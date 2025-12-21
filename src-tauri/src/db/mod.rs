@@ -44,6 +44,9 @@ impl Database {
     /// 새 데이터베이스 연결 생성
     pub fn new(path: &Path) -> Result<Self, IteError> {
         let conn = Connection::open(path)?;
+        // SQLite는 기본적으로 foreign_keys가 OFF일 수 있어, ON DELETE CASCADE가 동작하지 않을 수 있습니다.
+        // (프로젝트 삭제/정리 안정성을 위해 명시적으로 활성화)
+        conn.pragma_update(None, "foreign_keys", true)?;
         Ok(Self { conn })
     }
 
@@ -66,6 +69,54 @@ impl Database {
 
         let backup = Backup::new(&self.conn, &mut out_conn)?;
         backup.run_to_completion(5, std::time::Duration::from_millis(10), None)?;
+
+        // 일부 환경에서 “성공처럼 보이지만 파일이 실제로 생성되지 않음/0 byte” 케이스 방지용 검증
+        let meta = std::fs::metadata(out_path)?;
+        if meta.len() == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Export produced an empty file: {}",
+                out_path.display()
+            )));
+        }
+        Ok(())
+    }
+
+    /// 프로젝트 삭제(연관 데이터 포함)
+    /// - foreign_keys=ON이면 CASCADE로도 처리되지만, 환경 차이를 고려해 명시적으로 정리합니다.
+    pub fn delete_project(&self, project_id: &str) -> Result<(), IteError> {
+        let tx = self.conn.unchecked_transaction()?;
+
+        // chat_messages -> chat_sessions 순으로 제거(세션 FK)
+        tx.execute(
+            "DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE project_id = ?1)",
+            [project_id],
+        )?;
+        tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
+
+        tx.execute("DELETE FROM history WHERE project_id = ?1", [project_id])?;
+        tx.execute("DELETE FROM glossary_entries WHERE project_id = ?1", [project_id])?;
+        tx.execute("DELETE FROM segments WHERE project_id = ?1", [project_id])?;
+        tx.execute("DELETE FROM blocks WHERE project_id = ?1", [project_id])?;
+        tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 모든 프로젝트 삭제(연관 데이터 포함)
+    /// - 전역 용어집(project_id IS NULL)은 유지합니다.
+    pub fn delete_all_projects(&self) -> Result<(), IteError> {
+        let tx = self.conn.unchecked_transaction()?;
+
+        tx.execute("DELETE FROM chat_messages", [])?;
+        tx.execute("DELETE FROM chat_sessions", [])?;
+        tx.execute("DELETE FROM history", [])?;
+        tx.execute("DELETE FROM glossary_entries WHERE project_id IS NOT NULL", [])?;
+        tx.execute("DELETE FROM segments", [])?;
+        tx.execute("DELETE FROM blocks", [])?;
+        tx.execute("DELETE FROM projects", [])?;
+
+        tx.commit()?;
         Ok(())
     }
 

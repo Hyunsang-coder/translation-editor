@@ -4,6 +4,14 @@ export async function exportProjectFile(path: string): Promise<void> {
   await invoke<void>('export_project_file', { path });
 }
 
+export async function deleteProject(projectId: string): Promise<void> {
+  await invoke<void>('delete_project', { projectId });
+}
+
+export async function deleteAllProjects(): Promise<void> {
+  await invoke<void>('delete_all_projects');
+}
+
 export interface ImportProjectFileSafeResult {
   projectIds: string[];
   backupPath: string;

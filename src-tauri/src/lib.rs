@@ -53,6 +53,8 @@ pub fn run() {
             commands::history::restore_snapshot,
             commands::history::list_history,
             commands::storage::export_project_file,
+            commands::storage::delete_project,
+            commands::storage::delete_all_projects,
             commands::storage::import_project_file,
             commands::storage::import_project_file_safe,
             commands::storage::list_project_ids,

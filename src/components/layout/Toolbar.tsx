@@ -4,6 +4,8 @@ import {
   exportProjectFile,
   importProjectFileSafe,
   listRecentProjects,
+  deleteProject,
+  deleteAllProjects,
   type RecentProjectInfo,
 } from '@/tauri/storage';
 import { pickExportItePath, pickImportIteFile } from '@/tauri/dialog';
@@ -29,8 +31,13 @@ export function Toolbar(): JSX.Element {
     const defaultName = `${project.metadata.title || 'project'}.ite`;
     const path = await pickExportItePath(defaultName);
     if (!path) return;
-    await exportProjectFile(path);
-    window.alert('Export 완료');
+    try {
+      await exportProjectFile(path);
+      window.alert(`Export 완료\n경로: ${path}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Export에 실패했습니다.';
+      window.alert(`Export 실패\n\n경로: ${path}\n오류: ${msg}`);
+    }
   };
 
   const handleImport = async (): Promise<void> => {
@@ -59,6 +66,22 @@ export function Toolbar(): JSX.Element {
     } finally {
       setRecentLoading(false);
     }
+  };
+
+  const handleDeleteRecent = async (projectId: string): Promise<void> => {
+    const ok = window.confirm('이 프로젝트를 삭제할까요?\n(최근 목록에서 제거되며, DB에서 삭제됩니다)');
+    if (!ok) return;
+    await deleteProject(projectId);
+    await refreshRecent();
+  };
+
+  const handleClearAllRecent = async (): Promise<void> => {
+    const ok = window.confirm(
+      '모든 프로젝트를 삭제할까요?\n(최근 목록이 비워지며, DB의 프로젝트가 모두 삭제됩니다)',
+    );
+    if (!ok) return;
+    await deleteAllProjects();
+    await refreshRecent();
   };
 
   useEffect(() => {
@@ -152,6 +175,15 @@ export function Toolbar(): JSX.Element {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    className="text-xs text-red-500 hover:text-red-600 disabled:opacity-50"
+                    onClick={() => void handleClearAllRecent()}
+                    disabled={recentLoading || recent.length === 0}
+                    title="전체 삭제"
+                  >
+                    Clear All
+                  </button>
+                  <button
+                    type="button"
                     className="text-xs text-primary-500 hover:text-primary-600"
                     onClick={() => void refreshRecent()}
                     disabled={recentLoading}
@@ -180,22 +212,50 @@ export function Toolbar(): JSX.Element {
                 )}
                 {!recentLoading &&
                   recent.map((p) => (
-                    <button
+                    <div
                       key={p.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 hover:bg-editor-bg transition-colors"
-                      onClick={() => {
-                        void (async () => {
-                          const loaded = await tauriLoadProject(p.id);
-                          loadProject(loaded);
-                          setRecentOpen(false);
-                        })();
-                      }}
+                      className="flex items-stretch gap-1 px-2 py-1 hover:bg-editor-bg transition-colors"
                       title={p.id}
                     >
-                      <div className="text-sm text-editor-text truncate">{p.title}</div>
-                      <div className="text-[11px] text-editor-muted truncate">{p.id}</div>
-                    </button>
+                      <button
+                        type="button"
+                        className="flex-1 text-left px-1.5 py-1 rounded hover:bg-editor-bg transition-colors"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              const loaded = await tauriLoadProject(p.id);
+                              loadProject(loaded);
+                              setRecentOpen(false);
+                            } catch (e) {
+                              const msg =
+                                e instanceof Error ? e.message : '프로젝트 로드에 실패했습니다.';
+                              window.alert(`프로젝트를 열 수 없습니다.\n\nID: ${p.id}\n오류: ${msg}`);
+                              const ok = window.confirm(
+                                '이 항목을 최근 목록에서 삭제할까요?\n(최근 목록에서 제거되며, DB에서 삭제됩니다)',
+                              );
+                              if (ok) {
+                                try {
+                                  await deleteProject(p.id);
+                                } finally {
+                                  await refreshRecent();
+                                }
+                              }
+                            }
+                          })();
+                        }}
+                      >
+                        <div className="text-sm text-editor-text truncate">{p.title}</div>
+                        <div className="text-[11px] text-editor-muted truncate">{p.id}</div>
+                      </button>
+                      <button
+                        type="button"
+                        className="px-2 text-sm text-editor-muted hover:text-red-600 transition-colors"
+                        onClick={() => void handleDeleteRecent(p.id)}
+                        title="삭제"
+                      >
+                        🗑
+                      </button>
+                    </div>
                   ))}
               </div>
             </div>

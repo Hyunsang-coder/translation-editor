@@ -38,6 +38,13 @@ pub struct RecentProjectInfo {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteProjectArgs {
+    #[serde(rename = "projectId")]
+    pub project_id: String,
+}
+
 /// 현재 DB를 .ite 파일로 내보내기
 #[tauri::command]
 pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> CommandResult<()> {
@@ -50,6 +57,32 @@ pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> Comm
     })?;
 
     db.export_db_to_file(&out_path).map_err(CommandError::from)?;
+    Ok(())
+}
+
+/// 프로젝트 삭제(연관 데이터 포함)
+#[tauri::command]
+pub fn delete_project(args: DeleteProjectArgs, db_state: State<DbState>) -> CommandResult<()> {
+    let db = db_state.0.lock().map_err(|e| CommandError {
+        code: "LOCK_ERROR".to_string(),
+        message: format!("Failed to acquire database lock: {}", e),
+        details: None,
+    })?;
+
+    db.delete_project(&args.project_id).map_err(CommandError::from)?;
+    Ok(())
+}
+
+/// 전체 프로젝트 삭제(연관 데이터 포함)
+#[tauri::command]
+pub fn delete_all_projects(db_state: State<DbState>) -> CommandResult<()> {
+    let db = db_state.0.lock().map_err(|e| CommandError {
+        code: "LOCK_ERROR".to_string(),
+        message: format!("Failed to acquire database lock: {}", e),
+        details: None,
+    })?;
+
+    db.delete_all_projects().map_err(CommandError::from)?;
     Ok(())
 }
 
