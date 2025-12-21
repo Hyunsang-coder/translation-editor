@@ -37,7 +37,7 @@ Ghost Chips (태그 보호): {user_name}, <br> 등의 게임 태그를 시각적
 
 Smart Context Memory: 이전 대화의 핵심 결정 사항(용어, 톤앤매너)을 요약하여 장기적인 일관성 유지.
 
-Integrated Glossary RAG: 대규모 용어집을 로컬 벡터 DB로 관리하여, 현재 문장과 연관된 용어만 AI에게 자동 주입.
+Integrated Glossary (비벡터): 업로드한 용어집 파일을 로컬에서 직접 읽고(필요 시 DB로 임포트), 텍스트 기반 검색(룰/FTS)으로 현재 문장과 연관된 용어만 AI에게 자동 주입. (임베딩/벡터화는 하지 않음)
 
 3.4 로컬 기반 프로젝트 관리
 All-in-one Project File: SQLite 기반의 .ite 파일 하나에 텍스트, 이력, 대화 로그, 설정을 모두 통합 저장.
