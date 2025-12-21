@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatSession, ChatMessage, EditorBlock } from '@/types';
+import type { ChatSession, ChatMessage, EditorBlock, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
 import { getAiConfig } from '@/ai/config';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildTargetDocument } from '@/editor/targetDocument';
+import { searchGlossary } from '@/tauri/glossary';
 import {
   createGhostMaskSession,
   maskGhostChips,
@@ -12,6 +13,7 @@ import {
   collectGhostChipSet,
   diffMissingGhostChips,
 } from '@/utils/ghostMask';
+import { stripHtml } from '@/utils/hash';
 
 // ============================================
 // Store State Interface
@@ -24,6 +26,8 @@ interface ChatState {
   isLoading: boolean;
   streamingMessageId: string | null;
   error: string | null;
+  // 최근 요청에서 주입된 글로서리(디버깅/가시화)
+  lastInjectedGlossary: GlossaryEntry[];
   // Smart Context Memory (4.3)
   isSummarizing: boolean;
   summarySuggestionOpen: boolean;
@@ -110,6 +114,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isLoading: false,
   streamingMessageId: null,
   error: null,
+  lastInjectedGlossary: [],
   isSummarizing: false,
   summarySuggestionOpen: false,
   summarySuggestionReason: '',
@@ -247,6 +252,38 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ? maskGhostChips(targetDocumentRaw, maskSession)
         : undefined;
 
+      // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
+      let glossaryInjected = '';
+      try {
+        if (project?.id) {
+          const plainContext = contextBlocks
+            .map((b) => stripHtml(b.content))
+            .join('\n')
+            .slice(0, 1200);
+          const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
+          const hits = q.trim().length
+            ? await searchGlossary({
+                projectId: project.id,
+                query: q,
+                domain: project.metadata.domain,
+                limit: 12,
+              })
+            : [];
+          set({ lastInjectedGlossary: hits });
+          if (hits.length > 0) {
+            const raw = hits
+              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+              .join('\n');
+            glossaryInjected = maskGhostChips(raw, maskSession);
+          }
+        } else {
+          set({ lastInjectedGlossary: [] });
+        }
+      } catch {
+        // 글로서리 검색 실패는 조용히 무시(모델 호출 UX 방해 최소화)
+        set({ lastInjectedGlossary: [] });
+      }
+
       const maxN = cfg.maxRecentMessages;
       const fullHistory = session?.messages ?? [];
       const recent = fullHistory.slice(Math.max(0, fullHistory.length - maxN));
@@ -268,6 +305,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           userMessage: maskedUserContent,
           systemPromptOverlay,
           referenceNotes,
+          ...(glossaryInjected ? { glossaryInjected } : {}),
           ...(fallbackSourceText ? { fallbackSourceText } : {}),
           activeMemory,
           ...(sourceDocument ? { sourceDocument } : {}),
@@ -457,6 +495,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const fullHistory = session?.messages ?? [];
       const recent = fullHistory.slice(Math.max(0, fullHistory.length - maxN));
 
+      // 로컬 글로서리 주입(on-demand)
+      let glossaryInjected = '';
+      try {
+        const plainContext = contextBlocks
+          .map((b) => stripHtml(b.content))
+          .join('\n')
+          .slice(0, 1200);
+        const q = [selectionRaw ?? '', before ?? '', after ?? '', plainContext]
+          .filter(Boolean)
+          .join('\n')
+          .slice(0, 2000);
+        const hits = q.trim().length
+          ? await searchGlossary({
+              projectId: project.id,
+              query: q,
+              domain: project.metadata.domain,
+              limit: 12,
+            })
+          : [];
+        set({ lastInjectedGlossary: hits });
+        if (hits.length > 0) {
+          const raw = hits
+            .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+            .join('\n');
+          glossaryInjected = maskGhostChips(raw, maskSession);
+        }
+      } catch {
+        set({ lastInjectedGlossary: [] });
+      }
+
       // 사용자 메시지(프롬프트) 구성 (selection 기반을 1순위로)
       const userMessage = selection
         ? [
@@ -528,6 +596,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           userMessage,
           systemPromptOverlay,
           referenceNotes: referenceNotes ? maskGhostChips(referenceNotes, maskSession) : '',
+          ...(glossaryInjected ? { glossaryInjected } : {}),
           ...(fallbackSourceText ? { fallbackSourceText } : {}),
           activeMemory: activeMemory ? maskGhostChips(activeMemory, maskSession) : '',
           ...(sourceDocument ? { sourceDocument: maskGhostChips(sourceDocument, maskSession) } : {}),

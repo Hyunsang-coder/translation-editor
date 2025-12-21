@@ -86,6 +86,8 @@ interface ProjectActions {
   loadProject: (project: ITEProject) => void;
   createNewProject: (metadata: Partial<ProjectMetadata>) => void;
   saveProject: () => Promise<void>;
+  updateGlossaryPaths: (paths: string[]) => void;
+  addGlossaryPath: (path: string) => void;
   startAutoSave: () => void;
   stopAutoSave: () => void;
 
@@ -373,6 +375,47 @@ export const useProjectStore = create<ProjectStore>()(
       autoSaveTimer = null;
     }
     autoSaveInFlight = false;
+  },
+
+  updateGlossaryPaths: (paths: string[]): void => {
+    const { project } = get();
+    if (!project) return;
+    const deduped = Array.from(new Set(paths.filter((p) => p.trim().length > 0)));
+    set({
+      project: {
+        ...project,
+        metadata: {
+          ...project.metadata,
+          glossaryPaths: deduped,
+          updatedAt: Date.now(),
+        },
+      },
+      isDirty: true,
+      lastChangeAt: Date.now(),
+    });
+    scheduleWriteThroughSave(set, get);
+  },
+
+  addGlossaryPath: (path: string): void => {
+    const p = path.trim();
+    if (!p) return;
+    const { project } = get();
+    if (!project) return;
+    const prev = project.metadata.glossaryPaths ?? [];
+    const next = Array.from(new Set([...prev, p]));
+    set({
+      project: {
+        ...project,
+        metadata: {
+          ...project.metadata,
+          glossaryPaths: next,
+          updatedAt: Date.now(),
+        },
+      },
+      isDirty: true,
+      lastChangeAt: Date.now(),
+    });
+    scheduleWriteThroughSave(set, get);
   },
 
   // 프로젝트 로드

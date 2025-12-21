@@ -20,4 +20,24 @@ export async function pickExportItePath(defaultName = 'project.ite'): Promise<st
   return path ?? null;
 }
 
+export async function pickGlossaryCsvFile(): Promise<string | null> {
+  const file = await open({
+    title: '글로서리 CSV 파일 선택',
+    multiple: false,
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+  });
+  if (!file) return null;
+  return Array.isArray(file) ? (file[0] ?? null) : file;
+}
+
+export async function pickGlossaryExcelFile(): Promise<string | null> {
+  const file = await open({
+    title: '글로서리 Excel 파일 선택',
+    multiple: false,
+    filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
+  });
+  if (!file) return null;
+  return Array.isArray(file) ? (file[0] ?? null) : file;
+}
+
 

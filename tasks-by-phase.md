@@ -121,23 +121,28 @@
 - 줄바꿈 토큰: "\\n"(리터럴) + <br> 계열을 기본 보호, 필요 시 실제 '\n'까지 옵션으로 확장 가능
 - 속성 있는 태그/하이픈 태그(<br />, <b class="x">, <custom-tag>) 감지 지원
 
-[ ] 5.2 로컬 용어집(Glossary) “RAG” — 비벡터(업로드 파일 직접 읽기 + 룰/FTS 검색)
+[~] 5.2 로컬 용어집(Glossary) “RAG” — 비벡터(업로드 파일 직접 읽기 + 룰/FTS 검색)
 설명: 업로드한 glossary를 직접 읽어(로컬) 텍스트 기반 검색으로 관련 용어를 추출해 주입한다. 임베딩/벡터화는 하지 않는다.
 
-[ ] 5.2.1 용어집 임포트 (CSV/Excel → 로컬 DB)
+[~] 5.2.1 용어집 임포트 (CSV/Excel → 로컬 DB)
 - parsing/정규화(중복/공백/대소문자 정책) 규칙 정의
 - 프로젝트별/전역 용어집 구분(필요 시)
 - 업로드 파일 변경 감지(해시/mtime) 및 재임포트 정책(수동/반자동) 확정
+  - (구현) CSV 임포트(Tauri command) + project scope upsert
+  - (구현) Excel(.xlsx/.xls) 임포트(Tauri command) + project scope upsert
+  - (후속) Excel 파일의 다양한 셀 타입/시트 선택 UX 고도화
 
-[ ] 5.2.2 용어집 조회 API (로컬 DB 검색)
+[~] 5.2.2 용어집 조회 API (로컬 DB 검색)
 - 1차: 룰 기반(정확 매칭/부분 매칭/케이스 민감 옵션)으로 Top N 추출
 - 2차(후속): SQLite FTS5/BM25 등 랭킹 강화(선택)
+  - (구현) query 텍스트 내 포함 여부(inText) 기반 Top N (length(source) DESC)
 
-[ ] 5.2.3 모델 호출 payload 주입 (On-demand 유지)
+[~] 5.2.3 모델 호출 payload 주입 (On-demand 유지)
 - 사용자 요청(sendMessage/sendApplyRequest) 시에만 관련 용어를 system/context 섹션에 주입
 - 디버깅 가능하게 “주입된 용어 리스트”를 UI에서 확인 가능하게(간단 로그/토글)
+  - (구현) ChatPanel에서 CSV 가져오기 + 최근 주입 용어 리스트 표시(디버깅)
 
-[ ] 5.2.4 태그 보호와 결합 테스트
+[~] 5.2.4 태그 보호와 결합 테스트
 - 용어집 항목에 태그/변수가 포함된 경우에도 마스킹/복구/검증이 깨지지 않는지 확인
 
 [ ] 5.3 최종 폴리싱

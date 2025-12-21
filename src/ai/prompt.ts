@@ -13,6 +13,11 @@ export interface PromptContext {
    */
   referenceNotes?: string;
   /**
+   * 로컬 글로서리 검색 결과(자동 주입)
+   * - TRD 5.2: 비벡터, on-demand 모델 호출 시에만 payload에 포함
+   */
+  glossaryInjected?: string;
+  /**
    * 컨텍스트 블록 매핑 실패 시 주입할 원문 전체(plain) fallback
    */
   fallbackSourceText?: string;
@@ -39,6 +44,12 @@ function formatReferenceNotes(notes?: string): string {
   const trimmed = notes?.trim();
   if (!trimmed) return '';
   return ['참조 메모/용어집:', trimmed].join('\n');
+}
+
+function formatGlossaryInjected(glossary?: string): string {
+  const trimmed = glossary?.trim();
+  if (!trimmed) return '';
+  return ['주입된 로컬 글로서리(자동):', trimmed].join('\n');
 }
 
 function formatActiveMemory(memory?: string): string {
@@ -104,6 +115,7 @@ export function buildLangChainMessages(ctx: PromptContext, opts?: PromptOptions)
   const system = buildSystemPrompt(ctx.project, opts);
   const blockContext = buildBlockContextText(ctx.contextBlocks);
   const refNotes = formatReferenceNotes(ctx.referenceNotes);
+  const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
   const activeMemory = formatActiveMemory(ctx.activeMemory);
   const sourceFallback = formatFallbackSource(ctx.fallbackSourceText);
   const fullSource = formatFullDocument('원문', ctx.sourceDocument);
@@ -115,6 +127,7 @@ export function buildLangChainMessages(ctx: PromptContext, opts?: PromptOptions)
       [
         system,
         blockContext,
+        glossaryInjected,
         refNotes,
         activeMemory,
         fullSource,

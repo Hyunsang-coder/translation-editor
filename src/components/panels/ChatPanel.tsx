@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
+import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -30,7 +32,10 @@ export function ChatPanel(): JSX.Element {
   const setReferenceNotes = useChatStore((s) => s.setReferenceNotes);
   const activeMemory = useChatStore((s) => s.activeMemory);
   const setActiveMemory = useChatStore((s) => s.setActiveMemory);
+  const lastInjectedGlossary = useChatStore((s) => s.lastInjectedGlossary);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const project = useProjectStore((s) => s.project);
+  const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
 
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -161,6 +166,118 @@ export function ChatPanel(): JSX.Element {
           <p className="text-[11px] text-editor-muted">
             참고 메모는 시스템 메시지와 함께 모델로 전달됩니다.
           </p>
+
+          <div className="h-px bg-editor-border" />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-editor-muted">로컬 글로서리(CSV) — 프로젝트 DB 임포트</p>
+              <p className="text-[11px] text-editor-muted">
+                TRD 5.2: 모델 호출(send/edit) 시에만 관련 용어를 자동 주입합니다(비벡터).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
+                onClick={() => {
+                  void (async () => {
+                    if (!project) {
+                      window.alert('프로젝트가 로드되지 않았습니다.');
+                      return;
+                    }
+                    const path = await pickGlossaryCsvFile();
+                    if (!path) return;
+                    try {
+                      const res = await importGlossaryCsv({
+                        projectId: project.id,
+                        path,
+                        replaceProjectScope: false,
+                      });
+                      addGlossaryPath(path);
+                      window.alert(
+                        `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
+                      );
+                    } catch (e) {
+                      window.alert(e instanceof Error ? e.message : '글로서리 임포트 실패');
+                    }
+                  })();
+                }}
+                title="CSV 파일을 프로젝트 DB(glossary_entries)에 임포트"
+              >
+                CSV 가져오기
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
+                onClick={() => {
+                  void (async () => {
+                    if (!project) {
+                      window.alert('프로젝트가 로드되지 않았습니다.');
+                      return;
+                    }
+                    const path = await pickGlossaryExcelFile();
+                    if (!path) return;
+                    try {
+                      const res = await importGlossaryExcel({
+                        projectId: project.id,
+                        path,
+                        replaceProjectScope: false,
+                      });
+                      addGlossaryPath(path);
+                      window.alert(
+                        `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
+                      );
+                    } catch (e) {
+                      window.alert(e instanceof Error ? e.message : '글로서리 임포트 실패');
+                    }
+                  })();
+                }}
+                title="Excel(.xlsx/.xls) 파일을 프로젝트 DB(glossary_entries)에 임포트"
+              >
+                Excel 가져오기
+              </button>
+            </div>
+          </div>
+
+          {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 && (
+            <div className="text-[11px] text-editor-muted">
+              현재 연결된 CSV:
+              <div className="mt-1 space-y-1">
+                {project.metadata.glossaryPaths.slice(0, 3).map((p) => (
+                  <div key={p} className="truncate" title={p}>
+                    - {p}
+                  </div>
+                ))}
+                {project.metadata.glossaryPaths.length > 3 && (
+                  <div className="text-[11px] text-editor-muted">
+                    …외 {project.metadata.glossaryPaths.length - 3}개
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {lastInjectedGlossary.length > 0 && (
+            <div className="rounded-md border border-editor-border bg-editor-bg p-2">
+              <div className="text-[11px] text-editor-muted mb-1">
+                이번 요청에서 주입된 용어({lastInjectedGlossary.length})
+              </div>
+              <div className="space-y-1">
+                {lastInjectedGlossary.slice(0, 8).map((e) => (
+                  <div key={e.id} className="text-[11px] text-editor-text">
+                    - <span className="font-medium">{e.source}</span> → {e.target}
+                    {e.notes ? <span className="text-editor-muted"> ({e.notes})</span> : null}
+                  </div>
+                ))}
+                {lastInjectedGlossary.length > 8 && (
+                  <div className="text-[11px] text-editor-muted">
+                    …외 {lastInjectedGlossary.length - 8}개
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="h-px bg-editor-border" />
           <div className="flex items-center justify-between">
             <p className="text-xs text-editor-muted">Active Memory(용어/톤 규칙 요약)</p>

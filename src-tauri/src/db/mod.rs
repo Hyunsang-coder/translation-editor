@@ -14,6 +14,18 @@ use crate::error::IteError;
 use crate::models::{EditorBlock, IteProject, SegmentGroup};
 
 #[derive(Debug, Clone)]
+pub struct GlossaryEntryRow {
+    pub id: String,
+    pub source: String,
+    pub target: String,
+    pub notes: Option<String>,
+    pub domain: Option<String>,
+    pub case_sensitive: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
 pub struct RecentProjectRow {
     pub id: String,
     pub title: String,
@@ -266,6 +278,394 @@ impl Database {
             })
         })
         .map_err(|_| IteError::BlockNotFound(block_id.to_string()))
+    }
+
+    /// CSV 글로서리 임포트(project scope)
+    /// - replace=true면 해당 프로젝트 scope 엔트리를 전부 지우고 다시 넣음
+    pub fn import_glossary_csv(
+        &mut self,
+        project_id: &str,
+        path: &str,
+        replace_project_scope: bool,
+    ) -> Result<(u32, u32, u32), IteError> {
+        let text = std::fs::read_to_string(path)?;
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let tx = self.conn.unchecked_transaction()?;
+
+        if replace_project_scope {
+            tx.execute(
+                "DELETE FROM glossary_entries WHERE project_id = ?1",
+                [project_id],
+            )?;
+        }
+
+        // 간단 CSV 파서(외부 크레이트 없이 동작)
+        // - 기본: UTF-8 CSV
+        // - 따옴표(") 내부의 콤마는 필드로 취급
+        // - "" 는 " 로 이스케이프
+        fn parse_csv_row(line: &str) -> Vec<String> {
+            let mut out: Vec<String> = Vec::new();
+            let mut cur = String::new();
+            let mut in_quotes = false;
+            let mut it = line.chars().peekable();
+            while let Some(ch) = it.next() {
+                match ch {
+                    '"' => {
+                        if in_quotes {
+                            if matches!(it.peek(), Some('"')) {
+                                cur.push('"');
+                                it.next();
+                            } else {
+                                in_quotes = false;
+                            }
+                        } else {
+                            in_quotes = true;
+                        }
+                    }
+                    ',' if !in_quotes => {
+                        out.push(cur.trim().to_string());
+                        cur.clear();
+                    }
+                    _ => cur.push(ch),
+                }
+            }
+            out.push(cur.trim().to_string());
+            out
+        }
+
+        // 유효 라인들만 파싱
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        for line in text.lines() {
+            let l = line.trim_end_matches('\r').trim();
+            if l.is_empty() || l.starts_with('#') {
+                continue;
+            }
+            rows.push(parse_csv_row(l));
+        }
+
+        if rows.is_empty() {
+            return Ok((0, 0, 0));
+        }
+
+        // 헤더 여부 판단
+        let first = &rows[0];
+        let lower = first
+            .iter()
+            .map(|c| c.trim().to_lowercase())
+            .collect::<Vec<_>>();
+        let has_source = lower.iter().any(|c| c == "source");
+        let has_target = lower.iter().any(|c| c == "target");
+
+        let (headers, data_rows): (Vec<String>, &[Vec<String>]) = if has_source && has_target {
+            (first.clone(), &rows[1..])
+        } else {
+            (vec![], &rows[..])
+        };
+
+        let find_idx = |name: &str| -> Option<usize> {
+            let needle = name.to_lowercase();
+            headers
+                .iter()
+                .position(|h| h.trim().to_lowercase() == needle)
+        };
+
+        let idx_source = find_idx("source").unwrap_or(0);
+        let idx_target = find_idx("target").unwrap_or(1);
+        let idx_notes = find_idx("notes");
+        let idx_domain = find_idx("domain");
+        let idx_case = find_idx("casesensitive").or_else(|| find_idx("case_sensitive"));
+
+        let mut inserted: u32 = 0;
+        let mut updated: u32 = 0;
+        let mut skipped: u32 = 0;
+
+        for record in data_rows {
+            let source = record.get(idx_source).map(|s| s.trim()).unwrap_or("");
+            let target = record.get(idx_target).map(|s| s.trim()).unwrap_or("");
+
+            if source.is_empty() || target.is_empty() {
+                skipped += 1;
+                continue;
+            }
+
+            let notes = idx_notes
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+
+            let domain = idx_domain
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+
+            let case_sensitive = idx_case
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_lowercase())
+                .map(|v| v == "1" || v == "true" || v == "yes" || v == "y")
+                .unwrap_or(false);
+
+            let id = format!(
+                "{:x}",
+                md5::compute(format!("{}|{}|{}", project_id, source, target))
+            );
+
+            // 존재 여부 확인(INSERT vs UPDATE 카운트용)
+            let exists: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM glossary_entries WHERE id = ?1)",
+                    [&id],
+                    |row| row.get::<_, i64>(0).map(|v| v == 1),
+                )
+                .unwrap_or(false);
+
+            // upsert (created_at은 기존 유지)
+            tx.execute(
+                "INSERT INTO glossary_entries (
+                    id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    source = excluded.source,
+                    target = excluded.target,
+                    notes = excluded.notes,
+                    domain = excluded.domain,
+                    case_sensitive = excluded.case_sensitive,
+                    updated_at = excluded.updated_at",
+                (
+                    &id,
+                    project_id,
+                    source,
+                    target,
+                    notes.as_deref(),
+                    domain.as_deref(),
+                    if case_sensitive { 1 } else { 0 },
+                    now,
+                    now,
+                ),
+            )?;
+
+            if exists {
+                updated += 1;
+            } else {
+                inserted += 1;
+            }
+        }
+
+        tx.commit()?;
+        Ok((inserted, updated, skipped))
+    }
+
+    /// query 문자열 안에 등장하는 source 용어를 찾아 상위 N개를 반환합니다.
+    /// - case_sensitive=1: query에서 그대로 포함 여부 검사
+    /// - case_sensitive=0: lower(query)에서 lower(source) 포함 여부 검사
+    pub fn search_glossary_in_text(
+        &self,
+        project_id: &str,
+        query: &str,
+        domain: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<GlossaryEntryRow>, IteError> {
+        let q = query.trim();
+        if q.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, source, target, notes, domain, case_sensitive, created_at, updated_at
+             FROM glossary_entries
+             WHERE (project_id IS NULL OR project_id = ?1)
+               AND (?2 IS NULL OR domain IS NULL OR domain = ?2)
+               AND (
+                    (case_sensitive = 1 AND instr(?3, source) > 0)
+                 OR (case_sensitive = 0 AND instr(lower(?3), lower(source)) > 0)
+               )
+             ORDER BY length(source) DESC
+             LIMIT ?4",
+        )?;
+
+        let iter = stmt.query_map(
+            (project_id, domain, q, limit as i64),
+            |row| {
+                Ok(GlossaryEntryRow {
+                    id: row.get(0)?,
+                    source: row.get(1)?,
+                    target: row.get(2)?,
+                    notes: row.get(3)?,
+                    domain: row.get(4)?,
+                    case_sensitive: {
+                        let v: i64 = row.get(5)?;
+                        v == 1
+                    },
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            },
+        )?;
+
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Excel(.xlsx/.xls) 글로서리 임포트(project scope)
+    /// - 첫 번째 시트(또는 첫 sheet_names())를 읽습니다.
+    /// - 첫 행이 source/target 헤더로 보이면 헤더로 취급합니다.
+    pub fn import_glossary_excel(
+        &mut self,
+        project_id: &str,
+        path: &str,
+        replace_project_scope: bool,
+    ) -> Result<(u32, u32, u32), IteError> {
+        use calamine::{open_workbook_auto, DataType, Reader};
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let tx = self.conn.unchecked_transaction()?;
+
+        if replace_project_scope {
+            tx.execute(
+                "DELETE FROM glossary_entries WHERE project_id = ?1",
+                [project_id],
+            )?;
+        }
+
+        let mut workbook =
+            open_workbook_auto(path).map_err(|e| IteError::InvalidOperation(format!("{}", e)))?;
+        let sheet_names = workbook.sheet_names().to_owned();
+        let first_sheet = sheet_names
+            .get(0)
+            .ok_or_else(|| IteError::InvalidOperation("Excel에 시트가 없습니다.".to_string()))?
+            .to_string();
+
+        let range = workbook
+            .worksheet_range(&first_sheet)
+            .ok_or_else(|| IteError::InvalidOperation("워크시트를 읽을 수 없습니다.".to_string()))?
+            .map_err(|e| IteError::InvalidOperation(format!("{}", e)))?;
+
+        let cell_to_string = |c: &DataType| -> String {
+            match c {
+                DataType::Empty => "".to_string(),
+                _ => c.to_string().trim().to_string(),
+            }
+        };
+
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        for row in range.rows() {
+            let cols = row.iter().map(cell_to_string).collect::<Vec<_>>();
+            // 완전 공백 행은 스킵
+            if cols.iter().all(|c| c.trim().is_empty()) {
+                continue;
+            }
+            rows.push(cols);
+        }
+
+        if rows.is_empty() {
+            return Ok((0, 0, 0));
+        }
+
+        // 헤더 여부 판단
+        let first = &rows[0];
+        let lower = first
+            .iter()
+            .map(|c| c.trim().to_lowercase())
+            .collect::<Vec<_>>();
+        let has_source = lower.iter().any(|c| c == "source");
+        let has_target = lower.iter().any(|c| c == "target");
+
+        let (headers, data_rows): (Vec<String>, &[Vec<String>]) = if has_source && has_target {
+            (first.clone(), &rows[1..])
+        } else {
+            (vec![], &rows[..])
+        };
+
+        let find_idx = |name: &str| -> Option<usize> {
+            let needle = name.to_lowercase();
+            headers
+                .iter()
+                .position(|h| h.trim().to_lowercase() == needle)
+        };
+
+        let idx_source = find_idx("source").unwrap_or(0);
+        let idx_target = find_idx("target").unwrap_or(1);
+        let idx_notes = find_idx("notes");
+        let idx_domain = find_idx("domain");
+        let idx_case = find_idx("casesensitive").or_else(|| find_idx("case_sensitive"));
+
+        let mut inserted: u32 = 0;
+        let mut updated: u32 = 0;
+        let mut skipped: u32 = 0;
+
+        for record in data_rows {
+            let source = record.get(idx_source).map(|s| s.trim()).unwrap_or("");
+            let target = record.get(idx_target).map(|s| s.trim()).unwrap_or("");
+            if source.is_empty() || target.is_empty() {
+                skipped += 1;
+                continue;
+            }
+
+            let notes = idx_notes
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            let domain = idx_domain
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+            let case_sensitive = idx_case
+                .and_then(|i| record.get(i))
+                .map(|s| s.trim().to_lowercase())
+                .map(|v| v == "1" || v == "true" || v == "yes" || v == "y")
+                .unwrap_or(false);
+
+            let id = format!(
+                "{:x}",
+                md5::compute(format!("{}|{}|{}", project_id, source, target))
+            );
+
+            let exists: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM glossary_entries WHERE id = ?1)",
+                    [&id],
+                    |row| row.get::<_, i64>(0).map(|v| v == 1),
+                )
+                .unwrap_or(false);
+
+            tx.execute(
+                "INSERT INTO glossary_entries (
+                    id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    source = excluded.source,
+                    target = excluded.target,
+                    notes = excluded.notes,
+                    domain = excluded.domain,
+                    case_sensitive = excluded.case_sensitive,
+                    updated_at = excluded.updated_at",
+                (
+                    &id,
+                    project_id,
+                    source,
+                    target,
+                    notes.as_deref(),
+                    domain.as_deref(),
+                    if case_sensitive { 1 } else { 0 },
+                    now,
+                    now,
+                ),
+            )?;
+
+            if exists {
+                updated += 1;
+            } else {
+                inserted += 1;
+            }
+        }
+
+        tx.commit()?;
+        Ok((inserted, updated, skipped))
     }
 }
 

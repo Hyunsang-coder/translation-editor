@@ -10,6 +10,11 @@ export interface GenerateReplyInput {
   userMessage: string;
   systemPromptOverlay?: string;
   referenceNotes?: string;
+  /**
+   * 로컬 글로서리 검색 결과(주입)
+   * - On-demand: sendMessage/sendApplyRequest 같은 “모델 호출” 시에만 구성
+   */
+  glossaryInjected?: string;
   fallbackSourceText?: string;
   activeMemory?: string;
   sourceDocument?: string;
@@ -61,6 +66,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
       ...(input.referenceNotes ? { referenceNotes: input.referenceNotes } : {}),
+      ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.fallbackSourceText ? { fallbackSourceText: input.fallbackSourceText } : {}),
       ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
       ...(input.sourceDocument ? { sourceDocument: input.sourceDocument } : {}),
@@ -106,6 +112,7 @@ export async function streamAssistantReply(
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
       ...(input.referenceNotes ? { referenceNotes: input.referenceNotes } : {}),
+      ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.fallbackSourceText ? { fallbackSourceText: input.fallbackSourceText } : {}),
       ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
       ...(input.sourceDocument ? { sourceDocument: input.sourceDocument } : {}),
