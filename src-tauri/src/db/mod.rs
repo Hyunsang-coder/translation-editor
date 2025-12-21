@@ -519,7 +519,7 @@ impl Database {
         path: &str,
         replace_project_scope: bool,
     ) -> Result<(u32, u32, u32), IteError> {
-        use calamine::{open_workbook_auto, DataType, Reader};
+        use calamine::{open_workbook_auto, Data, Reader};
 
         let now = chrono::Utc::now().timestamp_millis();
         let tx = self.conn.unchecked_transaction()?;
@@ -541,21 +541,20 @@ impl Database {
 
         let range = workbook
             .worksheet_range(&first_sheet)
-            .ok_or_else(|| IteError::InvalidOperation("워크시트를 읽을 수 없습니다.".to_string()))?
             .map_err(|e| IteError::InvalidOperation(format!("{}", e)))?;
 
-        let cell_to_string = |c: &DataType| -> String {
+        fn cell_to_string(c: &Data) -> String {
             match c {
-                DataType::Empty => "".to_string(),
+                Data::Empty => String::new(),
                 _ => c.to_string().trim().to_string(),
             }
-        };
+        }
 
         let mut rows: Vec<Vec<String>> = Vec::new();
         for row in range.rows() {
-            let cols = row.iter().map(cell_to_string).collect::<Vec<_>>();
+            let cols = row.iter().map(cell_to_string).collect::<Vec<String>>();
             // 완전 공백 행은 스킵
-            if cols.iter().all(|c| c.trim().is_empty()) {
+            if cols.iter().all(|c: &String| c.trim().is_empty()) {
                 continue;
             }
             rows.push(cols);

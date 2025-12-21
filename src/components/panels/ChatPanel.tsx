@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
+import { isTauriRuntime } from '@/tauri/invoke';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -181,13 +182,20 @@ export function ChatPanel(): JSX.Element {
                 className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
                 onClick={() => {
                   void (async () => {
-                    if (!project) {
-                      window.alert('프로젝트가 로드되지 않았습니다.');
-                      return;
-                    }
-                    const path = await pickGlossaryCsvFile();
-                    if (!path) return;
                     try {
+                      if (!isTauriRuntime()) {
+                        window.alert('Tauri 런타임에서만 파일 가져오기가 가능합니다.');
+                        return;
+                      }
+                      if (!project) {
+                        window.alert('프로젝트가 로드되지 않았습니다.');
+                        return;
+                      }
+                      const path = await pickGlossaryCsvFile();
+                      if (!path) {
+                        window.alert('파일 선택이 취소되었습니다.');
+                        return;
+                      }
                       const res = await importGlossaryCsv({
                         projectId: project.id,
                         path,
@@ -198,7 +206,11 @@ export function ChatPanel(): JSX.Element {
                         `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
                       );
                     } catch (e) {
-                      window.alert(e instanceof Error ? e.message : '글로서리 임포트 실패');
+                      window.alert(
+                        `글로서리 임포트 실패\n${
+                          e instanceof Error ? e.message : String(e)
+                        }`,
+                      );
                     }
                   })();
                 }}
@@ -211,13 +223,20 @@ export function ChatPanel(): JSX.Element {
                 className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
                 onClick={() => {
                   void (async () => {
-                    if (!project) {
-                      window.alert('프로젝트가 로드되지 않았습니다.');
-                      return;
-                    }
-                    const path = await pickGlossaryExcelFile();
-                    if (!path) return;
                     try {
+                      if (!isTauriRuntime()) {
+                        window.alert('Tauri 런타임에서만 파일 가져오기가 가능합니다.');
+                        return;
+                      }
+                      if (!project) {
+                        window.alert('프로젝트가 로드되지 않았습니다.');
+                        return;
+                      }
+                      const path = await pickGlossaryExcelFile();
+                      if (!path) {
+                        window.alert('파일 선택이 취소되었습니다.');
+                        return;
+                      }
                       const res = await importGlossaryExcel({
                         projectId: project.id,
                         path,
@@ -228,7 +247,11 @@ export function ChatPanel(): JSX.Element {
                         `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
                       );
                     } catch (e) {
-                      window.alert(e instanceof Error ? e.message : '글로서리 임포트 실패');
+                      window.alert(
+                        `글로서리 임포트 실패\n${
+                          e instanceof Error ? e.message : String(e)
+                        }`,
+                      );
                     }
                   })();
                 }}
