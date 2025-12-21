@@ -1,0 +1,51 @@
+{
+  "name": "integrated-translation-editor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "node scripts/tauri-dev.mjs",
+    "tauri:build": "node scripts/tauri-build.mjs"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.10.4",
+    "@tiptap/extension-document": "^2.10.4",
+    "@tiptap/extension-paragraph": "^2.10.4",
+    "@tiptap/extension-text": "^2.10.4",
+    "@tiptap/pm": "^2.10.4",
+    "@tiptap/react": "^2.10.4",
+    "@tiptap/starter-kit": "^2.10.4",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-shell": "^2.2.0",
+    "diff-match-patch": "^1.0.5",
+    "langchain": "^0.3.10",
+    "@langchain/openai": "^0.3.17",
+    "@langchain/anthropic": "^0.3.12",
+    "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "^0.52.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
+

@@ -1,0 +1,10 @@
+/Users/hyunsang_joo/Documents/GitHub/translation-editor/src-tauri/./src-tauri/target/debug/deps/hashlink-6459c654baf71223.d: /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lib.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_map.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_set.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lru_cache.rs
+
+/Users/hyunsang_joo/Documents/GitHub/translation-editor/src-tauri/./src-tauri/target/debug/deps/libhashlink-6459c654baf71223.rlib: /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lib.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_map.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_set.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lru_cache.rs
+
+/Users/hyunsang_joo/Documents/GitHub/translation-editor/src-tauri/./src-tauri/target/debug/deps/libhashlink-6459c654baf71223.rmeta: /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lib.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_map.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_set.rs /Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lru_cache.rs
+
+/Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lib.rs:
+/Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_map.rs:
+/Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/linked_hash_set.rs:
+/Users/hyunsang_joo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hashlink-0.9.1/src/lru_cache.rs:

@@ -1,0 +1,45 @@
+/**
+ * 컨텐츠 해시 유틸리티
+ * 블록 변경 감지를 위한 해시 생성
+ */
+
+/**
+ * 간단한 문자열 해시 생성
+ * @param content - 해시할 콘텐츠
+ * @returns 해시 문자열
+ */
+export function hashContent(content: string): string {
+  let hash = 0;
+
+  if (content.length === 0) {
+    return hash.toString(36);
+  }
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+
+  return Math.abs(hash).toString(36);
+}
+
+/**
+ * HTML 태그를 제거하고 텍스트만 추출
+ * @param html - HTML 문자열
+ * @returns 순수 텍스트
+ */
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').trim();
+}
+
+/**
+ * 두 콘텐츠가 동일한지 비교
+ * @param content1 - 첫 번째 콘텐츠
+ * @param content2 - 두 번째 콘텐츠
+ * @returns 동일 여부
+ */
+export function isContentEqual(content1: string, content2: string): boolean {
+  return hashContent(content1) === hashContent(content2);
+}
+

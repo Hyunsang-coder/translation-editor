@@ -1,0 +1,253 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Variables - Light Theme */
+:root {
+  --editor-bg: #ffffff;
+  --editor-surface: #f8fafc;
+  --editor-border: #e2e8f0;
+  --editor-text: #1e293b;
+  --editor-muted: #64748b;
+
+  --diff-insertion: #22c55e;
+  --diff-deletion: #ef4444;
+  --diff-insertion-bg: rgba(34, 197, 94, 0.15);
+  --diff-deletion-bg: rgba(239, 68, 68, 0.15);
+
+  --chat-bg: #f1f5f9;
+  --chat-user: #3b82f6;
+  --chat-ai: #6366f1;
+}
+
+/* CSS Variables - Dark Theme */
+.dark {
+  --editor-bg: #0f172a;
+  --editor-surface: #1e293b;
+  --editor-border: #334155;
+  --editor-text: #f1f5f9;
+  --editor-muted: #94a3b8;
+
+  --diff-insertion: #4ade80;
+  --diff-deletion: #f87171;
+  --diff-insertion-bg: rgba(74, 222, 128, 0.2);
+  --diff-deletion-bg: rgba(248, 113, 113, 0.2);
+
+  --chat-bg: #1e293b;
+  --chat-user: #60a5fa;
+  --chat-ai: #818cf8;
+}
+
+/* Base Styles */
+@layer base {
+  html {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-editor-bg text-editor-text;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-editor-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-editor-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-editor-muted;
+  }
+}
+
+/* Component Styles */
+@layer components {
+  /* Ghost Chips (변수 보호) */
+  .ghost-chip {
+    @apply inline-flex items-center px-2 py-0.5 mx-0.5;
+    @apply bg-primary-100 dark:bg-primary-900;
+    @apply text-primary-700 dark:text-primary-300;
+    @apply text-sm font-mono rounded-md;
+    @apply select-none cursor-default;
+  }
+
+  /* Diff Marks */
+  .diff-insertion {
+    @apply bg-diff-insertion-bg;
+    text-decoration: none;
+    border-bottom: 2px solid var(--diff-insertion);
+  }
+
+  .diff-deletion {
+    @apply bg-diff-deletion-bg line-through;
+    text-decoration-color: var(--diff-deletion);
+  }
+
+  /* Editor Block */
+  .editor-block {
+    @apply py-2 px-4;
+    @apply border-l-2 border-transparent;
+    @apply transition-all duration-200;
+  }
+
+  .editor-block:hover {
+    @apply bg-editor-surface;
+  }
+
+  .editor-block:focus-within {
+    @apply border-l-primary-500;
+  }
+
+  /* Segment Group Container */
+  .segment-group {
+    @apply grid grid-cols-2 gap-4;
+    @apply border-b border-editor-border;
+    @apply py-3;
+  }
+
+  /* Chat Message */
+  .chat-message {
+    @apply p-4 rounded-lg;
+    @apply animate-fade-in;
+  }
+
+  .chat-message-user {
+    @apply bg-primary-100 dark:bg-primary-900;
+    @apply ml-auto max-w-[80%];
+  }
+
+  .chat-message-ai {
+    @apply bg-editor-surface;
+    @apply mr-auto max-w-[80%];
+  }
+}
+
+/* Utility Styles */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* TipTap Editor Styles */
+.ProseMirror {
+  @apply outline-none;
+  @apply min-h-[200px];
+  @apply text-editor leading-relaxed;
+}
+
+.ProseMirror p {
+  @apply my-2;
+}
+
+.ProseMirror p.is-empty::before {
+  @apply text-editor-muted;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Focus visible for accessibility */
+.ProseMirror:focus-visible {
+  @apply ring-2 ring-primary-500 ring-offset-2;
+}
+
+/* Monaco Ghost Chips (태그/변수 보호) */
+.monaco-ghost-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.12); /* primary-500 계열 */
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.dark .monaco-ghost-chip {
+  background: rgba(99, 102, 241, 0.22); /* indigo 계열 */
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+/* Monaco Pending Diff (In-place Preview) */
+.monaco-pending-diff {
+  background: rgba(16, 185, 129, 0.18); /* emerald-500 */
+  border-bottom: 1px dashed rgba(16, 185, 129, 0.9);
+}
+
+.dark .monaco-pending-diff {
+  background: rgba(16, 185, 129, 0.28);
+  border-bottom: 1px dashed rgba(52, 211, 153, 0.9);
+}
+
+/* Monaco Pending Diff - deletion-like highlight (range to be replaced) */
+.monaco-pending-delete {
+  background: rgba(239, 68, 68, 0.14); /* red-500 */
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.95);
+  border-bottom: 1px dashed rgba(239, 68, 68, 0.85);
+}
+
+.dark .monaco-pending-delete {
+  background: rgba(248, 113, 113, 0.22); /* red-400 */
+  text-decoration-color: rgba(248, 113, 113, 0.95);
+  border-bottom: 1px dashed rgba(248, 113, 113, 0.85);
+}
+
+/* Monaco Pending Diff - insertion preview widget */
+.monaco-pending-insert-widget {
+  max-width: min(680px, 90vw);
+  border-radius: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.55); /* green-500 */
+  background: rgba(34, 197, 94, 0.10);
+  backdrop-filter: blur(6px);
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dark .monaco-pending-insert-widget {
+  border: 1px solid rgba(74, 222, 128, 0.55); /* green-400 */
+  background: rgba(74, 222, 128, 0.12);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.monaco-pending-insert-widget__header {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--editor-muted);
+  margin-bottom: 6px;
+}
+
+.monaco-pending-insert-widget__body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--editor-text);
+}
+

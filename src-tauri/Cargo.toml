@@ -1,0 +1,37 @@
+[package]
+name = "integrated-translation-editor"
+version = "0.1.0"
+description = "AI를 동료로, 번역을 예술로 - Integrated Translation Editor"
+authors = ["ITE Team"]
+edition = "2021"
+
+[lib]
+name = "ite_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+md5 = "0.7"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
