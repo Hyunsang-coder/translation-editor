@@ -24,6 +24,10 @@ interface UIActions {
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
+  // Project Sidebar
+  toggleProjectSidebar: () => void;
+  setProjectSidebarCollapsed: (collapsed: boolean) => void;
+
   // Diff
   setShowDiff: (showDiff: boolean) => void;
 
@@ -51,6 +55,7 @@ export const useUIStore = create<UIStore>()(
       selectedBlockId: null,
       showDiff: false,
       sidebarCollapsed: false,
+      projectSidebarCollapsed: false,
       theme: 'system',
       toasts: [],
 
@@ -79,6 +84,15 @@ export const useUIStore = create<UIStore>()(
 
       setSidebarCollapsed: (collapsed: boolean): void => {
         set({ sidebarCollapsed: collapsed });
+      },
+
+      // Project Sidebar
+      toggleProjectSidebar: (): void => {
+        set((state) => ({ projectSidebarCollapsed: !state.projectSidebarCollapsed }));
+      },
+
+      setProjectSidebarCollapsed: (collapsed: boolean): void => {
+        set({ projectSidebarCollapsed: collapsed });
       },
 
       // Diff
@@ -124,6 +138,7 @@ export const useUIStore = create<UIStore>()(
         theme: state.theme,
         focusMode: state.focusMode,
         sidebarCollapsed: state.sidebarCollapsed,
+        projectSidebarCollapsed: state.projectSidebarCollapsed,
       }),
     }
   )

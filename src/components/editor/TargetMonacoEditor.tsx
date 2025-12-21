@@ -25,6 +25,9 @@ export function TargetMonacoEditor({
 }: TargetMonacoEditorProps): JSX.Element {
   const editorRef = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+  const trackedRangeDecorationIds = useRef<string[]>([]);
+  const idByBlockIdRef = useRef<Record<string, string>>({});
+  const modelChangeDisposable = useRef<{ dispose: () => void } | null>(null);
   const theme = useUIStore((s) => s.theme);
   const appendComposerText = useChatStore((s) => s.appendComposerText);
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
@@ -52,6 +55,87 @@ export function TargetMonacoEditor({
   const pendingDecorationIds = useRef<string[]>([]);
   const pendingAnchorDecorationId = useRef<string | null>(null);
   const pendingContentWidgetRef = useRef<MonacoEditorNS.IContentWidget | null>(null);
+
+  const setupTrackedRanges = (): void => {
+    const ed = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!ed || !monaco) return;
+    const model = ed.getModel();
+    if (!model || !blockRanges) {
+      trackedRangeDecorationIds.current = [];
+      idByBlockIdRef.current = {};
+      registerTargetDocHandle(null);
+      return;
+    }
+
+    // 기존 tracked range decorations 정리
+    if (trackedRangeDecorationIds.current.length > 0) {
+      trackedRangeDecorationIds.current = model.deltaDecorations(
+        trackedRangeDecorationIds.current,
+        [],
+      );
+    }
+
+    const blockIds = Object.keys(blockRanges);
+    const decorations = blockIds.map((blockId) => {
+      const r = blockRanges[blockId]!;
+      const start = model.getPositionAt(r.startOffset);
+      const end = model.getPositionAt(r.endOffset);
+      return {
+        range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+        options: {
+          stickiness: monaco.editor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+        },
+      } satisfies MonacoEditorNS.IModelDeltaDecoration;
+    });
+
+    const decorationIds = model.deltaDecorations([], decorations);
+    trackedRangeDecorationIds.current = decorationIds;
+
+    const nextMap: Record<string, string> = {};
+    decorationIds.forEach((id, idx) => {
+      const bid = blockIds[idx];
+      if (bid) nextMap[bid] = id;
+    });
+    idByBlockIdRef.current = nextMap;
+
+    registerTargetDocHandle({
+      getBlockOffsets: () => {
+        const out: Record<string, { startOffset: number; endOffset: number }> = {};
+        Object.entries(idByBlockIdRef.current).forEach(([bid, decId]) => {
+          const range = model.getDecorationRange(decId);
+          if (!range) return;
+          const startOffset = model.getOffsetAt(range.getStartPosition());
+          const endOffset = model.getOffsetAt(range.getEndPosition());
+          out[bid] = { startOffset, endOffset };
+        });
+        return out;
+      },
+      getDecorationOffsets: (decorationId) => {
+        const r = model.getDecorationRange(decorationId);
+        if (!r) return null;
+        const startOffset = model.getOffsetAt(r.getStartPosition());
+        const endOffset = model.getOffsetAt(r.getEndPosition());
+        return { startOffset, endOffset };
+      },
+    });
+  };
+
+  // 프로젝트 전환 등으로 blockRanges가 바뀌면 tracked ranges를 다시 세팅해야 저장이 정상 동작합니다.
+  useEffect(() => {
+    setupTrackedRanges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockRanges]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        modelChangeDisposable.current?.dispose();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -233,58 +317,18 @@ export function TargetMonacoEditor({
           monacoRef.current = monaco;
           onMount?.(ed);
 
-          // blocks/segments ↔ Target 단일 문서 저장 브릿지 (Tracked ranges)
-          // - 초기 blockRanges를 decoration(tracked range)로 만들고, save 시점에 현재 range를 offset으로 추출합니다.
-          const model = ed.getModel();
-          if (model && blockRanges) {
-            const blockIds = Object.keys(blockRanges);
-            const decorations = blockIds.map((blockId) => {
-              const r = blockRanges[blockId]!;
-              const start = model.getPositionAt(r.startOffset);
-              const end = model.getPositionAt(r.endOffset);
-              return {
-                range: new monaco.Range(
-                  start.lineNumber,
-                  start.column,
-                  end.lineNumber,
-                  end.column,
-                ),
-                options: {
-                  stickiness: monaco.editor.TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
-                },
-              } satisfies MonacoEditorNS.IModelDeltaDecoration;
-            });
+          // 최초 설정
+          setupTrackedRanges();
 
-            const decorationIds = model.deltaDecorations([], decorations);
-            const idByBlockId: Record<string, string> = {};
-            decorationIds.forEach((id, idx) => {
-              const bid = blockIds[idx];
-              if (bid) idByBlockId[bid] = id;
-            });
-
-            registerTargetDocHandle({
-              getBlockOffsets: () => {
-                const out: Record<string, { startOffset: number; endOffset: number }> = {};
-                Object.entries(idByBlockId).forEach(([bid, decId]) => {
-                  const range = model.getDecorationRange(decId);
-                  if (!range) return;
-                  const startOffset = model.getOffsetAt(range.getStartPosition());
-                  const endOffset = model.getOffsetAt(range.getEndPosition());
-                  out[bid] = { startOffset, endOffset };
-                });
-                return out;
-              },
-              getDecorationOffsets: (decorationId) => {
-                const r = model.getDecorationRange(decorationId);
-                if (!r) return null;
-                const startOffset = model.getOffsetAt(r.getStartPosition());
-                const endOffset = model.getOffsetAt(r.getEndPosition());
-                return { startOffset, endOffset };
-              },
-            });
-          } else {
-            registerTargetDocHandle(null);
+          // 모델이 교체되는 케이스를 대비(프로젝트 전환/리로드 등)
+          try {
+            modelChangeDisposable.current?.dispose();
+          } catch {
+            // ignore
           }
+          modelChangeDisposable.current = ed.onDidChangeModel(() => {
+            setupTrackedRanges();
+          });
 
           // Ghost chips (태그 보호) - decoration + 편집 차단
           const uiAddToast = useUIStore.getState().addToast;

@@ -78,6 +78,24 @@ What (의도/행동 정의):
 - Edit 요청: 선택 범위 또는 문서 구간을 교정/재작성하기 위한 모델 호출 (Pending Edit 생성)
 - Translate 요청: 원문을 번역문으로 생성하기 위한 모델 호출 (초기 번역/재번역)
 
+What (2-step Orchestration: Router → Executor):
+- 목표: “사용자 요구에 따라” 모델 호출/툴 실행의 형태가 달라져도 UX/안정성이 흔들리지 않게, 모든 요청을 2단계로 고정한다.
+- 1단계 Router(Intent Routing):
+  - 입력: 사용자 메시지 + 현재 편집 상태(선택 영역 존재 여부, includeSource/includeTarget, 프로젝트 메타 등)
+  - 출력: `taskType` (아래 중 1개로 고정)
+    - `edit_selection`: 선택 구간 교정/재작성(범위 기반)
+    - `edit_document`: 번역문 전체(또는 큰 구간) 제안(전체 기반)
+    - `translate_document`: 원문→번역문 생성(전체 번역)
+    - `check_target`: 번역문 단독 검수/오탈자 체크(리포트)
+    - `check_compare`: 원문-번역 비교 검수(리포트)
+  - 구현 전략: 1차는 룰/키워드(예: “오탈자/검수/비교/전반/문체/전체”) + 선택 여부로 결정하고, 필요 시에만 “짧은 JSON 라우터(LLM)”로 대체 가능.
+- 2단계 Executor(Execution):
+  - Router의 `taskType`에 따라 서로 다른 Prompt/Output Contract를 적용한다.
+  - `edit_selection`: 출력은 “선택 구간의 대체 텍스트만” (설명/불릿/따옴표/마크다운 금지) → Pending Edit 생성 → Diff Preview → Keep/Discard
+  - `translate_document`: 출력은 “번역문 전체만” (설명 금지) → Pending Edit 생성(초기 번역도 동일) → Diff Preview → Keep/Discard
+  - `edit_document`: 출력은 “번역문 전체(또는 지정 구간)만” (설명 금지) → Pending Edit 생성 → Diff Preview → Keep/Discard
+  - `check_target`/`check_compare`: 출력은 “JSON 리포트만” (설명/마크다운 금지). 기본 결과는 리포트이며 문서를 자동 변경하지 않는다. (적용은 별도 명시 요청 시 `edit_*`로 전환)
+
 What (Payload 구성 규칙: 우선순위):
 - **반드시 포함**
   - 프로젝트 메타: `sourceLanguage`, `targetLanguage`, `domain`
@@ -93,6 +111,7 @@ What (Payload 구성 규칙: 우선순위):
 What (모델 출력 포맷 강제):
 - Edit 요청(선택 범위): 출력은 “선택 구간의 대체 텍스트만” (설명/불릿/따옴표/마크다운 금지)
 - Translate 요청: 출력은 “번역문 전체만” (설명 금지)
+ - Check 요청(오탈자/검수): 출력은 “JSON 리포트만” (설명/마크다운 금지)
 
 3.3 Selection(Offset) → Segment/Block 매핑 규칙 (Range 기반)
 Why:

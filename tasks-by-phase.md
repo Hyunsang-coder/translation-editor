@@ -93,6 +93,8 @@
 [x] Import/Export: 파일 다이얼로그 기반 + Import 전 자동 백업(import_project_file_safe)
 [x] Export: 백엔드에서 파일 생성/0 byte 검증 + 프론트에서 성공/실패 메시지(저장 경로/오류) 표시
 [x] Chat: 프로젝트별 현재 세션 1개 + ChatPanel 설정(systemPrompt/reference/activeMemory/include flags) DB 저장/복원(.ite 포함)
+[x] Sidebar Projects: 좌측 사이드바에서 프로젝트 생성(+ New)/선택(마지막 상태 복귀)/삭제 + 전환 시 자동 저장(auto-save-and-switch)
+[x] Toolbar: Open/Export/Import UI 제거(사이드바 프로젝트 UX로 대체)
 [x] Auto-save 정책: 디바운스(마지막 변경 후 1.5s idle) + 저장 상태(Saved/Unsaved/Saving) 표시
 
 [~] 4.3 Smart Context Memory
@@ -154,3 +156,60 @@
 [ ] 타임라인 기반의 수정 이력 추적 UI (Smart History)
 
 [~] 다크 모드/라이트 모드 지원(기본) 및 단축키 커스텀 설정창
+
+[NEW] 🤖 Phase 6: LangGraph Agent & Tools (On-demand, Report-first)
+목표: TRD의 “Router → Executor” 모델을 기반으로, 사용자가 요청하면 Agent가 판단하여 Tool을 호출하고(필요 시 반복),
+기본 결과는 **리포트(JSON)**로 제공하며, 적용은 별도 명시 요청 시에만 Pending Edit로 전환한다.
+
+[ ] 6.1 Agent 오케스트레이션 설계 확정 (Router → Executor)
+- taskType 정의(고정): edit_selection / edit_document / translate_document / check_target / check_compare
+- Router 전략 1차(룰 기반): 키워드 + 선택 유무 + include flags로 결정
+  - 예: “오탈자/검수/체크” → check_target, “원문/비교/대조/검수” → check_compare
+  - 예: “전체/전반/문체/통일” → edit_document, 선택 존재 시 기본은 edit_selection 우선(옵션화 가능)
+- Router 전략 2차(선택): JSON-only LLM router로 대체/보강 (모호한 요청 처리)
+- Executor 계약 고정:
+  - Edit/Translate 계열: Pending Edit 생성 → Diff Preview → Keep/Discard
+  - Check 계열: JSON 리포트만(기본), 문서 자동 변경 금지(“적용” 요청 시 edit_*로 전환)
+
+[ ] 6.2 Tool 프레임워크(공통) 구축
+- Tool 인터페이스/스키마(zod):
+  - 입력: project meta, target text(선택/전체), (옵션) source text, glossary/activeMemory, ghost mask info
+  - 출력: check-report@v1(JSON) 또는 “적용 후보” 형태(후속)
+- Ghost Chips 가드 일관 적용 정책 결정:
+  - 최소: user input + 최종 assistant output에 마스킹/복원/검증
+  - 강화(선택): tool input/output에도 마스킹/복원/검증 적용
+- Tool 실행 위치 정책:
+  - 1차: 프론트(현재 구조와 자연 결합)
+  - 후속: Rust sidecar/command로 이동 가능(대용량/성능/보안 고려)
+
+[ ] 6.3 check_target: 오탈자/표기/띄어쓰기 검사 Tool (리포트 우선)
+- 출력 포맷: check-report@v1(JSON only) 강제
+- 이슈 항목: severity/category/message + target range(start/endOffset) + excerpt + suggestion.replaceText(옵션)
+- Ghost Chips 관련 이슈 분류(category=tag) 지원
+
+[ ] 6.4 check_compare: 원문-번역 비교 검수 Tool (리포트 우선)
+- 비교 규칙(초기): 누락/추가 의미, 수치/고유명사 불일치, 용어집 위반, 태그 불일치
+- source/target 모두 offset/excerpt를 채우되, 매핑 불가 시 source offsets는 null 허용
+- 결과는 “적용 제안”이 아니라 “검수 포인트 리스트”가 기본
+
+[ ] 6.5 LangGraph Agent 루프(툴 자율 호출) 도입
+- MessagesAnnotation 기반 state(messages)로 Agent 실행
+- llm(with tools) ↔ ToolNode 반복 루프 구성(툴콜 없으면 종료)
+- thread_id를 Chat session id로 매핑하여 “요청 단위”가 아닌 “세션 단위”로 대화/툴 맥락 유지(선택)
+- 스트리밍 UX: streamMode=values로 마지막 메시지 단계별 업데이트(초기)
+
+[ ] 6.6 UI/UX 트리거(온디맨드 유지)
+- 사용자가 “오탈자 체크해줘/검수해줘”라고 입력하거나, 버튼/메뉴/단축키로 명시 트리거했을 때만 Agent 실행
+- Check 결과(JSON)를 UI에서 렌더:
+  - 리스트/필터(severity/category)
+  - 항목 클릭 시 해당 범위로 점프(오프셋 기반)
+  - (후속) “이 제안 적용” 버튼은 edit_selection으로 재요청하여 Pending Edit 생성
+
+[ ] 6.7 관찰성/재현성(디버깅)
+- 요청 단위: taskType, prompt version, sections hash, 주입 glossary 요약, ghost chip 검증 결과 로그
+- Check 리포트 JSON 파싱 실패/스키마 불일치 시 사용자에게 명확한 오류 안내
+
+[ ] 6.8 테스트/회귀 방지(최소)
+- Router 룰 기반 케이스 테스트(문구 → taskType)
+- JSON 리포트 스키마 검증 테스트(zod)
+- Ghost Chips 누락/변형 시나리오(리포트/편집 모두) 회귀 테스트

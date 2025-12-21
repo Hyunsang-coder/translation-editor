@@ -86,6 +86,7 @@ interface ProjectActions {
   loadProject: (project: ITEProject) => void;
   createNewProject: (metadata: Partial<ProjectMetadata>) => void;
   saveProject: () => Promise<void>;
+  switchProjectById: (projectId: string) => Promise<void>;
   updateGlossaryPaths: (paths: string[]) => void;
   addGlossaryPath: (path: string) => void;
   startAutoSave: () => void;
@@ -346,7 +347,6 @@ export const useProjectStore = create<ProjectStore>()(
       const { project, isDirty, isLoading, lastChangeAt } = get();
       const settings = project?.metadata.settings;
       const enabled = settings?.autoSave === true;
-      const interval = settings?.autoSaveInterval ?? 30000;
       const debounceMs = 1500;
       const idleFor = Date.now() - (lastChangeAt || 0);
       const canSaveNow = lastChangeAt > 0 && idleFor >= debounceMs;
@@ -363,10 +363,12 @@ export const useProjectStore = create<ProjectStore>()(
           });
       }
 
-      autoSaveTimer = window.setTimeout(tick, Math.max(3000, interval));
+      // interval(예: 30s)은 “체크 주기”로 쓰면 저장 반영이 늦게 느껴질 수 있어서,
+      // tick은 짧게 돌리고(500ms), 실제 저장은 debounceMs로 제어합니다.
+      autoSaveTimer = window.setTimeout(tick, 500);
     };
 
-    autoSaveTimer = window.setTimeout(tick, 5000);
+    autoSaveTimer = window.setTimeout(tick, 500);
   },
 
   stopAutoSave: (): void => {
@@ -455,55 +457,112 @@ export const useProjectStore = create<ProjectStore>()(
 
   // 프로젝트 저장 (Tauri 백엔드 호출 예정)
   saveProject: async (): Promise<void> => {
-    const { project, targetDocument, targetDocHandle } = get();
+    const { project, targetDocument, sourceDocument, targetDocHandle } = get();
     if (!project) return;
 
     set({ isLoading: true, saveStatus: 'saving', lastSaveError: null });
 
     try {
-      // 저장 직전: Target 단일 문서 내용을 blocks로 역투영(Tracked range 기준)
-      let projectToSave: ITEProject = project;
-      if (targetDocHandle) {
-        const ranges = targetDocHandle.getBlockOffsets();
-        const now = Date.now();
-        const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
+      const now = Date.now();
+      // 저장 직전: Target/Source 단일 문서 내용을 blocks로 역투영
+      // 1) 가능하면 tracked ranges 기반(정확)
+      // 2) 실패/미설정 시 segment/ids 기반 fallback(저장 누락 방지)
+      let nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
 
-        Object.entries(ranges).forEach(([blockId, r]) => {
+      const applyTargetByTrackedRanges = (): boolean => {
+        if (!targetDocHandle) return false;
+        const ranges = targetDocHandle.getBlockOffsets();
+        const entries = Object.entries(ranges);
+        if (entries.length === 0) return false;
+
+        let touched = 0;
+        for (const [blockId, r] of entries) {
           const block = nextBlocks[blockId];
-          if (!block || block.type !== 'target') return;
+          if (!block || block.type !== 'target') continue;
           const start = Math.max(0, Math.min(r.startOffset, targetDocument.length));
           const end = Math.max(start, Math.min(r.endOffset, targetDocument.length));
           const plain = targetDocument.slice(start, end);
           const html = toParagraphHtml(plain);
-          const newHash = hashContent(html);
-
           nextBlocks[blockId] = {
             ...block,
             content: html,
-            hash: newHash,
-            metadata: {
-              ...block.metadata,
-              updatedAt: now,
-            },
+            hash: hashContent(html),
+            metadata: { ...block.metadata, updatedAt: now },
           };
-        });
+          touched++;
+        }
+        return touched > 0;
+      };
 
-        projectToSave = {
-          ...project,
-          blocks: nextBlocks,
-        };
+      const applyTargetFallback = (): void => {
+        const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
+        const segTexts = targetDocument.split(/\n{2,}/);
+        orderedSegments.forEach((seg, segIndex) => {
+          const segText = segTexts[segIndex] ?? '';
+          const parts = segText.split('\n');
+          const ids = seg.targetIds;
+          ids.forEach((blockId, idx) => {
+            const block = nextBlocks[blockId];
+            if (!block || block.type !== 'target') return;
+            let plain = parts[idx] ?? '';
+            // 남는 라인이 있으면 마지막 블록에 합쳐서 유실을 최소화
+            if (idx === ids.length - 1 && parts.length > ids.length) {
+              plain = [plain, ...parts.slice(ids.length)].filter(Boolean).join('\n');
+            }
+            const html = toParagraphHtml(plain);
+            nextBlocks[blockId] = {
+              ...block,
+              content: html,
+              hash: hashContent(html),
+              metadata: { ...block.metadata, updatedAt: now },
+            };
+          });
+        });
+      };
+
+      const applySourceFallback = (): void => {
+        // Source 단일 문서는 buildSourceDocument가 blocks를 '\n\n'로 이어붙인 형태라,
+        // 동일하게 '\n{2,}'로 분해해 sourceIds 순서에 매핑합니다.
+        const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
+        const parts = sourceDocument.split(/\n{2,}/);
+        let cursor = 0;
+        orderedSegments.forEach((seg) => {
+          seg.sourceIds.forEach((blockId) => {
+            const block = nextBlocks[blockId];
+            if (!block || block.type !== 'source') return;
+            const plain = parts[cursor] ?? '';
+            cursor++;
+            const html = toParagraphHtml(plain);
+            nextBlocks[blockId] = {
+              ...block,
+              content: html,
+              hash: hashContent(html),
+              metadata: { ...block.metadata, updatedAt: now },
+            };
+          });
+        });
+      };
+
+      const okTracked = applyTargetByTrackedRanges();
+      if (!okTracked) {
+        applyTargetFallback();
       }
+      // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
+      applySourceFallback();
+
+      const projectToSave: ITEProject = {
+        ...project,
+        blocks: nextBlocks,
+        metadata: {
+          ...project.metadata,
+          updatedAt: now,
+        },
+      };
 
       await tauriSaveProject(projectToSave);
 
       set({
-        project: {
-          ...projectToSave,
-          metadata: {
-            ...projectToSave.metadata,
-            updatedAt: Date.now(),
-          },
-        },
+        project: projectToSave,
         isDirty: false,
         isLoading: false,
         saveStatus: 'idle',
@@ -520,12 +579,45 @@ export const useProjectStore = create<ProjectStore>()(
     }
   },
 
+  // 프로젝트 전환(auto-save-and-switch)
+  switchProjectById: async (projectId: string): Promise<void> => {
+    const { project, isDirty, stopAutoSave, startAutoSave, saveProject, loadProject } = get();
+    if (!projectId) return;
+    if (project?.id === projectId) return;
+
+    stopAutoSave();
+    set({ isLoading: true, error: null });
+
+    try {
+      if (isDirty) {
+        await saveProject();
+        // saveProject는 내부에서 catch를 삼키므로, 상태로 실패 여부를 확인
+        const { saveStatus, lastSaveError } = get();
+        if (saveStatus === 'error') {
+          throw new Error(lastSaveError || 'Failed to save project before switching');
+        }
+      }
+
+      const loaded = await tauriLoadProject(projectId);
+      loadProject(loaded);
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : 'Failed to switch project',
+        isLoading: false,
+      });
+    } finally {
+      startAutoSave();
+    }
+  },
+
   setTargetDocument: (next: string): void => {
     set({ targetDocument: next, isDirty: true, lastChangeAt: Date.now() });
+    scheduleWriteThroughSave(set, get);
   },
 
   setSourceDocument: (next: string): void => {
     set({ sourceDocument: next, isDirty: true, lastChangeAt: Date.now() });
+    scheduleWriteThroughSave(set, get);
   },
 
   rebuildTargetDocument: (): void => {
@@ -1036,12 +1128,10 @@ function scheduleWriteThroughSave(
 
   writeThroughTimer = window.setTimeout(() => {
     void (async () => {
-      const { project } = get();
-      if (!project) return;
-
       try {
-        await tauriSaveProject(project);
-        set({ isDirty: false });
+        // 단일 문서(Target/Source) 편집은 blocks로 역투영이 필요하므로,
+        // 직접 tauriSaveProject(project)를 호출하지 말고 store.saveProject()를 사용합니다.
+        await get().saveProject();
       } catch (e) {
         set({
           error: e instanceof Error ? e.message : 'Write-thru save failed',

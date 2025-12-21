@@ -5,6 +5,7 @@
 // Layout
 export { MainLayout } from './layout/MainLayout';
 export { Toolbar } from './layout/Toolbar';
+export { ProjectSidebar } from './layout/ProjectSidebar';
 
 // Panels
 export { SourcePanel } from './panels/SourcePanel';
