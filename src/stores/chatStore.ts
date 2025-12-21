@@ -750,12 +750,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
             )}`
           : undefined;
 
+      // [FIX] selection이나 instruction이 있으면, 컨텍스트 수집 여부와 상관없이 Apply 의도로 간주합니다.
+      // missing ghost chip이 없으면 appliable=true입니다.
+      const isApplyIntent = !!(selectionRaw || additionalInstruction || applyTargetId);
+      const isAppliable = isApplyIntent && missing.length === 0;
+
       if (assistantId) {
         updateMessage(assistantId, {
           content: reply,
           metadata: {
             ...(applyTargetId ? { suggestedBlockId: applyTargetId } : {}),
-            appliable: missing.length === 0,
+            appliable: isAppliable,
             ...(selectionRaw ? { selectionText: selectionRaw } : {}),
             ...(typeof selectionStartOffset === 'number' ? { selectionStartOffset } : {}),
             ...(typeof selectionEndOffset === 'number' ? { selectionEndOffset } : {}),

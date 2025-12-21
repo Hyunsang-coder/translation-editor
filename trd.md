@@ -111,7 +111,7 @@ What (Payload 구성 규칙: 우선순위):
 What (모델 출력 포맷 강제):
 - Edit 요청(선택 범위): 출력은 “선택 구간의 대체 텍스트만” (설명/불릿/따옴표/마크다운 금지)
 - Translate 요청: 출력은 “번역문 전체만” (설명 금지)
- - Check 요청(오탈자/검수): 출력은 “JSON 리포트만” (설명/마크다운 금지)
+- Check 요청(오탈자/검수): 출력은 “JSON 리포트만” (설명/마크다운 금지)
 
 3.3 Selection(Offset) → Segment/Block 매핑 규칙 (Range 기반)
 Why:
@@ -170,9 +170,10 @@ Why:
 What:
 - 원문 붙여넣기
   - SourceDocument는 참조 전용이며, 프로젝트에 저장되고 항상 AI 컨텍스트로 주입 가능해야 함
-- 시스템 프롬프트/참조 문서(글로서리 등)
-  - 사용자 편집 가능한 “System Prompt” 오버레이를 제공하고, 모델 호출 시 system 메시지에 반영
-  - 참조 문서는 프로젝트에 첨부되며, 관련 구간에만 부분 주입(키워드/FTS 기반 매칭 등) 가능하도록 설계(초기에는 단순 첨부도 허용)
+- 설정(Settings)/참조 문서(글로서리 등)
+  - AI 채팅 패널에는 “Settings” 화면이 존재하며, 여기에서 사용자 편집 가능한 설정을 관리한다.
+  - Settings 항목(최소): 시스템 프롬프트 오버레이(System Prompt Overlay), 번역 규칙(Translation Rules), Active Memory, 첨부 파일(참조문서/글로서리)
+  - 시스템 프롬프트 오버레이는 모델 호출 시 system 메시지에 반영된다.
   - 글로서리 주입은 비벡터(임베딩/벡터화 없음)로 한다.
 - 멀티 채팅 세션
   - “번역 작업 세션”과 “개념 질의 세션”을 분리할 수 있어야 함
@@ -184,6 +185,48 @@ What:
   - 모든 편집 제안은 항상 Diff Preview를 거치며, Keep/Discard의 결과가 저장/히스토리와 정합해야 함
 - 저장/재개
   - `.ite` 프로젝트 파일에 `blocks/segments/채팅 세션/참조 문서/요약 메모리`가 함께 저장되어 재개 시 그대로 복원되어야 함
+
+3.6 AI Chat UX 명세 (Tabs, Settings, Message Edit)
+Why:
+- 번역 작업은 “문서 편집”과 “대화/검수”가 동시에 진행되므로, 채팅 UX가 일반적인 AI 앱(ChatGPT/Claude) 수준의 편집성과 멀티 스레드를 제공해야 한다.
+
+What:
+- 멀티 탭 채팅(Thread Tabs)
+  - 하나의 프로젝트 내에서 AI 채팅 탭을 여러 개 생성/전환할 수 있어야 한다.
+  - 탭들은 동일 프로젝트의 Settings(시스템 프롬프트 오버레이/번역 규칙/Active Memory/첨부 파일 등)를 공유한다.
+  - 각 탭(thread)은 메시지 히스토리를 독립적으로 가진다.
+- Settings 화면 전환(Replace)
+  - 기존 “System Prompt” 버튼은 “Settings”로 명명한다.
+  - Settings를 열면 채팅 메시지 리스트/입력창은 숨겨지고, 해당 탭의 화면이 Settings UI로 “교체(replace)”된다.
+  - Settings를 닫으면 원래의 채팅 화면으로 복귀한다.
+- 메시지 수정(Edit Message) — 일반 AI 채팅 UX
+  - 사용자는 기존 사용자 메시지(내가 보낸 메시지)를 수정할 수 있어야 한다.
+  - 메시지를 수정하면, 그 메시지 “이하”의 메시지는 모두 삭제(truncate)된다.
+  - 삭제(truncate) 이후의 흐름은 사용자가 재전송/재생성을 명시적으로 요청할 때만 진행한다(On-Demand 유지).
+  - (권장) 수정 이력: `editedAt`, `originalContent`를 보관하여 디버깅/재현성을 확보한다.
+- EditSession 정합성(중요)
+  - 메시지 수정으로 인해 삭제된 요청에서 파생된 `pending` EditSession은 자동으로 `discarded` 처리한다.
+  - 이미 `kept`된 변경은 문서 상태로 확정된 것이므로 되돌리지 않는다(되돌림은 별도 히스토리/undo 정책으로 처리).
+
+3.7 Settings 필드명/프롬프트 변수명 일관화
+What:
+- Settings의 “참조문서/용어집 메모(모델에 그대로 전달)” 필드명은 “번역 규칙”으로 변경한다.
+- 내부 변수명도 `referenceNotes` 대신 `translationRules`로 일관되게 변경한다.
+- Payload/프롬프트 섹션 라벨 또한 “번역 규칙(Translation Rules)”로 통일한다.
+
+3.8 첨부 파일(Reference Attachments) 확장 명세
+Why:
+- CSV/Excel뿐 아니라, PDF/PPTX/이미지/Markdown/DOCX 등 다양한 참고 자료를 “프로젝트에 첨부”하여 모델에 전달할 수 있어야 한다.
+
+What:
+- 지원 파일(1차 목표): csv, xlsx/xls, pdf, pptx, png/jpg/webp, md, docx
+- 저장/공유:
+  - 첨부 파일은 프로젝트 단위로 관리되며, 모든 채팅 탭이 동일 첨부 목록을 공유한다.
+- 모델 전달 원칙:
+  - 기본: Provider(OpenAI/Anthropic 등)가 제공하는 “파일 업로드/첨부” 메커니즘을 사용해, 첨부 파일을 원형 그대로 모델 입력에 포함한다.
+  - 파일 전달은 On-Demand 모델 호출 시점에만 수행하며(사용자 요청 기반), 요청 payload에는 업로드된 파일 참조(예: file_id 등)와 함께 “어떤 파일을 참고해야 하는지”를 명시한다.
+  - (호환성/폴백) 특정 포맷/모델에서 파일 첨부가 불가한 경우에만 텍스트 추출(및 이미지 OCR)로 폴백하여 payload에 포함한다.
+  - 과도한 컨텍스트 방지를 위해 파일별/전체 길이 제한 및 우선순위(사용자 선택/최근 첨부/키워드 매칭)를 둔다.
 
 4. 데이터 영속성 (Data & Storage)
 4.1 SQLite 기반의 단일 파일 구조 (.ite)
@@ -197,6 +240,10 @@ What (Schema 개요):
 - `blocks`: 각 문단/문장의 원문 및 번역문 데이터
 - `chat_sessions`: 대화 로그 및 컨텍스트 요약본
 - `snapshots`: 특정 시점의 전체 텍스트 상태(Version Control)
+
+What (Project Metadata UX):
+- 사이드바에서 Project 이름을 수정(rename)할 수 있어야 한다.
+- 변경된 Project 이름은 프로젝트 메타데이터로 저장되며 `.ite`에 영속화되어 재개 시 복원되어야 한다.
 
 5. 특화 기능 명세 (Specialized Sub-systems)
 5.1 Ghost Chips (태그 보호)
@@ -219,6 +266,13 @@ How:
 1) 대화 토큰 수를 실시간 모니터링한다.
 2) 임계치 도달 시, 과거 대화에서 확정된 “용어”와 “스타일 규칙”만 추출해 요약한다.
 3) 요약본을 시스템 프롬프트의 Active Memory 섹션으로 전송한다.
+
+What (Active Memory 제안 UX: Confirm-to-Add):
+- 시스템은 대화 중 “중요 규칙/용어/톤”을 감지하면 사용자에게 “Memory에 추가할까요?”를 제안할 수 있다.
+- 사용자가 YES를 선택한 경우에만 Active Memory에 추가한다(자동 추가 금지).
+- 제안 트리거는 분류용 모델 호출을 허용한다.
+  - 단, 사용자가 메시지를 전송한 “요청 처리 흐름” 내부에서만 수행하며(백그라운드 자동 실행 금지), 별도/추가적인 문서 자동 수정은 하지 않는다.
+  - 분류 모델의 출력은 “제안 여부/후보 문구”에 한정하고, 실제 Active Memory 반영은 사용자 YES 확인 후에만 수행한다.
 
 6. 개발 도구 및 환경 (Dev Tools)
 State Management: Zustand (Global Store), Immer (Immutable Updates).
