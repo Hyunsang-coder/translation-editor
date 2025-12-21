@@ -286,7 +286,7 @@ export const useProjectStore = create<ProjectStore>()(
             isLoading: false,
             error: null,
             targetDocument: td.text,
-            sourceDocument: buildSourceDocument(loaded),
+            sourceDocument: buildSourceDocument(loaded).text,
           });
           return;
         } catch {
@@ -308,7 +308,7 @@ export const useProjectStore = create<ProjectStore>()(
             error: null,
             lastProjectId: loaded.id,
             targetDocument: td.text,
-            sourceDocument: buildSourceDocument(loaded),
+            sourceDocument: buildSourceDocument(loaded).text,
           });
           return;
         }
@@ -325,7 +325,7 @@ export const useProjectStore = create<ProjectStore>()(
         error: null,
         lastProjectId: initialProject.id,
         targetDocument: td.text,
-        sourceDocument: buildSourceDocument(initialProject),
+        sourceDocument: buildSourceDocument(initialProject).text,
       });
 
       // 초기 프로젝트를 DB에 저장 (첫 실행 시)
@@ -355,8 +355,13 @@ export const useProjectStore = create<ProjectStore>()(
         autoSaveInFlight = true;
         void get()
           .saveProject()
-          .catch(() => {
-            // autosave는 조용히 실패 처리 (UX 방해 최소화)
+          .catch((err: unknown) => {
+            // autosave 실패 시 콘솔에 로그 + 상태 업데이트 (UI는 방해하지 않음)
+            console.warn('[AutoSave] Failed:', err);
+            set({
+              saveStatus: 'error',
+              lastSaveError: err instanceof Error ? err.message : 'AutoSave failed',
+            });
           })
           .finally(() => {
             autoSaveInFlight = false;
@@ -421,7 +426,16 @@ export const useProjectStore = create<ProjectStore>()(
   },
 
   // 프로젝트 로드
+  // 주의: 이전 프로젝트가 dirty면 저장하지 않고 바로 덮어씁니다.
+  // 이전 프로젝트를 저장하려면 호출 전에 saveProject()를 먼저 호출하거나,
+  // switchProjectById()를 사용하세요.
   loadProject: (project: ITEProject): void => {
+    // write-through 타이머 취소 (이전 프로젝트가 새 프로젝트 상태로 저장되는 것 방지)
+    if (writeThroughTimer !== null) {
+      window.clearTimeout(writeThroughTimer);
+      writeThroughTimer = null;
+    }
+
     const td = buildTargetDocument(project);
     set({
       project,
@@ -430,35 +444,70 @@ export const useProjectStore = create<ProjectStore>()(
       error: null,
       lastProjectId: project.id,
       targetDocument: td.text,
-      sourceDocument: buildSourceDocument(project),
+      sourceDocument: buildSourceDocument(project).text,
+      // pendingDocDiff 초기화 (이전 프로젝트의 diff가 남아있으면 문제)
+      pendingDocDiff: null,
     });
   },
 
   // 새 프로젝트 생성
   createNewProject: (metadata: Partial<ProjectMetadata>): void => {
-    const initialProject = createInitialProject();
-    const nextProject: ITEProject = {
-      ...initialProject,
-      metadata: {
-        ...initialProject.metadata,
-        ...metadata,
-      },
-    };
-    const td = buildTargetDocument(nextProject);
-    set({
-      project: nextProject,
-      isDirty: true,
-      lastProjectId: initialProject.id,
-      targetDocument: td.text,
-      sourceDocument: buildSourceDocument(nextProject),
-    });
-    scheduleWriteThroughSave(set, get);
+    const { project, isDirty, stopAutoSave, startAutoSave } = get();
+
+    // 기존 프로젝트가 있고 변경사항이 있으면 먼저 저장
+    if (project && isDirty) {
+      stopAutoSave();
+      void (async () => {
+        try {
+          await get().saveProject();
+        } catch (e) {
+          console.warn('[createNewProject] Failed to save previous project:', e);
+        }
+        // 저장 후 새 프로젝트 생성 진행
+        createAndSetNewProject();
+        startAutoSave();
+      })();
+    } else {
+      createAndSetNewProject();
+    }
+
+    function createAndSetNewProject(): void {
+      const initialProject = createInitialProject();
+      const nextProject: ITEProject = {
+        ...initialProject,
+        metadata: {
+          ...initialProject.metadata,
+          ...metadata,
+        },
+      };
+      const td = buildTargetDocument(nextProject);
+      set({
+        project: nextProject,
+        isDirty: true,
+        lastProjectId: initialProject.id,
+        targetDocument: td.text,
+        sourceDocument: buildSourceDocument(nextProject).text,
+      });
+      scheduleWriteThroughSave(set, get);
+    }
   },
 
   // 프로젝트 저장 (Tauri 백엔드 호출 예정)
   saveProject: async (): Promise<void> => {
     const { project, targetDocument, sourceDocument, targetDocHandle } = get();
-    if (!project) return;
+    
+    console.log('[saveProject] called', {
+      hasProject: !!project,
+      projectId: project?.id,
+      targetDocLength: targetDocument?.length,
+      sourceDocLength: sourceDocument?.length,
+      hasTargetDocHandle: !!targetDocHandle,
+    });
+    
+    if (!project) {
+      console.warn('[saveProject] No project, returning');
+      return;
+    }
 
     set({ isLoading: true, saveStatus: 'saving', lastSaveError: null });
 
@@ -470,6 +519,8 @@ export const useProjectStore = create<ProjectStore>()(
       let nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
 
       const applyTargetByTrackedRanges = (): boolean => {
+        // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
+        if (!targetDocument || targetDocument.length === 0) return false;
         if (!targetDocHandle) return false;
         const ranges = targetDocHandle.getBlockOffsets();
         const entries = Object.entries(ranges);
@@ -495,56 +546,102 @@ export const useProjectStore = create<ProjectStore>()(
       };
 
       const applyTargetFallback = (): void => {
-        const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
-        const segTexts = targetDocument.split(/\n{2,}/);
-        orderedSegments.forEach((seg, segIndex) => {
-          const segText = segTexts[segIndex] ?? '';
-          const parts = segText.split('\n');
-          const ids = seg.targetIds;
-          ids.forEach((blockId, idx) => {
-            const block = nextBlocks[blockId];
-            if (!block || block.type !== 'target') return;
-            let plain = parts[idx] ?? '';
-            // 남는 라인이 있으면 마지막 블록에 합쳐서 유실을 최소화
-            if (idx === ids.length - 1 && parts.length > ids.length) {
-              plain = [plain, ...parts.slice(ids.length)].filter(Boolean).join('\n');
-            }
-            const html = toParagraphHtml(plain);
-            nextBlocks[blockId] = {
-              ...block,
-              content: html,
-              hash: hashContent(html),
-              metadata: { ...block.metadata, updatedAt: now },
-            };
-          });
-        });
+        // targetDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+        // (기존 blocks 내용 유지)
+        if (!targetDocument || targetDocument.length === 0) {
+          return;
+        }
+
+        // 원본 blocks 기준으로 초기 offset을 계산하고,
+        // 현재 targetDocument 길이와의 차이를 마지막 블록에 적용합니다.
+        // 이렇게 하면 사용자가 추가한 줄바꿈이 잘못된 세그먼트로 매핑되는 문제를 방지합니다.
+        const initialBuild = buildTargetDocument(project);
+        const initialLength = initialBuild.text.length;
+        const currentLength = targetDocument.length;
+        const delta = currentLength - initialLength;
+
+        const blockIds = Object.keys(initialBuild.blockRanges);
+        if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+        const lastBlockId = blockIds[blockIds.length - 1];
+
+        for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+          const block = nextBlocks[blockId];
+          if (!block || block.type !== 'target') continue;
+
+          let start = r.startOffset;
+          let end = r.endOffset;
+
+          // 마지막 블록이면 길이 변화(delta)를 반영
+          if (blockId === lastBlockId) {
+            end = Math.max(start, Math.min(end + delta, currentLength));
+          }
+
+          // 범위 안전 체크
+          start = Math.max(0, Math.min(start, currentLength));
+          end = Math.max(start, Math.min(end, currentLength));
+
+          const plain = targetDocument.slice(start, end);
+          const html = toParagraphHtml(plain);
+          nextBlocks[blockId] = {
+            ...block,
+            content: html,
+            hash: hashContent(html),
+            metadata: { ...block.metadata, updatedAt: now },
+          };
+        }
       };
 
       const applySourceFallback = (): void => {
-        // Source 단일 문서는 buildSourceDocument가 blocks를 '\n\n'로 이어붙인 형태라,
-        // 동일하게 '\n{2,}'로 분해해 sourceIds 순서에 매핑합니다.
-        const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
-        const parts = sourceDocument.split(/\n{2,}/);
-        let cursor = 0;
-        orderedSegments.forEach((seg) => {
-          seg.sourceIds.forEach((blockId) => {
-            const block = nextBlocks[blockId];
-            if (!block || block.type !== 'source') return;
-            const plain = parts[cursor] ?? '';
-            cursor++;
-            const html = toParagraphHtml(plain);
-            nextBlocks[blockId] = {
-              ...block,
-              content: html,
-              hash: hashContent(html),
-              metadata: { ...block.metadata, updatedAt: now },
-            };
-          });
-        });
+        // sourceDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+        // (기존 blocks 내용 유지)
+        if (!sourceDocument || sourceDocument.length === 0) {
+          return;
+        }
+
+        // 원본 blocks 기준으로 초기 offset을 계산하고,
+        // 현재 sourceDocument 길이와의 차이를 마지막 블록에 적용합니다.
+        const initialBuild = buildSourceDocument(project);
+        const initialLength = initialBuild.text.length;
+        const currentLength = sourceDocument.length;
+        const delta = currentLength - initialLength;
+
+        const blockIds = Object.keys(initialBuild.blockRanges);
+        if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+        const lastBlockId = blockIds[blockIds.length - 1];
+
+        for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+          const block = nextBlocks[blockId];
+          if (!block || block.type !== 'source') continue;
+
+          let start = r.startOffset;
+          let end = r.endOffset;
+
+          // 마지막 블록이면 길이 변화(delta)를 반영
+          if (blockId === lastBlockId) {
+            end = Math.max(start, Math.min(end + delta, currentLength));
+          }
+
+          // 범위 안전 체크
+          start = Math.max(0, Math.min(start, currentLength));
+          end = Math.max(start, Math.min(end, currentLength));
+
+          const plain = sourceDocument.slice(start, end);
+          const html = toParagraphHtml(plain);
+          nextBlocks[blockId] = {
+            ...block,
+            content: html,
+            hash: hashContent(html),
+            metadata: { ...block.metadata, updatedAt: now },
+          };
+        }
       };
 
       const okTracked = applyTargetByTrackedRanges();
+      console.log('[saveProject] applyTargetByTrackedRanges result:', okTracked);
       if (!okTracked) {
+        console.log('[saveProject] Using applyTargetFallback');
         applyTargetFallback();
       }
       // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
@@ -559,7 +656,18 @@ export const useProjectStore = create<ProjectStore>()(
         },
       };
 
+      console.log('[saveProject] Calling tauriSaveProject...', {
+        projectId: projectToSave.id,
+        blocksCount: Object.keys(nextBlocks).length,
+        targetBlocksSample: Object.values(nextBlocks)
+          .filter(b => b.type === 'target')
+          .slice(0, 2)
+          .map(b => ({ id: b.id, contentLength: b.content.length, content: b.content.slice(0, 100) })),
+      });
+      
       await tauriSaveProject(projectToSave);
+      
+      console.log('[saveProject] SUCCESS - saved project:', projectToSave.id);
 
       set({
         project: projectToSave,
@@ -570,6 +678,7 @@ export const useProjectStore = create<ProjectStore>()(
         lastProjectId: projectToSave.id,
       });
     } catch (error) {
+      console.error('[saveProject] FAILED:', error);
       set({
         error: error instanceof Error ? error.message : 'Failed to save project',
         isLoading: false,
@@ -611,6 +720,7 @@ export const useProjectStore = create<ProjectStore>()(
   },
 
   setTargetDocument: (next: string): void => {
+    console.log('[setTargetDocument] called, length:', next?.length);
     set({ targetDocument: next, isDirty: true, lastChangeAt: Date.now() });
     scheduleWriteThroughSave(set, get);
   },
@@ -631,7 +741,7 @@ export const useProjectStore = create<ProjectStore>()(
     const { project } = get();
     if (!project) return;
     const sd = buildSourceDocument(project);
-    set({ sourceDocument: sd });
+    set({ sourceDocument: sd.text });
   },
 
   openDocDiffPreview: (params): void => {
@@ -1122,19 +1232,25 @@ function scheduleWriteThroughSave(
   set: (partial: Partial<ProjectStore>) => void,
   get: () => ProjectStore,
 ): void {
+  console.log('[scheduleWriteThroughSave] scheduling save in', WRITE_THROUGH_DELAY_MS, 'ms');
+  
   if (writeThroughTimer !== null) {
     window.clearTimeout(writeThroughTimer);
   }
 
   writeThroughTimer = window.setTimeout(() => {
+    console.log('[scheduleWriteThroughSave] timer fired, calling saveProject');
     void (async () => {
       try {
         // 단일 문서(Target/Source) 편집은 blocks로 역투영이 필요하므로,
         // 직접 tauriSaveProject(project)를 호출하지 말고 store.saveProject()를 사용합니다.
         await get().saveProject();
       } catch (e) {
+        console.warn('[WriteThroughSave] Failed:', e);
         set({
           error: e instanceof Error ? e.message : 'Write-thru save failed',
+          saveStatus: 'error',
+          lastSaveError: e instanceof Error ? e.message : 'Write-thru save failed',
         });
       }
     })();

@@ -42,7 +42,7 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
     const built = buildTargetDocument(project);
     return {
       blockRanges: built.blockRanges,
-      sourceDocument: buildSourceDocument(project),
+      sourceDocument: buildSourceDocument(project).text,
     };
   }, [project]);
 

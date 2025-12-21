@@ -79,6 +79,17 @@ export function ProjectSidebar(): JSX.Element {
     });
     if (!ok) return;
 
+    // 기존 프로젝트가 있고 변경사항이 있으면 먼저 저장
+    const { project: currentProject, isDirty, saveProject: doSave } = useProjectStore.getState();
+    if (currentProject && isDirty) {
+      try {
+        await doSave();
+      } catch (e) {
+        console.warn('[handleNewProject] Failed to save previous project:', e);
+        // 저장 실패해도 새 프로젝트 생성 진행 (사용자가 이미 확인함)
+      }
+    }
+
     const created = await createProject({
       title: form.title.trim() || 'New Project',
       sourceLanguage: form.sourceLanguage.trim() || 'English',
