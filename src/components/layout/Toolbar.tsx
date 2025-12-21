@@ -10,6 +10,7 @@ import {
 } from '@/tauri/storage';
 import { pickExportItePath, pickImportIteFile } from '@/tauri/dialog';
 import { loadProject as tauriLoadProject } from '@/tauri/project';
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useState } from 'react';
 
 /**
@@ -17,10 +18,28 @@ import { useEffect, useMemo, useState } from 'react';
  */
 export function Toolbar(): JSX.Element {
   const { focusMode, toggleFocusMode, theme, setTheme } = useUIStore();
-  const { project, saveProject, loadProject, isDirty, isLoading } = useProjectStore();
+  const { project, saveProject, loadProject, isDirty, isLoading, stopAutoSave, startAutoSave } =
+    useProjectStore();
   const [recentOpen, setRecentOpen] = useState(false);
   const [recentLoading, setRecentLoading] = useState(false);
   const [recent, setRecent] = useState<RecentProjectInfo[]>([]);
+
+  const askConfirm = async (text: string, title: string): Promise<boolean> => {
+    try {
+      return await confirm(text, { title, kind: 'warning', buttons: 'YesNo' });
+    } catch {
+      // fallback (비-Tauri 환경 등)
+      return window.confirm(text);
+    }
+  };
+
+  const showMessage = async (text: string, title: string, kind: 'info' | 'warning' | 'error') => {
+    try {
+      await message(text, { title, kind });
+    } catch {
+      window.alert(text);
+    }
+  };
 
   const handleSave = async (): Promise<void> => {
     await saveProject();
@@ -33,29 +52,62 @@ export function Toolbar(): JSX.Element {
     if (!path) return;
     try {
       await exportProjectFile(path);
-      window.alert(`Export 완료\n경로: ${path}`);
+      await showMessage(`Export 완료\n경로: ${path}`, 'Export', 'info');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Export에 실패했습니다.';
-      window.alert(`Export 실패\n\n경로: ${path}\n오류: ${msg}`);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : (() => {
+                try {
+                  return JSON.stringify(e);
+                } catch {
+                  return String(e);
+                }
+              })();
+      await showMessage(`Export 실패\n\n경로: ${path}\n오류: ${msg}`, 'Export 실패', 'error');
     }
   };
 
   const handleImport = async (): Promise<void> => {
     const file = await pickImportIteFile();
     if (!file) return;
-    const ok = window.confirm(
+    const ok = await askConfirm(
       'Import는 현재 DB를 덮어씁니다. 진행하기 전에 자동 백업을 생성한 뒤 Import를 수행합니다. 계속할까요?',
+      'Import 확인',
     );
     if (!ok) return;
-    const res = await importProjectFileSafe(file);
-    const firstId = res.projectIds[0];
-    if (!firstId) {
-      window.alert('Import는 완료되었지만 프로젝트를 찾지 못했습니다.');
-      return;
+    // autosave/저장과 DB lock 경쟁을 피하기 위해, import 동안 일시 중지
+    stopAutoSave();
+    try {
+      const res = await importProjectFileSafe(file);
+      const firstId = res.projectIds[0];
+      if (!firstId) {
+        await showMessage('Import는 완료되었지만 프로젝트를 찾지 못했습니다.', 'Import', 'warning');
+        return;
+      }
+      const loaded = await tauriLoadProject(firstId);
+      loadProject(loaded);
+      await showMessage(`Import 완료\n(자동 백업: ${res.backupPath})`, 'Import', 'info');
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : (() => {
+                try {
+                  return JSON.stringify(e);
+                } catch {
+                  return String(e);
+                }
+              })();
+      await showMessage(`Import 실패\n\n오류: ${msg}`, 'Import 실패', 'error');
+    } finally {
+      // import 후 자동 저장 재개
+      startAutoSave();
     }
-    const loaded = await tauriLoadProject(firstId);
-    loadProject(loaded);
-    window.alert(`Import 완료\n(자동 백업: ${res.backupPath})`);
   };
 
   const refreshRecent = async (): Promise<void> => {
@@ -69,15 +121,19 @@ export function Toolbar(): JSX.Element {
   };
 
   const handleDeleteRecent = async (projectId: string): Promise<void> => {
-    const ok = window.confirm('이 프로젝트를 삭제할까요?\n(최근 목록에서 제거되며, DB에서 삭제됩니다)');
+    const ok = await askConfirm(
+      '이 프로젝트를 삭제할까요?\n(최근 목록에서 제거되며, DB에서 삭제됩니다)',
+      '프로젝트 삭제',
+    );
     if (!ok) return;
     await deleteProject(projectId);
     await refreshRecent();
   };
 
   const handleClearAllRecent = async (): Promise<void> => {
-    const ok = window.confirm(
+    const ok = await askConfirm(
       '모든 프로젝트를 삭제할까요?\n(최근 목록이 비워지며, DB의 프로젝트가 모두 삭제됩니다)',
+      '전체 삭제',
     );
     if (!ok) return;
     await deleteAllProjects();
@@ -229,9 +285,14 @@ export function Toolbar(): JSX.Element {
                             } catch (e) {
                               const msg =
                                 e instanceof Error ? e.message : '프로젝트 로드에 실패했습니다.';
-                              window.alert(`프로젝트를 열 수 없습니다.\n\nID: ${p.id}\n오류: ${msg}`);
-                              const ok = window.confirm(
+                              await showMessage(
+                                `프로젝트를 열 수 없습니다.\n\nID: ${p.id}\n오류: ${msg}`,
+                                '프로젝트 로드 실패',
+                                'error',
+                              );
+                              const ok = await askConfirm(
                                 '이 항목을 최근 목록에서 삭제할까요?\n(최근 목록에서 제거되며, DB에서 삭제됩니다)',
+                                '삭제 확인',
                               );
                               if (ok) {
                                 try {

@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use rusqlite::backup::Backup;
 
 use crate::error::IteError;
-use crate::models::{EditorBlock, IteProject, SegmentGroup};
+use crate::models::{ChatMessageMetadata, ChatSession, EditorBlock, IteProject, SegmentGroup};
 
 #[derive(Debug, Clone)]
 pub struct GlossaryEntryRow {
@@ -62,19 +62,23 @@ impl Database {
             std::fs::create_dir_all(parent)?;
         }
 
-        let mut out_conn = Connection::open(out_path)?;
-        // 스키마가 없어도 백업이 전체 DB를 복제하지만,
-        // 일부 환경에서의 안정성을 위해 명시적으로 초기화합니다.
-        out_conn.execute_batch(schema::CREATE_SCHEMA)?;
+        // 백업 수행은 scope로 감싸 out_conn을 확실히 drop(=flush) 한 뒤 파일 크기 검증을 합니다.
+        // (일부 환경에선 connection이 살아있는 동안 metadata.len()이 0으로 보일 수 있음)
+        {
+            let mut out_conn = Connection::open(out_path)?;
+            // 스키마가 없어도 백업이 전체 DB를 복제하지만,
+            // 일부 환경에서의 안정성을 위해 명시적으로 초기화합니다.
+            out_conn.execute_batch(schema::CREATE_SCHEMA)?;
 
-        let backup = Backup::new(&self.conn, &mut out_conn)?;
-        backup.run_to_completion(5, std::time::Duration::from_millis(10), None)?;
+            let backup = Backup::new(&self.conn, &mut out_conn)?;
+            backup.run_to_completion(5, std::time::Duration::from_millis(10), None)?;
+        } // out_conn drop
 
-        // 일부 환경에서 “성공처럼 보이지만 파일이 실제로 생성되지 않음/0 byte” 케이스 방지용 검증
+        // “성공처럼 보이지만 파일이 실제로 생성되지 않음/0 byte” 케이스 방지용 검증
         let meta = std::fs::metadata(out_path)?;
         if meta.len() == 0 {
             return Err(IteError::InvalidOperation(format!(
-                "Export produced an empty file: {}",
+                "Export produced an empty file (size=0): {}",
                 out_path.display()
             )));
         }
@@ -92,6 +96,10 @@ impl Database {
             [project_id],
         )?;
         tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
+        tx.execute(
+            "DELETE FROM chat_project_settings WHERE project_id = ?1",
+            [project_id],
+        )?;
 
         tx.execute("DELETE FROM history WHERE project_id = ?1", [project_id])?;
         tx.execute("DELETE FROM glossary_entries WHERE project_id = ?1", [project_id])?;
@@ -110,6 +118,7 @@ impl Database {
 
         tx.execute("DELETE FROM chat_messages", [])?;
         tx.execute("DELETE FROM chat_sessions", [])?;
+        tx.execute("DELETE FROM chat_project_settings", [])?;
         tx.execute("DELETE FROM history", [])?;
         tx.execute("DELETE FROM glossary_entries WHERE project_id IS NOT NULL", [])?;
         tx.execute("DELETE FROM segments", [])?;
@@ -223,6 +232,145 @@ impl Database {
 
         tx.commit()?;
         Ok(())
+    }
+
+    /// 현재 채팅 세션(1개)을 프로젝트에 저장
+    /// - 요구사항: 프로젝트별 "현재 세션 1개만" 저장
+    pub fn save_current_chat_session(
+        &self,
+        project_id: &str,
+        session: &ChatSession,
+    ) -> Result<(), IteError> {
+        let tx = self.conn.unchecked_transaction()?;
+
+        // 기존 세션/메시지 제거(프로젝트당 1개만 유지)
+        tx.execute(
+            "DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE project_id = ?1)",
+            [project_id],
+        )?;
+        tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
+
+        tx.execute(
+            "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                &session.id,
+                project_id,
+                &session.name,
+                session.created_at,
+                serde_json::to_string(&session.context_block_ids)?,
+            ),
+        )?;
+
+        for m in &session.messages {
+            let meta_json: Option<String> = match &m.metadata {
+                Some(meta) => Some(serde_json::to_string(meta)?),
+                None => None,
+            };
+            tx.execute(
+                "INSERT INTO chat_messages (id, session_id, role, content, timestamp, metadata_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (
+                    &m.id,
+                    &session.id,
+                    &m.role,
+                    &m.content,
+                    m.timestamp,
+                    meta_json,
+                ),
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 현재 채팅 세션(1개) 로드
+    pub fn load_current_chat_session(&self, project_id: &str) -> Result<Option<ChatSession>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, created_at, context_block_ids
+             FROM chat_sessions WHERE project_id = ?1
+             ORDER BY created_at DESC LIMIT 1",
+        )?;
+
+        let row = stmt.query_row([project_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        });
+
+        let (session_id, name, created_at, context_block_ids_json) = match row {
+            Ok(v) => v,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(IteError::Database(e)),
+        };
+
+        let context_block_ids: Vec<String> =
+            serde_json::from_str(&context_block_ids_json).unwrap_or_default();
+
+        let mut msg_stmt = self.conn.prepare(
+            "SELECT id, role, content, timestamp, metadata_json
+             FROM chat_messages WHERE session_id = ?1
+             ORDER BY timestamp ASC",
+        )?;
+
+        let iter = msg_stmt.query_map([&session_id], |row| {
+            let metadata_json: Option<String> = row.get(4)?;
+            let metadata: Option<ChatMessageMetadata> = metadata_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<ChatMessageMetadata>(s).ok());
+            Ok(crate::models::ChatMessage {
+                id: row.get(0)?,
+                role: row.get(1)?,
+                content: row.get(2)?,
+                timestamp: row.get(3)?,
+                metadata,
+            })
+        })?;
+
+        let mut messages = Vec::new();
+        for m in iter {
+            messages.push(m?);
+        }
+
+        Ok(Some(ChatSession {
+            id: session_id,
+            name,
+            created_at,
+            messages,
+            context_block_ids,
+        }))
+    }
+
+    /// 프로젝트별 채팅 설정 저장(JSON)
+    pub fn save_chat_project_settings(
+        &self,
+        project_id: &str,
+        settings_json: &str,
+        updated_at: i64,
+    ) -> Result<(), IteError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO chat_project_settings (project_id, settings_json, updated_at)
+             VALUES (?1, ?2, ?3)",
+            (project_id, settings_json, updated_at),
+        )?;
+        Ok(())
+    }
+
+    /// 프로젝트별 채팅 설정 로드(JSON)
+    pub fn load_chat_project_settings(&self, project_id: &str) -> Result<Option<String>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT settings_json FROM chat_project_settings WHERE project_id = ?1",
+        )?;
+        let row = stmt.query_row([project_id], |row| row.get::<_, String>(0));
+        match row {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(IteError::Database(e)),
+        }
     }
 
     /// 프로젝트 로드

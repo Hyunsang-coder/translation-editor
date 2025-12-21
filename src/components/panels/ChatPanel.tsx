@@ -37,6 +37,12 @@ export function ChatPanel(): JSX.Element {
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const project = useProjectStore((s) => s.project);
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
+  const hydrateForProject = useChatStore((s) => s.hydrateForProject);
+
+  // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원
+  useEffect(() => {
+    void hydrateForProject(project?.id ?? null);
+  }, [project?.id, hydrateForProject]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

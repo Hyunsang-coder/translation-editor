@@ -1,11 +1,11 @@
 import { invoke } from '@/tauri/invoke';
 
 export async function exportProjectFile(path: string): Promise<void> {
-  await invoke<void>('export_project_file', { path });
+  await invoke<void>('export_project_file', { args: { path } });
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  await invoke<void>('delete_project', { projectId });
+  await invoke<void>('delete_project', { args: { projectId } });
 }
 
 export async function deleteAllProjects(): Promise<void> {
@@ -18,11 +18,11 @@ export interface ImportProjectFileSafeResult {
 }
 
 export async function importProjectFile(path: string): Promise<string[]> {
-  return await invoke<string[]>('import_project_file', { path });
+  return await invoke<string[]>('import_project_file', { args: { path } });
 }
 
 export async function importProjectFileSafe(path: string): Promise<ImportProjectFileSafeResult> {
-  return await invoke<ImportProjectFileSafeResult>('import_project_file_safe', { path });
+  return await invoke<ImportProjectFileSafeResult>('import_project_file_safe', { args: { path } });
 }
 
 export async function listProjectIds(): Promise<string[]> {

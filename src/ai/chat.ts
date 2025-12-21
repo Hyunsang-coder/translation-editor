@@ -59,7 +59,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   }
 
   const model = createChatModel();
-  const messages = buildLangChainMessages(
+  const messages = await buildLangChainMessages(
     {
       project: input.project,
       contextBlocks: input.contextBlocks,
@@ -105,7 +105,7 @@ export async function streamAssistantReply(
   }
 
   const model = createChatModel();
-  const messages = buildLangChainMessages(
+  const messages = await buildLangChainMessages(
     {
       project: input.project,
       contextBlocks: input.contextBlocks,

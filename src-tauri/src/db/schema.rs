@@ -84,6 +84,15 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_project ON chat_sessions(project_id
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
 
+-- 채팅 설정(프로젝트별)
+-- ChatPanel의 systemPromptOverlay/referenceNotes/activeMemory/include flags 등을 JSON으로 저장
+CREATE TABLE IF NOT EXISTS chat_project_settings (
+    project_id TEXT PRIMARY KEY,
+    settings_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
 -- 용어집 테이블
 CREATE TABLE IF NOT EXISTS glossary_entries (
     id TEXT PRIMARY KEY,

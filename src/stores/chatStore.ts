@@ -6,6 +6,14 @@ import { getAiConfig } from '@/ai/config';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { searchGlossary } from '@/tauri/glossary';
+import { isTauriRuntime } from '@/tauri/invoke';
+import {
+  loadChatProjectSettings,
+  loadCurrentChatSession,
+  saveChatProjectSettings,
+  saveCurrentChatSession,
+  type ChatProjectSettings,
+} from '@/tauri/chat';
 import {
   createGhostMaskSession,
   maskGhostChips,
@@ -14,6 +22,11 @@ import {
   diffMissingGhostChips,
 } from '@/utils/ghostMask';
 import { stripHtml } from '@/utils/hash';
+
+const CHAT_PERSIST_DEBOUNCE_MS = 800;
+let chatPersistTimer: number | null = null;
+let chatPersistInFlight = false;
+let chatPersistQueued = false;
 
 // ============================================
 // Store State Interface
@@ -98,6 +111,9 @@ interface ChatActions {
   setActiveMemory: (memory: string) => void;
   setIncludeSourceInPayload: (val: boolean) => void;
   setIncludeTargetInPayload: (val: boolean) => void;
+
+  // Persistence (project-scoped)
+  hydrateForProject: (projectId: string | null) => Promise<void>;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -106,7 +122,60 @@ type ChatStore = ChatState & ChatActions;
 // Store Implementation
 // ============================================
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>((set, get) => {
+  const getActiveProjectId = (): string | null =>
+    useProjectStore.getState().project?.id ?? null;
+
+  const buildChatSettings = (): ChatProjectSettings => ({
+    systemPromptOverlay: get().systemPromptOverlay,
+    referenceNotes: get().referenceNotes,
+    activeMemory: get().activeMemory,
+    includeSourceInPayload: get().includeSourceInPayload,
+    includeTargetInPayload: get().includeTargetInPayload,
+  });
+
+  const persistNow = async (): Promise<void> => {
+    if (!isTauriRuntime()) return;
+    const projectId = getActiveProjectId();
+    if (!projectId) return;
+
+    const session = get().currentSession;
+    const settings = buildChatSettings();
+
+    // 세션은 1개만 저장(요구사항)
+    if (session) {
+      await saveCurrentChatSession({ projectId, session });
+    }
+    await saveChatProjectSettings({ projectId, settings });
+  };
+
+  const schedulePersist = (): void => {
+    if (!isTauriRuntime()) return;
+    if (chatPersistTimer !== null) {
+      window.clearTimeout(chatPersistTimer);
+      chatPersistTimer = null;
+    }
+    chatPersistTimer = window.setTimeout(() => {
+      if (chatPersistInFlight) {
+        chatPersistQueued = true;
+        return;
+      }
+      chatPersistInFlight = true;
+      void persistNow()
+        .catch(() => {
+          // chat persistence는 UX 방해 최소화: 실패는 조용히 처리
+        })
+        .finally(() => {
+          chatPersistInFlight = false;
+          if (chatPersistQueued) {
+            chatPersistQueued = false;
+            schedulePersist();
+          }
+        });
+    }, CHAT_PERSIST_DEBOUNCE_MS);
+  };
+
+  return {
   // Initial State
   sessions: [],
   currentSessionId: null,
@@ -126,6 +195,59 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeMemory: '',
   includeSourceInPayload: false,
   includeTargetInPayload: false,
+
+  hydrateForProject: async (projectId: string | null): Promise<void> => {
+    // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
+    // (요구사항: 현재 세션 1개 + ChatPanel 설정 저장/복원)
+    set({
+      sessions: [],
+      currentSessionId: null,
+      currentSession: null,
+      streamingMessageId: null,
+      error: null,
+      lastInjectedGlossary: [],
+      isLoading: false,
+      // settings는 로드 결과에 따라 갱신
+      systemPromptOverlay: '',
+      referenceNotes: '',
+      activeMemory: '',
+      includeSourceInPayload: false,
+      includeTargetInPayload: false,
+    });
+
+    if (!projectId) return;
+    if (!isTauriRuntime()) return;
+
+    try {
+      const [session, settings] = await Promise.all([
+        loadCurrentChatSession(projectId),
+        loadChatProjectSettings(projectId),
+      ]);
+
+      if (session) {
+        set({
+          sessions: [session],
+          currentSessionId: session.id,
+          currentSession: session,
+          lastSummaryAtMessageCountBySessionId: { [session.id]: 0 },
+        });
+      }
+
+      if (settings) {
+        set({
+          systemPromptOverlay: settings.systemPromptOverlay,
+          referenceNotes: settings.referenceNotes,
+          activeMemory: settings.activeMemory,
+          includeSourceInPayload: settings.includeSourceInPayload,
+          includeTargetInPayload: settings.includeTargetInPayload,
+        });
+      }
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : '채팅 상태 로드 실패',
+      });
+    }
+  },
 
   // 세션 생성
   createSession: (name?: string): string => {
@@ -150,6 +272,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       },
     }));
 
+    schedulePersist();
+
     return sessionId;
   },
 
@@ -158,6 +282,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const session = get().sessions.find((s) => s.id === sessionId);
     if (session) {
       set({ currentSessionId: sessionId, currentSession: session });
+      schedulePersist();
     }
   },
 
@@ -185,6 +310,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         lastSummaryAtMessageCountBySessionId: nextMap,
       };
     });
+
+    schedulePersist();
   },
 
   // 세션 이름 변경
@@ -198,6 +325,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ? { ...state.currentSession, name }
           : state.currentSession,
     }));
+    schedulePersist();
   },
 
   // 메시지 전송
@@ -767,6 +895,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ),
       currentSession: updatedSession,
     }));
+    schedulePersist();
     return newMessage.id;
   },
 
@@ -795,6 +924,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ),
       currentSession: updatedSession,
     }));
+    schedulePersist();
   },
 
   // 메시지 초기화
@@ -813,6 +943,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ),
       currentSession: updatedSession,
     }));
+    schedulePersist();
   },
 
   // 컨텍스트 블록 설정
@@ -831,6 +962,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       ),
       currentSession: updatedSession,
     }));
+    schedulePersist();
   },
 
   // 컨텍스트 블록 추가
@@ -865,22 +997,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setSystemPromptOverlay: (overlay: string): void => {
     set({ systemPromptOverlay: overlay });
+    schedulePersist();
   },
 
   setReferenceNotes: (notes: string): void => {
     set({ referenceNotes: notes });
+    schedulePersist();
   },
 
   setActiveMemory: (memory: string): void => {
     set({ activeMemory: memory });
+    schedulePersist();
   },
 
   setIncludeSourceInPayload: (val: boolean): void => {
     set({ includeSourceInPayload: val });
+    schedulePersist();
   },
 
   setIncludeTargetInPayload: (val: boolean): void => {
     set({ includeTargetInPayload: val });
+    schedulePersist();
   },
-}));
+  };
+});
 

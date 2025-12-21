@@ -10,10 +10,12 @@ export interface CreateProjectParams {
 
 export async function createProject(params: CreateProjectParams): Promise<ITEProject> {
   return await invoke<ITEProject>('create_project', {
-    title: params.title,
-    sourceLanguage: params.sourceLanguage,
-    targetLanguage: params.targetLanguage,
-    domain: params.domain,
+    args: {
+      title: params.title,
+      sourceLanguage: params.sourceLanguage,
+      targetLanguage: params.targetLanguage,
+      domain: params.domain,
+    },
   });
 }
 
@@ -22,7 +24,7 @@ export async function saveProject(project: ITEProject): Promise<void> {
 }
 
 export async function loadProject(projectId: string): Promise<ITEProject> {
-  return await invoke<ITEProject>('load_project', { projectId });
+  return await invoke<ITEProject>('load_project', { args: { projectId } });
 }
 
 

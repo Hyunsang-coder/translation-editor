@@ -13,9 +13,11 @@ export async function importGlossaryCsv(params: {
   replaceProjectScope?: boolean;
 }): Promise<ImportGlossaryCsvResult> {
   return await invoke<ImportGlossaryCsvResult>('import_glossary_csv', {
-    projectId: params.projectId,
-    path: params.path,
-    replaceProjectScope: params.replaceProjectScope ?? false,
+    args: {
+      projectId: params.projectId,
+      path: params.path,
+      replaceProjectScope: params.replaceProjectScope ?? false,
+    },
   });
 }
 
@@ -25,9 +27,11 @@ export async function importGlossaryExcel(params: {
   replaceProjectScope?: boolean;
 }): Promise<ImportGlossaryCsvResult> {
   return await invoke<ImportGlossaryCsvResult>('import_glossary_excel', {
-    projectId: params.projectId,
-    path: params.path,
-    replaceProjectScope: params.replaceProjectScope ?? false,
+    args: {
+      projectId: params.projectId,
+      path: params.path,
+      replaceProjectScope: params.replaceProjectScope ?? false,
+    },
   });
 }
 
@@ -38,10 +42,12 @@ export async function searchGlossary(params: {
   domain?: ProjectDomain | string;
 }): Promise<GlossaryEntry[]> {
   return await invoke<GlossaryEntry[]>('search_glossary', {
-    projectId: params.projectId,
-    query: params.query,
-    limit: params.limit ?? 12,
-    domain: params.domain ?? null,
+    args: {
+      projectId: params.projectId,
+      query: params.query,
+      limit: params.limit ?? 12,
+      domain: params.domain ?? null,
+    },
   });
 }
 

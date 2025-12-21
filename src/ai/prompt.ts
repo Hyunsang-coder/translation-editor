@@ -1,5 +1,6 @@
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { stripHtml } from '@/utils/hash';
 
@@ -38,6 +39,33 @@ export interface PromptOptions {
    * - TRD 3.2: Project meta + 사용자 지침을 함께 반영
    */
   systemPromptOverlay?: string;
+}
+
+function buildSystemPolicyPrompt(): string {
+  return [
+    '너는 번역가를 돕는 AI 어시스턴트다.',
+    '',
+    '규칙:',
+    '- 사용자는 한국어로 응답을 선호한다. 가능하면 한국어로 답한다.',
+    '- 사용자가 요청하기 전에는 과도한 제안/개입을 하지 않는다(On-Demand AI).',
+    '- 불확실한 내용은 추측하지 말고 확인 질문을 먼저 한다.',
+    '- 컨텍스트로 제공된 블록 내용(원문/번역)을 우선으로 참고한다.',
+  ].join('\n');
+}
+
+function buildSystemMetaPrompt(project: ITEProject | null, opts?: PromptOptions): string {
+  const domain = project?.metadata.domain ?? 'general';
+  const src = project?.metadata.sourceLanguage ?? 'Source';
+  const tgt = project?.metadata.targetLanguage ?? 'Target';
+  const overlay = opts?.systemPromptOverlay?.trim();
+
+  return [
+    `프로젝트 도메인: ${domain}`,
+    `언어: ${src} → ${tgt}`,
+    overlay ? `- 추가 지침: ${overlay}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function formatReferenceNotes(notes?: string): string {
@@ -111,8 +139,22 @@ export function buildBlockContextText(blocks: EditorBlock[]): string {
   return lines.join('\n');
 }
 
-export function buildLangChainMessages(ctx: PromptContext, opts?: PromptOptions): BaseMessage[] {
-  const system = buildSystemPrompt(ctx.project, opts);
+function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[] {
+  const history: BaseMessage[] = [];
+  for (const m of recentMessages) {
+    if (m.role === 'user') history.push(new HumanMessage(m.content));
+    if (m.role === 'assistant') history.push(new AIMessage(m.content));
+    // system 메시지는 모델에 별도로 이미 주입했으므로 생략
+  }
+  return history;
+}
+
+export async function buildLangChainMessages(
+  ctx: PromptContext,
+  opts?: PromptOptions,
+): Promise<BaseMessage[]> {
+  const systemPolicy = buildSystemPolicyPrompt();
+  const systemMeta = buildSystemMetaPrompt(ctx.project, opts);
   const blockContext = buildBlockContextText(ctx.contextBlocks);
   const refNotes = formatReferenceNotes(ctx.referenceNotes);
   const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
@@ -121,33 +163,43 @@ export function buildLangChainMessages(ctx: PromptContext, opts?: PromptOptions)
   const fullSource = formatFullDocument('원문', ctx.sourceDocument);
   const fullTarget = formatFullDocument('번역문', ctx.targetDocument);
 
-  const messages: BaseMessage[] = [];
-  messages.push(
-    new SystemMessage(
-      [
-        system,
-        blockContext,
-        glossaryInjected,
-        refNotes,
-        activeMemory,
-        fullSource,
-        fullTarget,
-        ctx.contextBlocks.length === 0 ? sourceFallback : '',
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-    ),
-  );
+  const systemContext = [
+    blockContext,
+    glossaryInjected,
+    refNotes,
+    activeMemory,
+    fullSource,
+    fullTarget,
+    ctx.contextBlocks.length === 0 ? sourceFallback : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
-  // 최근 대화 N개만 포함 (system 제외)
-  for (const m of ctx.recentMessages) {
-    if (m.role === 'user') messages.push(new HumanMessage(m.content));
-    if (m.role === 'assistant') messages.push(new AIMessage(m.content));
-    // system 메시지는 모델에 별도로 이미 주입했으므로 생략
-  }
+  const history = mapRecentMessagesToHistory(ctx.recentMessages);
 
-  messages.push(new HumanMessage(ctx.userMessage));
-  return messages;
+  // 컨텍스트가 비어있으면 빈 system 메시지를 보내지 않도록 템플릿을 분기
+  const prompt = systemContext
+    ? ChatPromptTemplate.fromMessages([
+        ['system', '{systemPolicy}'],
+        ['system', '{systemMeta}'],
+        ['system', '{systemContext}'],
+        new MessagesPlaceholder('history'),
+        ['human', '{input}'],
+      ])
+    : ChatPromptTemplate.fromMessages([
+        ['system', '{systemPolicy}'],
+        ['system', '{systemMeta}'],
+        new MessagesPlaceholder('history'),
+        ['human', '{input}'],
+      ]);
+
+  return await prompt.formatMessages({
+    systemPolicy,
+    systemMeta,
+    ...(systemContext ? { systemContext } : {}),
+    history,
+    input: ctx.userMessage,
+  });
 }
 
 

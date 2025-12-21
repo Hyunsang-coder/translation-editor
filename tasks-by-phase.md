@@ -38,6 +38,7 @@
 [x] 스트리밍 응답 처리(useAIStream 등) + UI 반영
 
 [x] 시스템 프롬프트/컨텍스트 어셈블러(기본) + 사용자 편집 오버레이
+  - (개선) SystemMessage를 정책/메타/컨텍스트로 분리 + ChatPromptTemplate/MessagesPlaceholder(history) 기반 조립
 
 [x] 2.3 Inline Command UI (Cursor 스타일)
 
@@ -91,6 +92,7 @@
 [x] Recent Projects: 목록에서 단건 삭제(🗑) + Clear All(전체 삭제) + 로드 실패 시 오류 표시/삭제 제안
 [x] Import/Export: 파일 다이얼로그 기반 + Import 전 자동 백업(import_project_file_safe)
 [x] Export: 백엔드에서 파일 생성/0 byte 검증 + 프론트에서 성공/실패 메시지(저장 경로/오류) 표시
+[x] Chat: 프로젝트별 현재 세션 1개 + ChatPanel 설정(systemPrompt/reference/activeMemory/include flags) DB 저장/복원(.ite 포함)
 [x] Auto-save 정책: 디바운스(마지막 변경 후 1.5s idle) + 저장 상태(Saved/Unsaved/Saving) 표시
 
 [~] 4.3 Smart Context Memory
