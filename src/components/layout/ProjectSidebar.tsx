@@ -75,7 +75,6 @@ export function ProjectSidebar(): JSX.Element {
     const ok = await confirm('새 프로젝트를 생성할까요?', {
       title: 'New Project',
       kind: 'info',
-      buttons: 'YesNo',
     });
     if (!ok) return;
 
@@ -107,7 +106,6 @@ export function ProjectSidebar(): JSX.Element {
     const ok = await confirm('이 프로젝트를 삭제할까요?\n(DB에서 삭제되며 복구할 수 없습니다)', {
       title: '프로젝트 삭제',
       kind: 'warning',
-      buttons: 'YesNo',
     });
     if (!ok) return;
     await deleteProject(projectId);
@@ -226,9 +224,8 @@ export function ProjectSidebar(): JSX.Element {
             return (
               <div
                 key={p.id}
-                className={`px-2 py-1 flex items-stretch gap-1 ${
-                  active ? 'bg-editor-bg' : 'hover:bg-editor-bg'
-                }`}
+                className={`px-2 py-1 flex items-stretch gap-1 ${active ? 'bg-editor-bg' : 'hover:bg-editor-bg'
+                  }`}
                 title={p.id}
               >
                 <button

@@ -3,8 +3,9 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
 
-export function createChatModel(): BaseChatModel {
+export function createChatModel(modelOverride?: string): BaseChatModel {
   const cfg = getAiConfig();
+  const model = modelOverride ?? cfg.model;
 
   if (cfg.provider === 'openai') {
     if (!cfg.openaiApiKey) {
@@ -12,7 +13,7 @@ export function createChatModel(): BaseChatModel {
     }
     return new ChatOpenAI({
       apiKey: cfg.openaiApiKey,
-      model: cfg.model,
+      model,
       ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
     });
   }
@@ -23,7 +24,7 @@ export function createChatModel(): BaseChatModel {
     }
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
-      model: cfg.model,
+      model,
       ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
     });
   }

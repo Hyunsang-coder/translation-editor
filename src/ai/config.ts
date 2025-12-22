@@ -11,6 +11,7 @@ export interface AiConfig {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   maxRecentMessages: number;
+  judgeModel: string;
 }
 
 function getEnvString(key: string): string | undefined {
@@ -53,6 +54,9 @@ export function getAiConfig(): AiConfig {
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 12))),
+    judgeModel:
+      getEnvString('VITE_AI_JUDGE_MODEL') ??
+      (provider === 'anthropic' ? 'claude-3-haiku-20240307' : 'gpt-5-mini'),
   };
 }
 

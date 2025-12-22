@@ -8,8 +8,12 @@
 # mock | openai | anthropic
 VITE_AI_PROVIDER=mock
 
-# provider별 모델명
-VITE_AI_MODEL=gpt-4o-mini
+# provider별 모델명 (Main)
+VITE_AI_MODEL=gpt-5.2
+
+# 번역 적용 여부 및 텍스트 정제 판단 모델 (Judge)
+# - 설정하지 않으면 OpenAI는 'gpt-5-mini', Anthropic은 'claude-3-haiku'를 사용합니다.
+VITE_AI_JUDGE_MODEL=gpt-5-mini
 
 # (선택) temperature
 # - 최신 모델/엔드포인트 중에는 temperature를 무시/제약하는 경우가 있어

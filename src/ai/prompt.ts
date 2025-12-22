@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
@@ -180,18 +180,18 @@ export async function buildLangChainMessages(
   // 컨텍스트가 비어있으면 빈 system 메시지를 보내지 않도록 템플릿을 분기
   const prompt = systemContext
     ? ChatPromptTemplate.fromMessages([
-        ['system', '{systemPolicy}'],
-        ['system', '{systemMeta}'],
-        ['system', '{systemContext}'],
-        new MessagesPlaceholder('history'),
-        ['human', '{input}'],
-      ])
+      ['system', '{systemPolicy}'],
+      ['system', '{systemMeta}'],
+      ['system', '{systemContext}'],
+      new MessagesPlaceholder('history'),
+      ['human', '{input}'],
+    ])
     : ChatPromptTemplate.fromMessages([
-        ['system', '{systemPolicy}'],
-        ['system', '{systemMeta}'],
-        new MessagesPlaceholder('history'),
-        ['human', '{input}'],
-      ]);
+      ['system', '{systemPolicy}'],
+      ['system', '{systemMeta}'],
+      new MessagesPlaceholder('history'),
+      ['human', '{input}'],
+    ]);
 
   return await prompt.formatMessages({
     systemPolicy,
