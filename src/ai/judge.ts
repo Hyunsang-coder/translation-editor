@@ -46,7 +46,11 @@ export async function evaluateApplyReadiness(input: JudgeInput): Promise<JudgeRe
 
     // LangChain v1 Best Practice: use withStructuredOutput for extraction
     // This automatically handles tool calling or JSON mode depending on the model
-    const structuredJudge = judgeModel.withStructuredOutput(judgeSchema);
+    // enforce 'strict: true' for newer OpenAI models
+    const structuredJudge = judgeModel.withStructuredOutput(judgeSchema, {
+        name: 'judge_result',
+        strict: true,
+    });
 
     const prompt = PromptTemplate.fromTemplate(JUDGE_PROMPT);
     const chain = prompt.pipe(structuredJudge);

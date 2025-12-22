@@ -784,6 +784,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               }
             }
           } catch (e) {
+            console.error('[ChatStore] Judge failed:', e);
             // Judge 실패 시 안전하게 Reject
             finalAppliable = false;
             finalReason = `Judge Error: ${String(e)}`;
