@@ -140,7 +140,12 @@ export function ChatPanel(): JSX.Element {
           {/* Section 3: Glossary */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-editor-text">3. Glossary</h3>
+              <div className="flex flex-col gap-1">
+                <h3 className="text-xs font-semibold text-editor-text">3. Glossary</h3>
+                <span className="text-[10px] text-editor-muted">
+                  Columns: [Source] [Target] (Header required, case-insensitive)
+                </span>
+              </div>
               <div className="flex gap-2">
                 <button
                   type="button"

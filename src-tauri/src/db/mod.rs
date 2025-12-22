@@ -553,14 +553,15 @@ impl Database {
             .iter()
             .map(|c| c.trim().to_lowercase())
             .collect::<Vec<_>>();
+        
         let has_source = lower.iter().any(|c| c == "source");
         let has_target = lower.iter().any(|c| c == "target");
 
-        let (headers, data_rows): (Vec<String>, &[Vec<String>]) = if has_source && has_target {
-            (first.clone(), &rows[1..])
-        } else {
-            (vec![], &rows[..])
-        };
+        // "A언어 칼럼 | B언어 칼럼" 구조만 지켜지면 OK. 
+        // 즉, headers가 있든 없든 2개 이상의 칼럼이 있으면 0, 1번을 사용.
+        // 다만 헤더 '줄'이 있다고 가정하고 첫 줄을 헤더로 소비할지 말지가 관건인데, 
+        // 사용자 요청 "헤더 + A | B 구조"라고 했으므로 무조건 첫 줄은 헤더로 간주하고 건너뜀.
+        let (headers, data_rows) = (first.clone(), &rows[1..]);
 
         let find_idx = |name: &str| -> Option<usize> {
             let needle = name.to_lowercase();
@@ -569,6 +570,7 @@ impl Database {
                 .position(|h| h.trim().to_lowercase() == needle)
         };
 
+        // Source/Target 컬럼 찾기 시도, 없으면 0번, 1번 인덱스 사용
         let idx_source = find_idx("source").unwrap_or(0);
         let idx_target = find_idx("target").unwrap_or(1);
         let idx_notes = find_idx("notes");
@@ -765,18 +767,9 @@ impl Database {
 
         // 헤더 여부 판단
         let first = &rows[0];
-        let lower = first
-            .iter()
-            .map(|c| c.trim().to_lowercase())
-            .collect::<Vec<_>>();
-        let has_source = lower.iter().any(|c| c == "source");
-        let has_target = lower.iter().any(|c| c == "target");
 
-        let (headers, data_rows): (Vec<String>, &[Vec<String>]) = if has_source && has_target {
-            (first.clone(), &rows[1..])
-        } else {
-            (vec![], &rows[..])
-        };
+        // Excel도 CSV와 동일하게 무조건 첫 줄은 헤더라고 가정하고 시작
+        let (headers, data_rows) = (first.clone(), &rows[1..]);
 
         let find_idx = |name: &str| -> Option<usize> {
             let needle = name.to_lowercase();
@@ -785,6 +778,7 @@ impl Database {
                 .position(|h| h.trim().to_lowercase() == needle)
         };
 
+        // Source/Target 컬럼 찾기 시도, 없으면 0번, 1번 인덱스 사용
         let idx_source = find_idx("source").unwrap_or(0);
         let idx_target = find_idx("target").unwrap_or(1);
         let idx_notes = find_idx("notes");

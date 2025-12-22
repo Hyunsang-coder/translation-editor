@@ -191,9 +191,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
     lastSummaryAtMessageCountBySessionId: {},
     composerText: '',
     composerFocusNonce: 0,
-    systemPromptOverlay: '',
+    systemPromptOverlay: 'You are a professional translator. Translate the following text naturally and accurately, preserving the tone and nuance of the original.',
     referenceNotes: '',
-    activeMemory: '',
+    activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
     includeSourceInPayload: true,
     includeTargetInPayload: true,
 
