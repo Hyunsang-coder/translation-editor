@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import { createProject } from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
@@ -32,6 +32,11 @@ export function ProjectSidebar(): JSX.Element {
     domain: 'general',
   });
 
+  // Rename state
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -41,7 +46,6 @@ export function ProjectSidebar(): JSX.Element {
   const selectedId = project?.id ?? null;
 
   const sorted = useMemo(() => {
-    // backend가 updated_at desc지만, 방어적으로 한 번 더 정렬
     return [...items].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
   }, [items]);
 
@@ -68,6 +72,13 @@ export function ProjectSidebar(): JSX.Element {
     window.addEventListener('click', closeMenu);
     return () => window.removeEventListener('click', closeMenu);
   }, []);
+
+  // Auto-focus rename input
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) {
+      renameInputRef.current.focus();
+    }
+  }, [renamingId]);
 
   if (projectSidebarCollapsed) {
     return (
@@ -102,7 +113,6 @@ export function ProjectSidebar(): JSX.Element {
         await doSave();
       } catch (e) {
         console.warn('[handleNewProject] Failed to save previous project:', e);
-        // 저장 실패해도 새 프로젝트 생성 진행
       }
     }
 
@@ -110,10 +120,9 @@ export function ProjectSidebar(): JSX.Element {
       title: form.title.trim() || 'New Project',
       sourceLanguage: form.sourceLanguage.trim() || 'English',
       targetLanguage: form.targetLanguage.trim() || 'Korean',
-      domain: 'general', // Force general
+      domain: 'general',
     });
 
-    // create_project는 DB에 저장까지 수행하므로, 바로 로드
     loadProject(created);
     setShowNew(false);
     await refresh();
@@ -136,49 +145,60 @@ export function ProjectSidebar(): JSX.Element {
     }
   };
 
-  const handleRename = async (projectId: string): Promise<void> => {
+  const startRename = (projectId: string) => {
     const target = items.find((i) => i.id === projectId);
     if (!target) return;
+    setRenameTitle(target.title);
+    setRenamingId(projectId);
+  };
 
-    // TODO: Use a better UI than prompt if possible, but prompt is simple and robust
-    const newTitle = window.prompt('프로젝트 이름 변경:', target.title);
-    if (!newTitle || newTitle.trim() === target.title) return;
+  const submitRename = async () => {
+    if (!renamingId) return;
+    const projectId = renamingId;
+    const newTitle = renameTitle.trim();
+    const target = items.find((i) => i.id === projectId);
 
-    // If it's the current project, update store and save
-    if (selectedId === projectId && project) {
-      useProjectStore.setState({
-        project: {
-          ...project,
-          metadata: { ...project.metadata, title: newTitle.trim(), updatedAt: Date.now() },
-        },
-        isDirty: true,
-      });
-      await saveProject(); // Save changes to files
-      await refresh();
-      return;
-    }
+    setRenamingId(null); // Close input immediately
 
-    // If it's NOT the current project, we need to load-change-save
+    if (!target || !newTitle || newTitle === target.title) return;
+
+    // Optimistic Update
+    setItems((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, title: newTitle, updatedAt: Date.now() }
+          : p
+      )
+    );
+
     try {
-      setLoading(true);
-      // Temporarily import helpers to avoid hooking into store if easier
-      const { loadProject: tauriLoad, saveProject: tauriSave } = await import('@/tauri/project');
-      const loaded = await tauriLoad(projectId);
-      const updated = {
-        ...loaded,
-        metadata: {
-          ...loaded.metadata,
-          title: newTitle.trim(),
-          updatedAt: Date.now(),
-        },
-      };
-      await tauriSave(updated);
+      if (selectedId === projectId && project) {
+        useProjectStore.setState({
+          project: {
+            ...project,
+            metadata: { ...project.metadata, title: newTitle, updatedAt: Date.now() },
+          },
+          isDirty: true,
+        });
+        await saveProject();
+      } else {
+        const { loadProject: tauriLoad, saveProject: tauriSave } = await import('@/tauri/project');
+        const loaded = await tauriLoad(projectId);
+        const updated = {
+          ...loaded,
+          metadata: {
+            ...loaded.metadata,
+            title: newTitle,
+            updatedAt: Date.now(),
+          },
+        };
+        await tauriSave(updated);
+      }
       await refresh();
     } catch (e) {
       console.error('Rename failed:', e);
       await message('이름 변경에 실패했습니다.', { title: 'Error', kind: 'error' });
-    } finally {
-      setLoading(false);
+      await refresh(); // Revert
     }
   };
 
@@ -202,7 +222,6 @@ export function ProjectSidebar(): JSX.Element {
             className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
             title="프로젝트 사이드바 접기"
           >
-            {/* Sidebar Collapse Icon */}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <line x1="9" y1="3" x2="9" y2="21" />
@@ -215,20 +234,10 @@ export function ProjectSidebar(): JSX.Element {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="text-xs text-primary-500 hover:text-primary-600 disabled:opacity-50"
-            onClick={() => void refresh()}
-            disabled={loading}
-            title="새로고침"
-          >
-            Refresh
-          </button>
-          <button
-            type="button"
             className="text-editor-text hover:text-primary-500 transition-colors"
             onClick={() => setShowNew((v) => !v)}
             title="새 프로젝트"
           >
-            {/* New Project (Edit) Icon */}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -246,21 +255,21 @@ export function ProjectSidebar(): JSX.Element {
             placeholder="Project title"
             autoFocus
           />
+          {/* Simple language inputs */}
           <div className="flex gap-2">
             <input
               className="w-1/2 text-sm px-2 py-1.5 rounded border border-editor-border bg-editor-bg text-editor-text"
               value={form.sourceLanguage}
               onChange={(e) => setForm((p) => ({ ...p, sourceLanguage: e.target.value }))}
-              placeholder="Source language"
+              placeholder="Source"
             />
             <input
               className="w-1/2 text-sm px-2 py-1.5 rounded border border-editor-border bg-editor-bg text-editor-text"
               value={form.targetLanguage}
               onChange={(e) => setForm((p) => ({ ...p, targetLanguage: e.target.value }))}
-              placeholder="Target language"
+              placeholder="Target"
             />
           </div>
-          {/* Domain selection removed as per request */}
           <div className="flex gap-2 pt-1">
             <button
               type="button"
@@ -295,6 +304,8 @@ export function ProjectSidebar(): JSX.Element {
         {!loading &&
           sorted.map((p) => {
             const active = selectedId === p.id;
+            const isRenaming = renamingId === p.id;
+
             return (
               <div
                 key={p.id}
@@ -303,17 +314,36 @@ export function ProjectSidebar(): JSX.Element {
                   : 'hover:bg-editor-bg border-transparent'
                   }`}
                 onContextMenu={(e) => onContextMenu(e, p.id)}
-                onClick={() => void switchProjectById(p.id)}
+                onClick={() => {
+                  if (!isRenaming) void switchProjectById(p.id);
+                }}
                 title={p.title}
               >
                 <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
-                    }`}>
-                    {p.title}
-                  </div>
-                  <div className="text-[10px] text-editor-muted truncate">
-                    {new Date(p.updatedAt ?? 0).toLocaleDateString()}
-                  </div>
+                  {isRenaming ? (
+                    <input
+                      ref={renameInputRef}
+                      className="w-full text-sm px-1 py-0.5 rounded border border-primary-500 bg-editor-bg text-editor-text focus:outline-none"
+                      value={renameTitle}
+                      onChange={(e) => setRenameTitle(e.target.value)}
+                      onBlur={() => void submitRename()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void submitRename();
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <div className={`text-sm font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
+                        }`}>
+                        {p.title}
+                      </div>
+                      <div className="text-[10px] text-editor-muted truncate">
+                        {new Date(p.updatedAt ?? 0).toLocaleDateString()}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -325,13 +355,14 @@ export function ProjectSidebar(): JSX.Element {
         <div
           className="fixed z-50 min-w-[120px] bg-editor-surface border border-editor-border shadow-lg rounded-md py-1"
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+          onClick={(e) => e.stopPropagation()}
         >
           <button
             className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
             onClick={() => {
+              const pid = contextMenu.projectId;
               setContextMenu(null);
-              void handleRename(contextMenu.projectId);
+              startRename(pid);
             }}
           >
             이름 변경 (Rename)
@@ -339,8 +370,9 @@ export function ProjectSidebar(): JSX.Element {
           <button
             className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-500 hover:text-white"
             onClick={() => {
+              const pid = contextMenu.projectId;
               setContextMenu(null);
-              void handleDelete(contextMenu.projectId);
+              void handleDelete(pid);
             }}
           >
             삭제 (Delete)
