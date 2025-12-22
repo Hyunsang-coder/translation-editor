@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { confirm } from '@tauri-apps/plugin-dialog';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -222,9 +223,12 @@ export function ChatPanel(): JSX.Element {
                    `}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm('Delete this chat session?')) {
-                      useChatStore.getState().deleteSession(session.id);
-                    }
+                    void (async () => {
+                      const ok = await confirm('Delete this chat session?', { title: 'Delete Session', kind: 'warning' });
+                      if (ok) {
+                        useChatStore.getState().deleteSession(session.id);
+                      }
+                    })();
                   }}
                 >
                   ✕

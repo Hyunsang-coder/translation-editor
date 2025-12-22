@@ -9,13 +9,8 @@ export function Toolbar(): JSX.Element {
   const { project } = useProjectStore();
 
   const handleThemeToggle = (): void => {
-    const themes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-    const currentIndex = themes.indexOf(theme);
-    const nextIndex = (currentIndex + 1) % themes.length;
-    const nextTheme = themes[nextIndex];
-    if (nextTheme) {
-      setTheme(nextTheme);
-    }
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
   };
 
   return (
@@ -25,9 +20,6 @@ export function Toolbar(): JSX.Element {
         <h1 className="text-lg font-semibold text-editor-text">
           {project?.metadata.title ?? 'Untitled Project'}
         </h1>
-        <span className="text-sm text-editor-muted">
-          {project?.metadata.sourceLanguage ?? ''} → {project?.metadata.targetLanguage ?? ''}
-        </span>
       </div>
 
       {/* 툴바 액션 */}
@@ -59,14 +51,13 @@ export function Toolbar(): JSX.Element {
           {focusMode ? '📖 Normal' : '🎯 Focus'}
         </button>
 
-        {/* 테마 토글 */}
         <button
           type="button"
           onClick={handleThemeToggle}
           className="p-2 rounded-md hover:bg-editor-border transition-colors"
           title={`Current: ${theme}`}
         >
-          {theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '💻'}
+          {theme === 'dark' ? '🌙' : '☀️'}
         </button>
       </div>
     </header>

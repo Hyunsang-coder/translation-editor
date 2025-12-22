@@ -21,6 +21,7 @@ export function ProjectSidebar(): JSX.Element {
   const switchProjectById = useProjectStore((s) => s.switchProjectById);
   const loadProject = useProjectStore((s) => s.loadProject);
   const saveProject = useProjectStore((s) => s.saveProject);
+  const lastSavedAt = useProjectStore((s) => s.lastSavedAt);
 
   const [items, setItems] = useState<RecentProjectInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +65,7 @@ export function ProjectSidebar(): JSX.Element {
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [lastSavedAt]);
 
   // Close context menu on global click
   useEffect(() => {
