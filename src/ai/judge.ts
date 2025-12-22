@@ -11,24 +11,25 @@ export interface JudgeInput {
 export interface JudgeResult {
     decision: 'APPLY' | 'REJECT';
     reason: string;
-    cleanText?: string;
+    cleanText: string | null;
 }
 
 const judgeSchema = z.object({
     decision: z.enum(['APPLY', 'REJECT']).describe('APPLY if the AI response contains a valid translation/modification that can be directly applied. REJECT if it is a refusal, question, or meta-commentary.'),
     reason: z.string().describe('Reason for the decision.'),
-    cleanText: z.string().optional().describe('If decision is APPLY, provide the clean text content to be applied, removing any conversational prefixes or suffixes. If the response is already clean, return it as is.'),
+    cleanText: z.string().nullable().describe('If decision is APPLY, provide the clean text content to be applied, removing any conversational prefixes or suffixes. If the response is already clean or decision is REJECT, return null.'),
 });
 
-const JUDGE_PROMPT = `You are a strict judge for an AI translation assistant.
-The user asked for a translation or modification, and the AI responded.
-Determine if the AI's response is a valid "Applyable" text update or if it is a refusal/question/conversational reply.
+const JUDGE_PROMPT = `You are a semantic intent analyzer for a translation editor.
+Your goal is to determine if the User's request implies a modification to the document that should be "Applied".
+And if so, extract the content to apply.
 
 Rules:
-1. "APPLY" ONLY if the AI provided the requested text content.
-2. If the AI provided the text but surrounded it with "Here is the translation: ...", you must EXTRACT the clean text into 'cleanText'.
-3. "REJECT" if the AI refused (e.g., "I cannot do that"), asked a clarifying question, or only provided an explanation without the changed text.
-4. "REJECT" if the AI's response is just "Okay" or "Understood" without the actual content.
+1. "APPLY" if the user asked to translate, fix, rewrite, modify, or edit the text.
+2. "REJECT" if the user asked a question, asked for an explanation, or explicitly said "Don't apply", "Just explaining", "No changes".
+3. "REJECT" if the AI's response is a refusal ("I cannot do that") or a clarification question.
+4. If "APPLY", you must extract the actual content from the AI response into 'cleanText'. Remove conversational filler ("Sure, here is...", "The translation is...").
+5. If the AI response IS the content (no filler), 'cleanText' should be the response itself.
 
 User Request: {userRequest}
 AI Response: {aiResponse}
@@ -66,7 +67,8 @@ export async function evaluateApplyReadiness(input: JudgeInput): Promise<JudgeRe
         // Fallback: If judge fails, we conservatively Reject
         return {
             decision: 'REJECT',
-            reason: `Judge Error: ${e instanceof Error ? e.message : String(e)}`
+            reason: `Judge Error: ${e instanceof Error ? e.message : String(e)}`,
+            cleanText: null
         };
     }
 }

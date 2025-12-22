@@ -56,7 +56,7 @@ export function TargetMonacoEditor({
   const pendingAnchorDecorationId = useRef<string | null>(null);
   const pendingContentWidgetRef = useRef<MonacoEditorNS.IContentWidget | null>(null);
 
-  const setupTrackedRanges = (): void => {
+  const updateTrackedRanges = (): void => {
     const ed = editorRef.current;
     const monaco = monacoRef.current;
     if (!ed || !monaco) return;
@@ -64,7 +64,6 @@ export function TargetMonacoEditor({
     if (!model || !blockRanges) {
       trackedRangeDecorationIds.current = [];
       idByBlockIdRef.current = {};
-      registerTargetDocHandle(null);
       return;
     }
 
@@ -98,32 +97,11 @@ export function TargetMonacoEditor({
       if (bid) nextMap[bid] = id;
     });
     idByBlockIdRef.current = nextMap;
-
-    registerTargetDocHandle({
-      getBlockOffsets: () => {
-        const out: Record<string, { startOffset: number; endOffset: number }> = {};
-        Object.entries(idByBlockIdRef.current).forEach(([bid, decId]) => {
-          const range = model.getDecorationRange(decId);
-          if (!range) return;
-          const startOffset = model.getOffsetAt(range.getStartPosition());
-          const endOffset = model.getOffsetAt(range.getEndPosition());
-          out[bid] = { startOffset, endOffset };
-        });
-        return out;
-      },
-      getDecorationOffsets: (decorationId) => {
-        const r = model.getDecorationRange(decorationId);
-        if (!r) return null;
-        const startOffset = model.getOffsetAt(r.getStartPosition());
-        const endOffset = model.getOffsetAt(r.getEndPosition());
-        return { startOffset, endOffset };
-      },
-    });
   };
 
   // 프로젝트 전환 등으로 blockRanges가 바뀌면 tracked ranges를 다시 세팅해야 저장이 정상 동작합니다.
   useEffect(() => {
-    setupTrackedRanges();
+    updateTrackedRanges();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blockRanges]);
 
@@ -318,7 +296,42 @@ export function TargetMonacoEditor({
           onMount?.(ed);
 
           // 최초 설정
-          setupTrackedRanges();
+          updateTrackedRanges();
+
+          // Register Handle (Once per editor instance)
+          const model = ed.getModel();
+          if (model) {
+            registerTargetDocHandle({
+              getBlockOffsets: () => {
+                const out: Record<string, { startOffset: number; endOffset: number }> = {};
+                Object.entries(idByBlockIdRef.current).forEach(([bid, decId]) => {
+                  const range = model.getDecorationRange(decId);
+                  if (!range) return;
+                  const startOffset = model.getOffsetAt(range.getStartPosition());
+                  const endOffset = model.getOffsetAt(range.getEndPosition());
+                  out[bid] = { startOffset, endOffset };
+                });
+                return out;
+              },
+              getDecorationOffsets: (decorationId) => {
+                const r = model.getDecorationRange(decorationId);
+                if (!r) return null;
+                const startOffset = model.getOffsetAt(r.getStartPosition());
+                const endOffset = model.getOffsetAt(r.getEndPosition());
+                return { startOffset, endOffset };
+              },
+              getSelection: () => {
+                const sel = ed.getSelection();
+                if (sel) {
+                  const startOffset = model.getOffsetAt(sel.getStartPosition());
+                  const endOffset = model.getOffsetAt(sel.getEndPosition());
+                  const text = model.getValueInRange(sel);
+                  return { startOffset, endOffset, text };
+                }
+                return null;
+              },
+            });
+          }
 
           // 모델이 교체되는 케이스를 대비(프로젝트 전환/리로드 등)
           try {
@@ -327,7 +340,7 @@ export function TargetMonacoEditor({
             // ignore
           }
           modelChangeDisposable.current = ed.onDidChangeModel(() => {
-            setupTrackedRanges();
+            updateTrackedRanges();
           });
 
           // Ghost chips (태그 보호) - decoration + 편집 차단
@@ -633,5 +646,3 @@ export function TargetMonacoEditor({
     </div>
   );
 }
-
-

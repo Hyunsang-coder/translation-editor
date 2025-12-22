@@ -30,6 +30,39 @@ function App(): JSX.Element {
     return () => stopAutoSave();
   }, [startAutoSave, stopAutoSave]);
 
+  // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
+  useEffect(() => {
+    const initCloseListener = async () => {
+      // Dynamic import to avoid SSR/build issues if any, though standard import is fine
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
+        const { isDirty, saveProject } = useProjectStore.getState();
+        if (isDirty) {
+          // Prevent closing immediately
+          event.preventDefault();
+          try {
+            await saveProject();
+          } catch (e) {
+            console.error('Failed to save on close:', e);
+          } finally {
+            // Force close after save attempt
+            await getCurrentWindow().destroy();
+          }
+        }
+      });
+      return unlisten;
+    };
+
+    let cleanup: (() => void) | undefined;
+    initCloseListener().then((unlisten) => {
+      cleanup = unlisten;
+    });
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-editor-bg text-editor-text">
       <MainLayout />

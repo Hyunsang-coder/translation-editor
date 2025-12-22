@@ -5,6 +5,7 @@ export interface ChatProjectSettings {
   systemPromptOverlay: string;
   referenceNotes: string;
   activeMemory: string;
+  composerText: string;
   includeSourceInPayload: boolean;
   includeTargetInPayload: boolean;
 }

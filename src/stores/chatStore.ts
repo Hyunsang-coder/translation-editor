@@ -130,6 +130,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     systemPromptOverlay: get().systemPromptOverlay,
     referenceNotes: get().referenceNotes,
     activeMemory: get().activeMemory,
+    composerText: get().composerText,
     includeSourceInPayload: get().includeSourceInPayload,
     includeTargetInPayload: get().includeTargetInPayload,
   });
@@ -211,6 +212,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         systemPromptOverlay: '',
         referenceNotes: '',
         activeMemory: '',
+        composerText: '',
         includeSourceInPayload: false,
         includeTargetInPayload: false,
       });
@@ -238,6 +240,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             systemPromptOverlay: settings.systemPromptOverlay,
             referenceNotes: settings.referenceNotes,
             activeMemory: settings.activeMemory,
+            composerText: settings.composerText ?? '',
             includeSourceInPayload: settings.includeSourceInPayload,
             includeTargetInPayload: settings.includeTargetInPayload,
           });
@@ -454,6 +457,22 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         const reply = restoreGhostChips(replyMasked, maskSession);
 
+        // --- Context Capture (Smart Match) ---
+        let selectionStartOffset: number | undefined;
+        let selectionEndOffset: number | undefined;
+        let selectionText: string | undefined;
+
+        const targetDocHandle = useProjectStore.getState().targetDocHandle;
+        if (targetDocHandle?.getSelection) {
+          const sel = targetDocHandle.getSelection();
+          if (sel) {
+            selectionStartOffset = sel.startOffset;
+            selectionEndOffset = sel.endOffset;
+            selectionText = sel.text;
+          }
+        }
+        // -------------------------------------
+
         // --- Judge Integration for Normal Messsages ---
         set({ isLoading: false, streamingMessageId: null });
 
@@ -461,41 +480,41 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // we ask the Judge. For now, let's be generous: Any assistant reply might be "Applyable".
         // But to avoid over-triggering, we can check if it contains at least some Korean/English mix or length.
 
-        // However, the cleanest way is to just ask the Judge if it's "Applyable".
-        // To save cost, maybe we skip if it's extremely short? 
-        // For now, let's run Judge for all "normal" messages to ensure consistent "Apply" button availability.
+        // Judge Integration (Async - "Pop-in" Apply button)
+        (async () => {
+          try {
+            // Dynamic import
+            const { evaluateApplyReadiness } = await import('@/ai/judge');
 
-        // Judge: AI 응답에 대한 apply 여부 및 clean text 추출
-        set({ isLoading: true });
+            // Restore ghost chips in user content for accurate semantic analysis
+            const restoredUserContent = restoreGhostChips(maskedUserContent, maskSession);
 
-        try {
-          // Dynamic import to avoid circular dependency issues if any
-          const { evaluateApplyReadiness } = await import('@/ai/judge');
+            const judgeResult = await evaluateApplyReadiness({
+              userRequest: restoredUserContent,
+              aiResponse: reply,
+            });
 
-          const judgeResult = await evaluateApplyReadiness({
-            userRequest: restoreGhostChips(maskedUserContent, maskSession),
-            aiResponse: reply,
-          });
-
-          if (judgeResult.decision === 'APPLY') {
-            const cleanText = judgeResult.cleanText || reply;
-            if (assistantId) {
-              updateMessage(assistantId, {
-                metadata: {
-                  appliable: true,
-                  ...(cleanText !== reply ? { cleanContent: cleanText } : {}),
-                }
-              });
+            if (judgeResult.decision === 'APPLY') {
+              const cleanText = judgeResult.cleanText || reply;
+              if (assistantId) {
+                updateMessage(assistantId, {
+                  metadata: {
+                    appliable: true,
+                    ...(cleanText !== reply ? { cleanContent: cleanText } : {}),
+                    ...(typeof selectionStartOffset === 'number' ? { selectionStartOffset } : {}),
+                    ...(typeof selectionEndOffset === 'number' ? { selectionEndOffset } : {}),
+                    ...(typeof selectionText === 'string' ? { selectionText } : {}),
+                  }
+                });
+              }
             }
+          } catch (e) {
+            console.error('[ChatStore] Judge failed:', e);
           }
-          // Note: We don't mark 'REJECT' explicitly for normal chat to avoid cluttering UI with error messages
-          // unless it was an explicit 'Apply' intent (which is handled by sendApplyRequest).
+        })();
 
-        } catch (e) {
-          console.error('[ChatStore] Judge failed for sendMessage:', e);
-        } finally {
-          set({ isLoading: false });
-        }
+        set({ isLoading: false, streamingMessageId: null });
+        // ----------------------------------------------
         // ----------------------------------------------
 
         get().checkAndSuggestActiveMemory();
@@ -510,6 +529,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     setComposerText: (text: string): void => {
       set({ composerText: text });
+      schedulePersist();
     },
 
     appendComposerText: (text: string, opts?: { separator?: string }): void => {
@@ -523,6 +543,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           composerFocusNonce: state.composerFocusNonce + 1,
         };
       });
+      schedulePersist();
     },
 
     requestComposerFocus: (): void => {

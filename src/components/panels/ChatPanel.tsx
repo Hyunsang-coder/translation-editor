@@ -12,16 +12,12 @@ import { isTauriRuntime } from '@/tauri/invoke';
  */
 export function ChatPanel(): JSX.Element {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
-  const selectedBlockId = useUIStore((s) => s.selectedBlockId);
   const { currentSession, sendMessage, isLoading } = useChatStore();
   const isSummarizing = useChatStore((s) => s.isSummarizing);
   const summarySuggestionOpen = useChatStore((s) => s.summarySuggestionOpen);
   const summarySuggestionReason = useChatStore((s) => s.summarySuggestionReason);
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
   const generateActiveMemorySummary = useChatStore((s) => s.generateActiveMemorySummary);
-  const applySuggestionToBlock = useProjectStore((s) => s.applySuggestionToBlock);
-  const openDocDiffPreview = useProjectStore((s) => s.openDocDiffPreview);
-  const getBlock = useProjectStore((s) => s.getBlock);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const composerText = useChatStore((s) => s.composerText);
   const setComposerText = useChatStore((s) => s.setComposerText);
@@ -375,36 +371,48 @@ export function ChatPanel(): JSX.Element {
                   type="button"
                   className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
                   onClick={() => {
-                    // 신규: Target 단일 문서(selection offset 기반) → DiffPreview
-                    const start = message.metadata?.selectionStartOffset;
-                    const end = message.metadata?.selectionEndOffset;
+                    const clean = message.metadata?.cleanContent ?? message.content;
+                    const meta = message.metadata ?? {};
+                    const { targetDocument, openDocDiffPreview } = useProjectStore.getState();
+
+                    let start = meta.selectionStartOffset;
+                    let end = meta.selectionEndOffset;
+                    const selText = meta.selectionText;
+
+                    // --- Smart Match Strategy ---
+                    // 1. If offsets are missing or seem invalid, try to find the selection text in the document.
+                    if (
+                      (typeof start !== 'number' || typeof end !== 'number') &&
+                      selText
+                    ) {
+                      const foundIdx = targetDocument.indexOf(selText);
+                      if (foundIdx >= 0) {
+                        start = foundIdx;
+                        end = foundIdx + selText.length;
+                      }
+                    } else if (
+                      typeof start === 'number' && typeof end === 'number' &&
+                      selText &&
+                      targetDocument.slice(start, end) !== selText
+                    ) {
+                      // 2. Drift detection: content at offsets changed? Search globally.
+                      const foundIdx = targetDocument.indexOf(selText);
+                      if (foundIdx >= 0) {
+                        start = foundIdx;
+                        end = foundIdx + selText.length;
+                      }
+                    }
+
                     if (typeof start === 'number' && typeof end === 'number') {
                       openDocDiffPreview({
                         startOffset: start,
                         endOffset: end,
-                        suggestedText: message.metadata?.cleanContent ?? message.content,
+                        suggestedText: clean,
                         originMessageId: message.id,
                       });
-                      return;
+                    } else {
+                      window.alert('자동 적용할 위치를 찾을 수 없습니다. (원본 텍스트가 변경되었거나 선택되지 않음)');
                     }
-
-                    // 레거시: block 기반 Apply (프로토타입 유지)
-                    const candidate =
-                      message.metadata?.suggestedBlockId ?? selectedBlockId ?? null;
-                    if (!candidate) {
-                      window.alert('적용할 블록이 선택되지 않았습니다. 번역 블록을 클릭한 뒤 다시 시도하세요.');
-                      return;
-                    }
-                    const block = getBlock(candidate);
-                    if (!block || block.type !== 'target') {
-                      window.alert('번역(Target) 블록을 선택한 뒤 Apply 해주세요.');
-                      return;
-                    }
-                    applySuggestionToBlock(
-                      candidate,
-                      message.metadata?.cleanContent ?? message.content, // Use clean content if available
-                      message.metadata?.selectionText,
-                    );
                   }}
                   title="AI 제안 내용을 현재 선택된 번역 블록에 적용( Diff 표시 )"
                 >
