@@ -1,7 +1,7 @@
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
-import { buildLangChainMessages } from '@/ai/prompt';
+import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 
 export interface GenerateReplyInput {
   project: ITEProject | null;
@@ -9,16 +9,16 @@ export interface GenerateReplyInput {
   recentMessages: ChatMessage[];
   userMessage: string;
   systemPromptOverlay?: string;
-  referenceNotes?: string;
-  /**
-   * 로컬 글로서리 검색 결과(주입)
-   * - On-demand: sendMessage/sendApplyRequest 같은 “모델 호출” 시에만 구성
-   */
-  glossaryInjected?: string;
-  fallbackSourceText?: string;
+  /** 번역 규칙 (사용자 입력) */
+  translationRules?: string;
+  /** Active Memory (용어/톤 규칙 요약) */
   activeMemory?: string;
+  /** 원문 문서 */
   sourceDocument?: string;
+  /** 번역문 문서 */
   targetDocument?: string;
+  /** 요청 유형 (자동 감지 또는 명시적 지정) */
+  requestType?: RequestType;
 }
 
 export interface StreamCallbacks {
@@ -28,7 +28,6 @@ export interface StreamCallbacks {
 function extractChunkContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    // Anthropic/Multimodal content shape: [{ type: 'text', text: '...' }]
     return content
       .map((c) => {
         if (typeof c === 'string') return c;
@@ -42,21 +41,18 @@ function extractChunkContent(content: unknown): string {
   return '';
 }
 
+/**
+ * AI 응답 생성 (non-streaming)
+ */
 export async function generateAssistantReply(input: GenerateReplyInput): Promise<string> {
   const cfg = getAiConfig();
 
   if (cfg.provider === 'mock') {
-    return [
-      '현재 AI_PROVIDER가 mock이라 실제 모델 호출은 하지 않았습니다.',
-      '',
-      `입력: ${input.userMessage}`,
-      input.contextBlocks.length > 0
-        ? `컨텍스트 블록 수: ${input.contextBlocks.length}`
-        : '컨텍스트 블록 없음',
-      '',
-      'VITE_AI_PROVIDER=openai 또는 anthropic 로 바꾸고 API 키를 설정하면 실제 호출로 전환됩니다.',
-    ].join('\n');
+    return getMockResponse(input);
   }
+
+  // 요청 유형 자동 감지
+  const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
   const model = createChatModel();
   const messages = await buildLangChainMessages(
@@ -65,24 +61,27 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
       contextBlocks: input.contextBlocks,
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
-      ...(input.referenceNotes ? { referenceNotes: input.referenceNotes } : {}),
-      ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
-      ...(input.fallbackSourceText ? { fallbackSourceText: input.fallbackSourceText } : {}),
+      ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
       ...(input.sourceDocument ? { sourceDocument: input.sourceDocument } : {}),
       ...(input.targetDocument ? { targetDocument: input.targetDocument } : {}),
     },
-    input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : undefined,
+    {
+      ...(input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : {}),
+      requestType,
+    },
   );
 
   const res = await model.invoke(messages);
   const content = res.content;
 
   if (typeof content === 'string') return content;
-  // 일부 모델은 content가 블록 배열로 올 수 있어 stringify
   return JSON.stringify(content);
 }
 
+/**
+ * AI 응답 생성 (streaming)
+ */
 export async function streamAssistantReply(
   input: GenerateReplyInput,
   cb?: StreamCallbacks,
@@ -90,19 +89,13 @@ export async function streamAssistantReply(
   const cfg = getAiConfig();
 
   if (cfg.provider === 'mock') {
-    const mock = [
-      '현재 AI_PROVIDER가 mock이라 실제 모델 호출은 하지 않았습니다.',
-      '',
-      `입력: ${input.userMessage}`,
-      input.contextBlocks.length > 0
-        ? `컨텍스트 블록 수: ${input.contextBlocks.length}`
-        : '컨텍스트 블록 없음',
-      '',
-      'VITE_AI_PROVIDER=openai 또는 anthropic 로 바꾸고 API 키를 설정하면 실제 호출로 전환됩니다.',
-    ].join('\n');
+    const mock = getMockResponse(input);
     cb?.onToken?.(mock, mock);
     return mock;
   }
+
+  // 요청 유형 자동 감지
+  const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
   const model = createChatModel();
   const messages = await buildLangChainMessages(
@@ -111,14 +104,15 @@ export async function streamAssistantReply(
       contextBlocks: input.contextBlocks,
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
-      ...(input.referenceNotes ? { referenceNotes: input.referenceNotes } : {}),
-      ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
-      ...(input.fallbackSourceText ? { fallbackSourceText: input.fallbackSourceText } : {}),
+      ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
       ...(input.sourceDocument ? { sourceDocument: input.sourceDocument } : {}),
       ...(input.targetDocument ? { targetDocument: input.targetDocument } : {}),
     },
-    input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : undefined,
+    {
+      ...(input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : {}),
+      requestType,
+    },
   );
 
   const stream = await model.stream(messages);
@@ -134,4 +128,24 @@ export async function streamAssistantReply(
   return full;
 }
 
+/**
+ * Mock 응답 생성 (개발/테스트용)
+ */
+function getMockResponse(input: GenerateReplyInput): string {
+  const requestType = detectRequestType(input.userMessage);
+  
+  const mockResponses: Record<RequestType, string> = {
+    translate: '(Mock 번역 결과) 이것은 테스트 번역입니다.',
+    question: '(Mock 답변) 질문에 대한 테스트 답변입니다.',
+    general: [
+      '현재 AI_PROVIDER가 mock이라 실제 모델 호출은 하지 않았습니다.',
+      '',
+      `입력: ${input.userMessage}`,
+      `요청 유형: ${requestType}`,
+      '',
+      'VITE_AI_PROVIDER=openai 또는 anthropic 으로 설정하고 API 키를 입력하면 실제 호출로 전환됩니다.',
+    ].join('\n'),
+  };
 
+  return mockResponses[requestType];
+}

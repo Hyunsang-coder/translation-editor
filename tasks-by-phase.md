@@ -20,11 +20,11 @@
 
 ### 1.2 TipTap 에디터 "Document Mode" 구현
 
-[ ] TipTap 기본 에디터 컴포넌트 생성
+[x] TipTap 기본 에디터 컴포넌트 생성
 
-[ ] Source(ReadOnly) / Target(Editable) TipTap 에디터 구현
+[x] Source(ReadOnly) / Target(Editable) TipTap 에디터 구현
 
-[ ] 지원 포맷 Extension 설정:
+[x] 지원 포맷 Extension 설정:
   - StarterKit (기본)
   - Heading (H1-H6)
   - BulletList / OrderedList
@@ -33,7 +33,7 @@
   - Link
   - Placeholder
 
-[ ] Notion 스타일 CSS 적용 (Pretendard, lineHeight 1.8, 16px)
+[x] Notion 스타일 CSS 적용 (Pretendard, lineHeight 1.8, 16px)
 
 ### 1.3 3패널 레이아웃 및 Focus Mode
 
@@ -41,7 +41,7 @@
 
 [x] 원문 패널 숨기기(Focus Mode) 토글
 
-[ ] TipTap 에디터로 패널 컴포넌트 교체
+[x] TipTap 에디터로 패널 컴포넌트 교체
 
 ---
 
@@ -59,11 +59,13 @@
 
 ### 2.2 프롬프트 전략 구현
 
-[ ] 번역 요청 프롬프트 템플릿 (번역문만 출력)
+[x] 번역 요청 프롬프트 템플릿 (번역문만 출력)
 
-[ ] 질문 요청 프롬프트 템플릿 (간결한 설명)
+[x] 질문 요청 프롬프트 템플릿 (간결한 설명)
 
-[ ] 프로젝트 메타 자동 주입 (sourceLanguage, targetLanguage, domain)
+[x] 프로젝트 메타 자동 주입 (sourceLanguage, targetLanguage, domain)
+
+[x] 요청 유형 자동 감지 (detectRequestType)
 
 ### 2.3 Context Collection (맥락 수집)
 

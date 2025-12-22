@@ -4,202 +4,285 @@ import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { stripHtml } from '@/utils/hash';
 
+// ============================================
+// 요청 유형 정의
+// ============================================
+
+export type RequestType = 'translate' | 'question' | 'general';
+
+/**
+ * 사용자 메시지에서 요청 유형을 감지
+ * - 번역 요청: "번역", "translate", "~로 옮겨", "~로 바꿔" 등
+ * - 질문 요청: "?", "무엇", "왜", "어떻게", "뭐야", "알려줘" 등
+ */
+export function detectRequestType(message: string): RequestType {
+  const lowerMessage = message.toLowerCase();
+  
+  // 번역 관련 키워드
+  const translateKeywords = [
+    '번역', 'translate', '옮겨', '바꿔줘', '변환', '한국어로', '영어로', 
+    '일본어로', '중국어로', '자연스럽게', '다듬어', '수정해', '고쳐'
+  ];
+  
+  // 질문 관련 키워드
+  const questionKeywords = [
+    '?', '무엇', '뭐', '왜', '어떻게', '어디', '언제', '누가',
+    '알려', '설명', '의미', '뜻이', '차이', '맞아', '틀려'
+  ];
+  
+  for (const keyword of translateKeywords) {
+    if (lowerMessage.includes(keyword)) {
+      return 'translate';
+    }
+  }
+  
+  for (const keyword of questionKeywords) {
+    if (lowerMessage.includes(keyword)) {
+      return 'question';
+    }
+  }
+  
+  return 'general';
+}
+
+// ============================================
+// 프롬프트 컨텍스트 인터페이스
+// ============================================
+
 export interface PromptContext {
   project: ITEProject | null;
   contextBlocks: EditorBlock[];
   recentMessages: ChatMessage[];
   userMessage: string;
-  /**
-   * 참조문서/용어집/메모 등 추가 컨텍스트(사용자 입력)
-   */
-  referenceNotes?: string;
-  /**
-   * 로컬 글로서리 검색 결과(자동 주입)
-   * - TRD 5.2: 비벡터, on-demand 모델 호출 시에만 payload에 포함
-   */
-  glossaryInjected?: string;
-  /**
-   * 컨텍스트 블록 매핑 실패 시 주입할 원문 전체(plain) fallback
-   */
-  fallbackSourceText?: string;
-  /**
-   * Active Memory(용어/톤 규칙 요약)
-   */
+  /** 번역 규칙 (사용자 입력) */
+  translationRules?: string;
+  /** Active Memory (용어/톤 규칙 요약) */
   activeMemory?: string;
-  /**
-   * 전체 원문/번역 문서 (사용자 선택 시 주입)
-   */
+  /** 원문 문서 */
   sourceDocument?: string;
+  /** 번역문 문서 */
   targetDocument?: string;
 }
 
 export interface PromptOptions {
-  /**
-   * 사용자 편집 가능한 시스템 프롬프트 오버레이
-   * - TRD 3.2: Project meta + 사용자 지침을 함께 반영
-   */
+  /** 사용자 편집 가능한 시스템 프롬프트 오버레이 */
   systemPromptOverlay?: string;
+  /** 요청 유형 (자동 감지 또는 명시적 지정) */
+  requestType?: RequestType;
 }
 
-function buildSystemPolicyPrompt(): string {
-  return [
-    '너는 번역가를 돕는 AI 어시스턴트다.',
-    '',
-    '규칙:',
-    '- 사용자는 한국어로 응답을 선호한다. 가능하면 한국어로 답한다.',
-    '- 사용자가 요청하기 전에는 과도한 제안/개입을 하지 않는다(On-Demand AI).',
-    '- 불확실한 내용은 추측하지 말고 확인 질문을 먼저 한다.',
-    '- 컨텍스트로 제공된 블록 내용(원문/번역)을 우선으로 참고한다.',
-  ].join('\n');
-}
+// ============================================
+// 시스템 프롬프트 빌더
+// ============================================
 
-function buildSystemMetaPrompt(project: ITEProject | null, opts?: PromptOptions): string {
+function buildBaseSystemPrompt(project: ITEProject | null): string {
   const domain = project?.metadata.domain ?? 'general';
   const src = project?.metadata.sourceLanguage ?? 'Source';
   const tgt = project?.metadata.targetLanguage ?? 'Target';
-  const overlay = opts?.systemPromptOverlay?.trim();
 
   return [
-    `프로젝트 도메인: ${domain}`,
+    '당신은 전문 번역가를 돕는 AI 어시스턴트입니다.',
+    '',
+    `프로젝트: ${domain}`,
     `언어: ${src} → ${tgt}`,
-    overlay ? `- 추가 지침: ${overlay}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+    '',
+    '핵심 원칙:',
+    '- 번역사가 주도권을 가지고, AI는 요청 시에만 응답합니다.',
+    '- 불필요한 설명, 인사, 부연 없이 핵심만 답합니다.',
+    '- 확신 없는 내용은 추측하지 않고 확인 질문을 먼저 합니다.',
+  ].join('\n');
 }
 
-function formatReferenceNotes(notes?: string): string {
-  const trimmed = notes?.trim();
-  if (!trimmed) return '';
-  return ['참조 메모/용어집:', trimmed].join('\n');
+function buildTranslateSystemPrompt(project: ITEProject | null): string {
+  const base = buildBaseSystemPrompt(project);
+  
+  return [
+    base,
+    '',
+    '=== 번역 요청 모드 ===',
+    '중요: 번역문만 출력하세요.',
+    '- 설명, 인사, 부연, 마크다운 없이 오직 번역 결과만 응답합니다.',
+    '- "번역 결과입니다", "다음과 같이 번역했습니다" 등의 사족을 붙이지 마세요.',
+    '- 고유명사, 태그, 변수는 그대로 유지합니다.',
+  ].join('\n');
 }
 
-function formatGlossaryInjected(glossary?: string): string {
-  const trimmed = glossary?.trim();
+function buildQuestionSystemPrompt(project: ITEProject | null): string {
+  const base = buildBaseSystemPrompt(project);
+  
+  return [
+    base,
+    '',
+    '=== 질문 응답 모드 ===',
+    '- 질문에 간결하게 답변합니다.',
+    '- 필요한 경우에만 예시를 들어 설명합니다.',
+    '- 번역문을 제안하지 않고, 질문에만 답합니다.',
+  ].join('\n');
+}
+
+function buildGeneralSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
+  const base = buildBaseSystemPrompt(project);
+  const overlay = opts?.systemPromptOverlay?.trim();
+  
+  return [
+    base,
+    overlay ? `\n추가 지침: ${overlay}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+// ============================================
+// 컨텍스트 포매터
+// ============================================
+
+function formatTranslationRules(rules?: string): string {
+  const trimmed = rules?.trim();
   if (!trimmed) return '';
-  return ['주입된 로컬 글로서리(자동):', trimmed].join('\n');
+  return ['[번역 규칙]', trimmed].join('\n');
 }
 
 function formatActiveMemory(memory?: string): string {
   const trimmed = memory?.trim();
   if (!trimmed) return '';
   const maxLen = 1200;
-  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}\n...` : trimmed;
-  return ['Active Memory(용어/톤 규칙):', sliced].join('\n');
+  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
+  return ['[Active Memory - 용어/톤 규칙]', sliced].join('\n');
 }
 
-function formatFallbackSource(text?: string): string {
-  const trimmed = text?.trim();
-  if (!trimmed) return '';
-  const maxLen = 2000; // 과도한 컨텍스트 방지
-  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}\n...` : trimmed;
-  return ['원문 참조(fallback):', sliced].join('\n');
-}
-
-function formatFullDocument(label: string, text?: string): string {
+function formatDocument(label: string, text?: string): string {
   const trimmed = text?.trim();
   if (!trimmed) return '';
   const maxLen = 4000;
-  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}\n...` : trimmed;
-  return [`${label} 문서:`, sliced].join('\n');
-}
-
-export function buildSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
-  const domain = project?.metadata.domain ?? 'general';
-  const src = project?.metadata.sourceLanguage ?? 'Source';
-  const tgt = project?.metadata.targetLanguage ?? 'Target';
-
-  const overlay = opts?.systemPromptOverlay?.trim();
-
-  return [
-    '너는 번역가를 돕는 AI 어시스턴트다.',
-    `프로젝트 도메인: ${domain}`,
-    `언어: ${src} → ${tgt}`,
-    '',
-    '규칙:',
-    '- 사용자는 한국어로 응답을 선호한다. 가능하면 한국어로 답한다.',
-    '- 사용자가 요청하기 전에는 과도한 제안/개입을 하지 않는다(On-Demand AI).',
-    '- 불확실한 내용은 추측하지 말고 확인 질문을 먼저 한다.',
-    '- 컨텍스트로 제공된 블록 내용(원문/번역)을 우선으로 참고한다.',
-    overlay ? `- 추가 지침: ${overlay}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
+  return [`[${label}]`, sliced].join('\n');
 }
 
 export function buildBlockContextText(blocks: EditorBlock[]): string {
   if (blocks.length === 0) return '';
 
-  const lines: string[] = [];
-  lines.push('현재 컨텍스트 블록:');
+  const lines: string[] = ['[컨텍스트 블록]'];
   for (const b of blocks) {
     const plain = stripHtml(b.content);
-    lines.push(`- [${b.type}] ${b.id}: ${plain}`);
+    lines.push(`- [${b.type}] ${plain}`);
   }
   return lines.join('\n');
 }
+
+// ============================================
+// 레거시 호환용 (기존 코드 호환)
+// ============================================
+
+export function buildSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
+  return buildGeneralSystemPrompt(project, opts);
+}
+
+// ============================================
+// 메시지 히스토리 변환
+// ============================================
 
 function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[] {
   const history: BaseMessage[] = [];
   for (const m of recentMessages) {
     if (m.role === 'user') history.push(new HumanMessage(m.content));
     if (m.role === 'assistant') history.push(new AIMessage(m.content));
-    // system 메시지는 모델에 별도로 이미 주입했으므로 생략
   }
   return history;
 }
+
+// ============================================
+// LangChain 메시지 빌더
+// ============================================
 
 export async function buildLangChainMessages(
   ctx: PromptContext,
   opts?: PromptOptions,
 ): Promise<BaseMessage[]> {
-  const systemPolicy = buildSystemPolicyPrompt();
-  const systemMeta = buildSystemMetaPrompt(ctx.project, opts);
+  // 요청 유형 감지
+  const requestType = opts?.requestType ?? detectRequestType(ctx.userMessage);
+  
+  // 요청 유형에 따른 시스템 프롬프트 선택
+  let systemPrompt: string;
+  switch (requestType) {
+    case 'translate':
+      systemPrompt = buildTranslateSystemPrompt(ctx.project);
+      break;
+    case 'question':
+      systemPrompt = buildQuestionSystemPrompt(ctx.project);
+      break;
+    default:
+      systemPrompt = buildGeneralSystemPrompt(ctx.project, opts);
+  }
+
+  // 컨텍스트 조립
   const blockContext = buildBlockContextText(ctx.contextBlocks);
-  const refNotes = formatReferenceNotes(ctx.referenceNotes);
-  const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
+  const translationRules = formatTranslationRules(ctx.translationRules);
   const activeMemory = formatActiveMemory(ctx.activeMemory);
-  const sourceFallback = formatFallbackSource(ctx.fallbackSourceText);
-  const fullSource = formatFullDocument('원문', ctx.sourceDocument);
-  const fullTarget = formatFullDocument('번역문', ctx.targetDocument);
+  const sourceDoc = formatDocument('원문', ctx.sourceDocument);
+  const targetDoc = formatDocument('번역문', ctx.targetDocument);
 
   const systemContext = [
-    blockContext,
-    glossaryInjected,
-    refNotes,
+    translationRules,
     activeMemory,
-    fullSource,
-    fullTarget,
-    ctx.contextBlocks.length === 0 ? sourceFallback : '',
+    sourceDoc,
+    targetDoc,
+    blockContext,
   ]
     .filter(Boolean)
     .join('\n\n');
 
   const history = mapRecentMessagesToHistory(ctx.recentMessages);
 
-  // 컨텍스트가 비어있으면 빈 system 메시지를 보내지 않도록 템플릿을 분기
+  // 프롬프트 템플릿 구성
   const prompt = systemContext
     ? ChatPromptTemplate.fromMessages([
-      ['system', '{systemPolicy}'],
-      ['system', '{systemMeta}'],
-      ['system', '{systemContext}'],
-      new MessagesPlaceholder('history'),
-      ['human', '{input}'],
-    ])
+        ['system', '{systemPrompt}'],
+        ['system', '{systemContext}'],
+        new MessagesPlaceholder('history'),
+        ['human', '{input}'],
+      ])
     : ChatPromptTemplate.fromMessages([
-      ['system', '{systemPolicy}'],
-      ['system', '{systemMeta}'],
-      new MessagesPlaceholder('history'),
-      ['human', '{input}'],
-    ]);
+        ['system', '{systemPrompt}'],
+        new MessagesPlaceholder('history'),
+        ['human', '{input}'],
+      ]);
 
   return await prompt.formatMessages({
-    systemPolicy,
-    systemMeta,
+    systemPrompt,
     ...(systemContext ? { systemContext } : {}),
     history,
     input: ctx.userMessage,
   });
 }
 
+// ============================================
+// 번역 전용 프롬프트 빌더 (간결한 응답)
+// ============================================
 
+export async function buildTranslateOnlyMessages(
+  sourceText: string,
+  targetLanguage: string,
+  opts?: {
+    translationRules?: string;
+    activeMemory?: string;
+  },
+): Promise<BaseMessage[]> {
+  const systemPrompt = [
+    '당신은 전문 번역가입니다.',
+    `다음 원문을 ${targetLanguage}로 번역하세요.`,
+    '',
+    '중요: 번역문만 출력하세요.',
+    '- 설명, 인사, 부연 없이 오직 번역 결과만 응답합니다.',
+    '- 고유명사, 태그, 변수는 그대로 유지합니다.',
+    opts?.translationRules ? `\n[번역 규칙]\n${opts.translationRules}` : '',
+    opts?.activeMemory ? `\n[참고 용어]\n${opts.activeMemory}` : '',
+  ].filter(Boolean).join('\n');
+
+  const prompt = ChatPromptTemplate.fromMessages([
+    ['system', '{systemPrompt}'],
+    ['human', '{input}'],
+  ]);
+
+  return await prompt.formatMessages({
+    systemPrompt,
+    input: sourceText,
+  });
+}

@@ -50,7 +50,7 @@ interface ChatState {
   composerText: string;
   composerFocusNonce: number;
   systemPromptOverlay: string;
-  referenceNotes: string;
+  translationRules: string;
   activeMemory: string;
   includeSourceInPayload: boolean;
   includeTargetInPayload: boolean;
@@ -107,7 +107,7 @@ interface ChatActions {
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   setSystemPromptOverlay: (overlay: string) => void;
-  setReferenceNotes: (notes: string) => void;
+  setTranslationRules: (rules: string) => void;
   setActiveMemory: (memory: string) => void;
   setIncludeSourceInPayload: (val: boolean) => void;
   setIncludeTargetInPayload: (val: boolean) => void;
@@ -131,7 +131,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
   const buildChatSettings = (): ChatProjectSettings => ({
     systemPromptOverlay: get().systemPromptOverlay,
-    referenceNotes: get().referenceNotes,
+    translationRules: get().translationRules,
     activeMemory: get().activeMemory,
     composerText: get().composerText,
     includeSourceInPayload: get().includeSourceInPayload,
@@ -195,7 +195,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     composerText: '',
     composerFocusNonce: 0,
     systemPromptOverlay: 'You are a professional translator. Translate the following text naturally and accurately, preserving the tone and nuance of the original.',
-    referenceNotes: '',
+    translationRules: '',
     activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
     includeSourceInPayload: true,
     includeTargetInPayload: true,
@@ -213,7 +213,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         isLoading: false,
         // settings는 로드 결과에 따라 갱신
         systemPromptOverlay: '',
-        referenceNotes: '',
+        translationRules: '',
         activeMemory: '',
         composerText: '',
         includeSourceInPayload: true,
@@ -241,7 +241,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         if (settings) {
           set({
             systemPromptOverlay: settings.systemPromptOverlay,
-            referenceNotes: settings.referenceNotes,
+            translationRules: settings.translationRules,
             activeMemory: settings.activeMemory,
             composerText: settings.composerText ?? '',
             includeSourceInPayload: settings.includeSourceInPayload,
@@ -376,15 +376,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
             : [];
         const fallbackSourceText =
           contextBlocks.length === 0 && currentSourceDocument ? currentSourceDocument : undefined;
-        const referenceNotesRaw = get().referenceNotes;
+        const translationRulesRaw = get().translationRules;
         const activeMemoryRaw = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
         const includeTarget = get().includeTargetInPayload;
         const sourceDocumentRaw = includeSource ? currentSourceDocument : undefined;
         const targetDocumentRaw = includeTarget ? useProjectStore.getState().targetDocument : undefined;
 
-        const referenceNotes = referenceNotesRaw
-          ? maskGhostChips(referenceNotesRaw, maskSession)
+        const translationRules = translationRulesRaw
+          ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
         const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
         const sourceDocument = sourceDocumentRaw
@@ -446,7 +446,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             recentMessages: recent,
             userMessage: maskedUserContent,
             systemPromptOverlay,
-            referenceNotes,
+            translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             ...(fallbackSourceText ? { fallbackSourceText } : {}),
             activeMemory,
@@ -658,7 +658,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const targetDocHandle = useProjectStore.getState().targetDocHandle;
         const currentSourceDocument = useProjectStore.getState().sourceDocument;
         const systemPromptOverlay = get().systemPromptOverlay;
-        const referenceNotes = get().referenceNotes;
+        const translationRules = get().translationRules;
         const activeMemory = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
         const includeTarget = get().includeTargetInPayload;
@@ -888,7 +888,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             recentMessages: recent,
             userMessage,
             systemPromptOverlay,
-            referenceNotes: referenceNotes ? maskGhostChips(referenceNotes, maskSession) : '',
+            translationRules: translationRules ? maskGhostChips(translationRules, maskSession) : '',
             ...(glossaryInjected ? { glossaryInjected } : {}),
             ...(fallbackSourceText ? { fallbackSourceText } : {}),
             activeMemory: activeMemory ? maskGhostChips(activeMemory, maskSession) : '',
@@ -1238,8 +1238,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
       schedulePersist();
     },
 
-    setReferenceNotes: (notes: string): void => {
-      set({ referenceNotes: notes });
+    setTranslationRules: (rules: string): void => {
+      set({ translationRules: rules });
       schedulePersist();
     },
 

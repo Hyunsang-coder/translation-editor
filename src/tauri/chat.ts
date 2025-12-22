@@ -3,7 +3,7 @@ import { invoke } from '@/tauri/invoke';
 
 export interface ChatProjectSettings {
   systemPromptOverlay: string;
-  referenceNotes: string;
+  translationRules: string;
   activeMemory: string;
   composerText: string;
   includeSourceInPayload: boolean;
