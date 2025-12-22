@@ -24,14 +24,13 @@ export function MainLayout(): JSX.Element {
       <main className="flex-1 flex overflow-hidden">
         {/* 프로젝트 사이드바 */}
         <aside
-          className={`${
-            projectSidebarCollapsed ? 'w-12' : 'w-64'
-          } border-r border-editor-border overflow-hidden transition-all duration-200`}
+          className={`${projectSidebarCollapsed ? 'w-12' : 'w-64'
+            } border-r border-editor-border overflow-hidden transition-all duration-200`}
         >
           <ProjectSidebar />
         </aside>
 
-        {/* 에디터 캔버스 (SegmentGroup 단위 2컬럼) */}
+        {/* 에디터 캔버스 */}
         <section className="flex-1 overflow-hidden">
           <EditorCanvas focusMode={focusMode} />
         </section>

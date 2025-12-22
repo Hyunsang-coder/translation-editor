@@ -194,8 +194,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
     systemPromptOverlay: '',
     referenceNotes: '',
     activeMemory: '',
-    includeSourceInPayload: false,
-    includeTargetInPayload: false,
+    includeSourceInPayload: true,
+    includeTargetInPayload: true,
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
@@ -213,8 +213,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
         referenceNotes: '',
         activeMemory: '',
         composerText: '',
-        includeSourceInPayload: false,
-        includeTargetInPayload: false,
+        includeSourceInPayload: true,
+        includeTargetInPayload: true,
       });
 
       if (!projectId) return;
@@ -346,6 +346,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       // 사용자 메시지 추가
       addMessage({ role: 'user', content });
+
+      // [Auto-Title] 첫 메시지인 경우 세션 이름 자동 변경
+      const updatedSession = get().currentSession;
+      if (updatedSession && updatedSession.messages.length === 1) {
+        // 간단한 규칙: 첫 20자 + ...
+        const newTitle = content.trim().slice(0, 20) + (content.length > 20 ? '...' : '');
+        get().renameSession(updatedSession.id, newTitle);
+      }
 
       set({ isLoading: true, error: null });
 

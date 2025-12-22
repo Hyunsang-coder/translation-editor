@@ -3,7 +3,6 @@ import { TargetMonacoEditor } from '@/components/editor/TargetMonacoEditor';
 import { useMemo, useRef } from 'react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { buildTargetDocument } from '@/editor/targetDocument';
-import { DomSelectionAddToChat } from '@/components/editor/DomSelectionAddToChat';
 import { SourceMonacoEditor } from '@/components/editor/SourceMonacoEditor';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { useChatStore } from '@/stores/chatStore';
@@ -55,45 +54,43 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
   }
 
   return (
-    <div className="h-full p-editor-padding flex flex-col min-h-0">
-      <DomSelectionAddToChat />
-      <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+    <div className="flex-1 h-full flex flex-col min-w-0 bg-editor-surface">
+      {/* Header */}
+      <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-medium text-editor-muted uppercase tracking-wider">
-            Editor
-          </h2>
-          <span className="text-xs text-editor-muted">
-            {project.metadata.sourceLanguage} → {project.metadata.targetLanguage}
-          </span>
+          <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-editor-muted">
           <label className="inline-flex items-center gap-1 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="accent-primary-500"
               checked={includeSourceInPayload}
               onChange={(e) => setIncludeSourceInPayload(e.target.checked)}
+              className="checkbox-sm"
             />
-            원문을 AI 컨텍스트에 포함
+            <span>원문 컨텍스트에 포함</span>
           </label>
           <label className="inline-flex items-center gap-1 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="accent-primary-500"
               checked={includeTargetInPayload}
               onChange={(e) => setIncludeTargetInPayload(e.target.checked)}
+              className="checkbox-sm"
             />
-            번역문을 AI 컨텍스트에 포함
+            <span>번역문 컨텍스트에 포함</span>
           </label>
         </div>
       </div>
 
-      {/* Cursor 느낌: 좌(Source) / 우(Target) 두 에디터 */}
-      <div className={`flex-1 min-h-0 grid gap-3 ${focusMode ? 'grid-cols-1' : 'grid-cols-2'}`}>
+      <div className="flex-1 flex min-h-0">
         {!focusMode && (
-          <div className="min-h-0 flex flex-col">
-            <div className="text-xs text-editor-muted mb-2">SOURCE (reference)</div>
-            <div className="min-h-0 flex-1" data-ite-source>
+          <div className="flex-1 flex flex-col min-w-0 border-r border-editor-border">
+            <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
+              <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                SOURCE
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 relative" data-ite-source>
               <SourceMonacoEditor
                 value={sourceDocument || derived.sourceDocument}
                 onChange={(next) => setSourceDocument(next)}
@@ -102,9 +99,13 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
           </div>
         )}
 
-        <div className="min-h-0 flex flex-col">
-          <div className="text-xs text-editor-muted mb-2">TARGET</div>
-          <div className="min-h-0 flex-1">
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="h-8 px-4 flex items-center border-b border-editor-border bg-editor-bg">
+            <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+              TRANSLATION
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 relative">
             <TargetMonacoEditor
               value={targetDocument}
               onChange={setTargetDocument}
@@ -125,5 +126,3 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
     </div>
   );
 }
-
-

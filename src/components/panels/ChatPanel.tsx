@@ -11,35 +11,46 @@ import { isTauriRuntime } from '@/tauri/invoke';
  * 멀티 세션 지원 채팅창
  */
 export function ChatPanel(): JSX.Element {
+  // 1. Hooks (Top-level)
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+
   const { currentSession, sendMessage, isLoading } = useChatStore();
+  const chatSessions = useChatStore((s) => s.sessions); // Hoisted selector
   const isSummarizing = useChatStore((s) => s.isSummarizing);
   const summarySuggestionOpen = useChatStore((s) => s.summarySuggestionOpen);
   const summarySuggestionReason = useChatStore((s) => s.summarySuggestionReason);
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
   const generateActiveMemorySummary = useChatStore((s) => s.generateActiveMemorySummary);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const composerText = useChatStore((s) => s.composerText);
   const setComposerText = useChatStore((s) => s.setComposerText);
   const focusNonce = useChatStore((s) => s.composerFocusNonce);
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
   const systemPromptOverlay = useChatStore((s) => s.systemPromptOverlay);
   const setSystemPromptOverlay = useChatStore((s) => s.setSystemPromptOverlay);
-  const referenceNotes = useChatStore((s) => s.referenceNotes);
-  const setReferenceNotes = useChatStore((s) => s.setReferenceNotes);
   const activeMemory = useChatStore((s) => s.activeMemory);
   const setActiveMemory = useChatStore((s) => s.setActiveMemory);
-  const lastInjectedGlossary = useChatStore((s) => s.lastInjectedGlossary);
-  const [showPromptEditor, setShowPromptEditor] = useState(false);
+
   const project = useProjectStore((s) => s.project);
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
   const hydrateForProject = useChatStore((s) => s.hydrateForProject);
 
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // 2. Effects
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원
   useEffect(() => {
     void hydrateForProject(project?.id ?? null);
   }, [project?.id, hydrateForProject]);
 
+  useEffect(() => {
+    if (sidebarCollapsed) return;
+    // selection에서 Add to chat을 눌렀을 때 즉시 타이핑 가능하게 포커스
+    inputRef.current?.focus();
+  }, [focusNonce, sidebarCollapsed]);
+
+  // 3. Handlers
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (!composerText.trim() || isLoading) return;
@@ -49,12 +60,7 @@ export function ChatPanel(): JSX.Element {
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
 
-  useEffect(() => {
-    if (sidebarCollapsed) return;
-    // selection에서 Add to chat을 눌렀을 때 즉시 타이핑 가능하게 포커스
-    inputRef.current?.focus();
-  }, [focusNonce, sidebarCollapsed]);
-
+  // 4. Early Returns (Conditional Rendering)
   // 사이드바 축소 상태
   if (sidebarCollapsed) {
     return (
@@ -63,7 +69,7 @@ export function ChatPanel(): JSX.Element {
           type="button"
           onClick={toggleSidebar}
           className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title="채팅 패널 열기"
+          title="Open Chat"
         >
           💬
         </button>
@@ -71,35 +77,195 @@ export function ChatPanel(): JSX.Element {
     );
   }
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* 헤더 */}
-      <div className="h-12 border-b border-editor-border flex items-center justify-between px-4 gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-editor-text">AI Assistant</h2>
+  // Full-page Settings Interaction
+  if (showPromptEditor) {
+    return (
+      <div className="h-full flex flex-col bg-editor-bg">
+        {/* Settings Header */}
+        <div className="h-12 border-b border-editor-border flex items-center justify-between px-4 shrink-0">
+          <h2 className="text-sm font-medium text-editor-text">Settings</h2>
           <button
             type="button"
-            onClick={() => setShowPromptEditor((prev) => !prev)}
-            className={`px-2 py-1 rounded text-xs border ${showPromptEditor ? 'bg-primary-500 text-white border-primary-500' : 'bg-editor-bg text-editor-muted border-editor-border'
-              }`}
-            title="시스템 프롬프트 오버레이 편집"
+            onClick={() => setShowPromptEditor(false)}
+            className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
+            title="Close Settings"
           >
-            System Prompt
+            ✕
           </button>
         </div>
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
-          title="패널 축소"
-        >
-          ✕
-        </button>
+
+        {/* Settings Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Section 1: System Prompt */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
+              <button
+                type="button"
+                className="text-xs text-primary-500 hover:text-primary-600"
+                onClick={() => setSystemPromptOverlay('')}
+              >
+                Clear
+              </button>
+            </div>
+            <textarea
+              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={systemPromptOverlay}
+              onChange={(e) => setSystemPromptOverlay(e.target.value)}
+              placeholder="Enter system prompt..."
+            />
+          </section>
+
+          {/* Section 2: Translation Rules (Active Memory) */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
+              <button
+                type="button"
+                className="text-xs text-primary-500 hover:text-primary-600"
+                onClick={() => setActiveMemory('')}
+              >
+                Clear
+              </button>
+            </div>
+            <textarea
+              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={activeMemory}
+              onChange={(e) => setActiveMemory(e.target.value)}
+              placeholder="Enter translation rules..."
+            />
+          </section>
+
+          {/* Section 3: Glossary */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-editor-text">3. Glossary</h3>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
+                  onClick={() => {
+                    void (async () => {
+                      if (!isTauriRuntime() || !project) return;
+                      const path = await pickGlossaryCsvFile();
+                      if (path) {
+                        await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false });
+                        addGlossaryPath(path);
+                      }
+                    })();
+                  }}
+                >
+                  Import CSV
+                </button>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
+                  onClick={() => {
+                    void (async () => {
+                      if (!isTauriRuntime() || !project) return;
+                      const path = await pickGlossaryExcelFile();
+                      if (path) {
+                        await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
+                        addGlossaryPath(path);
+                      }
+                    })();
+                  }}
+                >
+                  Import Excel
+                </button>
+              </div>
+            </div>
+
+            {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
+              <div className="p-2 rounded bg-editor-surface border border-editor-border">
+                <div className="text-xs text-editor-muted">Linked Glossaries:</div>
+                <ul className="mt-1 space-y-1">
+                  {project.metadata.glossaryPaths.map((p) => (
+                    <li key={p} className="text-xs text-editor-text truncate" title={p}>• {p}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
+            )}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Main Render
+  return (
+    <div className="h-full flex flex-col">
+      {/* Session Tabs Header */}
+      <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none">
+        <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
+          {chatSessions.map((session) => (
+            <div
+              key={session.id}
+              onClick={() => useChatStore.getState().switchSession(session.id)}
+              className={`
+                group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[100px] max-w-[160px]
+                ${currentSession?.id === session.id
+                  ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                  : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+                }
+              `}
+              title={session.name}
+            >
+              <span className="truncate flex-1">{session.name}</span>
+              {(chatSessions.length > 0) && (
+                <button
+                  className={`
+                     opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50
+                     ${currentSession?.id === session.id ? 'opacity-100' : ''}
+                   `}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Delete this chat session?')) {
+                      useChatStore.getState().deleteSession(session.id);
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+
+          <button
+            onClick={() => void useChatStore.getState().createSession()}
+            className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
+            title="New Chat"
+          >
+            +
+          </button>
+        </div>
+
+        {/* Panel Controls */}
+        <div className="flex items-center px-2 gap-1 border-l border-editor-border bg-editor-bg shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowPromptEditor(true)}
+            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
+            title="Settings"
+          >
+            ⚙️
+          </button>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
+            title="Close Panel"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      {/* Smart Context Memory 제안 (System Prompt 패널이 닫혀 있어도 노출) */}
+      {/* Smart Context Memory 제안 */}
       {!showPromptEditor && summarySuggestionOpen && (
-        <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2">
+        <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2 shrink-0">
           <div className="text-[11px] text-editor-muted leading-relaxed">
             {summarySuggestionReason}
           </div>
@@ -109,245 +275,17 @@ export function ChatPanel(): JSX.Element {
               className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
               disabled={isSummarizing}
               onClick={() => void generateActiveMemorySummary()}
-              title="대화에서 확정된 용어/톤 규칙을 요약해 Active Memory로 저장"
             >
-              {isSummarizing ? '요약 중…' : '요약 생성'}
+              {isSummarizing ? 'Summarizing...' : 'Summarize'}
             </button>
             <button
               type="button"
               className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
               onClick={dismissSummarySuggestion}
-              title="닫기"
             >
-              닫기
+              Close
             </button>
           </div>
-        </div>
-      )}
-
-      {showPromptEditor && (
-        <div className="border-b border-editor-border bg-editor-surface/60 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-editor-muted">시스템 프롬프트 오버레이(프로젝트 지침/톤)</p>
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setSystemPromptOverlay('')}
-              title="초기화"
-            >
-              초기화
-            </button>
-          </div>
-          <textarea
-            className="w-full h-20 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={systemPromptOverlay}
-            onChange={(e) => setSystemPromptOverlay(e.target.value)}
-            placeholder="예: 용어집의 고유명사는 원문 표기 유지, 문체는 반말 금지 등"
-          />
-          <p className="text-[11px] text-editor-muted">
-            TRD 3.2: 프로젝트 메타 + 사용자 지침을 시스템 프롬프트에 함께 반영합니다.
-          </p>
-          <div className="h-px bg-editor-border" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-editor-muted">참조문서/용어집 메모(모델에 그대로 전달)</p>
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setReferenceNotes('')}
-              title="초기화"
-            >
-              초기화
-            </button>
-          </div>
-          <textarea
-            className="w-full h-20 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={referenceNotes}
-            onChange={(e) => setReferenceNotes(e.target.value)}
-            placeholder="예: glossary: {user}=플레이어 이름 유지, <br>은 줄바꿈 그대로 유지"
-          />
-          <p className="text-[11px] text-editor-muted">
-            참고 메모는 시스템 메시지와 함께 모델로 전달됩니다.
-          </p>
-
-          <div className="h-px bg-editor-border" />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-editor-muted">로컬 글로서리(CSV) — 프로젝트 DB 임포트</p>
-              <p className="text-[11px] text-editor-muted">
-                TRD 5.2: 모델 호출(send/edit) 시에만 관련 용어를 자동 주입합니다(비벡터).
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      if (!isTauriRuntime()) {
-                        window.alert('Tauri 런타임에서만 파일 가져오기가 가능합니다.');
-                        return;
-                      }
-                      if (!project) {
-                        window.alert('프로젝트가 로드되지 않았습니다.');
-                        return;
-                      }
-                      const path = await pickGlossaryCsvFile();
-                      if (!path) {
-                        window.alert('파일 선택이 취소되었습니다.');
-                        return;
-                      }
-                      const res = await importGlossaryCsv({
-                        projectId: project.id,
-                        path,
-                        replaceProjectScope: false,
-                      });
-                      addGlossaryPath(path);
-                      window.alert(
-                        `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
-                      );
-                    } catch (e) {
-                      window.alert(
-                        `글로서리 임포트 실패\n${e instanceof Error ? e.message : String(e)
-                        }`,
-                      );
-                    }
-                  })();
-                }}
-                title="CSV 파일을 프로젝트 DB(glossary_entries)에 임포트"
-              >
-                CSV 가져오기
-              </button>
-              <button
-                type="button"
-                className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      if (!isTauriRuntime()) {
-                        window.alert('Tauri 런타임에서만 파일 가져오기가 가능합니다.');
-                        return;
-                      }
-                      if (!project) {
-                        window.alert('프로젝트가 로드되지 않았습니다.');
-                        return;
-                      }
-                      const path = await pickGlossaryExcelFile();
-                      if (!path) {
-                        window.alert('파일 선택이 취소되었습니다.');
-                        return;
-                      }
-                      const res = await importGlossaryExcel({
-                        projectId: project.id,
-                        path,
-                        replaceProjectScope: false,
-                      });
-                      addGlossaryPath(path);
-                      window.alert(
-                        `글로서리 임포트 완료\n- inserted: ${res.inserted}\n- updated: ${res.updated}\n- skipped: ${res.skipped}`,
-                      );
-                    } catch (e) {
-                      window.alert(
-                        `글로서리 임포트 실패\n${e instanceof Error ? e.message : String(e)
-                        }`,
-                      );
-                    }
-                  })();
-                }}
-                title="Excel(.xlsx/.xls) 파일을 프로젝트 DB(glossary_entries)에 임포트"
-              >
-                Excel 가져오기
-              </button>
-            </div>
-          </div>
-
-          {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 && (
-            <div className="text-[11px] text-editor-muted">
-              현재 연결된 CSV:
-              <div className="mt-1 space-y-1">
-                {project.metadata.glossaryPaths.slice(0, 3).map((p) => (
-                  <div key={p} className="truncate" title={p}>
-                    - {p}
-                  </div>
-                ))}
-                {project.metadata.glossaryPaths.length > 3 && (
-                  <div className="text-[11px] text-editor-muted">
-                    …외 {project.metadata.glossaryPaths.length - 3}개
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {lastInjectedGlossary.length > 0 && (
-            <div className="rounded-md border border-editor-border bg-editor-bg p-2">
-              <div className="text-[11px] text-editor-muted mb-1">
-                이번 요청에서 주입된 용어({lastInjectedGlossary.length})
-              </div>
-              <div className="space-y-1">
-                {lastInjectedGlossary.slice(0, 8).map((e) => (
-                  <div key={e.id} className="text-[11px] text-editor-text">
-                    - <span className="font-medium">{e.source}</span> → {e.target}
-                    {e.notes ? <span className="text-editor-muted"> ({e.notes})</span> : null}
-                  </div>
-                ))}
-                {lastInjectedGlossary.length > 8 && (
-                  <div className="text-[11px] text-editor-muted">
-                    …외 {lastInjectedGlossary.length - 8}개
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="h-px bg-editor-border" />
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-editor-muted">Active Memory(용어/톤 규칙 요약)</p>
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setActiveMemory('')}
-              title="초기화"
-            >
-              초기화
-            </button>
-          </div>
-          <textarea
-            className="w-full h-16 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={activeMemory}
-            onChange={(e) => setActiveMemory(e.target.value)}
-            placeholder="예: 고유명사 표기 규칙, 존칭/말투, 포맷 지침 등"
-          />
-          <p className="text-[11px] text-editor-muted">
-            요약된 톤/용어 규칙을 모델에 주입합니다(길이 제한 1200자).
-          </p>
-
-          {summarySuggestionOpen && (
-            <div className="mt-2 rounded-md border border-editor-border bg-editor-bg p-2 flex items-start justify-between gap-2">
-              <div className="text-[11px] text-editor-muted leading-relaxed">
-                {summarySuggestionReason}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
-                  disabled={isSummarizing}
-                  onClick={() => void generateActiveMemorySummary()}
-                  title="대화에서 확정된 용어/톤 규칙을 요약해 Active Memory로 저장"
-                >
-                  {isSummarizing ? '요약 중…' : '요약 생성'}
-                </button>
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded text-[11px] bg-editor-surface text-editor-muted hover:bg-editor-border"
-                  onClick={dismissSummarySuggestion}
-                  title="닫기"
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -414,7 +352,7 @@ export function ChatPanel(): JSX.Element {
                       window.alert('자동 적용할 위치를 찾을 수 없습니다. (원본 텍스트가 변경되었거나 선택되지 않음)');
                     }
                   }}
-                  title="AI 제안 내용을 현재 선택된 번역 블록에 적용( Diff 표시 )"
+                  title="Apply translation to selected text"
                 >
                   Apply
                 </button>
@@ -436,7 +374,7 @@ export function ChatPanel(): JSX.Element {
           <div className="chat-message chat-message-ai">
             <div className="flex items-center gap-2">
               <span className="animate-pulse-soft">●</span>
-              <span className="text-sm text-editor-muted">생각 중...</span>
+              <span className="text-sm text-editor-muted">Thinking...</span>
             </div>
           </div>
         )}
@@ -450,7 +388,7 @@ export function ChatPanel(): JSX.Element {
             ref={inputRef}
             value={composerText}
             onChange={(e) => setComposerText(e.target.value)}
-            placeholder="메시지를 입력하세요... (Cmd+L로 텍스트 전송)"
+            placeholder="Type a message... (Cmd+L to send selection)"
             className="flex-1 px-4 py-2 rounded-lg bg-editor-bg border border-editor-border
                        text-editor-text placeholder-editor-muted
                        focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -464,11 +402,10 @@ export function ChatPanel(): JSX.Element {
                        hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                        transition-colors"
           >
-            전송
+            Send
           </button>
         </div>
       </form>
     </div>
   );
 }
-
