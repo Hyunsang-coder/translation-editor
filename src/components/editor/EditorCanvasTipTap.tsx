@@ -2,7 +2,8 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
-import { useCallback, useRef } from 'react';
+import { TipTapMenuBar } from './TipTapMenuBar';
+import { useCallback, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 
 interface EditorCanvasProps {
@@ -17,6 +18,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const project = useProjectStore((s) => s.project);
   const sourceDocument = useProjectStore((s) => s.sourceDocument);
   const targetDocument = useProjectStore((s) => s.targetDocument);
+  const setSourceDocument = useProjectStore((s) => s.setSourceDocument);
   const setTargetDocument = useProjectStore((s) => s.setTargetDocument);
 
   const includeSourceInPayload = useChatStore((s) => s.includeSourceInPayload);
@@ -30,14 +32,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
 
+  const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
+  const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
+  const [targetEditor, setTargetEditor] = useState<Editor | null>(null);
 
-  // Add to Chat 기능
-  const handleAddToChat = useCallback(() => {
-    if (!targetEditorRef.current) return;
-    
-    const { from, to } = targetEditorRef.current.state.selection;
-    const selectedText = targetEditorRef.current.state.doc.textBetween(from, to, ' ').trim();
+  // 선택된 텍스트를 채팅창에 복사하는 함수
+  const copySelectionToChat = useCallback((editor: Editor) => {
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
     
     if (!selectedText) return;
 
@@ -47,18 +50,48 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     requestComposerFocus();
   }, [sidebarCollapsed, toggleSidebar, setActivePanel, appendComposerText, requestComposerFocus]);
 
-  // 키보드 단축키 처리
+  // Source 에디터 준비 완료 콜백
+  const handleSourceEditorReady = useCallback((editor: Editor) => {
+    sourceEditorRef.current = editor;
+    setSourceEditor(editor);
+
+    // 우클릭 이벤트 핸들러 추가
+    const handleContextMenu = (e: MouseEvent) => {
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        // 선택된 텍스트가 없으면 기본 동작 수행
+        return;
+      }
+
+      e.preventDefault();
+      copySelectionToChat(editor);
+    };
+
+    editor.view.dom.addEventListener('contextmenu', handleContextMenu);
+
+    // 클린업 함수는 에디터가 언마운트될 때 자동으로 처리됨
+    // (TipTap이 내부적으로 관리)
+  }, [copySelectionToChat]);
+
+  // Target 에디터 준비 완료 콜백
   const handleTargetEditorReady = useCallback((editor: Editor) => {
     targetEditorRef.current = editor;
+    setTargetEditor(editor);
 
-    // Cmd+K: Add to Chat
-    editor.view.dom.addEventListener('keydown', (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        handleAddToChat();
+    // 우클릭 이벤트 핸들러 추가
+    const handleContextMenu = (e: MouseEvent) => {
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        // 선택된 텍스트가 없으면 기본 동작 수행
+        return;
       }
-    });
-  }, [handleAddToChat]);
+
+      e.preventDefault();
+      copySelectionToChat(editor);
+    };
+
+    editor.view.dom.addEventListener('contextmenu', handleContextMenu);
+  }, [copySelectionToChat]);
 
   if (!project) {
     return (
@@ -94,14 +127,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             />
             <span>번역문 컨텍스트에 포함</span>
           </label>
-          <button
-            type="button"
-            onClick={handleAddToChat}
-            className="px-2 py-1 text-xs rounded border border-editor-border hover:bg-editor-bg transition-colors"
-            title="선택한 텍스트를 채팅에 추가 (Cmd+K)"
-          >
-            Add to Chat
-          </button>
         </div>
       </div>
 
@@ -115,10 +140,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 SOURCE ({project.metadata.sourceLanguage})
               </span>
             </div>
+            <TipTapMenuBar editor={sourceEditor} />
             <div className="min-h-0 flex-1 overflow-auto">
               <SourceTipTapEditor
                 content={sourceDocument || ''}
+                onChange={setSourceDocument}
                 className="h-full"
+                onEditorReady={handleSourceEditorReady}
               />
             </div>
           </div>
@@ -131,6 +159,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               TRANSLATION ({project.metadata.targetLanguage})
             </span>
           </div>
+          <TipTapMenuBar editor={targetEditor} />
           <div className="min-h-0 flex-1 overflow-auto">
             <TargetTipTapEditor
               content={targetDocument || ''}

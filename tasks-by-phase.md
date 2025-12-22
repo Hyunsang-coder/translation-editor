@@ -79,13 +79,13 @@
 
 [x] 기본 채팅 UI (메시지 리스트 + 입력창)
 
-[ ] 멀티 탭 채팅 (Thread Tabs) 구현
+[x] 멀티 탭 채팅 (Thread Tabs) 구현
   - 탭 생성/전환/삭제
   - 각 탭 독립적인 메시지 히스토리
 
-[ ] Settings 화면 (채팅 화면과 교체 방식)
+[x] Settings 화면 (채팅 화면과 교체 방식)
   - 시스템 프롬프트 오버레이
-  - 번역 규칙
+  - 번역 규칙 (translationRules)
   - Active Memory
   - 첨부 파일 관리
 

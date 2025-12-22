@@ -16,7 +16,7 @@ export interface TipTapEditorProps {
 
 /**
  * TipTap 기반 Notion 스타일 에디터
- * - Source 패널: editable=false (읽기 전용)
+ * - Source 패널: editable=true (편집 가능)
  * - Target 패널: editable=true (편집 가능)
  */
 export function TipTapEditor({
@@ -98,23 +98,34 @@ export function TipTapEditor({
 }
 
 /**
- * Source 패널용 읽기 전용 에디터
+ * Source 패널용 편집 가능 에디터
  */
 export function SourceTipTapEditor({
   content,
+  onChange,
+  onJsonChange,
   className = '',
+  onEditorReady,
 }: {
   content: string;
+  onChange?: (content: string) => void;
+  onJsonChange?: (json: Record<string, unknown>) => void;
   className?: string;
+  onEditorReady?: (editor: Editor) => void;
 }): JSX.Element {
-  return (
-    <TipTapEditor
-      content={content}
-      editable={false}
-      placeholder="원문이 여기에 표시됩니다..."
-      className={`source-editor ${className}`}
-    />
-  );
+  // Props를 명시적으로 구성하여 undefined 값 제외
+  const props: TipTapEditorProps = {
+    content,
+    editable: true,
+    placeholder: '원문을 입력하세요...',
+    className: `source-editor ${className}`,
+  };
+  
+  if (onChange) props.onChange = onChange;
+  if (onJsonChange) props.onJsonChange = onJsonChange;
+  if (onEditorReady) props.onEditorReady = onEditorReady;
+
+  return <TipTapEditor {...props} />;
 }
 
 /**
