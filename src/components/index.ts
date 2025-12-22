@@ -12,6 +12,10 @@ export { SourcePanel } from './panels/SourcePanel';
 export { TargetPanel } from './panels/TargetPanel';
 export { ChatPanel } from './panels/ChatPanel';
 
-// Editor
+// Editor (Legacy - Monaco)
 export { TranslationBlock } from './editor/TranslationBlock';
+
+// Editor (New - TipTap)
+export { TipTapEditor, SourceTipTapEditor, TargetTipTapEditor } from './editor/TipTapEditor';
+export { EditorCanvasTipTap } from './editor/EditorCanvasTipTap';
 

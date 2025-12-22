@@ -1,9 +1,7 @@
 import { useUIStore } from '@/stores/uiStore';
 import { ChatPanel } from '@/components/panels/ChatPanel';
 import { Toolbar } from '@/components/layout/Toolbar';
-import { EditorCanvas } from '@/components/editor/EditorCanvas';
-// DiffPreviewModal은 인라인-only UX로 전환되어 기본 마운트에서 제거됨
-// import { DiffPreviewModal } from '@/components/editor/DiffPreviewModal';
+import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 
@@ -31,9 +29,9 @@ export function MainLayout(): JSX.Element {
           <ProjectSidebar />
         </aside>
 
-        {/* 에디터 캔버스 */}
+        {/* 에디터 캔버스 (TipTap) */}
         <section className="flex-1 overflow-hidden">
-          <EditorCanvas focusMode={focusMode} />
+          <EditorCanvasTipTap focusMode={focusMode} />
         </section>
 
         {/* AI 채팅 패널 */}
