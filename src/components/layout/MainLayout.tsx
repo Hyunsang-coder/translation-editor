@@ -2,7 +2,8 @@ import { useUIStore } from '@/stores/uiStore';
 import { ChatPanel } from '@/components/panels/ChatPanel';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvas } from '@/components/editor/EditorCanvas';
-import { DiffPreviewModal } from '@/components/editor/DiffPreviewModal';
+// DiffPreviewModal은 인라인-only UX로 전환되어 기본 마운트에서 제거됨
+// import { DiffPreviewModal } from '@/components/editor/DiffPreviewModal';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 
@@ -15,7 +16,7 @@ export function MainLayout(): JSX.Element {
 
   return (
     <div className="flex flex-col h-screen">
-      <DiffPreviewModal />
+      {/* DiffPreviewModal 제거: 인라인 위젯에서 Keep/Discard 처리 */}
       <ToastHost />
       {/* 상단 툴바 */}
       <Toolbar />

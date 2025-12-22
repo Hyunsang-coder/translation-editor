@@ -170,6 +170,7 @@ export interface ChatMessageMetadata {
   tokens?: number;
   suggestedBlockId?: string; // Apply 시 대상 블록
   appliedAt?: number;
+  applied?: boolean;
   accepted?: boolean;
 
   /**

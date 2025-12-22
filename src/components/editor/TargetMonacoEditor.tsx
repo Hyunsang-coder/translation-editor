@@ -206,14 +206,38 @@ export function TargetMonacoEditor({
 
       const header = document.createElement('div');
       header.className = 'monaco-pending-insert-widget__header';
-      header.textContent = 'Pending Edit (Diff Preview에서 Keep/Discard)';
+      header.textContent = 'Pending Edit';
 
       const body = document.createElement('pre');
       body.className = 'monaco-pending-insert-widget__body';
       body.textContent = suggestedText ?? '';
 
+      // Keep/Discard 버튼 추가
+      const footer = document.createElement('div');
+      footer.className = 'monaco-pending-insert-widget__footer';
+
+      const keepBtn = document.createElement('button');
+      keepBtn.className = 'monaco-pending-insert-widget__btn monaco-pending-insert-widget__btn--keep';
+      keepBtn.textContent = 'Keep (⌘Y)';
+      keepBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        useProjectStore.getState().acceptDocDiff();
+      });
+
+      const discardBtn = document.createElement('button');
+      discardBtn.className = 'monaco-pending-insert-widget__btn monaco-pending-insert-widget__btn--discard';
+      discardBtn.textContent = 'Discard (⌘N)';
+      discardBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        useProjectStore.getState().rejectDocDiff();
+      });
+
+      footer.appendChild(keepBtn);
+      footer.appendChild(discardBtn);
+
       dom.appendChild(header);
       dom.appendChild(body);
+      dom.appendChild(footer);
 
       const widget: MonacoEditorNS.IContentWidget = {
         getId: () => widgetId,
@@ -235,7 +259,8 @@ export function TargetMonacoEditor({
       ed.addContentWidget(widget);
       ed.layoutContentWidget(widget);
     }
-  }, [pendingDocDiff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDocDiff?.sessionId, pendingDocDiff?.startOffset, pendingDocDiff?.endOffset, pendingDocDiff?.suggestedText]);
 
   const monacoTheme = useMemo(() => {
     if (theme === 'dark') return 'vs-dark';
@@ -300,6 +325,9 @@ export function TargetMonacoEditor({
 
           // Register Handle (Once per editor instance)
           const model = ed.getModel();
+          // Anchor decoration ID 관리용 ref (apply 요청 시 생성된 decoration)
+          const anchorDecorationIdsRef = { current: [] as string[] };
+
           if (model) {
             registerTargetDocHandle({
               getBlockOffsets: () => {
@@ -329,6 +357,37 @@ export function TargetMonacoEditor({
                   return { startOffset, endOffset, text };
                 }
                 return null;
+              },
+              // Apply Anchor: 요청 시점에 tracked decoration 생성
+              createAnchorDecoration: (startOffset, endOffset) => {
+                const startPos = model.getPositionAt(startOffset);
+                const endPos = model.getPositionAt(endOffset);
+                const ids = model.deltaDecorations([], [
+                  {
+                    range: new monaco.Range(
+                      startPos.lineNumber,
+                      startPos.column,
+                      endPos.lineNumber,
+                      endPos.column,
+                    ),
+                    options: {
+                      stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+                      // 시각적으로는 표시하지 않음 (invisible anchor)
+                    },
+                  },
+                ]);
+                const decorationId = ids[0] ?? null;
+                if (decorationId) {
+                  anchorDecorationIdsRef.current.push(decorationId);
+                }
+                return decorationId;
+              },
+              // Apply Anchor: decoration 제거
+              removeDecoration: (decorationId) => {
+                model.deltaDecorations([decorationId], []);
+                anchorDecorationIdsRef.current = anchorDecorationIdsRef.current.filter(
+                  (id) => id !== decorationId,
+                );
               },
             });
           }
@@ -455,6 +514,22 @@ export function TargetMonacoEditor({
               startOffset,
               endOffset,
             });
+          });
+
+          // Cmd+Y: Keep (Accept) pending diff
+          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () => {
+            const hasPending = useProjectStore.getState().pendingDocDiff !== null;
+            if (hasPending) {
+              useProjectStore.getState().acceptDocDiff();
+            }
+          });
+
+          // Cmd+N: Discard (Reject) pending diff
+          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => {
+            const hasPending = useProjectStore.getState().pendingDocDiff !== null;
+            if (hasPending) {
+              useProjectStore.getState().rejectDocDiff();
+            }
           });
 
           // Cmd+K: Cursor처럼 "명령 입력" 진입(1차: chat composer 포커스만)

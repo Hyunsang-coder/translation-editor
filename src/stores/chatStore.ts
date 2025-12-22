@@ -114,6 +114,9 @@ interface ChatActions {
 
   // Persistence (project-scoped)
   hydrateForProject: (projectId: string | null) => Promise<void>;
+
+  // AI Interaction Feedback
+  markMessageAsApplied: (messageId: string) => void;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -484,26 +487,64 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // --- Judge Integration for Normal Messsages ---
         set({ isLoading: false, streamingMessageId: null });
 
-        // Basic Heuristic: If it looks like a translation request or contains code-like structure,
-        // we ask the Judge. For now, let's be generous: Any assistant reply might be "Applyable".
-        // But to avoid over-triggering, we can check if it contains at least some Korean/English mix or length.
+        // Hybrid Strategy:
+        // 1. If explicit intent (e.g. Apply request via Cmd+K), TRUST the intent and SKIP Judge (Fast Pass).
+        // 2. Otherwise, use Judge to determine if the message is an Apply suggestion.
 
-        // Judge Integration (Async - "Pop-in" Apply button)
         (async () => {
           try {
-            // Dynamic import
-            const { evaluateApplyReadiness } = await import('@/ai/judge');
+            // Check implicit metadata override (set by sendApplyRequest or UI)
+            // Note: sendApplyRequest currently sets appliable=false initially. We can deduce intent from metadata presence.
 
-            // Restore ghost chips in user content for accurate semantic analysis
-            const restoredUserContent = restoreGhostChips(maskedUserContent, maskSession);
+            // The last user message is the one we just processed.
+            // Actually, we can check the 'request' context or metadata we just set.
 
-            const judgeResult = await evaluateApplyReadiness({
-              userRequest: restoredUserContent,
-              aiResponse: reply,
-            });
+            // To be robust, let's pass a flag from specific actions. 
+            // But since we are inside sendMessage, we rely on state or arguments.
+            // For now, let's inspect the `maskedUserContent` or use a heuristic.
 
-            if (judgeResult.decision === 'APPLY') {
-              const cleanText = judgeResult.cleanText || reply;
+            // Better approach: sendApplyRequest calls sendMessage. We can check if the LAST user message has 'suggestedBlockId' or 'selectionText'.
+            // If so, it's an explicit Apply request.
+
+            const session = get().currentSession;
+            const lastUserMsg = session?.messages[session.messages.length - 2]; // last is assistant (which we just added), so user is -2
+            const isExplicitApply = lastUserMsg?.metadata?.suggestedBlockId || lastUserMsg?.metadata?.selectionText;
+
+            let cleanText = reply;
+            let decision = 'REJECT';
+
+            if (isExplicitApply) {
+              // [Fast Pass] Explicit Request -> Trust 
+              decision = 'APPLY';
+
+              // Simple Rule-based Cleanup for safety
+              // 1. Remove markdown code blocks
+              cleanText = cleanText.replace(/^```(html|text)?\n([\s\S]*?)\n```$/i, '$2');
+              // 2. Remove surronding quotes if present
+              cleanText = cleanText.trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+
+            } else {
+              // [Normal Pass] Implicit -> Use Judge Model
+              // Heuristic Filter: Skip if too short (e.g. "Ok.", "No.")
+              if (reply.length < 5) {
+                decision = 'REJECT';
+              } else {
+                const { evaluateApplyReadiness } = await import('@/ai/judge');
+                const restoredUserContent = restoreGhostChips(maskedUserContent, maskSession);
+
+                const judgeResult = await evaluateApplyReadiness({
+                  userRequest: restoredUserContent,
+                  aiResponse: reply,
+                });
+
+                decision = judgeResult.decision;
+                if (decision === 'APPLY' && judgeResult.cleanText) {
+                  cleanText = judgeResult.cleanText;
+                }
+              }
+            }
+
+            if (decision === 'APPLY') {
               if (assistantId) {
                 updateMessage(assistantId, {
                   metadata: {
@@ -514,6 +555,27 @@ export const useChatStore = create<ChatStore>((set, get) => {
                     ...(typeof selectionText === 'string' ? { selectionText } : {}),
                   }
                 });
+
+                // 자동 인라인 프리뷰 트리거 (선택 컨텍스트가 있는 경우)
+                if (
+                  typeof selectionStartOffset === 'number' &&
+                  typeof selectionEndOffset === 'number' &&
+                  selectionText
+                ) {
+                  const { openDocDiffPreview, targetDocument } = useProjectStore.getState();
+                  const finalText = cleanText !== reply ? cleanText : reply;
+
+                  // 텍스트 매칭으로 현재 위치 확인 (implicit apply는 anchor가 없으므로)
+                  const currentIdx = targetDocument.indexOf(selectionText);
+                  if (currentIdx >= 0) {
+                    openDocDiffPreview({
+                      startOffset: currentIdx,
+                      endOffset: currentIdx + selectionText.length,
+                      suggestedText: finalText,
+                      originMessageId: assistantId,
+                    });
+                  }
+                }
               }
             }
           } catch (e) {
@@ -556,6 +618,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     requestComposerFocus: (): void => {
       set((state) => ({ composerFocusNonce: state.composerFocusNonce + 1 }));
+    },
+
+    markMessageAsApplied: (messageId: string): void => {
+      get().updateMessage(messageId, {
+        metadata: {
+          applied: true,
+        },
+      });
     },
 
     /**
@@ -604,6 +674,27 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const selectionStartOffset = params.startOffset;
         const selectionEndOffset = params.endOffset;
         const additionalInstruction = params.userInstruction?.trim();
+
+        // Apply Anchor 생성: 요청 시점에 위치 캡처
+        const createApplyAnchor = useProjectStore.getState().createApplyAnchor;
+        const hasSelection =
+          typeof selectionStartOffset === 'number' &&
+          typeof selectionEndOffset === 'number' &&
+          selectionEndOffset > selectionStartOffset;
+
+        if (hasSelection) {
+          createApplyAnchor({
+            scope: 'selection',
+            startOffset: selectionStartOffset,
+            endOffset: selectionEndOffset,
+            ...(selectionRaw ? { selectionText: selectionRaw } : {}),
+            ...(before ? { beforeText: before } : {}),
+            ...(after ? { afterText: after } : {}),
+          });
+        } else {
+          // 문서 전체 scope (톤 변경 등)
+          createApplyAnchor({ scope: 'document' });
+        }
 
         const maskSession = createGhostMaskSession();
         const requiredGhostSet = selectionRaw ? collectGhostChipSet(selectionRaw) : new Set<string>();
@@ -881,8 +972,39 @@ export const useChatStore = create<ChatStore>((set, get) => {
           });
         }
 
+        // 자동 인라인 프리뷰 트리거: Apply 가능하면 Anchor 해석 후 Diff Preview 생성
+        if (finalAppliable && assistantId) {
+          const { resolveApplyAnchor, openDocDiffPreview, clearApplyAnchor } =
+            useProjectStore.getState();
+          const anchorResult = resolveApplyAnchor();
+
+          if (anchorResult.success && typeof anchorResult.startOffset === 'number' && typeof anchorResult.endOffset === 'number') {
+            openDocDiffPreview({
+              startOffset: anchorResult.startOffset,
+              endOffset: anchorResult.endOffset,
+              suggestedText: finalContent,
+              originMessageId: assistantId,
+            });
+          } else if (anchorResult.reason) {
+            // Anchor 해석 실패 시 메시지에 사유 표시
+            updateMessage(assistantId, {
+              metadata: {
+                appliable: false,
+                applyBlockedReason: anchorResult.reason,
+              },
+            });
+          }
+
+          clearApplyAnchor();
+        } else {
+          // Apply 불가 시에도 anchor 정리
+          useProjectStore.getState().clearApplyAnchor();
+        }
+
         get().checkAndSuggestActiveMemory();
       } catch (error) {
+        // 에러 시에도 anchor 정리
+        useProjectStore.getState().clearApplyAnchor();
         set({
           error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
           isLoading: false,

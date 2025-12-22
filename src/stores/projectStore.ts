@@ -16,6 +16,7 @@ import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
 import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
+import { useChatStore } from '@/stores/chatStore';
 
 // ============================================
 // Store State Interface
@@ -82,6 +83,31 @@ interface ProjectState {
       endOffset: number;
       text: string;
     } | null;
+    createAnchorDecoration?: (
+      startOffset: number,
+      endOffset: number,
+    ) => string | null;
+    removeDecoration?: (decorationId: string) => void;
+  };
+
+  /**
+   * Apply 요청 시점의 anchor 정보 (응답 도착 전까지 유지)
+   * - selection scope: 선택 구간 anchor
+   * - document scope: 전체 문서 스냅샷
+   */
+  applyAnchor: null | {
+    scope: 'selection' | 'document';
+    /** selection scope일 때 Monaco decoration ID */
+    decorationId?: string;
+    /** 요청 시점의 선택 텍스트 (검증용) */
+    selectionText?: string;
+    /** 요청 시점의 before/after 문맥 (폴백 매칭용) */
+    beforeText?: string;
+    afterText?: string;
+    /** document scope일 때 요청 시점의 전체 문서 스냅샷 */
+    baseDocument?: string;
+    /** document scope일 때 요청 시점의 문서 해시 (변경 감지용) */
+    baseDocumentHash?: string;
   };
 }
 
@@ -114,6 +140,23 @@ interface ProjectActions {
   acceptDocDiff: () => void;
   rejectDocDiff: () => void;
   finalizeEditSession: (params: { sessionId: string; status: EditSession['status'] }) => void;
+
+  // Apply Anchor (요청 시점에 위치 추적)
+  createApplyAnchor: (params: {
+    scope: 'selection' | 'document';
+    startOffset?: number;
+    endOffset?: number;
+    selectionText?: string;
+    beforeText?: string;
+    afterText?: string;
+  }) => void;
+  resolveApplyAnchor: () => {
+    success: boolean;
+    startOffset?: number;
+    endOffset?: number;
+    reason?: string;
+  };
+  clearApplyAnchor: () => void;
 
   // Target 문서 ↔ blocks 저장 브릿지
   registerTargetDocHandle: (handle: ProjectState['targetDocHandle']) => void;
@@ -274,6 +317,7 @@ export const useProjectStore = create<ProjectStore>()(
       pendingDocDiff: null,
       targetDocHandle: null,
       editSessions: [],
+      applyAnchor: null,
 
       // 프로젝트 초기화
       initializeProject: (): void => {
@@ -818,6 +862,11 @@ export const useProjectStore = create<ProjectStore>()(
         const next =
           targetDocument.slice(0, start) + suggestedText + targetDocument.slice(end);
 
+        // Diff가 수락되었으므로, 해당 변경사항을 제안한 메시지를 'Applied' 상태로 마킹
+        if (pendingDocDiff.originMessageId) {
+          useChatStore.getState().markMessageAsApplied(pendingDocDiff.originMessageId);
+        }
+
         set({
           targetDocument: next,
           pendingDocDiff: null,
@@ -848,6 +897,129 @@ export const useProjectStore = create<ProjectStore>()(
         const updated = [...editSessions];
         updated[idx] = next;
         set({ editSessions: updated });
+      },
+
+      // Apply Anchor: 요청 시점에 위치/문서 상태를 캡처
+      createApplyAnchor: (params): void => {
+        const { targetDocHandle, targetDocument } = get();
+
+        if (params.scope === 'selection') {
+          // Selection scope: Monaco decoration으로 위치 추적
+          let decorationId: string | undefined;
+          if (
+            typeof params.startOffset === 'number' &&
+            typeof params.endOffset === 'number' &&
+            targetDocHandle?.createAnchorDecoration
+          ) {
+            decorationId =
+              targetDocHandle.createAnchorDecoration(params.startOffset, params.endOffset) ??
+              undefined;
+          }
+
+          set({
+            applyAnchor: {
+              scope: 'selection',
+              ...(decorationId ? { decorationId } : {}),
+              ...(params.selectionText ? { selectionText: params.selectionText } : {}),
+              ...(params.beforeText ? { beforeText: params.beforeText } : {}),
+              ...(params.afterText ? { afterText: params.afterText } : {}),
+            },
+          });
+        } else {
+          // Document scope: 전체 문서 스냅샷 저장
+          set({
+            applyAnchor: {
+              scope: 'document',
+              baseDocument: targetDocument,
+              baseDocumentHash: hashContent(targetDocument),
+            },
+          });
+        }
+      },
+
+      // Apply Anchor: 응답 완료 시 최신 offset 해석 + 검증
+      resolveApplyAnchor: (): {
+        success: boolean;
+        startOffset?: number;
+        endOffset?: number;
+        reason?: string;
+      } => {
+        const { applyAnchor, targetDocHandle, targetDocument } = get();
+        if (!applyAnchor) {
+          return { success: false, reason: 'No apply anchor exists' };
+        }
+
+        if (applyAnchor.scope === 'document') {
+          // Document scope: 문서가 변경되었는지 체크
+          const currentHash = hashContent(targetDocument);
+          if (applyAnchor.baseDocumentHash && applyAnchor.baseDocumentHash !== currentHash) {
+            return {
+              success: false,
+              reason: '문서가 변경되어 적용할 수 없습니다. 다시 요청해주세요.',
+            };
+          }
+          // 전체 문서 범위
+          return {
+            success: true,
+            startOffset: 0,
+            endOffset: targetDocument.length,
+          };
+        }
+
+        // Selection scope: decoration에서 최신 offset 가져오기
+        if (applyAnchor.decorationId && targetDocHandle?.getDecorationOffsets) {
+          const resolved = targetDocHandle.getDecorationOffsets(applyAnchor.decorationId);
+          if (resolved) {
+            // 검증: 해당 위치의 텍스트가 원래 선택과 일치하는지
+            const currentText = targetDocument.slice(resolved.startOffset, resolved.endOffset);
+            if (applyAnchor.selectionText && currentText !== applyAnchor.selectionText) {
+              // 불일치 - 텍스트 매칭으로 폴백 시도
+              const fallbackIdx = targetDocument.indexOf(applyAnchor.selectionText);
+              if (fallbackIdx >= 0) {
+                return {
+                  success: true,
+                  startOffset: fallbackIdx,
+                  endOffset: fallbackIdx + applyAnchor.selectionText.length,
+                };
+              }
+              return {
+                success: false,
+                reason: '선택 구간이 변경되어 적용할 수 없습니다. 다시 선택해주세요.',
+              };
+            }
+            return {
+              success: true,
+              startOffset: resolved.startOffset,
+              endOffset: resolved.endOffset,
+            };
+          }
+        }
+
+        // Decoration이 없거나 해석 실패 - 텍스트 매칭으로 폴백
+        if (applyAnchor.selectionText) {
+          const fallbackIdx = targetDocument.indexOf(applyAnchor.selectionText);
+          if (fallbackIdx >= 0) {
+            return {
+              success: true,
+              startOffset: fallbackIdx,
+              endOffset: fallbackIdx + applyAnchor.selectionText.length,
+            };
+          }
+        }
+
+        return {
+          success: false,
+          reason: '적용할 위치를 찾을 수 없습니다. 다시 선택해주세요.',
+        };
+      },
+
+      // Apply Anchor: 정리
+      clearApplyAnchor: (): void => {
+        const { applyAnchor, targetDocHandle } = get();
+        if (applyAnchor?.decorationId && targetDocHandle?.removeDecoration) {
+          targetDocHandle.removeDecoration(applyAnchor.decorationId);
+        }
+        set({ applyAnchor: null });
       },
 
       registerTargetDocHandle: (handle): void => {

@@ -55,22 +55,26 @@
 ✨ Phase 3: Pending Edit(Keep/Discard) 시스템 & Diff (Critical)
 목표: Cursor 스타일의 핵심 루프인 **Pending Edit → Diff Preview → Keep/Discard**를 번역 문서에 맞게 구현.
 
-[~] 3.1 Diff 계산 및 Preview UI
+[x] 3.1 Diff 계산 및 Preview UI
 
 [x] diff-match-patch 기반 델타 계산 유틸 준비
 
-[~] Diff Preview UI (1차: DiffEditor 모달 구현됨 / Keep-Discard 용어 및 UX 정리 필요)
+[x] Diff Preview UI (인라인-only로 전환: DiffPreviewModal 기본 마운트 제거, 위젯에서 Keep/Discard)
 
-[~] 3.2 In-place Preview(문서 내 미리보기) 구현
+[x] 3.2 In-place Preview(문서 내 미리보기) 구현
 
-[x] 실제 텍스트 확정 전, 문서 내 “미리보기 상태”로 렌더(Decorations/overlay)
+[x] 실제 텍스트 확정 전, 문서 내 "미리보기 상태"로 렌더(Decorations/overlay)
 [x] Pending 범위를 Monaco tracked decoration으로 앵커링하여(오프셋 변동 대응) Keep 시점에 범위 재계산
+[x] 인라인 위젯에 Keep/Discard 버튼 추가 + Cmd+Y/Cmd+N 키보드 바인딩
 
-[~] 3.3 Pending Edit 세션 모델(편집 세션) 구현
+[x] 3.3 Pending Edit 세션 모델(편집 세션) 구현
 
-[~] EditSession 스키마/상태 전이(pending→kept/discarded) 및 히스토리 연계(상태 전이 1차 완료 / 히스토리 연계는 후속)
+[x] EditSession 스키마/상태 전이(pending→kept/discarded)
+[x] Apply Anchor: 요청 시점에 decoration으로 위치 캡처 → 응답 완료 시 해석/검증
+[x] 문서 전체 scope: base snapshot + hash 기반 fail-closed 정책
+[x] 자동 인라인 프리뷰 트리거: sendApplyRequest + Judge APPLY 시 응답 완료 후 자동 openDocDiffPreview
 
-[~] Keep: 제안 적용 + 미리보기/데코레이션 제거 + 저장/히스토리 정합(적용/제거 1차 완료)
+[x] Keep: 제안 적용 + 미리보기/데코레이션 제거 + 저장/히스토리 정합
 
 [x] Discard: 세션/미리보기 제거 + 원문 상태 복구
 

@@ -249,5 +249,65 @@
   font-size: 13px;
   line-height: 1.55;
   color: var(--editor-text);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Keep/Discard 버튼 영역 */
+.monaco-pending-insert-widget__footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.monaco-pending-insert-widget__btn {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.monaco-pending-insert-widget__btn--keep {
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+}
+
+.monaco-pending-insert-widget__btn--keep:hover {
+  background: rgba(34, 197, 94, 1);
+}
+
+.monaco-pending-insert-widget__btn--discard {
+  background: rgba(239, 68, 68, 0.15);
+  color: rgba(239, 68, 68, 0.95);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.monaco-pending-insert-widget__btn--discard:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.dark .monaco-pending-insert-widget__btn--keep {
+  background: rgba(74, 222, 128, 0.85);
+  color: #0f172a;
+}
+
+.dark .monaco-pending-insert-widget__btn--keep:hover {
+  background: rgba(74, 222, 128, 1);
+}
+
+.dark .monaco-pending-insert-widget__btn--discard {
+  background: rgba(248, 113, 113, 0.15);
+  color: rgba(248, 113, 113, 0.95);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.dark .monaco-pending-insert-widget__btn--discard:hover {
+  background: rgba(248, 113, 113, 0.25);
 }
 
