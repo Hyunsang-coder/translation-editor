@@ -84,9 +84,8 @@ export function ChatPanel(): JSX.Element {
           <button
             type="button"
             onClick={() => setShowPromptEditor((prev) => !prev)}
-            className={`px-2 py-1 rounded text-xs border ${
-              showPromptEditor ? 'bg-primary-500 text-white border-primary-500' : 'bg-editor-bg text-editor-muted border-editor-border'
-            }`}
+            className={`px-2 py-1 rounded text-xs border ${showPromptEditor ? 'bg-primary-500 text-white border-primary-500' : 'bg-editor-bg text-editor-muted border-editor-border'
+              }`}
             title="시스템 프롬프트 오버레이 편집"
           >
             System Prompt
@@ -213,8 +212,7 @@ export function ChatPanel(): JSX.Element {
                       );
                     } catch (e) {
                       window.alert(
-                        `글로서리 임포트 실패\n${
-                          e instanceof Error ? e.message : String(e)
+                        `글로서리 임포트 실패\n${e instanceof Error ? e.message : String(e)
                         }`,
                       );
                     }
@@ -254,8 +252,7 @@ export function ChatPanel(): JSX.Element {
                       );
                     } catch (e) {
                       window.alert(
-                        `글로서리 임포트 실패\n${
-                          e instanceof Error ? e.message : String(e)
+                        `글로서리 임포트 실패\n${e instanceof Error ? e.message : String(e)
                         }`,
                       );
                     }
@@ -363,9 +360,8 @@ export function ChatPanel(): JSX.Element {
         {currentSession?.messages.map((message) => (
           <div
             key={message.id}
-            className={`chat-message ${
-              message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
-            } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
+            className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
+              } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
           >
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
             <span className="text-xs text-editor-muted mt-1 block">
@@ -386,7 +382,7 @@ export function ChatPanel(): JSX.Element {
                       openDocDiffPreview({
                         startOffset: start,
                         endOffset: end,
-                        suggestedText: message.content,
+                        suggestedText: message.metadata?.cleanContent ?? message.content,
                         originMessageId: message.id,
                       });
                       return;
@@ -406,7 +402,7 @@ export function ChatPanel(): JSX.Element {
                     }
                     applySuggestionToBlock(
                       candidate,
-                      message.content,
+                      message.metadata?.cleanContent ?? message.content, // Use clean content if available
                       message.metadata?.selectionText,
                     );
                   }}

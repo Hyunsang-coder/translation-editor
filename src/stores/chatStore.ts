@@ -452,7 +452,52 @@ export const useChatStore = create<ChatStore>((set, get) => {
           updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
         }
 
+        const reply = restoreGhostChips(replyMasked, maskSession);
+
+        // --- Judge Integration for Normal Messsages ---
         set({ isLoading: false, streamingMessageId: null });
+
+        // Basic Heuristic: If it looks like a translation request or contains code-like structure,
+        // we ask the Judge. For now, let's be generous: Any assistant reply might be "Applyable".
+        // But to avoid over-triggering, we can check if it contains at least some Korean/English mix or length.
+
+        // However, the cleanest way is to just ask the Judge if it's "Applyable".
+        // To save cost, maybe we skip if it's extremely short? 
+        // For now, let's run Judge for all "normal" messages to ensure consistent "Apply" button availability.
+
+        // Judge: AI 응답에 대한 apply 여부 및 clean text 추출
+        set({ isLoading: true });
+
+        try {
+          // Dynamic import to avoid circular dependency issues if any
+          const { evaluateApplyReadiness } = await import('@/ai/judge');
+
+          const judgeResult = await evaluateApplyReadiness({
+            userRequest: restoreGhostChips(maskedUserContent, maskSession),
+            aiResponse: reply,
+          });
+
+          if (judgeResult.decision === 'APPLY') {
+            const cleanText = judgeResult.cleanText || reply;
+            if (assistantId) {
+              updateMessage(assistantId, {
+                metadata: {
+                  appliable: true,
+                  ...(cleanText !== reply ? { cleanContent: cleanText } : {}),
+                }
+              });
+            }
+          }
+          // Note: We don't mark 'REJECT' explicitly for normal chat to avoid cluttering UI with error messages
+          // unless it was an explicit 'Apply' intent (which is handled by sendApplyRequest).
+
+        } catch (e) {
+          console.error('[ChatStore] Judge failed for sendMessage:', e);
+        } finally {
+          set({ isLoading: false });
+        }
+        // ----------------------------------------------
+
         get().checkAndSuggestActiveMemory();
       } catch (error) {
         set({

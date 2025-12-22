@@ -195,6 +195,7 @@ export interface ChatMessageMetadata {
    * - UI에서 사용자에게 안내용으로 노출
    */
   applyBlockedReason?: string;
+  cleanContent?: string;
 }
 
 // ============================================
