@@ -46,6 +46,7 @@ export function ChatPanel(): JSX.Element {
   const [editingDraft, setEditingDraft] = useState<string>('');
 
   const editMessage = useChatStore((s) => s.editMessage);
+  const replayMessage = useChatStore((s) => s.replayMessage);
   const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
   const createSession = useChatStore((s) => s.createSession);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -431,6 +432,7 @@ export function ChatPanel(): JSX.Element {
                           editMessage(message.id, editingDraft);
                           setEditingMessageId(null);
                           setEditingDraft('');
+                          void replayMessage(message.id);
                         }}
                         title="Save (이후 대화는 삭제됩니다)"
                       >

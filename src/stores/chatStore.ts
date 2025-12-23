@@ -20,6 +20,7 @@ import {
   restoreGhostChips,
 } from '@/utils/ghostMask';
 import { stripHtml } from '@/utils/hash';
+import { buildTargetDocument } from '@/editor/targetDocument';
 
 const CHAT_PERSIST_DEBOUNCE_MS = 800;
 let chatPersistTimer: number | null = null;
@@ -80,6 +81,10 @@ interface ChatActions {
    * 메시지 수정: 해당 메시지 이후 대화는 truncate됩니다.
    */
   editMessage: (messageId: string, nextContent: string) => void;
+  /**
+   * 메시지 수정 후 같은 내용으로 다시 호출
+   */
+  replayMessage: (messageId: string) => Promise<void>;
   /**
    * 메시지 삭제: 해당 메시지(포함) 이후 대화는 truncate됩니다.
    */
@@ -176,6 +181,30 @@ export const useChatStore = create<ChatStore>((set, get) => {
           }
         });
     }, CHAT_PERSIST_DEBOUNCE_MS);
+  };
+
+  const resolveTargetDocumentText = (
+    includeTarget: boolean,
+    project: Parameters<typeof buildTargetDocument>[0] | null,
+  ): string | undefined => {
+    if (!includeTarget) return undefined;
+
+    const raw = useProjectStore.getState().targetDocument;
+    const fromStore = raw ? stripHtml(raw) : '';
+    if (fromStore.trim().length > 0) return fromStore;
+
+    if (project) {
+      const built = buildTargetDocument(project);
+      if (built?.text?.trim().length > 0) return built.text;
+    }
+
+    return undefined;
+  };
+
+  const resolveSourceDocumentText = (): string | undefined => {
+    const raw = useProjectStore.getState().sourceDocument;
+    if (raw?.trim().length > 0) return stripHtml(raw);
+    return undefined;
   };
 
   return {
@@ -390,7 +419,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const cfg = getAiConfig();
         const session = get().currentSession;
         const project = useProjectStore.getState().project;
-        const currentSourceDocument = useProjectStore.getState().sourceDocument;
+        const currentSourceDocument = resolveSourceDocumentText();
         const systemPromptOverlay = get().systemPromptOverlay;
 
         const contextBlockIds = session?.contextBlockIds ?? [];
@@ -407,7 +436,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const includeSource = get().includeSourceInPayload;
         const includeTarget = get().includeTargetInPayload;
         const sourceDocumentRaw = includeSource ? currentSourceDocument : undefined;
-        const targetDocumentRaw = includeTarget ? useProjectStore.getState().targetDocument : undefined;
+        const targetDocumentRaw = resolveTargetDocumentText(includeTarget, project);
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
@@ -415,10 +444,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
         // TipTap의 Source/Target은 HTML로 저장되므로, 채팅 컨텍스트에는 plain text를 우선 포함합니다.
         const sourceDocument = sourceDocumentRaw
-          ? maskGhostChips(stripHtml(sourceDocumentRaw), maskSession)
+          ? maskGhostChips(sourceDocumentRaw, maskSession)
           : undefined;
         const targetDocument = targetDocumentRaw
-          ? maskGhostChips(stripHtml(targetDocumentRaw), maskSession)
+          ? maskGhostChips(targetDocumentRaw, maskSession)
           : undefined;
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
@@ -715,6 +744,161 @@ export const useChatStore = create<ChatStore>((set, get) => {
         isLoading: false,
       }));
       schedulePersist();
+    },
+
+    replayMessage: async (messageId: string): Promise<void> => {
+      const session = get().currentSession;
+      if (!session) return;
+
+      const targetMessage = session.messages.find((m) => m.id === messageId);
+      if (!targetMessage || targetMessage.role !== 'user') return;
+
+      const content = targetMessage.content?.trim();
+      if (!content) return;
+
+      const req = detectRequestType(content);
+
+      // request 단위 Ghost mask (무결성 보호)
+      const maskSession = createGhostMaskSession();
+      const maskedUserContent = maskGhostChips(content, maskSession);
+
+      // 번역 요청은 채팅에서 처리하지 않음 (기존 로직 재사용)
+      if (req === 'translate') {
+        const translationRulesRaw = get().translationRules?.trim();
+        const activeMemoryRaw = get().activeMemory?.trim();
+        const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
+        const msg = needsOneQuestion
+          ? [
+              '이 요청은 채팅에서 번역하지 않습니다.',
+              '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
+            ].join(' ')
+          : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
+
+        const replyId = get().addMessage({ role: 'assistant', content: msg });
+        if (replyId) {
+          get().updateMessage(replyId, { metadata: { model: getAiConfig().model } });
+        }
+        set({ isLoading: false, streamingMessageId: null, error: null });
+        schedulePersist();
+        return;
+      }
+
+      set({ isLoading: true, error: null, streamingMessageId: null });
+
+      try {
+        const cfg = getAiConfig();
+        const project = useProjectStore.getState().project;
+        const currentSourceDocument = resolveSourceDocumentText();
+        const systemPromptOverlay = get().systemPromptOverlay;
+
+        const contextBlockIds = session.contextBlockIds ?? [];
+        const contextBlocks =
+          project
+            ? contextBlockIds
+              .map((id) => project.blocks[id])
+              .filter((b): b is NonNullable<typeof b> => b !== undefined)
+            : [];
+        const fallbackSourceText =
+          contextBlocks.length === 0 && currentSourceDocument ? currentSourceDocument : undefined;
+        const translationRulesRaw = get().translationRules;
+        const activeMemoryRaw = get().activeMemory;
+        const includeSource = get().includeSourceInPayload;
+        const includeTarget = get().includeTargetInPayload;
+        const sourceDocumentRaw = includeSource ? currentSourceDocument : undefined;
+        const targetDocumentRaw = resolveTargetDocumentText(includeTarget, project);
+
+        const translationRules = translationRulesRaw
+          ? maskGhostChips(translationRulesRaw, maskSession)
+          : '';
+        const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
+        const sourceDocument = sourceDocumentRaw
+          ? maskGhostChips(sourceDocumentRaw, maskSession)
+          : undefined;
+        const targetDocument = targetDocumentRaw
+          ? maskGhostChips(targetDocumentRaw, maskSession)
+          : undefined;
+
+        // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
+        let glossaryInjected = '';
+        try {
+          if (project?.id) {
+            const plainContext = contextBlocks
+              .map((b) => stripHtml(b.content))
+              .join('\n')
+              .slice(0, 1200);
+            const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
+            const hits = q.trim().length
+              ? await searchGlossary({
+                projectId: project.id,
+                query: q,
+                domain: project.metadata.domain,
+                limit: 12,
+              })
+              : [];
+            set({ lastInjectedGlossary: hits });
+            if (hits.length > 0) {
+              const raw = hits
+                .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+                .join('\n');
+              glossaryInjected = maskGhostChips(raw, maskSession);
+            }
+          } else {
+            set({ lastInjectedGlossary: [] });
+          }
+        } catch {
+          set({ lastInjectedGlossary: [] });
+        }
+
+        // 사용자 요청: 모델 호출 시 채팅 히스토리(이전 메시지)는 컨텍스트에 포함하지 않음
+        const recent: ChatMessage[] = [];
+
+        const assistantId = get().addMessage({
+          role: 'assistant',
+          content: '',
+          metadata: { model: cfg.model },
+        });
+        if (assistantId) {
+          set({ streamingMessageId: assistantId });
+        }
+
+        const replyMasked = await streamAssistantReply(
+          {
+            project,
+            contextBlocks,
+            recentMessages: recent,
+            userMessage: maskedUserContent,
+            systemPromptOverlay,
+            translationRules,
+            ...(glossaryInjected ? { glossaryInjected } : {}),
+            ...(fallbackSourceText ? { fallbackSourceText } : {}),
+            activeMemory,
+            ...(sourceDocument ? { sourceDocument } : {}),
+            ...(targetDocument ? { targetDocument } : {}),
+            requestType: 'question',
+          },
+          {
+            onToken: (full) => {
+              if (assistantId) {
+                get().updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
+              }
+            },
+          },
+        );
+
+        if (assistantId) {
+          get().updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
+        }
+
+        set({ isLoading: false, streamingMessageId: null });
+        get().checkAndSuggestActiveMemory();
+        schedulePersist();
+      } catch (error) {
+        set({
+          error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
+          isLoading: false,
+          streamingMessageId: null,
+        });
+      }
     },
 
     deleteMessageFrom: (messageId: string): void => {
