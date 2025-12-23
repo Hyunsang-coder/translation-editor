@@ -862,11 +862,6 @@ export const useProjectStore = create<ProjectStore>()(
         const next =
           targetDocument.slice(0, start) + suggestedText + targetDocument.slice(end);
 
-        // Diff가 수락되었으므로, 해당 변경사항을 제안한 메시지를 'Applied' 상태로 마킹
-        if (pendingDocDiff.originMessageId) {
-          useChatStore.getState().markMessageAsApplied(pendingDocDiff.originMessageId);
-        }
-
         set({
           targetDocument: next,
           pendingDocDiff: null,

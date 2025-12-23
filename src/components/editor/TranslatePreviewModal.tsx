@@ -36,6 +36,15 @@ export function TranslatePreviewModal(props: {
     },
   });
 
+  // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
+  useEffect(() => {
+    if (!editor) return;
+    if (!open) return;
+    if (!docJson) return;
+    // setContent는 내부적으로 selection을 바꾸므로, focus는 건드리지 않습니다.
+    editor.commands.setContent(docJson);
+  }, [editor, open, docJson]);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -81,7 +90,18 @@ export function TranslatePreviewModal(props: {
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
             <div className="h-full flex items-center justify-center text-editor-muted">
-              번역 생성 중...
+              <div className="w-full max-w-md px-6">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
+                  <div className="text-sm">번역 생성 중…</div>
+                </div>
+                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-editor-border/60">
+                  <div className="h-full w-1/2 rounded-full bg-primary-500 animate-pulse" />
+                </div>
+                <div className="mt-2 text-center text-[11px] text-editor-muted">
+                  응답을 기다리는 중입니다. 잠시만요.
+                </div>
+              </div>
             </div>
           ) : error ? (
             <div className="h-full flex items-center justify-center p-6">

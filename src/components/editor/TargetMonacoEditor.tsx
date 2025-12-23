@@ -31,7 +31,6 @@ export function TargetMonacoEditor({
   const theme = useUIStore((s) => s.theme);
   const appendComposerText = useChatStore((s) => s.appendComposerText);
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
-  const sendApplyRequest = useChatStore((s) => s.sendApplyRequest);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
@@ -487,7 +486,7 @@ export function TargetMonacoEditor({
             updateGhostDecorations();
           });
 
-          // Cmd+L: Selection → Apply (selection 기반)
+          // Cmd+L: Selection → Add to chat (모델 호출 없음)
           ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, () => {
             const sel = ed.getSelection();
             const model = ed.getModel();
@@ -496,24 +495,10 @@ export function TargetMonacoEditor({
             const selectedText = model.getValueInRange(sel).trim();
             if (!selectedText) return;
 
-            const startOffset = model.getOffsetAt(sel.getStartPosition());
-            const endOffset = model.getOffsetAt(sel.getEndPosition());
-            const full = model.getValue();
-
-            const windowSize = 200;
-            const beforeText = full.slice(Math.max(0, startOffset - windowSize), startOffset);
-            const afterText = full.slice(endOffset, Math.min(full.length, endOffset + windowSize));
-
             if (sidebarCollapsed) toggleSidebar();
             setActivePanel('chat');
-
-            void sendApplyRequest({
-              selectionText: selectedText,
-              beforeText,
-              afterText,
-              startOffset,
-              endOffset,
-            });
+            appendComposerText(selectedText);
+            requestComposerFocus();
           });
 
           // Cmd+Y: Keep (Accept) pending diff
@@ -702,14 +687,32 @@ export function TargetMonacoEditor({
               className="px-3 py-1 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
               disabled={!inlineContext.selectionText.trim()}
               onClick={() => {
-                void sendApplyRequest({
-                  selectionText: inlineContext.selectionText,
-                  beforeText: inlineContext.beforeText,
-                  afterText: inlineContext.afterText,
-                  startOffset: inlineContext.startOffset,
-                  endOffset: inlineContext.endOffset,
-                  userInstruction: inlineCommandText,
-                });
+                // Apply(selected text)는 제거되었습니다.
+                // 대신 채팅 입력창에 “검수/검증/리라이트 요청”을 구성해 넣고 사용자가 직접 Send 하게 합니다.
+                const instruction = inlineCommandText.trim();
+                const selection = inlineContext.selectionText.trim();
+                const before = inlineContext.beforeText.trim();
+                const after = inlineContext.afterText.trim();
+
+                const payload = [
+                  instruction ? `요청: ${instruction}` : '요청: (비워둠)',
+                  '',
+                  '[선택 구간]',
+                  selection,
+                  '',
+                  before || after
+                    ? [
+                        '[주변 문맥(참고)]',
+                        before ? `BEFORE: ${before}` : '',
+                        after ? `AFTER: ${after}` : '',
+                      ].filter(Boolean).join('\n')
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join('\n');
+
+                appendComposerText(payload);
+                requestComposerFocus();
                 setInlineCommandOpen(false);
               }}
             >

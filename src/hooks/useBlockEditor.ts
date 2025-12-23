@@ -32,9 +32,13 @@ export function useBlockEditor({
   const hasPendingDiff = useProjectStore((s) => s.hasPendingDiff(blockId));
   const acceptDiff = useProjectStore((s) => s.acceptDiff);
   const rejectDiff = useProjectStore((s) => s.rejectDiff);
-  const sendApplyRequest = useChatStore((s) => s.sendApplyRequest);
+  const appendComposerText = useChatStore((s) => s.appendComposerText);
+  const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const addContextBlock = useChatStore((s) => s.addContextBlock);
   const setSelectedBlockId = useUIStore((s) => s.setSelectedBlockId);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const setActivePanel = useUIStore((s) => s.setActivePanel);
 
   const stableContent = useMemo(() => content, [content]);
 
@@ -59,7 +63,7 @@ export function useBlockEditor({
         'data-block-id': blockId,
       },
       handleKeyDown: (_view, event) => {
-        // Cmd+L: Selection to Chat + Apply 전용 요청
+        // Cmd+L: Selection to Chat (모델 호출 없음)
         // readOnly(source)에서도 동작해야 하므로 readOnly 체크보다 먼저 처리합니다.
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
           event.preventDefault();
@@ -69,12 +73,12 @@ export function useBlockEditor({
             const selected = editor.state.doc.textBetween(from, to, ' ').trim();
             // 현재 블록을 컨텍스트로 등록 (Context Injection)
             addContextBlock(blockId);
-
-            // Apply 전용 요청으로 전환: 원문/번역 쌍 + 선택 구간을 body에 포함
-            await sendApplyRequest({
-              blockId,
-              ...(selected.length > 0 ? { selectionText: selected } : {}),
-            });
+            if (sidebarCollapsed) toggleSidebar();
+            setActivePanel('chat');
+            if (selected.length > 0) {
+              appendComposerText(selected);
+            }
+            requestComposerFocus();
           })();
           return true;
         }

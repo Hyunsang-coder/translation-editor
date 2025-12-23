@@ -132,6 +132,23 @@
     @apply bg-editor-surface;
     @apply mr-auto max-w-[80%];
   }
+
+  /* Chat Markdown */
+  .chat-markdown p {
+    @apply my-2;
+  }
+  .chat-markdown ul {
+    @apply list-disc pl-6 my-2;
+  }
+  .chat-markdown ol {
+    @apply list-decimal pl-6 my-2;
+  }
+  .chat-markdown li {
+    @apply my-1;
+  }
+  .chat-markdown blockquote {
+    @apply border-l-2 border-editor-border pl-3 my-2 text-editor-muted;
+  }
 }
 
 /* Utility Styles */

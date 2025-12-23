@@ -168,35 +168,13 @@ export interface ChatMessage {
 export interface ChatMessageMetadata {
   model?: string;
   tokens?: number;
-  suggestedBlockId?: string; // Apply 시 대상 블록
-  appliedAt?: number;
-  applied?: boolean;
-  accepted?: boolean;
 
   /**
-   * 이 메시지가 "Apply 가능한 번역 제안"인지 여부.
-   * true인 경우에만 UI에서 Apply 버튼을 노출합니다.
+   * 메시지 수정 이력 (TRD 4.3 권장)
+   * - 사용자가 메시지를 수정하면 해당 메시지 이후 대화는 truncate됩니다.
    */
-  appliable?: boolean;
-
-  /**
-   * Apply 시 "선택 구간"만 대체하는 경우, 선택 텍스트(plain)를 함께 저장합니다.
-   */
-  selectionText?: string;
-
-  /**
-   * Target 단일 문서(Monaco)에서의 selection 위치(UTF-16 offset)
-   * - Range tracking은 이후 단계에서 고도화(Tracked range)합니다.
-   */
-  selectionStartOffset?: number;
-  selectionEndOffset?: number;
-
-  /**
-   * 태그/변수 무결성 검증 실패 등으로 Apply를 막는 경우 사유를 기록합니다.
-   * - UI에서 사용자에게 안내용으로 노출
-   */
-  applyBlockedReason?: string;
-  cleanContent?: string;
+  editedAt?: number;
+  originalContent?: string;
 }
 
 // ============================================

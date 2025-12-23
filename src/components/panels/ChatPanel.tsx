@@ -6,6 +6,8 @@ import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -29,6 +31,8 @@ export function ChatPanel(): JSX.Element {
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
   const systemPromptOverlay = useChatStore((s) => s.systemPromptOverlay);
   const setSystemPromptOverlay = useChatStore((s) => s.setSystemPromptOverlay);
+  const translationRules = useChatStore((s) => s.translationRules);
+  const setTranslationRules = useChatStore((s) => s.setTranslationRules);
   const activeMemory = useChatStore((s) => s.activeMemory);
   const setActiveMemory = useChatStore((s) => s.setActiveMemory);
 
@@ -37,7 +41,54 @@ export function ChatPanel(): JSX.Element {
   const hydrateForProject = useChatStore((s) => s.hydrateForProject);
 
   const [showPromptEditor, setShowPromptEditor] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<string>('');
+
+  const editMessage = useChatStore((s) => s.editMessage);
+  const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
+
+  const isRuleLikeMessage = useCallback((text: string): boolean => {
+    const t = text.trim();
+    if (t.length < 12) return false;
+    // 너무 긴 본문(예: 검수 리포트 전체)에는 기본적으로 노출을 줄임
+    if (t.length > 1200) return false;
+
+    const keywords = [
+      '번역 규칙',
+      '용어',
+      '용어집',
+      '표기',
+      '표기법',
+      '스타일',
+      '톤',
+      '문체',
+      '금지어',
+      '권장',
+      '유지',
+      '통일',
+      '일관',
+      '띄어쓰기',
+      '존댓말',
+      '반말',
+      '하십시오',
+      '해요체',
+    ];
+
+    const hit = keywords.some((k) => t.includes(k));
+    const looksLikeRulesList = /\n-\s+/.test(t) || /\n\d+\.\s+/.test(t);
+    const looksLikeDirective = /(하세요|하지 마세요|금지|유지하세요|통일하세요|권장)/.test(t);
+
+    return hit && (looksLikeRulesList || looksLikeDirective || t.split('\n').length >= 2);
+  }, []);
+
+  const appendToTranslationRules = useCallback((snippet: string) => {
+    const incoming = snippet.trim();
+    if (!incoming) return;
+    const base = translationRules.trimEnd();
+    const next = base.length > 0 ? `${base}\n\n${incoming}\n` : `${incoming}\n`;
+    setTranslationRules(next);
+  }, [translationRules, setTranslationRules]);
 
   // 2. Effects
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원
@@ -52,14 +103,18 @@ export function ChatPanel(): JSX.Element {
   }, [focusNonce, sidebarCollapsed]);
 
   // 3. Handlers
-  const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
+  const sendCurrent = useCallback(async (): Promise<void> => {
     if (!composerText.trim() || isLoading) return;
 
     const message = composerText.trim();
     setComposerText('');
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    await sendCurrent();
+  }, [sendCurrent]);
 
   // 4. Early Returns (Conditional Rendering)
   // 사이드바 축소 상태
@@ -104,9 +159,13 @@ export function ChatPanel(): JSX.Element {
               <button
                 type="button"
                 className="text-xs text-primary-500 hover:text-primary-600"
-                onClick={() => setSystemPromptOverlay('')}
+                onClick={() =>
+                  setSystemPromptOverlay(
+                    '당신은 전문 번역가를 돕는 AI 어시스턴트입니다. 사용자의 질문에 간결하게 답하고, 원문/번역문 컨텍스트를 우선으로 고려하세요.',
+                  )
+                }
               >
-                Clear
+                Reset
               </button>
             </div>
             <textarea
@@ -117,10 +176,30 @@ export function ChatPanel(): JSX.Element {
             />
           </section>
 
-          {/* Section 2: Translation Rules (Active Memory) */}
+          {/* Section 2: Translation Rules */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
+              <button
+                type="button"
+                className="text-xs text-primary-500 hover:text-primary-600"
+                onClick={() => setTranslationRules('')}
+              >
+                Clear
+              </button>
+            </div>
+            <textarea
+              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={translationRules}
+              onChange={(e) => setTranslationRules(e.target.value)}
+              placeholder="Enter translation rules..."
+            />
+          </section>
+
+          {/* Section 3: Active Memory */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
               <button
                 type="button"
                 className="text-xs text-primary-500 hover:text-primary-600"
@@ -133,7 +212,7 @@ export function ChatPanel(): JSX.Element {
               className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
               value={activeMemory}
               onChange={(e) => setActiveMemory(e.target.value)}
-              placeholder="Enter translation rules..."
+              placeholder="Enter active memory..."
             />
           </section>
 
@@ -141,7 +220,7 @@ export function ChatPanel(): JSX.Element {
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
-                <h3 className="text-xs font-semibold text-editor-text">3. Glossary</h3>
+                <h3 className="text-xs font-semibold text-editor-text">4. Glossary</h3>
                 <span className="text-[10px] text-editor-muted">
                   Columns: [Source] [Target] (Header required, case-insensitive)
                 </span>
@@ -306,79 +385,109 @@ export function ChatPanel(): JSX.Element {
             className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
               } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
           >
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            {/* Message toolbar */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                {editingMessageId === message.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={editingDraft}
+                      onChange={(e) => setEditingDraft(e.target.value)}
+                      placeholder="Edit message..."
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-md text-xs border border-editor-border text-editor-muted hover:text-editor-text"
+                        onClick={() => {
+                          setEditingMessageId(null);
+                          setEditingDraft('');
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
+                        disabled={!editingDraft.trim()}
+                        onClick={() => {
+                          editMessage(message.id, editingDraft);
+                          setEditingMessageId(null);
+                          setEditingDraft('');
+                        }}
+                        title="Save (이후 대화는 삭제됩니다)"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm leading-relaxed chat-markdown">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      skipHtml
+                      urlTransform={defaultUrlTransform}
+                      components={{
+                        a: ({ node: _node, ...props }) => (
+                          <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+
+              {/* Edit/Delete (truncate) */}
+              {editingMessageId !== message.id && (
+                <div className="shrink-0 flex items-center gap-1">
+                  {message.role === 'user' && (
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-editor-text hover:bg-editor-border/60"
+                      onClick={() => {
+                        setEditingMessageId(message.id);
+                        setEditingDraft(message.content);
+                      }}
+                      title="Edit (이후 대화는 삭제됩니다)"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-red-600 hover:bg-editor-border/60"
+                    onClick={() => {
+                      const ok = window.confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?');
+                      if (!ok) return;
+                      deleteMessageFrom(message.id);
+                    }}
+                    title="Delete (이후 대화는 삭제됩니다)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
             <span className="text-xs text-editor-muted mt-1 block">
               {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
             </span>
 
-            {/* Apply 버튼: apply 전용 응답(appliable)일 때만 노출. 이미 적용된 경우(applied) 표시 변경 */}
-            {message.role === 'assistant' && message.metadata?.appliable === true && (
-              <div className="mt-2 flex gap-2">
-                {message.metadata.applied ? (
-                  <span className="px-3 py-1.5 text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
-                    <span>✓</span> Applied
-                  </span>
-                ) : (
+            {/* Add to Rules: 스타일/톤/번역 규칙 성격의 assistant 응답에만 노출 */}
+            {message.role === 'assistant' &&
+              streamingMessageId !== message.id &&
+              isRuleLikeMessage(message.content) && (
+                <div className="mt-2">
                   <button
                     type="button"
-                    className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-                    onClick={() => {
-                      const clean = message.metadata?.cleanContent ?? message.content;
-                      const meta = message.metadata ?? {};
-                      const { targetDocument, openDocDiffPreview } = useProjectStore.getState();
-
-                      let start = meta.selectionStartOffset;
-                      let end = meta.selectionEndOffset;
-                      const selText = meta.selectionText;
-
-                      // --- Smart Match Strategy ---
-                      // 1. If offsets are missing or seem invalid, try to find the selection text in the document.
-                      if (
-                        (typeof start !== 'number' || typeof end !== 'number') &&
-                        selText
-                      ) {
-                        const foundIdx = targetDocument.indexOf(selText);
-                        if (foundIdx >= 0) {
-                          start = foundIdx;
-                          end = foundIdx + selText.length;
-                        }
-                      } else if (
-                        typeof start === 'number' && typeof end === 'number' &&
-                        selText &&
-                        targetDocument.slice(start, end) !== selText
-                      ) {
-                        // 2. Drift detection: content at offsets changed? Search globally.
-                        const foundIdx = targetDocument.indexOf(selText);
-                        if (foundIdx >= 0) {
-                          start = foundIdx;
-                          end = foundIdx + selText.length;
-                        }
-                      }
-
-                      if (typeof start === 'number' && typeof end === 'number') {
-                        openDocDiffPreview({
-                          startOffset: start,
-                          endOffset: end,
-                          suggestedText: clean,
-                          originMessageId: message.id,
-                        });
-                      } else {
-                        window.alert('자동 적용할 위치를 찾을 수 없습니다. (원본 텍스트가 변경되었거나 선택되지 않음)');
-                      }
-                    }}
-                    title="Apply translation to selected text"
+                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors"
+                    onClick={() => appendToTranslationRules(message.content)}
+                    title="이 내용을 Translation Rules에 추가"
                   >
+                    Add to Rules
                   </button>
-                )}
-              </div>
-            )}
-
-            {/* Apply 차단 사유 */}
-            {message.role === 'assistant' &&
-              message.metadata?.appliable === false &&
-              message.metadata?.applyBlockedReason && (
-                <div className="mt-2 text-[11px] text-red-600 dark:text-red-400 whitespace-pre-wrap">
-                  {message.metadata.applyBlockedReason}
                 </div>
               )}
           </div>
@@ -397,8 +506,7 @@ export function ChatPanel(): JSX.Element {
       {/* 입력창 */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-editor-border">
         <div className="flex gap-2">
-          <input
-            type="text"
+          <textarea
             ref={inputRef}
             value={composerText}
             onChange={(e) => setComposerText(e.target.value)}
@@ -408,6 +516,13 @@ export function ChatPanel(): JSX.Element {
                        focus:outline-none focus:ring-2 focus:ring-primary-500"
             disabled={isLoading}
             data-ite-chat-composer
+            rows={3}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void sendCurrent();
+              }
+            }}
           />
           <button
             type="submit"
