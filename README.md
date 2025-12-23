@@ -16,11 +16,11 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 ---
 
 ## 🚀 핵심 사용자 경험(PRD 요약)
-- **Document-First 번역 에디터**: 코딩 에디터 수준의 성능을 문서 편집 감성으로 제공
-- **3-패널 레이아웃**: Source(참조) / Target(편집) / AI Chat
+- **Document-First 번역 에디터**: Notion 스타일의 리치 텍스트 편집 환경
+- **3-패널 레이아웃**: Source(참조/편집) / Target(편집) / AI Chat
 - **Focus Mode**: Source 패널을 숨기고 번역/대화에 집중
-- **Selection → Apply → Diff → Accept/Reject**: Cursor 스타일의 인라인 수정 제안 워크플로우
-- **Ghost Chips**: `{user}`, `<br>` 등 태그/변수 보호
+- **문서 전체 번역(Preview→Apply)**: Source 전체를 번역하여 Preview로 확인 후 Apply로 Target 전체 덮어쓰기
+- **Selection → Chat**: 선택 텍스트를 채팅 입력창에 추가하는 보조 UX
 - **Keyboard-First**: 단축키로 대부분의 핵심 액션 수행
 
 ---
@@ -28,9 +28,9 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 ## 🛠 목표 기술 스택(TRD 요약)
 ### Frontend
 - **React + TypeScript**
-- **Editor(목표)**: Monaco Editor (Source/Target 2개 인스턴스)
+- **Editor**: TipTap (ProseMirror 기반, Source/Target 2개 인스턴스)
 - **State**: Zustand (필요 시 Immer)
-- **Diff**: diff-match-patch 기반 델타 계산 + 시각화
+- **AI**: LangChain.js (OpenAI, Anthropic)
 
 ### Backend
 - **Tauri + Rust**
@@ -39,33 +39,51 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 ---
 
 ## ✅ 현재 구현 현황(요약)
-아래는 **PRD/TRD 대비 “현재 코드베이스”의 구현 상태**입니다. (목표와 다를 수 있음)
+아래는 **PRD/TRD 대비 "현재 코드베이스"의 구현 상태**입니다.
 
-### UI / UX (Cursor 유사)
-- **3-패널 레이아웃**: Source(참고) / Target(편집) / Chat ✅
-- **Focus Mode**: Source 숨김 ✅
-- **선택 시 ‘Add to chat’**:
-  - Source(일반 DOM selection) ✅
-  - Target(Monaco selection) ✅
+### Editor (TipTap 기반)
+- **TipTap 에디터**: Source/Target 모두 편집 가능 ✅
+- **지원 포맷**: 헤딩(H1-H6), 불릿/번호 리스트, 볼드, 이탤릭, 취소선, 인용 블록, 링크 ✅
+- **Notion 스타일**: Pretendard 폰트, 행간 1.8, 16px, max-width 800px ✅
+- **TipTap JSON 저장**: SQLite `documents` 테이블에 JSON 형식으로 저장 ✅
+
+### UI / UX
+- **3-패널 레이아웃**: Source(편집 가능) / Target(편집) / Chat ✅
+- **Focus Mode**: Source 패널 숨김 토글 ✅
+- **선택 시 'Add to chat'**: 
+  - Source/Target TipTap에서 텍스트 선택 시 버튼 표시 ✅
   - 동작: **채팅 입력창에 붙여넣기만**(자동 전송 X) ✅
-- **단축키**
-  - `Cmd+L`: Target selection 기반 Apply 요청 ✅
-  - `Cmd+K`: Chat 포커스 진입(1차) ✅
-  - `Cmd+Y` / `Cmd+N`: Diff Accept/Reject ✅
 
-### Editor / Apply / Diff
-- **Target 에디터(현재)**: Monaco **단일 문서** ✅
-- **Diff Preview(현재)**: Monaco DiffEditor 기반 모달 ✅
-- **Accept/Reject(현재)**: pending diff 기준 반영/취소 ✅
-- **Range tracking(현재)**: Monaco decoration(tracked range) 기반으로 target blocks 구간 추적 ✅
+### 문서 전체 번역 (Preview → Apply)
+- **Translate 버튼**: Source 전체를 번역하여 Preview 모달 표시 ✅
+- **Preview 모달**: 번역 결과를 읽기 전용 TipTap으로 미리보기 ✅
+- **Apply**: Preview 확인 후 Target 문서 전체 덮어쓰기 ✅
+- **JSON 출력 강제**: TipTap JSON 형식으로 서식 보존 ✅
 
-### Ghost Chips(태그 보호)
-- **감지**: `{var}`, `<tag>`, `<br>` 패턴 감지 ✅
-- **표시/보호(현재, Target Monaco)**: chip 데코레이션 + 편집 시 자동 undo + toast 경고 ✅
+### AI Chat 시스템
+- **멀티 탭 채팅**: 여러 채팅 세션 생성/전환/삭제 ✅
+- **Settings 화면**: 시스템 프롬프트, 번역 규칙, Active Memory, 용어집 관리 ✅
+- **메시지 수정/삭제**: 메시지 수정 시 이후 대화 truncate ✅
+- **Markdown 렌더링**: 채팅 메시지 GFM 지원 (HTML 렌더링 금지) ✅
+- **Add to Rules/Memory**: assistant 응답을 규칙/메모리에 추가 ✅
+- **Smart Context Memory**: 대화 토큰 모니터링 및 요약 제안 ✅
+- **LangChain.js**: OpenAI, Anthropic 모델 지원 ✅
+
+### 용어집 (Glossary)
+- **CSV/Excel 임포트**: 용어집 파일 업로드 및 프로젝트 연결 ✅
+- **텍스트 기반 검색**: 부분 매칭으로 관련 용어 추출 ✅
 
 ### Storage(.ite)
 - **SQLite 기반 단일 파일(.ite) Import/Export** ✅
-- **Save 시점 브릿지(현재)**: Target 단일 문서 → tracked range 기준으로 blocks에 역투영 후 저장 ✅
+- **프로젝트 저장/로드**: TipTap JSON 저장/복원 ✅
+- **채팅 세션 저장**: 프로젝트별 채팅 히스토리 영속화 ✅
+- **자동 저장**: Auto-save 지원 ✅
+
+### 제거된 기능 (참고)
+- ~~Monaco Editor~~ → TipTap으로 대체
+- ~~Diff Preview / Keep / Discard~~ → 사용자 직접 수정 방식으로 불필요
+- ~~Ghost Chips~~ → 기능 제거
+- ~~Range-based Tracking~~ → 불필요
 
 ---
 
@@ -77,12 +95,12 @@ english-playground/
 │   │   ├── editor/               # 에디터 관련 UI
 │   │   ├── layout/               # 레이아웃/툴바
 │   │   └── panels/               # Source/Target/Chat 패널
-│   ├── editor/                   # 에디터 엔진/확장/어댑터(목표: Monaco 중심)
+│   ├── editor/                   # 에디터 엔진/확장/어댑터(TipTap 기반)
 │   ├── ai/                       # 프롬프트/클라이언트/대화 로직
 │   ├── stores/                   # Zustand 스토어
 │   ├── tauri/                    # 프론트↔타우리 invoke 래퍼
 │   ├── types/                    # 타입 정의
-│   └── utils/                    # diff/ghost-chip 등 유틸
+│   └── utils/                    # 유틸리티 함수
 ├── src-tauri/                    # Backend (Rust)
 │   ├── src/
 │   │   ├── commands/             # Tauri commands
