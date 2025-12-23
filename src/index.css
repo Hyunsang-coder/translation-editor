@@ -469,3 +469,84 @@
   background: rgba(248, 113, 113, 0.25);
 }
 
+/* ============================================
+   Monaco DiffEditor - Custom Colors
+   첨부 이미지 스타일: 선명한 빨간/초록 + 취소선
+   ============================================ */
+
+/* 삭제된 줄 배경 (왼쪽 패널) */
+.monaco-diff-editor .editor.original .view-overlays .line-delete,
+.monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
+  background: rgba(254, 202, 202, 0.5) !important; /* red-200 */
+}
+
+/* 추가된 줄 배경 (오른쪽 패널) */
+.monaco-diff-editor .editor.modified .view-overlays .line-insert,
+.monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
+  background: rgba(187, 247, 208, 0.5) !important; /* green-200 */
+}
+
+/* 삭제된 문자 하이라이트 - 빨간색 배경 + 취소선 */
+.monaco-diff-editor .editor.original .view-overlays .char-delete {
+  background: rgba(254, 202, 202, 0.85) !important; /* red-200 */
+  text-decoration: line-through !important;
+  text-decoration-color: #dc2626 !important; /* red-600 */
+}
+
+/* 추가된 문자 하이라이트 - 초록색 배경 */
+.monaco-diff-editor .editor.modified .view-overlays .char-insert {
+  background: rgba(134, 239, 172, 0.7) !important; /* green-300 */
+}
+
+/* 삭제된 텍스트에 취소선 적용 (Monaco 텍스트 레이어) */
+.monaco-diff-editor .editor.original .view-lines .view-line span {
+  position: relative;
+}
+
+/* Gutter (줄 번호 옆) 색상 */
+.monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
+  background: rgba(254, 202, 202, 0.6) !important;
+}
+
+.monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
+  background: rgba(187, 247, 208, 0.6) !important;
+}
+
+/* Dark 테마 */
+.dark .monaco-diff-editor .editor.original .view-overlays .line-delete,
+.dark .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
+  background: rgba(127, 29, 29, 0.4) !important; /* red-900 */
+}
+
+.dark .monaco-diff-editor .editor.modified .view-overlays .line-insert,
+.dark .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
+  background: rgba(20, 83, 45, 0.4) !important; /* green-900 */
+}
+
+.dark .monaco-diff-editor .editor.original .view-overlays .char-delete {
+  background: rgba(185, 28, 28, 0.6) !important; /* red-700 */
+  text-decoration: line-through !important;
+  text-decoration-color: #fca5a5 !important; /* red-300 */
+}
+
+.dark .monaco-diff-editor .editor.modified .view-overlays .char-insert {
+  background: rgba(22, 163, 74, 0.5) !important; /* green-600 */
+}
+
+.dark .monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
+  background: rgba(127, 29, 29, 0.5) !important;
+}
+
+.dark .monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
+  background: rgba(20, 83, 45, 0.5) !important;
+}
+
+/* Inline diff 모드용 (renderSideBySide: false 시) */
+.monaco-diff-editor .inline-deleted-margin-view-zone {
+  background: rgba(254, 202, 202, 0.4) !important;
+}
+
+.monaco-diff-editor .view-overlays .diagonal-fill {
+  opacity: 0.08;
+}
+

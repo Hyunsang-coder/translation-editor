@@ -8,6 +8,43 @@ import { useUIStore } from '@/stores/uiStore';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 
+/**
+ * Diff 비교를 위한 텍스트 정규화
+ * - 줄 바꿈 통일 (Windows/Unix)
+ * - 과도한 빈 줄 정리
+ * - 앞뒤 공백 제거
+ */
+function normalizeDiffText(text: string): string {
+  return text
+    .replace(/\r\n/g, '\n')           // Windows 줄 바꿈 → Unix
+    .replace(/\n{3,}/g, '\n\n')       // 3개 이상 줄 바꿈 → 2개
+    .replace(/[ \t]+$/gm, '')         // 줄 끝 공백 제거
+    .trim();
+}
+
+/**
+ * 문장 단위로 텍스트 분할
+ * - 각 문장을 별도 줄로 변환하여 Monaco DiffEditor의 줄 매칭 정확도 향상
+ * - 번역 비교 시 문장 구조 변화를 더 명확하게 표시
+ */
+function splitBySentence(text: string): string {
+  return text
+    // 문장 종결 부호 + 공백을 줄바꿈으로 변환 (한국어/영어/일본어/중국어 지원)
+    .replace(/([.!?。！？])\s+/g, '$1\n')
+    // 이미 있는 줄바꿈은 유지하되 과도한 줄바꿈 정리
+    .replace(/\n{2,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Diff용 최종 텍스트 준비
+ * - 정규화 + 문장 분할
+ */
+function prepareDiffText(text: string): string {
+  const normalized = normalizeDiffText(text);
+  return splitBySentence(normalized);
+}
+
 export function TranslatePreviewModal(props: {
   open: boolean;
   title?: string;
@@ -54,13 +91,18 @@ export function TranslatePreviewModal(props: {
     },
   });
 
-  // diff용 텍스트 추출
-  const originalText = useMemo(() => (originalHtml ? stripHtml(originalHtml) : ''), [originalHtml]);
+  // diff용 텍스트 추출 (정규화 + 문장 분할 적용)
+  const originalText = useMemo(() => {
+    const raw = originalHtml ? stripHtml(originalHtml) : '';
+    return prepareDiffText(raw);
+  }, [originalHtml]);
+
   const translatedText = useMemo(() => {
     if (!docJson) return '';
     try {
       // TipTap JSON을 plain text로 변환 (Heading 등 구조 반영)
-      return generateText(docJson, extensions);
+      const raw = generateText(docJson, extensions);
+      return prepareDiffText(raw);
     } catch (err) {
       console.error('Failed to generate text from docJson:', err);
       return '';
@@ -184,14 +226,17 @@ export function TranslatePreviewModal(props: {
                   renderSideBySide: true,
                   readOnly: true,
                   minimap: { enabled: false },
-                  lineNumbers: 'off',
+                  lineNumbers: 'on',
                   wordWrap: 'on',
                   scrollBeyondLastLine: false,
                   renderOverviewRuler: false,
                   folding: false,
-                  diffAlgorithm: 'advanced', // 더 정교한 비교 알고리즘
-                  ignoreTrimWhitespace: false, // 공백 변경도 중요할 수 있음
+                  diffAlgorithm: 'advanced',
+                  ignoreTrimWhitespace: true,  // 앞뒤 공백 차이 무시
                   renderIndicators: true,
+                  // 인라인 힌트 표시 (단어 단위 하이라이트)
+                  renderMarginRevertIcon: false,
+                  useInlineViewWhenSpaceIsLimited: false,
                 }}
               />
             </div>
