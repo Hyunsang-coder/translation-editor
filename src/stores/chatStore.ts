@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage, EditorBlock, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
 import { getAiConfig } from '@/ai/config';
+import { detectRequestType } from '@/ai/prompt';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { searchGlossary } from '@/tauri/glossary';
@@ -353,6 +354,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createSession();
       }
 
+      // 채팅은 "질문 전용"으로 운영: 번역/리라이트 요청은 Translate(Preview) 워크플로우로 유도
+      const req = detectRequestType(content);
+
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();
       const maskedUserContent = maskGhostChips(content, maskSession);
@@ -366,6 +370,25 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // 간단한 규칙: 첫 20자 + ...
         const newTitle = content.trim().slice(0, 20) + (content.length > 20 ? '...' : '');
         get().renameSession(updatedSession.id, newTitle);
+      }
+
+      // 번역 요청은 모델 호출 없이 즉시 안내(번역 결과를 채팅으로 출력하지 않음)
+      if (req === 'translate') {
+        const translationRulesRaw = get().translationRules?.trim();
+        const activeMemoryRaw = get().activeMemory?.trim();
+
+        const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
+        const msg = needsOneQuestion
+          ? [
+              '이 요청은 채팅에서 번역하지 않습니다.',
+              '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
+            ].join(' ')
+          : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
+
+        addMessage({ role: 'assistant', content: msg, metadata: { appliable: false } });
+        set({ isLoading: false, streamingMessageId: null, error: null });
+        schedulePersist();
+        return;
       }
 
       set({ isLoading: true, error: null });
@@ -462,6 +485,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
             activeMemory,
             ...(sourceDocument ? { sourceDocument } : {}),
             ...(targetDocument ? { targetDocument } : {}),
+            // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
+            requestType: 'question',
           },
           {
             onToken: (full) => {
