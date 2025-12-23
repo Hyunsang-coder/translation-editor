@@ -34,9 +34,9 @@ export function buildSourceDocument(project: ITEProject): SourceDocumentBuildRes
       }
       isFirst = false;
 
-      const plain = stripHtml(b.content);
+      const content = b.content;
       const startOffset = text.length;
-      text += plain;
+      text += content;
       const endOffset = text.length;
       blockRanges[id] = { startOffset, endOffset };
     });

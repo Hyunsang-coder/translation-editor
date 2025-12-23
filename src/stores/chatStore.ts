@@ -62,6 +62,8 @@ interface ChatState {
    * - null이면 현재 탭(currentSession)의 최신 메시지 10개를 사용
    */
   translationContextSessionId: string | null;
+  /** 현재 로드된 프로젝트 ID (저장 시 검증용) */
+  loadedProjectId: string | null;
 }
 
 interface ChatActions {
@@ -148,7 +150,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
   const persistNow = async (): Promise<void> => {
     if (!isTauriRuntime()) return;
     if (get().isHydrating) return; // 로드 중에는 저장하지 않음 (데이터 유실 방지)
-    const projectId = getActiveProjectId();
+    
+    // getActiveProjectId() 대신 현재 스토어에 로드된 ID 사용
+    const projectId = get().loadedProjectId;
     if (!projectId) return;
 
     const session = get().currentSession;
@@ -233,8 +237,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     includeSourceInPayload: true,
     includeTargetInPayload: true,
     translationContextSessionId: null,
+    loadedProjectId: null,
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
+      // 프로젝트 전환 시, 기존 타이머 취소
+      if (chatPersistTimer !== null) {
+        window.clearTimeout(chatPersistTimer);
+        chatPersistTimer = null;
+      }
+
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
       if (!projectId) {
         set({
@@ -242,11 +253,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
           currentSessionId: null,
           currentSession: null,
           isHydrating: false,
+          loadedProjectId: null,
         });
         return;
       }
 
-      set({ isHydrating: true, error: null });
+      set({ isHydrating: true, error: null, loadedProjectId: projectId });
 
       try {
         if (!isTauriRuntime()) {

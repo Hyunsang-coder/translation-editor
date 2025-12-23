@@ -1441,7 +1441,12 @@ function escapeHtml(text: string): string {
 }
 
 function toParagraphHtml(text: string): string {
-  // TipTap 기본 문서 구조에서 paragraph를 기대하므로 <p>로 감쌉니다.
+  const trimmed = text.trim();
+  // 이미 HTML 태그로 감싸져 있다면 그대로 반환
+  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+    return text;
+  }
+  // 그 외의 경우에만 이스케이프 후 <p>로 감쌈
   const safe = escapeHtml(text);
   return `<p>${safe}</p>`;
 }

@@ -37,9 +37,9 @@ export function buildTargetDocument(project: ITEProject): TargetDocumentBuildRes
     seg.targetIds.forEach((id, blockIndex) => {
       const b = project.blocks[id];
       if (!b) return;
-      const plain = stripHtml(b.content);
+      const content = b.content;
       const startOffset = text.length;
-      text += plain;
+      text += content;
       const endOffset = text.length;
       blockRanges[id] = { startOffset, endOffset };
 
