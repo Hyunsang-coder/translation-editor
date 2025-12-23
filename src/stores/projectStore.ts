@@ -16,7 +16,6 @@ import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
 import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
-import { useChatStore } from '@/stores/chatStore';
 
 // ============================================
 // Store State Interface

@@ -82,7 +82,7 @@ export function TranslatePreviewModal(props: {
 
   const editor = useEditor({
     extensions,
-    content: content ?? undefined,
+    ...(content !== null && { content }),
     editable: false,
     editorProps: {
       attributes: {

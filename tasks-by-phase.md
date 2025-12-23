@@ -14,7 +14,7 @@
 
 [x] 필수 라이브러리 설치: zustand, tailwindcss, langchain
 
-[ ] TipTap 관련 패키지 설치: @tiptap/react, @tiptap/starter-kit, @tiptap/extension-*
+[x] TipTap 관련 패키지 설치: @tiptap/react, @tiptap/starter-kit, @tiptap/extension-link, @tiptap/extension-placeholder
 
 [x] 전역 테마 및 Pretendard 폰트 설정
 
@@ -51,11 +51,11 @@
 
 ### 2.1 LangChain.js 설정
 
-[ ] LangChain.js 패키지 설치/업데이트: langchain, @langchain/openai, @langchain/anthropic
+[x] LangChain.js 패키지 설치/업데이트: langchain, @langchain/openai, @langchain/anthropic
 
-[ ] API Key 환경변수 기반 구성 (VITE_OPENAI_API_KEY, VITE_ANTHROPIC_API_KEY)
+[x] API Key 환경변수 기반 구성 (VITE_OPENAI_API_KEY, VITE_ANTHROPIC_API_KEY)
 
-[ ] 기본 ChatModel 인스턴스 생성 유틸
+[x] 기본 ChatModel 인스턴스 생성 유틸 (`createChatModel`)
 
 ### 2.2 프롬프트 전략 구현
 
@@ -69,17 +69,18 @@
 
 ### 2.3 Context Collection (맥락 수집)
 
-[ ] TipTap에서 선택 텍스트 추출
+[x] TipTap에서 선택 텍스트 추출 (Cmd+L 단축키)
 
-[ ] Source/Target 문서 전체 텍스트 추출 (TipTap JSON → Plain Text)
+[x] Source/Target 문서 전체 텍스트 추출 (TipTap JSON → Plain Text)
 
-[x] Selection → Chat: 선택 텍스트를 우클릭으로 채팅 입력창에 복사하는 UX
+[x] Selection → Chat: 선택 텍스트를 채팅 입력창에 복사하는 UX (Cmd+L)
 
-[ ] 문서 전체 번역(Preview → Apply): Source 전체를 번역하여 Target 전체를 덮어쓰기 (TipTap JSON 서식 보존)
-  - [ ] Translate 버튼/단축키
-  - [ ] 최근 채팅 메시지 10개 컨텍스트 포함
-  - [ ] JSON 출력 강제 + 파싱/검증 + 실패 폴백
-  - [ ] Preview 렌더링 + Apply(전체 덮어쓰기)
+[x] 문서 전체 번역(Preview → Apply): Source 전체를 번역하여 Target 전체를 덮어쓰기 (TipTap JSON 서식 보존)
+  - [x] Translate 버튼/단축키
+  - [x] 최근 채팅 메시지 10개 컨텍스트 포함
+  - [x] JSON 출력 강제 + 파싱/검증 + 실패 폴백
+  - [x] Preview 렌더링 + Apply(전체 덮어쓰기)
+  - [ ] JSON 포맷 응답 누락 버그 수정 (간혹 발생)
 
 ### 2.4 AI Chat 패널
 
@@ -95,15 +96,21 @@
   - Active Memory
   - 첨부 파일 관리
 
-[ ] 메시지 수정 (Edit Message)
-  - 사용자 메시지 수정 시 이하 메시지 삭제
-  - 수정 이력 보관 (editedAt, originalContent)
+[~] 메시지 수정 (Edit Message)
+  - [x] 사용자 메시지 수정 시 이하 메시지 삭제 (truncate)
+  - [~] 수정 이력 보관 (editedAt, originalContent) - 부분 구현됨, 완전한 저장 필요
+
+[x] Markdown 렌더링 지원 (react-markdown, remark-gfm)
+
+[ ] Settings 입력 필드 Markdown 지원 (채팅창처럼)
+
+[ ] System Prompt 필드 툴팁 (각 필드 옆 아이콘 + 호버 시 툴팁)
 
 ### 2.5 스트리밍 응답
 
-[ ] LangChain.js 스트리밍 응답 처리
+[x] LangChain.js 스트리밍 응답 처리 (`streamAssistantReply`)
 
-[ ] 채팅 UI 실시간 업데이트
+[x] 채팅 UI 실시간 업데이트
 
 ---
 
@@ -115,17 +122,7 @@
 
 [x] rusqlite 연동 및 기본 테이블 스키마
 
-[ ] TipTap JSON 저장을 위한 documents 테이블 스키마 수정
-```sql
-CREATE TABLE documents (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  type TEXT NOT NULL, -- 'source' | 'target'
-  content TEXT NOT NULL, -- TipTap JSON
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
+[x] TipTap JSON 저장을 위한 documents 테이블 스키마 (또는 프로젝트 구조에 통합)
 
 [x] create/load/save 프로젝트 Tauri Command
 
@@ -137,15 +134,17 @@ CREATE TABLE documents (
 
 [x] Import/Export 기능
 
-[ ] TipTap JSON ↔ DB 저장/복원 테스트
+[x] TipTap JSON ↔ DB 저장/복원 (프로젝트 구조에 통합)
 
 ### 3.3 채팅 세션 저장
 
-[x] 프로젝트별 채팅 세션 저장/복원
+[x] 프로젝트별 채팅 세션 저장/복원 (Zustand persist)
 
-[ ] 멀티 탭 채팅 세션 저장 구조 확장
+[x] 멀티 탭 채팅 세션 저장 구조 확장
 
-[ ] Settings (시스템 프롬프트, 번역 규칙 등) DB 저장
+[x] Settings (시스템 프롬프트, 번역 규칙 등) DB 저장 (Zustand persist)
+
+[ ] 프로젝트 변경 시 패널 동기화 검증 (간혹 동기화 문제 발생)
 
 ---
 
@@ -171,9 +170,13 @@ CREATE TABLE documents (
 
 [x] Active Memory 요약을 모델 호출 payload에 주입
 
+[x] "Add to Rules" / "Add to Memory" 버튼 (메시지별)
+
 ### 4.3 첨부 파일 (Reference Attachments)
 
-[ ] 지원 파일 확장: csv, xlsx, pdf, pptx, png/jpg, md, docx
+[x] 지원 파일 확장: csv, xlsx
+
+[ ] 지원 파일 확장 확장: pdf, pptx, png/jpg, md, docx
 
 [ ] 프로젝트별 첨부 파일 관리
 
@@ -223,11 +226,31 @@ CREATE TABLE documents (
 
 ---
 
-## 🔮 Phase 6: MCP 연동 및 확장 기능 (추후)
+## 🎨 Phase 6: UI/UX 개선 및 버그 수정
+
+**목표**: 사용자 경험 개선 및 안정성 향상.
+
+### 6.1 UI 개선
+
+[ ] 아이콘 생성 및 적용 (전체 UI에 일관된 아이콘 시스템)
+
+[ ] Preview 모달 Diff 색상 대비 조정 (변경된 내용이 더 눈에 잘 띄도록)
+
+[ ] 채팅 탭 선택 상태 표시 버그 수정 (Settings 탭 선택 시에도 채팅 탭 언더라인 남아있는 문제)
+
+### 6.2 검토 및 최적화
+
+[ ] 프롬프트 구조 검증 (시스템 프롬프트 중복 확인)
+
+[ ] 프로젝트 변경 시 패널 동기화 안정화
+
+---
+
+## 🔮 Phase 7: MCP 연동 및 확장 기능 (추후)
 
 **목표**: MCP 프로토콜 연동, 웹검색 등 외부 도구 통합.
 
-### 6.1 MCP 연동 기반 구축
+### 7.1 MCP 연동 기반 구축
 
 [ ] MCP 클라이언트 설정
 
@@ -235,17 +258,11 @@ CREATE TABLE documents (
 
 [ ] 외부 사전 API 연동
 
-### 6.2 전체 덮어쓰기 기능
-
-[ ] AI 번역문으로 Target 전체 교체 기능
-
-[ ] 확인 다이얼로그 + 실행 취소(Undo) 지원
-
-### 6.3 고급 기능
+### 7.2 고급 기능
 
 [ ] 타임라인 기반 수정 이력 UI (Smart History)
 
-[ ] 다크 모드/라이트 모드 지원
+[ ] 다크 모드/라이트 모드 지원 (현재 기본 테마 지원)
 
 [ ] 단축키 커스텀 설정
 
@@ -257,8 +274,16 @@ CREATE TABLE documents (
 
 - ~~Monaco Editor~~ → TipTap으로 대체
 - ~~Range-based Tracking~~ → 불필요
-- ~~Diff Preview / Keep / Discard~~ → 사용자 직접 수정
+- ~~Diff Preview / Keep / Discard~~ → 사용자 직접 수정 (Preview → Apply로 대체)
 - ~~Pending Edit / EditSession~~ → 제거
 - ~~Ghost Chips (태그 보호)~~ → 제거
-- ~~diff-match-patch~~ → 불필요
+- ~~diff-match-patch~~ → 불필요 (Monaco DiffEditor 사용)
 - ~~LangGraph Agent 루프~~ → 단순 Tool 호출로 대체 (1차)
+
+---
+
+## 📝 참고
+
+- **최신 태스크 목록**: `Tasks-to-do.md` 참고
+- **제품 기준 문서**: `prd.md`, `trd.md`
+- **현재 구현 현황**: `README.md`의 "현재 구현 현황" 섹션

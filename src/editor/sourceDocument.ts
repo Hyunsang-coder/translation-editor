@@ -1,5 +1,4 @@
 import type { ITEProject } from '@/types';
-import { stripHtml } from '@/utils/hash';
 
 export interface SourceDocumentBuildResult {
   text: string;

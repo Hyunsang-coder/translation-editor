@@ -34,8 +34,7 @@ alwaysApply: true
 - **Storage**: SQLite(rusqlite) 기반 단일 `.ite` 프로젝트 파일
 
 ### 2.2 TipTap 에디터 구성
-- **Source 패널**: TipTap 읽기 전용 (`editable: false`)
-- **Target 패널**: TipTap 편집 가능
+- **Source/Target 패널**: TipTap 편집 가능 (Focus Mode로 Source를 숨길 수 있음)
 - **공통 스타일**: Notion 감성 (Pretendard 폰트, 행간 1.8, 16px, max-width 800px)
 
 ### 2.3 지원 포맷
@@ -61,13 +60,13 @@ alwaysApply: true
 - "Add to chat"은 **선택 텍스트를 프롬프트(채팅 입력)로 옮기는 보조 UX**이며, 단독으로 모델 호출을 발생시키지 않습니다.
 
 ### 3.3 프롬프트/컨텍스트(=Context Collection)
-- 컨텍스트는 TRD 기준으로 **"선택 영역 + 원문 맥락 + (가능하면) 용어집/참조 문서 + Active Memory(용어/톤 규칙)"** 순으로 구성합니다.
-- **원문 컨텍스트(Source)**는 번역 도메인에서 최우선이므로, 가능하면 항상 payload에 포함합니다.
-- 채팅/번역 모델 호출 시 **채팅 히스토리(이전 메시지)**는 컨텍스트에 포함하지 않습니다.
-- 출력 포맷이 필요한 기능은 프롬프트에서 명확히 강제합니다.
-  - 번역 요청: **번역문만 출력** (설명, 인사, 부연 없이)
-  - 질문 요청: 간결한 답변
-- 확정된 용어/스타일 규칙은 별도 메모리(요약)로 유지하여 일관성을 지킵니다(Smart Context Memory).
+- 컨텍스트는 **선택 영역(가능하면) + 원문/번역 맥락 + 용어집/참조 문서 + Active Memory(톤/스타일/용어 규칙)** 순으로 구성합니다.
+- **원문 컨텍스트(Source)**는 최우선으로 payload에 포함합니다.
+- 필요 시 최근 채팅 메시지(최대 10개)를 포함할 수 있습니다.
+- 출력 포맷 강제:
+  - 번역(문서 전체): TipTap JSON만 출력(설명 없이)
+  - 질문/검수: 간결한 답변 또는 JSON 리포트
+- 확정된 용어/스타일 규칙은 Translation Rules/Active Memory에 축적하여 일관성을 유지합니다.
 
 ---
 
@@ -76,11 +75,11 @@ alwaysApply: true
 - 코드/문서가 충돌하면 **`prd.md`/`trd.md`가 우선**입니다.
 
 ## 3.5 Chat 기능 범위(필수)
-- **채팅은 번역문 생성/리라이트 결과를 직접 출력하지 않습니다.** (번역은 Translate(Preview→Apply)로 유도)
-- 단, 채팅에서 **검수/리뷰/검증(누락/오역/일관성/톤)** 요청은 수행할 수 있습니다.
-- 채팅 메시지는 가독성을 위해 **Markdown(GFM) 렌더링**을 허용할 수 있습니다. (HTML 렌더링 금지)
-- assistant 응답이 **스타일/톤/번역 규칙** 성격일 때만 `Add to Rules` 버튼을 노출할 수 있으며, 클릭 시 `Translation Rules`에 **빈 줄(\\n\\n) 포함 append**합니다.
-- 메시지 수정/삭제 시에는 해당 메시지 이후 대화가 **truncate**되어야 합니다(맥락 일관성).
+- **채팅은 문서에 자동 적용하지 않습니다.** 번역은 Translate(Preview→Apply)로 유도합니다.
+- 검수/리뷰/검증(누락/오역/일관성/톤) 요청은 수행할 수 있습니다.
+- 채팅 메시지는 가독성을 위해 **Markdown(GFM) 렌더링**을 허용합니다. (HTML 렌더링 금지)
+- assistant 응답이 **스타일/톤/번역 규칙** 성격일 때만 `Add to Rules` 버튼을 노출하며, 클릭 시 `Translation Rules`에 **빈 줄(\\n\\n) 포함 append**합니다.
+- 메시지 수정/삭제 시에는 해당 메시지 이후 대화가 **truncate**되어야 합니다(맥락 일관성). `editedAt`, `originalContent` 보관을 권장합니다.
 
 ---
 

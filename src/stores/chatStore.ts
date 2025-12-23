@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatSession, ChatMessage, EditorBlock, GlossaryEntry } from '@/types';
+import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
 import { getAiConfig } from '@/ai/config';
 import { detectRequestType } from '@/ai/prompt';
@@ -134,9 +134,6 @@ type ChatStore = ChatState & ChatActions;
 // ============================================
 
 export const useChatStore = create<ChatStore>((set, get) => {
-  const getActiveProjectId = (): string | null =>
-    useProjectStore.getState().project?.id ?? null;
-
   const buildChatSettings = (): ChatProjectSettings => ({
     systemPromptOverlay: get().systemPromptOverlay,
     translationRules: get().translationRules,

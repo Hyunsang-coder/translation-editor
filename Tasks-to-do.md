@@ -1,15 +1,29 @@
-남은 태스크
+# 남은 태스크
 
-## 버그 수정
-- [ ] 간혹 JSON FORMAT으로 응답이 안 오는 경우 여전히 발생 (문서 전체 번역 시)
-- [ ] Preview 모달의 Diff 색상 대비 조정: 변경된 내용이 더 눈에 잘 띄도록
+## 🐛 버그 수정
 
-## UI/UX 개선
-- [ ] 아이콘 생성 및 적용
-- [ ] 메시지 수정 이력 보관 (editedAt, originalContent) - 현재 truncate만 구현됨
+- [ ] **JSON 포맷 응답 누락**: 문서 전체 번역 시 간혹 JSON FORMAT으로 응답이 오지 않는 경우 발생
+- [ ] **Preview 모달 Diff 색상 대비**: 변경된 내용이 더 눈에 잘 띄도록 색상 대비 조정 필요
+- [ ] **채팅 탭 선택 상태 표시**: Settings 탭 선택 시에도 채팅 탭 아래 언더라인이 남아있는 문제
 
-## 기능 구현
-- [ ] LangChain.js 스트리밍 응답 처리 (현재 비스트리밍)
-- [ ] 용어집 자동 주입: 모델 호출 시 관련 용어 자동 포함
-- [ ] 첨부 파일 지원 확장: pdf, pptx, png/jpg, md, docx 등
-- [ ] LangChain.js Tools 시스템 (checkSpelling, checkConsistency, reviewQuality)
+## 🎨 UI/UX 개선
+
+- [ ] **아이콘 생성 및 적용**: 전체 UI에 일관된 아이콘 시스템 적용
+- [ ] **메시지 수정 이력 보관**: `editedAt`, `originalContent` 필드 구현 (현재 truncate만 구현됨)
+- [ ] **Settings 입력 필드 Markdown 지원**: 채팅창처럼 Markdown 렌더링 지원
+- [ ] **System Prompt 필드 툴팁**: 각 필드 옆에 아이콘 추가 및 호버 시 툴팁 표시
+
+## ⚙️ 기능 구현
+
+- [ ] **LangChain.js 스트리밍 응답**: 현재 비스트리밍 방식에서 스트리밍으로 전환
+- [ ] **용어집 자동 주입**: 모델 호출 시 관련 용어를 자동으로 컨텍스트에 포함
+- [ ] **첨부 파일 지원 확장**: PDF, PPTX, PNG/JPG, MD, DOCX 등 다양한 포맷 지원
+- [ ] **LangChain.js Tools 시스템**: 
+  - `checkSpelling`: 맞춤법 검사
+  - `checkConsistency`: 일관성 검사
+  - `reviewQuality`: 품질 검토
+
+## 🔍 검토 필요
+
+- [ ] **프로젝트 변경 시 패널 동기화**: 사이드바에서 프로젝트 변경 시 우측 패널(Settings + Chat) 내용 동기화 확인
+- [ ] **프롬프트 구조 검증**: 시스템 프롬프트가 중복으로 들어가는지 확인 및 수정
