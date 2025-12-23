@@ -159,7 +159,9 @@
 
 /* TipTap Wrapper */
 .tiptap-wrapper {
-  @apply h-full w-full rounded-md border border-editor-border bg-editor-bg overflow-hidden;
+  @apply h-full w-full rounded-md border border-editor-border bg-editor-bg;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .tiptap-wrapper.source-editor {
@@ -169,7 +171,7 @@
 /* ProseMirror Core */
 .ProseMirror {
   @apply outline-none;
-  @apply min-h-[200px] h-full;
+  @apply min-h-[200px];
   @apply px-6 py-4;
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 16px;
@@ -177,6 +179,7 @@
   color: var(--editor-text);
   max-width: 800px;
   margin: 0 auto;
+  width: 100%;
 }
 
 /* Paragraphs */

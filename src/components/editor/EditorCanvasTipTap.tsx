@@ -141,7 +141,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               </span>
             </div>
             <TipTapMenuBar editor={sourceEditor} />
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <SourceTipTapEditor
                 content={sourceDocument || ''}
                 onChange={setSourceDocument}
@@ -160,7 +160,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             </span>
           </div>
           <TipTapMenuBar editor={targetEditor} />
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <TargetTipTapEditor
               content={targetDocument || ''}
               onChange={setTargetDocument}
