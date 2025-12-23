@@ -98,7 +98,8 @@
 - 사용자가 **Translate 버튼(또는 단축키)**로 명시적으로 트리거합니다.
 - Source 문서 전체를 **TipTap JSON**으로 수집하고, 모델 출력도 **TipTap JSON만** 반환하도록 강제합니다.
 - 결과는 먼저 **Preview**로 렌더링하고, 사용자가 **Apply**를 누를 때만 Target 문서를 **전체 덮어쓰기**합니다.
-- 번역 생성 시 **최근 채팅 메시지 10개**를 컨텍스트로 포함하여, 직전 합의된 톤/용어/스타일을 반영합니다.
+- 번역 생성 시 채팅 히스토리는 포함하지 않습니다. (히스토리 기반 컨텍스트는 사용하지 않음)
+- 톤/용어/스타일 반영은 `Translation Rules`/`Active Memory`(및 Add to Rules)로 관리합니다.
 
 **What (명세)**:
 - **Trigger**: `Translate (Preview)` 버튼 클릭(또는 단축키)
@@ -106,7 +107,6 @@
   - 필수: `sourceLanguage`, `targetLanguage`, `domain`
   - 필수: `sourceDocJson` (TipTap JSON; `doc` 루트)
   - 조건부: `translationRules`, `activeMemory`
-  - 조건부: `recentChatMessages` (최신 10개; user/assistant role + content)
   - (선택) `targetDocJson` (재번역/일관성 유지용)
 - **Output Contract (강제)**
   - 모델은 **오직 JSON만** 출력합니다. (code fence/마크다운/설명/HTML 금지)
@@ -225,7 +225,7 @@ const reviewQualityTool = {
   - 번역문: Target 패널의 현재 내용
   - 참조 문서/글로서리: 사용자가 첨부한 경우
   - Active Memory: 이전 대화에서 확정된 용어/스타일 규칙
-  - 최근 채팅 메시지(최신 10개): 직전 의사결정(톤/용어/스타일) 반영용
+  - 채팅 히스토리: 포함하지 않음 (항상 제외)
 
 ### 3.7 MCP 연동 (추후 예정)
 

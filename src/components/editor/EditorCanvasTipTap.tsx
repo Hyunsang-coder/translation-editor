@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
 
@@ -31,10 +31,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
   const activeMemory = useChatStore((s) => s.activeMemory);
-  const chatSessions = useChatStore((s) => s.sessions);
-  const currentChatSessionId = useChatStore((s) => s.currentSessionId);
-  const translationContextSessionId = useChatStore((s) => s.translationContextSessionId);
-  const setTranslationContextSessionId = useChatStore((s) => s.setTranslationContextSessionId);
 
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
@@ -50,18 +46,75 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
 
-  // 선택된 텍스트를 채팅창에 복사하는 함수
-  const copySelectionToChat = useCallback((editor: Editor) => {
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
-    
-    if (!selectedText) return;
+  const [addToChatBubble, setAddToChatBubble] = useState<null | {
+    top: number;
+    left: number;
+    text: string;
+  }>(null);
+  const selectionTimerRef = useRef<number | null>(null);
+  const selectionTokenRef = useRef<number>(0);
 
-    if (sidebarCollapsed) toggleSidebar();
-    setActivePanel('chat');
-    appendComposerText(selectedText);
-    requestComposerFocus();
-  }, [sidebarCollapsed, toggleSidebar, setActivePanel, appendComposerText, requestComposerFocus]);
+  const clearSelectionTimer = (): void => {
+    if (selectionTimerRef.current !== null) {
+      window.clearTimeout(selectionTimerRef.current);
+      selectionTimerRef.current = null;
+    }
+  };
+
+  const scheduleAddToChatBubble = useCallback((editor: Editor) => {
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      clearSelectionTimer();
+      setAddToChatBubble(null);
+      return;
+    }
+
+    const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
+    if (!selectedText) {
+      clearSelectionTimer();
+      setAddToChatBubble(null);
+      return;
+    }
+
+    // 드래그 후 1초 정도 멈추면 버튼 표시
+    clearSelectionTimer();
+    setAddToChatBubble(null);
+    const token = Date.now();
+    selectionTokenRef.current = token;
+
+    selectionTimerRef.current = window.setTimeout(() => {
+      if (selectionTokenRef.current !== token) return;
+
+      try {
+        const coords = editor.view.coordsAtPos(to);
+        const top = Math.max(8, coords.top - 36);
+        const left = Math.min(window.innerWidth - 140, Math.max(8, coords.left));
+        setAddToChatBubble({ top, left, text: selectedText });
+      } catch {
+        // ignore
+      }
+    }, 1000);
+  }, []);
+
+  const attachSelectionWatcher = useCallback((editor: Editor) => {
+    // TipTap 이벤트로 selection 변화 감지
+    const onSelection = (): void => scheduleAddToChatBubble(editor);
+    const onBlur = (): void => {
+      clearSelectionTimer();
+      setAddToChatBubble(null);
+    };
+
+    editor.on('selectionUpdate', onSelection);
+    editor.on('blur', onBlur);
+
+    // 초기 상태 반영
+    onSelection();
+
+    return () => {
+      editor.off('selectionUpdate', onSelection);
+      editor.off('blur', onBlur);
+    };
+  }, [scheduleAddToChatBubble]);
 
   const openTranslatePreview = useCallback(async (): Promise<void> => {
     if (!project) return;
@@ -85,20 +138,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
-      // Translate 버튼을 누르는 “그 순간”의 활성 채팅 탭(currentSession) 기준 최신 10개를 사용합니다.
-      // (탭이 여러 개일 수 있으므로, 기본값은 “현재 선택된 탭”이 가장 예측 가능합니다.)
-      const chosenId = useChatStore.getState().translationContextSessionId;
-      const state = useChatStore.getState();
-      const session =
-        chosenId
-          ? state.sessions.find((s) => s.id === chosenId) ?? state.currentSession
-          : state.currentSession;
-      const history = session?.messages ?? [];
-      const recentChatMessages = history.slice(Math.max(0, history.length - 10));
       const { doc } = await translateSourceDocToTargetDocJson({
         project,
         sourceDocJson,
-        recentChatMessages,
         translationRules,
         activeMemory,
       });
@@ -139,44 +181,24 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const handleSourceEditorReady = useCallback((editor: Editor) => {
     sourceEditorRef.current = editor;
     setSourceEditor(editor);
-
-    // 우클릭 이벤트 핸들러 추가
-    const handleContextMenu = (e: MouseEvent) => {
-      const { from, to } = editor.state.selection;
-      if (from === to) {
-        // 선택된 텍스트가 없으면 기본 동작 수행
-        return;
-      }
-
-      e.preventDefault();
-      copySelectionToChat(editor);
-    };
-
-    editor.view.dom.addEventListener('contextmenu', handleContextMenu);
-
-    // 클린업 함수는 에디터가 언마운트될 때 자동으로 처리됨
-    // (TipTap이 내부적으로 관리)
-  }, [copySelectionToChat]);
+  }, []);
 
   // Target 에디터 준비 완료 콜백
   const handleTargetEditorReady = useCallback((editor: Editor) => {
     targetEditorRef.current = editor;
     setTargetEditor(editor);
+  }, []);
 
-    // 우클릭 이벤트 핸들러 추가
-    const handleContextMenu = (e: MouseEvent) => {
-      const { from, to } = editor.state.selection;
-      if (from === to) {
-        // 선택된 텍스트가 없으면 기본 동작 수행
-        return;
-      }
-
-      e.preventDefault();
-      copySelectionToChat(editor);
+  // Source/Target 중 포커스된 에디터의 selection watcher를 연결
+  useEffect(() => {
+    const cleaners: Array<() => void> = [];
+    if (sourceEditor) cleaners.push(attachSelectionWatcher(sourceEditor));
+    if (targetEditor) cleaners.push(attachSelectionWatcher(targetEditor));
+    return () => {
+      cleaners.forEach((fn) => fn());
+      clearSelectionTimer();
     };
-
-    editor.view.dom.addEventListener('contextmenu', handleContextMenu);
-  }, [copySelectionToChat]);
+  }, [sourceEditor, targetEditor, attachSelectionWatcher]);
 
   if (!project) {
     return (
@@ -244,25 +266,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               TRANSLATION ({project.metadata.targetLanguage})
             </span>
             <div className="flex items-center gap-2">
-              <select
-                className="h-6 px-2 text-[11px] rounded border border-editor-border bg-editor-bg text-editor-text"
-                value={translationContextSessionId ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setTranslationContextSessionId(v ? v : null);
-                }}
-                title="번역 컨텍스트로 사용할 채팅 탭"
-              >
-                <option value="">
-                  현재 탭{currentChatSessionId ? '' : ' (없음)'}
-                </option>
-                {chatSessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-
               <button
                 type="button"
                 onClick={() => void openTranslatePreview()}
@@ -297,6 +300,33 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         }}
         onApply={applyTranslatePreview}
       />
+
+      {/* TipTap Add to chat 버튼 (드래그 후 1초) */}
+      {addToChatBubble && (
+        <button
+          type="button"
+          style={{
+            position: 'fixed',
+            top: addToChatBubble.top,
+            left: addToChatBubble.left,
+            zIndex: 80,
+          }}
+          className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg transition-colors shadow-sm"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            const text = addToChatBubble.text.trim();
+            if (!text) return;
+            if (sidebarCollapsed) toggleSidebar();
+            setActivePanel('chat');
+            appendComposerText(text);
+            requestComposerFocus();
+            setAddToChatBubble(null);
+          }}
+          title="선택한 텍스트를 채팅 입력창에 추가"
+        >
+          Add to chat
+        </button>
+      )}
     </div>
   );
 }

@@ -170,6 +170,12 @@ export interface ChatMessageMetadata {
   tokens?: number;
 
   /**
+   * Add to Rules 버튼을 이미 눌렀는지 여부
+   * - 중복 append 방지 및 버튼 숨김 용도
+   */
+  rulesAdded?: boolean;
+
+  /**
    * 메시지 수정 이력 (TRD 4.3 권장)
    * - 사용자가 메시지를 수정하면 해당 메시지 이후 대화는 truncate됩니다.
    */

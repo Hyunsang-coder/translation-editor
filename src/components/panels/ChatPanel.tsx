@@ -40,13 +40,15 @@ export function ChatPanel(): JSX.Element {
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
   const hydrateForProject = useChatStore((s) => s.hydrateForProject);
 
-  const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<string>('');
 
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
+  const createSession = useChatStore((s) => s.createSession);
+  const updateMessage = useChatStore((s) => s.updateMessage);
 
   const isRuleLikeMessage = useCallback((text: string): boolean => {
     const t = text.trim();
@@ -98,9 +100,18 @@ export function ChatPanel(): JSX.Element {
 
   useEffect(() => {
     if (sidebarCollapsed) return;
-    // selection에서 Add to chat을 눌렀을 때 즉시 타이핑 가능하게 포커스
+    // selection에서 Add to chat을 눌렀을 때: Settings에 있더라도 채팅 탭으로 전환 + 포커스
+    setActiveTab('chat');
     inputRef.current?.focus();
   }, [focusNonce, sidebarCollapsed]);
+
+  // 기본 채팅 세션 1개는 자동 생성
+  useEffect(() => {
+    if (!project?.id) return;
+    if (chatSessions.length > 0) return;
+    createSession('Chat 1');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, chatSessions.length]);
 
   // 3. Handlers
   const sendCurrent = useCallback(async (): Promise<void> => {
@@ -110,6 +121,12 @@ export function ChatPanel(): JSX.Element {
     setComposerText('');
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    if (sidebarCollapsed) return;
+    inputRef.current?.focus();
+  }, [activeTab, sidebarCollapsed]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -133,25 +150,8 @@ export function ChatPanel(): JSX.Element {
     );
   }
 
-  // Full-page Settings Interaction
-  if (showPromptEditor) {
-    return (
-      <div className="h-full flex flex-col bg-editor-bg">
-        {/* Settings Header */}
-        <div className="h-12 border-b border-editor-border flex items-center justify-between px-4 shrink-0">
-          <h2 className="text-sm font-medium text-editor-text">Settings</h2>
-          <button
-            type="button"
-            onClick={() => setShowPromptEditor(false)}
-            className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title="Close Settings"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Settings Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+  const renderSettings = (): JSX.Element => (
+    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-editor-bg">
           {/* Section 1: System Prompt */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
@@ -274,10 +274,8 @@ export function ChatPanel(): JSX.Element {
               <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
             )}
           </section>
-        </div>
-      </div>
-    );
-  }
+    </div>
+  );
 
   // 5. Main Render
   return (
@@ -285,10 +283,28 @@ export function ChatPanel(): JSX.Element {
       {/* Session Tabs Header */}
       <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none">
         <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
+          {/* Settings 탭은 항상 첫 번째 */}
+          <div
+            onClick={() => setActiveTab('settings')}
+            className={`
+              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[100px] max-w-[160px]
+              ${activeTab === 'settings'
+                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+              }
+            `}
+            title="Settings"
+          >
+            <span className="truncate flex-1">Settings</span>
+          </div>
+
           {chatSessions.map((session) => (
             <div
               key={session.id}
-              onClick={() => useChatStore.getState().switchSession(session.id)}
+              onClick={() => {
+                useChatStore.getState().switchSession(session.id);
+                setActiveTab('chat');
+              }}
               className={`
                 group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[100px] max-w-[160px]
                 ${currentSession?.id === session.id
@@ -322,7 +338,11 @@ export function ChatPanel(): JSX.Element {
           ))}
 
           <button
-            onClick={() => void useChatStore.getState().createSession()}
+            onClick={() => {
+              const id = useChatStore.getState().createSession();
+              useChatStore.getState().switchSession(id);
+              setActiveTab('chat');
+            }}
             className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
             title="New Chat"
           >
@@ -332,14 +352,6 @@ export function ChatPanel(): JSX.Element {
 
         {/* Panel Controls */}
         <div className="flex items-center px-2 gap-1 border-l border-editor-border bg-editor-bg shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowPromptEditor(true)}
-            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title="Settings"
-          >
-            ⚙️
-          </button>
           <button
             type="button"
             onClick={toggleSidebar}
@@ -352,7 +364,7 @@ export function ChatPanel(): JSX.Element {
       </div>
 
       {/* Smart Context Memory 제안 */}
-      {!showPromptEditor && summarySuggestionOpen && (
+      {activeTab === 'chat' && summarySuggestionOpen && (
         <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2 shrink-0">
           <div className="text-[11px] text-editor-muted leading-relaxed">
             {summarySuggestionReason}
@@ -377,14 +389,18 @@ export function ChatPanel(): JSX.Element {
         </div>
       )}
 
-      {/* 메시지 목록 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {currentSession?.messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
-              } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
-          >
+      {activeTab === 'settings' ? (
+        renderSettings()
+      ) : (
+        <>
+          {/* 메시지 목록 */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {currentSession?.messages.map((message) => (
+              <div
+                key={message.id}
+                className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
+                  } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
+              >
             {/* Message toolbar */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -478,63 +494,69 @@ export function ChatPanel(): JSX.Element {
             {/* Add to Rules: 스타일/톤/번역 규칙 성격의 assistant 응답에만 노출 */}
             {message.role === 'assistant' &&
               streamingMessageId !== message.id &&
-              isRuleLikeMessage(message.content) && (
+              isRuleLikeMessage(message.content) &&
+              message.metadata?.rulesAdded !== true && (
                 <div className="mt-2">
                   <button
                     type="button"
                     className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors"
-                    onClick={() => appendToTranslationRules(message.content)}
+                    onClick={() => {
+                      appendToTranslationRules(message.content);
+                      updateMessage(message.id, { metadata: { rulesAdded: true } });
+                    }}
                     title="이 내용을 Translation Rules에 추가"
                   >
                     Add to Rules
                   </button>
                 </div>
               )}
-          </div>
-        ))}
+              </div>
+            ))}
 
-        {isLoading && !streamingMessageId && (
-          <div className="chat-message chat-message-ai">
-            <div className="flex items-center gap-2">
-              <span className="animate-pulse-soft">●</span>
-              <span className="text-sm text-editor-muted">Thinking...</span>
+            {isLoading && !streamingMessageId && (
+              <div className="chat-message chat-message-ai">
+                <div className="flex items-center gap-2">
+                  <span className="animate-pulse-soft">●</span>
+                  <span className="text-sm text-editor-muted">Thinking...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 입력창 */}
+          <form onSubmit={handleSubmit} className="p-4 border-t border-editor-border">
+            <div className="flex gap-2">
+              <textarea
+                ref={inputRef}
+                value={composerText}
+                onChange={(e) => setComposerText(e.target.value)}
+                placeholder="Type a message... (Cmd+L to send selection)"
+                className="flex-1 px-4 py-2 rounded-lg bg-editor-bg border border-editor-border
+                           text-editor-text placeholder-editor-muted
+                           focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={isLoading}
+                data-ite-chat-composer
+                rows={3}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendCurrent();
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !composerText.trim()}
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium
+                           hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
+                           transition-colors"
+              >
+                Send
+              </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* 입력창 */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-editor-border">
-        <div className="flex gap-2">
-          <textarea
-            ref={inputRef}
-            value={composerText}
-            onChange={(e) => setComposerText(e.target.value)}
-            placeholder="Type a message... (Cmd+L to send selection)"
-            className="flex-1 px-4 py-2 rounded-lg bg-editor-bg border border-editor-border
-                       text-editor-text placeholder-editor-muted
-                       focus:outline-none focus:ring-2 focus:ring-primary-500"
-            disabled={isLoading}
-            data-ite-chat-composer
-            rows={3}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                void sendCurrent();
-              }
-            }}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !composerText.trim()}
-            className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium
-                       hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-colors"
-          >
-            Send
-          </button>
-        </div>
-      </form>
+          </form>
+        </>
+      )}
     </div>
   );
 }

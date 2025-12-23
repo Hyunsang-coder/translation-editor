@@ -413,11 +413,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
           ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
         const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
+        // TipTap의 Source/Target은 HTML로 저장되므로, 채팅 컨텍스트에는 plain text를 우선 포함합니다.
         const sourceDocument = sourceDocumentRaw
-          ? maskGhostChips(sourceDocumentRaw, maskSession)
+          ? maskGhostChips(stripHtml(sourceDocumentRaw), maskSession)
           : undefined;
         const targetDocument = targetDocumentRaw
-          ? maskGhostChips(targetDocumentRaw, maskSession)
+          ? maskGhostChips(stripHtml(targetDocumentRaw), maskSession)
           : undefined;
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
@@ -452,9 +453,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
           set({ lastInjectedGlossary: [] });
         }
 
-        const maxN = cfg.maxRecentMessages;
-        const fullHistory = session?.messages ?? [];
-        const recent = fullHistory.slice(Math.max(0, fullHistory.length - maxN));
+        // 사용자 요청: 모델 호출 시 채팅 히스토리(이전 메시지)는 컨텍스트에 포함하지 않음
+        const recent: ChatMessage[] = [];
 
         const assistantId = addMessage({
           role: 'assistant',
