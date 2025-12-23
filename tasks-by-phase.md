@@ -22,7 +22,7 @@
 
 [x] TipTap 기본 에디터 컴포넌트 생성
 
-[x] Source(ReadOnly) / Target(Editable) TipTap 에디터 구현
+[x] Source(Editable) / Target(Editable) TipTap 에디터 구현
 
 [x] 지원 포맷 Extension 설정:
   - StarterKit (기본)
@@ -73,7 +73,13 @@
 
 [ ] Source/Target 문서 전체 텍스트 추출 (TipTap JSON → Plain Text)
 
-[ ] Add to Chat: 선택 텍스트를 채팅 입력창에 추가하는 UX
+[x] Selection → Chat: 선택 텍스트를 우클릭으로 채팅 입력창에 복사하는 UX
+
+[ ] 문서 전체 번역(Preview → Apply): Source 전체를 번역하여 Target 전체를 덮어쓰기 (TipTap JSON 서식 보존)
+  - [ ] Translate 버튼/단축키
+  - [ ] 최근 채팅 메시지 10개 컨텍스트 포함
+  - [ ] JSON 출력 강제 + 파싱/검증 + 실패 폴백
+  - [ ] Preview 렌더링 + Apply(전체 덮어쓰기)
 
 ### 2.4 AI Chat 패널
 

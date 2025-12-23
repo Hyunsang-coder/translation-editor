@@ -8,6 +8,12 @@ export interface ChatProjectSettings {
   composerText: string;
   includeSourceInPayload: boolean;
   includeTargetInPayload: boolean;
+  /**
+   * 문서 전체 번역(Preview→Apply) 시 컨텍스트로 사용할 채팅 탭
+   * - null: 현재 탭(currentSession) 사용
+   * - string: 특정 sessionId 고정 사용
+   */
+  translationContextSessionId: string | null;
 }
 
 export async function saveCurrentChatSession(params: {

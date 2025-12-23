@@ -13,10 +13,12 @@ use crate::models::ChatSession;
 #[serde(rename_all = "camelCase")]
 pub struct ChatProjectSettings {
     pub system_prompt_overlay: String,
-    pub reference_notes: String,
+    pub translation_rules: String,
     pub active_memory: String,
+    pub composer_text: String,
     pub include_source_in_payload: bool,
     pub include_target_in_payload: bool,
+    pub translation_context_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

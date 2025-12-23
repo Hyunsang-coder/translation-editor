@@ -39,7 +39,7 @@
 - Source/Target 두 개의 에디터 인스턴스를 운영합니다.
 
 **What**:
-- **Source 패널**: TipTap 읽기 전용 (`editable: false`)
+- **Source 패널**: TipTap 편집 가능 (원문 붙여넣기/정리/편집)
 - **Target 패널**: TipTap 편집 가능
 - **공통 스타일**: Notion 감성 (Pretendard 폰트, 행간 1.8, 16px)
 
@@ -87,6 +87,39 @@
 - AI는 요청 시에만 응답 (Non-Intrusive)
 - 번역 vs 질문 구분: 채팅 탭 분리 권장
 - 간결한 응답: 불필요한 설명 없이 핵심만
+
+### 3.2 문서 전체 번역 워크플로우 (Preview → Apply)
+
+**Why**:
+- 채팅 응답을 복사/붙여넣기 할 때 HTML/서식이 섞이면 TipTap에서 서식이 깨지고 UX가 나빠집니다.
+- “문서 편집(Document-First)” 흐름에서 번역은 “텍스트 복사”가 아니라 “문서에 적용”이 기본이 되어야 합니다.
+
+**How**:
+- 사용자가 **Translate 버튼(또는 단축키)**로 명시적으로 트리거합니다.
+- Source 문서 전체를 **TipTap JSON**으로 수집하고, 모델 출력도 **TipTap JSON만** 반환하도록 강제합니다.
+- 결과는 먼저 **Preview**로 렌더링하고, 사용자가 **Apply**를 누를 때만 Target 문서를 **전체 덮어쓰기**합니다.
+- 번역 생성 시 **최근 채팅 메시지 10개**를 컨텍스트로 포함하여, 직전 합의된 톤/용어/스타일을 반영합니다.
+
+**What (명세)**:
+- **Trigger**: `Translate (Preview)` 버튼 클릭(또는 단축키)
+- **Input Payload**
+  - 필수: `sourceLanguage`, `targetLanguage`, `domain`
+  - 필수: `sourceDocJson` (TipTap JSON; `doc` 루트)
+  - 조건부: `translationRules`, `activeMemory`
+  - 조건부: `recentChatMessages` (최신 10개; user/assistant role + content)
+  - (선택) `targetDocJson` (재번역/일관성 유지용)
+- **Output Contract (강제)**
+  - 모델은 **오직 JSON만** 출력합니다. (code fence/마크다운/설명/HTML 금지)
+  - 최상단은 TipTap/ProseMirror `doc` 스키마를 유지합니다.
+  - 노드 구조(heading/list/marks/link 등)는 유지하고 **텍스트 노드만 번역**합니다.
+  - 번역 불가/불확실 시에는 오류 JSON을 반환합니다:
+    - 예: `{ "error": "…", "doc": null }`
+- **Preview**
+  - 결과 JSON을 읽기 전용 TipTap으로 렌더링
+  - Apply 전까지 Target 문서 변경 없음
+- **Apply**
+  - Target 문서를 결과 JSON으로 **전체 덮어쓰기**
+  - Apply는 “사용자 직접 결정” 원칙을 지킴(Non-Intrusive)
 
 ### 3.2 프롬프트 전략
 
@@ -188,6 +221,7 @@ const reviewQualityTool = {
   - 번역문: Target 패널의 현재 내용
   - 참조 문서/글로서리: 사용자가 첨부한 경우
   - Active Memory: 이전 대화에서 확정된 용어/스타일 규칙
+  - 최근 채팅 메시지(최신 10개): 직전 의사결정(톤/용어/스타일) 반영용
 
 ### 3.6 MCP 연동 (추후 예정)
 

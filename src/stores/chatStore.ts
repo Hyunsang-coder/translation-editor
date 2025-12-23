@@ -54,6 +54,11 @@ interface ChatState {
   activeMemory: string;
   includeSourceInPayload: boolean;
   includeTargetInPayload: boolean;
+  /**
+   * 문서 전체 번역(Preview→Apply) 컨텍스트로 사용할 채팅 탭
+   * - null이면 현재 탭(currentSession)의 최신 메시지 10개를 사용
+   */
+  translationContextSessionId: string | null;
 }
 
 interface ChatActions {
@@ -111,6 +116,7 @@ interface ChatActions {
   setActiveMemory: (memory: string) => void;
   setIncludeSourceInPayload: (val: boolean) => void;
   setIncludeTargetInPayload: (val: boolean) => void;
+  setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // Persistence (project-scoped)
   hydrateForProject: (projectId: string | null) => Promise<void>;
@@ -136,6 +142,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     composerText: get().composerText,
     includeSourceInPayload: get().includeSourceInPayload,
     includeTargetInPayload: get().includeTargetInPayload,
+    translationContextSessionId: get().translationContextSessionId,
   });
 
   const persistNow = async (): Promise<void> => {
@@ -199,6 +206,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
     includeSourceInPayload: true,
     includeTargetInPayload: true,
+    translationContextSessionId: null,
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
@@ -218,6 +226,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         composerText: '',
         includeSourceInPayload: true,
         includeTargetInPayload: true,
+        translationContextSessionId: null,
       });
 
       if (!projectId) return;
@@ -246,6 +255,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             composerText: settings.composerText ?? '',
             includeSourceInPayload: settings.includeSourceInPayload,
             includeTargetInPayload: settings.includeTargetInPayload,
+            translationContextSessionId: settings.translationContextSessionId ?? null,
           });
         }
       } catch (e) {
@@ -1255,6 +1265,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     setIncludeTargetInPayload: (val: boolean): void => {
       set({ includeTargetInPayload: val });
+      schedulePersist();
+    },
+
+    setTranslationContextSessionId: (sessionId: string | null): void => {
+      set({ translationContextSessionId: sessionId });
       schedulePersist();
     },
   };
