@@ -26,11 +26,18 @@ export function hashContent(content: string): string {
 
 /**
  * HTML 태그를 제거하고 텍스트만 추출
+ * - 블록 태그(p, div, h1-6, li 등) 뒤에는 줄바꿈을 추가하여 텍스트 구조 유지
  * @param html - HTML 문자열
  * @returns 순수 텍스트
  */
 export function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').trim();
+  if (!html) return '';
+  return html
+    .replace(/<\/p>|<\/div>|<\/h[1-6]>|<\/li>|<\/blockquote>|<\/pre>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\n\s*\n/g, '\n\n') // 중복 줄바꿈 정리
+    .trim();
 }
 
 /**

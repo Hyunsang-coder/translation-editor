@@ -111,7 +111,9 @@ interface ChatActions {
   setError: (error: string | null) => void;
   setSystemPromptOverlay: (overlay: string) => void;
   setTranslationRules: (rules: string) => void;
+  appendToTranslationRules: (snippet: string) => void;
   setActiveMemory: (memory: string) => void;
+  appendToActiveMemory: (snippet: string) => void;
   setIncludeSourceInPayload: (val: boolean) => void;
   setIncludeTargetInPayload: (val: boolean) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
@@ -997,8 +999,26 @@ export const useChatStore = create<ChatStore>((set, get) => {
       schedulePersist();
     },
 
+    appendToTranslationRules: (snippet: string): void => {
+      const incoming = snippet.trim();
+      if (!incoming) return;
+      const current = get().translationRules.trim();
+      const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
+      set({ translationRules: next });
+      schedulePersist();
+    },
+
     setActiveMemory: (memory: string): void => {
       set({ activeMemory: memory });
+      schedulePersist();
+    },
+
+    appendToActiveMemory: (snippet: string): void => {
+      const incoming = snippet.trim();
+      if (!incoming) return;
+      const current = get().activeMemory.trim();
+      const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
+      set({ activeMemory: next });
       schedulePersist();
     },
 

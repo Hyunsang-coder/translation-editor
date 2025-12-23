@@ -47,6 +47,8 @@ export function ChatPanel(): JSX.Element {
 
   const editMessage = useChatStore((s) => s.editMessage);
   const replayMessage = useChatStore((s) => s.replayMessage);
+  const appendToTranslationRules = useChatStore((s) => s.appendToTranslationRules);
+  const appendToActiveMemory = useChatStore((s) => s.appendToActiveMemory);
   const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
   const createSession = useChatStore((s) => s.createSession);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -84,14 +86,6 @@ export function ChatPanel(): JSX.Element {
 
     return hit && (looksLikeRulesList || looksLikeDirective || t.split('\n').length >= 2);
   }, []);
-
-  const appendToTranslationRules = useCallback((snippet: string) => {
-    const incoming = snippet.trim();
-    if (!incoming) return;
-    const base = translationRules.trimEnd();
-    const next = base.length > 0 ? `${base}\n\n${incoming}\n` : `${incoming}\n`;
-    setTranslationRules(next);
-  }, [translationRules, setTranslationRules]);
 
   // 2. Effects
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원
@@ -493,23 +487,37 @@ export function ChatPanel(): JSX.Element {
               {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
             </span>
 
-            {/* Add to Rules: 스타일/톤/번역 규칙 성격의 assistant 응답에만 노출 */}
+            {/* Add to Rules / Memory */}
             {message.role === 'assistant' &&
               streamingMessageId !== message.id &&
-              isRuleLikeMessage(message.content) &&
-              message.metadata?.rulesAdded !== true && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors"
-                    onClick={() => {
-                      appendToTranslationRules(message.content);
-                      updateMessage(message.id, { metadata: { rulesAdded: true } });
-                    }}
-                    title="이 내용을 Translation Rules에 추가"
-                  >
-                    Add to Rules
-                  </button>
+              message.content.length >= 20 && (
+                <div className="mt-2 flex gap-2">
+                  {isRuleLikeMessage(message.content) && message.metadata?.rulesAdded !== true && (
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
+                      onClick={() => {
+                        appendToTranslationRules(message.content);
+                        updateMessage(message.id, { metadata: { rulesAdded: true } });
+                      }}
+                      title="이 내용을 Translation Rules에 추가"
+                    >
+                      Add to Rules
+                    </button>
+                  )}
+                  {message.metadata?.memoryAdded !== true && (
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                      onClick={() => {
+                        appendToActiveMemory(message.content);
+                        updateMessage(message.id, { metadata: { memoryAdded: true } });
+                      }}
+                      title="이 내용을 Active Memory에 추가"
+                    >
+                      Add to Memory
+                    </button>
+                  )}
                 </div>
               )}
               </div>

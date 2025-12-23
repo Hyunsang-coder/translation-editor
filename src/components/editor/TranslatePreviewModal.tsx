@@ -1,32 +1,50 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
+import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
+import { DiffEditor } from '@monaco-editor/react';
+import { useUIStore } from '@/stores/uiStore';
+import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 
 export function TranslatePreviewModal(props: {
   open: boolean;
   title?: string;
   docJson: TipTapDocJson | null;
+  originalHtml?: string | null;
   isLoading?: boolean;
   error?: string | null;
   onClose: () => void;
   onApply: () => void;
 }): JSX.Element | null {
-  const { open, title, docJson, isLoading, error, onClose, onApply } = props;
+  const { open, title, docJson, originalHtml, isLoading, error, onClose, onApply } = props;
+  const theme = useUIStore((s) => s.theme);
+  const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
+
+  // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.
+  useEffect(() => {
+    if (open && originalHtml && stripHtml(originalHtml).trim().length > 0) {
+      setViewMode('diff');
+    } else {
+      setViewMode('preview');
+    }
+  }, [open, originalHtml]);
 
   const content = useMemo(() => docJson ?? null, [docJson]);
 
+  const extensions = useMemo(() => [
+    StarterKit.configure({
+      heading: { levels: [1, 2, 3, 4, 5, 6] },
+    }),
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: { class: 'tiptap-link' },
+    }),
+  ], []);
+
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { class: 'tiptap-link' },
-      }),
-    ],
+    extensions,
     content: content ?? undefined,
     editable: false,
     editorProps: {
@@ -35,6 +53,26 @@ export function TranslatePreviewModal(props: {
       },
     },
   });
+
+  // diff용 텍스트 추출
+  const originalText = useMemo(() => (originalHtml ? stripHtml(originalHtml) : ''), [originalHtml]);
+  const translatedText = useMemo(() => {
+    if (!docJson) return '';
+    try {
+      // TipTap JSON을 plain text로 변환 (Heading 등 구조 반영)
+      return generateText(docJson, extensions);
+    } catch (err) {
+      console.error('Failed to generate text from docJson:', err);
+      return '';
+    }
+  }, [docJson, extensions]);
+
+  const monacoTheme = (() => {
+    if (theme === 'dark') return 'vs-dark';
+    if (theme === 'light') return 'light';
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return prefersDark ? 'vs-dark' : 'light';
+  })();
 
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {
@@ -61,10 +99,30 @@ export function TranslatePreviewModal(props: {
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-6">
-      <div className="w-full max-w-5xl h-[82vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
+      <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
-          <div className="text-sm font-medium text-editor-text">
-            {title ?? '번역 미리보기'}
+          <div className="flex items-center gap-4">
+            <div className="text-sm font-medium text-editor-text">
+              {title ?? '번역 미리보기'}
+            </div>
+            {originalText.trim().length > 0 && !isLoading && !error && (
+              <div className="flex bg-editor-bg border border-editor-border rounded-md p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('preview')}
+                  className={`px-2 py-1 text-[11px] rounded transition-colors ${viewMode === 'preview' ? 'bg-editor-surface text-primary-500 font-bold' : 'text-editor-muted hover:text-editor-text'}`}
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('diff')}
+                  className={`px-2 py-1 text-[11px] rounded transition-colors ${viewMode === 'diff' ? 'bg-editor-surface text-primary-500 font-bold' : 'text-editor-muted hover:text-editor-text'}`}
+                >
+                  Diff
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -113,6 +171,29 @@ export function TranslatePreviewModal(props: {
                   {error}
                 </div>
               </div>
+            </div>
+          ) : viewMode === 'diff' && originalText.trim().length > 0 ? (
+            <div className="h-full">
+              <DiffEditor
+                height="100%"
+                language="plaintext"
+                theme={monacoTheme}
+                original={originalText}
+                modified={translatedText}
+                options={{
+                  renderSideBySide: true,
+                  readOnly: true,
+                  minimap: { enabled: false },
+                  lineNumbers: 'off',
+                  wordWrap: 'on',
+                  scrollBeyondLastLine: false,
+                  renderOverviewRuler: false,
+                  folding: false,
+                  diffAlgorithm: 'advanced', // 더 정교한 비교 알고리즘
+                  ignoreTrimWhitespace: false, // 공백 변경도 중요할 수 있음
+                  renderIndicators: true,
+                }}
+              />
             </div>
           ) : (
             <div className="h-full p-4 overflow-hidden">
