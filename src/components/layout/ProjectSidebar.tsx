@@ -8,8 +8,6 @@ import { confirm, message } from '@tauri-apps/plugin-dialog';
 
 type NewProjectForm = {
   title: string;
-  sourceLanguage: string;
-  targetLanguage: string;
   domain: ProjectDomain;
 };
 
@@ -28,8 +26,6 @@ export function ProjectSidebar(): JSX.Element {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState<NewProjectForm>({
     title: 'New Project',
-    sourceLanguage: 'English',
-    targetLanguage: 'Korean',
     domain: 'general',
   });
 
@@ -119,8 +115,6 @@ export function ProjectSidebar(): JSX.Element {
 
     const created = await createProject({
       title: form.title.trim() || 'New Project',
-      sourceLanguage: form.sourceLanguage.trim() || 'English',
-      targetLanguage: form.targetLanguage.trim() || 'Korean',
       domain: 'general',
     });
 
@@ -256,21 +250,6 @@ export function ProjectSidebar(): JSX.Element {
             placeholder="Project title"
             autoFocus
           />
-          {/* Simple language inputs */}
-          <div className="flex gap-2">
-            <input
-              className="w-1/2 text-sm px-2 py-1.5 rounded border border-editor-border bg-editor-bg text-editor-text"
-              value={form.sourceLanguage}
-              onChange={(e) => setForm((p) => ({ ...p, sourceLanguage: e.target.value }))}
-              placeholder="Source"
-            />
-            <input
-              className="w-1/2 text-sm px-2 py-1.5 rounded border border-editor-border bg-editor-bg text-editor-text"
-              value={form.targetLanguage}
-              onChange={(e) => setForm((p) => ({ ...p, targetLanguage: e.target.value }))}
-              placeholder="Target"
-            />
-          </div>
           <div className="flex gap-2 pt-1">
             <button
               type="button"

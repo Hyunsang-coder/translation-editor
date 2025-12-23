@@ -20,11 +20,9 @@ pub struct IteProject {
 pub struct ProjectMetadata {
     pub title: String,
     pub description: Option<String>,
-    #[serde(rename = "sourceLanguage")]
-    pub source_language: String,
-    #[serde(rename = "targetLanguage")]
-    pub target_language: String,
     pub domain: String,
+    #[serde(rename = "targetLanguage")]
+    pub target_language: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "updatedAt")]

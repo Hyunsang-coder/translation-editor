@@ -104,8 +104,8 @@
 **What (명세)**:
 - **Trigger**: `Translate (Preview)` 버튼 클릭(또는 단축키)
 - **Input Payload**
-  - 필수: `sourceLanguage`, `targetLanguage`, `domain`
   - 필수: `sourceDocJson` (TipTap JSON; `doc` 루트)
+  - 필수: `domain`
   - 조건부: `translationRules`, `activeMemory`
   - (선택) `targetDocJson` (재번역/일관성 유지용)
 - **Output Contract (강제)**
@@ -218,7 +218,7 @@ const reviewQualityTool = {
 
 **What (Payload 구성)**:
 - **반드시 포함**
-  - 프로젝트 메타: `sourceLanguage`, `targetLanguage`, `domain`
+  - 프로젝트 메타: `domain`
   - 원문 컨텍스트: Source 패널의 텍스트 (항상 최우선 맥락)
 - **조건부 포함**
   - 선택된 텍스트: 사용자가 선택한 범위

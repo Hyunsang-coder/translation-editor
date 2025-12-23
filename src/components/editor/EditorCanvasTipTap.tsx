@@ -22,6 +22,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const targetDocument = useProjectStore((s) => s.targetDocument);
   const setSourceDocument = useProjectStore((s) => s.setSourceDocument);
   const setTargetDocument = useProjectStore((s) => s.setTargetDocument);
+  const setTargetLanguage = useProjectStore((s) => s.setTargetLanguage);
 
   const includeSourceInPayload = useChatStore((s) => s.includeSourceInPayload);
   const includeTargetInPayload = useChatStore((s) => s.includeTargetInPayload);
@@ -120,6 +121,11 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     if (!project) return;
     if (!sourceEditorRef.current) {
       window.alert('Source 에디터가 아직 준비되지 않았습니다.');
+      return;
+    }
+
+    if (!project.metadata.targetLanguage) {
+      window.alert('타겟 언어를 선택하세요.');
       return;
     }
 
@@ -239,7 +245,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <div className="flex-1 flex flex-col min-w-0 border-r border-editor-border">
             <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
               <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                SOURCE ({project.metadata.sourceLanguage})
+                SOURCE
               </span>
             </div>
             <TipTapMenuBar editor={sourceEditor} />
@@ -257,9 +263,24 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         {/* Target Panel */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
-            <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-              TRANSLATION ({project.metadata.targetLanguage})
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                TRANSLATION
+              </span>
+              <select
+                className="text-[10px] bg-editor-surface border border-editor-border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary-500 text-editor-text"
+                value={project.metadata.targetLanguage || ''}
+                onChange={(e) => setTargetLanguage(e.target.value)}
+              >
+                <option value="" disabled>언어 선택</option>
+                <option value="한국어">한국어</option>
+                <option value="영어">영어</option>
+                <option value="일본어">일본어</option>
+                <option value="중국어">중국어</option>
+                <option value="스페인어">스페인어</option>
+                <option value="러시아어">러시아어</option>
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"

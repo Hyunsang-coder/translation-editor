@@ -13,10 +13,6 @@ use crate::models::IteProject;
 #[serde(rename_all = "camelCase")]
 pub struct CreateProjectArgs {
     pub title: String,
-    #[serde(rename = "sourceLanguage")]
-    pub source_language: String,
-    #[serde(rename = "targetLanguage")]
-    pub target_language: String,
     pub domain: String,
 }
 
@@ -89,9 +85,8 @@ pub fn create_project(
         metadata: crate::models::ProjectMetadata {
             title: args.title,
             description: None,
-            source_language: args.source_language,
-            target_language: args.target_language,
             domain: args.domain,
+            target_language: None,
             created_at: now,
             updated_at: now,
             author: None,

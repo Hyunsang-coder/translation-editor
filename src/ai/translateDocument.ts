@@ -141,12 +141,12 @@ export async function translateSourceDocToTargetDocJson(params: {
     return { doc: params.sourceDocJson, raw: JSON.stringify(params.sourceDocJson) };
   }
 
-  const srcLang = params.project.metadata.sourceLanguage ?? 'Source';
+  const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
 
   const systemLines: string[] = [
-    '당신은 전문 번역가입니다.',
-    `아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 ${srcLang}에서 ${tgtLang}로 번역하세요.`,
+    '당신은 경험많은 전문 번역가입니다.',
+    `아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '중요: 출력은 반드시 "단 하나의 JSON 객체"만 반환하세요.',
     '- 마크다운, 코드펜스(```), 설명, 인사, 부연, HTML을 절대 출력하지 마세요.',

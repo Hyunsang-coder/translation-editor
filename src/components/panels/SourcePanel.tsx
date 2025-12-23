@@ -20,7 +20,7 @@ export function SourcePanel(): JSX.Element {
     <div className="h-full p-editor-padding">
       <div className="mb-4">
         <h2 className="text-sm font-medium text-editor-muted uppercase tracking-wider">
-          Source ({project.metadata.sourceLanguage})
+          Source
         </h2>
       </div>
 

@@ -77,11 +77,11 @@ export interface PromptOptions {
 
 function buildBaseSystemPrompt(project: ITEProject | null): string {
   const domain = project?.metadata.domain ?? 'general';
-  const src = project?.metadata.sourceLanguage ?? 'Source';
+  const src = 'Source';
   const tgt = project?.metadata.targetLanguage ?? 'Target';
 
   return [
-    '당신은 전문 번역가를 돕는 AI 어시스턴트입니다.',
+    '당신은 경험많은 전문 번역가입니다.',
     '',
     `프로젝트: ${domain}`,
     `언어: ${src} → ${tgt}`,
@@ -272,15 +272,16 @@ export async function buildLangChainMessages(
 
 export async function buildTranslateOnlyMessages(
   sourceText: string,
-  targetLanguage: string,
   opts?: {
+    targetLanguage?: string;
     translationRules?: string;
     activeMemory?: string;
   },
 ): Promise<BaseMessage[]> {
+  const tgtLang = opts?.targetLanguage ?? 'Target';
   const systemPrompt = [
-    '당신은 전문 번역가입니다.',
-    `다음 원문을 ${targetLanguage}로 번역하세요.`,
+    '당신은 경험많은 전문 번역가입니다.',
+    `다음 원문을 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '중요: 번역문만 출력하세요.',
     '- 설명, 인사, 부연 없이 오직 번역 결과만 응답합니다.',

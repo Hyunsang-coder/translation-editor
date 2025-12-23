@@ -36,6 +36,7 @@ export function ChatPanel(): JSX.Element {
   const activeMemory = useChatStore((s) => s.activeMemory);
   const setActiveMemory = useChatStore((s) => s.setActiveMemory);
 
+  const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
   const hydrateForProject = useChatStore((s) => s.hydrateForProject);
@@ -88,13 +89,15 @@ export function ChatPanel(): JSX.Element {
   }, []);
 
   // 2. Effects
-  // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원
+  // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원 + 탭 초기화
   useEffect(() => {
     void hydrateForProject(project?.id ?? null);
+    setActiveTab('settings');
   }, [project?.id, hydrateForProject]);
 
   useEffect(() => {
     if (sidebarCollapsed) return;
+    if (focusNonce === 0) return; // 초기화 시점에는 무시
     // selection에서 Add to chat을 눌렀을 때: Settings에 있더라도 채팅 탭으로 전환 + 포커스
     setActiveTab('chat');
     inputRef.current?.focus();
@@ -103,10 +106,11 @@ export function ChatPanel(): JSX.Element {
   // 기본 채팅 세션 1개는 자동 생성
   useEffect(() => {
     if (!project?.id) return;
+    if (isHydrating) return; // 로드 중에는 자동 생성 대기 (데이터 유실 방지)
     if (chatSessions.length > 0) return;
     createSession('Chat 1');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.id, chatSessions.length]);
+  }, [project?.id, isHydrating, chatSessions.length]);
 
   // 3. Handlers
   const sendCurrent = useCallback(async (): Promise<void> => {
@@ -156,7 +160,7 @@ export function ChatPanel(): JSX.Element {
                 className="text-xs text-primary-500 hover:text-primary-600"
                 onClick={() =>
                   setSystemPromptOverlay(
-                    '당신은 전문 번역가를 돕는 AI 어시스턴트입니다. 사용자의 질문에 간결하게 답하고, 원문/번역문 컨텍스트를 우선으로 고려하세요.',
+                    '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
                   )
                 }
               >
@@ -490,9 +494,11 @@ export function ChatPanel(): JSX.Element {
             {/* Add to Rules / Memory */}
             {message.role === 'assistant' &&
               streamingMessageId !== message.id &&
-              message.content.length >= 20 && (
+              message.content.length >= 20 &&
+              !message.metadata?.rulesAdded &&
+              !message.metadata?.memoryAdded && (
                 <div className="mt-2 flex gap-2">
-                  {isRuleLikeMessage(message.content) && message.metadata?.rulesAdded !== true && (
+                  {isRuleLikeMessage(message.content) && (
                     <button
                       type="button"
                       className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
@@ -505,19 +511,17 @@ export function ChatPanel(): JSX.Element {
                       Add to Rules
                     </button>
                   )}
-                  {message.metadata?.memoryAdded !== true && (
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                      onClick={() => {
-                        appendToActiveMemory(message.content);
-                        updateMessage(message.id, { metadata: { memoryAdded: true } });
-                      }}
-                      title="이 내용을 Active Memory에 추가"
-                    >
-                      Add to Memory
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                    onClick={() => {
+                      appendToActiveMemory(message.content);
+                      updateMessage(message.id, { metadata: { memoryAdded: true } });
+                    }}
+                    title="이 내용을 Active Memory에 추가"
+                  >
+                    Add to Memory
+                  </button>
                 </div>
               )}
               </div>

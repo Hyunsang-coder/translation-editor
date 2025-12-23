@@ -28,7 +28,7 @@ let chatPersistInFlight = false;
 let chatPersistQueued = false;
 
 const DEFAULT_SYSTEM_PROMPT_OVERLAY =
-  '당신은 전문 번역가를 돕는 AI 어시스턴트입니다. 사용자의 질문에 간결하게 답하고, 원문/번역문 컨텍스트를 우선으로 고려하세요.';
+  '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.';
 
 // ============================================
 // Store State Interface
@@ -39,6 +39,7 @@ interface ChatState {
   currentSessionId: string | null;
   currentSession: ChatSession | null;
   isLoading: boolean;
+  isHydrating: boolean;
   streamingMessageId: string | null;
   error: string | null;
   // 최근 요청에서 주입된 글로서리(디버깅/가시화)
@@ -146,6 +147,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
   const persistNow = async (): Promise<void> => {
     if (!isTauriRuntime()) return;
+    if (get().isHydrating) return; // 로드 중에는 저장하지 않음 (데이터 유실 방지)
     const projectId = getActiveProjectId();
     if (!projectId) return;
 
@@ -219,6 +221,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     error: null,
     lastInjectedGlossary: [],
     isSummarizing: false,
+    isHydrating: false,
     summarySuggestionOpen: false,
     summarySuggestionReason: '',
     lastSummaryAtMessageCountBySessionId: {},
@@ -233,58 +236,62 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
-      // (요구사항: 현재 세션 1개 + ChatPanel 설정 저장/복원)
-      set({
-        sessions: [],
-        currentSessionId: null,
-        currentSession: null,
-        streamingMessageId: null,
-        error: null,
-        lastInjectedGlossary: [],
-        isLoading: false,
-        // settings는 로드 결과에 따라 갱신
-        systemPromptOverlay: DEFAULT_SYSTEM_PROMPT_OVERLAY,
-        translationRules: '',
-        activeMemory: '',
-        composerText: '',
-        includeSourceInPayload: true,
-        includeTargetInPayload: true,
-        translationContextSessionId: null,
-      });
+      if (!projectId) {
+        set({
+          sessions: [],
+          currentSessionId: null,
+          currentSession: null,
+          isHydrating: false,
+        });
+        return;
+      }
 
-      if (!projectId) return;
-      if (!isTauriRuntime()) return;
+      set({ isHydrating: true, error: null });
 
       try {
+        if (!isTauriRuntime()) {
+          set({ isHydrating: false });
+          return;
+        }
+
         const [session, settings] = await Promise.all([
           loadCurrentChatSession(projectId),
           loadChatProjectSettings(projectId),
         ]);
 
-        if (session) {
-          set({
-            sessions: [session],
-            currentSessionId: session.id,
-            currentSession: session,
-            lastSummaryAtMessageCountBySessionId: { [session.id]: 0 },
-          });
-        }
+        const nextState: Partial<ChatStore> = {
+          isHydrating: false,
+          sessions: session ? [session] : [],
+          currentSessionId: session?.id ?? null,
+          currentSession: session ?? null,
+          lastSummaryAtMessageCountBySessionId: session ? { [session.id]: 0 } : {},
+        };
 
         if (settings) {
-          set({
-            systemPromptOverlay: settings.systemPromptOverlay?.trim()
-              ? settings.systemPromptOverlay
-              : DEFAULT_SYSTEM_PROMPT_OVERLAY,
-            translationRules: settings.translationRules,
-            activeMemory: settings.activeMemory,
-            composerText: settings.composerText ?? '',
-            includeSourceInPayload: settings.includeSourceInPayload,
-            includeTargetInPayload: settings.includeTargetInPayload,
-            translationContextSessionId: settings.translationContextSessionId ?? null,
-          });
+          nextState.systemPromptOverlay = settings.systemPromptOverlay?.trim()
+            ? settings.systemPromptOverlay
+            : DEFAULT_SYSTEM_PROMPT_OVERLAY;
+          nextState.translationRules = settings.translationRules;
+          nextState.activeMemory = settings.activeMemory;
+          nextState.composerText = settings.composerText ?? '';
+          nextState.includeSourceInPayload = settings.includeSourceInPayload;
+          nextState.includeTargetInPayload = settings.includeTargetInPayload;
+          nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
+        } else {
+          // 설정이 없으면 기본값 유지
+          nextState.systemPromptOverlay = DEFAULT_SYSTEM_PROMPT_OVERLAY;
+          nextState.translationRules = '';
+          nextState.activeMemory = '';
+          nextState.composerText = '';
+          nextState.includeSourceInPayload = true;
+          nextState.includeTargetInPayload = true;
+          nextState.translationContextSessionId = null;
         }
+
+        set(nextState);
       } catch (e) {
         set({
+          isHydrating: false,
           error: e instanceof Error ? e.message : '채팅 상태 로드 실패',
         });
       }

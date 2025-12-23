@@ -126,6 +126,7 @@ interface ProjectActions {
   // Target 단일 문서
   setTargetDocument: (next: string) => void;
   setSourceDocument: (next: string) => void;
+  setTargetLanguage: (lang: string) => void;
   rebuildTargetDocument: () => void;
   rebuildSourceDocument: () => void;
 
@@ -276,8 +277,6 @@ const createInitialProject = (): ITEProject => {
     metadata: {
       title: 'New Project',
       description: '',
-      sourceLanguage: 'English',
-      targetLanguage: 'Korean',
       domain: 'general',
       createdAt: now,
       updatedAt: now,
@@ -339,7 +338,7 @@ export const useProjectStore = create<ProjectStore>()(
               });
               return;
             } catch {
-              // 로드 실패 시 새 프로젝트 생성으로 폴백
+              // 로드 실패 시 무시
             }
           }
 
@@ -365,27 +364,12 @@ export const useProjectStore = create<ProjectStore>()(
             // Tauri runtime 미탐지/DB 조회 실패 등은 폴백으로 처리
           }
 
-          const initialProject = createInitialProject();
-          const td = buildTargetDocument(initialProject);
+          // 프로젝트가 하나도 없는 경우: null 유지 (Blank Page UX를 위함)
           set({
-            project: initialProject,
-            isDirty: true,
+            project: null,
             isLoading: false,
-            error: null,
-            lastProjectId: initialProject.id,
-            targetDocument: td.text,
-            sourceDocument: buildSourceDocument(initialProject).text,
+            lastProjectId: null,
           });
-
-          // 초기 프로젝트를 DB에 저장 (첫 실행 시)
-          try {
-            await tauriSaveProject(initialProject);
-            set({ isDirty: false });
-          } catch (e) {
-            set({
-              error: e instanceof Error ? e.message : 'Failed to save initial project',
-            });
-          }
         })();
       },
 
@@ -776,6 +760,24 @@ export const useProjectStore = create<ProjectStore>()(
 
       setSourceDocument: (next: string): void => {
         set({ sourceDocument: next, isDirty: true, lastChangeAt: Date.now() });
+        scheduleWriteThroughSave(set, get);
+      },
+
+      setTargetLanguage: (lang: string): void => {
+        const { project } = get();
+        if (!project) return;
+        set({
+          project: {
+            ...project,
+            metadata: {
+              ...project.metadata,
+              targetLanguage: lang,
+              updatedAt: Date.now(),
+            },
+          },
+          isDirty: true,
+          lastChangeAt: Date.now(),
+        });
         scheduleWriteThroughSave(set, get);
       },
 

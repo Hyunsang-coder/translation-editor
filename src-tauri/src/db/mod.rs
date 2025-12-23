@@ -554,8 +554,8 @@ impl Database {
             .map(|c| c.trim().to_lowercase())
             .collect::<Vec<_>>();
         
-        let has_source = lower.iter().any(|c| c == "source");
-        let has_target = lower.iter().any(|c| c == "target");
+        let _has_source = lower.iter().any(|c| c == "source");
+        let _has_target = lower.iter().any(|c| c == "target");
 
         // "A언어 칼럼 | B언어 칼럼" 구조만 지켜지면 OK. 
         // 즉, headers가 있든 없든 2개 이상의 칼럼이 있으면 0, 1번을 사용.

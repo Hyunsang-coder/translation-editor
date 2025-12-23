@@ -24,7 +24,7 @@ export function TargetPanel(): JSX.Element {
     <div className="h-full p-editor-padding">
       <div className="mb-4">
         <h2 className="text-sm font-medium text-editor-muted uppercase tracking-wider">
-          Target ({project.metadata.targetLanguage})
+          Target
         </h2>
       </div>
 

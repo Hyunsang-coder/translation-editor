@@ -3,8 +3,6 @@ import { invoke } from '@/tauri/invoke';
 
 export interface CreateProjectParams {
   title: string;
-  sourceLanguage: string;
-  targetLanguage: string;
   domain: ProjectDomain;
 }
 
@@ -12,8 +10,6 @@ export async function createProject(params: CreateProjectParams): Promise<ITEPro
   return await invoke<ITEProject>('create_project', {
     args: {
       title: params.title,
-      sourceLanguage: params.sourceLanguage,
-      targetLanguage: params.targetLanguage,
       domain: params.domain,
     },
   });

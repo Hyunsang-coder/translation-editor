@@ -36,8 +36,6 @@ export interface TauriError {
  */
 export interface CreateProjectRequest {
   title: string;
-  sourceLanguage: string;
-  targetLanguage: string;
   domain: string;
 }
 

@@ -26,9 +26,8 @@ export interface ITEProject {
 export interface ProjectMetadata {
   title: string;
   description?: string;
-  sourceLanguage: string;
-  targetLanguage: string;
   domain: ProjectDomain;
+  targetLanguage?: string; // 타겟 언어 (선택 사항)
   createdAt: number;
   updatedAt: number;
   author?: string;
