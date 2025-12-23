@@ -73,6 +73,7 @@ alwaysApply: true
 ## 3.4 Docs-First 작업 순서(필수)
 - 기능/UX 변경이 있으면 **먼저 `prd.md`/`trd.md`를 업데이트**하고, 그 명세에 맞춰 코드를 구현합니다.
 - 코드/문서가 충돌하면 **`prd.md`/`trd.md`가 우선**입니다.
+- 코드 반영 후 `tasks-by-phase.md`와 `Tasks-to-do.md`를 최신 상태로 동기화합니다.
 
 ## 3.5 Chat 기능 범위(필수)
 - **채팅은 문서에 자동 적용하지 않습니다.** 번역은 Translate(Preview→Apply)로 유도합니다.

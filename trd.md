@@ -67,23 +67,6 @@ What (Payload 구성 규칙: 우선순위):
   - Translate: TipTap JSON 전체만 출력(설명 금지)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
 
-What (Payload 구성 규칙: 우선순위):
-- **반드시 포함**
-  - 프로젝트 메타: `sourceLanguage`, `targetLanguage`, `domain`
-  - 대상 텍스트: `selectionText` 또는 전체(`targetDocument` 또는 `target blocks`)
-  - 원문 컨텍스트: `source blocks`(또는 `sourceDocument` 일부) — PRD 원칙상 “항상 최우선 맥락”
-- **조건부 포함**
-  - 선택 주변 문맥: `beforeText`/`afterText`(offset 기반일 때)
-  - 참조 문서/글로서리: `glossary`/`snippets`(사용자가 추가한 경우)
-    - 글로서리는 “업로드한 파일을 로컬에서 직접 읽기(필요 시 SQLite로 임포트)”를 기본으로 한다.
-    - 관련 용어 추출은 텍스트 기반 검색(룰/FTS 등)으로 수행하며, 임베딩/벡터화는 하지 않는다.
-  - Active Memory(용어/톤 규칙 요약): summarizer 결과(임계치 도달 시)
-
-What (모델 출력 포맷 강제):
-- Edit 요청(선택 범위): 출력은 “선택 구간의 대체 텍스트만” (설명/불릿/따옴표/마크다운 금지)
-- Translate 요청: 출력은 “번역문 전체만” (설명 금지)
-- Check 요청(오탈자/검수): 출력은 “JSON 리포트만” (설명/마크다운 금지)
-
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:
 - 선택/문서 컨텍스트를 안정적으로 주입해 일관된 응답을 받기 위함입니다.
@@ -199,7 +182,7 @@ Formatting/Linting: Prettier, ESLint.
 Testing: Vitest (Unit), Playwright (E2E for Tauri).
 
 💡 기술적 체크포인트
-Performance: Monaco 에디터 두 개(Source/Target) 동시 렌더링 시 60fps 유지 확인.
+Performance: TipTap 두 개(Source/Target) 동시 렌더링 시 60fps 근접 유지 확인.
 
 IPC Latency: 대용량 텍스트 저장 시 Rust-React 간 통신 지연시간 50ms 미만 유지.
 

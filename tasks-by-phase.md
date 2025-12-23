@@ -246,6 +246,18 @@
 
 ---
 
+## 🧩 Backlog (Bugs & Enhancements)
+
+- [ ] JSON 포맷 응답 누락: 문서 전체 번역 시 간헐적으로 JSON FORMAT이 오지 않는 문제
+- [ ] Preview 모달 Diff 색상 대비: 변경 내용이 더 눈에 잘 띄도록 조정
+- [ ] 채팅 탭 선택 상태 표시: Settings 탭 선택 시에도 채팅 탭 언더라인이 남는 문제
+- [ ] 아이콘 생성 및 적용: 전체 UI에 일관된 아이콘 시스템 적용
+- [ ] 메시지 수정 이력 보관: `editedAt`, `originalContent` 필드 완전 구현
+- [ ] Settings 입력 필드 Markdown 지원: 채팅창처럼 Markdown 렌더링
+- [ ] System Prompt 필드 툴팁: 각 필드 옆 아이콘 추가 및 호버 툴팁
+
+---
+
 ## 🔮 Phase 7: MCP 연동 및 확장 기능 (추후)
 
 **목표**: MCP 프로토콜 연동, 웹검색 등 외부 도구 통합.
@@ -284,6 +296,5 @@
 
 ## 📝 참고
 
-- **최신 태스크 목록**: `Tasks-to-do.md` 참고
 - **제품 기준 문서**: `prd.md`, `trd.md`
 - **현재 구현 현황**: `README.md`의 "현재 구현 현황" 섹션
