@@ -133,7 +133,7 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   const memory = params.activeMemory?.trim();
   if (memory) {
-    systemLines.push('[Active Memory - 용어/톤 규칙]', memory, '');
+    systemLines.push('[Active Memory - 맥락 정보]', memory, '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();

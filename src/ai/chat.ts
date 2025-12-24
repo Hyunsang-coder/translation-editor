@@ -19,7 +19,7 @@ export interface GenerateReplyInput {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Active Memory (용어/톤 규칙 요약) */
+  /** Active Memory (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
   activeMemory?: string;
   /** 원문 문서 */
   sourceDocument?: string;
@@ -136,8 +136,8 @@ function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): 
     includeTarget ? '- get_target_document: 번역문(Target) 문서를 가져옵니다.' : '- get_target_document: (비활성화됨)',
     '',
     '제안 도구 (번역 규칙/메모리):',
-    '- suggest_translation_rule: 새로운 번역 규칙(용어, 스타일 등)을 발견하면 즉시 사용하세요. (예: "A는 B로 번역하라")',
-    '- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락이나 임시 규칙을 발견하면 즉시 사용하세요.',
+    '- suggest_translation_rule: 새로운 번역 규칙(포맷, 서식, 문체 등)을 발견하면 즉시 사용하세요. (예: "해요체 사용", "따옴표 유지")',
+    '- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 발견하면 즉시 사용하세요.',
     '',
     '규칙:',
     '- 질문에 답하기 위해 원문/번역문이 꼭 필요할 때만 문서 접근 도구를 호출하세요.',

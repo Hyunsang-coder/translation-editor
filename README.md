@@ -136,23 +136,72 @@ npm run tauri build
 ITE는 **LangChain.js**를 사용하여 AI 모델(OpenAI/Anthropic)에 요청을 전달합니다.  
 실제 API 호출은 LangChain이 내부적으로 처리하지만, 전달되는 메시지 구조는 다음과 같습니다.
 
-### LangChain 메시지 구조 (내부 표현)
+### 요청 유형별 메시지 구조
+
+#### 1. 문서 전체 번역 (Translate)
 
 ```typescript
-// buildLangChainMessages()가 생성하는 메시지 배열
+// translateDocument.ts → translateSourceDocToTargetDocJson()
+BaseMessage[] = [
+  SystemMessage({ 
+    content: `
+      당신은 경험많은 전문 번역가입니다.
+      아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 Source에서 Target으로 자연스럽게 번역하세요.
+      
+      중요: 출력은 반드시 "단 하나의 JSON 객체"만 반환하세요.
+      - 마크다운, 코드펜스(```), 설명, 인사, 부연, HTML을 절대 출력하지 마세요.
+      - 출력 JSON은 다음 형태 중 하나여야 합니다:
+        - 성공: {"doc": {"type":"doc","content":[...]} }
+        - 실패: {"error": "사유", "doc": null }
+      
+      [번역 규칙]
+      ${translationRules}
+      
+      [Active Memory - 맥락 정보]
+      ${activeMemory}
+    `
+  }),
+  HumanMessage({ 
+    content: `
+      다음 JSON 문서를 번역하여, 위에서 지정한 형태의 JSON 객체로만 반환하세요.
+      
+      ${JSON.stringify(sourceDocJson)}
+    `
+  })
+]
+```
+
+**특징**:
+- 채팅 히스토리 포함하지 않음
+- TipTap JSON을 문자열로 전달
+- 출력은 TipTap JSON만 강제
+- Translation Rules: 포맷, 서식, 문체 등 번역 규칙
+- Active Memory: 번역 시 참고할 맥락 정보(배경 지식 등)
+
+#### 2. 채팅/질문 (Question)
+
+```typescript
+// chat.ts → buildLangChainMessages() + ChatPromptTemplate
 BaseMessage[] = [
   SystemMessage({ content: systemPrompt }),      // 요청 유형별 시스템 프롬프트
-  SystemMessage({ content: systemContext }),     // 컨텍스트 (규칙/메모리/문서 등)
+  SystemMessage({ content: systemContext }),     // 컨텍스트 (규칙/메모리/글로서리/문서/블록)
+  SystemMessage({ content: toolGuide }),         // Tool 사용 가이드
   ...historyMessages,                            // (question 모드에서만) 최근 채팅 메시지 (최대 10개)
   HumanMessage({ content: userMessage }),        // 사용자 입력
 ]
 ```
 
+**특징**:
+- ChatPromptTemplate으로 구성
+- Tool Calling 지원 (문서 조회, 규칙/메모리 제안)
+- 초기 payload에 Source/Target 문서를 포함하지 않음 (on-demand tool 호출)
+- question 모드에서만 히스토리 포함
+
 ### 실제 API Payload 형식
 
 LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 
-#### OpenAI API 형식
+#### OpenAI API 형식 (채팅 모드 예시)
 
 ```json
 {
@@ -164,7 +213,11 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
     },
     {
       "role": "system",
-      "content": "[번역 규칙]\n해요체 사용\n\n[Active Memory - 용어/톤 규칙]\n한국어로 번역시 자주 사용되는 영어 단어는 음차한다.\n\n[원문]\nHello world\n\n[번역문]\n안녕하세요\n\n[컨텍스트 블록]\n- [paragraph] Example text"
+      "content": "[번역 규칙]\n해요체 사용\n\n[Active Memory - 맥락 정보]\n이 프로젝트는 게임 UI 번역이며, 캐릭터 대사는 캐주얼한 톤을 유지한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text"
+    },
+    {
+      "role": "system",
+      "content": "문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/메모리):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락을 발견하면 즉시 사용하세요."
     },
     {
       "role": "user",
@@ -179,17 +232,49 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
       "content": "번역 규칙을 확인해주세요"
     }
   ],
-  "temperature": 0.7
+  "temperature": 0.7,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_source_document",
+        "description": "원문(Source) 문서를 가져옵니다."
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_target_document",
+        "description": "번역문(Target) 문서를 가져옵니다."
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "suggest_translation_rule",
+        "description": "새로운 번역 규칙을 제안합니다."
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "suggest_active_memory",
+        "description": "Active Memory를 제안합니다."
+      }
+    }
+  ]
 }
 ```
 
-#### Anthropic API 형식
+**참고**: 번역 모드에서는 히스토리 메시지가 없고, Tool Guide도 없습니다.
+
+#### Anthropic API 형식 (채팅 모드 예시)
 
 ```json
 {
   "model": "claude-3-5-sonnet-20241022",
   "max_tokens": 4096,
-  "system": "당신은 경험많은 전문 번역가입니다.\n\n프로젝트: general\n언어: Source → Target\n\n핵심 원칙:\n- 번역사가 주도권을 가지고, AI는 요청 시에만 응답합니다.\n...\n\n[번역 규칙]\n해요체 사용\n\n[Active Memory - 용어/톤 규칙]\n한국어로 번역시 자주 사용되는 영어 단어는 음차한다.\n\n[원문]\nHello world\n\n[번역문]\n안녕하세요\n\n[컨텍스트 블록]\n- [paragraph] Example text",
+  "system": "당신은 경험많은 전문 번역가입니다.\n\n프로젝트: general\n언어: Source → Target\n\n핵심 원칙:\n- 번역사가 주도권을 가지고, AI는 요청 시에만 응답합니다.\n...\n\n[번역 규칙]\n해요체 사용\n\n[Active Memory - 용어/톤 규칙]\n한국어로 번역시 자주 사용되는 영어 단어는 음차한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text\n\n문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/메모리):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락을 발견하면 즉시 사용하세요.",
   "messages": [
     {
       "role": "user",
@@ -203,9 +288,29 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
       "role": "user",
       "content": "번역 규칙을 확인해주세요"
     }
+  ],
+  "tools": [
+    {
+      "name": "get_source_document",
+      "description": "원문(Source) 문서를 가져옵니다."
+    },
+    {
+      "name": "get_target_document",
+      "description": "번역문(Target) 문서를 가져옵니다."
+    },
+    {
+      "name": "suggest_translation_rule",
+      "description": "새로운 번역 규칙을 제안합니다."
+    },
+    {
+      "name": "suggest_active_memory",
+      "description": "Active Memory를 제안합니다."
+    }
   ]
 }
 ```
+
+**참고**: Anthropic은 system 메시지를 하나로 합쳐서 전달합니다.
 
 ### Payload 구성 요소
 
@@ -224,45 +329,62 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 다음 항목이 비어있지 않으면 포함됩니다 (우선순위 순):
 
 1. **Translation Rules** (`[번역 규칙]`)
+   - 포맷, 서식, 문체 등 번역에 적용되는 규칙
+   - 예: "해요체 사용", "따옴표 유지", "고유명사는 음차"
    - 사용자가 Settings에서 입력한 고정 번역 규칙
 
-2. **Active Memory** (`[Active Memory - 용어/톤 규칙]`)
-   - 대화 중 발견된 일시적 규칙 요약 (최대 1200자)
+2. **Active Memory** (`[Active Memory - 맥락 정보]`)
+   - 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
+   - 대화 중 발견된 일시적 맥락 정보 요약 (최대 1200자)
 
-3. **Source Document** (`[원문]`)
+3. **Glossary** (`[글로서리(주입)]`)
+   - 채팅 전송 시 자동 검색된 관련 용어 (최대 1200자)
+
+4. **Source Document** (`[원문]`)
    - Source 패널의 전체 텍스트 (최대 4000자, HTML 제거)
+   - **채팅 모드에서는 초기 payload에 포함하지 않음** (on-demand tool 호출)
 
-4. **Target Document** (`[번역문]`)
+5. **Target Document** (`[번역문]`)
    - Target 패널의 전체 텍스트 (최대 4000자, HTML 제거)
+   - **채팅 모드에서는 초기 payload에 포함하지 않음** (on-demand tool 호출)
 
-5. **Context Blocks** (`[컨텍스트 블록]`)
+6. **Context Blocks** (`[컨텍스트 블록]`)
    - 사용자가 선택한 에디터 블록들 (타입별로 표시)
 
-6. **Glossary** (on-demand 주입)
-   - 채팅 전송 시 자동 검색된 관련 용어 (최대 12개)
+**참고**: 번역 모드에서는 Source Document가 UserMessage에 TipTap JSON으로 포함됩니다.
 
-#### 3. History Messages (조건부 포함)
+#### 3. Tool Guide (채팅 모드에서만 포함)
 
-- **question 모드**: 최근 채팅 메시지 최대 10개 포함
+- 문서 조회 도구 사용 가이드
+- 제안 도구(번역 규칙/Active Memory) 사용 가이드
+- 번역 모드에서는 포함하지 않음
+
+#### 4. History Messages (조건부 포함)
+
+- **question 모드**: 최근 채팅 메시지 최대 10개 포함 (MessagesPlaceholder로 삽입)
 - **translate 모드**: 채팅 히스토리 포함하지 않음 (Settings의 페르소나/룰/메모리/글로서리/문서 컨텍스트만 사용)
+- **general 모드**: 히스토리 포함하지 않음
 
-#### 4. User Message
+#### 5. User Message
 
 - 사용자가 입력한 메시지 (채팅 입력창 또는 선택 텍스트)
+- 번역 모드: TipTap JSON 문서를 문자열로 전달
+- 채팅 모드: 사용자 입력 텍스트
 
 ### 요청 유형별 Payload 차이
 
-| 요청 유형 | System Prompt | History | 출력 포맷 |
-|---------|--------------|---------|----------|
-| **translate** | 번역 전용 프롬프트 | 포함하지 않음 | TipTap JSON만 (설명 금지) |
-| **question** | 질문/검수 프롬프트 | 최근 10개 포함 | 간결한 답변 또는 JSON 리포트 |
-| **general** | 기본 프롬프트 | 포함하지 않음 | 일반 응답 |
+| 요청 유형 | System Prompt | System Context | Tool Guide | History | Tool Calling | 출력 포맷 |
+|---------|--------------|----------------|------------|---------|--------------|----------|
+| **translate** | 번역 전용 프롬프트 | 번역 규칙/Active Memory | 없음 | 없음 | 없음 | TipTap JSON만 (설명 금지) |
+| **question** | 질문/검수 프롬프트 | 번역 규칙/Active Memory/글로서리/컨텍스트 블록 | 있음 | 최근 10개 | 지원 | 간결한 답변 또는 JSON 리포트 |
+| **general** | 기본 프롬프트 | 번역 규칙/Active Memory/글로서리/컨텍스트 블록 | 있음 | 없음 | 지원 | 일반 응답 |
 
 ### 구현 위치
 
-- **메시지 구성**: `src/ai/prompt.ts` → `buildLangChainMessages()`
-- **API 호출**: `src/ai/chat.ts` → `streamAssistantReply()` / `generateAssistantReply()`
-- **번역 전용**: `src/ai/translateDocument.ts` → `translateSourceDocToTargetDocJson()`
+- **메시지 구성 (채팅)**: `src/ai/prompt.ts` → `buildLangChainMessages()` (ChatPromptTemplate 사용)
+- **메시지 구성 (번역)**: `src/ai/translateDocument.ts` → `translateSourceDocToTargetDocJson()` (직접 배열 구성)
+- **API 호출 (채팅)**: `src/ai/chat.ts` → `streamAssistantReply()` / `generateAssistantReply()` (Tool calling 지원)
+- **API 호출 (번역)**: `src/ai/translateDocument.ts` → `translateSourceDocToTargetDocJson()` (단순 invoke)
 - **클라이언트**: `src/ai/client.ts` → `createChatModel()` (LangChain ChatOpenAI/ChatAnthropic)
 
 ---

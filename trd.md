@@ -47,6 +47,10 @@ What:
 - Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, activeMemory, translatorPersona, glossary/attachments(있는 경우)
 - Output: TipTap JSON (문서 전체), JSON 파싱 실패 시 폴백 로직
 - UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음.
+- API 구조: LangChain `BaseMessage[]` 배열
+  - SystemMessage 1개: 번역 전용 프롬프트 (페르소나, 번역 규칙, Active Memory 포함)
+  - UserMessage 1개: TipTap JSON 문서를 문자열로 전달
+  - 히스토리 메시지 없음
 
 3.2 Context Collection 명세 (Payload 규칙)
 Why:
@@ -63,9 +67,9 @@ What (의도/행동 정의):
 - Question 요청: 질의/검수(모델 호출), 문서 자동 적용 없음
 
 What (Payload 구성 규칙: 우선순위):
-- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules, Active Memory
+- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules(번역 규칙), Active Memory(맥락 정보)
 - 가능하면 포함(권장): 선택 텍스트(가능하면) + 주변 문맥(before/after) + 선택이 없으면 필요한 범위의 문서(부분/전체)
-- Question(채팅) 모드: 문서(Source/Target)는 “항상” 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
+- Question(채팅) 모드: 문서(Source/Target)는 "항상" 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
   - 목표: 불필요한 토큰 소비를 줄이고, 문맥이 필요한 질문에만 문서를 제공한다.
   - 방법: 모델이 필요하다고 판단하면 문서 조회 Tool을 호출하여 원문/번역문을 on-demand로 가져온다.
   - 보호(단순화): 현재는 Source/Target 접근 토글을 제공하지 않으며, 문서 조회는 on-demand Tool 호출로만 수행한다.
@@ -74,6 +78,20 @@ What (Payload 구성 규칙: 우선순위):
 - 출력 포맷 강제:
   - Translate: TipTap JSON 전체만 출력(설명 금지)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
+
+What (API 구조 - 채팅 모드):
+- LangChain `BaseMessage[]` 배열 사용
+- ChatPromptTemplate으로 메시지 구성:
+  - SystemMessage 1개: 요청 유형별 시스템 프롬프트 (translate/question/general)
+  - SystemMessage 1개 (조건부): SystemContext (번역 규칙/Active Memory/글로서리/문서/컨텍스트 블록)
+  - SystemMessage 1개: Tool Guide (문서 조회 도구 및 제안 도구 사용 가이드)
+  - MessagesPlaceholder: 히스토리 메시지 (question 모드에서만 최근 10개)
+  - HumanMessage 1개: 사용자 입력
+- Tool Calling 지원:
+  - get_source_document: 원문 문서 on-demand 조회
+  - get_target_document: 번역문 문서 on-demand 조회
+  - suggest_translation_rule: 번역 규칙 제안
+  - suggest_active_memory: Active Memory 제안
 
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:
@@ -102,6 +120,8 @@ What:
   - AI 채팅 패널에는 “Settings” 화면이 존재하며, 여기에서 사용자 편집 가능한 설정을 관리한다.
   - Settings 항목(최소): 시스템 프롬프트 오버레이(System Prompt Overlay), 번역 규칙(Translation Rules), Active Memory, 첨부 파일(참조문서/글로서리)
   - 시스템 프롬프트 오버레이는 모델 호출 시 system 메시지에 반영된다.
+  - 번역 규칙(Translation Rules): 포맷, 서식, 문체 등 번역에 적용되는 규칙 (예: "해요체 사용", "따옴표 유지", "고유명사는 음차")
+  - Active Memory: 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
   - 글로서리 주입은 비벡터(임베딩/벡터화 없음)로 한다.
 - 멀티 채팅 세션
   - “번역 작업 세션”과 “개념 질의 세션”을 분리할 수 있어야 함

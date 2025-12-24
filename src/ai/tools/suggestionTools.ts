@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 /**
  * 번역 규칙 제안 도구
- * AI가 대화 중 새로운 번역 규칙(용어, 스타일 등)을 발견했을 때 호출합니다.
+ * AI가 대화 중 새로운 번역 규칙(포맷, 서식, 문체 등)을 발견했을 때 호출합니다.
  */
 export const suggestTranslationRule = tool(
   async ({ rule }) => {
@@ -21,7 +21,7 @@ export const suggestTranslationRule = tool(
 
 /**
  * Active Memory 제안 도구
- * AI가 대화 중 기억해야 할 중요한 맥락이나 임시 규칙을 발견했을 때 호출합니다.
+ * AI가 대화 중 중요한 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 발견했을 때 호출합니다.
  */
 export const suggestActiveMemory = tool(
   async ({ memory }) => {

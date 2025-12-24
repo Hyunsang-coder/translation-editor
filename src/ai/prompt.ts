@@ -61,7 +61,7 @@ export interface PromptContext {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Active Memory (용어/톤 규칙 요약) */
+  /** Active Memory (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
   activeMemory?: string;
   /** 원문 문서 */
   sourceDocument?: string;
@@ -171,7 +171,7 @@ function formatActiveMemory(memory?: string): string {
   if (!trimmed) return '';
   const maxLen = 1200;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[Active Memory - 용어/톤 규칙]', sliced].join('\n');
+  return ['[Active Memory - 맥락 정보]', sliced].join('\n');
 }
 
 function formatGlossaryInjected(glossary?: string): string {
@@ -315,7 +315,7 @@ export async function buildTranslateOnlyMessages(
     '- 설명, 인사, 부연 없이 오직 번역 결과만 응답합니다.',
     '- 고유명사, 태그, 변수는 그대로 유지합니다.',
     opts?.translationRules ? `\n[번역 규칙]\n${opts.translationRules}` : '',
-    opts?.activeMemory ? `\n[참고 용어]\n${opts.activeMemory}` : '',
+    opts?.activeMemory ? `\n[Active Memory - 맥락 정보]\n${opts.activeMemory}` : '',
   ].filter(Boolean).join('\n');
 
   const prompt = ChatPromptTemplate.fromMessages([

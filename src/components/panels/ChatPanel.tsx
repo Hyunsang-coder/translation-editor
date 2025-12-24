@@ -219,7 +219,7 @@ export function ChatPanel(): JSX.Element {
             <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              모든 번역에 공통적으로 적용될 고정 규칙입니다. (예: "해요체 사용", "따옴표 유지" 등)
+              포맷, 서식, 문체 등 번역에 적용되는 규칙입니다. (예: "해요체 사용", "따옴표 유지", "고유명사는 음차")
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -262,7 +262,7 @@ export function ChatPanel(): JSX.Element {
             <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              대화 중 발견된 일시적 규칙이나 컨텍스트를 저장합니다. AI가 자동으로 제안할 수 있습니다.
+              번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 저장합니다. AI가 자동으로 제안할 수 있습니다.
             </div>
           </div>
           <div className="flex items-center gap-2">

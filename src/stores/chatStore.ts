@@ -635,7 +635,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (!get().summarySuggestionOpen) {
         set({
           summarySuggestionOpen: true,
-          summarySuggestionReason: '대화가 길어져서 용어/톤 규칙 요약(Active Memory)을 생성하면 컨텍스트 비용을 줄일 수 있어요.',
+          summarySuggestionReason: '대화가 길어져서 맥락 정보 요약(Active Memory)을 생성하면 컨텍스트 비용을 줄일 수 있어요.',
         });
       }
     },
@@ -668,10 +668,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
           .join('\n\n');
 
         const userMessage = [
-          '너는 번역 프로젝트의 “Active Memory(용어/톤 규칙)”만 요약하는 에디터 보조 AI다.',
+          '너는 번역 프로젝트의 "Active Memory(맥락 정보)"만 요약하는 에디터 보조 AI다.',
           '',
           '목표:',
-          '- 아래 대화에서 확정된 “용어/스타일/포맷 규칙”만 추출해 짧게 요약한다.',
+          '- 아래 대화에서 확정된 "맥락 정보(배경 지식, 프로젝트 컨텍스트 등)"만 추출해 짧게 요약한다.',
+          '- 번역 규칙(포맷, 서식, 문체)은 Translation Rules에 저장되므로 Active Memory에 포함하지 않는다.',
           '- 번역 내용 자체를 재작성/제안하지 않는다.',
           '',
           '출력 규칙:',
