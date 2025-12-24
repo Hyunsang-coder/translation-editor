@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -58,16 +58,44 @@ export function TranslatePreviewModal(props: {
   const { open, title, docJson, originalHtml, isLoading, error, onClose, onApply } = props;
   const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
-  const diffEditorRef = useRef<any>(null);
+  const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
+  const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
+
+  // Diff의 기준(original)은 모달을 열 때의 target 상태로 스냅샷 고정합니다.
+  // Apply로 targetDocument가 바뀌어도 DiffEditor의 모델이 갈아끼워지지 않게 해서
+  // "TextModel got disposed before ... reset" 레이스를 피합니다.
+  useEffect(() => {
+    if (open) {
+      setDiffOriginalHtmlSnapshot(originalHtml ?? '');
+    } else {
+      setDiffOriginalHtmlSnapshot(null);
+    }
+  }, [open]);
+
+  // 모달이 닫힐 때 상태 초기화
+  useEffect(() => {
+    if (!open) {
+      setIsApplying(false);
+    }
+  }, [open]);
+
+  // Apply 핸들러 래퍼
+  const handleApply = (): void => {
+    if (isApplying) return;
+    setIsApplying(true);
+    onApply();
+    // onApply 호출 후 부모 컴포넌트가 open=false로 만들면 모달이 닫힘
+  };
 
   // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.
   useEffect(() => {
-    if (open && originalHtml && stripHtml(originalHtml).trim().length > 0) {
+    const baseHtml = (diffOriginalHtmlSnapshot ?? originalHtml) ?? '';
+    if (open && baseHtml && stripHtml(baseHtml).trim().length > 0) {
       setViewMode('diff');
     } else {
       setViewMode('preview');
     }
-  }, [open, originalHtml]);
+  }, [open, originalHtml, diffOriginalHtmlSnapshot]);
 
   const content = useMemo(() => docJson ?? null, [docJson]);
 
@@ -94,9 +122,10 @@ export function TranslatePreviewModal(props: {
 
   // diff용 텍스트 추출 (정규화 + 문장 분할 적용)
   const originalText = useMemo(() => {
-    const raw = originalHtml ? stripHtml(originalHtml) : '';
+    const baseHtml = diffOriginalHtmlSnapshot ?? originalHtml ?? '';
+    const raw = baseHtml ? stripHtml(baseHtml) : '';
     return prepareDiffText(raw);
-  }, [originalHtml]);
+  }, [diffOriginalHtmlSnapshot, originalHtml]);
 
   const translatedText = useMemo(() => {
     if (!docJson) return '';
@@ -138,17 +167,6 @@ export function TranslatePreviewModal(props: {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
-  // Monaco DiffEditor가 언마운트될 때 모델을 명시적으로 해제하여
-  // "TextModel got disposed before DiffEditorWidget model got reset" 에러 방지
-  useEffect(() => {
-    return () => {
-      if (diffEditorRef.current) {
-        diffEditorRef.current.setModel(null);
-        diffEditorRef.current = null;
-      }
-    };
-  }, []);
-
   if (!open) return null;
 
   return (
@@ -181,12 +199,19 @@ export function TranslatePreviewModal(props: {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors"
-              onClick={onApply}
-              disabled={isLoading || !docJson}
+              className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5"
+              onClick={handleApply}
+              disabled={isLoading || !docJson || isApplying}
               title="Apply (전체 덮어쓰기)"
             >
-              Apply
+              {isApplying ? (
+                <>
+                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Applying...</span>
+                </>
+              ) : (
+                'Apply'
+              )}
             </button>
             <button
               type="button"
@@ -237,16 +262,17 @@ export function TranslatePreviewModal(props: {
               </div>
             </div>
           ) : viewMode === 'diff' && originalText.trim().length > 0 ? (
-            <div className="h-full">
+            <div className="h-full relative">
               <DiffEditor
                 height="100%"
                 language="plaintext"
                 theme={monacoTheme}
+                originalModelPath="inmemory://translate-preview/original"
+                modifiedModelPath="inmemory://translate-preview/modified"
+                keepCurrentOriginalModel
+                keepCurrentModifiedModel
                 original={originalText}
                 modified={translatedText}
-                onMount={(editor) => {
-                  diffEditorRef.current = editor;
-                }}
                 options={{
                   renderSideBySide: true,
                   readOnly: true,
@@ -264,9 +290,17 @@ export function TranslatePreviewModal(props: {
                   useInlineViewWhenSpaceIsLimited: false,
                 }}
               />
+              {isApplying && (
+                <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                    <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="h-full p-4 overflow-hidden">
+            <div className="h-full p-4 overflow-hidden relative">
               <div className="tiptap-wrapper h-full">
                 {editor ? (
                   <EditorContent editor={editor} className="h-full" />
@@ -274,6 +308,14 @@ export function TranslatePreviewModal(props: {
                   <div className="h-full animate-pulse bg-editor-surface rounded-md" />
                 )}
               </div>
+              {isApplying && (
+                <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                    <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

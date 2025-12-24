@@ -531,12 +531,38 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              
+              // 1. Tool Call Badge (Running state)
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
               const next =
                 evt.phase === 'start'
                   ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
                   : prev.filter((n) => n !== evt.toolName);
-              updateMessage(assistantId, { metadata: { toolCallsInProgress: next } });
+              
+              // 2. Suggestion Handling (Smart Buttons)
+              let nextMetadata = msgNow?.metadata ?? {};
+              
+              // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록
+              if (evt.phase === 'start' && evt.args) {
+                if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+                  nextMetadata = {
+                    ...nextMetadata,
+                    suggestion: { type: 'rule', content: evt.args.rule },
+                  };
+                } else if (evt.toolName === 'suggest_active_memory' && evt.args.memory) {
+                  nextMetadata = {
+                    ...nextMetadata,
+                    suggestion: { type: 'memory', content: evt.args.memory },
+                  };
+                }
+              }
+
+              updateMessage(assistantId, {
+                metadata: {
+                  ...nextMetadata,
+                  toolCallsInProgress: next,
+                },
+              });
             },
             onToolsUsed: (toolsUsed) => {
               if (assistantId) {

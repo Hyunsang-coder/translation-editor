@@ -39,6 +39,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
   const [targetEditor, setTargetEditor] = useState<Editor | null>(null);
 
+  // 추가: Flash 효과 상태
+  const [targetFlash, setTargetFlash] = useState(false);
+
   const [translatePreviewOpen, setTranslatePreviewOpen] = useState(false);
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
@@ -166,6 +169,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     const updatedHtml = targetEditorRef.current.getHTML();
     setTargetDocument(updatedHtml);
     setTranslatePreviewOpen(false);
+
+    // Flash 효과 트리거 (1초 동안 지속)
+    setTargetFlash(true);
+    setTimeout(() => setTargetFlash(false), 1000);
   }, [translatePreviewDoc, setTargetDocument]);
 
   // Source 에디터 준비 완료 콜백
@@ -264,7 +271,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             </div>
           </div>
           <TipTapMenuBar editor={targetEditor} />
-          <div className="min-h-0 flex-1 overflow-hidden">
+          {/* 여기에 transition 효과 추가 */}
+          <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 ${targetFlash ? 'bg-green-500/10' : ''}`}>
             <TargetTipTapEditor
               content={targetDocument || ''}
               onChange={setTargetDocument}

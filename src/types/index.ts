@@ -193,6 +193,15 @@ export interface ChatMessageMetadata {
    */
   editedAt?: number;
   originalContent?: string;
+
+  /**
+   * AI가 제안한 규칙/메모리 (Tool Call 결과)
+   * - 이 필드가 존재하면 UI에 [Add to Rules] 또는 [Add to Memory] 버튼이 표시됩니다.
+   */
+  suggestion?: {
+    type: 'rule' | 'memory';
+    content: string;
+  };
 }
 
 // ============================================

@@ -95,40 +95,6 @@ export function ChatPanel(): JSX.Element {
     );
   }, []);
 
-  const isRuleLikeMessage = useCallback((text: string): boolean => {
-    const t = text.trim();
-    if (t.length < 12) return false;
-    // 너무 긴 본문(예: 검수 리포트 전체)에는 기본적으로 노출을 줄임
-    if (t.length > 1200) return false;
-
-    const keywords = [
-      '번역 규칙',
-      '용어',
-      '용어집',
-      '표기',
-      '표기법',
-      '스타일',
-      '톤',
-      '문체',
-      '금지어',
-      '권장',
-      '유지',
-      '통일',
-      '일관',
-      '띄어쓰기',
-      '존댓말',
-      '반말',
-      '하십시오',
-      '해요체',
-    ];
-
-    const hit = keywords.some((k) => t.includes(k));
-    const looksLikeRulesList = /\n-\s+/.test(t) || /\n\d+\.\s+/.test(t);
-    const looksLikeDirective = /(하세요|하지 마세요|금지|유지하세요|통일하세요|권장)/.test(t);
-
-    return hit && (looksLikeRulesList || looksLikeDirective || t.split('\n').length >= 2);
-  }, []);
-
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원 + 탭 초기화
   const lastHydratedId = useRef<string | null>(null);
   useEffect(() => {
@@ -636,34 +602,38 @@ export function ChatPanel(): JSX.Element {
                 {/* Add to Rules / Memory */}
                 {message.role === 'assistant' &&
                   streamingMessageId !== message.id &&
-                  message.content.length >= 20 &&
-                  !message.metadata?.rulesAdded &&
-                  !message.metadata?.memoryAdded && (
+                  message.metadata?.suggestion && (
                     <div className="mt-2 flex gap-2">
-                      {isRuleLikeMessage(message.content) && (
+                      {message.metadata.suggestion.type === 'rule' && !message.metadata.rulesAdded && (
                         <button
                           type="button"
                           className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
                           onClick={() => {
-                            appendToTranslationRules(message.content);
-                            updateMessage(message.id, { metadata: { rulesAdded: true } });
+                            if (message.metadata?.suggestion?.content) {
+                              appendToTranslationRules(message.metadata.suggestion.content);
+                              updateMessage(message.id, { metadata: { rulesAdded: true } });
+                            }
                           }}
                           title="이 내용을 Translation Rules에 추가"
                         >
                           Add to Rules
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                        onClick={() => {
-                          appendToActiveMemory(message.content);
-                          updateMessage(message.id, { metadata: { memoryAdded: true } });
-                        }}
-                        title="이 내용을 Active Memory에 추가"
-                      >
-                        Add to Memory
-                      </button>
+                      {message.metadata.suggestion.type === 'memory' && !message.metadata.memoryAdded && (
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                          onClick={() => {
+                            if (message.metadata?.suggestion?.content) {
+                              appendToActiveMemory(message.metadata.suggestion.content);
+                              updateMessage(message.id, { metadata: { memoryAdded: true } });
+                            }
+                          }}
+                          title="이 내용을 Active Memory에 추가"
+                        >
+                          Add to Memory
+                        </button>
+                      )}
                     </div>
                   )}
               </div>

@@ -3,7 +3,9 @@ import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
-import { SystemMessage, ToolMessage, type ToolCall } from '@langchain/core/messages';
+import { suggestTranslationRule, suggestActiveMemory } from '@/ai/tools/suggestionTools';
+import { SystemMessage, ToolMessage } from '@langchain/core/messages';
+import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -36,7 +38,7 @@ export interface GenerateReplyInput {
 export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
-  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; status?: 'success' | 'error' }) => void;
+  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: any; status?: 'success' | 'error' }) => void;
 }
 
 function getToolCallId(call: ToolCall): string {
@@ -83,7 +85,7 @@ async function runToolCallingLoop(params: {
       // 문서 내용은 로그로 찍지 않음(보안/노이즈 방지). 도구명/인자만 로깅.
       console.debug('[AI tool_call]', { name: call.name, args: call.args ?? {} });
       if (!tool) {
-        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name });
+        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         loopMessages.push(
           new ToolMessage({
             tool_call_id: toolCallId,
@@ -96,7 +98,7 @@ async function runToolCallingLoop(params: {
       }
 
       try {
-        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name });
+        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         const out = await tool.invoke(call.args ?? {});
         const content = typeof out === 'string' ? out : JSON.stringify(out);
         loopMessages.push(
@@ -133,8 +135,14 @@ function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): 
     includeSource ? '- get_source_document: 원문(Source) 문서를 가져옵니다.' : '- get_source_document: (비활성화됨)',
     includeTarget ? '- get_target_document: 번역문(Target) 문서를 가져옵니다.' : '- get_target_document: (비활성화됨)',
     '',
+    '제안 도구 (번역 규칙/메모리):',
+    '- suggest_translation_rule: 새로운 번역 규칙(용어, 스타일 등)을 발견하면 즉시 사용하세요. (예: "A는 B로 번역하라")',
+    '- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락이나 임시 규칙을 발견하면 즉시 사용하세요.',
+    '',
     '규칙:',
-    '- 질문에 답하기 위해 원문/번역문이 꼭 필요할 때만 도구를 호출하세요.',
+    '- 질문에 답하기 위해 원문/번역문이 꼭 필요할 때만 문서 접근 도구를 호출하세요.',
+    '- 사용자가 "A는 B로 번역해줘", "존댓말로 해줘" 같은 규칙/요청을 하면 반드시 제안 도구를 호출하여 저장할 수 있게 하세요.',
+    '- 제안 도구 호출 후에는 "제안을 추가했습니다" 같은 멘트를 덧붙여 사용자에게 알리세요.',
     '- 일반적인 개념 질문은 도구 호출 없이 답하세요.',
   ].join('\n');
 
@@ -181,7 +189,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     },
   );
 
-  const toolSpecs: any[] = [];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestActiveMemory];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
@@ -246,7 +254,7 @@ export async function streamAssistantReply(
     },
   );
 
-  const toolSpecs: any[] = [];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestActiveMemory];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
