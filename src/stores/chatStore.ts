@@ -458,7 +458,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const cfg = getAiConfig();
         const session = get().currentSession;
         const project = useProjectStore.getState().project;
-        const currentSourceDocument = resolveSourceDocumentText();
         const translatorPersona = get().translatorPersona;
 
         const contextBlockIds = session?.contextBlockIds ?? [];
@@ -472,20 +471,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const activeMemoryRaw = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
         const includeTarget = get().includeTargetInPayload;
-        const sourceDocumentRaw = includeSource ? currentSourceDocument : undefined;
-        const targetDocumentRaw = resolveTargetDocumentText(includeTarget, project);
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
         const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
-        // TipTap의 Source/Target은 HTML로 저장되므로, 채팅 컨텍스트에는 plain text를 우선 포함합니다.
-        const sourceDocument = sourceDocumentRaw
-          ? maskGhostChips(sourceDocumentRaw, maskSession)
-          : undefined;
-        const targetDocument = targetDocumentRaw
-          ? maskGhostChips(targetDocumentRaw, maskSession)
-          : undefined;
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
         let glossaryInjected = '';
@@ -541,8 +531,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
-            ...(sourceDocument ? { sourceDocument } : {}),
-            ...(targetDocument ? { targetDocument } : {}),
+            includeSourceInPayload: includeSource,
+            includeTargetInPayload: includeTarget,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
           },
@@ -550,6 +540,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             onToken: (full) => {
               if (assistantId) {
                 updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
+              }
+            },
+            onToolsUsed: (toolsUsed) => {
+              if (assistantId) {
+                updateMessage(assistantId, { metadata: { toolsUsed } });
               }
             },
           },
@@ -828,7 +823,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
       try {
         const cfg = getAiConfig();
         const project = useProjectStore.getState().project;
-        const currentSourceDocument = resolveSourceDocumentText();
         const translatorPersona = get().translatorPersona;
 
         const contextBlockIds = session.contextBlockIds ?? [];
@@ -842,19 +836,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const activeMemoryRaw = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
         const includeTarget = get().includeTargetInPayload;
-        const sourceDocumentRaw = includeSource ? currentSourceDocument : undefined;
-        const targetDocumentRaw = resolveTargetDocumentText(includeTarget, project);
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
         const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
-        const sourceDocument = sourceDocumentRaw
-          ? maskGhostChips(sourceDocumentRaw, maskSession)
-          : undefined;
-        const targetDocument = targetDocumentRaw
-          ? maskGhostChips(targetDocumentRaw, maskSession)
-          : undefined;
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
         let glossaryInjected = '';
@@ -909,14 +895,19 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
-            ...(sourceDocument ? { sourceDocument } : {}),
-            ...(targetDocument ? { targetDocument } : {}),
+            includeSourceInPayload: includeSource,
+            includeTargetInPayload: includeTarget,
             requestType: 'question',
           },
           {
             onToken: (full) => {
               if (assistantId) {
                 get().updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
+              }
+            },
+            onToolsUsed: (toolsUsed) => {
+              if (assistantId) {
+                get().updateMessage(assistantId, { metadata: { toolsUsed } });
               }
             },
           },

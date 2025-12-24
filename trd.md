@@ -54,6 +54,8 @@ Why:
 
 How:
 - UI 트리거 시 프로젝트/문서 상태에서 컨텍스트를 조립해 모델 payload에 포함합니다.
+  - 단, 토큰 최적화를 위해 Question(채팅) 모드에서는 “초기 호출”에 문서 전체를 항상 포함하지 않을 수 있으며,
+    필요 시 Agent/Tool(문서 조회 도구)로 on-demand로 불러옵니다.
 
 What (의도/행동 정의):
 - Add to chat: 채팅 입력창에 텍스트 추가(모델 호출 없음)
@@ -61,7 +63,12 @@ What (의도/행동 정의):
 - Question 요청: 질의/검수(모델 호출), 문서 자동 적용 없음
 
 What (Payload 구성 규칙: 우선순위):
-- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), 선택 텍스트 또는 전체(Target/Source), Translation Rules, Active Memory
+- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules, Active Memory
+- 가능하면 포함(권장): 선택 텍스트(가능하면) + 주변 문맥(before/after) + 선택이 없으면 필요한 범위의 문서(부분/전체)
+- Question(채팅) 모드: 문서(Source/Target)는 “항상” 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
+  - 목표: 불필요한 토큰 소비를 줄이고, 문맥이 필요한 질문에만 문서를 제공한다.
+  - 방법: 모델이 필요하다고 판단하면 문서 조회 Tool을 호출하여 원문/번역문을 on-demand로 가져온다.
+  - 보호: 사용자가 Settings에서 Source/Target 포함을 끈 경우, 해당 문서는 Tool 호출/주입 모두 불가하다.
 - 조건부 포함: Glossary/첨부, before/after 문맥
 - 질문(Question) 모드에서만 포함: 최근 메시지(최대 10개)
 - 출력 포맷 강제:

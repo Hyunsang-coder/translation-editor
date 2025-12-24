@@ -59,6 +59,8 @@ export interface PromptContext {
   userMessage: string;
   /** 번역 규칙 (사용자 입력) */
   translationRules?: string;
+  /** 글로서리 주입 결과(plain text) */
+  glossaryInjected?: string;
   /** Active Memory (용어/톤 규칙 요약) */
   activeMemory?: string;
   /** 원문 문서 */
@@ -172,6 +174,14 @@ function formatActiveMemory(memory?: string): string {
   return ['[Active Memory - 용어/톤 규칙]', sliced].join('\n');
 }
 
+function formatGlossaryInjected(glossary?: string): string {
+  const trimmed = glossary?.trim();
+  if (!trimmed) return '';
+  const maxLen = 1200;
+  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
+  return ['[글로서리(주입)]', sliced].join('\n');
+}
+
 function formatDocument(label: string, text?: string): string {
   const trimmed = text?.trim();
   if (!trimmed) return '';
@@ -239,12 +249,14 @@ export async function buildLangChainMessages(
   // 컨텍스트 조립
   const blockContext = buildBlockContextText(ctx.contextBlocks);
   const translationRules = formatTranslationRules(ctx.translationRules);
+  const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
   const activeMemory = formatActiveMemory(ctx.activeMemory);
   const sourceDoc = formatDocument('원문', ctx.sourceDocument);
   const targetDoc = formatDocument('번역문', ctx.targetDocument);
 
   const systemContext = [
     translationRules,
+    glossaryInjected,
     activeMemory,
     sourceDoc,
     targetDoc,

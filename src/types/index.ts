@@ -167,6 +167,8 @@ export interface ChatMessage {
 export interface ChatMessageMetadata {
   model?: string;
   tokens?: number;
+  /** 이번 응답 생성 과정에서 호출된 Tool 목록(디버깅/가시화) */
+  toolsUsed?: string[];
 
   /**
    * Add to Rules 버튼을 이미 눌렀는지 여부

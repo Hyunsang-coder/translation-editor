@@ -6,8 +6,10 @@
 
 ### 5.1 Tool 프레임워크 구축
 
-- [ ] Tool 인터페이스/스키마 정의 (Zod)
-- [ ] 기본 Tool 구조 생성
+- [x] Tool 인터페이스/스키마 정의 (Zod)
+- [x] 기본 Tool 구조 생성
+  - 문서 조회 Tool: `get_source_document`, `get_target_document`
+  - Tool 호출 텔레메트리: 콘솔(`[AI tool_call]`) + `metadata.toolsUsed`
 
 ### 5.2 checkSpelling Tool
 
