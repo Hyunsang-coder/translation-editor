@@ -8,11 +8,6 @@ export interface ChatProjectSettings {
    * Project Context: 번역 시 참고할 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
    */
   projectContext: string;
-  /**
-   * (레거시) 기존 저장 포맷 호환용
-   * - 새 코드에서는 사용하지 않지만, 오래된 `.ite`/백엔드가 `activeMemory`로 내려줄 수 있어 optional로 유지합니다.
-   */
-  activeMemory?: string;
   composerText: string;
   /**
    * 문서 전체 번역(Preview→Apply) 시 컨텍스트로 사용할 채팅 탭

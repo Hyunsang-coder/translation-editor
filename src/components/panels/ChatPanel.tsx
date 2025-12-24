@@ -619,17 +619,16 @@ export function ChatPanel(): JSX.Element {
                           Add to Rules
                         </button>
                       )}
-                      {(message.metadata.suggestion.type === 'context' ||
-                        message.metadata.suggestion.type === 'memory') &&
+                      {message.metadata.suggestion.type === 'context' &&
                         !message.metadata.contextAdded &&
-                        !message.metadata.memoryAdded && (
+                        (
                         <button
                           type="button"
                           className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
                           onClick={() => {
                             if (message.metadata?.suggestion?.content) {
                               appendToProjectContext(message.metadata.suggestion.content);
-                              updateMessage(message.id, { metadata: { contextAdded: true, memoryAdded: true } });
+                              updateMessage(message.id, { metadata: { contextAdded: true } });
                             }
                           }}
                           title="이 내용을 Project Context에 추가"

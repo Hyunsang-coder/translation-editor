@@ -265,7 +265,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             : (legacy || DEFAULT_TRANSLATOR_PERSONA);
 
           nextState.translationRules = settings.translationRules ?? '';
-          nextState.projectContext = settings.projectContext ?? settings.activeMemory ?? '';
+          nextState.projectContext = settings.projectContext ?? '';
           nextState.composerText = settings.composerText ?? '';
           nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
         } else {
@@ -524,8 +524,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
                     ...nextMetadata,
                     suggestion: { type: 'rule', content: evt.args.rule },
                   };
-                } else if (evt.toolName === 'suggest_project_context' && (evt.args.context || evt.args.memory)) {
-                  const content = evt.args.context ?? evt.args.memory;
+                } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
+                  const content = evt.args.context;
                   nextMetadata = {
                     ...nextMetadata,
                     suggestion: { type: 'context', content },
