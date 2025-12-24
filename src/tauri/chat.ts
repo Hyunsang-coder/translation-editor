@@ -2,7 +2,7 @@ import type { ChatSession } from '@/types';
 import { invoke } from '@/tauri/invoke';
 
 export interface ChatProjectSettings {
-  systemPromptOverlay: string;
+  translatorPersona: string;
   translationRules: string;
   activeMemory: string;
   composerText: string;

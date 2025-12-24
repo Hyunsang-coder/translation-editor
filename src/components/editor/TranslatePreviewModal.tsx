@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -58,6 +58,7 @@ export function TranslatePreviewModal(props: {
   const { open, title, docJson, originalHtml, isLoading, error, onClose, onApply } = props;
   const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
+  const diffEditorRef = useRef<any>(null);
 
   // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.
   useEffect(() => {
@@ -136,6 +137,17 @@ export function TranslatePreviewModal(props: {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
+
+  // Monaco DiffEditor가 언마운트될 때 모델을 명시적으로 해제하여
+  // "TextModel got disposed before DiffEditorWidget model got reset" 에러 방지
+  useEffect(() => {
+    return () => {
+      if (diffEditorRef.current) {
+        diffEditorRef.current.setModel(null);
+        diffEditorRef.current = null;
+      }
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -222,6 +234,9 @@ export function TranslatePreviewModal(props: {
                 theme={monacoTheme}
                 original={originalText}
                 modified={translatedText}
+                onMount={(editor) => {
+                  diffEditorRef.current = editor;
+                }}
                 options={{
                   renderSideBySide: true,
                   readOnly: true,

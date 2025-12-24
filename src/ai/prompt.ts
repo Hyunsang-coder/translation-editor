@@ -68,8 +68,8 @@ export interface PromptContext {
 }
 
 export interface PromptOptions {
-  /** 사용자 편집 가능한 시스템 프롬프트 오버레이 */
-  systemPromptOverlay?: string;
+  /** 사용자 정의 번역기 페르소나 */
+  translatorPersona?: string;
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
 }
@@ -78,13 +78,18 @@ export interface PromptOptions {
 // 시스템 프롬프트 빌더
 // ============================================
 
-function buildBaseSystemPrompt(project: ITEProject | null): string {
+function buildBaseSystemPrompt(project: ITEProject | null, persona?: string): string {
   const domain = project?.metadata.domain ?? 'general';
   const src = 'Source';
   const tgt = project?.metadata.targetLanguage ?? 'Target';
 
+  // 사용자가 Persona를 설정했으면 그것을 사용, 아니면 기본값
+  const personaBlock = persona?.trim()
+    ? persona
+    : '당신은 경험많은 전문 번역가입니다.';
+
   return [
-    '당신은 경험많은 전문 번역가입니다.',
+    personaBlock,
     '',
     `프로젝트: ${domain}`,
     `언어: ${src} → ${tgt}`,
@@ -96,8 +101,9 @@ function buildBaseSystemPrompt(project: ITEProject | null): string {
   ].join('\n');
 }
 
-function buildTranslateSystemPrompt(project: ITEProject | null): string {
-  const base = buildBaseSystemPrompt(project);
+function buildTranslateSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
+  // 번역 모드: 사용자 Persona 반영
+  const base = buildBaseSystemPrompt(project, opts?.translatorPersona);
 
   return [
     base,
@@ -111,12 +117,16 @@ function buildTranslateSystemPrompt(project: ITEProject | null): string {
 }
 
 function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
-  const base = buildBaseSystemPrompt(project);
-  const overlay = opts?.systemPromptOverlay?.trim();
+  // 질문 모드: Persona 무시 (Systemically Controlled) - 기본 '전문 번역가' 페르소나 유지
+  // 단, 사용자가 설정한 Persona가 있다면 '컨텍스트'로만 제공하여 번역 방향성을 참고하게 함 (행동 지침 X)
+  const base = buildBaseSystemPrompt(project, undefined);
+  const personaContext = opts?.translatorPersona?.trim()
+    ? `\n[참고: 사용자가 설정한 번역 페르소나]\n${opts.translatorPersona}\n(이 페르소나는 번역 작업 시 적용됩니다. 질문 답변 시에는 참고만 하세요.)`
+    : '';
 
   return [
     base,
-    overlay ? `\n추가 지침: ${overlay}` : '',
+    personaContext,
     '',
     '=== 질문 응답 모드 ===',
     '- 질문에 간결하게 답변합니다.',
@@ -138,14 +148,10 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
   ].join('\n');
 }
 
-function buildGeneralSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
-  const base = buildBaseSystemPrompt(project);
-  const overlay = opts?.systemPromptOverlay?.trim();
-
-  return [
-    base,
-    overlay ? `\n추가 지침: ${overlay}` : '',
-  ].filter(Boolean).join('\n');
+function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
+  // 일반 모드도 질문 모드와 동일하게 처리
+  const base = buildBaseSystemPrompt(project, undefined);
+  return base;
 }
 
 // ============================================
@@ -221,7 +227,7 @@ export async function buildLangChainMessages(
   let systemPrompt: string;
   switch (requestType) {
     case 'translate':
-      systemPrompt = buildTranslateSystemPrompt(ctx.project);
+      systemPrompt = buildTranslateSystemPrompt(ctx.project, opts);
       break;
     case 'question':
       systemPrompt = buildQuestionSystemPrompt(ctx.project, opts);
@@ -281,11 +287,16 @@ export async function buildTranslateOnlyMessages(
     targetLanguage?: string;
     translationRules?: string;
     activeMemory?: string;
+    translatorPersona?: string;
   },
 ): Promise<BaseMessage[]> {
   const tgtLang = opts?.targetLanguage ?? 'Target';
+  const persona = opts?.translatorPersona?.trim()
+    ? opts.translatorPersona
+    : '당신은 경험많은 전문 번역가입니다.';
+
   const systemPrompt = [
-    '당신은 경험많은 전문 번역가입니다.',
+    persona,
     `다음 원문을 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '중요: 번역문만 출력하세요.',

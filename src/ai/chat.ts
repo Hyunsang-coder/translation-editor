@@ -8,7 +8,7 @@ export interface GenerateReplyInput {
   contextBlocks: EditorBlock[];
   recentMessages: ChatMessage[];
   userMessage: string;
-  systemPromptOverlay?: string;
+  translatorPersona?: string;
   /** 번역 규칙 (사용자 입력) */
   translationRules?: string;
   /** Active Memory (용어/톤 규칙 요약) */
@@ -67,7 +67,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
       ...(input.targetDocument ? { targetDocument: input.targetDocument } : {}),
     },
     {
-      ...(input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : {}),
+      ...(input.translatorPersona ? { translatorPersona: input.translatorPersona } : {}),
       requestType,
     },
   );
@@ -110,7 +110,7 @@ export async function streamAssistantReply(
       ...(input.targetDocument ? { targetDocument: input.targetDocument } : {}),
     },
     {
-      ...(input.systemPromptOverlay ? { systemPromptOverlay: input.systemPromptOverlay } : {}),
+      ...(input.translatorPersona ? { translatorPersona: input.translatorPersona } : {}),
       requestType,
     },
   );

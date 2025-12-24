@@ -29,8 +29,8 @@ export function ChatPanel(): JSX.Element {
   const setComposerText = useChatStore((s) => s.setComposerText);
   const focusNonce = useChatStore((s) => s.composerFocusNonce);
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
-  const systemPromptOverlay = useChatStore((s) => s.systemPromptOverlay);
-  const setSystemPromptOverlay = useChatStore((s) => s.setSystemPromptOverlay);
+  const translatorPersona = useChatStore((s) => s.translatorPersona);
+  const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
   const translationRules = useChatStore((s) => s.translationRules);
   const setTranslationRules = useChatStore((s) => s.setTranslationRules);
   const activeMemory = useChatStore((s) => s.activeMemory);
@@ -41,7 +41,7 @@ export function ChatPanel(): JSX.Element {
   const [editingDraft, setEditingDraft] = useState<string>('');
 
   // Settings Preview States
-  const [previewSystemPrompt, setPreviewSystemPrompt] = useState(false);
+  const [previewPersona, setPreviewPersona] = useState(false);
   const [previewTranslationRules, setPreviewTranslationRules] = useState(false);
   const [previewActiveMemory, setPreviewActiveMemory] = useState(false);
 
@@ -92,10 +92,14 @@ export function ChatPanel(): JSX.Element {
     return hit && (looksLikeRulesList || looksLikeDirective || t.split('\n').length >= 2);
   }, []);
 
-  // 2. Effects
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원 + 탭 초기화
+  const lastHydratedId = useRef<string | null>(null);
   useEffect(() => {
-    void hydrateForProject(project?.id ?? null);
+    const projectId = project?.id ?? null;
+    if (projectId === lastHydratedId.current) return;
+
+    lastHydratedId.current = projectId;
+    void hydrateForProject(projectId);
     setActiveTab('settings');
   }, [project?.id, hydrateForProject]);
 
@@ -161,49 +165,46 @@ export function ChatPanel(): JSX.Element {
 
   const renderSettings = (): JSX.Element => (
     <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-editor-bg">
-      {/* Section 1: System Prompt */}
+      {/* Section 1: Translator Persona */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
+            <h3 className="text-xs font-semibold text-editor-text">1. Translator Persona</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              AI의 기본적인 페르소나와 번역 태도를 정의합니다. {`{언어}`} 변수를 사용할 수 있습니다.
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+              번역 시 AI가 연기할 페르소나를 정의합니다.<br />
+              (채팅 답변 말투에는 영향을 주지 않고, 오직 <strong>번역</strong> 결과물에만 반영됩니다.)
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewSystemPrompt ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-              onClick={() => setPreviewSystemPrompt(!previewSystemPrompt)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewPersona ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+              onClick={() => setPreviewPersona(!previewPersona)}
             >
-              {previewSystemPrompt ? 'Edit' : 'Preview'}
+              {previewPersona ? 'Edit' : 'Preview'}
             </button>
             <button
               type="button"
               className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() =>
-                setSystemPromptOverlay(
-                  '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
-                )
-              }
+              onClick={() => setTranslatorPersona('')}
             >
-              Reset
+              Clear
             </button>
           </div>
         </div>
-        {previewSystemPrompt ? (
+        {previewPersona ? (
           <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-              {systemPromptOverlay || '*No content*'}
+              {translatorPersona || '*Default Persona (Professional Translator)*'}
             </ReactMarkdown>
           </div>
         ) : (
           <textarea
             className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={systemPromptOverlay}
-            onChange={(e) => setSystemPromptOverlay(e.target.value)}
-            placeholder="Enter system prompt..."
+            value={translatorPersona}
+            onChange={(e) => setTranslatorPersona(e.target.value)}
+            placeholder="예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요..."
           />
         )}
       </section>

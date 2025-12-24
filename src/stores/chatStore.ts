@@ -27,8 +27,7 @@ let chatPersistTimer: number | null = null;
 let chatPersistInFlight = false;
 let chatPersistQueued = false;
 
-const DEFAULT_SYSTEM_PROMPT_OVERLAY =
-  '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.';
+const DEFAULT_TRANSLATOR_PERSONA = '';
 
 // ============================================
 // Store State Interface
@@ -52,7 +51,7 @@ interface ChatState {
   // Chat composer
   composerText: string;
   composerFocusNonce: number;
-  systemPromptOverlay: string;
+  translatorPersona: string;
   translationRules: string;
   activeMemory: string;
   includeSourceInPayload: boolean;
@@ -112,7 +111,7 @@ interface ChatActions {
   // 유틸리티
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
-  setSystemPromptOverlay: (overlay: string) => void;
+  setTranslatorPersona: (persona: string) => void;
   setTranslationRules: (rules: string) => void;
   appendToTranslationRules: (snippet: string) => void;
   setActiveMemory: (memory: string) => void;
@@ -135,7 +134,7 @@ type ChatStore = ChatState & ChatActions;
 
 export const useChatStore = create<ChatStore>((set, get) => {
   const buildChatSettings = (): ChatProjectSettings => ({
-    systemPromptOverlay: get().systemPromptOverlay,
+    translatorPersona: get().translatorPersona,
     translationRules: get().translationRules,
     activeMemory: get().activeMemory,
     composerText: get().composerText,
@@ -228,7 +227,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     lastSummaryAtMessageCountBySessionId: {},
     composerText: '',
     composerFocusNonce: 0,
-    systemPromptOverlay: DEFAULT_SYSTEM_PROMPT_OVERLAY,
+    translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
     includeSourceInPayload: true,
@@ -238,12 +237,19 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
+      // 1. 현재와 같은 프로젝트고 이미 로드된 상태면 스킵 (불필요한 리로드 및 상태 초기화 방지)
+      const currentLoadedId = get().loadedProjectId;
+      if (projectId === currentLoadedId && !get().isHydrating && projectId !== null) {
+        return;
+      }
+
+      console.log(`[chatStore] hydrateForProject starting for: ${projectId} (current: ${currentLoadedId})`);
+
+      // 2. 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
       if (chatPersistTimer !== null) {
         window.clearTimeout(chatPersistTimer);
         chatPersistTimer = null;
-        // 기존 프로젝트 데이터 저장
-        const oldId = get().loadedProjectId;
-        if (oldId && !get().isHydrating) {
+        if (currentLoadedId && !get().isHydrating) {
           await persistNow();
         }
       }
@@ -283,18 +289,23 @@ export const useChatStore = create<ChatStore>((set, get) => {
         };
 
         if (settings) {
-          nextState.systemPromptOverlay = settings.systemPromptOverlay?.trim()
-            ? settings.systemPromptOverlay
-            : DEFAULT_SYSTEM_PROMPT_OVERLAY;
-          nextState.translationRules = settings.translationRules;
-          nextState.activeMemory = settings.activeMemory;
+          // Migration: systemPromptOverlay -> translatorPersona
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const legacy = (settings as any).systemPromptOverlay;
+
+          nextState.translatorPersona = settings.translatorPersona?.trim()
+            ? settings.translatorPersona
+            : (legacy || DEFAULT_TRANSLATOR_PERSONA);
+
+          nextState.translationRules = settings.translationRules ?? '';
+          nextState.activeMemory = settings.activeMemory ?? '';
           nextState.composerText = settings.composerText ?? '';
-          nextState.includeSourceInPayload = settings.includeSourceInPayload;
-          nextState.includeTargetInPayload = settings.includeTargetInPayload;
+          nextState.includeSourceInPayload = settings.includeSourceInPayload ?? true;
+          nextState.includeTargetInPayload = settings.includeTargetInPayload ?? true;
           nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
         } else {
           // 설정이 없으면 기본값 유지
-          nextState.systemPromptOverlay = DEFAULT_SYSTEM_PROMPT_OVERLAY;
+          nextState.translatorPersona = DEFAULT_TRANSLATOR_PERSONA;
           nextState.translationRules = '';
           nextState.activeMemory = '';
           nextState.composerText = '';
@@ -444,7 +455,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const session = get().currentSession;
         const project = useProjectStore.getState().project;
         const currentSourceDocument = resolveSourceDocumentText();
-        const systemPromptOverlay = get().systemPromptOverlay;
+        const translatorPersona = get().translatorPersona;
 
         const contextBlockIds = session?.contextBlockIds ?? [];
         const contextBlocks =
@@ -522,7 +533,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             contextBlocks,
             recentMessages: recent,
             userMessage: maskedUserContent,
-            systemPromptOverlay,
+            translatorPersona,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
@@ -810,7 +821,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const cfg = getAiConfig();
         const project = useProjectStore.getState().project;
         const currentSourceDocument = resolveSourceDocumentText();
-        const systemPromptOverlay = get().systemPromptOverlay;
+        const translatorPersona = get().translatorPersona;
 
         const contextBlockIds = session.contextBlockIds ?? [];
         const contextBlocks =
@@ -886,7 +897,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             contextBlocks,
             recentMessages: recent,
             userMessage: maskedUserContent,
-            systemPromptOverlay,
+            translatorPersona,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
@@ -1005,8 +1016,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set({ error });
     },
 
-    setSystemPromptOverlay: (overlay: string): void => {
-      set({ systemPromptOverlay: overlay });
+    setTranslatorPersona: (persona: string): void => {
+      set({ translatorPersona: persona });
       schedulePersist();
     },
 

@@ -12,7 +12,8 @@ use crate::models::ChatSession;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatProjectSettings {
-    pub system_prompt_overlay: String,
+    #[serde(alias = "systemPromptOverlay")]
+    pub translator_persona: String,
     pub translation_rules: String,
     pub active_memory: String,
     pub composer_text: String,

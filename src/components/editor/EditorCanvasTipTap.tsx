@@ -32,6 +32,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
   const activeMemory = useChatStore((s) => s.activeMemory);
+  const translatorPersona = useChatStore((s) => s.translatorPersona);
 
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
@@ -149,6 +150,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         sourceDocJson,
         translationRules,
         activeMemory,
+        translatorPersona,
       });
       setTranslatePreviewDoc(doc);
     } catch (e) {
@@ -161,6 +163,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     includeSourceInPayload,
     translationRules,
     activeMemory,
+    translatorPersona,
   ]);
 
   const applyTranslatePreview = useCallback((): void => {

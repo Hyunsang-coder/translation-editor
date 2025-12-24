@@ -182,9 +182,15 @@ impl Database {
         let tx = self.conn.unchecked_transaction()?;
 
         // 프로젝트 메타데이터 저장
+        // INSERT OR REPLACE는 row를 삭제후 재생성하므로, CASCADE DELETE가 설정된 자식 테이블(chat_project_settings 등)이
+        // 의도치 않게 삭제될 수 있습니다. 이를 방지하기 위해 UPSERT를 사용합니다.
         tx.execute(
-            "INSERT OR REPLACE INTO projects (id, version, metadata_json, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO projects (id, version, metadata_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                version = excluded.version,
+                metadata_json = excluded.metadata_json,
+                updated_at = excluded.updated_at",
             (
                 &project.id,
                 &project.version,

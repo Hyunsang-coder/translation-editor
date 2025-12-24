@@ -1,31 +1,8 @@
 import type { ChatMessage, ITEProject } from '@/types';
 import { createChatModel } from '@/ai/client';
 import { getAiConfig } from '@/ai/config';
-import { z } from 'zod';
 
 export type TipTapDocJson = Record<string, unknown>;
-
-const TipTapDocSchema = z
-  .object({
-    type: z.literal('doc'),
-    content: z.array(z.unknown()),
-  })
-  .passthrough();
-
-const TranslationResultSchema = z.union([
-  z
-    .object({
-      doc: TipTapDocSchema,
-      error: z.undefined().optional(),
-    })
-    .passthrough(),
-  z
-    .object({
-      error: z.string(),
-      doc: z.null(),
-    })
-    .passthrough(),
-]);
 
 function formatRecentChat(messages: ChatMessage[], maxN: number): string {
   const sliced = messages.slice(Math.max(0, messages.length - maxN));
@@ -133,6 +110,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   recentChatMessages?: ChatMessage[];
   translationRules?: string;
   activeMemory?: string;
+  translatorPersona?: string;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig();
 
@@ -144,8 +122,12 @@ export async function translateSourceDocToTargetDocJson(params: {
   const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
 
+  const persona = params.translatorPersona?.trim()
+    ? params.translatorPersona
+    : '당신은 경험많은 전문 번역가입니다.';
+
   const systemLines: string[] = [
-    '당신은 경험많은 전문 번역가입니다.',
+    persona,
     `아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '중요: 출력은 반드시 "단 하나의 JSON 객체"만 반환하세요.',
@@ -194,80 +176,63 @@ export async function translateSourceDocToTargetDocJson(params: {
   ];
 
   // 1) 1차: LangChain structured output (OpenAI JSON/tool calling 등)로 파싱 안정화
+  // 1) 1차: LangChain structured output 시도 (현재 스키마 에러로 인해 일시적으로 텍스트 파생 폴백 우선 사용)
+  /*
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const structured = (model as any).withStructuredOutput(TranslationResultSchema, {
       name: 'translate_doc',
-      strict: true,
+      strict: false,
       includeRaw: true,
     });
     const res = await structured.invoke(messages);
-
-    const parsed = (res && typeof res === 'object' && 'parsed' in res)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (res as any).parsed
-      : res;
-    const raw = (res && typeof res === 'object' && 'raw' in res)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? JSON.stringify((res as any).raw)
-      : JSON.stringify(res);
-
-    if (parsed && typeof parsed === 'object') {
-      const obj = parsed as { error?: unknown; doc?: unknown };
-      if (typeof obj.error === 'string') throw new Error(obj.error);
-      if (obj.doc && isTipTapDocJson(obj.doc)) {
-        return { doc: obj.doc, raw };
-      }
-      if (obj.doc === null && typeof obj.error === 'string') {
-        throw new Error(obj.error);
-      }
-    }
-
-    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
-  } catch {
-    // 2) 폴백: 기존 문자열 파싱 (provider/모델이 structured output을 지원하지 않는 경우)
-    const res = await model.invoke(messages);
-    const raw = contentToText((res as { content?: unknown })?.content);
-    const extracted = extractJsonObject(raw);
-
-    let parsed: unknown;
-    let lastError: unknown;
-    const candidates = [extracted, extracted !== raw ? raw : null].filter(
-      (c): c is string => typeof c === 'string' && c.length > 0,
-    );
-
-    for (const candidate of candidates) {
-      try {
-        parsed = JSON.parse(candidate);
-        lastError = null;
-        break;
-      } catch (err) {
-        lastError = err;
-      }
-    }
-
-    if (lastError) {
-      throw new Error(
-        '번역 결과 JSON 파싱에 실패했습니다. (모델이 JSON 이외의 텍스트를 출력했을 수 있습니다)',
-      );
-    }
-
-    if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
-      if (typeof obj.error === 'string') {
-        throw new Error(obj.error);
-      }
-      if (obj.doc && isTipTapDocJson(obj.doc)) {
-        return { doc: obj.doc, raw };
-      }
-    }
-
-    if (!isTipTapDocJson(parsed)) {
-      throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
-    }
-
-    return { doc: parsed, raw };
+    // ... (기존 로직)
+  } catch (e) {
+    console.warn('Structured output failed, falling back to text parsing:', e);
   }
+  */
+
+  // 2) 폴백: 기존 문자열 파싱 (가장 안정적임)
+  const res = await model.invoke(messages);
+  const raw = contentToText((res as { content?: unknown })?.content);
+  const extracted = extractJsonObject(raw);
+
+  let parsed: unknown;
+  let lastError: unknown;
+  const candidates = [extracted, extracted !== raw ? raw : null].filter(
+    (c): c is string => typeof c === 'string' && c.length > 0,
+  );
+
+  for (const candidate of candidates) {
+    try {
+      parsed = JSON.parse(candidate);
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) {
+    throw new Error(
+      '번역 결과 JSON 파싱에 실패했습니다. (모델이 JSON 이외의 텍스트를 출력했을 수 있습니다)',
+    );
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>;
+    if (typeof obj.error === 'string') {
+      throw new Error(obj.error);
+    }
+    if (obj.doc && isTipTapDocJson(obj.doc)) {
+      return { doc: obj.doc, raw };
+    }
+  }
+
+  if (!isTipTapDocJson(parsed)) {
+    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
+  }
+
+  return { doc: parsed, raw };
 }
 
 
