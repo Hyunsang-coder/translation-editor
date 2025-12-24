@@ -34,6 +34,7 @@ export interface GenerateReplyInput {
 export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
+  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; status?: 'success' | 'error' }) => void;
 }
 
 function getToolCallId(call: ToolCall): string {
@@ -45,6 +46,7 @@ async function runToolCallingLoop(params: {
   tools: Array<{ name: string; invoke: (arg: any) => Promise<any> }>;
   messages: BaseMessage[];
   maxSteps?: number;
+  cb?: StreamCallbacks;
 }): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[] }> {
   const maxSteps = Math.max(1, Math.min(8, params.maxSteps ?? 4));
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
@@ -79,6 +81,7 @@ async function runToolCallingLoop(params: {
       // 문서 내용은 로그로 찍지 않음(보안/노이즈 방지). 도구명/인자만 로깅.
       console.debug('[AI tool_call]', { name: call.name, args: call.args ?? {} });
       if (!tool) {
+        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name });
         loopMessages.push(
           new ToolMessage({
             tool_call_id: toolCallId,
@@ -86,10 +89,12 @@ async function runToolCallingLoop(params: {
             content: `Tool not found: ${call.name}`,
           }),
         );
+        params.cb?.onToolCall?.({ phase: 'end', toolName: call.name, status: 'error' });
         continue;
       }
 
       try {
+        params.cb?.onToolCall?.({ phase: 'start', toolName: call.name });
         const out = await tool.invoke(call.args ?? {});
         const content = typeof out === 'string' ? out : JSON.stringify(out);
         loopMessages.push(
@@ -99,6 +104,7 @@ async function runToolCallingLoop(params: {
             content,
           }),
         );
+        params.cb?.onToolCall?.({ phase: 'end', toolName: call.name, status: 'success' });
       } catch (e) {
         loopMessages.push(
           new ToolMessage({
@@ -107,6 +113,7 @@ async function runToolCallingLoop(params: {
             content: e instanceof Error ? e.message : 'Tool execution failed',
           }),
         );
+        params.cb?.onToolCall?.({ phase: 'end', toolName: call.name, status: 'error' });
       }
     }
   }
@@ -251,6 +258,7 @@ export async function streamAssistantReply(
     model,
     tools: toolSpecs as any,
     messages: messagesWithGuide,
+    ...(cb ? { cb } : {}),
   });
 
   cb?.onToolsUsed?.(toolsUsed);

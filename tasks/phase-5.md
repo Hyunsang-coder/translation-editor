@@ -10,6 +10,7 @@
 - [x] 기본 Tool 구조 생성
   - 문서 조회 Tool: `get_source_document`, `get_target_document`
   - Tool 호출 텔레메트리: 콘솔(`[AI tool_call]`) + `metadata.toolsUsed`
+- [x] 채팅 응답 중 Tool 호출 진행 상태 UI 표시 (`metadata.toolCallsInProgress`)
 
 ### 5.2 checkSpelling Tool
 

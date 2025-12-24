@@ -169,6 +169,11 @@ export interface ChatMessageMetadata {
   tokens?: number;
   /** 이번 응답 생성 과정에서 호출된 Tool 목록(디버깅/가시화) */
   toolsUsed?: string[];
+  /**
+   * 현재 실행 중인 Tool 목록 (UX: "툴 실행 중" 표시)
+   * - 실시간 표시를 위한 상태이며, 최종 toolsUsed와는 별개입니다.
+   */
+  toolCallsInProgress?: string[];
 
   /**
    * Add to Rules 버튼을 이미 눌렀는지 여부

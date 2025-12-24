@@ -515,7 +515,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const assistantId = addMessage({
           role: 'assistant',
           content: '',
-          metadata: { model: cfg.model },
+          metadata: { model: cfg.model, toolCallsInProgress: [] },
         });
         if (assistantId) {
           set({ streamingMessageId: assistantId });
@@ -542,6 +542,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
               }
             },
+            onToolCall: (evt) => {
+              if (!assistantId) return;
+              const sessionNow = get().currentSession;
+              const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
+              const next =
+                evt.phase === 'start'
+                  ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
+                  : prev.filter((n) => n !== evt.toolName);
+              updateMessage(assistantId, { metadata: { toolCallsInProgress: next } });
+            },
             onToolsUsed: (toolsUsed) => {
               if (assistantId) {
                 updateMessage(assistantId, { metadata: { toolsUsed } });
@@ -552,12 +563,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         if (assistantId) {
           updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
+          updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 
         restoreGhostChips(replyMasked, maskSession);
         set({ isLoading: false, streamingMessageId: null });
         get().checkAndSuggestActiveMemory();
       } catch (error) {
+        const assistantId = get().streamingMessageId;
+        if (assistantId) {
+          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+        }
         set({
           error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
           isLoading: false,
@@ -879,7 +895,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const assistantId = get().addMessage({
           role: 'assistant',
           content: '',
-          metadata: { model: cfg.model },
+          metadata: { model: cfg.model, toolCallsInProgress: [] },
         });
         if (assistantId) {
           set({ streamingMessageId: assistantId });
@@ -905,6 +921,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 get().updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
               }
             },
+            onToolCall: (evt) => {
+              if (!assistantId) return;
+              const sessionNow = get().currentSession;
+              const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
+              const next =
+                evt.phase === 'start'
+                  ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
+                  : prev.filter((n) => n !== evt.toolName);
+              get().updateMessage(assistantId, { metadata: { toolCallsInProgress: next } });
+            },
             onToolsUsed: (toolsUsed) => {
               if (assistantId) {
                 get().updateMessage(assistantId, { metadata: { toolsUsed } });
@@ -915,12 +942,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         if (assistantId) {
           get().updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
+          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 
         set({ isLoading: false, streamingMessageId: null });
         get().checkAndSuggestActiveMemory();
         schedulePersist();
       } catch (error) {
+        const assistantId = get().streamingMessageId;
+        if (assistantId) {
+          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+        }
         set({
           error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
           isLoading: false,

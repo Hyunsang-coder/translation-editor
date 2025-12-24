@@ -123,6 +123,10 @@ What:
   - 하나의 프로젝트 내에서 AI 채팅 탭을 여러 개 생성/전환할 수 있어야 한다.
   - 탭들은 동일 프로젝트의 Settings(시스템 프롬프트 오버레이/번역 규칙/Active Memory/첨부 파일 등)를 공유한다.
   - 각 탭(thread)은 메시지 히스토리를 독립적으로 가진다.
+- 응답 생성 상태 표시(Loading / Tool Calling)
+  - AI 응답을 기다리는 동안, 일반적인 채팅 앱처럼 “typing/로딩 인디케이터”를 표시한다.
+  - 모델이 문서 조회 등 Tool을 호출하는 동안, “툴 실행 중” 상태를 표시할 수 있다. (예: `get_source_document`, `get_target_document`)
+  - 상태 표시는 UX 보조용이며, 문서 자동 수정/자동 적용과 무관하다(Non-Intrusive 유지).
 - Settings 화면 전환(Replace)
   - 기존 “System Prompt” 버튼은 “Settings”로 명명한다.
   - Settings를 열면 채팅 메시지 리스트/입력창은 숨겨지고, 해당 탭의 화면이 Settings UI로 “교체(replace)”된다.

@@ -58,6 +58,43 @@ export function ChatPanel(): JSX.Element {
   const createSession = useChatStore((s) => s.createSession);
   const updateMessage = useChatStore((s) => s.updateMessage);
 
+  const renderTypingIndicator = useCallback((opts?: { label?: string }): JSX.Element => {
+    const label = opts?.label ?? '응답 생성 중...';
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
+            style={{ animationDelay: '0ms' }}
+          />
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
+            style={{ animationDelay: '120ms' }}
+          />
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
+            style={{ animationDelay: '240ms' }}
+          />
+        </div>
+        <span className="text-sm text-editor-muted">{label}</span>
+      </div>
+    );
+  }, []);
+
+  const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
+    const tools = toolNames.filter(Boolean);
+    if (tools.length === 0) return null;
+    const label = tools.length === 1 ? tools[0] : `${tools[0]} 외 ${tools.length - 1}개`;
+    return (
+      <div className="mt-2">
+        <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
+          <span className="inline-block w-3 h-3 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
+          <span className="truncate">툴 실행 중: {label}</span>
+        </div>
+      </div>
+    );
+  }, []);
+
   const isRuleLikeMessage = useCallback((text: string): boolean => {
     const t = text.trim();
     if (t.length < 12) return false;
@@ -519,20 +556,34 @@ export function ChatPanel(): JSX.Element {
                         </div>
                       </div>
                     ) : (
-                      <div className="text-sm leading-relaxed chat-markdown">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          skipHtml
-                          urlTransform={defaultUrlTransform}
-                          components={{
-                            a: ({ node: _node, ...props }) => (
-                              <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
+                      <>
+                        {message.role === 'assistant' &&
+                          streamingMessageId === message.id &&
+                          message.content.trim().length === 0 ? (
+                          <div className="text-sm leading-relaxed">
+                            {renderTypingIndicator()}
+                          </div>
+                        ) : (
+                          <div className="text-sm leading-relaxed chat-markdown">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              skipHtml
+                              urlTransform={defaultUrlTransform}
+                              components={{
+                                a: ({ node: _node, ...props }) => (
+                                  <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
+                                ),
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                        {message.role === 'assistant' &&
+                          streamingMessageId === message.id &&
+                          !!message.metadata?.toolCallsInProgress?.length &&
+                          renderToolCallingBadge(message.metadata.toolCallsInProgress)}
+                      </>
                     )}
                   </div>
 
@@ -620,10 +671,7 @@ export function ChatPanel(): JSX.Element {
 
             {isLoading && !streamingMessageId && (
               <div className="chat-message chat-message-ai">
-                <div className="flex items-center gap-2">
-                  <span className="animate-pulse-soft">●</span>
-                  <span className="text-sm text-editor-muted">Thinking...</span>
-                </div>
+                {renderTypingIndicator({ label: '응답을 준비 중...' })}
               </div>
             )}
           </div>
