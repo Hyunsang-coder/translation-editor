@@ -4,21 +4,6 @@ import { getAiConfig } from '@/ai/config';
 
 export type TipTapDocJson = Record<string, unknown>;
 
-function formatRecentChat(messages: ChatMessage[], maxN: number): string {
-  const sliced = messages.slice(Math.max(0, messages.length - maxN));
-  if (sliced.length === 0) return '';
-
-  const lines: string[] = ['[최근 채팅(최신 10개)]'];
-  for (const m of sliced) {
-    const role = m.role === 'assistant' ? 'assistant' : 'user';
-    const text = (m.content ?? '').trim().replace(/\s+/g, ' ');
-    if (!text) continue;
-    // 너무 길면 잘라서 토큰 폭발 방지
-    lines.push(`${role}: ${text.slice(0, 240)}${text.length > 240 ? '…' : ''}`);
-  }
-  return lines.join('\n');
-}
-
 function extractFirstJsonObject(raw: string): string | null {
   let inString = false;
   let escaped = false;
@@ -102,12 +87,11 @@ function contentToText(content: unknown): string {
 /**
  * Source 전체를 TipTap JSON 형태로 번역합니다. (서식/구조 보존)
  * - 모델 출력은 "JSON만" 강제
- * - 최근 채팅 10개를 컨텍스트로 포함 (톤/용어/스타일 반영)
+ * - 번역(Translate) 모드는 채팅 히스토리를 컨텍스트에 포함하지 않습니다.
  */
 export async function translateSourceDocToTargetDocJson(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
-  recentChatMessages?: ChatMessage[];
   translationRules?: string;
   activeMemory?: string;
   translatorPersona?: string;
@@ -150,11 +134,6 @@ export async function translateSourceDocToTargetDocJson(params: {
   const memory = params.activeMemory?.trim();
   if (memory) {
     systemLines.push('[Active Memory - 용어/톤 규칙]', memory, '');
-  }
-
-  const recent = formatRecentChat(params.recentChatMessages ?? [], 10);
-  if (recent) {
-    systemLines.push(recent, '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();

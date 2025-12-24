@@ -40,11 +40,11 @@ Why:
 How:
 - Translate 버튼/단축키로 Source 전체를 TipTap JSON으로 모델에 전달하고, 출력도 TipTap JSON으로 강제합니다.
 - Preview 모달에서 원문-번역 Diff를 보여주고, Apply 시 Target을 전체 덮어쓰기 합니다.
-- 최근 채팅 메시지 일부(최대 10개)와 Translation Rules/Active Memory를 컨텍스트로 포함할 수 있습니다.
+- 문서 전체 번역(Translate)은 채팅 히스토리를 컨텍스트에 포함하지 않습니다. (Settings의 페르소나/번역 규칙/Active Memory/글로서리/문서 컨텍스트만 사용)
 
 What:
 - Trigger: Translate(Preview) 버튼/단축키
-- Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), 최근 메시지 n, translationRules, activeMemory
+- Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, activeMemory, translatorPersona, glossary/attachments(있는 경우)
 - Output: TipTap JSON (문서 전체), JSON 파싱 실패 시 폴백 로직
 - UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음.
 
@@ -62,7 +62,8 @@ What (의도/행동 정의):
 
 What (Payload 구성 규칙: 우선순위):
 - 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), 선택 텍스트 또는 전체(Target/Source), Translation Rules, Active Memory
-- 조건부 포함: 최근 메시지(최대 10개), Glossary/첨부, before/after 문맥
+- 조건부 포함: Glossary/첨부, before/after 문맥
+- 질문(Question) 모드에서만 포함: 최근 메시지(최대 10개)
 - 출력 포맷 강제:
   - Translate: TipTap JSON 전체만 출력(설명 금지)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
