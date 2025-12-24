@@ -6,8 +6,6 @@ export interface ChatProjectSettings {
   translationRules: string;
   activeMemory: string;
   composerText: string;
-  includeSourceInPayload: boolean;
-  includeTargetInPayload: boolean;
   /**
    * 문서 전체 번역(Preview→Apply) 시 컨텍스트로 사용할 채팅 탭
    * - null: 현재 탭(currentSession) 사용

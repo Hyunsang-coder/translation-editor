@@ -204,11 +204,21 @@ export function TranslatePreviewModal(props: {
             <div className="h-full flex items-center justify-center text-editor-muted">
               <div className="w-full max-w-md px-6">
                 <div className="flex items-center justify-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-primary-500 animate-pulse" />
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    />
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
+                      style={{ animationDelay: '120ms' }}
+                    />
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
+                      style={{ animationDelay: '240ms' }}
+                    />
+                  </div>
                   <div className="text-sm">번역 생성 중…</div>
-                </div>
-                <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-editor-border/60">
-                  <div className="h-full w-1/2 rounded-full bg-primary-500 animate-pulse" />
                 </div>
                 <div className="mt-2 text-center text-[11px] text-editor-muted">
                   응답을 기다리는 중입니다. 잠시만요.

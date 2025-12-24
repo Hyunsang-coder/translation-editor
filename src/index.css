@@ -10,10 +10,11 @@
   --editor-text: #1e293b;
   --editor-muted: #64748b;
 
-  --diff-insertion: #22c55e;
-  --diff-deletion: #ef4444;
-  --diff-insertion-bg: rgba(34, 197, 94, 0.15);
-  --diff-deletion-bg: rgba(239, 68, 68, 0.15);
+  /* Diff: 변경(삽입/삭제)만 강하게, 나머지는 최대한 조용하게 */
+  --diff-insertion: #16a34a; /* green-600 */
+  --diff-deletion: #dc2626; /* red-600 */
+  --diff-insertion-bg: rgba(22, 163, 74, 0.22);
+  --diff-deletion-bg: rgba(220, 38, 38, 0.22);
 
   --chat-bg: #f1f5f9;
   --chat-user: #3b82f6;
@@ -30,8 +31,8 @@
 
   --diff-insertion: #4ade80;
   --diff-deletion: #f87171;
-  --diff-insertion-bg: rgba(74, 222, 128, 0.2);
-  --diff-deletion-bg: rgba(248, 113, 113, 0.2);
+  --diff-insertion-bg: rgba(74, 222, 128, 0.28);
+  --diff-deletion-bg: rgba(248, 113, 113, 0.28);
 
   --chat-bg: #1e293b;
   --chat-user: #60a5fa;
@@ -351,27 +352,27 @@
 
 /* Monaco Pending Diff (In-place Preview) */
 .monaco-pending-diff {
-  background: rgba(16, 185, 129, 0.18); /* emerald-500 */
-  border-bottom: 1px dashed rgba(16, 185, 129, 0.9);
+  background: rgba(16, 185, 129, 0.24); /* emerald-500 */
+  border-bottom: 1px dashed rgba(16, 185, 129, 0.95);
 }
 
 .dark .monaco-pending-diff {
-  background: rgba(16, 185, 129, 0.28);
-  border-bottom: 1px dashed rgba(52, 211, 153, 0.9);
+  background: rgba(16, 185, 129, 0.34);
+  border-bottom: 1px dashed rgba(52, 211, 153, 0.95);
 }
 
 /* Monaco Pending Diff - deletion-like highlight (range to be replaced) */
 .monaco-pending-delete {
-  background: rgba(239, 68, 68, 0.14); /* red-500 */
+  background: rgba(239, 68, 68, 0.20); /* red-500 */
   text-decoration: line-through;
   text-decoration-color: rgba(239, 68, 68, 0.95);
-  border-bottom: 1px dashed rgba(239, 68, 68, 0.85);
+  border-bottom: 1px dashed rgba(239, 68, 68, 0.92);
 }
 
 .dark .monaco-pending-delete {
-  background: rgba(248, 113, 113, 0.22); /* red-400 */
+  background: rgba(248, 113, 113, 0.30); /* red-400 */
   text-decoration-color: rgba(248, 113, 113, 0.95);
-  border-bottom: 1px dashed rgba(248, 113, 113, 0.85);
+  border-bottom: 1px dashed rgba(248, 113, 113, 0.92);
 }
 
 /* Monaco Pending Diff - insertion preview widget */
@@ -477,25 +478,25 @@
 /* 삭제된 줄 배경 (왼쪽 패널) */
 .monaco-diff-editor .editor.original .view-overlays .line-delete,
 .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
-  background: rgba(254, 202, 202, 0.5) !important; /* red-200 */
+  background: rgba(254, 202, 202, 0.65) !important; /* red-200 */
 }
 
 /* 추가된 줄 배경 (오른쪽 패널) */
 .monaco-diff-editor .editor.modified .view-overlays .line-insert,
 .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
-  background: rgba(187, 247, 208, 0.5) !important; /* green-200 */
+  background: rgba(187, 247, 208, 0.65) !important; /* green-200 */
 }
 
 /* 삭제된 문자 하이라이트 - 빨간색 배경 + 취소선 */
 .monaco-diff-editor .editor.original .view-overlays .char-delete {
-  background: rgba(254, 202, 202, 0.85) !important; /* red-200 */
+  background: rgba(254, 202, 202, 0.92) !important; /* red-200 */
   text-decoration: line-through !important;
   text-decoration-color: #dc2626 !important; /* red-600 */
 }
 
 /* 추가된 문자 하이라이트 - 초록색 배경 */
 .monaco-diff-editor .editor.modified .view-overlays .char-insert {
-  background: rgba(134, 239, 172, 0.7) !important; /* green-300 */
+  background: rgba(134, 239, 172, 0.82) !important; /* green-300 */
 }
 
 /* 삭제된 텍스트에 취소선 적용 (Monaco 텍스트 레이어) */
@@ -505,48 +506,48 @@
 
 /* Gutter (줄 번호 옆) 색상 */
 .monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
-  background: rgba(254, 202, 202, 0.6) !important;
+  background: rgba(254, 202, 202, 0.75) !important;
 }
 
 .monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
-  background: rgba(187, 247, 208, 0.6) !important;
+  background: rgba(187, 247, 208, 0.75) !important;
 }
 
 /* Dark 테마 */
 .dark .monaco-diff-editor .editor.original .view-overlays .line-delete,
 .dark .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
-  background: rgba(127, 29, 29, 0.4) !important; /* red-900 */
+  background: rgba(127, 29, 29, 0.55) !important; /* red-900 */
 }
 
 .dark .monaco-diff-editor .editor.modified .view-overlays .line-insert,
 .dark .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
-  background: rgba(20, 83, 45, 0.4) !important; /* green-900 */
+  background: rgba(20, 83, 45, 0.55) !important; /* green-900 */
 }
 
 .dark .monaco-diff-editor .editor.original .view-overlays .char-delete {
-  background: rgba(185, 28, 28, 0.6) !important; /* red-700 */
+  background: rgba(185, 28, 28, 0.72) !important; /* red-700 */
   text-decoration: line-through !important;
   text-decoration-color: #fca5a5 !important; /* red-300 */
 }
 
 .dark .monaco-diff-editor .editor.modified .view-overlays .char-insert {
-  background: rgba(22, 163, 74, 0.5) !important; /* green-600 */
+  background: rgba(22, 163, 74, 0.62) !important; /* green-600 */
 }
 
 .dark .monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
-  background: rgba(127, 29, 29, 0.5) !important;
+  background: rgba(127, 29, 29, 0.65) !important;
 }
 
 .dark .monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
-  background: rgba(20, 83, 45, 0.5) !important;
+  background: rgba(20, 83, 45, 0.65) !important;
 }
 
 /* Inline diff 모드용 (renderSideBySide: false 시) */
 .monaco-diff-editor .inline-deleted-margin-view-zone {
-  background: rgba(254, 202, 202, 0.4) !important;
+  background: rgba(254, 202, 202, 0.32) !important;
 }
 
 .monaco-diff-editor .view-overlays .diagonal-fill {
-  opacity: 0.08;
+  opacity: 0.03;
 }
 

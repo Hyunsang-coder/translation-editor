@@ -13,6 +13,7 @@
 - [x] 채팅 UI + 멀티 탭 + Settings 화면 전환
 - [x] Markdown(GFM) 렌더링
 - [x] 스트리밍 응답 + UI 실시간 업데이트
+- [x] 채팅/번역 로딩 표시 개선: typing indicator 적용(Progress bar 제거)
 - [x] 메시지 수정(Edit Message) 및 (edited) 라벨 UI 완성
 - [x] Settings 입력 필드 Markdown 미리보기 기능 추가
 - [x] System Prompt 필드 툴팁 및 가이드 아이콘 추가

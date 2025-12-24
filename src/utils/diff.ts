@@ -62,7 +62,7 @@ export function createDiffResult(
 }
 
 /**
- * Diff 변경 사항을 HTML로 변환
+ * Diff 변경 사항을 HTML로 변환 (통합 뷰)
  * @param changes - 변경 사항 배열
  * @returns HTML 문자열
  */
@@ -74,6 +74,46 @@ export function diffToHtml(changes: DiffChange[]): string {
           return `<span data-diff-insertion class="diff-insertion">${escapeHtml(change.value)}</span>`;
         case 'delete':
           return `<span data-diff-deletion class="diff-deletion">${escapeHtml(change.value)}</span>`;
+        default:
+          return escapeHtml(change.value);
+      }
+    })
+    .join('');
+}
+
+/**
+ * Diff 변경 사항을 원문 기준 HTML로 변환 (삭제만 표시, 추가는 숨김)
+ * @param changes - 변경 사항 배열
+ * @returns HTML 문자열
+ */
+export function diffToOriginalHtml(changes: DiffChange[]): string {
+  return changes
+    .map((change) => {
+      switch (change.type) {
+        case 'delete':
+          return `<span data-diff-deletion class="diff-deletion">${escapeHtml(change.value)}</span>`;
+        case 'insert':
+          return ''; // 원문에는 추가된 내용이 없음
+        default:
+          return escapeHtml(change.value);
+      }
+    })
+    .join('');
+}
+
+/**
+ * Diff 변경 사항을 변경문 기준 HTML로 변환 (추가만 표시, 삭제는 숨김)
+ * @param changes - 변경 사항 배열
+ * @returns HTML 문자열
+ */
+export function diffToSuggestedHtml(changes: DiffChange[]): string {
+  return changes
+    .map((change) => {
+      switch (change.type) {
+        case 'insert':
+          return `<span data-diff-insertion class="diff-insertion">${escapeHtml(change.value)}</span>`;
+        case 'delete':
+          return ''; // 변경문에는 삭제된 내용이 없음
         default:
           return escapeHtml(change.value);
       }

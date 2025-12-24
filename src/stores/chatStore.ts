@@ -54,8 +54,6 @@ interface ChatState {
   translatorPersona: string;
   translationRules: string;
   activeMemory: string;
-  includeSourceInPayload: boolean;
-  includeTargetInPayload: boolean;
   /**
    * 문서 전체 번역(Preview→Apply) 컨텍스트로 사용할 채팅 탭
    * - null이면 현재 탭(currentSession)의 최신 메시지 10개를 사용
@@ -116,8 +114,6 @@ interface ChatActions {
   appendToTranslationRules: (snippet: string) => void;
   setActiveMemory: (memory: string) => void;
   appendToActiveMemory: (snippet: string) => void;
-  setIncludeSourceInPayload: (val: boolean) => void;
-  setIncludeTargetInPayload: (val: boolean) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // Persistence (project-scoped)
@@ -138,8 +134,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translationRules: get().translationRules,
     activeMemory: get().activeMemory,
     composerText: get().composerText,
-    includeSourceInPayload: get().includeSourceInPayload,
-    includeTargetInPayload: get().includeTargetInPayload,
     translationContextSessionId: get().translationContextSessionId,
   });
 
@@ -230,8 +224,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
-    includeSourceInPayload: true,
-    includeTargetInPayload: true,
     translationContextSessionId: null,
     loadedProjectId: null,
 
@@ -300,8 +292,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           nextState.translationRules = settings.translationRules ?? '';
           nextState.activeMemory = settings.activeMemory ?? '';
           nextState.composerText = settings.composerText ?? '';
-          nextState.includeSourceInPayload = settings.includeSourceInPayload ?? true;
-          nextState.includeTargetInPayload = settings.includeTargetInPayload ?? true;
           nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
         } else {
           // 설정이 없으면 기본값 유지
@@ -309,8 +299,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           nextState.translationRules = '';
           nextState.activeMemory = '';
           nextState.composerText = '';
-          nextState.includeSourceInPayload = true;
-          nextState.includeTargetInPayload = true;
           nextState.translationContextSessionId = null;
         }
 
@@ -469,8 +457,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             : [];
         const translationRulesRaw = get().translationRules;
         const activeMemoryRaw = get().activeMemory;
-        const includeSource = get().includeSourceInPayload;
-        const includeTarget = get().includeTargetInPayload;
+        // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
@@ -531,8 +518,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
-            includeSourceInPayload: includeSource,
-            includeTargetInPayload: includeTarget,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
           },
@@ -850,8 +835,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             : [];
         const translationRulesRaw = get().translationRules;
         const activeMemoryRaw = get().activeMemory;
-        const includeSource = get().includeSourceInPayload;
-        const includeTarget = get().includeTargetInPayload;
+        // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
@@ -911,8 +895,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
             activeMemory,
-            includeSourceInPayload: includeSource,
-            includeTargetInPayload: includeTarget,
             requestType: 'question',
           },
           {
@@ -1077,16 +1059,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const current = get().activeMemory.trim();
       const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
       set({ activeMemory: next });
-      schedulePersist();
-    },
-
-    setIncludeSourceInPayload: (val: boolean): void => {
-      set({ includeSourceInPayload: val });
-      schedulePersist();
-    },
-
-    setIncludeTargetInPayload: (val: boolean): void => {
-      set({ includeTargetInPayload: val });
       schedulePersist();
     },
 

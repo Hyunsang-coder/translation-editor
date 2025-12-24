@@ -23,11 +23,6 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
   const setSourceDocument = useProjectStore((s) => s.setSourceDocument);
   const rebuildTargetDocument = useProjectStore((s) => s.rebuildTargetDocument);
   const rebuildSourceDocument = useProjectStore((s) => s.rebuildSourceDocument);
-  const includeSourceInPayload = useChatStore((s) => s.includeSourceInPayload);
-  const includeTargetInPayload = useChatStore((s) => s.includeTargetInPayload);
-  const setIncludeSourceInPayload = useChatStore((s) => s.setIncludeSourceInPayload);
-  const setIncludeTargetInPayload = useChatStore((s) => s.setIncludeTargetInPayload);
-
   const editorRef = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
 
   // Hook 순서 보장을 위해, project가 null이어도 useMemo/useCallback은 항상 호출합니다.
@@ -59,26 +54,6 @@ export function EditorCanvas({ focusMode }: EditorCanvasProps): JSX.Element {
       <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-editor-muted">
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeSourceInPayload}
-              onChange={(e) => setIncludeSourceInPayload(e.target.checked)}
-              className="checkbox-sm"
-            />
-            <span>원문 컨텍스트에 포함</span>
-          </label>
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeTargetInPayload}
-              onChange={(e) => setIncludeTargetInPayload(e.target.checked)}
-              className="checkbox-sm"
-            />
-            <span>번역문 컨텍스트에 포함</span>
-          </label>
         </div>
       </div>
 

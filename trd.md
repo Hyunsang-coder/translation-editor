@@ -68,7 +68,7 @@ What (Payload 구성 규칙: 우선순위):
 - Question(채팅) 모드: 문서(Source/Target)는 “항상” 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
   - 목표: 불필요한 토큰 소비를 줄이고, 문맥이 필요한 질문에만 문서를 제공한다.
   - 방법: 모델이 필요하다고 판단하면 문서 조회 Tool을 호출하여 원문/번역문을 on-demand로 가져온다.
-  - 보호: 사용자가 Settings에서 Source/Target 포함을 끈 경우, 해당 문서는 Tool 호출/주입 모두 불가하다.
+  - 보호(단순화): 현재는 Source/Target 접근 토글을 제공하지 않으며, 문서 조회는 on-demand Tool 호출로만 수행한다.
 - 조건부 포함: Glossary/첨부, before/after 문맥
 - 질문(Question) 모드에서만 포함: 최근 메시지(최대 10개)
 - 출력 포맷 강제:

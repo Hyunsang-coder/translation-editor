@@ -23,9 +23,11 @@ export interface GenerateReplyInput {
   sourceDocument?: string;
   /** 번역문 문서 */
   targetDocument?: string;
-  /** Source 문서 접근 허용 여부(도구 사용 포함) */
+  /**
+   * (레거시/확장용) 문서 접근 설정
+   * - 현재 UX는 토글을 제공하지 않으며, 문서 조회는 on-demand Tool로만 수행합니다.
+   */
   includeSourceInPayload?: boolean;
-  /** Target 문서 접근 허용 여부(도구 사용 포함) */
   includeTargetInPayload?: boolean;
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
@@ -153,8 +155,8 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
   const model = createChatModel();
-  const includeSource = input.includeSourceInPayload ?? true;
-  const includeTarget = input.includeTargetInPayload ?? true;
+  const includeSource = true;
+  const includeTarget = true;
 
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)
@@ -218,8 +220,8 @@ export async function streamAssistantReply(
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
   const model = createChatModel();
-  const includeSource = input.includeSourceInPayload ?? true;
-  const includeTarget = input.includeTargetInPayload ?? true;
+  const includeSource = true;
+  const includeTarget = true;
 
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)

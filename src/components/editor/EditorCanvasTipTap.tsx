@@ -24,10 +24,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const setTargetDocument = useProjectStore((s) => s.setTargetDocument);
   const setTargetLanguage = useProjectStore((s) => s.setTargetLanguage);
 
-  const includeSourceInPayload = useChatStore((s) => s.includeSourceInPayload);
-  const includeTargetInPayload = useChatStore((s) => s.includeTargetInPayload);
-  const setIncludeSourceInPayload = useChatStore((s) => s.setIncludeSourceInPayload);
-  const setIncludeTargetInPayload = useChatStore((s) => s.setIncludeTargetInPayload);
   const appendComposerText = useChatStore((s) => s.appendComposerText);
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
@@ -130,14 +126,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
 
-    // 옵션: 사용자가 원문 컨텍스트를 끈 경우엔 번역 버튼을 막는 게 UX적으로 안전합니다.
-    if (includeSourceInPayload === false) {
-      const ok = window.confirm(
-        '현재 “원문 컨텍스트에 포함”이 꺼져 있습니다. 그래도 Source 전체 번역을 진행할까요?',
-      );
-      if (!ok) return;
-    }
-
     setTranslatePreviewError(null);
     setTranslatePreviewDoc(null);
     setTranslatePreviewOpen(true);
@@ -160,7 +148,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     }
   }, [
     project,
-    includeSourceInPayload,
     translationRules,
     activeMemory,
     translatorPersona,
@@ -218,26 +205,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-editor-muted">
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeSourceInPayload}
-              onChange={(e) => setIncludeSourceInPayload(e.target.checked)}
-              className="checkbox-sm"
-            />
-            <span>원문 컨텍스트에 포함</span>
-          </label>
-          <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeTargetInPayload}
-              onChange={(e) => setIncludeTargetInPayload(e.target.checked)}
-              className="checkbox-sm"
-            />
-            <span>번역문 컨텍스트에 포함</span>
-          </label>
         </div>
       </div>
 
