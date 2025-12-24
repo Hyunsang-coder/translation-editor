@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { useUIStore } from '@/stores/uiStore';
@@ -29,28 +29,13 @@ export function TargetMonacoEditor({
   const idByBlockIdRef = useRef<Record<string, string>>({});
   const modelChangeDisposable = useRef<{ dispose: () => void } | null>(null);
   const theme = useUIStore((s) => s.theme);
-  const appendComposerText = useChatStore((s) => s.appendComposerText);
-  const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const setActivePanel = useUIStore((s) => s.setActivePanel);
+  const setSelectedBlockId = useUIStore((s) => s.setSelectedBlockId);
   const registerTargetDocHandle = useProjectStore((s) => s.registerTargetDocHandle);
-  const addToast = useUIStore((s) => s.addToast);
   const pendingDocDiff = useProjectStore((s) => s.pendingDocDiff);
   const setPendingDocDiffTrackedDecorationId = useProjectStore(
     (s) => s.setPendingDocDiffTrackedDecorationId,
   );
 
-  const [inlineCommandOpen, setInlineCommandOpen] = useState(false);
-  const [inlineCommandText, setInlineCommandText] = useState('');
-  const [inlinePosition, setInlinePosition] = useState<{ top: number; left: number } | null>(null);
-  const [inlineContext, setInlineContext] = useState<{
-    selectionText: string;
-    beforeText: string;
-    afterText: string;
-    startOffset: number;
-    endOffset: number;
-  } | null>(null);
   const pendingDecorationIds = useRef<string[]>([]);
   const pendingAnchorDecorationId = useRef<string | null>(null);
   const pendingContentWidgetRef = useRef<MonacoEditorNS.IContentWidget | null>(null);
@@ -112,16 +97,6 @@ export function TargetMonacoEditor({
         // ignore
       }
     };
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setInlineCommandOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   // In-place preview for pending doc diff
@@ -486,8 +461,8 @@ export function TargetMonacoEditor({
             updateGhostDecorations();
           });
 
-          // Cmd+L: Selection → Add to chat (모델 호출 없음)
-          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, () => {
+          // Cmd+L or Cmd+K: Selection → Add to chat (모델 호출 없음)
+          const addSelectionToChat = () => {
             const sel = ed.getSelection();
             const model = ed.getModel();
             if (!sel || !model || sel.isEmpty()) return;
@@ -495,11 +470,17 @@ export function TargetMonacoEditor({
             const selectedText = model.getValueInRange(sel).trim();
             if (!selectedText) return;
 
+            const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+            const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+
             if (sidebarCollapsed) toggleSidebar();
             setActivePanel('chat');
             appendComposerText(selectedText);
             requestComposerFocus();
-          });
+          };
+
+          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, addSelectionToChat);
+          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, addSelectionToChat);
 
           // Cmd+Y: Keep (Accept) pending diff
           ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () => {
@@ -515,64 +496,6 @@ export function TargetMonacoEditor({
             if (hasPending) {
               useProjectStore.getState().rejectDocDiff();
             }
-          });
-
-          // Cmd+K: Cursor처럼 "명령 입력" 진입(1차: chat composer 포커스만)
-          ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-            const model = ed.getModel();
-            if (!model) return;
-
-            const sel = ed.getSelection();
-            if (!sel || sel.isEmpty()) {
-              // selection이 없으면 기존 동작처럼 채팅 입력 포커스
-              if (sidebarCollapsed) toggleSidebar();
-              setActivePanel('chat');
-              requestComposerFocus();
-              return;
-            }
-
-            const selectedText = model.getValueInRange(sel).trim();
-            if (!selectedText) {
-              addToast({
-                type: 'warning',
-                message: '인라인 명령을 사용하려면 번역문에서 구간을 선택하세요.',
-                duration: 1600,
-              });
-              return;
-            }
-
-            const startOffset = model.getOffsetAt(sel.getStartPosition());
-            const endOffset = model.getOffsetAt(sel.getEndPosition());
-            const full = model.getValue();
-            const windowSize = 200;
-            const beforeText = full.slice(Math.max(0, startOffset - windowSize), startOffset);
-            const afterText = full.slice(endOffset, Math.min(full.length, endOffset + windowSize));
-
-            const visible = ed.getScrolledVisiblePosition(sel.getEndPosition());
-            const domNode = ed.getDomNode();
-            const rect = domNode?.getBoundingClientRect();
-            const top =
-              visible && rect
-                ? Math.max(8, rect.top + visible.top - 24)
-                : 32;
-            const left =
-              visible && rect
-                ? Math.min(window.innerWidth - 340, Math.max(8, rect.left + visible.left - 40))
-                : 24;
-
-            if (sidebarCollapsed) toggleSidebar();
-            setActivePanel('chat');
-
-            setInlineContext({
-              selectionText: selectedText,
-              beforeText,
-              afterText,
-              startOffset,
-              endOffset,
-            });
-            setInlineCommandText('');
-            setInlinePosition({ top, left });
-            setInlineCommandOpen(true);
           });
 
           // Monaco selection 기반 Add to chat (Cursor 스타일)
@@ -633,6 +556,9 @@ export function TargetMonacoEditor({
           const text = (el.getAttribute('data-text') ?? '').trim();
           if (!text) return;
 
+          const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+          const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+
           if (sidebarCollapsed) toggleSidebar();
           setActivePanel('chat');
           appendComposerText(text);
@@ -645,82 +571,6 @@ export function TargetMonacoEditor({
         Add to chat
       </button>
 
-      {inlineCommandOpen && inlineContext && (
-        <div
-          className="absolute z-40 w-80 rounded-lg border border-editor-border bg-editor-surface shadow-xl p-3 space-y-2"
-          style={
-            inlinePosition
-              ? { top: inlinePosition.top, left: inlinePosition.left }
-              : { top: 16, right: 16 }
-          }
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-editor-text">인라인 명령 (Cmd+K)</p>
-            <button
-              type="button"
-              className="text-xs text-editor-muted hover:text-editor-text"
-              onClick={() => setInlineCommandOpen(false)}
-              title="닫기"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="text-[11px] text-editor-muted overflow-hidden text-ellipsis max-h-10">
-            선택 구간: {inlineContext.selectionText}
-          </div>
-          <textarea
-            className="w-full h-20 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={inlineCommandText}
-            onChange={(e) => setInlineCommandText(e.target.value)}
-            placeholder="예: 존칭 유지하며 더 자연스럽게 다듬어줘"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="px-3 py-1 rounded-md text-xs border border-editor-border text-editor-muted hover:text-editor-text"
-              onClick={() => setInlineCommandOpen(false)}
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
-              disabled={!inlineContext.selectionText.trim()}
-              onClick={() => {
-                // Apply(selected text)는 제거되었습니다.
-                // 대신 채팅 입력창에 “검수/검증/리라이트 요청”을 구성해 넣고 사용자가 직접 Send 하게 합니다.
-                const instruction = inlineCommandText.trim();
-                const selection = inlineContext.selectionText.trim();
-                const before = inlineContext.beforeText.trim();
-                const after = inlineContext.afterText.trim();
-
-                const payload = [
-                  instruction ? `요청: ${instruction}` : '요청: (비워둠)',
-                  '',
-                  '[선택 구간]',
-                  selection,
-                  '',
-                  before || after
-                    ? [
-                        '[주변 문맥(참고)]',
-                        before ? `BEFORE: ${before}` : '',
-                        after ? `AFTER: ${after}` : '',
-                      ].filter(Boolean).join('\n')
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join('\n');
-
-                appendComposerText(payload);
-                requestComposerFocus();
-                setInlineCommandOpen(false);
-              }}
-            >
-              전송
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

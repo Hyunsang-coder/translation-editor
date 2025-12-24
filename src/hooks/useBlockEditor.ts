@@ -32,13 +32,7 @@ export function useBlockEditor({
   const hasPendingDiff = useProjectStore((s) => s.hasPendingDiff(blockId));
   const acceptDiff = useProjectStore((s) => s.acceptDiff);
   const rejectDiff = useProjectStore((s) => s.rejectDiff);
-  const appendComposerText = useChatStore((s) => s.appendComposerText);
-  const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
-  const addContextBlock = useChatStore((s) => s.addContextBlock);
   const setSelectedBlockId = useUIStore((s) => s.setSelectedBlockId);
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const setActivePanel = useUIStore((s) => s.setActivePanel);
 
   const stableContent = useMemo(() => content, [content]);
 
@@ -63,14 +57,23 @@ export function useBlockEditor({
         'data-block-id': blockId,
       },
       handleKeyDown: (_view, event) => {
-        // Cmd+L: Selection to Chat (모델 호출 없음)
+        // Cmd+L or Cmd+K: Selection to Chat (모델 호출 없음)
         // readOnly(source)에서도 동작해야 하므로 readOnly 체크보다 먼저 처리합니다.
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
+        const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
+          (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
+
+        if (isSelectionShortcut) {
           event.preventDefault();
           void (async () => {
             if (!editor) return;
             const { from, to } = editor.state.selection;
             const selected = editor.state.doc.textBetween(from, to, ' ').trim();
+
+            // getState()를 사용하여 stale closure 문제 방지
+            const { addContextBlock } = useChatStore.getState();
+            const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+            const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+
             // 현재 블록을 컨텍스트로 등록 (Context Injection)
             addContextBlock(blockId);
             if (sidebarCollapsed) toggleSidebar();

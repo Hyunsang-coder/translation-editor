@@ -3,6 +3,8 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEffect } from 'react';
+import { useChatStore } from '@/stores/chatStore';
+import { useUIStore } from '@/stores/uiStore';
 
 export interface TipTapEditorProps {
   content: string;
@@ -53,6 +55,33 @@ export function TipTapEditor({
     editorProps: {
       attributes: {
         class: 'tiptap-editor focus:outline-none',
+      },
+      handleKeyDown: (_view, event) => {
+        // Cmd+L or Cmd+K: Selection to Chat (모델 호출 없음)
+        const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
+          (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
+
+        if (isSelectionShortcut) {
+          if (!editor) return false;
+          const { from, to } = editor.state.selection;
+          if (from === to) return false;
+
+          event.preventDefault();
+          const selected = editor.state.doc.textBetween(from, to, ' ').trim();
+
+          const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+          const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+
+          if (sidebarCollapsed) toggleSidebar();
+          setActivePanel('chat');
+          if (selected.length > 0) {
+            appendComposerText(selected);
+          }
+          requestComposerFocus();
+          return true;
+        }
+
+        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -120,7 +149,7 @@ export function SourceTipTapEditor({
     placeholder: '원문을 입력하세요...',
     className: `source-editor ${className}`,
   };
-  
+
   if (onChange) props.onChange = onChange;
   if (onJsonChange) props.onJsonChange = onJsonChange;
   if (onEditorReady) props.onEditorReady = onEditorReady;
@@ -151,7 +180,7 @@ export function TargetTipTapEditor({
     placeholder: '번역문을 입력하세요...',
     className: `target-editor ${className}`,
   };
-  
+
   if (onChange) props.onChange = onChange;
   if (onJsonChange) props.onJsonChange = onJsonChange;
   if (onEditorReady) props.onEditorReady = onEditorReady;

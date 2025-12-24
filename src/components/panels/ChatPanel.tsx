@@ -35,12 +35,6 @@ export function ChatPanel(): JSX.Element {
   const setTranslationRules = useChatStore((s) => s.setTranslationRules);
   const activeMemory = useChatStore((s) => s.activeMemory);
   const setActiveMemory = useChatStore((s) => s.setActiveMemory);
-
-  const isHydrating = useChatStore((s) => s.isHydrating);
-  const project = useProjectStore((s) => s.project);
-  const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
-  const hydrateForProject = useChatStore((s) => s.hydrateForProject);
-
   const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -50,6 +44,11 @@ export function ChatPanel(): JSX.Element {
   const [previewSystemPrompt, setPreviewSystemPrompt] = useState(false);
   const [previewTranslationRules, setPreviewTranslationRules] = useState(false);
   const [previewActiveMemory, setPreviewActiveMemory] = useState(false);
+
+  const isHydrating = useChatStore((s) => s.isHydrating);
+  const project = useProjectStore((s) => s.project);
+  const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
+  const hydrateForProject = useChatStore((s) => s.hydrateForProject);
 
   const editMessage = useChatStore((s) => s.editMessage);
   const replayMessage = useChatStore((s) => s.replayMessage);
@@ -101,12 +100,18 @@ export function ChatPanel(): JSX.Element {
   }, [project?.id, hydrateForProject]);
 
   useEffect(() => {
-    if (sidebarCollapsed) return;
-    if (focusNonce === 0) return; // 초기화 시점에는 무시
-    // selection에서 Add to chat을 눌렀을 때: Settings에 있더라도 채팅 탭으로 전환 + 포커스
+    if (focusNonce === 0) return;
+
+    // 이펙트가 실행될 때 사이드바가 닫혀있다면 강제로 열기
+    const { sidebarCollapsed, toggleSidebar } = useUIStore.getState();
+    if (sidebarCollapsed) toggleSidebar();
+
     setActiveTab('chat');
-    inputRef.current?.focus();
-  }, [focusNonce, sidebarCollapsed]);
+    // 사이드바가 열리는 시간을 고려하여 약간의 지연 후 포커스
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  }, [focusNonce]);
 
   // 기본 채팅 세션 1개는 자동 생성
   useEffect(() => {
