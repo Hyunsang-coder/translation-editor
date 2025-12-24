@@ -147,7 +147,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
   const persistNow = async (): Promise<void> => {
     if (!isTauriRuntime()) return;
     if (get().isHydrating) return; // 로드 중에는 저장하지 않음 (데이터 유실 방지)
-    
+
     // getActiveProjectId() 대신 현재 스토어에 로드된 ID 사용
     const projectId = get().loadedProjectId;
     if (!projectId) return;
@@ -237,10 +237,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     loadedProjectId: null,
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
-      // 프로젝트 전환 시, 기존 타이머 취소
+      // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
       if (chatPersistTimer !== null) {
         window.clearTimeout(chatPersistTimer);
         chatPersistTimer = null;
+        // 기존 프로젝트 데이터 저장
+        const oldId = get().loadedProjectId;
+        if (oldId && !get().isHydrating) {
+          await persistNow();
+        }
       }
 
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
@@ -255,7 +260,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      set({ isHydrating: true, error: null, loadedProjectId: projectId });
+      set({ isHydrating: true, error: null, loadedProjectId: null });
 
       try {
         if (!isTauriRuntime()) {
@@ -270,6 +275,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
+          loadedProjectId: projectId, // 로드 성공 후에만 ID 설정 (저장 허용)
           sessions: session ? [session] : [],
           currentSessionId: session?.id ?? null,
           currentSession: session ?? null,
@@ -420,9 +426,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
         const msg = needsOneQuestion
           ? [
-              '이 요청은 채팅에서 번역하지 않습니다.',
-              '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
-            ].join(' ')
+            '이 요청은 채팅에서 번역하지 않습니다.',
+            '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
+          ].join(' ')
           : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
 
         addMessage({ role: 'assistant', content: msg });
@@ -447,8 +453,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .map((id) => project.blocks[id])
               .filter((b): b is NonNullable<typeof b> => b !== undefined)
             : [];
-        const fallbackSourceText =
-          contextBlocks.length === 0 && currentSourceDocument ? currentSourceDocument : undefined;
         const translationRulesRaw = get().translationRules;
         const activeMemoryRaw = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
@@ -521,7 +525,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
             systemPromptOverlay,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
-            ...(fallbackSourceText ? { fallbackSourceText } : {}),
             activeMemory,
             ...(sourceDocument ? { sourceDocument } : {}),
             ...(targetDocument ? { targetDocument } : {}),
@@ -787,9 +790,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
         const msg = needsOneQuestion
           ? [
-              '이 요청은 채팅에서 번역하지 않습니다.',
-              '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
-            ].join(' ')
+            '이 요청은 채팅에서 번역하지 않습니다.',
+            '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
+          ].join(' ')
           : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
 
         const replyId = get().addMessage({ role: 'assistant', content: msg });
@@ -816,8 +819,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .map((id) => project.blocks[id])
               .filter((b): b is NonNullable<typeof b> => b !== undefined)
             : [];
-        const fallbackSourceText =
-          contextBlocks.length === 0 && currentSourceDocument ? currentSourceDocument : undefined;
         const translationRulesRaw = get().translationRules;
         const activeMemoryRaw = get().activeMemory;
         const includeSource = get().includeSourceInPayload;
@@ -888,7 +889,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
             systemPromptOverlay,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
-            ...(fallbackSourceText ? { fallbackSourceText } : {}),
             activeMemory,
             ...(sourceDocument ? { sourceDocument } : {}),
             ...(targetDocument ? { targetDocument } : {}),

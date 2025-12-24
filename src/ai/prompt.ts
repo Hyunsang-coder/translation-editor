@@ -17,31 +17,34 @@ export type RequestType = 'translate' | 'question' | 'general';
  */
 export function detectRequestType(message: string): RequestType {
   const lowerMessage = message.toLowerCase();
-  
-  // 번역 관련 키워드
-  const translateKeywords = [
-    '번역', 'translate', '옮겨', '바꿔줘', '변환', '한국어로', '영어로', 
-    '일본어로', '중국어로', '자연스럽게', '다듬어', '수정해', '고쳐'
-  ];
-  
-  // 질문 관련 키워드
-  const questionKeywords = [
+
+  // 질문 관련 지표 (물음표, 의문사, 확인 요청 등)
+  const questionIndicators = [
     '?', '무엇', '뭐', '왜', '어떻게', '어디', '언제', '누가',
-    '알려', '설명', '의미', '뜻이', '차이', '맞아', '틀려'
+    '알려', '설명', '의미', '뜻이', '차이', '맞아', '틀려', '어때', '맞나', '인가',
+    'correct', 'wrong', 'what', 'how', 'why', 'where', 'when', 'who', 'check'
   ];
-  
+
+  // 번역 관련 키워드 (명령형 위주)
+  const translateKeywords = [
+    '번역해', 'translate', '옮겨', '바꿔줘', '변환', '한국어로', '영어로',
+    '일본어로', '중국어로', '다듬어', '수정해', '고쳐'
+  ];
+
+  // 질문 지표가 포함되어 있으면 우선적으로 질문으로 분류
+  // 예: "이 번역 맞아?" -> "번역"이 포함되어 있어도 "맞아" 때문에 질문임
+  for (const indicator of questionIndicators) {
+    if (lowerMessage.includes(indicator)) {
+      return 'question';
+    }
+  }
+
   for (const keyword of translateKeywords) {
     if (lowerMessage.includes(keyword)) {
       return 'translate';
     }
   }
-  
-  for (const keyword of questionKeywords) {
-    if (lowerMessage.includes(keyword)) {
-      return 'question';
-    }
-  }
-  
+
   return 'general';
 }
 
@@ -95,7 +98,7 @@ function buildBaseSystemPrompt(project: ITEProject | null): string {
 
 function buildTranslateSystemPrompt(project: ITEProject | null): string {
   const base = buildBaseSystemPrompt(project);
-  
+
   return [
     base,
     '',
@@ -107,11 +110,13 @@ function buildTranslateSystemPrompt(project: ITEProject | null): string {
   ].join('\n');
 }
 
-function buildQuestionSystemPrompt(project: ITEProject | null): string {
+function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
   const base = buildBaseSystemPrompt(project);
-  
+  const overlay = opts?.systemPromptOverlay?.trim();
+
   return [
     base,
+    overlay ? `\n추가 지침: ${overlay}` : '',
     '',
     '=== 질문 응답 모드 ===',
     '- 질문에 간결하게 답변합니다.',
@@ -136,7 +141,7 @@ function buildQuestionSystemPrompt(project: ITEProject | null): string {
 function buildGeneralSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
   const base = buildBaseSystemPrompt(project);
   const overlay = opts?.systemPromptOverlay?.trim();
-  
+
   return [
     base,
     overlay ? `\n추가 지침: ${overlay}` : '',
@@ -211,7 +216,7 @@ export async function buildLangChainMessages(
 ): Promise<BaseMessage[]> {
   // 요청 유형 감지
   const requestType = opts?.requestType ?? detectRequestType(ctx.userMessage);
-  
+
   // 요청 유형에 따른 시스템 프롬프트 선택
   let systemPrompt: string;
   switch (requestType) {
@@ -219,7 +224,7 @@ export async function buildLangChainMessages(
       systemPrompt = buildTranslateSystemPrompt(ctx.project);
       break;
     case 'question':
-      systemPrompt = buildQuestionSystemPrompt(ctx.project);
+      systemPrompt = buildQuestionSystemPrompt(ctx.project, opts);
       break;
     default:
       systemPrompt = buildGeneralSystemPrompt(ctx.project, opts);
@@ -247,16 +252,16 @@ export async function buildLangChainMessages(
   // 프롬프트 템플릿 구성
   const prompt = systemContext
     ? ChatPromptTemplate.fromMessages([
-        ['system', '{systemPrompt}'],
-        ['system', '{systemContext}'],
-        new MessagesPlaceholder('history'),
-        ['human', '{input}'],
-      ])
+      ['system', '{systemPrompt}'],
+      ['system', '{systemContext}'],
+      new MessagesPlaceholder('history'),
+      ['human', '{input}'],
+    ])
     : ChatPromptTemplate.fromMessages([
-        ['system', '{systemPrompt}'],
-        new MessagesPlaceholder('history'),
-        ['human', '{input}'],
-      ]);
+      ['system', '{systemPrompt}'],
+      new MessagesPlaceholder('history'),
+      ['human', '{input}'],
+    ]);
 
   return await prompt.formatMessages({
     systemPrompt,

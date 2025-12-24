@@ -133,7 +133,7 @@ export async function streamAssistantReply(
  */
 function getMockResponse(input: GenerateReplyInput): string {
   const requestType = detectRequestType(input.userMessage);
-  
+
   const mockResponses: Record<RequestType, string> = {
     translate: '(Mock 번역 결과) 이것은 테스트 번역입니다.',
     question: '(Mock 답변) 질문에 대한 테스트 답변입니다.',
