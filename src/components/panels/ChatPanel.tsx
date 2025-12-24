@@ -46,6 +46,11 @@ export function ChatPanel(): JSX.Element {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<string>('');
 
+  // Settings Preview States
+  const [previewSystemPrompt, setPreviewSystemPrompt] = useState(false);
+  const [previewTranslationRules, setPreviewTranslationRules] = useState(false);
+  const [previewActiveMemory, setPreviewActiveMemory] = useState(false);
+
   const editMessage = useChatStore((s) => s.editMessage);
   const replayMessage = useChatStore((s) => s.replayMessage);
   const appendToTranslationRules = useChatStore((s) => s.appendToTranslationRules);
@@ -154,65 +159,134 @@ export function ChatPanel(): JSX.Element {
           {/* Section 1: System Prompt */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
-              <button
-                type="button"
-                className="text-xs text-primary-500 hover:text-primary-600"
-                onClick={() =>
-                  setSystemPromptOverlay(
-                    '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
-                  )
-                }
-              >
-                Reset
-              </button>
+              <div className="flex items-center gap-1.5 group relative">
+                <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
+                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+                  AI의 기본적인 페르소나와 번역 태도를 정의합니다. {`{언어}`} 변수를 사용할 수 있습니다.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewSystemPrompt ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+                  onClick={() => setPreviewSystemPrompt(!previewSystemPrompt)}
+                >
+                  {previewSystemPrompt ? 'Edit' : 'Preview'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-primary-500 hover:text-primary-600"
+                  onClick={() =>
+                    setSystemPromptOverlay(
+                      '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
+                    )
+                  }
+                >
+                  Reset
+                </button>
+              </div>
             </div>
-            <textarea
-              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={systemPromptOverlay}
-              onChange={(e) => setSystemPromptOverlay(e.target.value)}
-              placeholder="Enter system prompt..."
-            />
+            {previewSystemPrompt ? (
+              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                  {systemPromptOverlay || '*No content*'}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <textarea
+                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={systemPromptOverlay}
+                onChange={(e) => setSystemPromptOverlay(e.target.value)}
+                placeholder="Enter system prompt..."
+              />
+            )}
           </section>
 
           {/* Section 2: Translation Rules */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
-              <button
-                type="button"
-                className="text-xs text-primary-500 hover:text-primary-600"
-                onClick={() => setTranslationRules('')}
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-1.5 group relative">
+                <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
+                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+                  모든 번역에 공통적으로 적용될 고정 규칙입니다. (예: "해요체 사용", "따옴표 유지" 등)
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewTranslationRules ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+                  onClick={() => setPreviewTranslationRules(!previewTranslationRules)}
+                >
+                  {previewTranslationRules ? 'Edit' : 'Preview'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-primary-500 hover:text-primary-600"
+                  onClick={() => setTranslationRules('')}
+                >
+                  Clear
+                </button>
+              </div>
             </div>
-            <textarea
-              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={translationRules}
-              onChange={(e) => setTranslationRules(e.target.value)}
-              placeholder="Enter translation rules..."
-            />
+            {previewTranslationRules ? (
+              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                  {translationRules || '*No rules defined*'}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <textarea
+                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={translationRules}
+                onChange={(e) => setTranslationRules(e.target.value)}
+                placeholder="Enter translation rules..."
+              />
+            )}
           </section>
 
           {/* Section 3: Active Memory */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
-              <button
-                type="button"
-                className="text-xs text-primary-500 hover:text-primary-600"
-                onClick={() => setActiveMemory('')}
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-1.5 group relative">
+                <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
+                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+                  대화 중 발견된 일시적 규칙이나 컨텍스트를 저장합니다. AI가 자동으로 제안할 수 있습니다.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewActiveMemory ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+                  onClick={() => setPreviewActiveMemory(!previewActiveMemory)}
+                >
+                  {previewActiveMemory ? 'Edit' : 'Preview'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-primary-500 hover:text-primary-600"
+                  onClick={() => setActiveMemory('')}
+                >
+                  Clear
+                </button>
+              </div>
             </div>
-            <textarea
-              className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={activeMemory}
-              onChange={(e) => setActiveMemory(e.target.value)}
-              placeholder="Enter active memory..."
-            />
+            {previewActiveMemory ? (
+              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                  {activeMemory || '*Memory is empty*'}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <textarea
+                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={activeMemory}
+                onChange={(e) => setActiveMemory(e.target.value)}
+                placeholder="Enter active memory..."
+              />
+            )}
           </section>
 
           {/* Section 3: Glossary */}
@@ -487,9 +561,20 @@ export function ChatPanel(): JSX.Element {
                 </div>
               )}
             </div>
-            <span className="text-xs text-editor-muted mt-1 block">
-              {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
-            </span>
+            <div className="flex items-end justify-between gap-2 mt-1">
+              <span className="text-xs text-editor-muted">
+                {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
+                {message.metadata?.editedAt && (
+                  <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
+                    (edited)
+                    <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
+                      <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">Original Content:</div>
+                      <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
+                    </div>
+                  </span>
+                )}
+              </span>
+            </div>
 
             {/* Add to Rules / Memory */}
             {message.role === 'assistant' &&

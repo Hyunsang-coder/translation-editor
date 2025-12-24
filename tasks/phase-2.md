@@ -13,6 +13,9 @@
 - [x] 채팅 UI + 멀티 탭 + Settings 화면 전환
 - [x] Markdown(GFM) 렌더링
 - [x] 스트리밍 응답 + UI 실시간 업데이트
+- [x] 메시지 수정(Edit Message) 및 (edited) 라벨 UI 완성
+- [x] Settings 입력 필드 Markdown 미리보기 기능 추가
+- [x] System Prompt 필드 툴팁 및 가이드 아이콘 추가
 
 ## 진행중/미완료(상세)
 
@@ -25,18 +28,18 @@
     - 항상 `doc` 루트의 TipTap JSON으로 파싱 성공하거나,
     - 실패 시 사용자에게 **명확한 오류 메시지** + **재시도/폴백** 동작이 일관되게 동작
 
-### 2.4 AI Chat 패널 UX
+### 2.4 AI Chat 패널 UX (완료)
 
-- [~] **메시지 수정(Edit Message) 완성**
+- [x] **메시지 수정(Edit Message) 완성**
   - [x] 사용자 메시지 수정 시 이하 메시지 truncate
-  - [~] `editedAt`, `originalContent` 저장/표시까지 포함해 “완전 구현”
+  - [x] `editedAt`, `originalContent` 저장/표시까지 포함해 “완전 구현”
   - **완료 조건**: 수정 후에도 히스토리/스트리밍/세션 저장이 깨지지 않음
 
-- [ ] **Settings 입력 필드 Markdown 지원**
+- [x] **Settings 입력 필드 Markdown 지원**
   - **범위**: Settings 영역의 특정 입력(예: 번역 규칙/Active Memory 등)
   - **완료 조건**: 입력/미리보기(또는 표시)에서 Markdown 렌더링이 일관되며, HTML 렌더링은 금지
 
-- [ ] **System Prompt 필드 툴팁**
+- [x] **System Prompt 필드 툴팁**
   - **완료 조건**: 각 필드 옆 아이콘 + 호버 시 툴팁 표시, 접근성(키보드 포커스) 고려
 
 
