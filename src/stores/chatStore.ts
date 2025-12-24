@@ -20,7 +20,6 @@ import {
   restoreGhostChips,
 } from '@/utils/ghostMask';
 import { stripHtml } from '@/utils/hash';
-import { buildTargetDocument } from '@/editor/targetDocument';
 
 const CHAT_PERSIST_DEBOUNCE_MS = 800;
 let chatPersistTimer: number | null = null;
@@ -53,7 +52,7 @@ interface ChatState {
   composerFocusNonce: number;
   translatorPersona: string;
   translationRules: string;
-  activeMemory: string;
+  projectContext: string;
   /**
    * 문서 전체 번역(Preview→Apply) 컨텍스트로 사용할 채팅 탭
    * - null이면 현재 탭(currentSession)의 최신 메시지 10개를 사용
@@ -102,9 +101,9 @@ interface ChatActions {
   removeContextBlock: (blockId: string) => void;
 
   // Smart Context Memory (4.3)
-  checkAndSuggestActiveMemory: () => void;
+  checkAndSuggestProjectContext: () => void;
   dismissSummarySuggestion: () => void;
-  generateActiveMemorySummary: () => Promise<void>;
+  generateProjectContextSummary: () => Promise<void>;
 
   // 유틸리티
   setLoading: (isLoading: boolean) => void;
@@ -112,8 +111,8 @@ interface ChatActions {
   setTranslatorPersona: (persona: string) => void;
   setTranslationRules: (rules: string) => void;
   appendToTranslationRules: (snippet: string) => void;
-  setActiveMemory: (memory: string) => void;
-  appendToActiveMemory: (snippet: string) => void;
+  setProjectContext: (memory: string) => void;
+  appendToProjectContext: (snippet: string) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // Persistence (project-scoped)
@@ -132,7 +131,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
   const buildChatSettings = (): ChatProjectSettings => ({
     translatorPersona: get().translatorPersona,
     translationRules: get().translationRules,
-    activeMemory: get().activeMemory,
+    projectContext: get().projectContext,
     composerText: get().composerText,
     translationContextSessionId: get().translationContextSessionId,
   });
@@ -181,30 +180,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
     }, CHAT_PERSIST_DEBOUNCE_MS);
   };
 
-  const resolveTargetDocumentText = (
-    includeTarget: boolean,
-    project: Parameters<typeof buildTargetDocument>[0] | null,
-  ): string | undefined => {
-    if (!includeTarget) return undefined;
-
-    const raw = useProjectStore.getState().targetDocument;
-    const fromStore = raw ? stripHtml(raw) : '';
-    if (fromStore.trim().length > 0) return fromStore;
-
-    if (project) {
-      const built = buildTargetDocument(project);
-      if (built?.text?.trim().length > 0) return built.text;
-    }
-
-    return undefined;
-  };
-
-  const resolveSourceDocumentText = (): string | undefined => {
-    const raw = useProjectStore.getState().sourceDocument;
-    if (raw?.trim().length > 0) return stripHtml(raw);
-    return undefined;
-  };
-
   return {
     // Initial State
     sessions: [],
@@ -223,7 +198,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     composerFocusNonce: 0,
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
-    activeMemory: '한국어로 번역시 자주 사용되는 영어 단어는 음차한다.',
+    projectContext: '',
     translationContextSessionId: null,
     loadedProjectId: null,
 
@@ -290,14 +265,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
             : (legacy || DEFAULT_TRANSLATOR_PERSONA);
 
           nextState.translationRules = settings.translationRules ?? '';
-          nextState.activeMemory = settings.activeMemory ?? '';
+          nextState.projectContext = settings.projectContext ?? settings.activeMemory ?? '';
           nextState.composerText = settings.composerText ?? '';
           nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
         } else {
           // 설정이 없으면 기본값 유지
           nextState.translatorPersona = DEFAULT_TRANSLATOR_PERSONA;
           nextState.translationRules = '';
-          nextState.activeMemory = '';
+          nextState.projectContext = '';
           nextState.composerText = '';
           nextState.translationContextSessionId = null;
         }
@@ -424,9 +399,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 번역 요청은 모델 호출 없이 즉시 안내(번역 결과를 채팅으로 출력하지 않음)
       if (req === 'translate') {
         const translationRulesRaw = get().translationRules?.trim();
-        const activeMemoryRaw = get().activeMemory?.trim();
+        const projectContextRaw = get().projectContext?.trim();
 
-        const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
+        const needsOneQuestion = !translationRulesRaw && !projectContextRaw;
         const msg = needsOneQuestion
           ? [
             '이 요청은 채팅에서 번역하지 않습니다.',
@@ -456,13 +431,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((b): b is NonNullable<typeof b> => b !== undefined)
             : [];
         const translationRulesRaw = get().translationRules;
-        const activeMemoryRaw = get().activeMemory;
+        const projectContextRaw = get().projectContext;
         // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
-        const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
+        const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
         let glossaryInjected = '';
@@ -517,7 +492,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translatorPersona,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
-            activeMemory,
+            projectContext,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
           },
@@ -549,10 +524,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
                     ...nextMetadata,
                     suggestion: { type: 'rule', content: evt.args.rule },
                   };
-                } else if (evt.toolName === 'suggest_active_memory' && evt.args.memory) {
+                } else if (evt.toolName === 'suggest_project_context' && (evt.args.context || evt.args.memory)) {
+                  const content = evt.args.context ?? evt.args.memory;
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'memory', content: evt.args.memory },
+                    suggestion: { type: 'context', content },
                   };
                 }
               }
@@ -579,7 +555,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         restoreGhostChips(replyMasked, maskSession);
         set({ isLoading: false, streamingMessageId: null });
-        get().checkAndSuggestActiveMemory();
+        get().checkAndSuggestProjectContext();
       } catch (error) {
         const assistantId = get().streamingMessageId;
         if (assistantId) {
@@ -616,7 +592,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set((state) => ({ composerFocusNonce: state.composerFocusNonce + 1 }));
     },
 
-    checkAndSuggestActiveMemory: (): void => {
+    checkAndSuggestProjectContext: (): void => {
       const session = get().currentSession;
       if (!session) return;
 
@@ -635,7 +611,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (!get().summarySuggestionOpen) {
         set({
           summarySuggestionOpen: true,
-          summarySuggestionReason: '대화가 길어져서 맥락 정보 요약(Active Memory)을 생성하면 컨텍스트 비용을 줄일 수 있어요.',
+          summarySuggestionReason: '대화가 길어져서 맥락 정보 요약(Project Context)을 생성하면 컨텍스트 비용을 줄일 수 있어요.',
         });
       }
     },
@@ -644,7 +620,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set({ summarySuggestionOpen: false, summarySuggestionReason: '' });
     },
 
-    generateActiveMemorySummary: async (): Promise<void> => {
+    generateProjectContextSummary: async (): Promise<void> => {
       const session = get().currentSession;
       if (!session) return;
       if (get().isSummarizing) return;
@@ -654,7 +630,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       try {
         const cfg = getAiConfig();
         const project = useProjectStore.getState().project;
-        const current = get().activeMemory.trim();
+        const current = get().projectContext.trim();
 
         // 최근 메시지만 요약(과도한 토큰 방지)
         const maxN = Math.max(20, cfg.maxRecentMessages);
@@ -668,11 +644,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
           .join('\n\n');
 
         const userMessage = [
-          '너는 번역 프로젝트의 "Active Memory(맥락 정보)"만 요약하는 에디터 보조 AI다.',
+          '너는 번역 프로젝트의 "Project Context(맥락 정보)"만 요약하는 에디터 보조 AI다.',
           '',
           '목표:',
           '- 아래 대화에서 확정된 "맥락 정보(배경 지식, 프로젝트 컨텍스트 등)"만 추출해 짧게 요약한다.',
-          '- 번역 규칙(포맷, 서식, 문체)은 Translation Rules에 저장되므로 Active Memory에 포함하지 않는다.',
+          '- 번역 규칙(포맷, 서식, 문체)은 Translation Rules에 저장되므로 Project Context에 포함하지 않는다.',
           '- 번역 내용 자체를 재작성/제안하지 않는다.',
           '',
           '출력 규칙:',
@@ -681,7 +657,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           '- 불릿/번호/따옴표/마크다운 금지. (그냥 줄바꿈으로 규칙만 나열)',
           '- 확정되지 않은 내용은 포함하지 않는다.',
           '',
-          current ? `기존 Active Memory(있으면 갱신/정리):\n${current}\n` : '',
+          current ? `기존 Project Context(있으면 갱신/정리):\n${current}\n` : '',
           '대화 기록:',
           transcript,
         ]
@@ -693,12 +669,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
           contextBlocks: [],
           recentMessages: [],
           userMessage,
-          ...(current ? { activeMemory: current } : {}),
+          ...(current ? { projectContext: current } : {}),
         });
 
         const cleaned = reply.trim().slice(0, 1200);
         set((state) => ({
-          activeMemory: cleaned,
+          projectContext: cleaned,
           lastSummaryAtMessageCountBySessionId: {
             ...state.lastSummaryAtMessageCountBySessionId,
             [session.id]: session.messages.length,
@@ -828,8 +804,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 번역 요청은 채팅에서 처리하지 않음 (기존 로직 재사용)
       if (req === 'translate') {
         const translationRulesRaw = get().translationRules?.trim();
-        const activeMemoryRaw = get().activeMemory?.trim();
-        const needsOneQuestion = !translationRulesRaw && !activeMemoryRaw;
+        const projectContextRaw = get().projectContext?.trim();
+        const needsOneQuestion = !translationRulesRaw && !projectContextRaw;
         const msg = needsOneQuestion
           ? [
             '이 요청은 채팅에서 번역하지 않습니다.',
@@ -861,13 +837,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((b): b is NonNullable<typeof b> => b !== undefined)
             : [];
         const translationRulesRaw = get().translationRules;
-        const activeMemoryRaw = get().activeMemory;
+        const projectContextRaw = get().projectContext;
         // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
 
         const translationRules = translationRulesRaw
           ? maskGhostChips(translationRulesRaw, maskSession)
           : '';
-        const activeMemory = activeMemoryRaw ? maskGhostChips(activeMemoryRaw, maskSession) : '';
+        const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
 
         // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
         let glossaryInjected = '';
@@ -921,7 +897,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             translatorPersona,
             translationRules,
             ...(glossaryInjected ? { glossaryInjected } : {}),
-            activeMemory,
+            projectContext,
             requestType: 'question',
           },
           {
@@ -955,7 +931,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         set({ isLoading: false, streamingMessageId: null });
-        get().checkAndSuggestActiveMemory();
+        get().checkAndSuggestProjectContext();
         schedulePersist();
       } catch (error) {
         const assistantId = get().streamingMessageId;
@@ -1075,17 +1051,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
       schedulePersist();
     },
 
-    setActiveMemory: (memory: string): void => {
-      set({ activeMemory: memory });
+    setProjectContext: (memory: string): void => {
+      set({ projectContext: memory });
       schedulePersist();
     },
 
-    appendToActiveMemory: (snippet: string): void => {
+    appendToProjectContext: (snippet: string): void => {
       const incoming = snippet.trim();
       if (!incoming) return;
-      const current = get().activeMemory.trim();
+      const current = get().projectContext.trim();
       const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
-      set({ activeMemory: next });
+      set({ projectContext: next });
       schedulePersist();
     },
 

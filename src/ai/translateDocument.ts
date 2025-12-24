@@ -1,4 +1,4 @@
-import type { ChatMessage, ITEProject } from '@/types';
+import type { ITEProject } from '@/types';
 import { createChatModel } from '@/ai/client';
 import { getAiConfig } from '@/ai/config';
 
@@ -93,7 +93,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
   translationRules?: string;
-  activeMemory?: string;
+  projectContext?: string;
   translatorPersona?: string;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig();
@@ -131,9 +131,9 @@ export async function translateSourceDocToTargetDocJson(params: {
     systemLines.push('[번역 규칙]', rules, '');
   }
 
-  const memory = params.activeMemory?.trim();
-  if (memory) {
-    systemLines.push('[Active Memory - 맥락 정보]', memory, '');
+  const projectContext = params.projectContext?.trim();
+  if (projectContext) {
+    systemLines.push('[Project Context]', projectContext, '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();

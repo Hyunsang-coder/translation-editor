@@ -23,7 +23,7 @@ export function ChatPanel(): JSX.Element {
   const summarySuggestionOpen = useChatStore((s) => s.summarySuggestionOpen);
   const summarySuggestionReason = useChatStore((s) => s.summarySuggestionReason);
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
-  const generateActiveMemorySummary = useChatStore((s) => s.generateActiveMemorySummary);
+  const generateProjectContextSummary = useChatStore((s) => s.generateProjectContextSummary);
 
   const composerText = useChatStore((s) => s.composerText);
   const setComposerText = useChatStore((s) => s.setComposerText);
@@ -33,8 +33,8 @@ export function ChatPanel(): JSX.Element {
   const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
   const translationRules = useChatStore((s) => s.translationRules);
   const setTranslationRules = useChatStore((s) => s.setTranslationRules);
-  const activeMemory = useChatStore((s) => s.activeMemory);
-  const setActiveMemory = useChatStore((s) => s.setActiveMemory);
+  const projectContext = useChatStore((s) => s.projectContext);
+  const setProjectContext = useChatStore((s) => s.setProjectContext);
   const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function ChatPanel(): JSX.Element {
   // Settings Preview States
   const [previewPersona, setPreviewPersona] = useState(false);
   const [previewTranslationRules, setPreviewTranslationRules] = useState(false);
-  const [previewActiveMemory, setPreviewActiveMemory] = useState(false);
+  const [previewProjectContext, setPreviewProjectContext] = useState(false);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
@@ -53,7 +53,7 @@ export function ChatPanel(): JSX.Element {
   const editMessage = useChatStore((s) => s.editMessage);
   const replayMessage = useChatStore((s) => s.replayMessage);
   const appendToTranslationRules = useChatStore((s) => s.appendToTranslationRules);
-  const appendToActiveMemory = useChatStore((s) => s.appendToActiveMemory);
+  const appendToProjectContext = useChatStore((s) => s.appendToProjectContext);
   const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
   const createSession = useChatStore((s) => s.createSession);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -255,11 +255,11 @@ export function ChatPanel(): JSX.Element {
         )}
       </section>
 
-      {/* Section 3: Active Memory */}
+      {/* Section 3: Project Context */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
+            <h3 className="text-xs font-semibold text-editor-text">3. Project Context</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
               번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 저장합니다. AI가 자동으로 제안할 수 있습니다.
@@ -268,32 +268,32 @@ export function ChatPanel(): JSX.Element {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewActiveMemory ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-              onClick={() => setPreviewActiveMemory(!previewActiveMemory)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewProjectContext ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+              onClick={() => setPreviewProjectContext(!previewProjectContext)}
             >
-              {previewActiveMemory ? 'Edit' : 'Preview'}
+              {previewProjectContext ? 'Edit' : 'Preview'}
             </button>
             <button
               type="button"
               className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setActiveMemory('')}
+              onClick={() => setProjectContext('')}
             >
               Clear
             </button>
           </div>
         </div>
-        {previewActiveMemory ? (
+        {previewProjectContext ? (
           <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-              {activeMemory || '*Memory is empty*'}
+              {projectContext || '*Context is empty*'}
             </ReactMarkdown>
           </div>
         ) : (
           <textarea
             className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={activeMemory}
-            onChange={(e) => setActiveMemory(e.target.value)}
-            placeholder="Enter active memory..."
+            value={projectContext}
+            onChange={(e) => setProjectContext(e.target.value)}
+            placeholder="Enter project context..."
           />
         )}
       </section>
@@ -456,7 +456,7 @@ export function ChatPanel(): JSX.Element {
               type="button"
               className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
               disabled={isSummarizing}
-              onClick={() => void generateActiveMemorySummary()}
+              onClick={() => void generateProjectContextSummary()}
             >
               {isSummarizing ? 'Summarizing...' : 'Summarize'}
             </button>
@@ -599,7 +599,7 @@ export function ChatPanel(): JSX.Element {
                   </span>
                 </div>
 
-                {/* Add to Rules / Memory */}
+                {/* Add to Rules / Context */}
                 {message.role === 'assistant' &&
                   streamingMessageId !== message.id &&
                   message.metadata?.suggestion && (
@@ -619,19 +619,22 @@ export function ChatPanel(): JSX.Element {
                           Add to Rules
                         </button>
                       )}
-                      {message.metadata.suggestion.type === 'memory' && !message.metadata.memoryAdded && (
+                      {(message.metadata.suggestion.type === 'context' ||
+                        message.metadata.suggestion.type === 'memory') &&
+                        !message.metadata.contextAdded &&
+                        !message.metadata.memoryAdded && (
                         <button
                           type="button"
                           className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
                           onClick={() => {
                             if (message.metadata?.suggestion?.content) {
-                              appendToActiveMemory(message.metadata.suggestion.content);
-                              updateMessage(message.id, { metadata: { memoryAdded: true } });
+                              appendToProjectContext(message.metadata.suggestion.content);
+                              updateMessage(message.id, { metadata: { contextAdded: true, memoryAdded: true } });
                             }
                           }}
-                          title="이 내용을 Active Memory에 추가"
+                          title="이 내용을 Project Context에 추가"
                         >
-                          Add to Memory
+                          Add to Context
                         </button>
                       )}
                     </div>

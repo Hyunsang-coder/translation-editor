@@ -62,10 +62,10 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 
 ### AI Chat 시스템
 - **멀티 탭 채팅**: 여러 채팅 세션 생성/전환/삭제 ✅
-- **Settings 화면**: 시스템 프롬프트, 번역 규칙, Active Memory, 용어집 관리 ✅
+- **Settings 화면**: 시스템 프롬프트, 번역 규칙, Project Context, 용어집 관리 ✅
 - **메시지 수정/삭제**: 메시지 수정 시 이후 대화 truncate ✅
 - **Markdown 렌더링**: 채팅 메시지 GFM 지원 (HTML 렌더링 금지) ✅
-- **Add to Rules/Memory**: assistant 응답을 규칙/메모리에 추가 ✅
+- **Add to Rules/Context**: assistant 응답을 규칙/컨텍스트에 추가 ✅
 - **Smart Context Memory**: 대화 토큰 모니터링 및 요약 제안 ✅
 - **LangChain.js**: OpenAI, Anthropic 모델 지원 ✅
 
@@ -157,8 +157,8 @@ BaseMessage[] = [
       [번역 규칙]
       ${translationRules}
       
-      [Active Memory - 맥락 정보]
-      ${activeMemory}
+      [Project Context]
+      ${projectContext}
     `
   }),
   HumanMessage({ 
@@ -176,7 +176,7 @@ BaseMessage[] = [
 - TipTap JSON을 문자열로 전달
 - 출력은 TipTap JSON만 강제
 - Translation Rules: 포맷, 서식, 문체 등 번역 규칙
-- Active Memory: 번역 시 참고할 맥락 정보(배경 지식 등)
+- Project Context: 번역 시 참고할 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
 
 #### 2. 채팅/질문 (Question)
 
@@ -184,7 +184,7 @@ BaseMessage[] = [
 // chat.ts → buildLangChainMessages() + ChatPromptTemplate
 BaseMessage[] = [
   SystemMessage({ content: systemPrompt }),      // 요청 유형별 시스템 프롬프트
-  SystemMessage({ content: systemContext }),     // 컨텍스트 (규칙/메모리/글로서리/문서/블록)
+  SystemMessage({ content: systemContext }),     // 컨텍스트 (규칙/컨텍스트/글로서리/문서/블록)
   SystemMessage({ content: toolGuide }),         // Tool 사용 가이드
   ...historyMessages,                            // (question 모드에서만) 최근 채팅 메시지 (최대 10개)
   HumanMessage({ content: userMessage }),        // 사용자 입력
@@ -213,11 +213,11 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
     },
     {
       "role": "system",
-      "content": "[번역 규칙]\n해요체 사용\n\n[Active Memory - 맥락 정보]\n이 프로젝트는 게임 UI 번역이며, 캐릭터 대사는 캐주얼한 톤을 유지한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text"
+      "content": "[번역 규칙]\n해요체 사용\n\n[Project Context]\n이 프로젝트는 게임 UI 번역이며, 캐릭터 대사는 캐주얼한 톤을 유지한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text"
     },
     {
       "role": "system",
-      "content": "문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/메모리):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락을 발견하면 즉시 사용하세요."
+      "content": "문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/컨텍스트):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_project_context: Project Context에 추가할 맥락 정보를 발견하면 즉시 사용하세요."
     },
     {
       "role": "user",
@@ -258,8 +258,8 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
     {
       "type": "function",
       "function": {
-        "name": "suggest_active_memory",
-        "description": "Active Memory를 제안합니다."
+        "name": "suggest_project_context",
+        "description": "Project Context를 제안합니다."
       }
     }
   ]
@@ -274,7 +274,7 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 {
   "model": "claude-3-5-sonnet-20241022",
   "max_tokens": 4096,
-  "system": "당신은 경험많은 전문 번역가입니다.\n\n프로젝트: general\n언어: Source → Target\n\n핵심 원칙:\n- 번역사가 주도권을 가지고, AI는 요청 시에만 응답합니다.\n...\n\n[번역 규칙]\n해요체 사용\n\n[Active Memory - 용어/톤 규칙]\n한국어로 번역시 자주 사용되는 영어 단어는 음차한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text\n\n문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/메모리):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락을 발견하면 즉시 사용하세요.",
+  "system": "당신은 경험많은 전문 번역가입니다.\n\n프로젝트: general\n언어: Source → Target\n\n핵심 원칙:\n- 번역사가 주도권을 가지고, AI는 요청 시에만 응답합니다.\n...\n\n[번역 규칙]\n해요체 사용\n\n[Project Context]\n이 프로젝트는 게임 UI 번역이며, 캐릭터 대사는 캐주얼한 톤을 유지한다.\n\n[컨텍스트 블록]\n- [paragraph] Example text\n\n문서/문맥 접근 도구:\n- get_source_document: 원문(Source) 문서를 가져옵니다.\n- get_target_document: 번역문(Target) 문서를 가져옵니다.\n\n제안 도구 (번역 규칙/컨텍스트):\n- suggest_translation_rule: 새로운 번역 규칙을 발견하면 즉시 사용하세요.\n- suggest_project_context: Project Context에 추가할 맥락 정보를 발견하면 즉시 사용하세요.",
   "messages": [
     {
       "role": "user",
@@ -303,8 +303,8 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
       "description": "새로운 번역 규칙을 제안합니다."
     },
     {
-      "name": "suggest_active_memory",
-      "description": "Active Memory를 제안합니다."
+      "name": "suggest_project_context",
+      "description": "Project Context를 제안합니다."
     }
   ]
 }
@@ -333,7 +333,7 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
    - 예: "해요체 사용", "따옴표 유지", "고유명사는 음차"
    - 사용자가 Settings에서 입력한 고정 번역 규칙
 
-2. **Active Memory** (`[Active Memory - 맥락 정보]`)
+2. **Project Context** (`[Project Context]`)
    - 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
    - 대화 중 발견된 일시적 맥락 정보 요약 (최대 1200자)
 
@@ -356,7 +356,7 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 #### 3. Tool Guide (채팅 모드에서만 포함)
 
 - 문서 조회 도구 사용 가이드
-- 제안 도구(번역 규칙/Active Memory) 사용 가이드
+- 제안 도구(번역 규칙/Project Context) 사용 가이드
 - 번역 모드에서는 포함하지 않음
 
 #### 4. History Messages (조건부 포함)
@@ -375,9 +375,9 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 
 | 요청 유형 | System Prompt | System Context | Tool Guide | History | Tool Calling | 출력 포맷 |
 |---------|--------------|----------------|------------|---------|--------------|----------|
-| **translate** | 번역 전용 프롬프트 | 번역 규칙/Active Memory | 없음 | 없음 | 없음 | TipTap JSON만 (설명 금지) |
-| **question** | 질문/검수 프롬프트 | 번역 규칙/Active Memory/글로서리/컨텍스트 블록 | 있음 | 최근 10개 | 지원 | 간결한 답변 또는 JSON 리포트 |
-| **general** | 기본 프롬프트 | 번역 규칙/Active Memory/글로서리/컨텍스트 블록 | 있음 | 없음 | 지원 | 일반 응답 |
+| **translate** | 번역 전용 프롬프트 | 번역 규칙/Project Context | 없음 | 없음 | 없음 | TipTap JSON만 (설명 금지) |
+| **question** | 질문/검수 프롬프트 | 번역 규칙/Project Context/글로서리/컨텍스트 블록 | 있음 | 최근 10개 | 지원 | 간결한 답변 또는 JSON 리포트 |
+| **general** | 기본 프롬프트 | 번역 규칙/Project Context/글로서리/컨텍스트 블록 | 있음 | 없음 | 지원 | 일반 응답 |
 
 ### 구현 위치
 

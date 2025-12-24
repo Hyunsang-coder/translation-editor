@@ -85,7 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id
 CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
 
 -- 채팅 설정(프로젝트별)
--- ChatPanel의 systemPromptOverlay/referenceNotes/activeMemory/include flags 등을 JSON으로 저장
+-- ChatPanel의 systemPromptOverlay/referenceNotes/projectContext/include flags 등을 JSON으로 저장
 CREATE TABLE IF NOT EXISTS chat_project_settings (
     project_id TEXT PRIMARY KEY,
     settings_json TEXT NOT NULL,

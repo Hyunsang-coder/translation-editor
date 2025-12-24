@@ -27,7 +27,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const appendComposerText = useChatStore((s) => s.appendComposerText);
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
-  const activeMemory = useChatStore((s) => s.activeMemory);
+  const projectContext = useChatStore((s) => s.projectContext);
   const translatorPersona = useChatStore((s) => s.translatorPersona);
 
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -140,7 +140,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         project,
         sourceDocJson,
         translationRules,
-        activeMemory,
+        projectContext,
         translatorPersona,
       });
       setTranslatePreviewDoc(doc);
@@ -152,7 +152,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   }, [
     project,
     translationRules,
-    activeMemory,
+    projectContext,
     translatorPersona,
   ]);
 

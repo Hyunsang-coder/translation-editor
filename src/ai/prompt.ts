@@ -61,8 +61,8 @@ export interface PromptContext {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Active Memory (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
-  activeMemory?: string;
+  /** Project Context (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
+  projectContext?: string;
   /** 원문 문서 */
   sourceDocument?: string;
   /** 번역문 문서 */
@@ -166,12 +166,12 @@ function formatTranslationRules(rules?: string): string {
   return ['[번역 규칙]', trimmed].join('\n');
 }
 
-function formatActiveMemory(memory?: string): string {
-  const trimmed = memory?.trim();
+function formatProjectContext(context?: string): string {
+  const trimmed = context?.trim();
   if (!trimmed) return '';
   const maxLen = 1200;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[Active Memory - 맥락 정보]', sliced].join('\n');
+  return ['[Project Context]', sliced].join('\n');
 }
 
 function formatGlossaryInjected(glossary?: string): string {
@@ -250,14 +250,14 @@ export async function buildLangChainMessages(
   const blockContext = buildBlockContextText(ctx.contextBlocks);
   const translationRules = formatTranslationRules(ctx.translationRules);
   const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
-  const activeMemory = formatActiveMemory(ctx.activeMemory);
+  const projectContext = formatProjectContext(ctx.projectContext);
   const sourceDoc = formatDocument('원문', ctx.sourceDocument);
   const targetDoc = formatDocument('번역문', ctx.targetDocument);
 
   const systemContext = [
     translationRules,
     glossaryInjected,
-    activeMemory,
+    projectContext,
     sourceDoc,
     targetDoc,
     blockContext,
@@ -298,7 +298,7 @@ export async function buildTranslateOnlyMessages(
   opts?: {
     targetLanguage?: string;
     translationRules?: string;
-    activeMemory?: string;
+    projectContext?: string;
     translatorPersona?: string;
   },
 ): Promise<BaseMessage[]> {
@@ -315,7 +315,7 @@ export async function buildTranslateOnlyMessages(
     '- 설명, 인사, 부연 없이 오직 번역 결과만 응답합니다.',
     '- 고유명사, 태그, 변수는 그대로 유지합니다.',
     opts?.translationRules ? `\n[번역 규칙]\n${opts.translationRules}` : '',
-    opts?.activeMemory ? `\n[Active Memory - 맥락 정보]\n${opts.activeMemory}` : '',
+    opts?.projectContext ? `\n[Project Context]\n${opts.projectContext}` : '',
   ].filter(Boolean).join('\n');
 
   const prompt = ChatPromptTemplate.fromMessages([

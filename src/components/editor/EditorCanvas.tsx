@@ -5,7 +5,6 @@ import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { SourceMonacoEditor } from '@/components/editor/SourceMonacoEditor';
 import { buildSourceDocument } from '@/editor/sourceDocument';
-import { useChatStore } from '@/stores/chatStore';
 
 interface EditorCanvasProps {
   focusMode: boolean;

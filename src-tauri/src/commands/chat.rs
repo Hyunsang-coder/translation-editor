@@ -15,7 +15,8 @@ pub struct ChatProjectSettings {
     #[serde(alias = "systemPromptOverlay")]
     pub translator_persona: String,
     pub translation_rules: String,
-    pub active_memory: String,
+    #[serde(default, alias = "activeMemory")]
+    pub project_context: String,
     pub composer_text: String,
     pub translation_context_session_id: Option<String>,
 }

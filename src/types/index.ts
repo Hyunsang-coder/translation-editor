@@ -182,8 +182,14 @@ export interface ChatMessageMetadata {
   rulesAdded?: boolean;
 
   /**
-   * Add to Memory 버튼을 이미 눌렀는지 여부
+   * Add to Context 버튼을 이미 눌렀는지 여부
    * - 중복 append 방지 및 버튼 숨김 용도
+   */
+  contextAdded?: boolean;
+
+  /**
+   * (레거시) Add to Memory 버튼을 이미 눌렀는지 여부
+   * - 기존 저장 데이터 호환을 위해 유지합니다.
    */
   memoryAdded?: boolean;
 
@@ -196,10 +202,15 @@ export interface ChatMessageMetadata {
 
   /**
    * AI가 제안한 규칙/메모리 (Tool Call 결과)
-   * - 이 필드가 존재하면 UI에 [Add to Rules] 또는 [Add to Memory] 버튼이 표시됩니다.
+   * - 이 필드가 존재하면 UI에 [Add to Rules] 또는 [Add to Context] 버튼이 표시됩니다.
    */
   suggestion?: {
-    type: 'rule' | 'memory';
+    /**
+     * - rule: Translation Rules에 추가
+     * - context: Project Context에 추가
+     * - memory: (레거시) 과거 저장 데이터 호환
+     */
+    type: 'rule' | 'context' | 'memory';
     content: string;
   };
 }

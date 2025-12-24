@@ -40,15 +40,15 @@ Why:
 How:
 - Translate 버튼/단축키로 Source 전체를 TipTap JSON으로 모델에 전달하고, 출력도 TipTap JSON으로 강제합니다.
 - Preview 모달에서 원문-번역 Diff를 보여주고, Apply 시 Target을 전체 덮어쓰기 합니다.
-- 문서 전체 번역(Translate)은 채팅 히스토리를 컨텍스트에 포함하지 않습니다. (Settings의 페르소나/번역 규칙/Active Memory/글로서리/문서 컨텍스트만 사용)
+- 문서 전체 번역(Translate)은 채팅 히스토리를 컨텍스트에 포함하지 않습니다. (Settings의 페르소나/번역 규칙/Project Context/글로서리/문서 컨텍스트만 사용)
 
 What:
 - Trigger: Translate(Preview) 버튼/단축키
-- Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, activeMemory, translatorPersona, glossary/attachments(있는 경우)
+- Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
 - Output: TipTap JSON (문서 전체), JSON 파싱 실패 시 폴백 로직
 - UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음.
 - API 구조: LangChain `BaseMessage[]` 배열
-  - SystemMessage 1개: 번역 전용 프롬프트 (페르소나, 번역 규칙, Active Memory 포함)
+  - SystemMessage 1개: 번역 전용 프롬프트 (페르소나, 번역 규칙, Project Context 포함)
   - UserMessage 1개: TipTap JSON 문서를 문자열로 전달
   - 히스토리 메시지 없음
 
@@ -67,7 +67,7 @@ What (의도/행동 정의):
 - Question 요청: 질의/검수(모델 호출), 문서 자동 적용 없음
 
 What (Payload 구성 규칙: 우선순위):
-- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules(번역 규칙), Active Memory(맥락 정보)
+- 반드시 포함: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules(번역 규칙), Project Context(맥락 정보)
 - 가능하면 포함(권장): 선택 텍스트(가능하면) + 주변 문맥(before/after) + 선택이 없으면 필요한 범위의 문서(부분/전체)
 - Question(채팅) 모드: 문서(Source/Target)는 "항상" 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
   - 목표: 불필요한 토큰 소비를 줄이고, 문맥이 필요한 질문에만 문서를 제공한다.
@@ -83,7 +83,7 @@ What (API 구조 - 채팅 모드):
 - LangChain `BaseMessage[]` 배열 사용
 - ChatPromptTemplate으로 메시지 구성:
   - SystemMessage 1개: 요청 유형별 시스템 프롬프트 (translate/question/general)
-  - SystemMessage 1개 (조건부): SystemContext (번역 규칙/Active Memory/글로서리/문서/컨텍스트 블록)
+  - SystemMessage 1개 (조건부): SystemContext (번역 규칙/Project Context/글로서리/문서/컨텍스트 블록)
   - SystemMessage 1개: Tool Guide (문서 조회 도구 및 제안 도구 사용 가이드)
   - MessagesPlaceholder: 히스토리 메시지 (question 모드에서만 최근 10개)
   - HumanMessage 1개: 사용자 입력
@@ -91,7 +91,7 @@ What (API 구조 - 채팅 모드):
   - get_source_document: 원문 문서 on-demand 조회
   - get_target_document: 번역문 문서 on-demand 조회
   - suggest_translation_rule: 번역 규칙 제안
-  - suggest_active_memory: Active Memory 제안
+  - suggest_project_context: Project Context 제안
 
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:
@@ -101,7 +101,7 @@ How:
 - TipTap 문서에서 선택 텍스트를 추출(Cmd+L)하고, Source/Target 전체 텍스트를 필요 시 포함합니다.
 
 What (fallback 규칙):
-- 선택 추출이 실패해도 최소한 Source/Target 전체 또는 번역 규칙/Active Memory는 포함합니다.
+- 선택 추출이 실패해도 최소한 Source/Target 전체 또는 번역 규칙/Project Context는 포함합니다.
 
 3.4 편집 적용 정책
 What:
@@ -118,14 +118,14 @@ What:
   - SourceDocument는 참조 전용이며, 프로젝트에 저장되고 항상 AI 컨텍스트로 주입 가능해야 함
 - 설정(Settings)/참조 문서(글로서리 등)
   - AI 채팅 패널에는 “Settings” 화면이 존재하며, 여기에서 사용자 편집 가능한 설정을 관리한다.
-  - Settings 항목(최소): 시스템 프롬프트 오버레이(System Prompt Overlay), 번역 규칙(Translation Rules), Active Memory, 첨부 파일(참조문서/글로서리)
+  - Settings 항목(최소): 시스템 프롬프트 오버레이(System Prompt Overlay), 번역 규칙(Translation Rules), Project Context, 첨부 파일(참조문서/글로서리)
   - 시스템 프롬프트 오버레이는 모델 호출 시 system 메시지에 반영된다.
   - 번역 규칙(Translation Rules): 포맷, 서식, 문체 등 번역에 적용되는 규칙 (예: "해요체 사용", "따옴표 유지", "고유명사는 음차")
-  - Active Memory: 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
+  - Project Context: 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
   - 글로서리 주입은 비벡터(임베딩/벡터화 없음)로 한다.
 - 멀티 채팅 세션
   - “번역 작업 세션”과 “개념 질의 세션”을 분리할 수 있어야 함
-  - 세션별로 Active Memory(요약)와 첨부 컨텍스트 상태(선택/블록/참조문서 범위)를 관리
+  - 세션별로 Project Context(요약)와 첨부 컨텍스트 상태(선택/블록/참조문서 범위)를 관리
 - 선택 → 재수정
   - Add to chat은 “텍스트 추가” UX로 유지
   - Edit 요청은 반드시 원문/번역 자동 주입이 보장되어야 함(3.2~3.3)
@@ -141,7 +141,7 @@ Why:
 What:
 - 멀티 탭 채팅(Thread Tabs)
   - 하나의 프로젝트 내에서 AI 채팅 탭을 여러 개 생성/전환할 수 있어야 한다.
-  - 탭들은 동일 프로젝트의 Settings(시스템 프롬프트 오버레이/번역 규칙/Active Memory/첨부 파일 등)를 공유한다.
+  - 탭들은 동일 프로젝트의 Settings(시스템 프롬프트 오버레이/번역 규칙/Project Context/첨부 파일 등)를 공유한다.
   - 각 탭(thread)은 메시지 히스토리를 독립적으로 가진다.
 - 응답 생성 상태 표시(Loading / Tool Calling)
   - AI 응답을 기다리는 동안, 일반적인 채팅 앱처럼 “typing/로딩 인디케이터”를 표시한다.
@@ -204,7 +204,7 @@ What:
 
 5.2 Smart Context Summarizer
 What:
-- 대화 토큰 임계치 모니터링과 Active Memory 제안 UX는 점진 구현 중이며, Add to Rules / Add to Memory 버튼을 통해 수동 반영합니다.
+- 대화 토큰 임계치 모니터링과 Project Context 제안 UX는 점진 구현 중이며, Add to Rules / Add to Context 버튼을 통해 수동 반영합니다.
 
 6. 개발 도구 및 환경 (Dev Tools)
 State Management: Zustand (Global Store), Immer (Immutable Updates).

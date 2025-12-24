@@ -63,7 +63,7 @@
 **문서 전체 번역 (Preview → Apply)**:
 - Source 문서 전체를 대상으로 번역을 생성하고, 결과를 **Preview로 확인한 뒤 Apply**로 Target 문서를 **전체 덮어쓰기**합니다.
 - 사용자는 Apply를 누르기 전까지 문서가 변경되지 않습니다(Non-Intrusive).
-- 번역 생성 시 채팅 히스토리는 포함하지 않으며, Settings의 페르소나/번역 규칙/Active Memory/글로서리만 컨텍스트로 사용합니다.
+- 번역 생성 시 채팅 히스토리는 포함하지 않으며, Settings의 페르소나/번역 규칙/Project Context/글로서리만 컨텍스트로 사용합니다.
 - 출력은 TipTap JSON으로 강제하며, JSON 파싱 실패 시 폴백 처리 후 Preview로 표시합니다.
 
 **프롬프트 전략**:
@@ -79,7 +79,7 @@
 
 **Smart Context Memory**:
 - Translation Rules: 포맷, 서식, 문체 등 번역에 적용되는 규칙 (예: "해요체 사용", "따옴표 유지")
-- Active Memory: 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
+- Project Context: 번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
 - 이전 대화의 핵심 결정 사항을 요약하여 장기적인 일관성 유지
 - 사용자 확인 후에만 Memory에 추가 (자동 추가 금지)
 
@@ -155,22 +155,22 @@
 - 필요 시 용어집(글로서리) 및 참고 자료를 첨부합니다. *(확장 포맷은 추후 범위 포함)*
 
 2) **Settings / 규칙 정리**
-- 시스템 프롬프트 오버레이, Translation Rules, Active Memory를 설정합니다.
+- 시스템 프롬프트 오버레이, Translation Rules, Project Context를 설정합니다.
 
 3) **문서 전체 번역 (Preview → Apply)**
 - **Translate 버튼**으로 문서 전체 번역을 생성합니다.
 - 결과는 **Preview/Diff로 확인**하고, 확정할 때만 **Apply**로 Target 전체를 덮어씁니다.
-- 이때 최근 채팅(최대 10개), Translation Rules/Active Memory, 첨부된 글로서리/참고자료를 컨텍스트로 활용할 수 있습니다.
+- 이때 최근 채팅(최대 10개), Translation Rules/Project Context, 첨부된 글로서리/참고자료를 컨텍스트로 활용할 수 있습니다.
 
 4) **비교/수정**
 - 원문(Source)과 번역(Target)을 비교하며 필요한 부분은 **사용자가 직접 편집**합니다.
-- 규칙이 바뀌었거나 큰 수정이 필요하면, 업데이트된 Rules/Memory를 반영하기 위해 **Translate를 다시 실행**하고 Diff로 재검토합니다.
+- 규칙이 바뀌었거나 큰 수정이 필요하면, 업데이트된 Rules/Context를 반영하기 위해 **Translate를 다시 실행**하고 Diff로 재검토합니다.
 
 5) **질문/개념 확인 (채팅 탭 분리)**
 - 어려운 개념/문맥/용어는 **새 채팅 탭**에서 질문합니다.
-- 필요한 경우 assistant 응답을 **Add to Rules / Add to Memory**로 축적하여 일관성을 유지합니다.
+- 필요한 경우 assistant 응답을 **Add to Rules / Add to Context**로 축적하여 일관성을 유지합니다.
   - Add to Rules: 번역 규칙(포맷, 서식, 문체 등) 추가
-  - Add to Memory: 맥락 정보(배경 지식, 프로젝트 컨텍스트 등) 추가
+  - Add to Context: 맥락 정보(배경 지식, 프로젝트 컨텍스트 등) 추가
 
 6) **검수/리뷰(요청 기반)**
 - 채팅에서 누락/오역/일관성/톤 검수 요청을 하고 리포트를 확인합니다.

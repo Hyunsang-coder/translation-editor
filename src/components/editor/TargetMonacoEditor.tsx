@@ -29,7 +29,6 @@ export function TargetMonacoEditor({
   const idByBlockIdRef = useRef<Record<string, string>>({});
   const modelChangeDisposable = useRef<{ dispose: () => void } | null>(null);
   const theme = useUIStore((s) => s.theme);
-  const setSelectedBlockId = useUIStore((s) => s.setSelectedBlockId);
   const registerTargetDocHandle = useProjectStore((s) => s.registerTargetDocHandle);
   const pendingDocDiff = useProjectStore((s) => s.pendingDocDiff);
   const setPendingDocDiffTrackedDecorationId = useProjectStore(

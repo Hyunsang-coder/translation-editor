@@ -243,7 +243,7 @@ function LineCell({ side, num, content, type }: {
         ${bgClass}
       `}>
         {!isEmpty && (
-          <DiffContentRenderer content={content} type={type} side={side} />
+          <DiffContentRenderer content={content} side={side} />
         )}
       </td>
     </>
@@ -269,15 +269,14 @@ function UnifiedLineRow({ numLeft, numRight, content, type }: {
         {numRight || ''}
       </td>
       <td className="px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-relaxed">
-        <DiffContentRenderer content={content} type={type} side={type === 'delete' ? 'left' : 'right'} />
+        <DiffContentRenderer content={content} side={type === 'delete' ? 'left' : 'right'} />
       </td>
     </tr>
   );
 }
 
-function DiffContentRenderer({ content, type, side }: { 
+function DiffContentRenderer({ content, side }: { 
   content: string | DiffPart[]; 
-  type: string; 
   side: 'left' | 'right';
 }) {
   if (typeof content === 'string') {

@@ -144,10 +144,7 @@ export function computeSideBySideDiff(text1: string, text2: string): SideBySideR
   // 여기서는 일반적인 diffLines 사용
   const lineDiffs = Diff.diffLines(text1, text2);
   const rows: SideBySideRow[] = [];
-  
-  let bufferDelete: Diff.Change[] = [];
-  let bufferInsert: Diff.Change[] = [];
-  
+
   let lineNum1 = 1;
   let lineNum2 = 1;
   
@@ -162,45 +159,6 @@ export function computeSideBySideDiff(text1: string, text2: string): SideBySideR
     }
     
     return lines;
-  };
-
-  const flushBuffers = () => {
-    const maxLen = Math.max(bufferDelete.length, bufferInsert.length);
-    
-    for (let i = 0; i < maxLen; i++) {
-      const delLineStr = bufferDelete[i] || null;
-      const insLineStr = bufferInsert[i] || null;
-      
-      if (delLineStr !== null && insLineStr !== null) {
-        // Modified -> Word Diff
-        const wordDiffs = Diff.diffWords(delLineStr, insLineStr);
-        const parts: DiffPart[] = wordDiffs.map(p => ({
-            type: p.added ? 'insert' : p.removed ? 'delete' : 'equal',
-            value: p.value
-        }));
-
-        rows.push({
-          original: { num: lineNum1++, content: parts, type: 'modify' },
-          changed:  { num: lineNum2++, content: parts, type: 'modify' }
-        });
-      } else if (delLineStr !== null) {
-        // Delete only
-        rows.push({
-          original: { num: lineNum1++, content: delLineStr, type: 'delete' },
-          changed:  { num: null, content: '', type: 'empty' }
-        });
-      } else if (insLineStr !== null) {
-        // Insert only
-        rows.push({
-          original: { num: null, content: '', type: 'empty' },
-          changed:  { num: lineNum2++, content: insLineStr, type: 'insert' }
-        });
-      }
-    }
-    
-    // 버퍼 초기화 (문자열 배열)
-    bufferDelete = [];
-    bufferInsert = [];
   };
 
   // 버퍼는 줄 단위 문자열 배열로 관리

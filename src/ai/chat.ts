@@ -3,7 +3,7 @@ import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
-import { suggestTranslationRule, suggestActiveMemory } from '@/ai/tools/suggestionTools';
+import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -19,8 +19,8 @@ export interface GenerateReplyInput {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Active Memory (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
-  activeMemory?: string;
+  /** Project Context (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
+  projectContext?: string;
   /** 원문 문서 */
   sourceDocument?: string;
   /** 번역문 문서 */
@@ -135,9 +135,9 @@ function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): 
     includeSource ? '- get_source_document: 원문(Source) 문서를 가져옵니다.' : '- get_source_document: (비활성화됨)',
     includeTarget ? '- get_target_document: 번역문(Target) 문서를 가져옵니다.' : '- get_target_document: (비활성화됨)',
     '',
-    '제안 도구 (번역 규칙/메모리):',
+    '제안 도구 (번역 규칙/컨텍스트):',
     '- suggest_translation_rule: 새로운 번역 규칙(포맷, 서식, 문체 등)을 발견하면 즉시 사용하세요. (예: "해요체 사용", "따옴표 유지")',
-    '- suggest_active_memory: 현재 세션에서 기억해야 할 중요한 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 발견하면 즉시 사용하세요.',
+    '- suggest_project_context: Project Context에 추가할 중요한 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 발견하면 즉시 사용하세요.',
     '',
     '규칙:',
     '- 질문에 답하기 위해 원문/번역문이 꼭 필요할 때만 문서 접근 도구를 호출하세요.',
@@ -179,7 +179,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
       userMessage: input.userMessage,
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
-      ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
+      ...(input.projectContext ? { projectContext: input.projectContext } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
       ...(targetDocument ? { targetDocument } : {}),
     },
@@ -189,7 +189,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestActiveMemory];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
@@ -244,7 +244,7 @@ export async function streamAssistantReply(
       userMessage: input.userMessage,
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
-      ...(input.activeMemory ? { activeMemory: input.activeMemory } : {}),
+      ...(input.projectContext ? { projectContext: input.projectContext } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
       ...(targetDocument ? { targetDocument } : {}),
     },
@@ -254,7 +254,7 @@ export async function streamAssistantReply(
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestActiveMemory];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
