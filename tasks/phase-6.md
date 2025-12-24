@@ -6,6 +6,19 @@
 
 ### 6.1 UI 개선
 
+- [ ] **사이드바 하단: App Settings 옵션 추가**
+  - [ ] **API Key 입력 UI**
+    - 완료 조건: OpenAI/Anthropic 등 Provider별 Key 입력/저장/마스킹(표시 정책) 동작
+  - [ ] **모델 선택 UI**
+    - 완료 조건: Provider별 모델 프리셋/커스텀 입력 지원, 실제 호출에 반영
+  - [ ] **외부 MCP 연동 진입점**
+    - 완료 조건: 설정 화면에서 MCP 연동(Atlassian/Google Drive 등) 관리 화면으로 진입 가능
+    - 구현은 `Phase 7 (MCP 연동)` 범위에 포함
+  - [ ] **Tutorial / FAQ**
+    - 완료 조건: 앱 내에서 접근 가능한 간단 가이드/FAQ 화면(또는 링크)
+  - [ ] **Info**
+    - 완료 조건: 앱 버전/빌드 정보, 라이선스/크레딧 등 확인 가능
+
 - [ ] **아이콘 생성 및 적용**
   - **완료 조건**: 전체 UI에 일관된 아이콘 시스템 적용(최소: Settings/Chat/Translate/Attach 등 주요 액션)
 
