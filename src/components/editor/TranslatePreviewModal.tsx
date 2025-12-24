@@ -3,7 +3,6 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
-import { useUIStore } from '@/stores/uiStore';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
@@ -23,26 +22,11 @@ function normalizeDiffText(text: string): string {
 }
 
 /**
- * 문장 단위로 텍스트 분할
- * - 각 문장을 별도 줄로 변환하여 Monaco DiffEditor의 줄 매칭 정확도 향상
- * - 번역 비교 시 문장 구조 변화를 더 명확하게 표시
- */
-function splitBySentence(text: string): string {
-  return text
-    // 문장 종결 부호 + 공백을 줄바꿈으로 변환 (한국어/영어/일본어/중국어 지원)
-    .replace(/([.!?。！？])\s+/g, '$1\n')
-    // 이미 있는 줄바꿈은 유지하되 과도한 줄바꿈 정리
-    .replace(/\n{2,}/g, '\n\n')
-    .trim();
-}
-
-/**
  * Diff용 최종 텍스트 준비
- * - 정규화 + 문장 분할
+ * - 정규화만 수행 (문장 단위 분할 제거하여 줄 밀림 방지)
  */
 function prepareDiffText(text: string): string {
-  const normalized = normalizeDiffText(text);
-  return splitBySentence(normalized);
+  return normalizeDiffText(text);
 }
 
 export function TranslatePreviewModal(props: {
