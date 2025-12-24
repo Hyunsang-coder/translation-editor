@@ -109,11 +109,11 @@ export function VisualDiffViewer({
 
 function SideBySideView({ rows }: { rows: SideBySideRow[] }) {
   return (
-    <div className="w-full table border-collapse min-w-full">
+    <table className="w-full table-fixed border-collapse min-w-full">
        <colgroup>
-        <col className="w-[40px] bg-editor-surface/50 border-r border-editor-border" />
-        <col className="w-[calc(50%-40px)] border-r border-editor-border" />
-        <col className="w-[40px] bg-editor-surface/50 border-r border-editor-border" />
+        <col className="w-[40px]" />
+        <col className="w-[calc(50%-40px)]" />
+        <col className="w-[40px]" />
         <col className="w-[calc(50%-40px)]" />
        </colgroup>
        <tbody className="divide-y divide-transparent">
@@ -137,7 +137,7 @@ function SideBySideView({ rows }: { rows: SideBySideRow[] }) {
            </tr>
          ))}
        </tbody>
-    </div>
+    </table>
   );
 }
 
@@ -146,10 +146,10 @@ function UnifiedView({ rows }: { rows: SideBySideRow[] }) {
   // Modify(수정)인 경우, 보통 원문(삭제) -> 변경(추가) 순서로 표시합니다.
   
   return (
-    <div className="w-full table border-collapse">
+    <table className="w-full table-fixed border-collapse">
        <colgroup>
-        <col className="w-[40px] bg-editor-surface/50 border-r border-editor-border" />
-        <col className="w-[40px] bg-editor-surface/50 border-r border-editor-border" />
+        <col className="w-[40px]" />
+        <col className="w-[40px]" />
         <col className="w-auto" />
        </colgroup>
        <tbody>
@@ -198,7 +198,7 @@ function UnifiedView({ rows }: { rows: SideBySideRow[] }) {
            return nodes;
          })}
        </tbody>
-    </div>
+    </table>
   );
 }
 
@@ -239,7 +239,7 @@ function LineCell({ side, num, content, type }: {
       
       {/* Content */}
       <td className={`
-        px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-6
+        px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-relaxed
         ${bgClass}
       `}>
         {!isEmpty && (
@@ -268,7 +268,7 @@ function UnifiedLineRow({ numLeft, numRight, content, type }: {
       <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-gray-50 dark:bg-gray-800/30 border-r border-editor-border/50 w-[40px]">
         {numRight || ''}
       </td>
-      <td className="px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-6">
+      <td className="px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-relaxed">
         <DiffContentRenderer content={content} type={type} side={type === 'delete' ? 'left' : 'right'} />
       </td>
     </tr>
