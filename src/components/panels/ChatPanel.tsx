@@ -156,197 +156,197 @@ export function ChatPanel(): JSX.Element {
 
   const renderSettings = (): JSX.Element => (
     <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-editor-bg">
-          {/* Section 1: System Prompt */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 group relative">
-                <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
-                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-                  AI의 기본적인 페르소나와 번역 태도를 정의합니다. {`{언어}`} 변수를 사용할 수 있습니다.
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewSystemPrompt ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-                  onClick={() => setPreviewSystemPrompt(!previewSystemPrompt)}
-                >
-                  {previewSystemPrompt ? 'Edit' : 'Preview'}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-primary-500 hover:text-primary-600"
-                  onClick={() =>
-                    setSystemPromptOverlay(
-                      '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
-                    )
+      {/* Section 1: System Prompt */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 group relative">
+            <h3 className="text-xs font-semibold text-editor-text">1. System Prompt</h3>
+            <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+              AI의 기본적인 페르소나와 번역 태도를 정의합니다. {`{언어}`} 변수를 사용할 수 있습니다.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewSystemPrompt ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+              onClick={() => setPreviewSystemPrompt(!previewSystemPrompt)}
+            >
+              {previewSystemPrompt ? 'Edit' : 'Preview'}
+            </button>
+            <button
+              type="button"
+              className="text-xs text-primary-500 hover:text-primary-600"
+              onClick={() =>
+                setSystemPromptOverlay(
+                  '당신은 경험많은 전문 번역가입니다. 원문의 내용을 {언어}로 자연스럽게 번역하세요.',
+                )
+              }
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+        {previewSystemPrompt ? (
+          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+              {systemPromptOverlay || '*No content*'}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <textarea
+            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={systemPromptOverlay}
+            onChange={(e) => setSystemPromptOverlay(e.target.value)}
+            placeholder="Enter system prompt..."
+          />
+        )}
+      </section>
+
+      {/* Section 2: Translation Rules */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 group relative">
+            <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
+            <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+              모든 번역에 공통적으로 적용될 고정 규칙입니다. (예: "해요체 사용", "따옴표 유지" 등)
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewTranslationRules ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+              onClick={() => setPreviewTranslationRules(!previewTranslationRules)}
+            >
+              {previewTranslationRules ? 'Edit' : 'Preview'}
+            </button>
+            <button
+              type="button"
+              className="text-xs text-primary-500 hover:text-primary-600"
+              onClick={() => setTranslationRules('')}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        {previewTranslationRules ? (
+          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+              {translationRules || '*No rules defined*'}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <textarea
+            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={translationRules}
+            onChange={(e) => setTranslationRules(e.target.value)}
+            placeholder="Enter translation rules..."
+          />
+        )}
+      </section>
+
+      {/* Section 3: Active Memory */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 group relative">
+            <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
+            <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+              대화 중 발견된 일시적 규칙이나 컨텍스트를 저장합니다. AI가 자동으로 제안할 수 있습니다.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewActiveMemory ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
+              onClick={() => setPreviewActiveMemory(!previewActiveMemory)}
+            >
+              {previewActiveMemory ? 'Edit' : 'Preview'}
+            </button>
+            <button
+              type="button"
+              className="text-xs text-primary-500 hover:text-primary-600"
+              onClick={() => setActiveMemory('')}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        {previewActiveMemory ? (
+          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+              {activeMemory || '*Memory is empty*'}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <textarea
+            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={activeMemory}
+            onChange={(e) => setActiveMemory(e.target.value)}
+            placeholder="Enter active memory..."
+          />
+        )}
+      </section>
+
+      {/* Section 3: Glossary */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-xs font-semibold text-editor-text">4. Glossary</h3>
+            <span className="text-[10px] text-editor-muted">
+              Columns: [Source] [Target] (Header required, case-insensitive)
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
+              onClick={() => {
+                void (async () => {
+                  if (!isTauriRuntime() || !project) return;
+                  const path = await pickGlossaryCsvFile();
+                  if (path) {
+                    await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false });
+                    addGlossaryPath(path);
                   }
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-            {previewSystemPrompt ? (
-              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-                  {systemPromptOverlay || '*No content*'}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <textarea
-                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={systemPromptOverlay}
-                onChange={(e) => setSystemPromptOverlay(e.target.value)}
-                placeholder="Enter system prompt..."
-              />
-            )}
-          </section>
+                })();
+              }}
+            >
+              Import CSV
+            </button>
+            <button
+              type="button"
+              className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
+              onClick={() => {
+                void (async () => {
+                  if (!isTauriRuntime() || !project) return;
+                  const path = await pickGlossaryExcelFile();
+                  if (path) {
+                    await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
+                    addGlossaryPath(path);
+                  }
+                })();
+              }}
+            >
+              Import Excel
+            </button>
+          </div>
+        </div>
 
-          {/* Section 2: Translation Rules */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 group relative">
-                <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
-                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-                  모든 번역에 공통적으로 적용될 고정 규칙입니다. (예: "해요체 사용", "따옴표 유지" 등)
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewTranslationRules ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-                  onClick={() => setPreviewTranslationRules(!previewTranslationRules)}
-                >
-                  {previewTranslationRules ? 'Edit' : 'Preview'}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-primary-500 hover:text-primary-600"
-                  onClick={() => setTranslationRules('')}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            {previewTranslationRules ? (
-              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-                  {translationRules || '*No rules defined*'}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <textarea
-                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={translationRules}
-                onChange={(e) => setTranslationRules(e.target.value)}
-                placeholder="Enter translation rules..."
-              />
-            )}
-          </section>
-
-          {/* Section 3: Active Memory */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 group relative">
-                <h3 className="text-xs font-semibold text-editor-text">3. Active Memory</h3>
-                <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-                  대화 중 발견된 일시적 규칙이나 컨텍스트를 저장합니다. AI가 자동으로 제안할 수 있습니다.
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={`text-[10px] px-1.5 py-0.5 rounded border ${previewActiveMemory ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-                  onClick={() => setPreviewActiveMemory(!previewActiveMemory)}
-                >
-                  {previewActiveMemory ? 'Edit' : 'Preview'}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-primary-500 hover:text-primary-600"
-                  onClick={() => setActiveMemory('')}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            {previewActiveMemory ? (
-              <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-                  {activeMemory || '*Memory is empty*'}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <textarea
-                className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={activeMemory}
-                onChange={(e) => setActiveMemory(e.target.value)}
-                placeholder="Enter active memory..."
-              />
-            )}
-          </section>
-
-          {/* Section 3: Glossary */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-xs font-semibold text-editor-text">4. Glossary</h3>
-                <span className="text-[10px] text-editor-muted">
-                  Columns: [Source] [Target] (Header required, case-insensitive)
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
-                  onClick={() => {
-                    void (async () => {
-                      if (!isTauriRuntime() || !project) return;
-                      const path = await pickGlossaryCsvFile();
-                      if (path) {
-                        await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false });
-                        addGlossaryPath(path);
-                      }
-                    })();
-                  }}
-                >
-                  Import CSV
-                </button>
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
-                  onClick={() => {
-                    void (async () => {
-                      if (!isTauriRuntime() || !project) return;
-                      const path = await pickGlossaryExcelFile();
-                      if (path) {
-                        await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
-                        addGlossaryPath(path);
-                      }
-                    })();
-                  }}
-                >
-                  Import Excel
-                </button>
-              </div>
-            </div>
-
-            {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
-              <div className="p-2 rounded bg-editor-surface border border-editor-border">
-                <div className="text-xs text-editor-muted">Linked Glossaries:</div>
-                <ul className="mt-1 space-y-1">
-                  {project.metadata.glossaryPaths.map((p) => (
-                    <li key={p} className="text-xs text-editor-text truncate" title={p}>• {p}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
-            )}
-          </section>
+        {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
+          <div className="p-2 rounded bg-editor-surface border border-editor-border">
+            <div className="text-xs text-editor-muted">Linked Glossaries:</div>
+            <ul className="mt-1 space-y-1">
+              {project.metadata.glossaryPaths.map((p) => (
+                <li key={p} className="text-xs text-editor-text truncate" title={p}>• {p}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
+        )}
+      </section>
     </div>
   );
 
@@ -380,7 +380,7 @@ export function ChatPanel(): JSX.Element {
               }}
               className={`
                 group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[100px] max-w-[160px]
-                ${currentSession?.id === session.id
+                ${activeTab === 'chat' && currentSession?.id === session.id
                   ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
                   : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
                 }
@@ -474,141 +474,141 @@ export function ChatPanel(): JSX.Element {
                 className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
                   } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
               >
-            {/* Message toolbar */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                {editingMessageId === message.id ? (
-                  <div className="space-y-2">
-                    <textarea
-                      className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      value={editingDraft}
-                      onChange={(e) => setEditingDraft(e.target.value)}
-                      placeholder="Edit message..."
-                    />
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 rounded-md text-xs border border-editor-border text-editor-muted hover:text-editor-text"
-                        onClick={() => {
-                          setEditingMessageId(null);
-                          setEditingDraft('');
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
-                        disabled={!editingDraft.trim()}
-                        onClick={() => {
-                          editMessage(message.id, editingDraft);
-                          setEditingMessageId(null);
-                          setEditingDraft('');
-                          void replayMessage(message.id);
-                        }}
-                        title="Save (이후 대화는 삭제됩니다)"
-                      >
-                        Save
-                      </button>
-                    </div>
+                {/* Message toolbar */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    {editingMessageId === message.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          value={editingDraft}
+                          onChange={(e) => setEditingDraft(e.target.value)}
+                          placeholder="Edit message..."
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-md text-xs border border-editor-border text-editor-muted hover:text-editor-text"
+                            onClick={() => {
+                              setEditingMessageId(null);
+                              setEditingDraft('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
+                            disabled={!editingDraft.trim()}
+                            onClick={() => {
+                              editMessage(message.id, editingDraft);
+                              setEditingMessageId(null);
+                              setEditingDraft('');
+                              void replayMessage(message.id);
+                            }}
+                            title="Save (이후 대화는 삭제됩니다)"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm leading-relaxed chat-markdown">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          skipHtml
+                          urlTransform={defaultUrlTransform}
+                          components={{
+                            a: ({ node: _node, ...props }) => (
+                              <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
+                            ),
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-sm leading-relaxed chat-markdown">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      skipHtml
-                      urlTransform={defaultUrlTransform}
-                      components={{
-                        a: ({ node: _node, ...props }) => (
-                          <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
-                        ),
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                )}
-              </div>
 
-              {/* Edit/Delete (truncate) */}
-              {editingMessageId !== message.id && (
-                <div className="shrink-0 flex items-center gap-1">
-                  {message.role === 'user' && (
-                    <button
-                      type="button"
-                      className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-editor-text hover:bg-editor-border/60"
-                      onClick={() => {
-                        setEditingMessageId(message.id);
-                        setEditingDraft(message.content);
-                      }}
-                      title="Edit (이후 대화는 삭제됩니다)"
-                    >
-                      Edit
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-red-600 hover:bg-editor-border/60"
-                    onClick={() => {
-                      const ok = window.confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?');
-                      if (!ok) return;
-                      deleteMessageFrom(message.id);
-                    }}
-                    title="Delete (이후 대화는 삭제됩니다)"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex items-end justify-between gap-2 mt-1">
-              <span className="text-xs text-editor-muted">
-                {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
-                {message.metadata?.editedAt && (
-                  <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
-                    (edited)
-                    <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
-                      <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">Original Content:</div>
-                      <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
+                  {/* Edit/Delete (truncate) */}
+                  {editingMessageId !== message.id && (
+                    <div className="shrink-0 flex items-center gap-1">
+                      {message.role === 'user' && (
+                        <button
+                          type="button"
+                          className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-editor-text hover:bg-editor-border/60"
+                          onClick={() => {
+                            setEditingMessageId(message.id);
+                            setEditingDraft(message.content);
+                          }}
+                          title="Edit (이후 대화는 삭제됩니다)"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-red-600 hover:bg-editor-border/60"
+                        onClick={() => {
+                          const ok = window.confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?');
+                          if (!ok) return;
+                          deleteMessageFrom(message.id);
+                        }}
+                        title="Delete (이후 대화는 삭제됩니다)"
+                      >
+                        Delete
+                      </button>
                     </div>
+                  )}
+                </div>
+                <div className="flex items-end justify-between gap-2 mt-1">
+                  <span className="text-xs text-editor-muted">
+                    {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
+                    {message.metadata?.editedAt && (
+                      <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
+                        (edited)
+                        <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
+                          <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">Original Content:</div>
+                          <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
+                        </div>
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
-            </div>
-
-            {/* Add to Rules / Memory */}
-            {message.role === 'assistant' &&
-              streamingMessageId !== message.id &&
-              message.content.length >= 20 &&
-              !message.metadata?.rulesAdded &&
-              !message.metadata?.memoryAdded && (
-                <div className="mt-2 flex gap-2">
-                  {isRuleLikeMessage(message.content) && (
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
-                      onClick={() => {
-                        appendToTranslationRules(message.content);
-                        updateMessage(message.id, { metadata: { rulesAdded: true } });
-                      }}
-                      title="이 내용을 Translation Rules에 추가"
-                    >
-                      Add to Rules
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                    onClick={() => {
-                      appendToActiveMemory(message.content);
-                      updateMessage(message.id, { metadata: { memoryAdded: true } });
-                    }}
-                    title="이 내용을 Active Memory에 추가"
-                  >
-                    Add to Memory
-                  </button>
                 </div>
-              )}
+
+                {/* Add to Rules / Memory */}
+                {message.role === 'assistant' &&
+                  streamingMessageId !== message.id &&
+                  message.content.length >= 20 &&
+                  !message.metadata?.rulesAdded &&
+                  !message.metadata?.memoryAdded && (
+                    <div className="mt-2 flex gap-2">
+                      {isRuleLikeMessage(message.content) && (
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
+                          onClick={() => {
+                            appendToTranslationRules(message.content);
+                            updateMessage(message.id, { metadata: { rulesAdded: true } });
+                          }}
+                          title="이 내용을 Translation Rules에 추가"
+                        >
+                          Add to Rules
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                        onClick={() => {
+                          appendToActiveMemory(message.content);
+                          updateMessage(message.id, { metadata: { memoryAdded: true } });
+                        }}
+                        title="이 내용을 Active Memory에 추가"
+                      >
+                        Add to Memory
+                      </button>
+                    </div>
+                  )}
               </div>
             ))}
 
