@@ -3,10 +3,10 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
-import { DiffEditor } from '@monaco-editor/react';
 import { useUIStore } from '@/stores/uiStore';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
+import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 
 /**
  * Diff 비교를 위한 텍스트 정규화
@@ -56,7 +56,7 @@ export function TranslatePreviewModal(props: {
   onApply: () => void;
 }): JSX.Element | null {
   const { open, title, docJson, originalHtml, isLoading, error, onClose, onApply } = props;
-  const theme = useUIStore((s) => s.theme);
+  // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
@@ -138,13 +138,6 @@ export function TranslatePreviewModal(props: {
       return '';
     }
   }, [docJson, extensions]);
-
-  const monacoTheme = (() => {
-    if (theme === 'dark') return 'vs-dark';
-    if (theme === 'light') return 'light';
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return prefersDark ? 'vs-dark' : 'light';
-  })();
 
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {
@@ -263,32 +256,10 @@ export function TranslatePreviewModal(props: {
             </div>
           ) : viewMode === 'diff' && originalText.trim().length > 0 ? (
             <div className="h-full relative">
-              <DiffEditor
-                height="100%"
-                language="plaintext"
-                theme={monacoTheme}
-                originalModelPath="inmemory://translate-preview/original"
-                modifiedModelPath="inmemory://translate-preview/modified"
-                keepCurrentOriginalModel
-                keepCurrentModifiedModel
+              <VisualDiffViewer
                 original={originalText}
-                modified={translatedText}
-                options={{
-                  renderSideBySide: true,
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  lineNumbers: 'on',
-                  wordWrap: 'on',
-                  scrollBeyondLastLine: false,
-                  renderOverviewRuler: false,
-                  folding: false,
-                  diffAlgorithm: 'advanced',
-                  ignoreTrimWhitespace: true,  // 앞뒤 공백 차이 무시
-                  renderIndicators: true,
-                  // 인라인 힌트 표시 (단어 단위 하이라이트)
-                  renderMarginRevertIcon: false,
-                  useInlineViewWhenSpaceIsLimited: false,
-                }}
+                suggested={translatedText}
+                className="h-full border-none rounded-none"
               />
               {isApplying && (
                 <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">

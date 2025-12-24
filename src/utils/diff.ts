@@ -1,52 +1,36 @@
 /**
  * Diff 유틸리티
- * 텍스트 비교 및 변경 사항 계산
+ * 'diff' 패키지를 사용하여 텍스트 비교 및 변경 사항 계산
  */
 
-import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
+import * as Diff from 'diff';
 import type { DiffChange, DiffResult } from '@/types';
 
-const dmp = new diff_match_patch();
-
 /**
- * 두 텍스트 간의 차이점 계산
- * @param original - 원본 텍스트
- * @param suggested - 제안된 텍스트
- * @returns 변경 사항 배열
+ * 기본 문자 단위 Diff (호환성 유지용)
  */
 export function calculateDiff(original: string, suggested: string): DiffChange[] {
-  const diffs = dmp.diff_main(original, suggested);
-  dmp.diff_cleanupSemantic(diffs);
-
-  const changes: DiffChange[] = [];
+  const diffs = Diff.diffChars(original, suggested);
   let position = 0;
 
-  for (const [operation, text] of diffs) {
+  return diffs.map((part) => {
     const change: DiffChange = {
-      type: operation === DIFF_INSERT ? 'insert' : operation === DIFF_DELETE ? 'delete' : 'equal',
-      value: text,
+      type: part.added ? 'insert' : part.removed ? 'delete' : 'equal',
+      value: part.value,
       start: position,
-      end: position + text.length,
+      end: position + part.value.length,
     };
 
-    changes.push(change);
-
-    // 삭제된 텍스트는 위치를 이동하지 않음
-    if (operation !== DIFF_DELETE) {
-      position += text.length;
+    // 원문 기준 위치 이동 (삭제된 부분은 원문에 있었으므로 포함, 추가된 부분은 원문에 없었으므로 제외해야 하지만
+    // 기존 로직과 호환성을 위해 체크 필요. 보통 원문 인덱스는 equal/delete만 카운트)
+    if (!part.added) {
+      position += part.value.length;
     }
-  }
-
-  return changes;
+    
+    return change;
+  });
 }
 
-/**
- * Diff 결과 생성
- * @param blockId - 블록 ID
- * @param original - 원본 텍스트
- * @param suggested - 제안된 텍스트
- * @returns Diff 결과 객체
- */
 export function createDiffResult(
   blockId: string,
   original: string,
@@ -62,9 +46,27 @@ export function createDiffResult(
 }
 
 /**
- * Diff 변경 사항을 HTML로 변환 (통합 뷰)
- * @param changes - 변경 사항 배열
- * @returns HTML 문자열
+ * Diff 적용 후 최종 텍스트 계산 (수락 시)
+ */
+export function applyDiff(changes: DiffChange[]): string {
+  return changes
+    .filter((change) => change.type !== 'delete')
+    .map((change) => change.value)
+    .join('');
+}
+
+/**
+ * Diff 거부 후 원본 텍스트 복원
+ */
+export function revertDiff(changes: DiffChange[]): string {
+  return changes
+    .filter((change) => change.type !== 'insert')
+    .map((change) => change.value)
+    .join('');
+}
+
+/**
+ * 단순 HTML 변환 (Legacy)
  */
 export function diffToHtml(changes: DiffChange[]): string {
   return changes
@@ -81,11 +83,6 @@ export function diffToHtml(changes: DiffChange[]): string {
     .join('');
 }
 
-/**
- * Diff 변경 사항을 원문 기준 HTML로 변환 (삭제만 표시, 추가는 숨김)
- * @param changes - 변경 사항 배열
- * @returns HTML 문자열
- */
 export function diffToOriginalHtml(changes: DiffChange[]): string {
   return changes
     .map((change) => {
@@ -93,7 +90,7 @@ export function diffToOriginalHtml(changes: DiffChange[]): string {
         case 'delete':
           return `<span data-diff-deletion class="diff-deletion">${escapeHtml(change.value)}</span>`;
         case 'insert':
-          return ''; // 원문에는 추가된 내용이 없음
+          return '';
         default:
           return escapeHtml(change.value);
       }
@@ -101,11 +98,6 @@ export function diffToOriginalHtml(changes: DiffChange[]): string {
     .join('');
 }
 
-/**
- * Diff 변경 사항을 변경문 기준 HTML로 변환 (추가만 표시, 삭제는 숨김)
- * @param changes - 변경 사항 배열
- * @returns HTML 문자열
- */
 export function diffToSuggestedHtml(changes: DiffChange[]): string {
   return changes
     .map((change) => {
@@ -113,7 +105,7 @@ export function diffToSuggestedHtml(changes: DiffChange[]): string {
         case 'insert':
           return `<span data-diff-insertion class="diff-insertion">${escapeHtml(change.value)}</span>`;
         case 'delete':
-          return ''; // 변경문에는 삭제된 내용이 없음
+          return '';
         default:
           return escapeHtml(change.value);
       }
@@ -121,11 +113,160 @@ export function diffToSuggestedHtml(changes: DiffChange[]): string {
     .join('');
 }
 
+// ==========================================
+// Advanced Diff Logic (Line & Word) - Using 'diff' package
+// ==========================================
+
+export interface DiffPart {
+  type: 'equal' | 'insert' | 'delete';
+  value: string;
+}
+
+export interface SideBySideRow {
+  original: {
+    num: number | null;
+    content: string | DiffPart[]; // string(equal/delete) or parts(modify)
+    type: 'equal' | 'delete' | 'modify' | 'empty';
+  };
+  changed: {
+    num: number | null;
+    content: string | DiffPart[];
+    type: 'equal' | 'insert' | 'modify' | 'empty';
+  };
+}
+
 /**
- * HTML 특수 문자 이스케이프
- * @param text - 원본 텍스트
- * @returns 이스케이프된 텍스트
+ * Side-by-Side 뷰를 위한 하이브리드 Diff 계산
+ * (줄 단위 매칭 후 변경된 줄은 단어 단위 비교)
  */
+export function computeSideBySideDiff(text1: string, text2: string): SideBySideRow[] {
+  // 1. 줄 단위 Diff (newlineIsToken: true로 하면 줄바꿈도 토큰으로 처리됨)
+  // 여기서는 일반적인 diffLines 사용
+  const lineDiffs = Diff.diffLines(text1, text2);
+  const rows: SideBySideRow[] = [];
+  
+  let bufferDelete: Diff.Change[] = [];
+  let bufferInsert: Diff.Change[] = [];
+  
+  let lineNum1 = 1;
+  let lineNum2 = 1;
+  
+  // 줄 단위 Diff 결과에는 개행문자가 포함되어 있으므로 분리해서 처리
+  const processDiffPart = (part: Diff.Change) => {
+    // 마지막 줄바꿈 처리가 까다로울 수 있음. 
+    // 단순하게 split('\n') 하면 마지막 빈 문자열이 생길 수 있음.
+    let lines = part.value.split('\n');
+    // 마지막이 빈 문자열이면 제거 (단, 원래 텍스트가 빈 줄로 끝나는 경우 등 고려 필요)
+    if (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+    
+    return lines;
+  };
+
+  const flushBuffers = () => {
+    const maxLen = Math.max(bufferDelete.length, bufferInsert.length);
+    
+    for (let i = 0; i < maxLen; i++) {
+      const delLineStr = bufferDelete[i] || null;
+      const insLineStr = bufferInsert[i] || null;
+      
+      if (delLineStr !== null && insLineStr !== null) {
+        // Modified -> Word Diff
+        const wordDiffs = Diff.diffWords(delLineStr, insLineStr);
+        const parts: DiffPart[] = wordDiffs.map(p => ({
+            type: p.added ? 'insert' : p.removed ? 'delete' : 'equal',
+            value: p.value
+        }));
+
+        rows.push({
+          original: { num: lineNum1++, content: parts, type: 'modify' },
+          changed:  { num: lineNum2++, content: parts, type: 'modify' }
+        });
+      } else if (delLineStr !== null) {
+        // Delete only
+        rows.push({
+          original: { num: lineNum1++, content: delLineStr, type: 'delete' },
+          changed:  { num: null, content: '', type: 'empty' }
+        });
+      } else if (insLineStr !== null) {
+        // Insert only
+        rows.push({
+          original: { num: null, content: '', type: 'empty' },
+          changed:  { num: lineNum2++, content: insLineStr, type: 'insert' }
+        });
+      }
+    }
+    
+    // 버퍼 초기화 (문자열 배열)
+    bufferDelete = [];
+    bufferInsert = [];
+  };
+
+  // 버퍼는 줄 단위 문자열 배열로 관리
+  let pendingDeletes: string[] = [];
+  let pendingInserts: string[] = [];
+
+  const flushStringBuffers = () => {
+    const maxLen = Math.max(pendingDeletes.length, pendingInserts.length);
+    for(let i=0; i<maxLen; i++) {
+        const del = pendingDeletes[i];
+        const ins = pendingInserts[i];
+        
+        if (del !== undefined && ins !== undefined) {
+            // Modified
+            const wordDiffs = Diff.diffWords(del, ins);
+            const parts: DiffPart[] = wordDiffs.map(p => ({
+                type: p.added ? 'insert' : p.removed ? 'delete' : 'equal',
+                value: p.value
+            }));
+            rows.push({
+                original: { num: lineNum1++, content: parts, type: 'modify' },
+                changed: { num: lineNum2++, content: parts, type: 'modify' }
+            });
+        } else if (del !== undefined) {
+            rows.push({
+                original: { num: lineNum1++, content: del, type: 'delete' },
+                changed: { num: null, content: '', type: 'empty' }
+            });
+        } else if (ins !== undefined) {
+            rows.push({
+                original: { num: null, content: '', type: 'empty' },
+                changed: { num: lineNum2++, content: ins, type: 'insert' }
+            });
+        }
+    }
+    pendingDeletes = [];
+    pendingInserts = [];
+  };
+
+  for (const part of lineDiffs) {
+    const lines = processDiffPart(part);
+    
+    if (part.added) {
+        pendingInserts.push(...lines);
+    } else if (part.removed) {
+        pendingDeletes.push(...lines);
+    } else {
+        // Equal - 먼저 pending된 변경사항들 처리
+        flushStringBuffers();
+        
+        // Equal 라인들 추가
+        for (const line of lines) {
+            rows.push({
+                original: { num: lineNum1++, content: line, type: 'equal' },
+                changed: { num: lineNum2++, content: line, type: 'equal' }
+            });
+        }
+    }
+  }
+  
+  // 남은 버퍼 처리
+  flushStringBuffers();
+  
+  return rows;
+}
+
 function escapeHtml(text: string): string {
   const htmlEntities: Record<string, string> = {
     '&': '&amp;',
@@ -134,31 +275,5 @@ function escapeHtml(text: string): string {
     '"': '&quot;',
     "'": '&#39;',
   };
-
   return text.replace(/[&<>"']/g, (char) => htmlEntities[char] ?? char);
 }
-
-/**
- * Diff 적용 후 최종 텍스트 계산 (수락 시)
- * @param changes - 변경 사항 배열
- * @returns 최종 텍스트
- */
-export function applyDiff(changes: DiffChange[]): string {
-  return changes
-    .filter((change) => change.type !== 'delete')
-    .map((change) => change.value)
-    .join('');
-}
-
-/**
- * Diff 거부 후 원본 텍스트 복원
- * @param changes - 변경 사항 배열
- * @returns 원본 텍스트
- */
-export function revertDiff(changes: DiffChange[]): string {
-  return changes
-    .filter((change) => change.type !== 'insert')
-    .map((change) => change.value)
-    .join('');
-}
-
