@@ -214,6 +214,17 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void openTranslatePreview()}
+            className="px-2 py-1 text-[11px] rounded border border-editor-border hover:bg-editor-surface transition-colors disabled:opacity-60"
+            disabled={translateLoading}
+            title="Source 전체 번역 → Preview"
+          >
+            {translateLoading ? '번역 중…' : '번역'}
+          </button>
+        </div>
       </div>
 
       {/* Editor Panels */}
@@ -265,17 +276,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 <option value="러시아어">러시아어</option>
               </select>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void openTranslatePreview()}
-                className="px-2 py-1 text-[11px] rounded border border-editor-border hover:bg-editor-surface transition-colors disabled:opacity-60"
-                disabled={translateLoading}
-                title="Source 전체 번역 → Preview"
-              >
-                {translateLoading ? 'Translating…' : 'Translate'}
-              </button>
-            </div>
+            <div className="flex items-center gap-2" />
           </div>
           <TipTapMenuBar editor={targetEditor} />
           {/* 여기에 transition 효과 추가 */}

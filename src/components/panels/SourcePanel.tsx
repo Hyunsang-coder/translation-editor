@@ -17,7 +17,7 @@ export function SourcePanel(): JSX.Element {
   }
 
   return (
-    <div className="h-full p-editor-padding">
+    <div className="h-full p-editor-padding bg-editor-surface">
       <div className="mb-4">
         <h2 className="text-sm font-medium text-editor-muted uppercase tracking-wider">
           Source

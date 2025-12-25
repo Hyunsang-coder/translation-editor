@@ -183,7 +183,7 @@
 }
 
 .tiptap-wrapper.source-editor {
-  @apply bg-editor-surface;
+  @apply bg-editor-bg;
 }
 
 /* ProseMirror Core */
@@ -328,7 +328,7 @@
 
 /* Source Editor (Read-only) specific */
 .source-editor .ProseMirror {
-  @apply bg-editor-surface cursor-default;
+  @apply bg-editor-bg cursor-default;
 }
 
 /* Target Editor specific */

@@ -4,8 +4,9 @@ export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
 export const MODEL_PRESETS = {
   openai: [
-    { value: 'gpt-5.2', label: 'GPT-5.2', description: '최신 플래그십 모델 (High Reasoning)' },
-    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '빠르고 효율적인 경량 모델' },
+    { value: 'gpt-5.2', label: 'GPT-5.2', description: '코딩 및 에이전트 작업에 최적화된 산업 전반 최고의 모델' },
+    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '명확한 작업을 위한 빠르고 비용 효율적인 GPT-5 버전' },
+    { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 빠르고 비용 효율적인 GPT-5 버전' },
   ],
   anthropic: [
     { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet', description: '균형 잡힌 고성능 모델' },
