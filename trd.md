@@ -218,6 +218,30 @@ Formatting/Linting: Prettier, ESLint.
 
 Testing: Vitest (Unit), Playwright (E2E for Tauri).
 
+7. AI Provider 및 API Key 관리
+7.1 Provider 지원 현황
+What:
+- **OpenAI**: 활성화됨 (기본 provider)
+- **Anthropic**: UI에서 비활성화됨 (코드는 유지, 추후 활성화 예정)
+- **Mock**: UI에서 제거됨 (타입은 유지, 개발/테스트용)
+
+7.2 API Key 관리
+Why:
+- 사용자가 App Settings에서 직접 API Key를 입력할 수 있어야 합니다.
+- 환경 변수와 사용자 입력 키의 우선순위를 명확히 해야 합니다.
+
+How:
+- Zustand persist 미들웨어로 localStorage에 API Key 저장
+- 우선순위: 사용자 입력 키 > 환경 변수
+- 추후 Tauri secure storage 플러그인으로 마이그레이션 가능하도록 설계
+
+What:
+- **저장 위치**: localStorage (키: 'ite-ai-config')
+- **우선순위**: Store의 사용자 입력 키 > 환경 변수(`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`)
+- **보안**: 현재는 평문 저장 (Tauri 앱이므로 브라우저보다는 안전하지만, 민감 정보는 평문 저장임을 인지)
+- **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능
+- **환경 변수 폴백**: 사용자 입력 키가 없으면 환경 변수 사용
+
 💡 기술적 체크포인트
 Performance: TipTap 두 개(Source/Target) 동시 렌더링 시 60fps 근접 유지 확인.
 

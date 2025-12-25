@@ -56,8 +56,12 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
   const model = useFor === 'translation' ? store.translationModel : store.chatModel;
 
-  const openaiApiKey = getEnvString('VITE_OPENAI_API_KEY');
-  const anthropicApiKey = getEnvString('VITE_ANTHROPIC_API_KEY');
+  // 3. API Key 우선순위: Store의 사용자 입력 키 > 환경 변수
+  const envOpenaiKey = getEnvString('VITE_OPENAI_API_KEY');
+  const envAnthropicKey = getEnvString('VITE_ANTHROPIC_API_KEY');
+  const openaiApiKey = store.openaiApiKey || envOpenaiKey;
+  const anthropicApiKey = store.anthropicApiKey || envAnthropicKey;
+
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 
   // exactOptionalPropertyTypes 대응: undefined 값은 프로퍼티 자체를 생략

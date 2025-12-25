@@ -28,6 +28,37 @@ let chatPersistQueued = false;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
 
+function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context'; content: string } | null {
+  const t = (text ?? '').trim();
+  if (!t) return null;
+
+  // 사용자가 클릭해야 반영되는 버튼 안내 문구가 있을 때만 "보수적으로" suggestion을 추론합니다.
+  // (오탐 방지: 단순 설명/대화에는 버튼을 띄우지 않음)
+  const ruleTrigger = /원하시면\s*버튼을\s*눌러\s*번역\s*규칙(?:으로)?\s*추가/i;
+  const contextTrigger = /원하시면\s*버튼을\s*눌러\s*(?:project\s*context|컨텍스트)(?:로)?\s*추가/i;
+
+  let type: 'rule' | 'context' | null = null;
+  let cutIdx = -1;
+
+  if (ruleTrigger.test(t)) {
+    type = 'rule';
+    cutIdx = t.search(ruleTrigger);
+  } else if (contextTrigger.test(t)) {
+    type = 'context';
+    cutIdx = t.search(contextTrigger);
+  }
+
+  if (!type) return null;
+
+  const core = (cutIdx >= 0 ? t.slice(0, cutIdx) : t).trim();
+  if (!core) return null;
+
+  // 저장 필드 폭주 방지 (rules/context에 append될 수 있으니 적당히 제한)
+  const maxLen = type === 'rule' ? 2000 : 3000;
+  const clipped = core.length > maxLen ? `${core.slice(0, maxLen)}...` : core;
+  return { type, content: clipped };
+}
+
 // ============================================
 // Store State Interface
 // ============================================
@@ -549,7 +580,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
         );
 
         if (assistantId) {
-          updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
+          const restored = restoreGhostChips(replyMasked, maskSession);
+          updateMessage(assistantId, { content: restored });
+
+          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
+          const msgNow = get().currentSession?.messages.find((m) => m.id === assistantId);
+          if (!msgNow?.metadata?.suggestion) {
+            const inferred = inferSuggestionFromAssistantText(restored);
+            if (inferred) {
+              updateMessage(assistantId, { metadata: { suggestion: inferred } });
+            }
+          }
+
           updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 
@@ -910,12 +952,36 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              
+              // 1) Tool Call Badge
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
               const next =
                 evt.phase === 'start'
                   ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
                   : prev.filter((n) => n !== evt.toolName);
-              get().updateMessage(assistantId, { metadata: { toolCallsInProgress: next } });
+
+              // 2) Suggestion Handling (Smart Buttons)
+              let nextMetadata = msgNow?.metadata ?? {};
+              if (evt.phase === 'start' && evt.args) {
+                if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+                  nextMetadata = {
+                    ...nextMetadata,
+                    suggestion: { type: 'rule', content: evt.args.rule },
+                  };
+                } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
+                  nextMetadata = {
+                    ...nextMetadata,
+                    suggestion: { type: 'context', content: evt.args.context },
+                  };
+                }
+              }
+
+              get().updateMessage(assistantId, {
+                metadata: {
+                  ...nextMetadata,
+                  toolCallsInProgress: next,
+                },
+              });
             },
             onToolsUsed: (toolsUsed) => {
               if (assistantId) {
@@ -926,7 +992,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
         );
 
         if (assistantId) {
-          get().updateMessage(assistantId, { content: restoreGhostChips(replyMasked, maskSession) });
+          const restored = restoreGhostChips(replyMasked, maskSession);
+          get().updateMessage(assistantId, { content: restored });
+
+          const msgNow = get().currentSession?.messages.find((m) => m.id === assistantId);
+          if (!msgNow?.metadata?.suggestion) {
+            const inferred = inferSuggestionFromAssistantText(restored);
+            if (inferred) {
+              get().updateMessage(assistantId, { metadata: { suggestion: inferred } });
+            }
+          }
+
           get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 

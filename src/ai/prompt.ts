@@ -10,6 +10,13 @@ import { stripHtml } from '@/utils/hash';
 
 export type RequestType = 'translate' | 'question' | 'general';
 
+// 토큰(문자) 최적화용 상한. 정확한 token count는 아니지만 비용 폭발을 방지합니다.
+const LIMITS = {
+  translationRulesChars: 1200,
+  blockContextMaxBlocks: 10,
+  blockContextCharsPerBlock: 280,
+} as const;
+
 /**
  * 사용자 메시지에서 요청 유형을 감지
  * - 번역 요청: "번역", "translate", "~로 옮겨", "~로 바꿔" 등
@@ -133,6 +140,12 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
     '=== 질문 응답 모드 ===',
     '- 질문에 간결하게 답변합니다.',
     '- 필요한 경우에만 예시를 들어 설명합니다.',
+    '- suggest_* 도구는 "저장 제안" 생성일 뿐이며, 실제 저장/반영은 사용자가 버튼을 눌러야만 가능합니다.',
+    '- 응답에서 "저장/추가 완료"라고 말하지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내합니다.',
+    '',
+    '문서 대조/검수 지침:',
+    '- 사용자가 "번역 맞아?", "고유명사/기관명 제대로 번역됐어?", "누락/오역 확인"처럼 원문↔번역문 대조가 필요한 요청을 하면, 사용자가 문서를 붙여주길 기다리기 전에 먼저 get_source_document / get_target_document를 호출해 필요한 근거를 확보합니다.',
+    '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져오고, 그래도 부족할 때만 "검수할 구간을 선택해 달라"는 확인 요청을 0~1개 합니다.',
     '',
     '허용 범위(검수/리뷰/검증):',
     '- 원문↔번역문 비교로 누락/오역/과잉 번역을 지적합니다.',
@@ -163,7 +176,9 @@ function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOpti
 function formatTranslationRules(rules?: string): string {
   const trimmed = rules?.trim();
   if (!trimmed) return '';
-  return ['[번역 규칙]', trimmed].join('\n');
+  const maxLen = LIMITS.translationRulesChars;
+  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
+  return ['[번역 규칙]', sliced].join('\n');
 }
 
 function formatProjectContext(context?: string): string {
@@ -194,9 +209,13 @@ export function buildBlockContextText(blocks: EditorBlock[]): string {
   if (blocks.length === 0) return '';
 
   const lines: string[] = ['[컨텍스트 블록]'];
-  for (const b of blocks) {
+  const maxBlocks = LIMITS.blockContextMaxBlocks;
+  const maxChars = LIMITS.blockContextCharsPerBlock;
+  for (const b of blocks.slice(0, maxBlocks)) {
     const plain = stripHtml(b.content);
-    lines.push(`- [${b.type}] ${plain}`);
+    const sliced = plain.length > maxChars ? `${plain.slice(0, maxChars)}...` : plain;
+    // 타입 라벨은 토큰 대비 정보량이 낮아 최소화
+    lines.push(`- ${sliced}`);
   }
   return lines.join('\n');
 }

@@ -131,19 +131,21 @@ async function runToolCallingLoop(params: {
 
 function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): SystemMessage {
   const toolGuide = [
-    '문서/문맥 접근 도구:',
-    includeSource ? '- get_source_document: 원문(Source) 문서를 가져옵니다.' : '- get_source_document: (비활성화됨)',
-    includeTarget ? '- get_target_document: 번역문(Target) 문서를 가져옵니다.' : '- get_target_document: (비활성화됨)',
-    '',
-    '제안 도구 (번역 규칙/컨텍스트):',
-    '- suggest_translation_rule: 새로운 번역 규칙(포맷, 서식, 문체 등)을 발견하면 즉시 사용하세요. (예: "해요체 사용", "따옴표 유지")',
-    '- suggest_project_context: Project Context에 추가할 중요한 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 발견하면 즉시 사용하세요.',
+    '도구 사용 가이드(짧게):',
+    includeSource
+      ? '- get_source_document: 원문을 가져옴(문서가 아주 길면 일부만 반환될 수 있음). 꼭 필요할 때만.'
+      : '- get_source_document: (비활성화됨)',
+    includeTarget
+      ? '- get_target_document: 번역문을 가져옴(문서가 아주 길면 일부만 반환될 수 있음). 꼭 필요할 때만.'
+      : '- get_target_document: (비활성화됨)',
+    '- suggest_translation_rule: "번역 규칙 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
+    '- suggest_project_context: "Project Context 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
     '',
     '규칙:',
-    '- 질문에 답하기 위해 원문/번역문이 꼭 필요할 때만 문서 접근 도구를 호출하세요.',
-    '- 사용자가 "A는 B로 번역해줘", "존댓말로 해줘" 같은 규칙/요청을 하면 반드시 제안 도구를 호출하여 저장할 수 있게 하세요.',
-    '- 제안 도구 호출 후에는 "제안을 추가했습니다" 같은 멘트를 덧붙여 사용자에게 알리세요.',
-    '- 일반적인 개념 질문은 도구 호출 없이 답하세요.',
+    '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
+    '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
+    '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
+    '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내한다.',
   ].join('\n');
 
   return new SystemMessage(toolGuide);

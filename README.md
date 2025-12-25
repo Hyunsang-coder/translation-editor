@@ -67,7 +67,14 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **Markdown 렌더링**: 채팅 메시지 GFM 지원 (HTML 렌더링 금지) ✅
 - **Add to Rules/Context**: assistant 응답을 규칙/컨텍스트에 추가 ✅
 - **Smart Context Memory**: 대화 토큰 모니터링 및 요약 제안 ✅
-- **LangChain.js**: OpenAI, Anthropic 모델 지원 ✅
+- **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
+- **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
+
+### AI Provider 및 API Key 관리
+- **App Settings API Key 입력**: 사용자가 직접 API Key 입력 가능 ✅
+- **localStorage 캐싱**: 입력한 API Key는 localStorage에 자동 저장되어 재사용 ✅
+- **우선순위**: 사용자 입력 키 > 환경 변수 (`VITE_OPENAI_API_KEY`) ✅
+- **환경 변수 폴백**: 사용자 입력 키가 없으면 환경 변수 사용 ✅
 
 ### 용어집 (Glossary)
 - **CSV/Excel 임포트**: 용어집 파일 업로드 및 프로젝트 연결 ✅
@@ -389,6 +396,13 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 
 ---
 
-## 🔐 환경 변수(AI)
+## 🔐 환경 변수 및 API Key 관리
+### 환경 변수 (선택적)
 AI 환경 변수 설정은 `ENV.md` 를 참고하세요.
+
+### API Key 우선순위
+1. **App Settings에서 입력한 키** (localStorage에 저장, 우선 사용)
+2. **환경 변수** (`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`)
+
+**참고**: App Settings에서 API Key를 입력하면 환경 변수보다 우선적으로 사용됩니다. Clear 버튼으로 저장된 키를 삭제하면 환경 변수로 폴백합니다.
 

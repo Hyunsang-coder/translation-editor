@@ -12,7 +12,7 @@ export function createChatModel(
 
   if (cfg.provider === 'openai') {
     if (!cfg.openaiApiKey) {
-      throw new Error('OPENAI API key is missing (VITE_OPENAI_API_KEY).');
+      throw new Error('OpenAI API key is missing. Please set VITE_OPENAI_API_KEY environment variable or enter it in App Settings.');
     }
 
     // GPT-5.2, GPT-5-mini 등 최신 모델은 temperature 파라미터를 지원하지 않거나 무시해야 함
@@ -29,7 +29,7 @@ export function createChatModel(
 
   if (cfg.provider === 'anthropic') {
     if (!cfg.anthropicApiKey) {
-      throw new Error('Anthropic API key is missing (VITE_ANTHROPIC_API_KEY).');
+      throw new Error('Anthropic API key is missing. Please set VITE_ANTHROPIC_API_KEY environment variable or enter it in App Settings.');
     }
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
@@ -38,5 +38,5 @@ export function createChatModel(
     });
   }
 
-  throw new Error('AI provider is set to mock.');
+  throw new Error(`Unsupported AI provider: ${cfg.provider}. Please select a valid provider in App Settings.`);
 }

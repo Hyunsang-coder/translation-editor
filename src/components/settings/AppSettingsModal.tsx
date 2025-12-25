@@ -6,12 +6,29 @@ interface AppSettingsModalProps {
   onClose: () => void;
 }
 
+// 환경 변수 확인 헬퍼
+function hasEnvKey(key: string): boolean {
+  const v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.[key];
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
-  const { provider, translationModel, chatModel, setProvider, setTranslationModel, setChatModel } = useAiConfigStore();
+  const { 
+    provider, 
+    translationModel, 
+    chatModel, 
+    openaiApiKey,
+    anthropicApiKey,
+    setProvider, 
+    setTranslationModel, 
+    setChatModel,
+    setOpenaiApiKey,
+    setAnthropicApiKey,
+  } = useAiConfigStore();
 
   // 커스텀 입력 모드 상태 (드롭다운에 없는 값이면 커스텀 모드)
-  const isCustomTranslation = !MODEL_PRESETS[provider === 'mock' ? 'openai' : provider]?.some(p => p.value === translationModel);
-  const isCustomChat = !MODEL_PRESETS[provider === 'mock' ? 'openai' : provider]?.some(p => p.value === chatModel);
+  const isCustomTranslation = !MODEL_PRESETS[provider]?.some(p => p.value === translationModel);
+  const isCustomChat = !MODEL_PRESETS[provider]?.some(p => p.value === chatModel);
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -31,8 +48,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const handleProviderChange = (newProvider: AiProvider) => {
     setProvider(newProvider);
     
-    // Mock은 모델 설정 불필요하거나 OpenAI 프리셋 따름
-    const targetPresets = newProvider === 'mock' ? MODEL_PRESETS.openai : MODEL_PRESETS[newProvider];
+    const targetPresets = MODEL_PRESETS[newProvider];
     
     // 현재 모델이 새 프리셋에 없으면 첫 번째 프리셋으로 변경
     if (targetPresets && targetPresets.length > 0) {
@@ -49,7 +65,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setModel: (m: string) => void,
     isCustom: boolean
   ) => {
-    const presets = provider === 'mock' ? MODEL_PRESETS.openai : MODEL_PRESETS[provider];
+    const presets = MODEL_PRESETS[provider];
     if (!presets) return null;
 
     return (
@@ -128,58 +144,96 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <div className="space-y-2">
                     <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">Provider</label>
                     <div className="flex items-center gap-4">
-                        {(['openai', 'anthropic', 'mock'] as AiProvider[]).map((p) => (
-                            <label key={p} className="flex items-center gap-2 cursor-pointer group">
-                                <input 
-                                    type="radio" 
-                                    name="provider" 
-                                    value={p} 
-                                    checked={provider === p}
-                                    onChange={() => handleProviderChange(p)}
-                                    className="accent-primary-500 w-4 h-4 cursor-pointer"
-                                />
-                                <span className={`text-sm font-medium transition-colors ${provider === p ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
-                                    {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Mock'}
-                                </span>
-                            </label>
-                        ))}
+                        {(['openai', 'anthropic'] as AiProvider[]).map((p) => {
+                            const isDisabled = p === 'anthropic';
+                            return (
+                                <label 
+                                    key={p} 
+                                    className={`flex items-center gap-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer group'}`}
+                                >
+                                    <input 
+                                        type="radio" 
+                                        name="provider" 
+                                        value={p} 
+                                        checked={provider === p}
+                                        onChange={() => !isDisabled && handleProviderChange(p)}
+                                        disabled={isDisabled}
+                                        className="accent-primary-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
+                                    />
+                                    <span className={`text-sm font-medium transition-colors ${provider === p ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
+                                        {p === 'openai' ? 'OpenAI' : 'Anthropic'}
+                                        {isDisabled && <span className="ml-1 text-xs text-editor-muted">(Coming soon)</span>}
+                                    </span>
+                                </label>
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* Model Selection */}
-                {provider !== 'mock' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                        {renderModelSelector(
-                            "Translation Model", 
-                            translationModel, 
-                            setTranslationModel,
-                            isCustomTranslation
-                        )}
-                        {renderModelSelector(
-                            "Chat Model", 
-                            chatModel, 
-                            setChatModel,
-                            isCustomChat
-                        )}
-                    </div>
-                )}
-                {provider === 'mock' && (
-                     <div className="text-sm text-editor-muted bg-editor-bg/50 p-3 rounded border border-editor-border border-dashed">
-                        Mock Provider is selected. Using dummy responses for testing.
-                     </div>
-                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    {renderModelSelector(
+                        "Translation Model", 
+                        translationModel, 
+                        setTranslationModel,
+                        isCustomTranslation
+                    )}
+                    {renderModelSelector(
+                        "Chat Model", 
+                        chatModel, 
+                        setChatModel,
+                        isCustomChat
+                    )}
+                </div>
             </section>
 
-            {/* 2. API Keys (Placeholder) */}
-            <section className="space-y-3 opacity-60">
+            {/* 2. API Keys */}
+            <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🔑</span>
                     <h3 className="font-semibold text-editor-text">API Keys</h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-editor-border text-editor-muted">Coming soon</span>
                 </div>
-                <div className="p-4 bg-editor-bg rounded border border-editor-border border-dashed text-center text-sm text-editor-muted">
-                    API Key management will be available here. <br/>
-                    Currently using .env.local configuration.
+
+                {/* OpenAI API Key */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-editor-text">OpenAI API Key</label>
+                        {openaiApiKey && (
+                            <button
+                                onClick={() => setOpenaiApiKey(undefined)}
+                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={hasEnvKey('VITE_OPENAI_API_KEY') ? 'Using environment variable' : 'Enter your OpenAI API key'}
+                            value={openaiApiKey || ''}
+                            onChange={(e) => setOpenaiApiKey(e.target.value)}
+                        />
+                        {!openaiApiKey && hasEnvKey('VITE_OPENAI_API_KEY') && (
+                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Anthropic API Key (Disabled) */}
+                <div className="space-y-1.5 opacity-50">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-editor-text">Anthropic API Key</label>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-editor-border text-editor-muted">Coming soon</span>
+                    </div>
+                    <input
+                        type="password"
+                        disabled
+                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-muted cursor-not-allowed"
+                        placeholder="Anthropic support will be available soon"
+                        value=""
+                    />
                 </div>
             </section>
 

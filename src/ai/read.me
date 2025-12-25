@@ -1,0 +1,102 @@
+## AI 폴더 개요 (`src/ai/`)
+
+이 폴더는 **채팅(질문/검수)** 및 **번역(Preview→Apply)**에 사용되는 AI 로직과, 모델이 필요 시 호출하는 **tool(도구)**들을 포함합니다.
+
+핵심 원칙:
+- **Non-Intrusive**: AI는 사용자 요청 시에만 응답합니다.
+- **문서 자동 변경 금지**: 채팅은 번역문/문서를 자동으로 수정하지 않습니다.
+- **저장/메모리 자동 반영 금지**: 규칙/컨텍스트는 **AI가 직접 저장할 수 없고**, UI에 표시되는 **버튼을 사용자가 클릭**해야만 반영됩니다.
+
+---
+
+## 모드 구분
+
+### 1) Chat (질문/검수)
+- 사용자 입력을 `prompt.ts`에서 `requestType='question'`으로 처리합니다.  
+- 번역 생성(전체 번역/리라이트)은 채팅에서 금지이며, 필요 시 **Translate(Preview) 워크플로우**로 유도합니다.
+- 원문/번역문 **대조/검수(정확성 확인, 누락/오역, 고유명사/기관명 등)**가 필요하면, 사용자가 문서를 붙여주길 기다리기 전에 **문서 도구(tool)**를 on-demand로 호출해 근거를 확보합니다.
+
+### 2) Translate (Preview→Apply)
+- 전체 문서 번역은 `translateDocument.ts`가 담당합니다.
+- 모델 출력은 TipTap/ProseMirror JSON 형태를 강제하고, UI에서 Preview 후 Apply로 반영합니다.
+
+---
+
+## 프롬프트/컨텍스트 구성 (`prompt.ts`)
+
+`buildLangChainMessages()`가 시스템 프롬프트 + 시스템 컨텍스트를 조립합니다.
+
+포함 가능한 컨텍스트:
+- Translation Rules (사용자 입력)
+- Glossary Injected (로컬 글로서리 검색 결과)
+- Project Context (사용자 입력/요약)
+- Source/Target 문서(채팅에서는 기본 payload에 인라인으로 넣지 않고 tool로 조회)
+- 컨텍스트 블록(선택 블록)
+
+토큰(문자) 최적화:
+- Translation Rules / Context Blocks는 **상한을 두어**(문자 길이) 과도한 컨텍스트 폭증을 방지합니다.
+
+---
+
+## Tool Calling 동작 (`chat.ts`)
+
+### Tool calling loop
+`runToolCallingLoop()`가 다음을 반복합니다:
+1) 모델 호출
+2) 응답에 tool_calls가 있으면 해당 tool 실행
+3) tool 결과를 ToolMessage로 추가
+4) tool_calls가 없으면 최종 답변으로 종료
+
+기본 최대 step은 제한되어 있습니다(무한 루프 방지).
+
+### Tool guide (system message)
+모델이 도구 사용 원칙을 잊지 않도록, 시스템 메시지로 간단한 도구 가이드를 주입합니다.
+
+---
+
+## 제공 도구 목록
+
+### 1) 문서 조회 도구 (`tools/documentTools.ts`)
+- `get_source_document`
+- `get_target_document`
+
+정책:
+- **질문/검수에 꼭 필요할 때만** 호출합니다. 단, **대조/검수 요청**이라면 먼저 호출하는 것이 원칙입니다.
+- 문서가 아주 긴 경우 토큰 폭발을 막기 위해 **자동으로 일부만 반환될 수 있습니다**(auto truncate).
+- (옵션) 문서가 길고 특정 구절 근처가 필요하면 `query` / `maxChars` / `aroundChars`를 전달해 **해당 구절 주변만 발췌**를 유도할 수 있습니다.
+
+### 2) 저장 제안 도구 (`tools/suggestionTools.ts`)
+- `suggest_translation_rule`
+- `suggest_project_context`
+
+정책(중요):
+- 이 도구들은 **저장을 수행하지 않습니다.**
+- 오직 **“저장 제안(suggestion) 생성”** 신호만 만들고,
+  실제 반영은 UI에 표시된 버튼을 **사용자가 클릭**해야만 일어납니다.
+
+AI 응답 문구 가이드:
+- 금지: “저장했습니다 / 추가했습니다”
+- 권장: “저장 제안을 생성했습니다. 원하시면 버튼을 눌러 추가하세요.”
+
+---
+
+## UI 연동(요약)
+
+채팅 UI는 tool 호출 이벤트를 받아:
+- `suggest_*` 호출 시, 메시지 메타데이터에 suggestion 내용을 기록
+- UI에서 “Add to Rules / Add to Context” 같은 버튼을 표시
+- 사용자가 클릭하면 실제 `Translation Rules`/`Project Context`에 append
+
+추가 폴백:
+- 모델이 `suggest_*` tool을 호출하지 않더라도, assistant 응답에
+  “원하시면 버튼을 눌러 번역 규칙(또는 Project Context)으로 추가하세요” 같은 문구가 포함되면,
+  UI가 해당 메시지를 **저장 제안(suggestion)으로 추론**하여 버튼을 표시할 수 있습니다.
+
+---
+
+## 디버깅 팁
+
+- 문서/글로서리/규칙이 길어질수록 비용이 커지므로, 필요할 때만 컨텍스트를 선택/주입하는 쪽이 유리합니다.
+- 문서 비교가 필요 없는 일반 질문은 도구 호출 없이 답하도록 가이드되어 있습니다.
+
+

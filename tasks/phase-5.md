@@ -8,7 +8,8 @@
 
 - [x] Tool 인터페이스/스키마 정의 (Zod)
 - [x] 기본 Tool 구조 생성
-  - 문서 조회 Tool: `get_source_document`, `get_target_document`
+  - 문서 조회 Tool: `get_source_document`, `get_target_document` ✅
+  - 제안 Tool: `suggest_translation_rule`, `suggest_project_context` ✅
   - Tool 호출 텔레메트리: 콘솔(`[AI tool_call]`) + `metadata.toolsUsed`
 - [x] 채팅 응답 중 Tool 호출 진행 상태 UI 표시 (`metadata.toolCallsInProgress`)
 
