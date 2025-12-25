@@ -11,6 +11,8 @@ type NewProjectForm = {
   domain: ProjectDomain;
 };
 
+import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+
 export function ProjectSidebar(): JSX.Element {
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
   const toggleProjectSidebar = useUIStore((s) => s.toggleProjectSidebar);
@@ -24,6 +26,7 @@ export function ProjectSidebar(): JSX.Element {
   const [items, setItems] = useState<RecentProjectInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const [form, setForm] = useState<NewProjectForm>({
     title: 'New Project',
     domain: 'general',
@@ -329,6 +332,21 @@ export function ProjectSidebar(): JSX.Element {
             );
           })}
       </div>
+
+      <div className="p-3 border-t border-editor-border bg-editor-surface shrink-0">
+        <button
+            type="button"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-editor-bg border border-editor-border text-editor-text hover:bg-editor-border transition-colors text-xs font-medium"
+            onClick={() => setShowAppSettings(true)}
+        >
+            <span className="text-sm">⚙️</span>
+            App Settings
+        </button>
+      </div>
+
+      {showAppSettings && (
+        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
+      )}
 
       {/* Context Menu */}
       {contextMenu && (

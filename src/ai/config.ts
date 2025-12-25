@@ -1,4 +1,17 @@
+import { useAiConfigStore } from '@/stores/aiConfigStore';
+
 export type AiProvider = 'openai' | 'anthropic' | 'mock';
+
+export const MODEL_PRESETS = {
+  openai: [
+    { value: 'gpt-5.2', label: 'GPT-5.2', description: '최신 플래그십 모델 (High Reasoning)' },
+    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '빠르고 효율적인 경량 모델' },
+  ],
+  anthropic: [
+    { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet', description: '균형 잡힌 고성능 모델' },
+    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', description: '매우 빠른 응답 속도' },
+  ],
+} as const;
 
 export interface AiConfig {
   provider: AiProvider;
@@ -33,14 +46,14 @@ function getEnvOptionalNumber(key: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function getAiConfig(): AiConfig {
-  const providerRaw = (getEnvString('VITE_AI_PROVIDER') ?? 'mock').toLowerCase();
-  const provider: AiProvider =
-    providerRaw === 'openai' ? 'openai' : providerRaw === 'anthropic' ? 'anthropic' : 'mock';
-
-  const model =
-    getEnvString('VITE_AI_MODEL') ??
-    (provider === 'anthropic' ? 'claude-3-5-sonnet-latest' : 'gpt-4o-mini');
+export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiConfig {
+  // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
+  const store = useAiConfigStore.getState();
+  const provider = store.provider;
+  
+  // 2. 용도에 따른 모델 선택
+  const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
+  const model = useFor === 'translation' ? store.translationModel : store.chatModel;
 
   const openaiApiKey = getEnvString('VITE_OPENAI_API_KEY');
   const anthropicApiKey = getEnvString('VITE_ANTHROPIC_API_KEY');
@@ -59,5 +72,3 @@ export function getAiConfig(): AiConfig {
       (provider === 'anthropic' ? 'claude-3-haiku-20240307' : 'gpt-5-mini'),
   };
 }
-
-

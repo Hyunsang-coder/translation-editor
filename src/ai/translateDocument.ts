@@ -138,7 +138,7 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   const systemPrompt = systemLines.join('\n').trim();
 
-  const model = createChatModel();
+  const model = createChatModel(undefined, { useFor: 'translation' });
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },

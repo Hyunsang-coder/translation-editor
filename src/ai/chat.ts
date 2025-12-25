@@ -162,7 +162,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   // 요청 유형 자동 감지
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
-  const model = createChatModel();
+  const model = createChatModel(undefined, { useFor: 'chat' });
   const includeSource = true;
   const includeTarget = true;
 
@@ -227,7 +227,7 @@ export async function streamAssistantReply(
   // 요청 유형 자동 감지
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
-  const model = createChatModel();
+  const model = createChatModel(undefined, { useFor: 'chat' });
   const includeSource = true;
   const includeTarget = true;
 
