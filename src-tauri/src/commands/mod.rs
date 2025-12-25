@@ -8,4 +8,5 @@ pub mod glossary;
 pub mod history;
 pub mod project;
 pub mod storage;
+pub mod attachments;
 

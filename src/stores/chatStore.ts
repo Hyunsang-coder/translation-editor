@@ -15,6 +15,12 @@ import {
   type ChatProjectSettings,
 } from '@/tauri/chat';
 import {
+  attachFile,
+  deleteAttachment as deleteAttachmentApi,
+  listAttachments,
+  type AttachmentDto,
+} from '@/tauri/attachments';
+import {
   createGhostMaskSession,
   maskGhostChips,
   restoreGhostChips,
@@ -92,6 +98,8 @@ interface ChatState {
   translationContextSessionId: string | null;
   /** 현재 로드된 프로젝트 ID (저장 시 검증용) */
   loadedProjectId: string | null;
+  /** 첨부 파일 목록 (4.2) */
+  attachments: AttachmentDto[];
 }
 
 interface ChatActions {
@@ -146,6 +154,11 @@ interface ChatActions {
   setProjectContext: (memory: string) => void;
   appendToProjectContext: (snippet: string) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
+
+  // 첨부 파일 관리 (4.2)
+  attachFile: (path: string) => Promise<void>;
+  deleteAttachment: (id: string) => Promise<void>;
+  loadAttachments: () => Promise<void>;
 
   // Persistence (project-scoped)
   hydrateForProject: (projectId: string | null) => Promise<void>;
@@ -238,6 +251,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     projectContext: '',
     translationContextSessionId: null,
     loadedProjectId: null,
+    attachments: [],
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
@@ -278,35 +292,39 @@ export const useChatStore = create<ChatStore>((set, get) => {
           return;
         }
 
-        const [sessions, settings] = await Promise.all([
+        const [sessionsRes, settingsRes, attachmentsRes] = await Promise.all([
           loadChatSessions(projectId),
           loadChatProjectSettings(projectId),
+          listAttachments(projectId),
         ]);
+
+        const atts = attachmentsRes ?? [];
 
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
           loadedProjectId: projectId, // 로드 성공 후에만 ID 설정 (저장 허용)
-          sessions: (sessions ?? []).slice(0, MAX_CHAT_SESSIONS),
-          currentSessionId: (sessions && sessions.length > 0) ? sessions[0]!.id : null,
-          currentSession: (sessions && sessions.length > 0) ? sessions[0]! : null,
-          lastSummaryAtMessageCountBySessionId: (sessions && sessions.length > 0)
-            ? Object.fromEntries(sessions.slice(0, MAX_CHAT_SESSIONS).map((s) => [s.id, 0]))
+          sessions: (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS),
+          currentSessionId: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]!.id : null,
+          currentSession: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]! : null,
+          lastSummaryAtMessageCountBySessionId: (sessionsRes && sessionsRes.length > 0)
+            ? Object.fromEntries(sessionsRes.slice(0, MAX_CHAT_SESSIONS).map((s) => [s.id, 0]))
             : {},
+          attachments: atts,
         };
 
-        if (settings) {
+        if (settingsRes) {
           // Migration: systemPromptOverlay -> translatorPersona
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const legacy = (settings as any).systemPromptOverlay;
+          const legacy = (settingsRes as any).systemPromptOverlay;
 
-          nextState.translatorPersona = settings.translatorPersona?.trim()
-            ? settings.translatorPersona
+          nextState.translatorPersona = settingsRes.translatorPersona?.trim()
+            ? settingsRes.translatorPersona
             : (legacy || DEFAULT_TRANSLATOR_PERSONA);
 
-          nextState.translationRules = settings.translationRules ?? '';
-          nextState.projectContext = settings.projectContext ?? '';
-          nextState.composerText = settings.composerText ?? '';
-          nextState.translationContextSessionId = settings.translationContextSessionId ?? null;
+          nextState.translationRules = settingsRes.translationRules ?? '';
+          nextState.projectContext = settingsRes.projectContext ?? '';
+          nextState.composerText = settingsRes.composerText ?? '';
+          nextState.translationContextSessionId = settingsRes.translationContextSessionId ?? null;
         } else {
           // 설정이 없으면 기본값 유지
           nextState.translatorPersona = DEFAULT_TRANSLATOR_PERSONA;
@@ -540,6 +558,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
             projectContext,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
+            // 첨부 파일 텍스트 주입
+            attachments: get().attachments
+              .filter(a => a.extractedText)
+              .map(a => ({ filename: a.filename, text: a.extractedText! })),
           },
           {
             onToken: (full) => {
@@ -551,17 +573,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
-              
+
               // 1. Tool Call Badge (Running state)
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
               const next =
                 evt.phase === 'start'
                   ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
                   : prev.filter((n) => n !== evt.toolName);
-              
+
               // 2. Suggestion Handling (Smart Buttons)
               let nextMetadata = msgNow?.metadata ?? {};
-              
+
               // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
@@ -955,6 +977,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
             ...(glossaryInjected ? { glossaryInjected } : {}),
             projectContext,
             requestType: 'question',
+            // 첨부 파일 텍스트 주입
+            attachments: get().attachments
+              .filter(a => a.extractedText)
+              .map(a => ({ filename: a.filename, text: a.extractedText! })),
           },
           {
             onToken: (full) => {
@@ -966,7 +992,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
-              
+
               // 1) Tool Call Badge
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
               const next =
@@ -1137,7 +1163,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (!incoming) return;
       const current = get().translationRules.trim();
       const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
-      set({ translationRules: next });
+      set({ projectContext: next });
       schedulePersist();
     },
 
@@ -1158,6 +1184,54 @@ export const useChatStore = create<ChatStore>((set, get) => {
     setTranslationContextSessionId: (sessionId: string | null): void => {
       set({ translationContextSessionId: sessionId });
       schedulePersist();
+    },
+
+    // 첨부 파일 관리
+    attachFile: async (path: string): Promise<void> => {
+      const projectId = get().loadedProjectId;
+      if (!projectId) return;
+
+      set({ isLoading: true });
+      try {
+        const newAtt = await attachFile(projectId, path);
+        set((state) => ({
+          attachments: [...state.attachments, newAtt],
+          isLoading: false,
+        }));
+      } catch (e) {
+        set({
+          isLoading: false,
+          error: e instanceof Error ? e.message : '첨부 파일 추가 실패',
+        });
+      }
+    },
+
+    deleteAttachment: async (id: string): Promise<void> => {
+      set({ isLoading: true });
+      try {
+        await deleteAttachmentApi(id);
+        set((state) => ({
+          attachments: state.attachments.filter((a) => a.id !== id),
+          isLoading: false,
+        }));
+      } catch (e) {
+        set({
+          isLoading: false,
+          error: e instanceof Error ? e.message : '첨부 파일 삭제 실패',
+        });
+      }
+    },
+
+    loadAttachments: async (): Promise<void> => {
+      const projectId = get().loadedProjectId;
+      if (!projectId) return;
+
+      try {
+        const atts = await listAttachments(projectId);
+        set({ attachments: atts });
+      } catch (e) {
+        console.error('Failed to load attachments:', e);
+      }
     },
   };
 });

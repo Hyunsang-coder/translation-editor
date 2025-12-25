@@ -25,6 +25,10 @@ thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 md5 = "0.7"
 calamine = "0.26"
+pdf-extract = "0.7"
+docx-rs = "0.4"
+zip = "2.2"
+quick-xml = "0.37"
 
 [profile.dev]
 incremental = true

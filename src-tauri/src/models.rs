@@ -143,6 +143,40 @@ pub struct ChatMessage {
     pub metadata: Option<Value>,
 }
 
+/// 첨부 파일 모델 (DB Row)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: String,
+    #[serde(rename = "projectId")]
+    pub project_id: String,
+    pub filename: String,
+    #[serde(rename = "fileType")]
+    pub file_type: String,
+    #[serde(rename = "filePath")]
+    pub file_path: Option<String>,
+    #[serde(rename = "extractedText")]
+    pub extracted_text: Option<String>,
+    #[serde(rename = "fileSize")]
+    pub file_size: Option<i64>,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64,
+}
+
+/// 첨부 파일 DTO (프론트엔드 전송용)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentDto {
+    pub id: String,
+    pub filename: String,
+    pub file_type: String,
+    pub file_size: Option<i64>,
+    pub extracted_text: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 // NOTE: 과거에는 ChatMessageMetadata를 Rust struct로 고정했지만,
 // TS 메타데이터가 확장되면서 유실 위험이 커져 JSON(Value)로 변경했습니다.
 

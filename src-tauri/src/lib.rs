@@ -65,6 +65,9 @@ pub fn run() {
             commands::storage::import_project_file_safe,
             commands::storage::list_project_ids,
             commands::storage::list_recent_projects,
+            commands::attachments::attach_file,
+            commands::attachments::list_attachments,
+            commands::attachments::delete_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

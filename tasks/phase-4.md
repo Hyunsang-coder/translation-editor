@@ -139,17 +139,33 @@
   - `delete_attachment`: 첨부 파일 삭제
   - `extract_file_text`: 파일 타입별 텍스트 추출 로직
 
-#### 4.2.4 구현 우선순위
+#### 4.2.4 구현 우선순위 및 세부 단계
 
-1. **Phase 1**: Markdown (.md) - 가장 간단, 즉시 사용 가능
-2. **Phase 2**: PDF (.pdf) - 참조 문서로 가장 많이 사용
-3. **Phase 3**: Word/PowerPoint (.docx, .pptx) - 비즈니스 문서
-4. **Phase 4**: 이미지 (.png, .jpg) - Vision API 또는 사용자 설명
+1.  **단계 1: 인프라 구축**
+    - [ ] SQLite `attachments` 테이블 추가 (`src-tauri/src/db/schema.rs`)
+    - [ ] `Attachment` 모델 정의 (`src-tauri/src/models.rs`)
+    - [ ] Tauri Commands 스켈레톤 구현 (`attach_file`, `list_attachments`, `delete_attachment`)
 
-#### 4.2.5 에러 처리 및 폴백
+2.  **단계 2: 텍스트 추출 엔진 (Rust)**
+    - [ ] **Markdown (.md)**: `std::fs::read_to_string` (완료)
+    - [ ] **PDF (.pdf)**: `pdf-extract` 또는 `lopdf` 활용
+    - [ ] **Word (.docx)**: `docx-rs` 활용
+    - [ ] **PowerPoint (.pptx)**: Zip 파일 내 XML 파싱 (슬라이드 텍스트 추출)
+
+3.  **단계 3: 프롬프트 연동**
+    - [ ] `src/ai/prompt.ts`의 `buildLangChainMessages` 수정: 첨부 파일 텍스트 주입 로직 추가
+    - [ ] 토큰/글자수 제한 (8,000자) 적용 및 초과 시 절단/경고
+
+4.  **단계 4: UI 구현 (React)**
+    - [ ] `ChatPanel.tsx`에 첨부 파일 업로드 및 목록 표시 UI 추가
+    - [ ] 파일 선택기 연동 (`@tauri-apps/api/dialog`)
+    - [ ] 업로드 중 로딩 상태 및 에러 표시
+
+5.  **단계 5: 이미지 지원 (Optional/Future)**
+    - [ ] 이미지 메타데이터 저장 및 Vision API 연동 준비
+
+#### 4.2.5 에러 처리 및 폴백 (동일)
 
 - 파일 파싱 실패 시: 원본 파일명 + 에러 메시지만 표시
 - 지원하지 않는 파일 타입: 업로드 거부 + 지원 타입 안내
 - 텍스트 추출 실패: 사용자에게 수동 설명 입력 요청 옵션
-
-

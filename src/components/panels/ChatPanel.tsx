@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
+import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
@@ -54,6 +54,9 @@ export function ChatPanel(): JSX.Element {
   const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
   const createSession = useChatStore((s) => s.createSession);
   const updateMessage = useChatStore((s) => s.updateMessage);
+  const attachments = useChatStore((s) => s.attachments);
+  const attachFile = useChatStore((s) => s.attachFile);
+  const deleteAttachment = useChatStore((s) => s.deleteAttachment);
 
   const renderTypingIndicator = useCallback((opts?: { label?: string }): JSX.Element => {
     const label = opts?.label ?? '응답 생성 중...';
@@ -318,6 +321,83 @@ export function ChatPanel(): JSX.Element {
           </div>
         ) : (
           <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
+        )}
+      </section>
+
+      {/* Section 5: Attachments (4.2) */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-xs font-semibold text-editor-text">5. Attachments</h3>
+            <span className="text-[10px] text-editor-muted">
+              PDF, Word, PPTX, Markdown (Max 4,000 chars each)
+            </span>
+          </div>
+          <button
+            type="button"
+            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1"
+            onClick={() => {
+              void (async () => {
+                if (!isTauriRuntime() || !project) return;
+                const path = await pickDocumentFile();
+                if (path) {
+                  await attachFile(path);
+                }
+              })();
+            }}
+          >
+            <span>+</span>
+            <span>Attach</span>
+          </button>
+        </div>
+
+        {attachments.length > 0 ? (
+          <div className="space-y-1.5">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className="group flex items-center justify-between p-2 rounded bg-editor-surface border border-editor-border hover:border-editor-text transition-colors"
+                title={`${att.filename} (${att.fileType.toUpperCase()})`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs">
+                    {att.fileType === 'pdf' ? '📄' : att.fileType === 'docx' ? '📝' : att.fileType === 'pptx' ? '📊' : '📄'}
+                  </span>
+                  <div className="min-w-0 flex flex-col">
+                    <span className="text-[11px] text-editor-text font-medium truncate">
+                      {att.filename}
+                    </span>
+                    {att.fileSize && (
+                      <span className="text-[9px] text-editor-muted">
+                        {(att.fileSize / 1024).toFixed(1)} KB
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-editor-muted hover:text-red-500 transition-opacity"
+                  onClick={() => {
+                    void (async () => {
+                      const ok = await confirm(`Delete "${att.filename}"?`, {
+                        title: 'Delete Attachment',
+                        kind: 'warning',
+                      });
+                      if (ok) {
+                        await deleteAttachment(att.id);
+                      }
+                    })();
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-editor-muted italic p-2 border border-dashed border-editor-border rounded">
+            No files attached to this project.
+          </div>
         )}
       </section>
     </div>
@@ -598,20 +678,20 @@ export function ChatPanel(): JSX.Element {
                       {message.metadata.suggestion.type === 'context' &&
                         !message.metadata.contextAdded &&
                         (
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                          onClick={() => {
-                            if (message.metadata?.suggestion?.content) {
-                              appendToProjectContext(message.metadata.suggestion.content);
-                              updateMessage(message.id, { metadata: { contextAdded: true } });
-                            }
-                          }}
-                          title="이 내용을 Project Context에 추가"
-                        >
-                          Add to Context
-                        </button>
-                      )}
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                            onClick={() => {
+                              if (message.metadata?.suggestion?.content) {
+                                appendToProjectContext(message.metadata.suggestion.content);
+                                updateMessage(message.id, { metadata: { contextAdded: true } });
+                              }
+                            }}
+                            title="이 내용을 Project Context에 추가"
+                          >
+                            Add to Context
+                          </button>
+                        )}
                     </div>
                   )}
               </div>

@@ -74,6 +74,8 @@ export interface PromptContext {
   sourceDocument?: string;
   /** 번역문 문서 */
   targetDocument?: string;
+  /** 첨부 파일 (추출된 텍스트 목록) */
+  attachments?: { filename: string; text: string }[];
 }
 
 export interface PromptOptions {
@@ -205,6 +207,35 @@ function formatDocument(label: string, text?: string): string {
   return [`[${label}]`, sliced].join('\n');
 }
 
+function formatAttachments(attachments?: { filename: string; text: string }[]): string {
+  if (!attachments || attachments.length === 0) return '';
+
+  const lines: string[] = ['[첨부 파일]'];
+  const maxLenPerFile = 4000;
+  const totalMaxLen = 8000;
+  let currentTotal = 0;
+
+  for (const att of attachments) {
+    if (currentTotal >= totalMaxLen) break;
+
+    const trimmed = att.text.trim();
+    if (!trimmed) continue;
+
+    const available = totalMaxLen - currentTotal;
+    const sliceLen = Math.min(trimmed.length, maxLenPerFile, available);
+
+    const sliced = trimmed.length > sliceLen ? `${trimmed.slice(0, sliceLen)}...` : trimmed;
+
+    lines.push(`--- [파일: ${att.filename}] ---`);
+    lines.push(sliced);
+    lines.push('');
+
+    currentTotal += sliced.length;
+  }
+
+  return lines.join('\n');
+}
+
 export function buildBlockContextText(blocks: EditorBlock[]): string {
   if (blocks.length === 0) return '';
 
@@ -279,6 +310,7 @@ export async function buildLangChainMessages(
     projectContext,
     sourceDoc,
     targetDoc,
+    formatAttachments(ctx.attachments),
     blockContext,
   ]
     .filter(Boolean)

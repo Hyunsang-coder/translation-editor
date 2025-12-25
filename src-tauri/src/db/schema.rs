@@ -110,5 +110,22 @@ CREATE TABLE IF NOT EXISTS glossary_entries (
 -- 용어집 인덱스
 CREATE INDEX IF NOT EXISTS idx_glossary_project ON glossary_entries(project_id);
 CREATE INDEX IF NOT EXISTS idx_glossary_source ON glossary_entries(source);
+
+-- 첨부 파일 테이블
+CREATE TABLE IF NOT EXISTS attachments (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_path TEXT,
+    extracted_text TEXT,
+    file_size INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- 첨부 파일 인덱스
+CREATE INDEX IF NOT EXISTS idx_attachments_project ON attachments(project_id);
 "#;
 

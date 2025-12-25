@@ -31,6 +31,8 @@ export interface GenerateReplyInput {
    */
   includeSourceInPayload?: boolean;
   includeTargetInPayload?: boolean;
+  /** 첨부 파일 (추출된 텍스트 목록) */
+  attachments?: { filename: string; text: string }[];
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
 }

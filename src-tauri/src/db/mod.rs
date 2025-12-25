@@ -907,6 +907,68 @@ impl Database {
         tx.commit()?;
         Ok((inserted, updated, skipped))
     }
+
+    /// 첨부 파일 저장
+    pub fn save_attachment(&self, a: &crate::models::Attachment) -> Result<(), IteError> {
+        self.conn.execute(
+            "INSERT INTO attachments (
+                id, project_id, filename, file_type, file_path, extracted_text, file_size, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ON CONFLICT(id) DO UPDATE SET
+                filename = excluded.filename,
+                file_type = excluded.file_type,
+                file_path = excluded.file_path,
+                extracted_text = excluded.extracted_text,
+                file_size = excluded.file_size,
+                updated_at = excluded.updated_at",
+            (
+                &a.id,
+                &a.project_id,
+                &a.filename,
+                &a.file_type,
+                &a.file_path,
+                &a.extracted_text,
+                a.file_size,
+                a.created_at,
+                a.updated_at,
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// 프로젝트별 첨부 파일 목록 조회
+    pub fn list_attachments(&self, project_id: &str) -> Result<Vec<crate::models::Attachment>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, project_id, filename, file_type, file_path, extracted_text, file_size, created_at, updated_at
+             FROM attachments WHERE project_id = ?1 ORDER BY created_at ASC",
+        )?;
+
+        let iter = stmt.query_map([project_id], |row| {
+            Ok(crate::models::Attachment {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                filename: row.get(2)?,
+                file_type: row.get(3)?,
+                file_path: row.get(4)?,
+                extracted_text: row.get(5)?,
+                file_size: row.get(6)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// 첨부 파일 삭제
+    pub fn delete_attachment(&self, id: &str) -> Result<(), IteError> {
+        self.conn.execute("DELETE FROM attachments WHERE id = ?1", [id])?;
+        Ok(())
+    }
 }
 
 impl Default for crate::models::BlockMetadata {
