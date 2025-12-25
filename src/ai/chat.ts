@@ -45,6 +45,67 @@ function getToolCallId(call: ToolCall): string {
   return call.id ?? uuidv4();
 }
 
+function safeJsonParse(input: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeToolCalls(rawCalls: unknown): ToolCall[] {
+  if (!Array.isArray(rawCalls)) return [];
+
+  const out: ToolCall[] = [];
+  for (const raw of rawCalls) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as any;
+
+    // OpenAI style: { id, type: 'function', function: { name, arguments } }
+    // LangChain normalized: { id, name, args }
+    // Anthropic style (possible): { id, name, input }
+    const name: string | undefined =
+      r.name ??
+      r.function?.name ??
+      r.tool?.name;
+
+    if (!name || typeof name !== 'string') continue;
+
+    const id: string | undefined =
+      r.id ??
+      r.tool_call_id ??
+      r.toolCallId;
+
+    const argsRaw =
+      r.args ??
+      r.input ??
+      r.function?.arguments ??
+      r.arguments;
+
+    const args =
+      typeof argsRaw === 'string'
+        ? (safeJsonParse(argsRaw) ?? {})
+        : (argsRaw ?? {});
+
+    out.push({ ...(id ? { id } : {}), name, args } as ToolCall);
+  }
+
+  return out;
+}
+
+function extractToolCalls(ai: unknown): ToolCall[] {
+  const a = ai as any;
+  // 가장 흔한 케이스 우선: ai.tool_calls (LangChain normalized)
+  const direct = normalizeToolCalls(a?.tool_calls);
+  if (direct.length > 0) return direct;
+
+  // Provider/버전에 따라 additional_kwargs에 들어가는 케이스 대응
+  const fromAdditional = normalizeToolCalls(a?.additional_kwargs?.tool_calls ?? a?.additional_kwargs?.toolCalls);
+  if (fromAdditional.length > 0) return fromAdditional;
+
+  return [];
+}
+
 async function runToolCallingLoop(params: {
   model: ReturnType<typeof createChatModel>;
   tools: Array<{ name: string; invoke: (arg: any) => Promise<any> }>;
@@ -66,7 +127,7 @@ async function runToolCallingLoop(params: {
     const ai = await (modelWithTools as any).invoke(loopMessages);
     loopMessages.push(ai);
 
-    const toolCalls: ToolCall[] = (ai as any)?.tool_calls ?? [];
+    const toolCalls: ToolCall[] = extractToolCalls(ai);
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
       const content = (ai as any)?.content;
       const text =
