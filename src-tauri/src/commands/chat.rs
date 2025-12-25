@@ -1,6 +1,6 @@
 //! Chat Persistence Commands
 //!
-//! 프로젝트별 "현재 세션 1개" 및 ChatPanel 설정을 DB에 저장/로드합니다.
+//! 프로젝트별 채팅 세션 및 ChatPanel 설정을 DB에 저장/로드합니다.
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -30,6 +30,19 @@ pub struct SaveCurrentChatSessionArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadCurrentChatSessionArgs {
+    pub project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveChatSessionsArgs {
+    pub project_id: String,
+    pub sessions: Vec<ChatSession>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadChatSessionsArgs {
     pub project_id: String,
 }
 
@@ -76,6 +89,39 @@ pub fn load_current_chat_session(
     })?;
 
     db.load_current_chat_session(&args.project_id)
+        .map_err(CommandError::from)
+}
+
+/// 프로젝트별 채팅 세션(최대 3개) 저장
+#[tauri::command]
+pub fn save_chat_sessions(
+    args: SaveChatSessionsArgs,
+    db_state: State<DbState>,
+) -> CommandResult<()> {
+    let db = db_state.0.lock().map_err(|e| CommandError {
+        code: "LOCK_ERROR".to_string(),
+        message: format!("Failed to acquire database lock: {}", e),
+        details: None,
+    })?;
+
+    db.save_chat_sessions(&args.project_id, &args.sessions)
+        .map_err(CommandError::from)?;
+    Ok(())
+}
+
+/// 프로젝트별 채팅 세션(최대 3개) 로드 (최근 활동 기준)
+#[tauri::command]
+pub fn load_chat_sessions(
+    args: LoadChatSessionsArgs,
+    db_state: State<DbState>,
+) -> CommandResult<Vec<ChatSession>> {
+    let db = db_state.0.lock().map_err(|e| CommandError {
+        code: "LOCK_ERROR".to_string(),
+        message: format!("Failed to acquire database lock: {}", e),
+        details: None,
+    })?;
+
+    db.load_chat_sessions(&args.project_id)
         .map_err(CommandError::from)
 }
 

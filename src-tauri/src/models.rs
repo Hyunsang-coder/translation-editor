@@ -3,6 +3,7 @@
 //! TypeScript 타입과 매핑되는 Rust 데이터 모델
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// 프로젝트 전체 구조
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,18 +138,11 @@ pub struct ChatMessage {
     pub role: String,
     pub content: String,
     pub timestamp: i64,
-    pub metadata: Option<ChatMessageMetadata>,
+    /// 메시지 메타데이터는 프론트(TypeScript) 구조를 그대로 roundtrip 하기 위해 JSON으로 보관합니다.
+    /// (버튼 상태, suggestion 등 UX 메타데이터 유실 방지)
+    pub metadata: Option<Value>,
 }
 
-/// 채팅 메시지 메타데이터
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessageMetadata {
-    pub model: Option<String>,
-    pub tokens: Option<u32>,
-    #[serde(rename = "suggestedBlockId")]
-    pub suggested_block_id: Option<String>,
-    #[serde(rename = "appliedAt")]
-    pub applied_at: Option<i64>,
-    pub accepted: Option<bool>,
-}
+// NOTE: 과거에는 ChatMessageMetadata를 Rust struct로 고정했지만,
+// TS 메타데이터가 확장되면서 유실 위험이 커져 JSON(Value)로 변경했습니다.
 

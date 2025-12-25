@@ -48,6 +48,8 @@ pub fn run() {
             commands::block::merge_blocks,
             commands::chat::save_current_chat_session,
             commands::chat::load_current_chat_session,
+            commands::chat::save_chat_sessions,
+            commands::chat::load_chat_sessions,
             commands::chat::save_chat_project_settings,
             commands::chat::load_chat_project_settings,
             commands::glossary::import_glossary_csv,

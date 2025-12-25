@@ -383,17 +383,21 @@ export function ChatPanel(): JSX.Element {
             </div>
           ))}
 
-          <button
-            onClick={() => {
-              const id = useChatStore.getState().createSession();
-              useChatStore.getState().switchSession(id);
-              setActiveTab('chat');
-            }}
-            className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
-            title="New Chat"
-          >
-            +
-          </button>
+          {chatSessions.length < 3 && (
+            <button
+              onClick={() => {
+                const id = useChatStore.getState().createSession();
+                if (id) {
+                  useChatStore.getState().switchSession(id);
+                  setActiveTab('chat');
+                }
+              }}
+              className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
+              title="New Chat"
+            >
+              +
+            </button>
+          )}
         </div>
 
         {/* Panel Controls */}

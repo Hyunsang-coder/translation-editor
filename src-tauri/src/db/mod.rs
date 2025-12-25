@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use rusqlite::backup::Backup;
 
 use crate::error::IteError;
-use crate::models::{ChatMessageMetadata, ChatSession, EditorBlock, IteProject, SegmentGroup};
+use crate::models::{ChatSession, EditorBlock, IteProject, SegmentGroup};
 
 #[derive(Debug, Clone)]
 pub struct GlossaryEntryRow {
@@ -247,6 +247,18 @@ impl Database {
         project_id: &str,
         session: &ChatSession,
     ) -> Result<(), IteError> {
+        // 레거시 호환: "현재 세션 1개" 저장 API는 여전히 유지하되,
+        // 내부적으로는 다중 세션 저장 로직을 호출하여 구현을 단일화합니다.
+        self.save_chat_sessions(project_id, std::slice::from_ref(session))
+    }
+
+    /// 채팅 세션을 프로젝트에 저장 (최대 3개 유지)
+    /// - 정책: 최근 활동(마지막 메시지 timestamp) 기준으로 정렬 후 상위 3개만 저장
+    pub fn save_chat_sessions(
+        &self,
+        project_id: &str,
+        sessions: &[ChatSession],
+    ) -> Result<(), IteError> {
         let tx = self.conn.unchecked_transaction()?;
 
         // 기존 세션/메시지 제거(프로젝트당 1개만 유지)
@@ -256,35 +268,55 @@ impl Database {
         )?;
         tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
 
-        tx.execute(
-            "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            (
-                &session.id,
-                project_id,
-                &session.name,
-                session.created_at,
-                serde_json::to_string(&session.context_block_ids)?,
-            ),
-        )?;
+        // 최근 활동 기준으로 정렬 후 최대 3개만 저장
+        let mut sorted: Vec<&ChatSession> = sessions.iter().collect();
+        sorted.sort_by(|a, b| {
+            let a_last = a
+                .messages
+                .iter()
+                .map(|m| m.timestamp)
+                .max()
+                .unwrap_or(a.created_at);
+            let b_last = b
+                .messages
+                .iter()
+                .map(|m| m.timestamp)
+                .max()
+                .unwrap_or(b.created_at);
+            b_last.cmp(&a_last)
+        });
 
-        for m in &session.messages {
-            let meta_json: Option<String> = match &m.metadata {
-                Some(meta) => Some(serde_json::to_string(meta)?),
-                None => None,
-            };
+        for session in sorted.into_iter().take(3) {
             tx.execute(
-                "INSERT INTO chat_messages (id, session_id, role, content, timestamp, metadata_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
                 (
-                    &m.id,
                     &session.id,
-                    &m.role,
-                    &m.content,
-                    m.timestamp,
-                    meta_json,
+                    project_id,
+                    &session.name,
+                    session.created_at,
+                    serde_json::to_string(&session.context_block_ids)?,
                 ),
             )?;
+
+            for m in &session.messages {
+                let meta_json: Option<String> = match &m.metadata {
+                    Some(meta) => Some(serde_json::to_string(meta)?),
+                    None => None,
+                };
+                tx.execute(
+                    "INSERT INTO chat_messages (id, session_id, role, content, timestamp, metadata_json)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    (
+                        &m.id,
+                        &session.id,
+                        &m.role,
+                        &m.content,
+                        m.timestamp,
+                        meta_json,
+                    ),
+                )?;
+            }
         }
 
         tx.commit()?;
@@ -293,62 +325,72 @@ impl Database {
 
     /// 현재 채팅 세션(1개) 로드
     pub fn load_current_chat_session(&self, project_id: &str) -> Result<Option<ChatSession>, IteError> {
+        // 레거시 API: 가장 최근 활동 세션 1개만 반환
+        let sessions = self.load_chat_sessions(project_id)?;
+        Ok(sessions.into_iter().next())
+    }
+
+    /// 채팅 세션 목록 로드 (최근 활동 기준, 최대 3개)
+    pub fn load_chat_sessions(&self, project_id: &str) -> Result<Vec<ChatSession>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, created_at, context_block_ids
-             FROM chat_sessions WHERE project_id = ?1
-             ORDER BY created_at DESC LIMIT 1",
+            "SELECT s.id, s.name, s.created_at, s.context_block_ids,
+                    COALESCE((SELECT MAX(m.timestamp) FROM chat_messages m WHERE m.session_id = s.id), s.created_at) AS last_ts
+             FROM chat_sessions s
+             WHERE s.project_id = ?1
+             ORDER BY last_ts DESC
+             LIMIT 3",
         )?;
 
-        let row = stmt.query_row([project_id], |row| {
+        let iter = stmt.query_map([project_id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)?,
                 row.get::<_, String>(3)?,
             ))
-        });
-
-        let (session_id, name, created_at, context_block_ids_json) = match row {
-            Ok(v) => v,
-            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-            Err(e) => return Err(IteError::Database(e)),
-        };
-
-        let context_block_ids: Vec<String> =
-            serde_json::from_str(&context_block_ids_json).unwrap_or_default();
-
-        let mut msg_stmt = self.conn.prepare(
-            "SELECT id, role, content, timestamp, metadata_json
-             FROM chat_messages WHERE session_id = ?1
-             ORDER BY timestamp ASC",
-        )?;
-
-        let iter = msg_stmt.query_map([&session_id], |row| {
-            let metadata_json: Option<String> = row.get(4)?;
-            let metadata: Option<ChatMessageMetadata> = metadata_json
-                .as_deref()
-                .and_then(|s| serde_json::from_str::<ChatMessageMetadata>(s).ok());
-            Ok(crate::models::ChatMessage {
-                id: row.get(0)?,
-                role: row.get(1)?,
-                content: row.get(2)?,
-                timestamp: row.get(3)?,
-                metadata,
-            })
         })?;
 
-        let mut messages = Vec::new();
-        for m in iter {
-            messages.push(m?);
+        let mut sessions = Vec::new();
+        for r in iter {
+            let (session_id, name, created_at, context_block_ids_json) = r?;
+            let context_block_ids: Vec<String> =
+                serde_json::from_str(&context_block_ids_json).unwrap_or_default();
+
+            let mut msg_stmt = self.conn.prepare(
+                "SELECT id, role, content, timestamp, metadata_json
+                 FROM chat_messages WHERE session_id = ?1
+                 ORDER BY timestamp ASC",
+            )?;
+
+            let msg_iter = msg_stmt.query_map([&session_id], |row| {
+                let metadata_json: Option<String> = row.get(4)?;
+                let metadata: Option<serde_json::Value> = metadata_json
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+                Ok(crate::models::ChatMessage {
+                    id: row.get(0)?,
+                    role: row.get(1)?,
+                    content: row.get(2)?,
+                    timestamp: row.get(3)?,
+                    metadata,
+                })
+            })?;
+
+            let mut messages = Vec::new();
+            for m in msg_iter {
+                messages.push(m?);
+            }
+
+            sessions.push(ChatSession {
+                id: session_id,
+                name,
+                created_at,
+                messages,
+                context_block_ids,
+            });
         }
 
-        Ok(Some(ChatSession {
-            id: session_id,
-            name,
-            created_at,
-            messages,
-            context_block_ids,
-        }))
+        Ok(sessions)
     }
 
     /// 프로젝트별 채팅 설정 저장(JSON)

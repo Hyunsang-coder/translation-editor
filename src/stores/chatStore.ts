@@ -9,9 +9,9 @@ import { searchGlossary } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import {
   loadChatProjectSettings,
-  loadCurrentChatSession,
+  loadChatSessions,
   saveChatProjectSettings,
-  saveCurrentChatSession,
+  saveChatSessions,
   type ChatProjectSettings,
 } from '@/tauri/chat';
 import {
@@ -27,6 +27,7 @@ let chatPersistInFlight = false;
 let chatPersistQueued = false;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
+const MAX_CHAT_SESSIONS = 3;
 
 function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context'; content: string } | null {
   const t = (text ?? '').trim();
@@ -178,9 +179,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
     const session = get().currentSession;
     const settings = buildChatSettings();
 
-    // 세션은 1개만 저장(요구사항)
-    if (session) {
-      await saveCurrentChatSession({ projectId, session });
+    // 세션은 최대 3개만 저장(요구사항)
+    // - 저장은 전체 sessions를 대상으로 하되, 백엔드에서도 최종적으로 3개로 clamp됩니다.
+    const sessions = get().sessions.slice(0, MAX_CHAT_SESSIONS);
+    if (sessions.length > 0) {
+      await saveChatSessions({ projectId, sessions });
+    } else if (session) {
+      // 안전장치: sessions가 비어있지만 currentSession이 있으면 1개만 저장
+      await saveChatSessions({ projectId, sessions: [session] });
     }
     await saveChatProjectSettings({ projectId, settings });
   };
@@ -272,18 +278,20 @@ export const useChatStore = create<ChatStore>((set, get) => {
           return;
         }
 
-        const [session, settings] = await Promise.all([
-          loadCurrentChatSession(projectId),
+        const [sessions, settings] = await Promise.all([
+          loadChatSessions(projectId),
           loadChatProjectSettings(projectId),
         ]);
 
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
           loadedProjectId: projectId, // 로드 성공 후에만 ID 설정 (저장 허용)
-          sessions: session ? [session] : [],
-          currentSessionId: session?.id ?? null,
-          currentSession: session ?? null,
-          lastSummaryAtMessageCountBySessionId: session ? { [session.id]: 0 } : {},
+          sessions: (sessions ?? []).slice(0, MAX_CHAT_SESSIONS),
+          currentSessionId: (sessions && sessions.length > 0) ? sessions[0]!.id : null,
+          currentSession: (sessions && sessions.length > 0) ? sessions[0]! : null,
+          lastSummaryAtMessageCountBySessionId: (sessions && sessions.length > 0)
+            ? Object.fromEntries(sessions.slice(0, MAX_CHAT_SESSIONS).map((s) => [s.id, 0]))
+            : {},
         };
 
         if (settings) {
@@ -319,6 +327,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     // 세션 생성
     createSession: (name?: string): string => {
+      // 최대 3개 제한: 초과 생성은 조용히 무시
+      const existing = get().sessions;
+      if (existing.length >= MAX_CHAT_SESSIONS) {
+        return get().currentSessionId ?? existing[0]?.id ?? '';
+      }
+
       const sessionId = uuidv4();
       const now = Date.now();
 

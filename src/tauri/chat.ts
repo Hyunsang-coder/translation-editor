@@ -30,6 +30,19 @@ export async function loadCurrentChatSession(projectId: string): Promise<ChatSes
   return await invoke<ChatSession | null>('load_current_chat_session', { args: { projectId } });
 }
 
+export async function saveChatSessions(params: {
+  projectId: string;
+  sessions: ChatSession[];
+}): Promise<void> {
+  await invoke<void>('save_chat_sessions', {
+    args: { projectId: params.projectId, sessions: params.sessions },
+  });
+}
+
+export async function loadChatSessions(projectId: string): Promise<ChatSession[]> {
+  return await invoke<ChatSession[]>('load_chat_sessions', { args: { projectId } });
+}
+
 export async function saveChatProjectSettings(params: {
   projectId: string;
   settings: ChatProjectSettings;
