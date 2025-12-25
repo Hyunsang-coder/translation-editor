@@ -34,6 +34,11 @@ interface UIActions {
   // Theme
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
 
+  // Panel Layout
+  isPanelsSwapped: boolean;
+  togglePanelSwap: () => void;
+  setPanelsSwapped: (swapped: boolean) => void;
+
   // Toasts
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -57,6 +62,7 @@ export const useUIStore = create<UIStore>()(
       sidebarCollapsed: false,
       projectSidebarCollapsed: false,
       theme: 'system',
+      isPanelsSwapped: false,
       toasts: [],
 
       // Focus Mode
@@ -105,6 +111,15 @@ export const useUIStore = create<UIStore>()(
         set({ theme });
       },
 
+      // Panel Layout
+      togglePanelSwap: (): void => {
+        set((state) => ({ isPanelsSwapped: !state.isPanelsSwapped }));
+      },
+
+      setPanelsSwapped: (swapped: boolean): void => {
+        set({ isPanelsSwapped: swapped });
+      },
+
       // Toasts
       addToast: (toast: Omit<Toast, 'id'>): void => {
         const id = crypto.randomUUID();
@@ -139,6 +154,7 @@ export const useUIStore = create<UIStore>()(
         focusMode: state.focusMode,
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
+        isPanelsSwapped: state.isPanelsSwapped,
       }),
     }
   )

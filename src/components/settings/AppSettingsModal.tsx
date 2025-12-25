@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 

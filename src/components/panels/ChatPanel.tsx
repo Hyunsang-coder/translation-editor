@@ -8,6 +8,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -15,7 +16,7 @@ import remarkGfm from 'remark-gfm';
  */
 export function ChatPanel(): JSX.Element {
   // 1. Hooks (Top-level)
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, togglePanelSwap, isPanelsSwapped } = useUIStore();
 
   const { currentSession, sendMessage, isLoading } = useChatStore();
   const chatSessions = useChatStore((s) => s.sessions); // Hoisted selector
@@ -37,13 +38,9 @@ export function ChatPanel(): JSX.Element {
   const setProjectContext = useChatStore((s) => s.setProjectContext);
   const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<string>('');
-
-  // Settings Preview States
-  const [previewPersona, setPreviewPersona] = useState(false);
-  const [previewTranslationRules, setPreviewTranslationRules] = useState(false);
-  const [previewProjectContext, setPreviewProjectContext] = useState(false);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
@@ -142,7 +139,18 @@ export function ChatPanel(): JSX.Element {
     if (activeTab !== 'chat') return;
     if (sidebarCollapsed) return;
     inputRef.current?.focus();
+    // 탭 전환 시 스크롤 하단 이동
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   }, [activeTab, sidebarCollapsed]);
+
+  // 메시지 추가 시 자동 스크롤
+  useEffect(() => {
+    if (activeTab === 'chat' && currentSession?.messages.length) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [currentSession?.messages.length, activeTab]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -167,7 +175,7 @@ export function ChatPanel(): JSX.Element {
   }
 
   const renderSettings = (): JSX.Element => (
-    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-editor-bg">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translator Persona */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
@@ -182,13 +190,6 @@ export function ChatPanel(): JSX.Element {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewPersona ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-              onClick={() => setPreviewPersona(!previewPersona)}
-            >
-              {previewPersona ? 'Edit' : 'Preview'}
-            </button>
-            <button
-              type="button"
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setTranslatorPersona('')}
             >
@@ -196,20 +197,13 @@ export function ChatPanel(): JSX.Element {
             </button>
           </div>
         </div>
-        {previewPersona ? (
-          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-              {translatorPersona || '*Default Persona (Professional Translator)*'}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <textarea
-            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={translatorPersona}
-            onChange={(e) => setTranslatorPersona(e.target.value)}
-            placeholder="예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요..."
-          />
-        )}
+        <DebouncedTextarea
+          className="w-full min-h-[3.5rem] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+          value={translatorPersona}
+          onDebouncedChange={setTranslatorPersona}
+          placeholder="예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요..."
+          rows={2}
+        />
       </section>
 
       {/* Section 2: Translation Rules */}
@@ -225,13 +219,6 @@ export function ChatPanel(): JSX.Element {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewTranslationRules ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-              onClick={() => setPreviewTranslationRules(!previewTranslationRules)}
-            >
-              {previewTranslationRules ? 'Edit' : 'Preview'}
-            </button>
-            <button
-              type="button"
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setTranslationRules('')}
             >
@@ -239,20 +226,12 @@ export function ChatPanel(): JSX.Element {
             </button>
           </div>
         </div>
-        {previewTranslationRules ? (
-          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-              {translationRules || '*No rules defined*'}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <textarea
-            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={translationRules}
-            onChange={(e) => setTranslationRules(e.target.value)}
-            placeholder="Enter translation rules..."
-          />
-        )}
+        <DebouncedTextarea
+          className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+          value={translationRules}
+          onDebouncedChange={setTranslationRules}
+          placeholder="Enter translation rules..."
+        />
       </section>
 
       {/* Section 3: Project Context */}
@@ -268,13 +247,6 @@ export function ChatPanel(): JSX.Element {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className={`text-[10px] px-1.5 py-0.5 rounded border ${previewProjectContext ? 'bg-primary-500 text-white border-primary-500' : 'text-editor-muted border-editor-border hover:text-editor-text'}`}
-              onClick={() => setPreviewProjectContext(!previewProjectContext)}
-            >
-              {previewProjectContext ? 'Edit' : 'Preview'}
-            </button>
-            <button
-              type="button"
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setProjectContext('')}
             >
@@ -282,20 +254,12 @@ export function ChatPanel(): JSX.Element {
             </button>
           </div>
         </div>
-        {previewProjectContext ? (
-          <div className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text overflow-y-auto chat-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-              {projectContext || '*Context is empty*'}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <textarea
-            className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-            value={projectContext}
-            onChange={(e) => setProjectContext(e.target.value)}
-            placeholder="Enter project context..."
-          />
-        )}
+        <DebouncedTextarea
+          className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+          value={projectContext}
+          onDebouncedChange={setProjectContext}
+          placeholder="Enter project context..."
+        />
       </section>
 
       {/* Section 3: Glossary */}
@@ -361,7 +325,7 @@ export function ChatPanel(): JSX.Element {
 
   // 5. Main Render
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Session Tabs Header */}
       <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none">
         <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
@@ -436,6 +400,14 @@ export function ChatPanel(): JSX.Element {
         <div className="flex items-center px-2 gap-1 border-l border-editor-border bg-editor-bg shrink-0">
           <button
             type="button"
+            onClick={togglePanelSwap}
+            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
+            title={isPanelsSwapped ? "Move to Right" : "Move to Left"}
+          >
+            ⇄
+          </button>
+          <button
+            type="button"
             onClick={toggleSidebar}
             className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
             title="Close Panel"
@@ -476,7 +448,7 @@ export function ChatPanel(): JSX.Element {
       ) : (
         <>
           {/* 메시지 목록 */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {currentSession?.messages.map((message) => (
               <div
                 key={message.id}
@@ -646,6 +618,7 @@ export function ChatPanel(): JSX.Element {
                 {renderTypingIndicator({ label: '응답을 준비 중...' })}
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* 입력창 */}

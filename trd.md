@@ -147,6 +147,11 @@ What:
   - AI 응답을 기다리는 동안, 일반적인 채팅 앱처럼 “typing/로딩 인디케이터”를 표시한다.
   - 모델이 문서 조회 등 Tool을 호출하는 동안, “툴 실행 중” 상태를 표시할 수 있다. (예: `get_source_document`, `get_target_document`)
   - 상태 표시는 UX 보조용이며, 문서 자동 수정/자동 적용과 무관하다(Non-Intrusive 유지).
+- 패널 레이아웃/폭 (PanelGroup 규칙)
+  - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel
+  - 기본 분할 비율은 Editor 60% / Chat 40%이며, 사용자가 리사이즈 핸들로 최소 Chat 25% ~ 최대 80% 범위에서 조절할 수 있어야 한다.
+  - Chat이 80%까지 확장되도록 Editor Panel의 최소 폭은 20%로 제한하되, 기본 상태에서는 Document-First 철학을 위해 60%를 유지한다.
+  - PanelGroup의 설정은 패널 스왑(좌/우 위치 변경) 시에도 동일한 폭 규칙을 적용한다.
 - Settings 화면 전환(Replace)
   - 기존 “System Prompt” 버튼은 “Settings”로 명명한다.
   - Settings를 열면 채팅 메시지 리스트/입력창은 숨겨지고, 해당 탭의 화면이 Settings UI로 “교체(replace)”된다.

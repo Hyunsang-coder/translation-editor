@@ -7,6 +7,7 @@ import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -216,29 +217,35 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       </div>
 
       {/* Editor Panels */}
-      <div className="flex-1 flex min-h-0">
+      <PanelGroup orientation="horizontal" className="flex-1 min-h-0 min-w-0" id="editor-panels">
         {/* Source Panel */}
         {!focusMode && (
-          <div className="flex-1 flex flex-col min-w-0 border-r border-editor-border">
-            <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
-              <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                SOURCE
-              </span>
-            </div>
-            <TipTapMenuBar editor={sourceEditor} />
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <SourceTipTapEditor
-                content={sourceDocument || ''}
-                onChange={setSourceDocument}
-                className="h-full"
-                onEditorReady={handleSourceEditorReady}
-              />
-            </div>
-          </div>
+          <>
+            <Panel id="source" defaultSize="50" minSize="20" className="min-w-0">
+              <div className="h-full flex flex-col min-w-0">
+                <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
+                  <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                    SOURCE
+                  </span>
+                </div>
+                <TipTapMenuBar editor={sourceEditor} />
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <SourceTipTapEditor
+                    content={sourceDocument || ''}
+                    onChange={setSourceDocument}
+                    className="h-full"
+                    onEditorReady={handleSourceEditorReady}
+                  />
+                </div>
+              </div>
+            </Panel>
+            <PanelResizeHandle className="w-1 bg-editor-border hover:bg-primary-500 transition-colors cursor-col-resize z-10" />
+          </>
         )}
 
         {/* Target Panel */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="20" className="min-w-0">
+          <div className="h-full flex flex-col min-w-0">
           <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
             <div className="flex items-center gap-3">
               <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
@@ -280,8 +287,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               onEditorReady={handleTargetEditorReady}
             />
           </div>
-        </div>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
 
       <TranslatePreviewModal
         open={translatePreviewOpen}

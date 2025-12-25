@@ -7,7 +7,7 @@ export function createChatModel(
   modelOverride?: string,
   options?: { useFor?: 'translation' | 'chat' }
 ): BaseChatModel {
-  const cfg = getAiConfig({ useFor: options?.useFor });
+  const cfg = getAiConfig(options);
   const model = modelOverride ?? cfg.model;
 
   if (cfg.provider === 'openai') {
