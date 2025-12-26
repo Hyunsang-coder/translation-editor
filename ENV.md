@@ -30,7 +30,11 @@ VITE_AI_MAX_RECENT_MESSAGES=12
 ```bash
 VITE_OPENAI_API_KEY=
 VITE_ANTHROPIC_API_KEY=
+BRAVE_SEARCH_API=
 ```
+
+> 참고: Brave Search는 WebView(브라우저)에서 직접 호출하면 CORS로 차단될 수 있어,
+> 이 프로젝트에서는 **Tauri(Rust) 백엔드 command가 BRAVE_SEARCH_API를 사용해 프록시 호출**합니다.
 
 ## 보안 주의 (PRD/TRD 기준)
 

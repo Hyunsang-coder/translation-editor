@@ -9,8 +9,8 @@ interface AiConfigState {
   // 채팅/질문용 모델 (예: gpt-4o-mini, claude-3-5-haiku)
   chatModel: string;
   // 사용자 입력 API Keys (선택적, localStorage에 저장)
-  openaiApiKey?: string;
-  anthropicApiKey?: string;
+  openaiApiKey: string | undefined;
+  anthropicApiKey: string | undefined;
 }
 
 interface AiConfigActions {

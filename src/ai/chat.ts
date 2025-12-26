@@ -4,6 +4,7 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
+import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -119,9 +120,13 @@ async function runToolCallingLoop(params: {
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
   const toolsUsed: string[] = [];
 
-  // Provider 별 tool binding 지원을 사용 (OpenAI/Anthropic 모두 bindTools 제공)
+  // 정석: tool calling은 bindTools()로 모델에 도구를 바인딩합니다. (LangChain 공식 문서 패턴)
+  // - Provider/버전에 따라 bindTools 유무가 다를 수 있어 방어적으로 처리합니다.
   const modelAny = params.model as any;
-  const modelWithTools = typeof modelAny.bindTools === 'function' ? modelAny.bindTools(params.tools) : params.model;
+  const modelWithTools =
+    params.tools.length > 0 && typeof modelAny.bindTools === 'function'
+      ? modelAny.bindTools(params.tools)
+      : params.model;
 
   const loopMessages: BaseMessage[] = [...params.messages];
 
@@ -203,12 +208,14 @@ function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): 
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: "번역 규칙 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
     '- suggest_project_context: "Project Context 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
+    '- brave_search: 최신 정보, 뉴스, 기술 문서 등 웹 검색이 필요한 질문에 사용. 최신 정보나 실시간 데이터가 필요한 경우에만 호출.',
     '',
     '규칙:',
     '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
     '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
     '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
     '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내한다.',
+    '- 최신 정보나 실시간 데이터가 필요한 질문에는 brave_search를 사용하여 웹 검색 결과를 가져온다.',
   ].join('\n');
 
   return new SystemMessage(toolGuide);
@@ -254,7 +261,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext, braveSearchTool];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
@@ -319,7 +326,7 @@ export async function streamAssistantReply(
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext];
+  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext, braveSearchTool];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 

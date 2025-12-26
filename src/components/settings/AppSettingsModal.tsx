@@ -8,7 +8,7 @@ interface AppSettingsModalProps {
 
 // 환경 변수 확인 헬퍼
 function hasEnvKey(key: string): boolean {
-  const v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.[key];
+  const v = (import.meta as any).env?.[key] as string | undefined;
   return typeof v === 'string' && v.trim().length > 0;
 }
 
@@ -18,17 +18,18 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     translationModel, 
     chatModel, 
     openaiApiKey,
-    anthropicApiKey,
     setProvider, 
     setTranslationModel, 
     setChatModel,
     setOpenaiApiKey,
-    setAnthropicApiKey,
   } = useAiConfigStore();
 
+  // MODEL_PRESETS는 openai/anthropic만 정의되어 있어 mock은 openai 프리셋으로 취급합니다.
+  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
+
   // 커스텀 입력 모드 상태 (드롭다운에 없는 값이면 커스텀 모드)
-  const isCustomTranslation = !MODEL_PRESETS[provider]?.some(p => p.value === translationModel);
-  const isCustomChat = !MODEL_PRESETS[provider]?.some(p => p.value === chatModel);
+  const isCustomTranslation = !MODEL_PRESETS[providerKey].some((p) => p.value === translationModel);
+  const isCustomChat = !MODEL_PRESETS[providerKey].some((p) => p.value === chatModel);
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -48,7 +49,8 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const handleProviderChange = (newProvider: AiProvider) => {
     setProvider(newProvider);
     
-    const targetPresets = MODEL_PRESETS[newProvider];
+    const presetsKey: Exclude<AiProvider, 'mock'> = newProvider === 'mock' ? 'openai' : newProvider;
+    const targetPresets = MODEL_PRESETS[presetsKey];
     
     // 현재 모델이 새 프리셋에 없으면 첫 번째 프리셋으로 변경
     if (targetPresets && targetPresets.length > 0) {
@@ -65,8 +67,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setModel: (m: string) => void,
     isCustom: boolean
   ) => {
-    const presets = MODEL_PRESETS[provider];
-    if (!presets) return null;
+    const presets = MODEL_PRESETS[providerKey];
 
     return (
       <div className="space-y-1.5">
@@ -87,7 +88,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     }
                 }}
             >
-                {presets.map(p => (
+                {presets.map((p) => (
                     <option key={p.value} value={p.value}>
                         {p.label} - {p.description}
                     </option>

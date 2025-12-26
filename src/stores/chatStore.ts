@@ -4,6 +4,7 @@ import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
 import { getAiConfig } from '@/ai/config';
 import { detectRequestType } from '@/ai/prompt';
+import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { useProjectStore } from '@/stores/projectStore';
 import { searchGlossary } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -34,6 +35,17 @@ let chatPersistQueued = false;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
 const MAX_CHAT_SESSIONS = 3;
+
+function tryExtractWebSearchQuery(raw: string): string | null {
+  const t = (raw ?? '').trim();
+  if (!t) return null;
+  // 명시적 트리거(Non-Intrusive): 사용자가 /web 또는 웹검색: 형태로 입력했을 때만 실행
+  const slash = t.match(/^\/(web|search)\s+([\s\S]+)$/i);
+  if (slash?.[2]) return slash[2].trim();
+  const colon = t.match(/^(웹검색|웹 검색|web)\s*:\s*([\s\S]+)$/i);
+  if (colon?.[2]) return colon[2].trim();
+  return null;
+}
 
 function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context'; content: string } | null {
   const t = (text ?? '').trim();
@@ -478,6 +490,39 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
+      // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
+      const webQuery = tryExtractWebSearchQuery(content);
+      if (webQuery) {
+        set({ isLoading: true, error: null });
+
+        const assistantId = addMessage({
+          role: 'assistant',
+          content: '',
+          metadata: { model: 'brave_search', toolCallsInProgress: ['brave_search'] },
+        });
+
+        try {
+          const out = await (braveSearchTool as any).invoke({ query: webQuery });
+          const text = typeof out === 'string' ? out : JSON.stringify(out);
+          if (assistantId) {
+            updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [] } });
+          } else {
+            addMessage({ role: 'assistant', content: text });
+          }
+          set({ isLoading: false, streamingMessageId: null, error: null });
+          schedulePersist();
+        } catch (e) {
+          const errText = e instanceof Error ? e.message : '웹 검색 실패';
+          if (assistantId) {
+            updateMessage(assistantId, { content: `⚠️ ${errText}`, metadata: { toolCallsInProgress: [] } });
+          } else {
+            addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
+          }
+          set({ isLoading: false, streamingMessageId: null, error: errText });
+        }
+        return;
+      }
+
       set({ isLoading: true, error: null });
 
       try {
@@ -636,11 +681,19 @@ export const useChatStore = create<ChatStore>((set, get) => {
         get().checkAndSuggestProjectContext();
       } catch (error) {
         const assistantId = get().streamingMessageId;
+        const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
         if (assistantId) {
-          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+          // 사용자가 "왜 안 되는지" 바로 알 수 있도록 버블에 에러를 표시합니다.
+          get().updateMessage(assistantId, {
+            content: `⚠️ ${errText}`,
+            metadata: { toolCallsInProgress: [] },
+          });
+        } else {
+          // assistant 버블이 생성되기 전에 실패한 경우(매우 드묾)에도 에러를 남깁니다.
+          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
         set({
-          error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
+          error: errText,
           isLoading: false,
           streamingMessageId: null,
         });
@@ -1051,11 +1104,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
         schedulePersist();
       } catch (error) {
         const assistantId = get().streamingMessageId;
+        const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
         if (assistantId) {
-          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+          get().updateMessage(assistantId, {
+            content: `⚠️ ${errText}`,
+            metadata: { toolCallsInProgress: [] },
+          });
+        } else {
+          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
         set({
-          error: error instanceof Error ? error.message : 'AI 응답 생성 실패',
+          error: errText,
           isLoading: false,
           streamingMessageId: null,
         });

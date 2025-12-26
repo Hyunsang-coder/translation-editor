@@ -29,7 +29,8 @@ export interface AiConfig {
 }
 
 function getEnvString(key: string): string | undefined {
-  const v = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.[key];
+  // Vite exposes env via import.meta.env (only keys allowed by envPrefix)
+  const v = (import.meta as any).env?.[key] as string | undefined;
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
 }
 

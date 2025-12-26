@@ -26,6 +26,9 @@ export default defineConfig(({ command }) => {
 
   return {
     base: isBuild ? './' : '/',
+    // 보안: 기본적으로 VITE_ 프리픽스만 클라이언트에 노출합니다.
+    // (BRAVE_SEARCH_API 등 비밀키는 Rust(Tauri) 백엔드에서만 읽도록 설계)
+    envPrefix: ['VITE_'],
     plugins: [
       react(),
       monacoPlugin({
