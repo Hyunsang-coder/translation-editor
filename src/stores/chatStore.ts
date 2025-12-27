@@ -65,7 +65,7 @@ function extractTextFromAiMessage(ai: unknown): string {
   return content ? String(content) : '';
 }
 
-function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context'; content: string } | null {
+function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context' | 'both'; content: string } | null {
   const t = (text ?? '').trim();
   if (!t) return null;
 
@@ -75,26 +75,34 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
   const ruleTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Rules\]).*번역\s*규칙/i;
   const contextTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Context\]).*(?:project\s*context|컨텍스트|맥락)/i;
 
-  let type: 'rule' | 'context' | null = null;
-  let cutIdx = -1;
-
-  if (ruleTrigger.test(t)) {
-    type = 'rule';
-    cutIdx = t.search(ruleTrigger);
-  } else if (contextTrigger.test(t)) {
-    type = 'context';
-    cutIdx = t.search(contextTrigger);
-  }
+  const hasRule = ruleTrigger.test(t);
+  const hasContext = contextTrigger.test(t);
+  let ruleIdx = hasRule ? t.search(ruleTrigger) : -1;
+  let contextIdx = hasContext ? t.search(contextTrigger) : -1;
 
   // Fallback: 아주 명시적인 버튼 이름만 있는 경우도 체크
-  if (!type) {
-    if (t.includes('[Add to Rules]')) {
-      type = 'rule';
-      cutIdx = t.indexOf('[Add to Rules]');
-    } else if (t.includes('[Add to Context]')) {
-      type = 'context';
-      cutIdx = t.indexOf('[Add to Context]');
-    }
+  if (!hasRule && t.includes('[Add to Rules]')) {
+    ruleIdx = t.indexOf('[Add to Rules]');
+  }
+  if (!hasContext && t.includes('[Add to Context]')) {
+    contextIdx = t.indexOf('[Add to Context]');
+  }
+
+  const foundRule = ruleIdx >= 0;
+  const foundContext = contextIdx >= 0;
+
+  let type: 'rule' | 'context' | 'both' | null = null;
+  let cutIdx = -1;
+
+  if (foundRule && foundContext) {
+    type = 'both';
+    cutIdx = Math.min(ruleIdx, contextIdx);
+  } else if (foundRule) {
+    type = 'rule';
+    cutIdx = ruleIdx;
+  } else if (foundContext) {
+    type = 'context';
+    cutIdx = contextIdx;
   }
 
   if (!type) return null;
@@ -103,7 +111,7 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
   if (!core) return null;
 
   // 저장 필드 폭주 방지 (rules/context에 append될 수 있으니 적당히 제한)
-  const maxLen = type === 'rule' ? 2000 : 3000;
+  const maxLen = 3000;
   const clipped = core.length > maxLen ? `${core.slice(0, maxLen)}...` : core;
   return { type, content: clipped };
 }

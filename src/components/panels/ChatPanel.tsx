@@ -93,18 +93,40 @@ export function ChatPanel(): JSX.Element {
     return () => window.clearTimeout(t);
   }, [isLoading]);
 
-  const streamingBubbleExists = useMemo(() => {
-    if (!streamingMessageId) return false;
-    const msgs = currentSession?.messages ?? [];
-    return msgs.some((m) => m.id === streamingMessageId);
+  const streamingMessage = useMemo(() => {
+    if (!streamingMessageId) return null;
+    return currentSession?.messages.find((m) => m.id === streamingMessageId) ?? null;
   }, [currentSession?.messages, streamingMessageId]);
 
-  const renderAssistantSkeleton = useCallback((): JSX.Element => {
+  const streamingBubbleExists = !!streamingMessage;
+
+  const renderAssistantSkeleton = useCallback((toolsInProgress?: string[]): JSX.Element => {
+    const hasTools = toolsInProgress && toolsInProgress.length > 0;
+    let statusText = '답변 생성 중...';
+
+    if (hasTools) {
+      const t = toolsInProgress[0];
+      const name = 
+          (t === 'web_search' || t === 'web_search_preview') ? '웹 검색'
+        : t === 'brave_search' ? '웹 검색(Brave)'
+        : t === 'get_source_document' ? '원문 분석'
+        : t === 'get_target_document' ? '번역문 분석'
+        : t === 'suggest_translation_rule' ? '번역 규칙 확인'
+        : t === 'suggest_project_context' ? '프로젝트 맥락 확인'
+        : t;
+      statusText = `${name} 진행 중...`;
+    }
+
     return (
       <div>
         <SkeletonParagraph seed={0} lines={3} />
+        <div className="mt-2.5 flex items-center gap-2 px-1">
+          <span className="text-[11px] font-medium shimmer-text">
+            {statusText}
+          </span>
+        </div>
         <span className="sr-only" aria-live="polite">
-          응답 생성 중
+          {statusText}
         </span>
       </div>
     );
@@ -713,7 +735,9 @@ export function ChatPanel(): JSX.Element {
                           streamingMessageId === message.id &&
                           message.content.trim().length === 0 ? (
                           <div className="text-sm leading-relaxed">
-                            {showStreamingSkeleton ? renderAssistantSkeleton() : renderTypingIndicator()}
+                            {showStreamingSkeleton 
+                              ? renderAssistantSkeleton(message.metadata?.toolCallsInProgress) 
+                              : renderTypingIndicator()}
                           </div>
                         ) : (
                           <div className="text-sm leading-relaxed chat-markdown">
@@ -798,7 +822,9 @@ export function ChatPanel(): JSX.Element {
                           <div className="flex items-center gap-2 mb-1.5">
                             <div className="w-1 h-3 bg-primary-500 rounded-full" />
                             <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                              {message.metadata.suggestion.type === 'rule' ? 'Suggested Rule' : 'Suggested Context'}
+                              {message.metadata.suggestion.type === 'rule' ? 'Suggested Rule' : 
+                               message.metadata.suggestion.type === 'context' ? 'Suggested Context' : 
+                               'Suggested Rule / Context'}
                             </span>
                           </div>
                           <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
@@ -808,7 +834,7 @@ export function ChatPanel(): JSX.Element {
                       )}
 
                       <div className="flex gap-2">
-                      {message.metadata.suggestion.type === 'rule' && !message.metadata.rulesAdded && (
+                      {(message.metadata.suggestion.type === 'rule' || message.metadata.suggestion.type === 'both') && !message.metadata.rulesAdded && (
                         <button
                           type="button"
                           className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
@@ -823,7 +849,7 @@ export function ChatPanel(): JSX.Element {
                           Add to Rules
                         </button>
                       )}
-                      {message.metadata.suggestion.type === 'context' &&
+                      {(message.metadata.suggestion.type === 'context' || message.metadata.suggestion.type === 'both') &&
                         !message.metadata.contextAdded &&
                         (
                           <button

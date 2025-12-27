@@ -202,8 +202,9 @@ export interface ChatMessageMetadata {
     /**
      * - rule: Translation Rules에 추가
      * - context: Project Context에 추가
+     * - both: 둘 다 제안 (사용자가 선택)
      */
-    type: 'rule' | 'context';
+    type: 'rule' | 'context' | 'both';
     content: string;
   };
 }

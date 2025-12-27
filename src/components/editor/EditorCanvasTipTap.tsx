@@ -324,6 +324,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         open={translatePreviewOpen}
         title="번역 미리보기 (Source 전체 → Target 전체)"
         docJson={translatePreviewDoc}
+        sourceHtml={sourceDocument}
         originalHtml={targetDocument}
         isLoading={translateLoading}
         error={translatePreviewError}

@@ -37,13 +37,14 @@ export function TranslatePreviewModal(props: {
   open: boolean;
   title?: string;
   docJson: TipTapDocJson | null;
+  sourceHtml?: string | null;
   originalHtml?: string | null;
   isLoading?: boolean;
   error?: string | null;
   onClose: () => void;
   onApply: () => void;
 }): JSX.Element | null {
-  const { open, title, docJson, originalHtml, isLoading, error, onClose, onApply } = props;
+  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
@@ -215,8 +216,17 @@ export function TranslatePreviewModal(props: {
                       SOURCE
                     </span>
                   </div>
-                  <div className="flex-1 min-h-0 p-4 overflow-hidden">
-                    <SkeletonParagraph seed={0} lines={9} />
+                  <div className="flex-1 min-h-0 p-4 overflow-hidden bg-editor-surface">
+                    {sourceHtml ? (
+                      <div className="h-full overflow-y-auto scrollbar-thin">
+                        <div 
+                          className="tiptap ProseMirror focus:outline-none max-w-none" 
+                          dangerouslySetInnerHTML={{ __html: sourceHtml }} 
+                        />
+                      </div>
+                    ) : (
+                      <SkeletonParagraph seed={0} lines={9} />
+                    )}
                   </div>
                 </div>
                 <div className="min-w-0 flex flex-col">
@@ -230,8 +240,8 @@ export function TranslatePreviewModal(props: {
                   </div>
                 </div>
               </div>
-              <div className="px-4 py-3 border-t border-editor-border bg-editor-bg text-editor-muted">
-                <div className="text-[11px]">
+              <div className="px-4 py-3 border-t border-editor-border bg-editor-bg">
+                <div className="text-[11px] font-medium shimmer-text">
                   번역 생성 중… 잠시만요.
                   <span className="sr-only" aria-live="polite">
                     번역 생성 중
