@@ -5,10 +5,12 @@ import { buildLangChainMessages, detectRequestType, type RequestType } from '@/a
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
-import { SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
 import { v4 as uuidv4 } from 'uuid';
+import { isTauriRuntime } from '@/tauri/invoke';
+import { readFileBytes } from '@/tauri/attachments';
 
 function uniqueStrings(items: string[]): string[] {
   const out: string[] = [];
@@ -89,6 +91,11 @@ export interface GenerateReplyInput {
   /** 번역문 문서 */
   targetDocument?: string;
   /**
+   * 웹검색 사용 여부 (tool availability gate)
+   * - false면 web search 도구를 모델에 바인딩/노출하지 않습니다.
+   */
+  webSearchEnabled?: boolean;
+  /**
    * (레거시/확장용) 문서 접근 설정
    * - 현재 UX는 토글을 제공하지 않으며, 문서 조회는 on-demand Tool로만 수행합니다.
    */
@@ -96,6 +103,8 @@ export interface GenerateReplyInput {
   includeTargetInPayload?: boolean;
   /** 첨부 파일 (추출된 텍스트 목록) */
   attachments?: { filename: string; text: string }[];
+  /** 첨부 이미지(로컬 파일 경로) - 멀티모달(vision) 입력으로 전달 */
+  imageAttachments?: { filename: string; fileType: string; filePath: string }[];
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
 }
@@ -277,9 +286,10 @@ async function runToolCallingLoop(params: {
   };
 }
 
-function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string }): SystemMessage {
+function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string; webSearchEnabled?: boolean }): SystemMessage {
   const { includeSource, includeTarget, provider } = params;
   const hasOpenAiWebSearch = provider === 'openai';
+  const webSearchEnabled = !!params.webSearchEnabled;
   const toolGuide = [
     '도구 사용 가이드(짧게):',
     includeSource
@@ -290,22 +300,90 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: "번역 규칙 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
     '- suggest_project_context: "Project Context 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
-    hasOpenAiWebSearch
+    (webSearchEnabled && hasOpenAiWebSearch)
       ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
       : '- web_search_preview: (비활성화됨)',
-    '- brave_search: (fallback) 웹 검색이 필요하지만 web_search_preview가 비활성/실패/제약일 때 사용.',
+    webSearchEnabled
+      ? '- brave_search: (fallback) 웹 검색이 필요하지만 web_search_preview가 비활성/실패/제약일 때 사용.'
+      : '- brave_search: (비활성화됨)',
     '',
     '규칙:',
     '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
     '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
     '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
     '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내한다.',
-    hasOpenAiWebSearch
-      ? '- 최신 정보/실시간 데이터가 필요한 질문에는 web_search_preview를 우선 사용하고, 불가능하면 brave_search를 사용한다.'
-      : '- 최신 정보/실시간 데이터가 필요한 질문에는 brave_search를 사용한다.',
+    ...(webSearchEnabled
+      ? [
+        hasOpenAiWebSearch
+          ? '- 최신 정보/실시간 데이터가 필요한 질문에는 web_search_preview를 우선 사용하고, 불가능하면 brave_search를 사용한다.'
+          : '- 최신 정보/실시간 데이터가 필요한 질문에는 brave_search를 사용한다.',
+      ]
+      : []),
   ].join('\n');
 
   return new SystemMessage(toolGuide);
+}
+
+function isImageExt(ext: string): boolean {
+  const e = (ext ?? '').toLowerCase();
+  return e === 'png' || e === 'jpg' || e === 'jpeg' || e === 'webp' || e === 'gif';
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  // btoa는 Latin-1 문자열을 기대하므로 chunk로 변환합니다.
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function maybeReplaceLastHumanMessageWithImages(params: {
+  messages: BaseMessage[];
+  userText: string;
+  imageAttachments?: { filename: string; fileType: string; filePath: string }[];
+}): Promise<BaseMessage[]> {
+  const images = (params.imageAttachments ?? []).filter((x) => x && isImageExt(x.fileType) && !!x.filePath);
+  if (images.length === 0) return params.messages;
+  if (!isTauriRuntime()) return params.messages;
+
+  const MAX_IMAGES = 3;
+  const MAX_IMAGE_BYTES = 2_000_000; // 2MB
+
+  const blocks: any[] = [{ type: 'text', text: params.userText }];
+  const warnings: string[] = [];
+
+  for (const img of images.slice(0, MAX_IMAGES)) {
+    try {
+      const raw = await readFileBytes(img.filePath);
+      const bytes = new Uint8Array(raw);
+      if (bytes.length > MAX_IMAGE_BYTES) {
+        warnings.push(`- ${img.filename}: 파일이 너무 커서(${Math.round(bytes.length / 1024)}KB) 제외됨`);
+        continue;
+      }
+      blocks.push({
+        type: 'image',
+        source_type: 'base64',
+        data: bytesToBase64(bytes),
+      });
+    } catch {
+      warnings.push(`- ${img.filename}: 파일을 읽을 수 없어 제외됨`);
+    }
+  }
+
+  if (warnings.length > 0) {
+    blocks[0] = {
+      type: 'text',
+      text: [params.userText, '', '[첨부 이미지 제외됨]', ...warnings].join('\n'),
+    };
+  }
+
+  // buildLangChainMessages()가 만든 마지막 HumanMessage를 멀티모달 HumanMessage로 교체합니다.
+  const next = [...params.messages];
+  const lastIdx = next.length - 1;
+  next[lastIdx] = new HumanMessage({ content: blocks });
+  return next;
 }
 
 /**
@@ -324,6 +402,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   const model = createChatModel(undefined, { useFor: 'chat' });
   const includeSource = true;
   const includeTarget = true;
+  const webSearchEnabled = !!input.webSearchEnabled;
 
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)
@@ -348,26 +427,35 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext, braveSearchTool];
+  const toolSpecs: any[] = [
+    suggestTranslationRule,
+    suggestProjectContext,
+    ...(webSearchEnabled ? [braveSearchTool] : []),
+  ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
   // OpenAI provider에서는 built-in web search를 모델에 바인딩 (서버 측에서 실행됨)
-  const openAiBuiltInTools = cfg.provider === 'openai' ? [{ type: 'web_search_preview' }] : [];
+  const openAiBuiltInTools = (webSearchEnabled && cfg.provider === 'openai') ? [{ type: 'web_search_preview' }] : [];
   const bindTools = [...toolSpecs, ...openAiBuiltInTools];
 
   const messagesWithGuide: BaseMessage[] = [
     // systemPrompt 바로 다음에 가이드를 넣어 tool 사용 원칙을 고정
     messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider }),
+    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
     ...messages.slice(1),
   ];
+  const finalMessages = await maybeReplaceLastHumanMessageWithImages({
+    messages: messagesWithGuide,
+    userText: input.userMessage,
+    ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
+  });
 
   const { finalText } = await runToolCallingLoop({
     model,
     tools: toolSpecs as any,
     bindTools,
-    messages: messagesWithGuide,
+    messages: finalMessages,
   });
 
   return finalText;
@@ -394,6 +482,7 @@ export async function streamAssistantReply(
   const model = createChatModel(undefined, { useFor: 'chat' });
   const includeSource = true;
   const includeTarget = true;
+  const webSearchEnabled = !!input.webSearchEnabled;
 
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)
@@ -418,24 +507,33 @@ export async function streamAssistantReply(
     },
   );
 
-  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext, braveSearchTool];
+  const toolSpecs: any[] = [
+    suggestTranslationRule,
+    suggestProjectContext,
+    ...(webSearchEnabled ? [braveSearchTool] : []),
+  ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
-  const openAiBuiltInTools = cfg.provider === 'openai' ? [{ type: 'web_search_preview' }] : [];
+  const openAiBuiltInTools = (webSearchEnabled && cfg.provider === 'openai') ? [{ type: 'web_search_preview' }] : [];
   const bindTools = [...toolSpecs, ...openAiBuiltInTools];
 
   const messagesWithGuide: BaseMessage[] = [
     messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider }),
+    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
     ...messages.slice(1),
   ];
+  const finalMessages = await maybeReplaceLastHumanMessageWithImages({
+    messages: messagesWithGuide,
+    userText: input.userMessage,
+    ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
+  });
 
   const { finalText, toolsUsed } = await runToolCallingLoop({
     model,
     tools: toolSpecs as any,
     bindTools,
-    messages: messagesWithGuide,
+    messages: finalMessages,
     ...(cb ? { cb } : {}),
   });
 

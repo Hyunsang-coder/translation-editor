@@ -10,6 +10,11 @@ export interface ChatProjectSettings {
   projectContext: string;
   composerText: string;
   /**
+   * 웹검색 사용 여부 (tool availability gate)
+   * - true일 때만 Brave/OpenAI web search 사용 가능
+   */
+  webSearchEnabled: boolean;
+  /**
    * 문서 전체 번역(Preview→Apply) 시 컨텍스트로 사용할 채팅 탭
    * - null: 현재 탭(currentSession) 사용
    * - string: 특정 sessionId 고정 사용

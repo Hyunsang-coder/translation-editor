@@ -6,6 +6,7 @@ export interface AttachmentDto {
     fileType: string;
     fileSize: number | null;
     extractedText?: string;
+    filePath: string | null;
     createdAt: number;
     updatedAt: number;
 }
@@ -20,4 +21,8 @@ export async function listAttachments(projectId: string): Promise<AttachmentDto[
 
 export async function deleteAttachment(id: string): Promise<void> {
     return await invoke<void>('delete_attachment', { id });
+}
+
+export async function readFileBytes(path: string): Promise<number[]> {
+    return await invoke<number[]>('read_file_bytes', { args: { path } });
 }

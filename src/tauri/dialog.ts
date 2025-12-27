@@ -55,4 +55,19 @@ export async function pickDocumentFile(): Promise<string | null> {
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
 
+export async function pickChatAttachmentFile(): Promise<string | null> {
+  const file = await open({
+    title: '첨부할 파일/이미지 선택',
+    multiple: false,
+    filters: [
+      {
+        name: 'Attachments',
+        extensions: ['pdf', 'docx', 'pptx', 'md', 'txt', 'png', 'jpg', 'jpeg', 'webp', 'gif'],
+      },
+    ],
+  });
+  if (!file) return null;
+  return Array.isArray(file) ? (file[0] ?? null) : file;
+}
+
 

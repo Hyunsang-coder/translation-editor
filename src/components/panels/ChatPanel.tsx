@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile } from '@/tauri/dialog';
+import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile, pickChatAttachmentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
@@ -57,6 +57,9 @@ export function ChatPanel(): JSX.Element {
   const attachments = useChatStore((s) => s.attachments);
   const attachFile = useChatStore((s) => s.attachFile);
   const deleteAttachment = useChatStore((s) => s.deleteAttachment);
+  const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
+  const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
+  const [composerMenuOpen, setComposerMenuOpen] = useState(false);
 
   const renderTypingIndicator = useCallback((opts?: { label?: string }): JSX.Element => {
     const label = opts?.label ?? '응답 생성 중...';
@@ -213,6 +216,27 @@ export function ChatPanel(): JSX.Element {
     e.preventDefault();
     await sendCurrent();
   }, [sendCurrent]);
+
+  useEffect(() => {
+    if (!composerMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setComposerMenuOpen(false);
+    };
+    const onPointerDown = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // 메뉴 영역 밖 클릭이면 닫기
+      if (!target.closest('[data-ite-composer-menu-root]')) {
+        setComposerMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('mousedown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [composerMenuOpen]);
 
   // 4. Early Returns (Conditional Rendering)
   // 사이드바 축소 상태
@@ -762,16 +786,16 @@ export function ChatPanel(): JSX.Element {
           </div>
 
           {/* 입력창 */}
-          <form onSubmit={handleSubmit} className="p-4 border-t border-editor-border">
-            <div className="flex gap-2">
+          <form onSubmit={handleSubmit} className="p-4 border-t border-editor-border bg-editor-bg">
+            <div className="relative rounded-2xl border border-editor-border bg-editor-surface shadow-sm">
               <textarea
                 ref={inputRef}
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
-                placeholder="Type a message... (Cmd+L to send selection)"
-                className="flex-1 px-4 py-2 rounded-lg bg-editor-bg border border-editor-border
+                placeholder="무엇이든 물어보세요 :)"
+                className="w-full min-h-[96px] px-4 pt-4 pb-12 rounded-2xl bg-transparent
                            text-editor-text placeholder-editor-muted
-                           focus:outline-none focus:ring-2 focus:ring-primary-500"
+                           focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                 disabled={isLoading}
                 data-ite-chat-composer
                 rows={3}
@@ -782,15 +806,74 @@ export function ChatPanel(): JSX.Element {
                   }
                 }}
               />
-              <button
-                type="submit"
-                disabled={isLoading || !composerText.trim()}
-                className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium
-                           hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
-                           transition-colors"
-              >
-                Send
-              </button>
+
+              {/* 하단 컨트롤 바: 좌측 + / 우측 Send(화살표) */}
+              <div className="absolute inset-x-0 bottom-0 px-3 pb-3 flex items-end justify-between pointer-events-none">
+                <div className="pointer-events-auto relative" data-ite-composer-menu-root>
+                  <button
+                    type="button"
+                    className="w-9 h-9 rounded-full border border-editor-border bg-editor-bg text-editor-muted
+                               hover:bg-editor-border hover:text-editor-text transition-colors"
+                    title="첨부/옵션"
+                    aria-label="첨부/옵션"
+                    onClick={() => {
+                      setComposerMenuOpen((v) => !v);
+                    }}
+                    disabled={isLoading}
+                  >
+                    +
+                  </button>
+                  {composerMenuOpen && (
+                    <div
+                      data-ite-composer-menu
+                      className="absolute bottom-12 left-0 w-56 rounded-xl border border-editor-border bg-editor-surface shadow-lg overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        className="w-full px-3 py-2 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors"
+                        onClick={() => {
+                          setComposerMenuOpen(false);
+                          void (async () => {
+                            if (!isTauriRuntime()) return;
+                            const path = await pickChatAttachmentFile();
+                            if (path) {
+                              await attachFile(path);
+                            }
+                          })();
+                        }}
+                      >
+                        파일 또는 이미지 추가
+                      </button>
+                      <div className="h-px bg-editor-border" />
+                      <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="accent-primary-500"
+                          checked={webSearchEnabled}
+                          onChange={(e) => setWebSearchEnabled(e.target.checked)}
+                          disabled={isLoading}
+                        />
+                        <span className="flex-1">웹 검색</span>
+                        <span className="text-[11px] text-editor-muted">{webSearchEnabled ? 'ON' : 'OFF'}</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pointer-events-auto">
+                  <button
+                    type="submit"
+                    disabled={isLoading || !composerText.trim()}
+                    className="w-9 h-9 rounded-full bg-primary-500 text-white
+                               hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
+                               transition-colors flex items-center justify-center"
+                    title="Send"
+                    aria-label="Send"
+                  >
+                    <span className="text-base leading-none">↑</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         </>

@@ -119,6 +119,8 @@ interface ChatState {
   translatorPersona: string;
   translationRules: string;
   projectContext: string;
+  /** 웹검색 사용 여부 (tool availability gate) */
+  webSearchEnabled: boolean;
   /**
    * 문서 전체 번역(Preview→Apply) 컨텍스트로 사용할 채팅 탭
    * - null이면 현재 탭(currentSession)의 최신 메시지 10개를 사용
@@ -181,6 +183,7 @@ interface ChatActions {
   appendToTranslationRules: (snippet: string) => void;
   setProjectContext: (memory: string) => void;
   appendToProjectContext: (snippet: string) => void;
+  setWebSearchEnabled: (enabled: boolean) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // 첨부 파일 관리 (4.2)
@@ -206,6 +209,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translationRules: get().translationRules,
     projectContext: get().projectContext,
     composerText: get().composerText,
+    webSearchEnabled: get().webSearchEnabled,
     translationContextSessionId: get().translationContextSessionId,
   });
 
@@ -277,6 +281,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     projectContext: '',
+    webSearchEnabled: false,
     translationContextSessionId: null,
     loadedProjectId: null,
     attachments: [],
@@ -352,6 +357,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           nextState.translationRules = settingsRes.translationRules ?? '';
           nextState.projectContext = settingsRes.projectContext ?? '';
           nextState.composerText = settingsRes.composerText ?? '';
+          nextState.webSearchEnabled = settingsRes.webSearchEnabled ?? false;
           nextState.translationContextSessionId = settingsRes.translationContextSessionId ?? null;
         } else {
           // 설정이 없으면 기본값 유지
@@ -359,6 +365,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           nextState.translationRules = '';
           nextState.projectContext = '';
           nextState.composerText = '';
+          nextState.webSearchEnabled = false;
           nextState.translationContextSessionId = null;
         }
 
@@ -509,6 +516,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
       const webQuery = tryExtractWebSearchQuery(content);
       if (webQuery) {
+        if (!get().webSearchEnabled) {
+          addMessage({
+            role: 'assistant',
+            content: '웹 검색이 꺼져 있어 실행하지 않았습니다. 채팅 입력창의 + 메뉴에서 “웹 검색”을 켜면 사용할 수 있어요.',
+          });
+          set({ isLoading: false, streamingMessageId: null, error: null });
+          schedulePersist();
+          return;
+        }
+
         set({ isLoading: true, error: null });
 
         const cfg = getAiConfig();
@@ -582,6 +599,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const session = get().currentSession;
         const project = useProjectStore.getState().project;
         const translatorPersona = get().translatorPersona;
+        const webSearchEnabled = get().webSearchEnabled;
 
         const contextBlockIds = session?.contextBlockIds ?? [];
         const contextBlocks =
@@ -659,6 +677,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             attachments: get().attachments
               .filter(a => a.extractedText)
               .map(a => ({ filename: a.filename, text: a.extractedText! })),
+            // 첨부 이미지(멀티모달)
+            imageAttachments: get().attachments
+              .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
+              .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
+            webSearchEnabled,
           },
           {
             onToken: (full) => {
@@ -853,6 +876,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           recentMessages: [],
           userMessage,
           ...(current ? { projectContext: current } : {}),
+          webSearchEnabled: false,
         });
 
         const cleaned = reply.trim().slice(0, 1200);
@@ -1086,6 +1110,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             attachments: get().attachments
               .filter(a => a.extractedText)
               .map(a => ({ filename: a.filename, text: a.extractedText! })),
+            // 첨부 이미지(멀티모달)
+            imageAttachments: get().attachments
+              .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
+              .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
+            webSearchEnabled: get().webSearchEnabled,
           },
           {
             onToken: (full) => {
@@ -1289,6 +1318,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const current = get().projectContext.trim();
       const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
       set({ projectContext: next });
+      schedulePersist();
+    },
+
+    setWebSearchEnabled: (enabled: boolean): void => {
+      set({ webSearchEnabled: enabled });
       schedulePersist();
     },
 

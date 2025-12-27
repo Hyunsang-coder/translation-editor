@@ -17,6 +17,8 @@ pub struct ChatProjectSettings {
     pub translation_rules: String,
     pub project_context: String,
     pub composer_text: String,
+    #[serde(default)]
+    pub web_search_enabled: bool,
     pub translation_context_session_id: Option<String>,
 }
 

@@ -17,6 +17,7 @@
 - [x] 메시지 수정(Edit Message) 및 (edited) 라벨 UI 완성
 - [x] Settings 입력 필드 Markdown 미리보기 기능 추가
 - [x] System Prompt 필드 툴팁 및 가이드 아이콘 추가
+- [x] 채팅 입력창(Composer) UI 교체: 화살표 Send + 좌측 `+` 메뉴 + 웹 검색 토글
 
 ## 진행중/미완료(상세)
 

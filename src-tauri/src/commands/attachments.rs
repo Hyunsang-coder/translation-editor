@@ -8,6 +8,10 @@ use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
 
+fn is_image_extension(ext: &str) -> bool {
+    matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif")
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachFileArgs {
@@ -40,13 +44,19 @@ pub async fn attach_file(
         .unwrap_or_default();
 
     let file_size = fs::metadata(path).map(|m| m.len() as i64).ok();
-    
-    // Extract text based on file type
-    let extracted_text = extract_file_text(path, &extension).map_err(|e| CommandError {
-        code: "EXTRACT_ERROR".to_string(),
-        message: format!("Failed to extract text: {}", e),
-        details: None,
-    })?;
+
+    // Extract text based on file type (images are stored without extracted text)
+    let extracted_text: Option<String> = if is_image_extension(&extension) {
+        None
+    } else {
+        Some(
+            extract_file_text(path, &extension).map_err(|e| CommandError {
+                code: "EXTRACT_ERROR".to_string(),
+                message: format!("Failed to extract text: {}", e),
+                details: None,
+            })?,
+        )
+    };
 
     let now = chrono::Utc::now().timestamp_millis();
     let attachment = Attachment {
@@ -55,7 +65,7 @@ pub async fn attach_file(
         filename: filename.clone(),
         file_type: extension.clone(),
         file_path: Some(args.path.clone()),
-        extracted_text: Some(extracted_text),
+        extracted_text,
         file_size,
         created_at: now,
         updated_at: now,
@@ -75,8 +85,36 @@ pub async fn attach_file(
         file_type: attachment.file_type,
         file_size: attachment.file_size,
         extracted_text: attachment.extracted_text,
+        file_path: attachment.file_path,
         created_at: attachment.created_at,
         updated_at: attachment.updated_at,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadFileBytesArgs {
+    pub path: String,
+}
+
+/// 로컬 파일을 바이트로 읽습니다.
+/// - 이미지 멀티모달(vision) 입력을 위해 프론트에서 base64로 변환할 때 사용합니다.
+/// - 파일이 사라졌거나 접근 불가하면 에러를 반환합니다.
+#[tauri::command]
+pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> {
+    let path = Path::new(&args.path);
+    if !path.exists() {
+        return Err(CommandError {
+            code: "FILE_NOT_FOUND".to_string(),
+            message: format!("File not found: {}", args.path),
+            details: None,
+        });
+    }
+
+    fs::read(path).map_err(|e| CommandError {
+        code: "READ_ERROR".to_string(),
+        message: format!("Failed to read file: {}", e),
+        details: None,
     })
 }
 
@@ -99,6 +137,7 @@ pub fn list_attachments(
         file_type: a.file_type,
         file_size: a.file_size,
         extracted_text: a.extracted_text,
+        file_path: a.file_path,
         created_at: a.created_at,
         updated_at: a.updated_at,
     }).collect())
@@ -124,6 +163,8 @@ fn extract_file_text(path: &Path, extension: &str) -> Result<String, String> {
         "md" | "txt" => {
             fs::read_to_string(path).map_err(|e| e.to_string())
         },
+        // 이미지 파일은 텍스트 추출 대신 "첨부 허용"만 하고, 멀티모달(vision) 입력은 프론트에서 처리합니다.
+        "png" | "jpg" | "jpeg" | "webp" | "gif" => Ok(String::new()),
         "pdf" => {
             pdf_extract::extract_text(path).map_err(|e| e.to_string())
         },
