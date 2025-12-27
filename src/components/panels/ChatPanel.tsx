@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile, pickChatAttachmentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -9,6 +10,7 @@ import { confirm } from '@tauri-apps/plugin-dialog';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
+import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -41,6 +43,19 @@ export function ChatPanel(): JSX.Element {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<string>('');
+
+  const provider = useAiConfigStore((s) => s.provider);
+  const chatModel = useAiConfigStore((s) => s.chatModel);
+  const setChatModel = useAiConfigStore((s) => s.setChatModel);
+  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
+  const chatPresets = MODEL_PRESETS[providerKey];
+
+  useEffect(() => {
+    if (chatPresets.length === 0) return;
+    if (!chatPresets.some((p) => p.value === chatModel)) {
+      setChatModel(chatPresets[0].value);
+    }
+  }, [chatModel, chatPresets, setChatModel]);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
@@ -863,7 +878,21 @@ export function ChatPanel(): JSX.Element {
                   )}
                 </div>
 
-                <div className="pointer-events-auto">
+                <div className="pointer-events-auto flex items-center gap-2">
+                  <select
+                    className="h-9 px-2 text-[11px] rounded-full border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={chatModel}
+                    onChange={(e) => setChatModel(e.target.value)}
+                    aria-label="Chat model"
+                    title="Chat Model"
+                    disabled={isLoading}
+                  >
+                    {chatPresets.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="submit"
                     disabled={isLoading || !composerText.trim()}

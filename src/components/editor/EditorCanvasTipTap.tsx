@@ -8,6 +8,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -34,6 +36,19 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
+
+  const provider = useAiConfigStore((s) => s.provider);
+  const translationModel = useAiConfigStore((s) => s.translationModel);
+  const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
+  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
+  const translationPresets = MODEL_PRESETS[providerKey];
+
+  useEffect(() => {
+    if (translationPresets.length === 0) return;
+    if (!translationPresets.some((p) => p.value === translationModel)) {
+      setTranslationModel(translationPresets[0].value);
+    }
+  }, [translationModel, translationPresets, setTranslationModel]);
 
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
@@ -215,6 +230,19 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
         </div>
         <div className="flex items-center gap-2">
+          <select
+            className="h-7 px-2 text-[11px] rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={translationModel}
+            onChange={(e) => setTranslationModel(e.target.value)}
+            aria-label="Translation model"
+            title="Translation Model"
+          >
+            {translationPresets.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => void openTranslatePreview()}
@@ -334,4 +362,3 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     </div>
   );
 }
-

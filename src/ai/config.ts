@@ -55,7 +55,10 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   
   // 2. 용도에 따른 모델 선택
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
-  const model = useFor === 'translation' ? store.translationModel : store.chatModel;
+  const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
+  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
+  const presets = MODEL_PRESETS[providerKey];
+  const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
 
   // 3. API Key 우선순위: Store의 사용자 입력 키 > 환경 변수
   const envOpenaiKey = getEnvString('VITE_OPENAI_API_KEY');

@@ -15,21 +15,12 @@ function hasEnvKey(key: string): boolean {
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
   const { 
     provider, 
-    translationModel, 
-    chatModel, 
     openaiApiKey,
     setProvider, 
     setTranslationModel, 
     setChatModel,
     setOpenaiApiKey,
   } = useAiConfigStore();
-
-  // MODEL_PRESETS는 openai/anthropic만 정의되어 있어 mock은 openai 프리셋으로 취급합니다.
-  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
-
-  // 커스텀 입력 모드 상태 (드롭다운에 없는 값이면 커스텀 모드)
-  const isCustomTranslation = !MODEL_PRESETS[providerKey].some((p) => p.value === translationModel);
-  const isCustomChat = !MODEL_PRESETS[providerKey].some((p) => p.value === chatModel);
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -56,62 +47,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     if (targetPresets && targetPresets.length > 0) {
         // 번역 모델 리셋
         setTranslationModel(targetPresets[0].value);
-        // 채팅 모델 리셋 (보통 haiku/mini 같은 경량 모델이 두 번째에 위치)
-        setChatModel(targetPresets[1]?.value ?? targetPresets[0].value);
+        // 채팅 모델 리셋
+        setChatModel(targetPresets[0].value);
     }
-  };
-
-  const renderModelSelector = (
-    label: string, 
-    currentModel: string, 
-    setModel: (m: string) => void,
-    isCustom: boolean
-  ) => {
-    const presets = MODEL_PRESETS[providerKey];
-
-    return (
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-editor-text">{label}</label>
-        <div className="flex flex-col gap-2">
-            {/* 드롭다운 */}
-            <select
-                className="w-full h-9 px-2 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={isCustom ? 'custom' : currentModel}
-                onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === 'custom') {
-                        // 커스텀 모드로 진입 시 모델명은 유지하되 입력창 포커스 유도 가능
-                        // 여기서는 상태만 변경됨
-                        // 실제 모델값 변경은 안 함 (기존 값 유지 or 빈 값)
-                    } else {
-                        setModel(val);
-                    }
-                }}
-            >
-                {presets.map((p) => (
-                    <option key={p.value} value={p.value}>
-                        {p.label} - {p.description}
-                    </option>
-                ))}
-                <option value="custom">Custom Input...</option>
-            </select>
-
-            {/* 커스텀 입력창 (isCustom일 때만 표시하거나, 항상 표시하되 비활성화?) 
-                -> 드롭다운이 'custom'일 때만 활성화되는 인풋이 직관적
-            */}
-            {isCustom && (
-                <input
-                    type="text"
-                    className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                    placeholder="Enter model name (e.g. gpt-5.2)"
-                    value={currentModel}
-                    onChange={(e) => setModel(e.target.value)}
-                    autoFocus
-                />
-            )}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -134,11 +72,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-8">
             
-            {/* 1. AI Provider & Models */}
+            {/* 1. AI Provider */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🤖</span>
-                    <h3 className="font-semibold text-editor-text">AI Provider & Models</h3>
+                    <h3 className="font-semibold text-editor-text">AI Provider</h3>
                 </div>
 
                 {/* Provider Selection (Radio Group) */}
@@ -171,21 +109,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                 </div>
 
-                {/* Model Selection */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    {renderModelSelector(
-                        "Translation Model", 
-                        translationModel, 
-                        setTranslationModel,
-                        isCustomTranslation
-                    )}
-                    {renderModelSelector(
-                        "Chat Model", 
-                        chatModel, 
-                        setChatModel,
-                        isCustomChat
-                    )}
-                </div>
             </section>
 
             {/* 2. API Keys */}
@@ -279,4 +202,3 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     </div>
   );
 }
-

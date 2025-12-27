@@ -46,7 +46,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         } else {
           // openai or mock
           defaultTranslationModel = 'gpt-5.2';
-          defaultChatModel = 'gpt-5-mini';
+          defaultChatModel = 'gpt-5.2';
         }
       }
 
@@ -69,4 +69,3 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     }
   )
 );
-
