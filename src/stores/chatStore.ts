@@ -34,6 +34,7 @@ const CHAT_PERSIST_DEBOUNCE_MS = 800;
 let chatPersistTimer: number | null = null;
 let chatPersistInFlight = false;
 let chatPersistQueued = false;
+let hydrateRequestId = 0;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
 const MAX_CHAT_SESSIONS = 3;
@@ -295,6 +296,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     composerAttachments: [],
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
+      const requestId = ++hydrateRequestId;
       // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
       // 1. 현재와 같은 프로젝트고 이미 로드된 상태면 스킵 (불필요한 리로드 및 상태 초기화 방지)
       const currentLoadedId = get().loadedProjectId;
@@ -308,9 +310,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (chatPersistTimer !== null) {
         window.clearTimeout(chatPersistTimer);
         chatPersistTimer = null;
-        if (currentLoadedId && !get().isHydrating) {
-          await persistNow();
-        }
+      }
+      if (currentLoadedId && !get().isHydrating) {
+        await persistNow();
       }
 
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
@@ -319,14 +321,48 @@ export const useChatStore = create<ChatStore>((set, get) => {
           sessions: [],
           currentSessionId: null,
           currentSession: null,
+          lastInjectedGlossary: [],
+          summarySuggestionOpen: false,
+          summarySuggestionReason: '',
+          lastSummaryAtMessageCountBySessionId: {},
           isHydrating: false,
           loadedProjectId: null,
+          composerText: '',
+          translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
+          translationRules: '',
+          projectContext: '',
+          webSearchEnabled: false,
+          translationContextSessionId: null,
           composerAttachments: [],
+          attachments: [],
+          streamingMessageId: null,
+          isLoading: false,
         });
         return;
       }
 
-      set({ isHydrating: true, error: null, loadedProjectId: null });
+      set({
+        sessions: [],
+        currentSessionId: null,
+        currentSession: null,
+        lastInjectedGlossary: [],
+        summarySuggestionOpen: false,
+        summarySuggestionReason: '',
+        lastSummaryAtMessageCountBySessionId: {},
+        composerText: '',
+        translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
+        translationRules: '',
+        projectContext: '',
+        webSearchEnabled: false,
+        translationContextSessionId: null,
+        attachments: [],
+        composerAttachments: [],
+        streamingMessageId: null,
+        isLoading: false,
+        isHydrating: true,
+        error: null,
+        loadedProjectId: null,
+      });
 
       try {
         if (!isTauriRuntime()) {
@@ -341,6 +377,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         ]);
 
         const atts = attachmentsRes ?? [];
+
+        const activeProjectId = useProjectStore.getState().project?.id ?? null;
+        if (requestId !== hydrateRequestId || activeProjectId !== projectId) {
+          return;
+        }
 
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
@@ -381,6 +422,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         set(nextState);
       } catch (e) {
+        if (requestId !== hydrateRequestId) {
+          return;
+        }
         set({
           isHydrating: false,
           error: e instanceof Error ? e.message : '채팅 상태 로드 실패',
