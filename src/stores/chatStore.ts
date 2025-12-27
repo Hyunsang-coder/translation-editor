@@ -71,8 +71,9 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
 
   // 사용자가 클릭해야 반영되는 버튼 안내 문구가 있을 때만 "보수적으로" suggestion을 추론합니다.
   // (오탐 방지: 단순 설명/대화에는 버튼을 띄우지 않음)
-  const ruleTrigger = /원하시면\s*버튼을\s*눌러\s*번역\s*규칙(?:으로)?\s*추가/i;
-  const contextTrigger = /원하시면\s*버튼을\s*눌러\s*(?:project\s*context|컨텍스트)(?:로)?\s*추가/i;
+  // 패턴 확장: [Add to Rules], [Add to Context] 같은 명시적 버튼 멘트도 허용
+  const ruleTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Rules\]).*번역\s*규칙/i;
+  const contextTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Context\]).*(?:project\s*context|컨텍스트|맥락)/i;
 
   let type: 'rule' | 'context' | null = null;
   let cutIdx = -1;
@@ -83,6 +84,17 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
   } else if (contextTrigger.test(t)) {
     type = 'context';
     cutIdx = t.search(contextTrigger);
+  }
+
+  // Fallback: 아주 명시적인 버튼 이름만 있는 경우도 체크
+  if (!type) {
+    if (t.includes('[Add to Rules]')) {
+      type = 'rule';
+      cutIdx = t.indexOf('[Add to Rules]');
+    } else if (t.includes('[Add to Context]')) {
+      type = 'context';
+      cutIdx = t.indexOf('[Add to Context]');
+    }
   }
 
   if (!type) return null;
