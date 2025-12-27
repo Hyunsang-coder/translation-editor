@@ -791,7 +791,23 @@ export function ChatPanel(): JSX.Element {
                 {message.role === 'assistant' &&
                   streamingMessageId !== message.id &&
                   message.metadata?.suggestion && (
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2">
+                      {/* 제안 내용 미리보기 (아직 추가 안 된 경우만) */}
+                      {!message.metadata.rulesAdded && !message.metadata.contextAdded && (
+                        <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="w-1 h-3 bg-primary-500 rounded-full" />
+                            <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
+                              {message.metadata.suggestion.type === 'rule' ? 'Suggested Rule' : 'Suggested Context'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
+                            {message.metadata.suggestion.content}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
                       {message.metadata.suggestion.type === 'rule' && !message.metadata.rulesAdded && (
                         <button
                           type="button"
@@ -825,6 +841,7 @@ export function ChatPanel(): JSX.Element {
                           </button>
                         )}
                     </div>
+                  </div>
                   )}
               </div>
             ))}
