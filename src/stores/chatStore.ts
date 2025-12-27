@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
 import { getAiConfig } from '@/ai/config';
+import { createChatModel } from '@/ai/client';
 import { detectRequestType } from '@/ai/prompt';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { useProjectStore } from '@/stores/projectStore';
@@ -45,6 +46,21 @@ function tryExtractWebSearchQuery(raw: string): string | null {
   const colon = t.match(/^(웹검색|웹 검색|web)\s*:\s*([\s\S]+)$/i);
   if (colon?.[2]) return colon[2].trim();
   return null;
+}
+
+function extractTextFromAiMessage(ai: unknown): string {
+  const content = (ai as any)?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => {
+        if (typeof c === 'string') return c;
+        if (c && typeof c === 'object' && 'text' in c) return String((c as any).text ?? '');
+        return '';
+      })
+      .join('');
+  }
+  return content ? String(content) : '';
 }
 
 function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context'; content: string } | null {
@@ -498,12 +514,40 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const assistantId = addMessage({
           role: 'assistant',
           content: '',
-          metadata: { model: 'brave_search', toolCallsInProgress: ['brave_search'] },
+          metadata: { model: 'web_search', toolCallsInProgress: ['web_search'] },
         });
 
         try {
-          const out = await (braveSearchTool as any).invoke({ query: webQuery });
-          const text = typeof out === 'string' ? out : JSON.stringify(out);
+          const cfg = getAiConfig();
+          let text = '';
+
+          if (cfg.provider === 'openai') {
+            // OpenAI 내장 web search (Responses API) 우선 사용
+            const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
+            const modelWithSearch =
+              typeof modelAny.bindTools === 'function'
+                ? modelAny.bindTools([{ type: 'web_search_preview' }])
+                : modelAny;
+
+            const ai = await modelWithSearch.invoke(
+              [
+                '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
+                '',
+                `- 질문: ${webQuery}`,
+                '- 출력:',
+                '  1) 요약(3~6줄)',
+                '  2) 근거 링크 3~8개 (가능하면 제목 + 링크)',
+              ].join('\n'),
+            );
+            text = extractTextFromAiMessage(ai);
+          }
+
+          // fallback: OpenAI가 아니거나, OpenAI 결과가 비어있으면 Brave Search
+          if (!text.trim()) {
+            const out = await (braveSearchTool as any).invoke({ query: webQuery });
+            text = typeof out === 'string' ? out : JSON.stringify(out);
+          }
+
           if (assistantId) {
             updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [] } });
           } else {

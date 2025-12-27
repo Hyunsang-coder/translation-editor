@@ -111,7 +111,15 @@ function extractToolCalls(ai: unknown): ToolCall[] {
 
 async function runToolCallingLoop(params: {
   model: ReturnType<typeof createChatModel>;
+  /**
+   * 실행 가능한(로컬) 도구 목록: tool_calls로 요청이 오면 우리가 직접 invoke합니다.
+   */
   tools: Array<{ name: string; invoke: (arg: any) => Promise<any> }>;
+  /**
+   * 모델에 바인딩할 도구 목록 (OpenAI built-in tools 포함 가능)
+   * - 예: { type: "web_search_preview" } 는 OpenAI가 서버 측에서 실행합니다.
+   */
+  bindTools?: any[];
   messages: BaseMessage[];
   maxSteps?: number;
   cb?: StreamCallbacks;
@@ -123,9 +131,10 @@ async function runToolCallingLoop(params: {
   // 정석: tool calling은 bindTools()로 모델에 도구를 바인딩합니다. (LangChain 공식 문서 패턴)
   // - Provider/버전에 따라 bindTools 유무가 다를 수 있어 방어적으로 처리합니다.
   const modelAny = params.model as any;
+  const bindTools = params.bindTools ?? params.tools;
   const modelWithTools =
-    params.tools.length > 0 && typeof modelAny.bindTools === 'function'
-      ? modelAny.bindTools(params.tools)
+    bindTools.length > 0 && typeof modelAny.bindTools === 'function'
+      ? modelAny.bindTools(bindTools)
       : params.model;
 
   const loopMessages: BaseMessage[] = [...params.messages];
@@ -197,7 +206,9 @@ async function runToolCallingLoop(params: {
   };
 }
 
-function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): SystemMessage {
+function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string }): SystemMessage {
+  const { includeSource, includeTarget, provider } = params;
+  const hasOpenAiWebSearch = provider === 'openai';
   const toolGuide = [
     '도구 사용 가이드(짧게):',
     includeSource
@@ -208,14 +219,19 @@ function buildToolGuideMessage(includeSource: boolean, includeTarget: boolean): 
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: "번역 규칙 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
     '- suggest_project_context: "Project Context 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
-    '- brave_search: 최신 정보, 뉴스, 기술 문서 등 웹 검색이 필요한 질문에 사용. 최신 정보나 실시간 데이터가 필요한 경우에만 호출.',
+    hasOpenAiWebSearch
+      ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
+      : '- web_search_preview: (비활성화됨)',
+    '- brave_search: (fallback) 웹 검색이 필요하지만 web_search_preview가 비활성/실패/제약일 때 사용.',
     '',
     '규칙:',
     '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
     '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
     '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
     '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내한다.',
-    '- 최신 정보나 실시간 데이터가 필요한 질문에는 brave_search를 사용하여 웹 검색 결과를 가져온다.',
+    hasOpenAiWebSearch
+      ? '- 최신 정보/실시간 데이터가 필요한 질문에는 web_search_preview를 우선 사용하고, 불가능하면 brave_search를 사용한다.'
+      : '- 최신 정보/실시간 데이터가 필요한 질문에는 brave_search를 사용한다.',
   ].join('\n');
 
   return new SystemMessage(toolGuide);
@@ -265,16 +281,21 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
+  // OpenAI provider에서는 built-in web search를 모델에 바인딩 (서버 측에서 실행됨)
+  const openAiBuiltInTools = cfg.provider === 'openai' ? [{ type: 'web_search_preview' }] : [];
+  const bindTools = [...toolSpecs, ...openAiBuiltInTools];
+
   const messagesWithGuide: BaseMessage[] = [
     // systemPrompt 바로 다음에 가이드를 넣어 tool 사용 원칙을 고정
     messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage(includeSource, includeTarget),
+    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider }),
     ...messages.slice(1),
   ];
 
   const { finalText } = await runToolCallingLoop({
     model,
     tools: toolSpecs as any,
+    bindTools,
     messages: messagesWithGuide,
   });
 
@@ -330,15 +351,19 @@ export async function streamAssistantReply(
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
+  const openAiBuiltInTools = cfg.provider === 'openai' ? [{ type: 'web_search_preview' }] : [];
+  const bindTools = [...toolSpecs, ...openAiBuiltInTools];
+
   const messagesWithGuide: BaseMessage[] = [
     messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage(includeSource, includeTarget),
+    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider }),
     ...messages.slice(1),
   ];
 
   const { finalText, toolsUsed } = await runToolCallingLoop({
     model,
     tools: toolSpecs as any,
+    bindTools,
     messages: messagesWithGuide,
     ...(cb ? { cb } : {}),
   });

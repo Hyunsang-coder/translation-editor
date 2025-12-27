@@ -9,6 +9,7 @@ export function createChatModel(
 ): BaseChatModel {
   const cfg = getAiConfig(options);
   const model = modelOverride ?? cfg.model;
+  const useFor = options?.useFor ?? 'chat';
 
   if (cfg.provider === 'openai') {
     if (!cfg.openaiApiKey) {
@@ -24,6 +25,8 @@ export function createChatModel(
       apiKey: cfg.openaiApiKey,
       model,
       ...temperatureOption,
+      // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
+      ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
     });
   }
 
