@@ -343,6 +343,7 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
   messages: BaseMessage[];
   userText: string;
   imageAttachments?: { filename: string; fileType: string; filePath: string }[];
+  provider: string;
 }): Promise<{ messages: BaseMessage[]; usedImages: boolean }> {
   const images = (params.imageAttachments ?? []).filter((x) => x && isImageExt(x.fileType) && !!x.filePath);
   if (images.length === 0) return { messages: params.messages, usedImages: false };
@@ -363,11 +364,21 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
         warnings.push(`- ${img.filename}: 파일이 너무 커서(${Math.round(bytes.length / 1024)}KB) 제외됨`);
         continue;
       }
-      blocks.push({
-        type: 'image',
-        source_type: 'base64',
-        data: bytesToBase64(bytes),
-      });
+      const base64 = bytesToBase64(bytes);
+      if (params.provider === 'openai') {
+        const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
+        const dataUrl = `data:image/${ext};base64,${base64}`;
+        blocks.push({
+          type: 'image_url',
+          image_url: { url: dataUrl },
+        });
+      } else {
+        blocks.push({
+          type: 'image',
+          source_type: 'base64',
+          data: base64,
+        });
+      }
       usedImages = true;
     } catch {
       warnings.push(`- ${img.filename}: 파일을 읽을 수 없어 제외됨`);
@@ -463,6 +474,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     messages: messagesWithGuide,
     userText: input.userMessage,
     ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
+    provider: cfg.provider,
   });
 
   let finalText: string;
@@ -567,6 +579,7 @@ export async function streamAssistantReply(
     messages: messagesWithGuide,
     userText: input.userMessage,
     ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
+    provider: cfg.provider,
   });
 
   let finalText: string;
