@@ -1315,7 +1315,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (!incoming) return;
       const current = get().translationRules.trim();
       const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
-      set({ projectContext: next });
+      set({ translationRules: next });
       schedulePersist();
     },
 
@@ -1422,4 +1422,3 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
   };
 });
-
