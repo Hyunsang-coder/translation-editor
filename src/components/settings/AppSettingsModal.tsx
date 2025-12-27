@@ -6,7 +6,7 @@ interface AppSettingsModalProps {
   onClose: () => void;
 }
 
-// 환경 변수 확인 헬퍼
+// 환경 변수 확인 헬퍼 (Deprecated)
 function hasEnvKey(key: string): boolean {
   const v = (import.meta as any).env?.[key] as string | undefined;
   return typeof v === 'string' && v.trim().length > 0;
@@ -120,6 +120,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <span className="text-lg">🔑</span>
                     <h3 className="font-semibold text-editor-text">API Keys</h3>
                 </div>
+                <p className="text-xs text-editor-muted">
+                    Keys are stored securely in your OS keychain and are not saved to localStorage.
+                </p>
 
                 {/* OpenAI API Key */}
                 <div className="space-y-1.5">

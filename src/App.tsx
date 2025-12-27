@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
 
 function App(): JSX.Element {
   const { theme } = useUIStore();
   const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore();
+  const { loadSecureKeys } = useAiConfigStore();
 
   // 테마 적용
   useEffect(() => {
@@ -23,6 +25,11 @@ function App(): JSX.Element {
   useEffect(() => {
     initializeProject();
   }, [initializeProject]);
+
+  // 보안 저장소에서 API 키 로드
+  useEffect(() => {
+    void loadSecureKeys();
+  }, [loadSecureKeys]);
 
   // Auto-save (Phase 4.2 안정화: Monaco 단일 문서 편집에서도 주기 저장)
   useEffect(() => {
@@ -71,4 +78,3 @@ function App(): JSX.Element {
 }
 
 export default App;
-

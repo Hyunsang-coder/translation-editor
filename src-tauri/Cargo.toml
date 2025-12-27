@@ -31,6 +31,7 @@ pdf-extract = "0.7"
 docx-rs = "0.4"
 zip = "2.2"
 quick-xml = "0.37"
+keyring = "2"
 
 [profile.dev]
 incremental = true
@@ -41,4 +42,3 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
-
