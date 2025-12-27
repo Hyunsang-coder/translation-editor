@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -11,6 +11,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
+import { SkeletonParagraph } from '@/components/ui/Skeleton';
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -78,6 +79,36 @@ export function ChatPanel(): JSX.Element {
   const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
   const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [showStreamingSkeleton, setShowStreamingSkeleton] = useState(false);
+
+  // 스트리밍 시작 직후(아주 빠른 응답)에는 skeleton이 번쩍이지 않도록, 짧은 지연 후에만 skeleton을 표시합니다.
+  useEffect(() => {
+    if (!isLoading) {
+      setShowStreamingSkeleton(false);
+      return;
+    }
+
+    setShowStreamingSkeleton(false);
+    const t = window.setTimeout(() => setShowStreamingSkeleton(true), 200);
+    return () => window.clearTimeout(t);
+  }, [isLoading]);
+
+  const streamingBubbleExists = useMemo(() => {
+    if (!streamingMessageId) return false;
+    const msgs = currentSession?.messages ?? [];
+    return msgs.some((m) => m.id === streamingMessageId);
+  }, [currentSession?.messages, streamingMessageId]);
+
+  const renderAssistantSkeleton = useCallback((): JSX.Element => {
+    return (
+      <div>
+        <SkeletonParagraph seed={0} lines={3} />
+        <span className="sr-only" aria-live="polite">
+          응답 생성 중
+        </span>
+      </div>
+    );
+  }, []);
 
   const renderTypingIndicator = useCallback((opts?: { label?: string }): JSX.Element => {
     const label = opts?.label ?? '응답 생성 중...';
@@ -682,7 +713,7 @@ export function ChatPanel(): JSX.Element {
                           streamingMessageId === message.id &&
                           message.content.trim().length === 0 ? (
                           <div className="text-sm leading-relaxed">
-                            {renderTypingIndicator()}
+                            {showStreamingSkeleton ? renderAssistantSkeleton() : renderTypingIndicator()}
                           </div>
                         ) : (
                           <div className="text-sm leading-relaxed chat-markdown">
@@ -798,9 +829,9 @@ export function ChatPanel(): JSX.Element {
               </div>
             ))}
 
-            {isLoading && !streamingMessageId && (
+            {isLoading && (!streamingMessageId || !streamingBubbleExists) && (
               <div className="chat-message chat-message-ai">
-                {renderTypingIndicator({ label: '응답을 준비 중...' })}
+                {showStreamingSkeleton ? renderAssistantSkeleton() : renderTypingIndicator({ label: '응답을 준비 중...' })}
               </div>
             )}
             <div ref={messagesEndRef} />

@@ -6,6 +6,7 @@ import Link from '@tiptap/extension-link';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
+import { SkeletonParagraph } from '@/components/ui/Skeleton';
 
 /**
  * Diff 비교를 위한 텍스트 정규화
@@ -206,27 +207,35 @@ export function TranslatePreviewModal(props: {
 
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
-            <div className="h-full flex items-center justify-center text-editor-muted">
-              <div className="w-full max-w-md px-6">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
-                      style={{ animationDelay: '0ms' }}
-                    />
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
-                      style={{ animationDelay: '120ms' }}
-                    />
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500 animate-bounce"
-                      style={{ animationDelay: '240ms' }}
-                    />
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0 grid grid-cols-2 gap-0">
+                <div className="min-w-0 flex flex-col border-r border-editor-border">
+                  <div className="h-10 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+                    <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                      SOURCE
+                    </span>
                   </div>
-                  <div className="text-sm">번역 생성 중…</div>
+                  <div className="flex-1 min-h-0 p-4 overflow-hidden">
+                    <SkeletonParagraph seed={0} lines={9} />
+                  </div>
                 </div>
-                <div className="mt-2 text-center text-[11px] text-editor-muted">
-                  응답을 기다리는 중입니다. 잠시만요.
+                <div className="min-w-0 flex flex-col">
+                  <div className="h-10 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+                    <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                      TRANSLATION
+                    </span>
+                  </div>
+                  <div className="flex-1 min-h-0 p-4 overflow-hidden">
+                    <SkeletonParagraph seed={1} lines={9} />
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-editor-border bg-editor-bg text-editor-muted">
+                <div className="text-[11px]">
+                  번역 생성 중… 잠시만요.
+                  <span className="sr-only" aria-live="polite">
+                    번역 생성 중
+                  </span>
                 </div>
               </div>
             </div>
