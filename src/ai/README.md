@@ -54,6 +54,27 @@
 
 ---
 
+## 프롬프트/지침 중복 리스크(드리프트) 줄이기: 단일 Source of Truth
+
+이 프로젝트에서 **도구의 의미/구분(특히 `Translation Rules` vs `Project Context`)은 한 곳에만 “정의”를 둡니다.**
+
+- **Source of Truth(정의의 기준)**: `tools/suggestionTools.ts`의 tool `description` + `schema`  
+  - 모델이 tool을 “선택/호출”할 때 가장 직접적으로 참고하는 정보이며,
+  - 구분/예시/금지 사항을 여기에만 자세히 적어 **다른 프롬프트와 내용이 어긋나는 상황**을 방지합니다.
+
+- **Secondary(최소 지침)**: `prompt.ts` / `chat.ts`의 system message  
+  - 중복 정의/예시는 넣지 않고, **“tool description을 따르라”**는 참조 + UX 안전장치만 둡니다.
+  - 안전장치 예:
+    - `suggest_*`는 저장이 아니라 **저장 제안 생성**임
+    - 응답에서 “저장/추가 완료” 금지
+    - 필요 시 “원하시면 [Add to Rules]/[Add to Context] 버튼…” 안내
+
+왜 이렇게 하나요?
+- 같은 규칙을 여러 곳에 반복하면, 시간이 지나면서 한 군데만 업데이트되어 **모델이 서로 다른 지침을 동시에 받는**(드리프트/충돌) 문제가 생길 수 있습니다.
+- 반대로 정의를 1곳에만 두면, 업데이트 포인트가 명확해져 유지보수가 안정됩니다.
+
+---
+
 ## 제공 도구 목록
 
 ### 1) 문서 조회 도구 (`tools/documentTools.ts`)
@@ -77,6 +98,10 @@
 AI 응답 문구 가이드:
 - 금지: “저장했습니다 / 추가했습니다”
 - 권장: “저장 제안을 생성했습니다. 원하시면 버튼을 눌러 추가하세요.”
+
+### Translation Rules vs Project Context (구분 정의 위치)
+- **정의/예시/금지 규칙은 `tools/suggestionTools.ts`에만** 둡니다. (단일 Source of Truth)
+- `prompt.ts`/`chat.ts`는 중복 정의를 피하고, “tool description을 따르라” + 버튼 안내 같은 최소 지침만 유지합니다.
 
 ---
 

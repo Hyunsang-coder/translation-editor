@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import { createProject } from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
+import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { ProjectDomain } from '@/types';
 import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -22,6 +23,7 @@ export function ProjectSidebar(): JSX.Element {
   const loadProject = useProjectStore((s) => s.loadProject);
   const saveProject = useProjectStore((s) => s.saveProject);
   const lastSavedAt = useProjectStore((s) => s.lastSavedAt);
+  const initializeProject = useProjectStore((s) => s.initializeProject);
 
   const [items, setItems] = useState<RecentProjectInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -132,15 +134,30 @@ export function ProjectSidebar(): JSX.Element {
       kind: 'warning',
     });
     if (!ok) return;
-    await deleteProject(projectId);
-    await refresh();
+    const isCurrent = selectedId === projectId;
+    let nextProjectId: string | null = null;
 
-    if (selectedId === projectId) {
-      await message('현재 열려있던 프로젝트가 삭제되었습니다.\n다른 프로젝트를 선택해 주세요.', {
-        title: '삭제됨',
-        kind: 'warning',
-      });
+    if (isCurrent) {
+      const remaining = items.filter((p) => p.id !== projectId);
+      const next = [...remaining].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
+      if (next?.id) {
+        nextProjectId = next.id;
+        await switchProjectById(next.id);
+        await useChatStore.getState().hydrateForProject(next.id);
+      }
     }
+
+    if (isCurrent && !nextProjectId) {
+      await useChatStore.getState().hydrateForProject(null);
+    }
+
+    await deleteProject(projectId);
+
+    if (isCurrent && !nextProjectId) {
+      initializeProject();
+    }
+
+    await refresh();
   };
 
   const startRename = (projectId: string) => {

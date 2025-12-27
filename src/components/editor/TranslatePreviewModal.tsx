@@ -16,7 +16,10 @@ import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 function normalizeDiffText(text: string): string {
   return text
     .replace(/\r\n/g, '\n')           // Windows 줄 바꿈 → Unix
-    .replace(/\n{3,}/g, '\n\n')       // 3개 이상 줄 바꿈 → 2개
+    // TipTap generateText는 문단 경계를 \n\n 로 만들 수 있고,
+    // HTML->stripHtml 경로는 \n 로 만드는 경우가 있어 diff에서만 "빈 줄" 차이가 생길 수 있습니다.
+    // Diff 안정성을 위해 연속 줄바꿈(문단 구분 포함)은 1개로 통일합니다.
+    .replace(/\n{2,}/g, '\n')         // 2개 이상 줄 바꿈 → 1개
     .replace(/[ \t]+$/gm, '')         // 줄 끝 공백 제거
     .trim();
 }

@@ -298,8 +298,8 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     includeTarget
       ? '- get_target_document: 번역문을 가져옴(문서가 아주 길면 일부만 반환될 수 있음). 꼭 필요할 때만.'
       : '- get_target_document: (비활성화됨)',
-    '- suggest_translation_rule: "번역 규칙 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
-    '- suggest_project_context: "Project Context 저장 제안" 생성(실제 저장은 사용자가 버튼 클릭)',
+    '- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)',
+    '- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)',
     (webSearchEnabled && hasOpenAiWebSearch)
       ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
       : '- web_search_preview: (비활성화됨)',
@@ -311,7 +311,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
     '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
     '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
-    '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 버튼을 눌러 추가하세요"라고 안내한다.',
+    '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 [Add to Rules]/[Add to Context] 버튼을 눌러 추가하세요"라고 안내한다.',
     ...(webSearchEnabled
       ? [
         hasOpenAiWebSearch

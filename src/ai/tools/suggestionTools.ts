@@ -14,13 +14,17 @@ export const suggestTranslationRule = tool(
   {
     name: 'suggest_translation_rule',
     description:
-      'Create a "save suggestion" for Translation Rules. IMPORTANT: This does not save anything automatically; the user must click a button to apply.',
+      'Create a "save suggestion" for Translation Rules (번역 규칙). ' +
+      'CRITICAL: Translation Rules는 번역 스타일/포맷/문체 규칙입니다 (예: "해요체 사용", "따옴표 유지", "고유명사는 음차"). ' +
+      'Project Context와 다릅니다: Project Context는 프로젝트 배경 지식/맥락 정보입니다 (예: "이 프로젝트는 게임 UI 번역", "배경 설정: 미래 SF 세계관"). ' +
+      '이 도구는 번역 방법/스타일 규칙만 제안하며, 배경 지식은 제안하지 않습니다. ' +
+      'IMPORTANT: This does not save anything automatically; the user must click [Add to Rules] button to apply.',
     schema: z.object({
       rule: z
         .string()
         .min(1)
         .max(2000)
-        .describe('The translation rule content to suggest (a short, actionable rule)'),
+        .describe('번역 규칙 내용 (스타일/포맷/문체 규칙, 배경 지식이 아님)'),
     }),
   }
 );
@@ -37,13 +41,17 @@ export const suggestProjectContext = tool(
   {
     name: 'suggest_project_context',
     description:
-      'Create a "save suggestion" for Project Context. IMPORTANT: This does not save anything automatically; the user must click a button to apply.',
+      'Create a "save suggestion" for Project Context (프로젝트 맥락 정보). ' +
+      'CRITICAL: Project Context는 프로젝트 배경 지식/맥락 정보입니다 (예: "이 프로젝트는 게임 UI 번역", "캐릭터 이름은 음차", "배경 설정: 미래 SF 세계관"). ' +
+      'Translation Rules와 다릅니다: Translation Rules는 번역 스타일/포맷/문체 규칙입니다 (예: "해요체 사용", "따옴표 유지"). ' +
+      '이 도구는 배경 지식/맥락 정보만 제안하며, 번역 스타일 규칙은 제안하지 않습니다. ' +
+      'IMPORTANT: This does not save anything automatically; the user must click [Add to Context] button to apply.',
     schema: z.object({
       context: z
         .string()
         .min(1)
         .max(4000)
-        .describe('The project context content to suggest (facts/constraints, not style rules)'),
+        .describe('프로젝트 맥락 정보 내용 (배경 지식/맥락 정보, 번역 스타일 규칙이 아님)'),
     }),
   }
 );

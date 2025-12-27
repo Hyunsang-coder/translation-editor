@@ -312,7 +312,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         chatPersistTimer = null;
       }
       if (currentLoadedId && !get().isHydrating) {
-        await persistNow();
+        try {
+          await persistNow();
+        } catch (e) {
+          console.warn('[chatStore] persistNow failed during project switch:', e);
+        }
       }
 
       // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
