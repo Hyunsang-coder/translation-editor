@@ -32,6 +32,7 @@ export interface AiConfig {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   googleApiKey?: string;
+  braveApiKey?: string;
   maxRecentMessages: number;
   judgeModel: string;
 }
@@ -68,13 +69,12 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   const presets = MODEL_PRESETS[providerKey];
   const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
 
-  // 3. API Key 우선순위: Store의 사용자 입력 키 > 환경 변수
-  const envOpenaiKey = getEnvString('VITE_OPENAI_API_KEY');
-  const envAnthropicKey = getEnvString('VITE_ANTHROPIC_API_KEY');
-  const envGoogleKey = getEnvString('VITE_GOOGLE_API_KEY');
-  const openaiApiKey = store.openaiApiKey || envOpenaiKey;
-  const anthropicApiKey = store.anthropicApiKey || envAnthropicKey;
-  const googleApiKey = store.googleApiKey || envGoogleKey;
+  // 3. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
+  // "환경 변수의 api key는 아무것도 사용하지 않을 거야" 반영
+  const openaiApiKey = store.openaiApiKey;
+  const anthropicApiKey = store.anthropicApiKey;
+  const googleApiKey = store.googleApiKey;
+  const braveApiKey = store.braveApiKey;
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 
@@ -86,6 +86,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     ...(googleApiKey ? { googleApiKey } : {}),
+    ...(braveApiKey ? { braveApiKey } : {}),
     maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 12))),
     judgeModel:
       getEnvString('VITE_AI_JUDGE_MODEL') ??

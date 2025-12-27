@@ -12,6 +12,7 @@ use crate::error::{CommandError, CommandResult};
 pub struct BraveSearchArgs {
     pub query: String,
     pub count: Option<u32>,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -39,22 +40,21 @@ struct BraveWebSearchItem {
     description: Option<String>,
 }
 
-fn get_brave_api_key() -> Result<String, CommandError> {
-    // 우선순위: BRAVE_SEARCH_API > VITE_BRAVE_SEARCH_API
-    if let Ok(v) = std::env::var("BRAVE_SEARCH_API") {
-        if !v.trim().is_empty() {
-            return Ok(v.trim().to_string());
-        }
-    }
-    if let Ok(v) = std::env::var("VITE_BRAVE_SEARCH_API") {
-        if !v.trim().is_empty() {
-            return Ok(v.trim().to_string());
+fn get_brave_api_key(args: &BraveSearchArgs) -> Result<String, CommandError> {
+    // 1. 인자로 넘어온 API Key가 있으면 최우선 사용
+    if let Some(key) = &args.api_key {
+        let k = key.trim();
+        if !k.is_empty() {
+            return Ok(k.to_string());
         }
     }
 
+    // 2. 환경변수는 더 이상 사용하지 않음 (요구사항 반영)
+    // "이제 환경 변수의 api key는 아무것도 사용하지 않을 거야"
+
     Err(CommandError {
         code: "BRAVE_API_KEY_MISSING".to_string(),
-        message: "Brave Search API key is missing. Please set BRAVE_SEARCH_API in .env.local".to_string(),
+        message: "Brave Search API key is missing. Please set it in App Settings.".to_string(),
         details: None,
     })
 }
@@ -62,7 +62,7 @@ fn get_brave_api_key() -> Result<String, CommandError> {
 /// Brave Web Search API 호출
 #[tauri::command]
 pub async fn brave_search(args: BraveSearchArgs) -> CommandResult<Vec<BraveSearchResultDto>> {
-    let api_key = get_brave_api_key()?;
+    let api_key = get_brave_api_key(&args)?;
     let q = args.query.trim();
     if q.is_empty() {
         return Ok(vec![]);

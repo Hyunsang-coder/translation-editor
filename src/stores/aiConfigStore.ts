@@ -12,6 +12,7 @@ interface AiConfigState {
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
   googleApiKey: string | undefined;
+  braveApiKey: string | undefined;
 }
 
 interface AiConfigActions {
@@ -21,6 +22,7 @@ interface AiConfigActions {
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
   setGoogleApiKey: (key: string | undefined) => void;
+  setBraveApiKey: (key: string | undefined) => void;
 }
 
 // 환경변수 읽기 헬퍼
@@ -62,6 +64,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
         googleApiKey: undefined,
+        braveApiKey: undefined,
 
         setProvider: (provider) => set({ provider }),
         setTranslationModel: (model) => set({ translationModel: model }),
@@ -69,6 +72,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         setOpenaiApiKey: (key) => set({ openaiApiKey: key?.trim() || undefined }),
         setAnthropicApiKey: (key) => set({ anthropicApiKey: key?.trim() || undefined }),
         setGoogleApiKey: (key) => set({ googleApiKey: key?.trim() || undefined }),
+        setBraveApiKey: (key) => set({ braveApiKey: key?.trim() || undefined }),
       };
     },
     {

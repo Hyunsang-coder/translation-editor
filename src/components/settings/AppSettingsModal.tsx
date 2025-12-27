@@ -18,12 +18,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     openaiApiKey,
     anthropicApiKey,
     googleApiKey,
+    braveApiKey,
     setProvider, 
     setTranslationModel, 
     setChatModel,
     setOpenaiApiKey,
     setAnthropicApiKey,
     setGoogleApiKey,
+    setBraveApiKey,
   } = useAiConfigStore();
 
   // 모달 외부 클릭 시 닫기
@@ -136,13 +138,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <input
                             type="password"
                             className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={hasEnvKey('VITE_OPENAI_API_KEY') ? 'Using environment variable' : 'Enter your OpenAI API key'}
+                            placeholder="Enter your OpenAI API key"
                             value={openaiApiKey || ''}
                             onChange={(e) => setOpenaiApiKey(e.target.value)}
                         />
-                        {!openaiApiKey && hasEnvKey('VITE_OPENAI_API_KEY') && (
-                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
-                        )}
                     </div>
                 </div>
 
@@ -163,13 +162,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <input
                             type="password"
                             className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={hasEnvKey('VITE_ANTHROPIC_API_KEY') ? 'Using environment variable' : 'Enter your Anthropic API key'}
+                            placeholder="Enter your Anthropic API key"
                             value={anthropicApiKey || ''}
                             onChange={(e) => setAnthropicApiKey(e.target.value)}
                         />
-                        {!anthropicApiKey && hasEnvKey('VITE_ANTHROPIC_API_KEY') && (
-                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
-                        )}
                     </div>
                 </div>
 
@@ -190,13 +186,34 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <input
                             type="password"
                             className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={hasEnvKey('VITE_GOOGLE_API_KEY') ? 'Using environment variable' : 'Enter your Google API key'}
+                            placeholder="Enter your Google API key"
                             value={googleApiKey || ''}
                             onChange={(e) => setGoogleApiKey(e.target.value)}
                         />
-                        {!googleApiKey && hasEnvKey('VITE_GOOGLE_API_KEY') && (
-                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
+                    </div>
+                </div>
+
+                {/* Brave Search API Key */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-editor-text">Brave Search API Key</label>
+                        {braveApiKey && (
+                            <button
+                                onClick={() => setBraveApiKey(undefined)}
+                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                Clear
+                            </button>
                         )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder="Enter your Brave Search API key"
+                            value={braveApiKey || ''}
+                            onChange={(e) => setBraveApiKey(e.target.value)}
+                        />
                     </div>
                 </div>
             </section>
