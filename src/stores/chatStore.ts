@@ -128,6 +128,7 @@ interface ChatState {
   isHydrating: boolean;
   streamingMessageId: string | null;
   error: string | null;
+  statusMessage: string | null;
   // 최근 요청에서 주입된 글로서리(디버깅/가시화)
   lastInjectedGlossary: GlossaryEntry[];
   // Smart Context Memory (4.3)
@@ -202,6 +203,7 @@ interface ChatActions {
   // 유틸리티
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
+  setStatusMessage: (message: string | null) => void;
   setTranslatorPersona: (persona: string) => void;
   setTranslationRules: (rules: string) => void;
   appendToTranslationRules: (snippet: string) => void;
@@ -298,6 +300,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     isLoading: false,
     streamingMessageId: null,
     error: null,
+    statusMessage: null,
     lastInjectedGlossary: [],
     isSummarizing: false,
     isHydrating: false,
@@ -592,7 +595,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       }
 
       // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
-      const webQuery = tryExtractWebSearchQuery(content);
+        const webQuery = tryExtractWebSearchQuery(content);
       if (webQuery) {
         if (!get().webSearchEnabled) {
           addMessage({
@@ -604,7 +607,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           return;
         }
 
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
         const cfg = getAiConfig();
         const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['brave_search'];
@@ -620,6 +623,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           const toolsUsed: string[] = [];
 
           if (cfg.provider === 'openai') {
+            set({ statusMessage: 'OpenAI 웹 검색 중...' });
             // OpenAI 내장 web search (Responses API) 우선 사용
             const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
             const modelWithSearch =
@@ -643,6 +647,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
           // fallback: OpenAI가 아니거나, OpenAI 결과가 비어있으면 Brave Search
           if (!text.trim()) {
+            set({ statusMessage: 'Brave 검색 중...' });
             if (assistantId) {
               updateMessage(assistantId, { metadata: { toolCallsInProgress: ['brave_search'] } });
             }
@@ -656,7 +661,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           } else {
             addMessage({ role: 'assistant', content: text });
           }
-          set({ isLoading: false, streamingMessageId: null, error: null });
+          set({ isLoading: false, streamingMessageId: null, error: null, statusMessage: null });
           schedulePersist();
         } catch (e) {
           const errText = e instanceof Error ? e.message : '웹 검색 실패';
@@ -665,12 +670,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
           } else {
             addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
           }
-          set({ isLoading: false, streamingMessageId: null, error: errText });
+          set({ isLoading: false, streamingMessageId: null, error: errText, statusMessage: null });
         }
         return;
       }
 
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
       try {
         const cfg = getAiConfig();
@@ -762,6 +767,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           },
           {
             onToken: (full) => {
+              if (get().statusMessage !== '답변 생성 중...') {
+                set({ statusMessage: '답변 생성 중...' });
+              }
               if (assistantId) {
                 updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
               }
@@ -770,6 +778,22 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+
+              if (evt.phase === 'start') {
+                const toolNameMap: Record<string, string> = {
+                  'web_search': '웹 검색',
+                  'web_search_preview': '웹 검색',
+                  'brave_search': '웹 검색(Brave)',
+                  'get_source_document': '원문 문서 조회',
+                  'get_target_document': '번역문 문서 조회',
+                  'suggest_translation_rule': '번역 규칙 생성',
+                  'suggest_project_context': '프로젝트 맥락 분석'
+                };
+                const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
+                set({ statusMessage: `${friendlyName} 진행 중...` });
+              } else {
+                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+              }
 
               // 1. Tool Call Badge (Running state)
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
@@ -831,7 +855,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         restoreGhostChips(replyMasked, maskSession);
-        set({ isLoading: false, streamingMessageId: null });
+        set({ isLoading: false, streamingMessageId: null, statusMessage: null });
         get().checkAndSuggestProjectContext();
       } catch (error) {
         const assistantId = get().streamingMessageId;
@@ -1108,7 +1132,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      set({ isLoading: true, error: null, streamingMessageId: null });
+      set({ isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
       try {
         const cfg = getAiConfig();
@@ -1196,6 +1220,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           },
           {
             onToken: (full) => {
+              if (get().statusMessage !== '답변 생성 중...') {
+                set({ statusMessage: '답변 생성 중...' });
+              }
               if (assistantId) {
                 get().updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
               }
@@ -1204,6 +1231,22 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (!assistantId) return;
               const sessionNow = get().currentSession;
               const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+
+              if (evt.phase === 'start') {
+                const toolNameMap: Record<string, string> = {
+                  'web_search': '웹 검색',
+                  'web_search_preview': '웹 검색',
+                  'brave_search': '웹 검색(Brave)',
+                  'get_source_document': '원문 문서 조회',
+                  'get_target_document': '번역문 문서 조회',
+                  'suggest_translation_rule': '번역 규칙 생성',
+                  'suggest_project_context': '프로젝트 맥락 분석'
+                };
+                const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
+                set({ statusMessage: `${friendlyName} 진행 중...` });
+              } else {
+                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+              }
 
               // 1) Tool Call Badge
               const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
@@ -1235,6 +1278,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 },
               });
             },
+            onModelRun: (step) => {
+              if (step > 0) {
+                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+              } else {
+                // 초기 단계: 웹 검색 활성화 여부에 따라 메시지 차별화
+                const isWeb = get().webSearchEnabled;
+                set({ statusMessage: isWeb ? '답변 생성 및 웹 검색 확인 중...' : '답변 생성 및 도구 확인 중...' });
+              }
+            },
             onToolsUsed: (toolsUsed) => {
               if (assistantId) {
                 get().updateMessage(assistantId, { metadata: { toolsUsed } });
@@ -1260,7 +1312,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 
-        set({ isLoading: false, streamingMessageId: null });
+        set({ isLoading: false, streamingMessageId: null, statusMessage: null });
         get().checkAndSuggestProjectContext();
         schedulePersist();
       } catch (error) {
@@ -1366,6 +1418,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
     // 에러 설정
     setError: (error: string | null): void => {
       set({ error });
+    },
+
+    setStatusMessage: (message: string | null): void => {
+      set({ statusMessage: message });
     },
 
     setTranslatorPersona: (persona: string): void => {

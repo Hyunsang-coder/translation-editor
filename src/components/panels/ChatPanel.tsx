@@ -22,6 +22,7 @@ export function ChatPanel(): JSX.Element {
   const { sidebarCollapsed, toggleSidebar, togglePanelSwap, isPanelsSwapped } = useUIStore();
 
   const { currentSession, sendMessage, isLoading } = useChatStore();
+  const statusMessage = useChatStore((s) => s.statusMessage); // [복구] 상태 메시지 구독 (리렌더링 트리거용)
   const chatSessions = useChatStore((s) => s.sessions); // Hoisted selector
   const isSummarizing = useChatStore((s) => s.isSummarizing);
   const summarySuggestionOpen = useChatStore((s) => s.summarySuggestionOpen);
@@ -100,11 +101,14 @@ export function ChatPanel(): JSX.Element {
 
   const streamingBubbleExists = !!streamingMessage;
 
+  // statusMessage를 의존성에 추가하여 상태 변경 시 스켈레톤 텍스트가 업데이트되도록 함
   const renderAssistantSkeleton = useCallback((toolsInProgress?: string[]): JSX.Element => {
-    const hasTools = toolsInProgress && toolsInProgress.length > 0;
-    let statusText = '답변 생성 중...';
+    // 1. Store의 상태 메시지를 최우선으로 사용
+    const statusMessage = useChatStore.getState().statusMessage;
+    let statusText = statusMessage;
 
-    if (hasTools) {
+    // 2. Store 상태가 없는데(null) 도구 호출 정보가 남아있다면 추론 (하위 호환 및 엣지 케이스)
+    if (!statusText && toolsInProgress && toolsInProgress.length > 0) {
       const t = toolsInProgress[0];
       const name = 
           (t === 'web_search' || t === 'web_search_preview') ? '웹 검색'
@@ -115,6 +119,11 @@ export function ChatPanel(): JSX.Element {
         : t === 'suggest_project_context' ? '프로젝트 맥락 확인'
         : t;
       statusText = `${name} 진행 중...`;
+    }
+
+    // 3. 기본값
+    if (!statusText) {
+      statusText = '답변 생성 중...';
     }
 
     return (
@@ -130,30 +139,7 @@ export function ChatPanel(): JSX.Element {
         </span>
       </div>
     );
-  }, []);
-
-  const renderTypingIndicator = useCallback((opts?: { label?: string }): JSX.Element => {
-    const label = opts?.label ?? '응답 생성 중...';
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
-            style={{ animationDelay: '0ms' }}
-          />
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
-            style={{ animationDelay: '120ms' }}
-          />
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full bg-editor-muted animate-bounce"
-            style={{ animationDelay: '240ms' }}
-          />
-        </div>
-        <span className="text-sm text-editor-muted">{label}</span>
-      </div>
-    );
-  }, []);
+  }, []); // 의존성 배열에서 statusMessage 제거 (getState() 사용하므로 리렌더링만 트리거되면 됨)
 
   const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
     const tools = toolNames.filter(Boolean);
@@ -735,9 +721,7 @@ export function ChatPanel(): JSX.Element {
                           streamingMessageId === message.id &&
                           message.content.trim().length === 0 ? (
                           <div className="text-sm leading-relaxed">
-                            {showStreamingSkeleton 
-                              ? renderAssistantSkeleton(message.metadata?.toolCallsInProgress) 
-                              : renderTypingIndicator()}
+                            {showStreamingSkeleton && renderAssistantSkeleton(message.metadata?.toolCallsInProgress)}
                           </div>
                         ) : (
                           <div className="text-sm leading-relaxed chat-markdown">
@@ -874,7 +858,7 @@ export function ChatPanel(): JSX.Element {
 
             {isLoading && (!streamingMessageId || !streamingBubbleExists) && (
               <div className="chat-message chat-message-ai">
-                {showStreamingSkeleton ? renderAssistantSkeleton() : renderTypingIndicator({ label: '응답을 준비 중...' })}
+                {showStreamingSkeleton && renderAssistantSkeleton()}
               </div>
             )}
             <div ref={messagesEndRef} />

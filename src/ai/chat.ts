@@ -113,6 +113,8 @@ export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
   onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: any; status?: 'success' | 'error' }) => void;
+  /** 모델 실행(생각) 시작 시 호출 */
+  onModelRun?: (step: number) => void;
 }
 
 function getToolCallId(call: ToolCall): string {
@@ -211,6 +213,7 @@ async function runToolCallingLoop(params: {
   const loopMessages: BaseMessage[] = [...params.messages];
 
   for (let step = 0; step < maxSteps; step++) {
+    params.cb?.onModelRun?.(step);
     const ai = await (modelWithTools as any).invoke(loopMessages);
     loopMessages.push(ai);
 
