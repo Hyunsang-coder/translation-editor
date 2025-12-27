@@ -14,6 +14,19 @@ import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 
 /**
+ * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
+ * 예: citeturn0search2turn0search3 (Perplexity/Brave Search 등에서 발생)
+ */
+function cleanCitationArtifacts(content: string): string {
+  if (!content) return '';
+  return content
+    // 1. "cite" 또는 "turnXsearchY" 패턴과 주변의 PUA(Private Use Area) 문자 제거
+    .replace(/([\uE000-\uF8FF]*(?:cite|turn\d+search\d+)[\uE000-\uF8FF]*)+/g, '')
+    // 2. 남은 PUA 문자 제거 (안전장치)
+    .replace(/[\uE000-\uF8FF]/g, '');
+}
+
+/**
  * AI 채팅 패널 컴포넌트
  * 멀티 세션 지원 채팅창
  */
@@ -731,11 +744,11 @@ export function ChatPanel(): JSX.Element {
                               urlTransform={defaultUrlTransform}
                               components={{
                                 a: ({ node: _node, ...props }) => (
-                                  <a {...props} target="_blank" rel="noreferrer noopener" className="underline" />
+                                  <a {...props} target="_blank" rel="noreferrer noopener" className="underline break-all text-primary-500 hover:text-primary-600" />
                                 ),
                               }}
                             >
-                              {message.content}
+                              {cleanCitationArtifacts(message.content)}
                             </ReactMarkdown>
                           </div>
                         )}
@@ -758,7 +771,7 @@ export function ChatPanel(): JSX.Element {
                           className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-editor-text hover:bg-editor-border/60"
                           onClick={() => {
                             setEditingMessageId(message.id);
-                            setEditingDraft(message.content);
+                            setEditingDraft(cleanCitationArtifacts(message.content));
                           }}
                           title="Edit (이후 대화는 삭제됩니다)"
                         >

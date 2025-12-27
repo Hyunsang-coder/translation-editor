@@ -155,6 +155,9 @@
   }
 
   /* Chat Markdown */
+  .chat-markdown {
+    @apply break-words max-w-full;
+  }
   .chat-markdown p {
     @apply my-2;
   }
@@ -169,6 +172,28 @@
   }
   .chat-markdown blockquote {
     @apply border-l-2 border-editor-border pl-3 my-2 text-editor-muted;
+  }
+  .chat-markdown pre {
+    @apply bg-editor-surface p-3 rounded-md overflow-x-auto max-w-full my-2 border border-editor-border;
+  }
+  .chat-markdown code {
+    @apply bg-editor-surface px-1.5 py-0.5 rounded text-xs font-mono break-all;
+  }
+  .chat-markdown pre code {
+    @apply bg-transparent p-0 text-sm break-normal;
+  }
+  .chat-markdown img {
+    @apply max-w-full h-auto rounded my-2 border border-editor-border;
+  }
+  .chat-markdown table {
+    @apply block overflow-x-auto max-w-full my-2 border-collapse;
+  }
+  .chat-markdown th,
+  .chat-markdown td {
+    @apply border border-editor-border px-3 py-1.5 text-sm;
+  }
+  .chat-markdown th {
+    @apply bg-editor-surface font-semibold;
   }
 }
 
