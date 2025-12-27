@@ -1,6 +1,6 @@
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 
-export type AiProvider = 'openai' | 'anthropic' | 'mock';
+export type AiProvider = 'openai' | 'anthropic' | 'google' | 'mock';
 
 export const MODEL_PRESETS = {
   openai: [
@@ -11,6 +11,13 @@ export const MODEL_PRESETS = {
   anthropic: [
     { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet', description: '균형 잡힌 고성능 모델' },
     { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', description: '매우 빠른 응답 속도' },
+    { value: 'claude-4-5-sonnet', label: 'Claude 4.5 Sonnet', description: '차세대 고성능 모델' },
+    { value: 'claude-4-5-haiku', label: 'Claude 4.5 Haiku', description: '차세대 초고속 모델' },
+  ],
+  google: [
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: '빠른 속도와 효율성을 갖춘 최신 Gemini 모델' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: '비용 효율적인 경량화 Gemini 모델' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: '복잡한 작업에 최적화된 고성능 Gemini 모델' },
   ],
 } as const;
 
@@ -24,6 +31,7 @@ export interface AiConfig {
   temperature?: number;
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  googleApiKey?: string;
   maxRecentMessages: number;
   judgeModel: string;
 }
@@ -63,8 +71,10 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   // 3. API Key 우선순위: Store의 사용자 입력 키 > 환경 변수
   const envOpenaiKey = getEnvString('VITE_OPENAI_API_KEY');
   const envAnthropicKey = getEnvString('VITE_ANTHROPIC_API_KEY');
+  const envGoogleKey = getEnvString('VITE_GOOGLE_API_KEY');
   const openaiApiKey = store.openaiApiKey || envOpenaiKey;
   const anthropicApiKey = store.anthropicApiKey || envAnthropicKey;
+  const googleApiKey = store.googleApiKey || envGoogleKey;
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 
@@ -75,6 +85,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
+    ...(googleApiKey ? { googleApiKey } : {}),
     maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 12))),
     judgeModel:
       getEnvString('VITE_AI_JUDGE_MODEL') ??

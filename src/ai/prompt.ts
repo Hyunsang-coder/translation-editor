@@ -320,22 +320,21 @@ export async function buildLangChainMessages(
   const history = mapRecentMessagesToHistory(ctx.recentMessages);
 
   // 프롬프트 템플릿 구성
-  const prompt = systemContext
-    ? ChatPromptTemplate.fromMessages([
-      ['system', '{systemPrompt}'],
-      ['system', '{systemContext}'],
-      new MessagesPlaceholder('history'),
-      ['human', '{input}'],
-    ])
-    : ChatPromptTemplate.fromMessages([
-      ['system', '{systemPrompt}'],
-      new MessagesPlaceholder('history'),
-      ['human', '{input}'],
-    ]);
+  // Google Gemini 등 일부 모델은 System Message가 맨 앞에 하나만 있어야 하거나, 
+  // System Message가 아예 지원되지 않는 경우(Human으로 변환 등)가 있을 수 있음.
+  // LangChain은 이를 어느 정도 추상화하지만, 안전을 위해 System Message를 하나로 합치는 것이 좋음.
+  const fullSystemPrompt = systemContext 
+    ? `${systemPrompt}\n\n[Context]\n${systemContext}`
+    : systemPrompt;
+
+  const prompt = ChatPromptTemplate.fromMessages([
+    ['system', '{fullSystemPrompt}'],
+    new MessagesPlaceholder('history'),
+    ['human', '{input}'],
+  ]);
 
   return await prompt.formatMessages({
-    systemPrompt,
-    ...(systemContext ? { systemContext } : {}),
+    fullSystemPrompt,
     history,
     input: ctx.userMessage,
   });

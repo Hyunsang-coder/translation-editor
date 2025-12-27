@@ -16,10 +16,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const { 
     provider, 
     openaiApiKey,
+    anthropicApiKey,
+    googleApiKey,
     setProvider, 
     setTranslationModel, 
     setChatModel,
     setOpenaiApiKey,
+    setAnthropicApiKey,
+    setGoogleApiKey,
   } = useAiConfigStore();
 
   // 모달 외부 클릭 시 닫기
@@ -83,25 +87,22 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <div className="space-y-2">
                     <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">Provider</label>
                     <div className="flex items-center gap-4">
-                        {(['openai', 'anthropic'] as AiProvider[]).map((p) => {
-                            const isDisabled = p === 'anthropic';
+                        {(['openai', 'anthropic', 'google'] as AiProvider[]).map((p) => {
                             return (
                                 <label 
                                     key={p} 
-                                    className={`flex items-center gap-2 ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer group'}`}
+                                    className="flex items-center gap-2 cursor-pointer group"
                                 >
                                     <input 
                                         type="radio" 
                                         name="provider" 
                                         value={p} 
                                         checked={provider === p}
-                                        onChange={() => !isDisabled && handleProviderChange(p)}
-                                        disabled={isDisabled}
-                                        className="accent-primary-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
+                                        onChange={() => handleProviderChange(p)}
+                                        className="accent-primary-500 w-4 h-4 cursor-pointer"
                                     />
                                     <span className={`text-sm font-medium transition-colors ${provider === p ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
-                                        {p === 'openai' ? 'OpenAI' : 'Anthropic'}
-                                        {isDisabled && <span className="ml-1 text-xs text-editor-muted">(Coming soon)</span>}
+                                        {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Google'}
                                     </span>
                                 </label>
                             );
@@ -145,19 +146,58 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                 </div>
 
-                {/* Anthropic API Key (Disabled) */}
-                <div className="space-y-1.5 opacity-50">
+                {/* Anthropic API Key */}
+                <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-editor-text">Anthropic API Key</label>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-editor-border text-editor-muted">Coming soon</span>
+                        {anthropicApiKey && (
+                            <button
+                                onClick={() => setAnthropicApiKey(undefined)}
+                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                Clear
+                            </button>
+                        )}
                     </div>
-                    <input
-                        type="password"
-                        disabled
-                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-muted cursor-not-allowed"
-                        placeholder="Anthropic support will be available soon"
-                        value=""
-                    />
+                    <div className="flex flex-col gap-1.5">
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={hasEnvKey('VITE_ANTHROPIC_API_KEY') ? 'Using environment variable' : 'Enter your Anthropic API key'}
+                            value={anthropicApiKey || ''}
+                            onChange={(e) => setAnthropicApiKey(e.target.value)}
+                        />
+                        {!anthropicApiKey && hasEnvKey('VITE_ANTHROPIC_API_KEY') && (
+                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Google API Key */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-editor-text">Google API Key</label>
+                        {googleApiKey && (
+                            <button
+                                onClick={() => setGoogleApiKey(undefined)}
+                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={hasEnvKey('VITE_GOOGLE_API_KEY') ? 'Using environment variable' : 'Enter your Google API key'}
+                            value={googleApiKey || ''}
+                            onChange={(e) => setGoogleApiKey(e.target.value)}
+                        />
+                        {!googleApiKey && hasEnvKey('VITE_GOOGLE_API_KEY') && (
+                            <p className="text-xs text-editor-muted">Using key from environment variable</p>
+                        )}
+                    </div>
                 </div>
             </section>
 

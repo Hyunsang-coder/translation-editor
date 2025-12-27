@@ -21,9 +21,9 @@ function resolveTargetDocumentText(): string {
 // - 기본 호출({})은 "짧으면 전체, 길면 truncate" (auto)
 // - query는 문서가 아주 길 때만 주변 발췌에 사용합니다.
 const DocumentToolArgsSchema = z.object({
-  query: z.string().nullish().describe('문서가 매우 길 때, 이 구절 주변만 발췌하고 싶으면 사용'),
-  maxChars: z.number().int().min(1000).max(20000).nullish().describe('문서가 길 때 반환할 최대 문자 수 (기본 8000)'),
-  aroundChars: z.number().int().min(200).max(4000).nullish().describe('query 주변 발췌 범위(문자) (기본 900)'),
+  query: z.string().optional().describe('문서가 매우 길 때, 이 구절 주변만 발췌하고 싶으면 사용'),
+  maxChars: z.number().int().min(1000).max(20000).optional().describe('문서가 길 때 반환할 최대 문자 수 (기본 8000)'),
+  aroundChars: z.number().int().min(200).max(4000).optional().describe('query 주변 발췌 범위(문자) (기본 900)'),
 });
 
 type DocumentToolArgs = z.infer<typeof DocumentToolArgsSchema>;

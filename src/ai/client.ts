@@ -1,5 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
 
@@ -36,6 +37,17 @@ export function createChatModel(
     }
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
+      model,
+      ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
+    });
+  }
+
+  if (cfg.provider === 'google') {
+    if (!cfg.googleApiKey) {
+      throw new Error('Google API key is missing. Please set VITE_GOOGLE_API_KEY environment variable or enter it in App Settings.');
+    }
+    return new ChatGoogleGenerativeAI({
+      apiKey: cfg.googleApiKey,
       model,
       ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
     });

@@ -468,9 +468,12 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   const bindTools = [...toolSpecs, ...openAiBuiltInTools];
 
   const messagesWithGuide: BaseMessage[] = [
-    // systemPrompt 바로 다음에 가이드를 넣어 tool 사용 원칙을 고정
-    messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
+    // systemPrompt에 가이드를 병합하여 하나의 SystemMessage만 유지
+    new SystemMessage([
+      (messages[0] as SystemMessage).content,
+      '',
+      buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }).content,
+    ].join('\n')),
     ...messages.slice(1),
   ];
   const { messages: finalMessages, usedImages } = await maybeReplaceLastHumanMessageWithImages({
@@ -574,8 +577,12 @@ export async function streamAssistantReply(
   const bindTools = [...toolSpecs, ...openAiBuiltInTools];
 
   const messagesWithGuide: BaseMessage[] = [
-    messages[0] ?? new SystemMessage(''),
-    buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
+    // systemPrompt에 가이드를 병합하여 하나의 SystemMessage만 유지
+    new SystemMessage([
+      (messages[0] as SystemMessage).content,
+      '',
+      buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }).content,
+    ].join('\n')),
     ...messages.slice(1),
   ];
   const { messages: finalMessages, usedImages } = await maybeReplaceLastHumanMessageWithImages({
