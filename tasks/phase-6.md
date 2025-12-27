@@ -9,7 +9,7 @@
 - [x] **사이드바 하단: App Settings 옵션 추가**
   - [x] **API Key 입력 UI** ✅
     - 완료 조건: OpenAI/Anthropic 등 Provider별 Key 입력/저장/마스킹(표시 정책) 동작
-    - 구현: AppSettingsModal에 password 타입 입력 필드, Clear 버튼, localStorage 저장
+    - 구현: AppSettingsModal에 password 타입 입력 필드, Clear 버튼, OS 키체인 저장 (localStorage 미사용)
   - [x] **모델 선택 UI** ✅
     - 완료 조건: Provider별 모델 프리셋/커스텀 입력 지원, 실제 호출에 반영
     - 구현: Provider별 프리셋 드롭다운, 커스텀 입력 모드, getAiConfig()에서 실제 사용
@@ -37,5 +37,4 @@
   - 구현: ChatPanel에서 activeTab 상태에 따라 조건부 스타일 적용
     - Settings 탭: `activeTab === 'settings'`일 때 활성화
     - Chat 탭: `activeTab === 'chat' && currentSession?.id === session.id`일 때 활성화
-
 

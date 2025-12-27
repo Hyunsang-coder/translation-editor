@@ -257,16 +257,16 @@ Why:
 - 환경 변수와 사용자 입력 키의 우선순위를 명확히 해야 합니다.
 
 How:
-- Zustand persist 미들웨어로 localStorage에 API Key 저장
-- 우선순위: 사용자 입력 키 > 환경 변수
-- 추후 Tauri secure storage 플러그인으로 마이그레이션 가능하도록 설계
+- Tauri 백엔드에서 OS 키체인/키링을 사용해 API Key 저장
+- 프론트는 secure store 명령을 통해 저장/조회, localStorage에는 저장하지 않음
+- 앱 시작 시 키체인에서 로드하여 메모리에 반영
 
 What:
-- **저장 위치**: localStorage (키: 'ite-ai-config')
-- **우선순위**: Store의 사용자 입력 키 > 환경 변수(`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`)
-- **보안**: 현재는 평문 저장 (Tauri 앱이므로 브라우저보다는 안전하지만, 민감 정보는 평문 저장임을 인지)
+- **저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ai:openai|anthropic|google|brave`)
+- **우선순위**: 키체인 저장값만 사용 (환경 변수 폴백 없음)
+- **보안**: localStorage/DB에 저장하지 않음. 키는 OS 보안 저장소에만 존재
 - **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능
-- **환경 변수 폴백**: 사용자 입력 키가 없으면 환경 변수 사용
+- **비고**: Tauri 런타임이 아닌 경우 키는 메모리에서만 유지
 
 💡 기술적 체크포인트
 Performance: TipTap 두 개(Source/Target) 동시 렌더링 시 60fps 근접 유지 확인.
