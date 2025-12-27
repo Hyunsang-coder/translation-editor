@@ -5,7 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
  * 상단 툴바 컴포넌트
  */
 export function Toolbar(): JSX.Element {
-  const { focusMode, toggleFocusMode, theme, setTheme, toggleProjectSidebar } = useUIStore();
+  const { focusMode, toggleFocusMode, theme, setTheme, toggleSidebar } = useUIStore();
   const { project } = useProjectStore();
 
   const handleThemeToggle = (): void => {
@@ -24,12 +24,12 @@ export function Toolbar(): JSX.Element {
 
       {/* 툴바 액션 */}
       <div className="flex items-center gap-2">
-        {/* Project Sidebar 토글 */}
+        {/* Chat/Settings Sidebar 토글 */}
         <button
           type="button"
-          onClick={toggleProjectSidebar}
+          onClick={toggleSidebar}
           className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title="프로젝트 사이드바 토글"
+          title="채팅/설정 패널 토글"
         >
           📁
         </button>
@@ -63,4 +63,3 @@ export function Toolbar(): JSX.Element {
     </header>
   );
 }
-

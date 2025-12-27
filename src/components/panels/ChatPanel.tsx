@@ -200,7 +200,7 @@ export function ChatPanel(): JSX.Element {
     if (!project?.id) return;
     if (isHydrating) return; // 로드 중에는 자동 생성 대기 (데이터 유실 방지)
     if (chatSessions.length > 0) return;
-    createSession('Chat 1');
+    createSession('Chat');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, isHydrating, chatSessions.length]);
 
