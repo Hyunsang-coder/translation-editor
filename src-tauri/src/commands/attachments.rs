@@ -97,6 +97,54 @@ pub struct ReadFileBytesArgs {
     pub path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewAttachmentArgs {
+    pub path: String,
+}
+
+/// 파일을 DB에 저장하지 않고 "미리보기 DTO"로만 반환합니다.
+/// - 채팅 컴포저 전용 첨부(일회성)에서 사용합니다.
+/// - 프로젝트(Settings) 첨부 목록과 섞이지 않도록 DB를 건드리지 않습니다.
+#[tauri::command]
+pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<AttachmentDto> {
+    let path = Path::new(&args.path);
+    if !path.exists() {
+        return Err(CommandError {
+            code: "FILE_NOT_FOUND".to_string(),
+            message: format!("File not found: {}", args.path),
+            details: None,
+        });
+    }
+
+    let filename = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let extension = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    let file_size = fs::metadata(path).map(|m| m.len() as i64).ok();
+    let extracted_text = extract_file_text(path, &extension).ok();
+
+    let now = chrono::Utc::now().timestamp_millis();
+    Ok(AttachmentDto {
+        id: Uuid::new_v4().to_string(),
+        filename,
+        file_type: extension,
+        file_size,
+        extracted_text,
+        file_path: Some(args.path),
+        created_at: now,
+        updated_at: now,
+    })
+}
+
 /// 로컬 파일을 바이트로 읽습니다.
 /// - 이미지 멀티모달(vision) 입력을 위해 프론트에서 base64로 변환할 때 사용합니다.
 /// - 파일이 사라졌거나 접근 불가하면 에러를 반환합니다.

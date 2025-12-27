@@ -21,6 +21,7 @@ import {
   deleteAttachment as deleteAttachmentApi,
   listAttachments,
   type AttachmentDto,
+  previewAttachment,
 } from '@/tauri/attachments';
 import {
   createGhostMaskSession,
@@ -130,6 +131,8 @@ interface ChatState {
   loadedProjectId: string | null;
   /** 첨부 파일 목록 (4.2) */
   attachments: AttachmentDto[];
+  /** 채팅 컴포저 전용 첨부(일회성, 비영속) */
+  composerAttachments: AttachmentDto[];
 }
 
 interface ChatActions {
@@ -190,6 +193,10 @@ interface ChatActions {
   attachFile: (path: string) => Promise<void>;
   deleteAttachment: (id: string) => Promise<void>;
   loadAttachments: () => Promise<void>;
+  // 채팅 컴포저 전용 첨부(일회성)
+  addComposerAttachment: (path: string) => Promise<void>;
+  removeComposerAttachment: (id: string) => void;
+  clearComposerAttachments: () => void;
 
   // Persistence (project-scoped)
   hydrateForProject: (projectId: string | null) => Promise<void>;
@@ -285,6 +292,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translationContextSessionId: null,
     loadedProjectId: null,
     attachments: [],
+    composerAttachments: [],
 
     hydrateForProject: async (projectId: string | null): Promise<void> => {
       // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
@@ -313,6 +321,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           currentSession: null,
           isHydrating: false,
           loadedProjectId: null,
+          composerAttachments: [],
         });
         return;
       }
@@ -343,6 +352,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             ? Object.fromEntries(sessionsRes.slice(0, MAX_CHAT_SESSIONS).map((s) => [s.id, 0]))
             : {},
           attachments: atts,
+          composerAttachments: [],
         };
 
         if (settingsRes) {
@@ -673,12 +683,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             projectContext,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
-            // 첨부 파일 텍스트 주입
-            attachments: get().attachments
-              .filter(a => a.extractedText)
-              .map(a => ({ filename: a.filename, text: a.extractedText! })),
-            // 첨부 이미지(멀티모달)
-            imageAttachments: get().attachments
+            // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
+            attachments: get().composerAttachments
+              .filter((a) => a.extractedText)
+              .map((a) => ({ filename: a.filename, text: a.extractedText! })),
+            imageAttachments: get().composerAttachments
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled,
@@ -734,6 +743,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
             },
           },
         );
+        // 성공적으로 응답을 받았으면, 컴포저 첨부는 일회성이므로 초기화
+        set({ composerAttachments: [] });
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
@@ -1106,12 +1117,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             ...(glossaryInjected ? { glossaryInjected } : {}),
             projectContext,
             requestType: 'question',
-            // 첨부 파일 텍스트 주입
-            attachments: get().attachments
-              .filter(a => a.extractedText)
-              .map(a => ({ filename: a.filename, text: a.extractedText! })),
-            // 첨부 이미지(멀티모달)
-            imageAttachments: get().attachments
+            // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
+            attachments: get().composerAttachments
+              .filter((a) => a.extractedText)
+              .map((a) => ({ filename: a.filename, text: a.extractedText! })),
+            imageAttachments: get().composerAttachments
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled: get().webSearchEnabled,
@@ -1164,6 +1174,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
             },
           },
         );
+        // 성공적으로 응답을 받았으면, 컴포저 첨부는 일회성이므로 초기화
+        set({ composerAttachments: [] });
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
@@ -1365,6 +1377,36 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: e instanceof Error ? e.message : '첨부 파일 삭제 실패',
         });
       }
+    },
+
+    addComposerAttachment: async (path: string): Promise<void> => {
+      // 채팅 컴포저 첨부는 프로젝트(Settings) 첨부와 분리: DB에 저장하지 않고, 모델 호출 payload에만 사용
+      if (!get().loadedProjectId) return;
+
+      set({ isLoading: true });
+      try {
+        const tmp = await previewAttachment(path);
+
+        set((state) => ({
+          composerAttachments: [...state.composerAttachments, tmp],
+          isLoading: false,
+        }));
+      } catch (e) {
+        set({
+          isLoading: false,
+          error: e instanceof Error ? e.message : '첨부 파일 추가 실패',
+        });
+      }
+    },
+
+    removeComposerAttachment: (id: string): void => {
+      set((state) => ({
+        composerAttachments: state.composerAttachments.filter((a) => a.id !== id),
+      }));
+    },
+
+    clearComposerAttachments: (): void => {
+      set({ composerAttachments: [] });
     },
 
     loadAttachments: async (): Promise<void> => {

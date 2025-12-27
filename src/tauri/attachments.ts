@@ -23,6 +23,10 @@ export async function deleteAttachment(id: string): Promise<void> {
     return await invoke<void>('delete_attachment', { id });
 }
 
+export async function previewAttachment(path: string): Promise<AttachmentDto> {
+    return await invoke<AttachmentDto>('preview_attachment', { args: { path } });
+}
+
 export async function readFileBytes(path: string): Promise<number[]> {
     return await invoke<number[]>('read_file_bytes', { args: { path } });
 }

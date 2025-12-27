@@ -180,6 +180,7 @@ pub fn run() {
             commands::attachments::attach_file,
             commands::attachments::list_attachments,
             commands::attachments::delete_attachment,
+            commands::attachments::preview_attachment,
             commands::attachments::read_file_bytes,
             commands::brave_search::brave_search,
         ])

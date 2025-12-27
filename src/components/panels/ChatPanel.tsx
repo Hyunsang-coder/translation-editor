@@ -57,6 +57,9 @@ export function ChatPanel(): JSX.Element {
   const attachments = useChatStore((s) => s.attachments);
   const attachFile = useChatStore((s) => s.attachFile);
   const deleteAttachment = useChatStore((s) => s.deleteAttachment);
+  const composerAttachments = useChatStore((s) => s.composerAttachments);
+  const addComposerAttachment = useChatStore((s) => s.addComposerAttachment);
+  const removeComposerAttachment = useChatStore((s) => s.removeComposerAttachment);
   const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
   const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
@@ -837,7 +840,7 @@ export function ChatPanel(): JSX.Element {
                             if (!isTauriRuntime()) return;
                             const path = await pickChatAttachmentFile();
                             if (path) {
-                              await attachFile(path);
+                              await addComposerAttachment(path);
                             }
                           })();
                         }}
@@ -874,6 +877,29 @@ export function ChatPanel(): JSX.Element {
                   </button>
                 </div>
               </div>
+
+              {composerAttachments.length > 0 && (
+                <div className="px-3 pb-3 -mt-2 flex flex-wrap gap-2">
+                  {composerAttachments.map((a) => (
+                    <div
+                      key={a.id}
+                      className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[12px] text-editor-text max-w-full"
+                      title={a.filename}
+                    >
+                      <span className="truncate max-w-[220px]">{a.filename}</span>
+                      <button
+                        type="button"
+                        className="text-editor-muted hover:text-red-600"
+                        aria-label="첨부 제거"
+                        onClick={() => removeComposerAttachment(a.id)}
+                        disabled={isLoading}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </form>
         </>

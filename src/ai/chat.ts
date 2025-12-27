@@ -343,16 +343,17 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
   messages: BaseMessage[];
   userText: string;
   imageAttachments?: { filename: string; fileType: string; filePath: string }[];
-}): Promise<BaseMessage[]> {
+}): Promise<{ messages: BaseMessage[]; usedImages: boolean }> {
   const images = (params.imageAttachments ?? []).filter((x) => x && isImageExt(x.fileType) && !!x.filePath);
-  if (images.length === 0) return params.messages;
-  if (!isTauriRuntime()) return params.messages;
+  if (images.length === 0) return { messages: params.messages, usedImages: false };
+  if (!isTauriRuntime()) return { messages: params.messages, usedImages: false };
 
   const MAX_IMAGES = 3;
   const MAX_IMAGE_BYTES = 2_000_000; // 2MB
 
   const blocks: any[] = [{ type: 'text', text: params.userText }];
   const warnings: string[] = [];
+  let usedImages = false;
 
   for (const img of images.slice(0, MAX_IMAGES)) {
     try {
@@ -367,6 +368,7 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
         source_type: 'base64',
         data: bytesToBase64(bytes),
       });
+      usedImages = true;
     } catch {
       warnings.push(`- ${img.filename}: 파일을 읽을 수 없어 제외됨`);
     }
@@ -379,11 +381,22 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
     };
   }
 
+  if (!usedImages) {
+    return { messages: params.messages, usedImages: false };
+  }
+
   // buildLangChainMessages()가 만든 마지막 HumanMessage를 멀티모달 HumanMessage로 교체합니다.
   const next = [...params.messages];
   const lastIdx = next.length - 1;
   next[lastIdx] = new HumanMessage({ content: blocks });
-  return next;
+  return { messages: next, usedImages };
+}
+
+function replaceLastHumanMessageText(messages: BaseMessage[], nextText: string): BaseMessage[] {
+  const out = [...messages];
+  const lastIdx = out.length - 1;
+  out[lastIdx] = new HumanMessage(nextText);
+  return out;
 }
 
 /**
@@ -418,6 +431,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+      ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
       ...(targetDocument ? { targetDocument } : {}),
     },
@@ -445,18 +459,43 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
     ...messages.slice(1),
   ];
-  const finalMessages = await maybeReplaceLastHumanMessageWithImages({
+  const { messages: finalMessages, usedImages } = await maybeReplaceLastHumanMessageWithImages({
     messages: messagesWithGuide,
     userText: input.userMessage,
     ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
   });
 
-  const { finalText } = await runToolCallingLoop({
-    model,
-    tools: toolSpecs as any,
-    bindTools,
-    messages: finalMessages,
-  });
+  let finalText: string;
+  try {
+    ({ finalText } = await runToolCallingLoop({
+      model,
+      tools: toolSpecs as any,
+      bindTools,
+      messages: finalMessages,
+    }));
+  } catch (e) {
+    // 이미지 입력을 지원하지 않는 모델(OpenAI text-only 등)에서 400이 발생할 수 있어 폴백합니다.
+    if (usedImages) {
+      const fallback = replaceLastHumanMessageText(
+        messagesWithGuide,
+        [
+          input.userMessage,
+          '',
+          '[첨부 이미지 안내]',
+          '현재 선택된 모델/Provider에서 이미지 입력이 지원되지 않아, 이미지는 제외하고 진행합니다.',
+          '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
+        ].join('\n'),
+      );
+      ({ finalText } = await runToolCallingLoop({
+        model,
+        tools: toolSpecs as any,
+        bindTools,
+        messages: fallback,
+      }));
+    } else {
+      throw e;
+    }
+  }
 
   return finalText;
 }
@@ -498,6 +537,7 @@ export async function streamAssistantReply(
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+      ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
       ...(targetDocument ? { targetDocument } : {}),
     },
@@ -523,19 +563,45 @@ export async function streamAssistantReply(
     buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }),
     ...messages.slice(1),
   ];
-  const finalMessages = await maybeReplaceLastHumanMessageWithImages({
+  const { messages: finalMessages, usedImages } = await maybeReplaceLastHumanMessageWithImages({
     messages: messagesWithGuide,
     userText: input.userMessage,
     ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
   });
 
-  const { finalText, toolsUsed } = await runToolCallingLoop({
-    model,
-    tools: toolSpecs as any,
-    bindTools,
-    messages: finalMessages,
-    ...(cb ? { cb } : {}),
-  });
+  let finalText: string;
+  let toolsUsed: string[];
+  try {
+    ({ finalText, toolsUsed } = await runToolCallingLoop({
+      model,
+      tools: toolSpecs as any,
+      bindTools,
+      messages: finalMessages,
+      ...(cb ? { cb } : {}),
+    }));
+  } catch (e) {
+    if (usedImages) {
+      const fallback = replaceLastHumanMessageText(
+        messagesWithGuide,
+        [
+          input.userMessage,
+          '',
+          '[첨부 이미지 안내]',
+          '현재 선택된 모델/Provider에서 이미지 입력이 지원되지 않아, 이미지는 제외하고 진행합니다.',
+          '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
+        ].join('\n'),
+      );
+      ({ finalText, toolsUsed } = await runToolCallingLoop({
+        model,
+        tools: toolSpecs as any,
+        bindTools,
+        messages: fallback,
+        ...(cb ? { cb } : {}),
+      }));
+    } else {
+      throw e;
+    }
+  }
 
   cb?.onToolsUsed?.(toolsUsed);
 
