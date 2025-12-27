@@ -51,11 +51,10 @@ export function ChatPanel(): JSX.Element {
   const chatPresets = MODEL_PRESETS[providerKey];
 
   useEffect(() => {
-    if (chatPresets.length === 0) return;
     if (!chatPresets.some((p) => p.value === chatModel)) {
       setChatModel(chatPresets[0].value);
     }
-  }, [chatModel, chatPresets, setChatModel]);
+  }, [chatModel, provider, setChatModel]);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
