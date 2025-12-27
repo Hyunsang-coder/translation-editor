@@ -84,12 +84,66 @@ export function ChatPanel(): JSX.Element {
   const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
     const tools = toolNames.filter(Boolean);
     if (tools.length === 0) return null;
-    const label = tools.length === 1 ? tools[0] : `${tools[0]} 외 ${tools.length - 1}개`;
+    const humanize = (t: string): string => {
+      switch (t) {
+        case 'web_search':
+        case 'web_search_preview':
+          return '웹검색';
+        case 'brave_search':
+          return '웹검색(Brave)';
+        case 'get_source_document':
+          return '원문 조회';
+        case 'get_target_document':
+          return '번역문 조회';
+        case 'suggest_translation_rule':
+          return '규칙 제안';
+        case 'suggest_project_context':
+          return '컨텍스트 제안';
+        default:
+          return t;
+      }
+    };
+
+    const label =
+      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
     return (
       <div className="mt-2">
         <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
           <span className="inline-block w-3 h-3 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
           <span className="truncate">툴 실행 중: {label}</span>
+        </div>
+      </div>
+    );
+  }, []);
+
+  const renderToolsUsedBadge = useCallback((toolNames: string[]): JSX.Element | null => {
+    const tools = toolNames.filter(Boolean);
+    if (tools.length === 0) return null;
+    const humanize = (t: string): string => {
+      switch (t) {
+        case 'web_search_preview':
+          return '웹검색(OpenAI)';
+        case 'brave_search':
+          return '웹검색(Brave)';
+        case 'get_source_document':
+          return '원문 조회';
+        case 'get_target_document':
+          return '번역문 조회';
+        case 'suggest_translation_rule':
+          return '규칙 제안';
+        case 'suggest_project_context':
+          return '컨텍스트 제안';
+        default:
+          return t;
+      }
+    };
+    const label =
+      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
+    return (
+      <div className="mt-2">
+        <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500" />
+          <span className="truncate">도구 사용됨: {label}</span>
         </div>
       </div>
     );
@@ -602,9 +656,11 @@ export function ChatPanel(): JSX.Element {
                           </div>
                         )}
                         {message.role === 'assistant' &&
-                          streamingMessageId === message.id &&
                           !!message.metadata?.toolCallsInProgress?.length &&
                           renderToolCallingBadge(message.metadata.toolCallsInProgress)}
+                        {message.role === 'assistant' &&
+                          !!message.metadata?.toolsUsed?.length &&
+                          renderToolsUsedBadge(message.metadata.toolsUsed)}
                       </>
                     )}
                   </div>

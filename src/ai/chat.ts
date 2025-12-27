@@ -10,6 +10,68 @@ import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
 import { v4 as uuidv4 } from 'uuid';
 
+function uniqueStrings(items: string[]): string[] {
+  const out: string[] = [];
+  for (const x of items) {
+    const t = (x ?? '').trim();
+    if (!t) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * OpenAI Responses API built-in tools(web_search_preview 등)은 function tool_calls 형태로 노출되지 않을 수 있어
+ * message content blocks / annotations를 기반으로 "사용 흔적"을 보수적으로 감지합니다.
+ */
+function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): string[] {
+  const hasWebSearchBound = Array.isArray(bindTools) && bindTools.some((t) => t && typeof t === 'object' && (t as any).type === 'web_search_preview');
+  if (!hasWebSearchBound) return [];
+
+  const a = ai as any;
+  const candidates: string[] = [];
+
+  // 1) Standard content blocks (LangChain v1)
+  const blocks = a?.contentBlocks ?? a?.content_blocks;
+  if (Array.isArray(blocks)) {
+    for (const b of blocks) {
+      const s = typeof b === 'string' ? b : JSON.stringify(b);
+      if (s.includes('web_search')) candidates.push('web_search_preview');
+      if (s.includes('url_citation')) candidates.push('web_search_preview');
+    }
+  }
+
+  // 2) Provider-native content (Responses API는 content가 block array인 경우가 많음)
+  const content = a?.content;
+  if (Array.isArray(content)) {
+    for (const c of content) {
+      if (c && typeof c === 'object') {
+        const type = String((c as any).type ?? '');
+        const annotations = (c as any).annotations;
+        if (type.includes('server_tool') || type.includes('tool_result') || type.includes('tool_call')) {
+          const s = JSON.stringify(c);
+          if (s.includes('web_search')) candidates.push('web_search_preview');
+        }
+        if (Array.isArray(annotations)) {
+          const hasCitation = annotations.some((ann: any) => String(ann?.type ?? '').includes('citation') || JSON.stringify(ann).includes('url_citation'));
+          if (hasCitation) candidates.push('web_search_preview');
+        }
+      }
+    }
+  }
+
+  // 3) additional_kwargs 등에도 provider별 metadata가 담길 수 있음
+  const extra = a?.additional_kwargs ?? a?.additionalKwargs ?? {};
+  try {
+    const s = JSON.stringify(extra);
+    if (s.includes('web_search') || s.includes('url_citation')) candidates.push('web_search_preview');
+  } catch {
+    // ignore
+  }
+
+  return uniqueStrings(candidates);
+}
+
 export interface GenerateReplyInput {
   project: ITEProject | null;
   contextBlocks: EditorBlock[];
@@ -143,6 +205,15 @@ async function runToolCallingLoop(params: {
     const ai = await (modelWithTools as any).invoke(loopMessages);
     loopMessages.push(ai);
 
+    // OpenAI built-in tools(web_search_preview 등)은 function tool_calls로 노출되지 않을 수 있어 별도 감지
+    const builtIns = detectOpenAiBuiltInToolsFromMessage(ai, bindTools);
+    for (const t of builtIns) {
+      if (!toolsUsed.includes(t)) toolsUsed.push(t);
+    }
+    if (builtIns.length > 0) {
+      console.info('[AI builtin_tools_used]', builtIns);
+    }
+
     const toolCalls: ToolCall[] = extractToolCalls(ai);
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
       const content = (ai as any)?.content;
@@ -160,7 +231,7 @@ async function runToolCallingLoop(params: {
       const toolCallId = getToolCallId(call);
       if (!toolsUsed.includes(call.name)) toolsUsed.push(call.name);
       // 문서 내용은 로그로 찍지 않음(보안/노이즈 방지). 도구명/인자만 로깅.
-      console.debug('[AI tool_call]', { name: call.name, args: call.args ?? {} });
+      console.info('[AI tool_call]', { name: call.name, args: call.args ?? {} });
       if (!tool) {
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         loopMessages.push(

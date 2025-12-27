@@ -511,15 +511,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (webQuery) {
         set({ isLoading: true, error: null });
 
+        const cfg = getAiConfig();
+        const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['brave_search'];
+
         const assistantId = addMessage({
           role: 'assistant',
           content: '',
-          metadata: { model: 'web_search', toolCallsInProgress: ['web_search'] },
+          metadata: { model: 'web_search', toolCallsInProgress: initialToolsInProgress, toolsUsed: [] },
         });
 
         try {
-          const cfg = getAiConfig();
           let text = '';
+          const toolsUsed: string[] = [];
 
           if (cfg.provider === 'openai') {
             // OpenAI 내장 web search (Responses API) 우선 사용
@@ -540,16 +543,21 @@ export const useChatStore = create<ChatStore>((set, get) => {
               ].join('\n'),
             );
             text = extractTextFromAiMessage(ai);
+            if (text.trim()) toolsUsed.push('web_search_preview');
           }
 
           // fallback: OpenAI가 아니거나, OpenAI 결과가 비어있으면 Brave Search
           if (!text.trim()) {
+            if (assistantId) {
+              updateMessage(assistantId, { metadata: { toolCallsInProgress: ['brave_search'] } });
+            }
             const out = await (braveSearchTool as any).invoke({ query: webQuery });
             text = typeof out === 'string' ? out : JSON.stringify(out);
+            toolsUsed.push('brave_search');
           }
 
           if (assistantId) {
-            updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [] } });
+            updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [], toolsUsed } });
           } else {
             addMessage({ role: 'assistant', content: text });
           }
