@@ -72,9 +72,8 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 
 ### AI Provider 및 API Key 관리
 - **App Settings API Key 입력**: 사용자가 직접 API Key 입력 가능 ✅
-- **localStorage 캐싱**: 입력한 API Key는 localStorage에 자동 저장되어 재사용 ✅
-- **우선순위**: 사용자 입력 키 > 환경 변수 (`VITE_OPENAI_API_KEY`) ✅
-- **환경 변수 폴백**: 사용자 입력 키가 없으면 환경 변수 사용 ✅
+- **보안 저장**: 입력한 API Key는 OS 키체인/키링에 안전하게 저장됨 ✅ (localStorage 저장 안 함)
+- **우선순위**: 사용자 입력 키(키체인)만 사용 ✅ (환경 변수 폴백 없음)
 
 ### 용어집 (Glossary)
 - **CSV/Excel 임포트**: 용어집 파일 업로드 및 프로젝트 연결 ✅
@@ -86,10 +85,8 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **채팅 세션 저장**: 프로젝트별 채팅 히스토리 영속화 ✅
 - **자동 저장**: Auto-save 지원 ✅
 
-### 제거된 기능 (참고)
 - ~~Monaco Editor~~ → TipTap으로 대체
 - ~~Diff Preview / Keep / Discard~~ → 사용자 직접 수정 방식으로 불필요
-- ~~Ghost Chips~~ → 기능 제거
 - ~~Range-based Tracking~~ → 불필요
 
 ---
@@ -401,8 +398,7 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 AI 환경 변수 설정은 `ENV.md` 를 참고하세요.
 
 ### API Key 우선순위
-1. **App Settings에서 입력한 키** (localStorage에 저장, 우선 사용)
-2. **환경 변수** (`VITE_OPENAI_API_KEY`, `VITE_ANTHROPIC_API_KEY`)
+1. **App Settings에서 입력한 키** (OS 키체인에 저장, 단독 사용)
 
-**참고**: App Settings에서 API Key를 입력하면 환경 변수보다 우선적으로 사용됩니다. Clear 버튼으로 저장된 키를 삭제하면 환경 변수로 폴백합니다.
+**참고**: 보안 강화를 위해 API Key는 OS 키체인에만 저장되며, 환경 변수(`VITE_...`)나 `localStorage`는 사용하지 않습니다. App Settings에서 Clear 버튼으로 저장된 키를 삭제할 수 있습니다.
 

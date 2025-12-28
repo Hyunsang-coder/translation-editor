@@ -231,7 +231,8 @@ What (Project Metadata UX):
 5. 특화 기능 명세 (Specialized Sub-systems)
 5.1 Ghost Chips (태그 보호)
 What:
-- 현재 코드에서는 Ghost Chips를 사용하지 않습니다. (제거됨)
+- 특정 특수 문자나 태그(예: <tag>, {var})가 번역 과정에서 손상되지 않도록 보호하기 위해 **Ghost Chips**를 사용합니다.
+- `chatStore.ts`와 `ghostMask.ts`를 통해 모델 호출 전 마스킹하고, 응답 후 복원하는 과정을 거칩니다.
 
 5.2 Smart Context Summarizer
 What:
@@ -263,7 +264,7 @@ How:
 
 What:
 - **저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ai:openai|anthropic|google|brave`)
-- **우선순위**: 키체인 저장값만 사용 (환경 변수 폴백 없음)
+- **우선순위**: 키체인 저장값만 사용 (환경 변수 또는 localStorage 폴백 없음)
 - **보안**: localStorage/DB에 저장하지 않음. 키는 OS 보안 저장소에만 존재
 - **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능
 - **비고**: Tauri 런타임이 아닌 경우 키는 메모리에서만 유지
