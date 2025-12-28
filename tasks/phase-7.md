@@ -5,14 +5,13 @@
 ## 진행 중 / 계획
 
 ### 7.1 MCP 연동 
-  - [ ] **외부 MCP 연동 진입점 (MVP)**
+  - [x] **외부 MCP 연동 진입점 (MVP)** ✅
     - 완료 조건: 설정 화면에서 MCP 연동(Atlassian 등) 관리 화면으로 진입 가능, 인증 키 입력 및 활성화 기능
     - 구현 방식: Tauri Shell (`npx`) 사용 (개발/검증 단계)
     - 제약 사항: 사용자 PC에 Node.js 설치 필요 (개발자/얼리어답터 타겟)
-    - 현재 상태: UI에 "Integrations" 섹션 placeholder 존재 (Coming soon)
     - 참고: 최종 배포 시 Sidecar 패턴으로 전환 예정 (Phase 7 참조)
 
-- [ ] **Atlassian MCP 연동 (MVP)**
+- [x] **Atlassian MCP 연동 (MVP)** ✅
   - 완료 조건: 
     - App Settings에서 Atlassian MCP 설정 UI 제공 (Email, API Token, Site URL 입력)
     - Tauri Shell을 통한 `npx @modelcontextprotocol/server-atlassian` 실행

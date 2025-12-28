@@ -29,6 +29,15 @@ export default defineConfig(({ command }) => {
     // 보안: 기본적으로 VITE_ 프리픽스만 클라이언트에 노출합니다.
     // (BRAVE_SEARCH_API 등 비밀키는 Rust(Tauri) 백엔드에서만 읽도록 설계)
     envPrefix: ['VITE_'],
+    
+    // Node.js 호환성을 위한 Polyfill
+    define: {
+      'process.env': {},
+      'process.platform': JSON.stringify(process.platform),
+      'process.version': JSON.stringify(process.version),
+      global: 'window',
+    },
+
     plugins: [
       react(),
       monacoPlugin({
@@ -50,6 +59,8 @@ export default defineConfig(({ command }) => {
       '@stores': path.resolve(__dirname, './src/stores'),
       '@types': path.resolve(__dirname, './src/types'),
       '@utils': path.resolve(__dirname, './src/utils'),
+      // Polyfill node:async_hooks for LangChain MCP Adapters
+      'node:async_hooks': path.resolve(__dirname, './src/mocks/async_hooks.js'),
     },
   },
 

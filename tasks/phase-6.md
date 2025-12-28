@@ -13,18 +13,6 @@
   - [x] **모델 선택 UI** ✅
     - 완료 조건: Provider별 모델 프리셋/커스텀 입력 지원, 실제 호출에 반영
     - 구현: Provider별 프리셋 드롭다운, 커스텀 입력 모드, getAiConfig()에서 실제 사용
-  - [ ] **외부 MCP 연동 진입점 (MVP)**
-    - 완료 조건: 설정 화면에서 MCP 연동(Atlassian 등) 관리 화면으로 진입 가능, 인증 키 입력 및 활성화 기능
-    - 구현 방식: Tauri Shell (`npx`) 사용 (개발/검증 단계)
-    - 제약 사항: 사용자 PC에 Node.js 설치 필요 (개발자/얼리어답터 타겟)
-    - 현재 상태: UI에 "Integrations" 섹션 placeholder 존재 (Coming soon)
-    - 참고: 최종 배포 시 Sidecar 패턴으로 전환 예정 (Phase 7 참조)
-  - [ ] **Tutorial / FAQ**
-    - 완료 조건: 앱 내에서 접근 가능한 간단 가이드/FAQ 화면(또는 링크)
-    - 현재 상태: UI에 "Help & Info" 섹션 placeholder 존재 (Coming soon)
-  - [ ] **Info**
-    - 완료 조건: 앱 버전/빌드 정보, 라이선스/크레딧 등 확인 가능
-    - 현재 상태: UI에 "Help & Info" 섹션에 버전 정보 placeholder 존재 (Coming soon)
 
 - [x] **Preview 모달 Diff 색상 대비 조정** ✅
   - **완료 조건**: 변경/추가/삭제가 다크/라이트 모두에서 명확히 구분됨
@@ -40,3 +28,11 @@
     - Settings 탭: `activeTab === 'settings'`일 때 활성화
     - Chat 탭: `activeTab === 'chat' && currentSession?.id === session.id`일 때 활성화
 
+
+### Low Priority
+  - [ ] **Tutorial / FAQ**
+    - 완료 조건: 앱 내에서 접근 가능한 간단 가이드/FAQ 화면(또는 링크)
+    - 현재 상태: UI에 "Help & Info" 섹션 placeholder 존재 (Coming soon)
+  - [ ] **Info**
+    - 완료 조건: 앱 버전/빌드 정보, 라이선스/크레딧 등 확인 가능
+    - 현재 상태: UI에 "Help & Info" 섹션에 버전 정보 placeholder 존재 (Coming soon)
