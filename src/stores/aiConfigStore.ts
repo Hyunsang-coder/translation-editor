@@ -44,13 +44,6 @@ const secureKeyLoaded: Record<SecureKeyId, boolean> = {
   brave: false,
 };
 
-function getProviderKey(provider: AiProvider): SecureKeyId | null {
-  if (provider === 'openai' || provider === 'anthropic' || provider === 'google') {
-    return provider;
-  }
-  return null;
-}
-
 async function persistSecureKey(kind: SecureKeyId, value: string | undefined): Promise<void> {
   try {
     if (value) {
@@ -100,17 +93,20 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         braveApiKey: undefined,
 
         loadSecureKeys: async () => {
-          const providerKey = getProviderKey(get().provider);
-          if (!providerKey || secureKeyLoaded[providerKey]) return;
-          try {
-            const value = await getSecureSecret(providerKey);
-            secureKeyLoaded[providerKey] = true;
-            if (!value) return;
-            if (providerKey === 'openai') set({ openaiApiKey: value });
-            if (providerKey === 'anthropic') set({ anthropicApiKey: value });
-            if (providerKey === 'google') set({ googleApiKey: value });
-          } catch (err) {
-            console.warn(`[aiConfigStore] Failed to load ${providerKey} API key:`, err);
+          const kinds: SecureKeyId[] = ['openai', 'anthropic', 'google', 'brave'];
+          for (const kind of kinds) {
+            if (secureKeyLoaded[kind]) continue;
+            try {
+              const value = await getSecureSecret(kind);
+              secureKeyLoaded[kind] = true;
+              if (!value) continue;
+              if (kind === 'openai') set({ openaiApiKey: value });
+              if (kind === 'anthropic') set({ anthropicApiKey: value });
+              if (kind === 'google') set({ googleApiKey: value });
+              if (kind === 'brave') set({ braveApiKey: value });
+            } catch (err) {
+              console.warn(`[aiConfigStore] Failed to load ${kind} API key:`, err);
+            }
           }
         },
 
