@@ -2,7 +2,7 @@
 //!
 //! .ite 파일은 SQLite DB 자체를 패키징한 파일로 취급합니다.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -10,6 +10,51 @@ use tauri::{State, AppHandle, Manager};
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+
+fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
+    let path = Path::new(path_str);
+    // 1. 존재 여부 확인 (import 시 필요, export 시에는 부모 디렉토리 확인이 필요할 수 있으나 여기서는 단순화)
+    // 단, export는 "파일 생성"이므로 파일이 없어도 되지만, 부모 디렉토리는 있어야 함.
+    // 여기서는 공통적으로 "입력된 경로 문자열"을 정규화하는 데 집중합니다.
+
+    // canonicalize는 파일이 존재해야 성공하므로, 
+    // export의 경우(파일 생성)에는 부모 디렉토리까지만 체크하거나, 
+    // 단순히 경로 상의 ../ 등을 해소하는 로직이 필요합니다.
+    
+    // 안전을 위해, 파일이 존재하면 canonicalize를 시도하고,
+    // 존재하지 않으면(새로 생성) 부모 디렉토리를 canonicalize하여 경로를 조합합니다.
+    
+    if path.exists() {
+        path.canonicalize().map_err(|e| CommandError {
+            code: "PATH_ERROR".to_string(),
+            message: format!("Invalid path: {}", e),
+            details: None,
+        })
+    } else {
+        // 파일이 없는 경우 (Export 등), 부모 디렉토리를 검증
+        if let Some(parent) = path.parent() {
+            if parent.exists() {
+                let canonical_parent = parent.canonicalize().map_err(|e| CommandError {
+                    code: "PATH_ERROR".to_string(),
+                    message: format!("Invalid parent path: {}", e),
+                    details: None,
+                })?;
+                // 파일명만 붙여서 반환
+                Ok(canonical_parent.join(path.file_name().unwrap_or_default()))
+            } else {
+                // 부모도 없으면 에러
+                 Err(CommandError {
+                    code: "PATH_ERROR".to_string(),
+                    message: "Parent directory does not exist".to_string(),
+                    details: None,
+                })
+            }
+        } else {
+            // 루트 경로 등이면 그냥 사용 (단, 상대경로 공격 위험은 남지만 OS 레벨에서 처리됨)
+             Ok(PathBuf::from(path_str))
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +93,8 @@ pub struct DeleteProjectArgs {
 /// 현재 DB를 .ite 파일로 내보내기
 #[tauri::command]
 pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> CommandResult<()> {
-    let out_path = PathBuf::from(args.path);
+    // Path validation (canonicalize)
+    let out_path = validate_path(&args.path)?;
 
     let db = db_state.0.lock().map_err(|e| CommandError {
         code: "LOCK_ERROR".to_string(),
@@ -90,7 +136,8 @@ pub fn delete_all_projects(db_state: State<DbState>) -> CommandResult<()> {
 /// 가져온 뒤, DB 안에 있는 projectId 리스트를 반환합니다.
 #[tauri::command]
 pub fn import_project_file(args: ImportDbArgs, db_state: State<DbState>) -> CommandResult<Vec<String>> {
-    let in_path = PathBuf::from(args.path);
+    // Path validation
+    let in_path = validate_path(&args.path)?;
 
     let mut db = db_state.0.lock().map_err(|e| CommandError {
         code: "LOCK_ERROR".to_string(),
@@ -112,7 +159,8 @@ pub fn import_project_file_safe(
     args: ImportDbArgs,
     db_state: State<DbState>,
 ) -> CommandResult<ImportProjectFileResult> {
-    let in_path = PathBuf::from(args.path);
+    // Path validation
+    let in_path = validate_path(&args.path)?;
 
     let backup_dir = app
         .path()
@@ -178,5 +226,3 @@ pub fn list_recent_projects(db_state: State<DbState>) -> CommandResult<Vec<Recen
         })
         .collect())
 }
-
-
