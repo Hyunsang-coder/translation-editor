@@ -7,12 +7,6 @@ interface AppSettingsModalProps {
   onClose: () => void;
 }
 
-// 환경 변수 확인 헬퍼 (Deprecated)
-function hasEnvKey(key: string): boolean {
-  const v = (import.meta as any).env?.[key] as string | undefined;
-  return typeof v === 'string' && v.trim().length > 0;
-}
-
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
   const { 
     provider, 
@@ -50,9 +44,23 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
-  // MCP 상태 구독
+  // MCP 상태 구독 및 초기 로드
   useEffect(() => {
-    const unsubscribe = mcpClientManager.subscribe(setMcpStatus);
+    // 1. 상태 구독
+    const unsubscribe = mcpClientManager.subscribe((status) => {
+        setMcpStatus(status);
+        // 연결된 상태라면 설정값을 UI에 반영 (복원)
+        if (status.isConnected && status.config) {
+            setAtlassianEmail(status.config.email);
+            setAtlassianToken(status.config.apiToken);
+            setAtlassianUrl(status.config.instanceUrl);
+        }
+    });
+
+    // 2. 저장된 설정 로드 및 자동 연결 시도 (앱 시작 시 한 번만 수행되도록 별도 처리 필요하지만, 
+    //    여기서는 모달 열릴 때마다 체크해도 무방 - 이미 연결되어 있으면 스킵됨)
+    mcpClientManager.loadAndConnectSavedServers();
+
     return unsubscribe;
   }, []);
 
@@ -85,6 +93,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
         apiToken: atlassianToken,
         instanceUrl: atlassianUrl
       });
+      setShowMcpConfig(false); // 연결 성공 시 폼 닫기
     } catch (error) {
       // 에러는 mcpStatus.error에 반영됨
     }
@@ -93,6 +102,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   // MCP 연결 해제 핸들러
   const handleDisconnectMcp = async () => {
     await mcpClientManager.disconnect();
+    // UI 입력 필드 초기화 (선택 사항)
+    // setAtlassianEmail('');
+    // setAtlassianToken('');
+    // setAtlassianUrl('');
   };
 
   return (
@@ -258,7 +271,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
-             {/* 3. Integrations */}
+             {/* 3. Integrations (MCP) */}
              <section className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🔌</span>

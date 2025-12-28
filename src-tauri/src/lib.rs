@@ -187,6 +187,9 @@ pub fn run() {
             commands::secure_store::set_secure_secret,
             commands::secure_store::get_secure_secret,
             commands::secure_store::delete_secure_secret,
+            commands::mcp::save_mcp_server,
+            commands::mcp::list_mcp_servers,
+            commands::mcp::delete_mcp_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -32,6 +32,17 @@ pub struct RecentProjectRow {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct McpServerRow {
+    pub id: String,
+    pub name: String,
+    pub server_type: String,
+    pub config_json: String,
+    pub is_enabled: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
 pub struct DbState(pub Mutex<Database>);
 
@@ -969,6 +980,64 @@ impl Database {
         self.conn.execute("DELETE FROM attachments WHERE id = ?1", [id])?;
         Ok(())
     }
+
+    /// MCP 서버 저장 (Insert or Update)
+    pub fn save_mcp_server(&self, server: &McpServerRow) -> Result<(), IteError> {
+        self.conn.execute(
+            "INSERT INTO mcp_servers (
+                id, name, server_type, config_json, is_enabled, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                server_type = excluded.server_type,
+                config_json = excluded.config_json,
+                is_enabled = excluded.is_enabled,
+                updated_at = excluded.updated_at",
+            (
+                &server.id,
+                &server.name,
+                &server.server_type,
+                &server.config_json,
+                if server.is_enabled { 1 } else { 0 },
+                server.created_at,
+                server.updated_at,
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// MCP 서버 목록 조회
+    pub fn list_mcp_servers(&self) -> Result<Vec<McpServerRow>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, server_type, config_json, is_enabled, created_at, updated_at
+             FROM mcp_servers ORDER BY created_at ASC",
+        )?;
+
+        let iter = stmt.query_map([], |row| {
+            let is_enabled: i64 = row.get(4)?;
+            Ok(McpServerRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                server_type: row.get(2)?,
+                config_json: row.get(3)?,
+                is_enabled: is_enabled == 1,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// MCP 서버 삭제
+    pub fn delete_mcp_server(&self, id: &str) -> Result<(), IteError> {
+        self.conn.execute("DELETE FROM mcp_servers WHERE id = ?1", [id])?;
+        Ok(())
+    }
 }
 
 impl Default for crate::models::BlockMetadata {
@@ -982,4 +1051,3 @@ impl Default for crate::models::BlockMetadata {
         }
     }
 }
-

@@ -7,24 +7,47 @@
     "core:default",
     "shell:allow-spawn",
     "shell:allow-execute",
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
     "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+    "dialog:allow-ask",
     {
       "identifier": "shell:allow-spawn",
       "allow": [
         {
           "name": "npx",
-          "args": [
-            "-y",
-            "@modelcontextprotocol/server-atlassian"
-          ],
+          "cmd": "npx",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true,
           "sidecar": false
         }
       ]
     },
-    "dialog:allow-save",
-    "dialog:allow-message",
-    "dialog:allow-confirm",
-    "dialog:allow-ask"
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "npx",
+          "cmd": "npx",
+          "args": true,
+          "sidecar": false
+        },
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    }
   ]
 }
 

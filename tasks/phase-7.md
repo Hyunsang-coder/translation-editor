@@ -25,9 +25,9 @@
     - Custom Transport: `TauriShellTransport.ts` (stdio bridge)
   - 참고: 최종 배포 시 Sidecar 패턴으로 전환 예정 (아래 7.2 참조)
 
-- [ ] **MCP 클라이언트 설정 관리**
+- [x] **MCP 클라이언트 설정 관리** ✅
   - 완료 조건: 여러 MCP 서버 설정 저장/로드, 연결 상태 표시
-  - 구현: Zustand store 또는 SQLite에 설정 저장
+  - 구현: SQLite `mcp_servers` 테이블 및 `McpClientManager` 자동 연결 로직
 
 ### 7.2 MCP 연동 (Production - 배포 단계)
 

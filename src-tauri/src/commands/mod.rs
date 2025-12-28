@@ -11,3 +11,4 @@ pub mod storage;
 pub mod attachments;
 pub mod brave_search;
 pub mod secure_store;
+pub mod mcp;

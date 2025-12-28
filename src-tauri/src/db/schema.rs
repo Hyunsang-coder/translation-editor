@@ -127,5 +127,16 @@ CREATE TABLE IF NOT EXISTS attachments (
 
 -- 첨부 파일 인덱스
 CREATE INDEX IF NOT EXISTS idx_attachments_project ON attachments(project_id);
+
+-- MCP 서버 설정 테이블
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    server_type TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 "#;
 
