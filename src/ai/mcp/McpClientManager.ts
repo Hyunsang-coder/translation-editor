@@ -83,10 +83,10 @@ class McpClientManager {
     this.updateStatus({ isConnecting: true, error: undefined });
 
     try {
-      // 1. Transport 생성
+      // 1. Transport 생성 (atlassian-mcp 패키지 사용)
       this.transport = new TauriShellTransport(
         "npx", 
-        ["-y", "@modelcontextprotocol/server-atlassian"], 
+        ["-y", "atlassian-mcp"], 
         {
           ATLASSIAN_EMAIL: config.email,
           ATLASSIAN_API_TOKEN: config.apiToken,

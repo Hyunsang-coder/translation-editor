@@ -21,11 +21,15 @@ export class TauriShellTransport implements Transport {
 
   async start(): Promise<void> {
     try {
-      // Command 생성 및 환경변수 설정
-      const cmd = Command.create(this.command, this.args, {
-        env: this.env,
-        encoding: 'utf-8', // 텍스트 모드
-      });
+      // SpawnOptions로 환경변수 설정 (Tauri 2.x 정식 API)
+      const options: { env?: Record<string, string>; encoding?: string } = {};
+      
+      if (Object.keys(this.env).length > 0) {
+        options.env = this.env;
+      }
+
+      // Command 생성 (세 번째 인자로 SpawnOptions 전달)
+      const cmd = Command.create(this.command, this.args, options);
 
       // 자식 프로세스 stdout 이벤트 리스너
       cmd.stdout.on('data', (line: string) => {
