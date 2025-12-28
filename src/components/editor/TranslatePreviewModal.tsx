@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
+import DOMPurify from 'dompurify';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
@@ -221,7 +222,7 @@ export function TranslatePreviewModal(props: {
                       <div className="h-full overflow-y-auto scrollbar-thin">
                         <div 
                           className="tiptap ProseMirror focus:outline-none max-w-none" 
-                          dangerouslySetInnerHTML={{ __html: sourceHtml }} 
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sourceHtml) }} 
                         />
                       </div>
                     ) : (

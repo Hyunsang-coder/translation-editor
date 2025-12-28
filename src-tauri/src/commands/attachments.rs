@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use tauri::State;
 use uuid::Uuid;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 
 use crate::db::DbState;
@@ -10,6 +10,24 @@ use crate::models::{Attachment, AttachmentDto};
 
 fn is_image_extension(ext: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif")
+}
+
+fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
+    let path = Path::new(path_str);
+    if !path.exists() {
+        return Err(CommandError {
+            code: "FILE_NOT_FOUND".to_string(),
+            message: format!("File not found: {}", path_str),
+            details: None,
+        });
+    }
+
+    // Canonicalize path to resolve symlinks and '..'
+    path.canonicalize().map_err(|e| CommandError {
+        code: "PATH_ERROR".to_string(),
+        message: format!("Invalid path or access denied: {}", e),
+        details: None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -24,14 +42,7 @@ pub async fn attach_file(
     args: AttachFileArgs,
     db_state: State<'_, DbState>,
 ) -> CommandResult<AttachmentDto> {
-    let path = Path::new(&args.path);
-    if !path.exists() {
-        return Err(CommandError {
-            code: "FILE_NOT_FOUND".to_string(),
-            message: format!("File not found: {}", args.path),
-            details: None,
-        });
-    }
+    let path = validate_path(&args.path)?;
 
     let filename = path.file_name()
         .and_then(|s| s.to_str())
@@ -43,14 +54,14 @@ pub async fn attach_file(
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    let file_size = fs::metadata(path).map(|m| m.len() as i64).ok();
+    let file_size = fs::metadata(&path).map(|m| m.len() as i64).ok();
 
     // Extract text based on file type (images are stored without extracted text)
     let extracted_text: Option<String> = if is_image_extension(&extension) {
         None
     } else {
         Some(
-            extract_file_text(path, &extension).map_err(|e| CommandError {
+            extract_file_text(&path, &extension).map_err(|e| CommandError {
                 code: "EXTRACT_ERROR".to_string(),
                 message: format!("Failed to extract text: {}", e),
                 details: None,
@@ -64,7 +75,7 @@ pub async fn attach_file(
         project_id: args.project_id.clone(),
         filename: filename.clone(),
         file_type: extension.clone(),
-        file_path: Some(args.path.clone()),
+        file_path: Some(path.to_string_lossy().to_string()),
         extracted_text,
         file_size,
         created_at: now,
@@ -108,14 +119,7 @@ pub struct PreviewAttachmentArgs {
 /// - 프로젝트(Settings) 첨부 목록과 섞이지 않도록 DB를 건드리지 않습니다.
 #[tauri::command]
 pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<AttachmentDto> {
-    let path = Path::new(&args.path);
-    if !path.exists() {
-        return Err(CommandError {
-            code: "FILE_NOT_FOUND".to_string(),
-            message: format!("File not found: {}", args.path),
-            details: None,
-        });
-    }
+    let path = validate_path(&args.path)?;
 
     let filename = path
         .file_name()
@@ -129,8 +133,8 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    let file_size = fs::metadata(path).map(|m| m.len() as i64).ok();
-    let extracted_text = extract_file_text(path, &extension).ok();
+    let file_size = fs::metadata(&path).map(|m| m.len() as i64).ok();
+    let extracted_text = extract_file_text(&path, &extension).ok();
 
     let now = chrono::Utc::now().timestamp_millis();
     Ok(AttachmentDto {
@@ -139,7 +143,7 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         file_type: extension,
         file_size,
         extracted_text,
-        file_path: Some(args.path),
+        file_path: Some(path.to_string_lossy().to_string()),
         created_at: now,
         updated_at: now,
     })
@@ -150,16 +154,9 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
 /// - 파일이 사라졌거나 접근 불가하면 에러를 반환합니다.
 #[tauri::command]
 pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> {
-    let path = Path::new(&args.path);
-    if !path.exists() {
-        return Err(CommandError {
-            code: "FILE_NOT_FOUND".to_string(),
-            message: format!("File not found: {}", args.path),
-            details: None,
-        });
-    }
+    let path = validate_path(&args.path)?;
 
-    fs::read(path).map_err(|e| CommandError {
+    fs::read(&path).map_err(|e| CommandError {
         code: "READ_ERROR".to_string(),
         message: format!("Failed to read file: {}", e),
         details: None,
