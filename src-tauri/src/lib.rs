@@ -6,6 +6,7 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod models;
+pub mod utils;
 
 use std::path::{Path, PathBuf};
 use tauri::Manager;

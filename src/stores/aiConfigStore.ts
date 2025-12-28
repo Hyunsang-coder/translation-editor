@@ -37,6 +37,20 @@ function normalizeKey(key: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+const secureKeyLoaded: Record<SecureKeyId, boolean> = {
+  openai: false,
+  anthropic: false,
+  google: false,
+  brave: false,
+};
+
+function getProviderKey(provider: AiProvider): SecureKeyId | null {
+  if (provider === 'openai' || provider === 'anthropic' || provider === 'google') {
+    return provider;
+  }
+  return null;
+}
+
 async function persistSecureKey(kind: SecureKeyId, value: string | undefined): Promise<void> {
   try {
     if (value) {
@@ -51,7 +65,7 @@ async function persistSecureKey(kind: SecureKeyId, value: string | undefined): P
 
 export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
   persist(
-    (set) => {
+    (set, get) => {
       // 초기값 결정 로직
       const defaultProvider = (getEnv('VITE_AI_PROVIDER', 'openai') as AiProvider).toLowerCase() as AiProvider;
       const validProvider = ['openai', 'anthropic', 'google', 'mock'].includes(defaultProvider) ? defaultProvider : 'openai';
@@ -86,21 +100,24 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         braveApiKey: undefined,
 
         loadSecureKeys: async () => {
-          const [openaiApiKey, anthropicApiKey, googleApiKey, braveApiKey] = await Promise.all([
-            getSecureSecret('openai'),
-            getSecureSecret('anthropic'),
-            getSecureSecret('google'),
-            getSecureSecret('brave'),
-          ]);
-          set({
-            openaiApiKey: openaiApiKey ?? undefined,
-            anthropicApiKey: anthropicApiKey ?? undefined,
-            googleApiKey: googleApiKey ?? undefined,
-            braveApiKey: braveApiKey ?? undefined,
-          });
+          const providerKey = getProviderKey(get().provider);
+          if (!providerKey || secureKeyLoaded[providerKey]) return;
+          try {
+            const value = await getSecureSecret(providerKey);
+            secureKeyLoaded[providerKey] = true;
+            if (!value) return;
+            if (providerKey === 'openai') set({ openaiApiKey: value });
+            if (providerKey === 'anthropic') set({ anthropicApiKey: value });
+            if (providerKey === 'google') set({ googleApiKey: value });
+          } catch (err) {
+            console.warn(`[aiConfigStore] Failed to load ${providerKey} API key:`, err);
+          }
         },
 
-        setProvider: (provider) => set({ provider }),
+        setProvider: (provider) => {
+          set({ provider });
+          void get().loadSecureKeys();
+        },
         setTranslationModel: (model) => set({ translationModel: model }),
         setChatModel: (model) => set({ chatModel: model }),
         setOpenaiApiKey: (key) => {

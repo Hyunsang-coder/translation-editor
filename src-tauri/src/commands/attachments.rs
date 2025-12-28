@@ -1,33 +1,16 @@
 use serde::Deserialize;
 use tauri::State;
 use uuid::Uuid;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
+use crate::utils::validate_path;
 
 fn is_image_extension(ext: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif")
-}
-
-fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
-    let path = Path::new(path_str);
-    if !path.exists() {
-        return Err(CommandError {
-            code: "FILE_NOT_FOUND".to_string(),
-            message: format!("File not found: {}", path_str),
-            details: None,
-        });
-    }
-
-    // Canonicalize path to resolve symlinks and '..'
-    path.canonicalize().map_err(|e| CommandError {
-        code: "PATH_ERROR".to_string(),
-        message: format!("Invalid path or access denied: {}", e),
-        details: None,
-    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +25,7 @@ pub async fn attach_file(
     args: AttachFileArgs,
     db_state: State<'_, DbState>,
 ) -> CommandResult<AttachmentDto> {
+    // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
     let filename = path.file_name()
@@ -119,6 +103,7 @@ pub struct PreviewAttachmentArgs {
 /// - 프로젝트(Settings) 첨부 목록과 섞이지 않도록 DB를 건드리지 않습니다.
 #[tauri::command]
 pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<AttachmentDto> {
+    // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
     let filename = path
@@ -154,6 +139,7 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
 /// - 파일이 사라졌거나 접근 불가하면 에러를 반환합니다.
 #[tauri::command]
 pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> {
+    // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
     fs::read(&path).map_err(|e| CommandError {
