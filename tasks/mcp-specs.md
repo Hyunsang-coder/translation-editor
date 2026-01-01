@@ -1,234 +1,111 @@
-# MCP Integration Specifications
+# Rovo MCP Integration Specifications (Confluence: `search()` / `fetch()`)
 
 ## 1. Overview
-This document outlines the technical specifications for integrating the **Model Context Protocol (MCP)** into the Translation Editor. The initial implementation (MVP) focuses on the **Atlassian MCP server** using a Tauri Shell bridge.
+이 문서는 ITE에서 **Atlassian Rovo MCP Server**를 통해 Confluence 문서를 **검색(`search`)**하고 **가져오기(`fetch`)** 위한 MCP 연동 스펙을 정의합니다.
 
-### Architecture (MVP)
+핵심 원칙:
+- **OAuth 2.1 전제**: 사용자가 API Token/API Key를 입력해 MCP 서버를 직접 두드리는 구조는 지원/권장되지 않습니다.
+- **게이트(Non-Intrusive)**: Chat 탭에서 `Confluence_search` 토글이 켜져 있을 때만 Rovo MCP 도구를 모델에 바인딩/노출합니다.
+- **Lazy OAuth**: 토글 ON이 즉시 브라우저 인증을 강제하지 않습니다. 실제로 `search/fetch`가 필요할 때 연결이 없으면 “Connect” CTA를 통해 사용자 클릭으로 OAuth를 시작합니다.
+
+참고(공식 가이드): [Setting up IDEs (desktop clients)](https://support.atlassian.com/atlassian-rovo-mcp-server/docs/setting-up-ides/)
+
+## 2. Architecture (MVP: `mcp-remote` Proxy)
+MVP 단계에서는 공식 가이드 흐름에 맞춰 **`mcp-remote`를 프록시로 사용**합니다.
 
 ```mermaid
 sequenceDiagram
-    participant React as Frontend (React)
+    participant App as ITE_App(React)
+    participant Gate as Confluence_search_Gate
+    participant LC as LangChain_Tools
     participant Bridge as TauriShellTransport
-    participant Tauri as Tauri Shell Plugin
-    participant Node as Node.js (npx)
-    participant MCP as Atlassian MCP Server
+    participant Proxy as mcp-remote(npx)
+    participant Rovo as Rovo_MCP_Server(SSE)
 
-    React->>Bridge: Connect (API Key, URL)
-    Bridge->>Tauri: spawn("npx", ["-y", "atlassian-mcp"])
-    Tauri->>Node: Exec Process
-    Node->>MCP: Start Server (stdio)
-    
-    loop Message Exchange
-        React->>Bridge: JSON-RPC Request
-        Bridge->>Tauri: write(stdin)
-        Tauri->>MCP: Pipe to stdin
-        MCP->>Tauri: stdout (JSON-RPC Response)
-        Tauri->>Bridge: Event (stdout)
-        Bridge->>React: Handle Message
+    App->>Gate: confluenceSearchEnabled=true(thread_scope)
+    Note over Gate: OFF면 tools 미바인딩
+
+    App->>LC: bindTools(search, fetch) if Gate_ON
+    LC->>Bridge: connect/start
+    Bridge->>Proxy: spawn(\"npx\", [\"-y\",\"mcp-remote\",\"https://mcp.atlassian.com/v1/sse\"])
+    Proxy->>Rovo: OAuth_flow_in_browser
+    Proxy->>Rovo: MCP_connect(SSE)
+
+    loop Tool_Calls
+        LC->>Rovo: search(query)
+        Rovo-->>LC: results
+        LC->>Rovo: fetch(id)
+        Rovo-->>LC: document_content
     end
-
-    React->>Bridge: Close
-    Bridge->>Tauri: kill()
-    Tauri->>Node: Terminate Process
 ```
 
-## 2. Prerequisites
-- **Node.js & npm**: Must be installed on the user's machine (for MVP).
-- **Atlassian Account**: API Token, Email, and Instance URL required.
+## 3. Endpoint
+- **SSE URL**: `https://mcp.atlassian.com/v1/sse`
 
-## 3. Configuration
+## 4. Prerequisites (MVP)
+- **Node.js 18+**: `npx`로 `mcp-remote` 실행
+- **브라우저**: OAuth 동의 플로우 진행
+- **Atlassian Cloud + Confluence 권한**: 사용자의 기존 권한 범위 내에서만 접근 가능
 
-### 3.1 Tauri Capabilities (Tauri 2.x)
-To allow the frontend to spawn the `npx` process, update `src-tauri/capabilities/default.json`.
+## 5. Connection & Auth Policy
 
-> ⚠️ **Important (Tauri 2.x)**: 
-> - Use `cmd` field instead of `command` in scope configuration
-> - Include `shell:allow-stdin-write` and `shell:allow-kill` for full MCP communication
+### 5.1 OAuth 2.1 Only
+- Rovo MCP 연동은 OAuth 2.1 기반을 전제합니다.
+- 따라서 App Settings에 “Atlassian API Token/Email/Site URL”을 입력받는 방식은 **제거 대상(계획)**입니다.
 
-```json
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "main-capability",
-  "description": "main window IPC permissions",
-  "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "shell:allow-spawn",
-    "shell:allow-execute",
-    "shell:allow-stdin-write",
-    "shell:allow-kill",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "npx",
-          "cmd": "npx",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": true,
-          "sidecar": false
-        }
-      ]
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "npx",
-          "cmd": "npx",
-          "args": true,
-          "sidecar": false
-        },
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": true,
-          "sidecar": false
-        }
-      ]
-    }
-  ]
-}
-```
+### 5.2 Lazy OAuth UX
+- `Confluence_search` 토글 ON: “도구 사용 허용” 상태만 의미
+- 실제 `search/fetch` 호출이 필요할 때 연결이 없으면:
+  - UI에서 “Atlassian 연결(Connect)” CTA를 노출
+  - **사용자 클릭으로만** 브라우저 OAuth 시작
 
-### 3.2 Environment Variables (Injected)
-The Atlassian MCP server requires the following environment variables. Since we spawn the process from Tauri, we must pass these `env` vars during the spawn call.
+## 6. Tool Contract (ITE-side)
+> 주의: Rovo MCP의 세부 스키마는 서버 구현/버전에 따라 달라질 수 있으므로, ITE는 **반환값을 보수적으로 처리**해야 합니다.
 
-- `ATLASSIAN_API_TOKEN`
-- `ATLASSIAN_EMAIL`
-- `ATLASSIAN_INSTANCE_URL`
+### 6.1 `search()`
+- 목적: Confluence 문서 후보를 찾는다.
+- ITE 처리(권장):
+  - 상위 N개만 사용
+  - 결과에서 가능한 식별자(id/url/key 등)를 추출
 
-### 3.3 NPM Package (Updated 2024-12)
+### 6.2 `fetch()`
+- 목적: 특정 문서의 본문/메타를 가져온다.
+- ITE 처리(권장):
+  - 본문은 텍스트로 정규화(HTML/마크업 최소화)
+  - 길이 제한(예: 최대 X자) + 필요 시 요약
 
-> ⚠️ **Note**: `@modelcontextprotocol/server-atlassian` does **NOT exist** on npm.
+### 6.3 Safety / Limits (권장)
+- 한 요청에서 가져오는 문서 수/길이 제한
+- 토큰 폭주 방지를 위해 `search` 후 `fetch`는 최소 호출로 유지
+- Tool 사용 표시는 “도구 사용됨/실행 중” 배지로 가시화(Non-Intrusive)
 
-**Available Atlassian MCP packages:**
-| Package | Description |
-|---------|-------------|
-| `atlassian-mcp` | MCP server for Atlassian Confluence and Jira integration (recommended) |
-| `@xuandev/atlassian-mcp` | MCP server for Atlassian Confluence and Jira Cloud APIs |
-| `@ecubelabs/atlassian-mcp` | Alternative implementation |
+## 7. UI / UX Requirements
 
-**Current implementation uses**: `atlassian-mcp`
+### 7.1 `Confluence_search` Toggle
+- 위치: Chat composer 하단 `+` 메뉴(웹검색 체크와 동일 패턴)
+- 스코프: **채팅 탭(thread) 단위**
+- 게이트 규칙:
+  - OFF: `search/fetch`를 모델에 바인딩/노출하지 않음
+  - ON: `search/fetch`를 바인딩 가능(단, 연결은 Lazy)
 
-## 4. Implementation Specs
+### 7.2 App Settings 정리(계획)
+- “Atlassian MCP” 토큰 입력형 설정 UI는 제거
+- Confluence 검색은 채팅 흐름 내 게이트/연결 CTA로 제어
 
-### 4.1 `TauriShellTransport.ts`
-Custom implementation of the `Transport` interface from `@modelcontextprotocol/sdk`.
+## 8. Roadmap
 
-> ⚠️ **Tauri 2.x API Note**: 
-> - Use `Command.create(program, args, options)` with `SpawnOptions` as third argument
-> - `.env()` method chaining is **NOT supported** (documentation is incorrect)
-> - Environment variables must be passed via `SpawnOptions.env`
+### MVP (Proxy 기반)
+- `npx -y mcp-remote https://mcp.atlassian.com/v1/sse`
+- Node.js 필요
 
-- **Interface**:
-  ```typescript
-  import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-  import { Command, Child } from "@tauri-apps/plugin-shell";
-  
-  export class TauriShellTransport implements Transport {
-    constructor(
-      private command: string, 
-      private args: string[], 
-      private env: Record<string, string>
-    ) {}
-    
-    async start(): Promise<void> {
-      // Tauri 2.x: SpawnOptions as third argument (NOT method chaining)
-      const options: { env?: Record<string, string> } = {};
-      if (Object.keys(this.env).length > 0) {
-        options.env = this.env;
-      }
-      
-      const cmd = Command.create(this.command, this.args, options);
-      
-      // Event listeners
-      cmd.stdout.on('data', (line: string) => this.handleData(line));
-      cmd.stderr.on('data', (line: string) => console.warn('[MCP Stderr]', line));
-      cmd.on('close', (data) => { /* handle close */ });
-      cmd.on('error', (error) => { /* handle error */ });
-      
-      this.child = await cmd.spawn();
-    }
-    
-    async send(message: JSONRPCMessage): Promise<void> {
-      await this.child.write(JSON.stringify(message) + "\n");
-    }
-    
-    async close(): Promise<void> {
-      await this.child.kill();
-    }
-  }
-  ```
+### Production (Proxy 제거, 권장 방향)
+- 앱이 OAuth 2.1을 직접 처리(리다이렉트/콜백/토큰 저장)
+- 앱이 `https://mcp.atlassian.com/v1/sse`로 직접 MCP 연결
 
-### 4.2 `McpClientManager.ts`
-Manages the lifecycle of the MCP Client.
+## 9. Troubleshooting
 
-- **Dependencies**: `@modelcontextprotocol/sdk`, `@langchain/mcp-adapters`
-- **NPM Package**: `atlassian-mcp` (via npx)
-- **Functions**:
-  - `connectAtlassian(config: AtlassianConfig)`: Initializes `Client` with `TauriShellTransport`.
-  - `getTools()`: Uses `loadMcpTools` (from adapters) or manual tool conversion to return LangChain-compatible tools.
-  - `disconnect()`: Cleans up resources.
-
-- **Usage**:
-  ```typescript
-  this.transport = new TauriShellTransport(
-    "npx", 
-    ["-y", "atlassian-mcp"],  // ✅ Correct package name
-    {
-      ATLASSIAN_EMAIL: config.email,
-      ATLASSIAN_API_TOKEN: config.apiToken,
-      ATLASSIAN_INSTANCE_URL: config.instanceUrl
-    }
-  );
-  ```
-
-### 4.3 UI Components (`AppSettingsModal.tsx`)
-New section "Integrations" > "Atlassian MCP".
-
-- **Fields**:
-  - `Instance URL` (e.g., `https://my-team.atlassian.net`)
-  - `Email` (e.g., `user@example.com`)
-  - `API Token` (Password input)
-- **Actions**:
-  - `Connect`: Validates input -> Calls `McpClientManager.connectAtlassian` -> Updates status.
-  - `Disconnect`: Calls `disconnect`.
-- **Status**:
-  - 🔴 Disconnected
-  - 🟡 Connecting...
-  - 🟢 Connected
-
-## 5. Roadmap
-
-### Phase 6 (MVP) ✅ Completed
-- [x] Install dependencies (`@modelcontextprotocol/sdk`, `@langchain/mcp-adapters`)
-- [x] Configure Tauri Shell permissions (with `cmd` field for Tauri 2.x)
-- [x] Implement `TauriShellTransport` (SpawnOptions pattern)
-- [x] Implement `McpClientManager`
-- [x] Add UI to `AppSettingsModal`
-- [x] Fix npm package name (`atlassian-mcp` instead of non-existent `@modelcontextprotocol/server-atlassian`)
-
-### Phase 7 (Production)
-- [ ] **Sidecar Migration**: Replace `npx` with a packaged binary.
-  - Create `atlassian-mcp` binary using `pkg`.
-  - Register as Tauri sidecar.
-  - Update Transport to use `Command.sidecar` instead of `Command.spawn`.
-- [ ] **Multi-Server Support**: Support Google Drive, Slack, etc.
-- [ ] **Persistent Config**: Save connected integrations in SQLite/Store.
-
-## 6. Troubleshooting
-
-### Common Errors
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `error deserializing scope: The shell scope 'command' value is required` | Tauri 2.x requires `cmd` field | Use `"cmd": "npx"` instead of `"command": "npx"` in capabilities |
-| `cmd.env is not a function` | Documentation incorrect for Tauri 2.x | Pass env via `Command.create(prog, args, { env })` third argument |
-| `npm error 404 @modelcontextprotocol/server-atlassian` | Package doesn't exist | Use `atlassian-mcp` package instead |
-| `MCP error -32000: Connection closed` | Process exits immediately | Check stderr logs for actual error (auth, PATH, etc.) |
-
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| `npx` 실행 실패 | Node.js 미설치/버전 낮음 | Node.js 18+ 설치 |
+| OAuth 화면이 반복/실패 | 만료/권한/로그인 문제 | 재로그인 후 재시도 |
+| 연결이 자주 끊김 | 토큰 만료/네트워크 | Connect CTA로 재인증 |
