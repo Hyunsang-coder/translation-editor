@@ -1,6 +1,6 @@
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
 
-export type SecureKeyId = 'openai' | 'anthropic' | 'google' | 'brave';
+export type SecureKeyId = 'openai' | 'anthropic' | 'google' | 'brave' | 'api_keys_bundle';
 
 function buildKeyId(key: SecureKeyId): string {
   return `ai:${key}`;

@@ -76,7 +76,7 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 
 ### AI Provider 및 API Key 관리
 - **App Settings API Key 입력**: 사용자가 직접 API Key 입력 가능 ✅
-- **보안 저장**: 입력한 API Key는 OS 키체인/키링에 안전하게 저장됨 ✅ (localStorage 저장 안 함)
+- **보안 저장**: 모든 API Key는 통합된 JSON 번들로 OS 키체인/키링에 안전하게 저장됨 ✅ (최초 실행 시 1회 인증)
 - **우선순위**: 사용자 입력 키(키체인)만 사용 ✅ (환경 변수 폴백 없음)
 
 ### 용어집 (Glossary)

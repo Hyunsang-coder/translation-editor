@@ -274,15 +274,16 @@ What:
 7.2 API Key 관리
 Why:
 - 사용자가 App Settings에서 직접 API Key를 입력할 수 있어야 합니다.
-- 환경 변수와 사용자 입력 키의 우선순위를 명확히 해야 합니다.
+- macOS 등에서 앱 실행 시마다 키체인 접근 권한을 묻는 횟수를 최소화(1회)해야 합니다.
 
 How:
 - Tauri 백엔드에서 OS 키체인/키링을 사용해 API Key 저장
+- 모든 API 키를 하나의 JSON 번들(`ai:api_keys_bundle`)로 묶어서 저장/로드
 - 프론트는 secure store 명령을 통해 저장/조회, localStorage에는 저장하지 않음
-- 앱 시작 시 키체인에서 로드하여 메모리에 반영
+- 앱 시작 시 키체인에서 번들을 로드(1회 접근)하여 메모리에 반영
 
 What:
-- **저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ai:openai|anthropic|google|brave`)
+- **저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ai:api_keys_bundle` (JSON))
 - **우선순위**: 키체인 저장값만 사용 (환경 변수 또는 localStorage 폴백 없음)
 - **보안**: localStorage/DB에 저장하지 않음. 키는 OS 보안 저장소에만 존재
 - **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능

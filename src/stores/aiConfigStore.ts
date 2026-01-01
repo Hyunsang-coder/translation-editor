@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AiProvider } from '@/ai/config';
-import { deleteSecureSecret, getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
+import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
+
+const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
+
+interface ApiKeysBundle {
+  openai: string | undefined;
+  anthropic: string | undefined;
+  google: string | undefined;
+  brave: string | undefined;
+}
 
 interface AiConfigState {
   provider: AiProvider;
@@ -37,24 +46,17 @@ function normalizeKey(key: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-const secureKeyLoaded: Record<SecureKeyId, boolean> = {
-  openai: false,
-  anthropic: false,
-  google: false,
-  brave: false,
-};
-
-async function persistSecureKey(kind: SecureKeyId, value: string | undefined): Promise<void> {
+// 번들로 묶어서 저장하는 함수
+async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
   try {
-    if (value) {
-      await setSecureSecret(kind, value);
-    } else {
-      await deleteSecureSecret(kind);
-    }
+    const json = JSON.stringify(keys);
+    await setSecureSecret(API_KEYS_BUNDLE_ID, json);
   } catch (err) {
-    console.warn(`[aiConfigStore] Failed to persist ${kind} API key:`, err);
+    console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, err);
   }
 }
+
+let keysLoaded = false;
 
 export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
   persist(
@@ -93,20 +95,66 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         braveApiKey: undefined,
 
         loadSecureKeys: async () => {
-          const kinds: SecureKeyId[] = ['openai', 'anthropic', 'google', 'brave'];
-          for (const kind of kinds) {
-            if (secureKeyLoaded[kind]) continue;
-            try {
-              const value = await getSecureSecret(kind);
-              secureKeyLoaded[kind] = true;
-              if (!value) continue;
-              if (kind === 'openai') set({ openaiApiKey: value });
-              if (kind === 'anthropic') set({ anthropicApiKey: value });
-              if (kind === 'google') set({ googleApiKey: value });
-              if (kind === 'brave') set({ braveApiKey: value });
-            } catch (err) {
-              console.warn(`[aiConfigStore] Failed to load ${kind} API key:`, err);
+          if (keysLoaded) return;
+          keysLoaded = true;
+
+          try {
+            // 1. 번들 로드 시도
+            const bundleJson = await getSecureSecret(API_KEYS_BUNDLE_ID);
+            
+            if (bundleJson) {
+              // 번들이 있으면 파싱해서 적용
+              try {
+                const bundle = JSON.parse(bundleJson) as ApiKeysBundle;
+                set({
+                  openaiApiKey: bundle.openai,
+                  anthropicApiKey: bundle.anthropic,
+                  googleApiKey: bundle.google,
+                  braveApiKey: bundle.brave,
+                });
+                return; // 로드 완료
+              } catch (e) {
+                console.error('[aiConfigStore] Failed to parse API keys bundle', e);
+              }
             }
+
+            // 2. 번들이 없으면 마이그레이션 (개별 키 로드 -> 번들 저장)
+            const oldKinds: SecureKeyId[] = ['openai', 'anthropic', 'google', 'brave'];
+            const newBundle: ApiKeysBundle = {
+              openai: undefined,
+              anthropic: undefined,
+              google: undefined,
+              brave: undefined
+            };
+            let hasLegacyKey = false;
+
+            for (const kind of oldKinds) {
+              if (kind === 'api_keys_bundle') continue;
+              const val = await getSecureSecret(kind);
+              if (val) {
+                hasLegacyKey = true;
+                if (kind === 'openai') newBundle.openai = val;
+                if (kind === 'anthropic') newBundle.anthropic = val;
+                if (kind === 'google') newBundle.google = val;
+                if (kind === 'brave') newBundle.brave = val;
+                
+                // 마이그레이션 후 기존 키 삭제 (선택적 - 현재는 유지)
+                // await deleteSecureSecret(kind); 
+              }
+            }
+
+            if (hasLegacyKey) {
+              set({
+                openaiApiKey: newBundle.openai,
+                anthropicApiKey: newBundle.anthropic,
+                googleApiKey: newBundle.google,
+                braveApiKey: newBundle.brave,
+              });
+              await persistAllKeys(newBundle);
+            }
+
+          } catch (err) {
+            console.warn(`[aiConfigStore] Failed to load secure keys:`, err);
           }
         },
 
@@ -116,25 +164,50 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         },
         setTranslationModel: (model) => set({ translationModel: model }),
         setChatModel: (model) => set({ chatModel: model }),
+        
         setOpenaiApiKey: (key) => {
           const next = normalizeKey(key);
           set({ openaiApiKey: next });
-          void persistSecureKey('openai', next);
+          const state = get();
+          void persistAllKeys({
+            openai: next,
+            anthropic: state.anthropicApiKey,
+            google: state.googleApiKey,
+            brave: state.braveApiKey,
+          });
         },
         setAnthropicApiKey: (key) => {
           const next = normalizeKey(key);
           set({ anthropicApiKey: next });
-          void persistSecureKey('anthropic', next);
+          const state = get();
+          void persistAllKeys({
+            openai: state.openaiApiKey,
+            anthropic: next,
+            google: state.googleApiKey,
+            brave: state.braveApiKey,
+          });
         },
         setGoogleApiKey: (key) => {
           const next = normalizeKey(key);
           set({ googleApiKey: next });
-          void persistSecureKey('google', next);
+          const state = get();
+          void persistAllKeys({
+            openai: state.openaiApiKey,
+            anthropic: state.anthropicApiKey,
+            google: next,
+            brave: state.braveApiKey,
+          });
         },
         setBraveApiKey: (key) => {
           const next = normalizeKey(key);
           set({ braveApiKey: next });
-          void persistSecureKey('brave', next);
+          const state = get();
+          void persistAllKeys({
+            openai: state.openaiApiKey,
+            anthropic: state.anthropicApiKey,
+            google: state.googleApiKey,
+            brave: next,
+          });
         },
       };
     },
