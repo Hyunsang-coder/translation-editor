@@ -12,6 +12,7 @@ import remarkGfm from 'remark-gfm';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
+import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 
 /**
  * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
@@ -92,7 +93,13 @@ export function ChatPanel(): JSX.Element {
   const removeComposerAttachment = useChatStore((s) => s.removeComposerAttachment);
   const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
   const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
+  const confluenceSearchEnabled = useChatStore((s) => s.currentSession?.confluenceSearchEnabled ?? false);
+  const setConfluenceSearchEnabled = useChatStore((s) => s.setConfluenceSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  
+  const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());
+  useEffect(() => mcpClientManager.subscribe(setMcpStatus), []);
+
   const [showStreamingSkeleton, setShowStreamingSkeleton] = useState(false);
 
   // 스트리밍 시작 직후(아주 빠른 응답)에는 skeleton이 번쩍이지 않도록, 짧은 지연 후에만 skeleton을 표시합니다.
@@ -117,8 +124,8 @@ export function ChatPanel(): JSX.Element {
   // statusMessage를 의존성에 추가하여 상태 변경 시 스켈레톤 텍스트가 업데이트되도록 함
   const renderAssistantSkeleton = useCallback((toolsInProgress?: string[]): JSX.Element => {
     // 1. Store의 상태 메시지를 최우선으로 사용
-    const statusMessage = useChatStore.getState().statusMessage;
-    let statusText = statusMessage;
+    const storeStatus = statusMessage;
+    let statusText = storeStatus;
 
     // 2. Store 상태가 없는데(null) 도구 호출 정보가 남아있다면 추론 (하위 호환 및 엣지 케이스)
     if (!statusText && toolsInProgress && toolsInProgress.length > 0) {
@@ -152,7 +159,7 @@ export function ChatPanel(): JSX.Element {
         </span>
       </div>
     );
-  }, []); // 의존성 배열에서 statusMessage 제거 (getState() 사용하므로 리렌더링만 트리거되면 됨)
+  }, [statusMessage]);
 
   const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
     const tools = toolNames.filter(Boolean);
@@ -948,6 +955,32 @@ export function ChatPanel(): JSX.Element {
                         <span className="flex-1">웹 검색</span>
                         <span className="text-[11px] text-editor-muted">{webSearchEnabled ? 'ON' : 'OFF'}</span>
                       </label>
+                      <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="accent-primary-500"
+                          checked={confluenceSearchEnabled}
+                          onChange={(e) => setConfluenceSearchEnabled(e.target.checked)}
+                          disabled={isLoading}
+                        />
+                        <span className="flex-1">Confluence 검색</span>
+                        <span className="text-[11px] text-editor-muted">{confluenceSearchEnabled ? 'ON' : 'OFF'}</span>
+                      </label>
+                      
+                      {confluenceSearchEnabled && !mcpStatus.isConnected && (
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 flex items-center gap-2 text-sm text-primary-500 hover:bg-editor-border/60 transition-colors"
+                          onClick={() => {
+                            setComposerMenuOpen(false);
+                            mcpClientManager.connectAtlassian();
+                          }}
+                          disabled={mcpStatus.isConnecting}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          <span className="flex-1 text-left">{mcpStatus.isConnecting ? '연결 중...' : 'Atlassian 연결하기'}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

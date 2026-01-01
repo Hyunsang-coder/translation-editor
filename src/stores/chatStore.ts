@@ -210,6 +210,7 @@ interface ChatActions {
   setProjectContext: (memory: string) => void;
   appendToProjectContext: (snippet: string) => void;
   setWebSearchEnabled: (enabled: boolean) => void;
+  setConfluenceSearchEnabled: (enabled: boolean) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // 첨부 파일 관리 (4.2)
@@ -476,6 +477,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createdAt: now,
         messages: [],
         contextBlockIds: [],
+        confluenceSearchEnabled: false,
       };
 
       set((state) => ({
@@ -764,6 +766,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled,
+            confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
           },
           {
             onToken: (full) => {
@@ -1217,6 +1220,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled: get().webSearchEnabled,
+            confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
           },
           {
             onToken: (full) => {
@@ -1459,6 +1463,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     setWebSearchEnabled: (enabled: boolean): void => {
       set({ webSearchEnabled: enabled });
+      schedulePersist();
+    },
+
+    setConfluenceSearchEnabled: (enabled: boolean): void => {
+      const { currentSession, sessions } = get();
+      if (!currentSession) return;
+
+      const updated = { ...currentSession, confluenceSearchEnabled: enabled };
+      set({
+        currentSession: updated,
+        sessions: sessions.map((s) => (s.id === currentSession.id ? updated : s)),
+      });
       schedulePersist();
     },
 

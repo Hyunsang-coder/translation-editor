@@ -42,7 +42,7 @@ export class TauriShellTransport implements Transport {
       });
 
       // 자식 프로세스 종료 이벤트 리스너
-      cmd.on('close', (data: { code: number; signal: number }) => {
+      cmd.on('close', (data: { code: number | null; signal: number | null }) => {
         console.log(`[MCP] Process exited with code ${data.code}`);
         if (this.onclose) {
           this.onclose();

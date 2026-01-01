@@ -12,7 +12,6 @@ const monacoPlugin =
     languageWorkers?: string[];
     publicPath?: string;
     globalAPI?: boolean;
-    customWorkers?: Array<{ label: string; entry: string }>;
     forceBuildCDN?: boolean;
   }) => unknown;
 
@@ -64,6 +63,35 @@ export default defineConfig(({ command }) => {
     },
   },
 
+  // Build options for production
+  build: {
+    // Tauri uses Chromium on Windows and WebKit on macOS and Linux
+    target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari14',
+    // Produce sourcemaps for debugging
+    sourcemap: !!process.env.TAURI_DEBUG,
+    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+    
+    // Node.js 모듈 외부화 (빌드 시 브라우저 번들에 포함하지 않음)
+    // - MCP SDK가 Node 모듈을 참조하더라도, 브라우저에서 실행될 때(Tauri) 무시되도록 함
+    rollupOptions: {
+        external: [
+            // Node.js built-ins that shouldn't be bundled for browser
+            'child_process',
+            'fs',
+            'path',
+            'os',
+            'crypto',
+            'stream',
+            'util',
+            'events',
+            'node:process',
+            'node:stream',
+            'node:util',
+            'node:events'
+        ],
+    },
+  },
+
   // Vite options tailored for Tauri development
   clearScreen: false,
 
@@ -84,15 +112,5 @@ export default defineConfig(({ command }) => {
       ignored: ['**/src-tauri/**'],
     },
   },
-
-  // Build options for production
-  build: {
-    // Tauri uses Chromium on Windows and WebKit on macOS and Linux
-    target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari14',
-    // Produce sourcemaps for debugging
-    sourcemap: !!process.env.TAURI_DEBUG,
-    minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
-  },
   };
 });
-

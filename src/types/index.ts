@@ -148,6 +148,7 @@ export interface ChatSession {
   createdAt: number;
   messages: ChatMessage[];
   contextBlockIds: string[]; // 관련 블록 ID들
+  confluenceSearchEnabled?: boolean; // Rovo MCP 검색 사용 여부 (탭 단위)
 }
 
 /**

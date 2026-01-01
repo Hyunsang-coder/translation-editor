@@ -44,7 +44,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const translationPresets = MODEL_PRESETS[providerKey];
 
   useEffect(() => {
-    if (translationPresets.length === 0) return;
+    // translationPresets가 비어있는 경우(예: mock)나 로딩 중일 때 처리
+    if (!translationPresets || (translationPresets as unknown as any[]).length === 0) return;
+    
     if (!translationPresets.some((p) => p.value === translationModel)) {
       setTranslationModel(translationPresets[0].value);
     }

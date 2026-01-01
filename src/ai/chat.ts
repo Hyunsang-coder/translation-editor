@@ -74,6 +74,8 @@ function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): str
   return uniqueStrings(candidates);
 }
 
+import { mcpClientManager } from '@/ai/mcp/McpClientManager';
+
 export interface GenerateReplyInput {
   project: ITEProject | null;
   contextBlocks: EditorBlock[];
@@ -95,6 +97,11 @@ export interface GenerateReplyInput {
    * - false면 web search 도구를 모델에 바인딩/노출하지 않습니다.
    */
   webSearchEnabled?: boolean;
+  /**
+   * Confluence 검색 사용 여부 (tool availability gate)
+   * - false면 Rovo MCP 도구를 모델에 바인딩/노출하지 않습니다.
+   */
+  confluenceSearchEnabled?: boolean;
   /**
    * (레거시/확장용) 문서 접근 설정
    * - 현재 UX는 토글을 제공하지 않으며, 문서 조회는 on-demand Tool로만 수행합니다.
@@ -565,10 +572,13 @@ export async function streamAssistantReply(
     },
   );
 
+  const mcpTools = input.confluenceSearchEnabled ? await mcpClientManager.getTools() : [];
+
   const toolSpecs: any[] = [
     suggestTranslationRule,
     suggestProjectContext,
     ...(webSearchEnabled ? [braveSearchTool] : []),
+    ...mcpTools,
   ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
