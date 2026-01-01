@@ -4,43 +4,45 @@
 
 ## 진행 중 / 계획
 
-### 7.1 MCP 연동 
-  - [x] **외부 MCP 연동 진입점 (MVP)** ✅
-    - 완료 조건: 설정 화면에서 MCP 연동(Atlassian 등) 관리 화면으로 진입 가능, 인증 키 입력 및 활성화 기능
-    - 구현 방식: Tauri Shell (`npx`) 사용 (개발/검증 단계)
-    - 제약 사항: 사용자 PC에 Node.js 설치 필요 (개발자/얼리어답터 타겟)
-    - 참고: 최종 배포 시 Sidecar 패턴으로 전환 예정 (Phase 7 참조)
+### 7.1 Rovo MCP 연동 (Confluence: `search()` / `fetch()`) — MVP
+- [ ] **Chat Panel: `Confluence_search` 게이트 토글 추가**
+  - 완료 조건:
+    - Chat composer 하단 `+` 메뉴에 `Confluence_search` 체크 항목 추가
+    - 토글은 **채팅 탭(thread) 단위**로 on/off (웹검색 체크와 동일한 UX)
+  - 정책:
+    - 토글 ON은 “도구 사용 허용”만 의미 (즉시 OAuth 강제하지 않음, Lazy)
+    - 토글 OFF 시 모델에 Rovo MCP 도구를 바인딩/노출하지 않음
 
-- [x] **Atlassian MCP 연동 (MVP)** ✅
-  - 완료 조건: 
-    - App Settings에서 Atlassian MCP 설정 UI 제공 (Email, API Token, Site URL 입력)
-    - Tauri Shell을 통한 `npx @modelcontextprotocol/server-atlassian` 실행
-    - MCP 클라이언트 연결 및 LangChain 도구 연동
-    - 프로세스 종료(Kill) 로직 구현 (Zombie Process 방지)
-  - 구현 방식: **Tauri Shell (`npx`) 사용**
-  - 제약 사항: 사용자 PC에 Node.js 설치 필요 (개발자/얼리어답터 타겟)
-  - 기술 스택:
-    - Frontend: `@modelcontextprotocol/sdk`, `@langchain/mcp-adapters`
-    - Backend: `tauri-plugin-shell`
-    - Custom Transport: `TauriShellTransport.ts` (stdio bridge)
-  - 참고: 최종 배포 시 Sidecar 패턴으로 전환 예정 (아래 7.2 참조)
+- [ ] **OAuth 2.1 인증 (Lazy) + 연결 UX**
+  - 배경:
+    - Rovo MCP는 **API Token/API Key 입력 방식 미지원**. OAuth 2.1 기반이 전제.
+  - 완료 조건:
+    - Confluence 도구 사용이 실제로 필요할 때(모델/사용자 흐름상) 연결이 없으면 “Atlassian 연결(Connect)” CTA 노출
+    - 사용자가 CTA를 눌렀을 때만 브라우저 OAuth를 시작
 
-- [x] **MCP 클라이언트 설정 관리** ✅
-  - 완료 조건: 여러 MCP 서버 설정 저장/로드, 연결 상태 표시
-  - 구현: SQLite `mcp_servers` 테이블 및 `McpClientManager` 자동 연결 로직
+- [ ] **Rovo MCP 연결 방식(MVP): `mcp-remote` 프록시 사용**
+  - 근거(공식 가이드): `https://support.atlassian.com/atlassian-rovo-mcp-server/docs/setting-up-ides/`
+  - 완료 조건:
+    - 로컬에서 `npx -y mcp-remote https://mcp.atlassian.com/v1/sse` 실행을 통해 OAuth 플로우 완료
+    - 이후 MCP 프로토콜로 연결하여 tool 목록 조회/호출 가능
+  - 제약 사항:
+    - 사용자 PC에 Node.js(18+) 필요 (MVP 단계)
+    - 토큰 만료 시 재인증 필요 (프록시 재실행/재로그인)
+
+- [ ] **도구 연동: `search()` → `fetch()` (Confluence 문서 검색/가져오기)**
+  - 완료 조건:
+    - 모델이 Confluence 문서를 필요로 할 때 `search()`로 후보를 찾고 `fetch()`로 본문/메타를 가져오는 2단계 사용
+    - 결과는 **채팅 컨텍스트 보조용**으로만 사용 (문서 자동 적용 없음)
+  - 안전장치(권장):
+    - 가져온 문서의 길이 제한/요약 정책으로 토큰 폭주 방지
+    - Tool 사용 여부 표시(“도구 사용됨/실행 중”)는 보조 UX로 제공 가능
 
 ### 7.2 MCP 연동 (Production - 배포 단계)
 
-- [ ] **Sidecar 패턴으로 전환 (Node.js 의존성 제거)**
-  - 완료 조건: 
-    - MCP 서버(JS)를 바이너리로 패키징 (`pkg` 등 사용)
-    - Tauri Sidecar로 등록 (`src-tauri/binaries/`)
-    - 사용자가 Node.js 설치 없이도 MCP 기능 사용 가능
-  - 목표: 일반 사용자 배포 시 Node.js 의존성 완전 제거
-  - 작업 범위:
-    - `@modelcontextprotocol/server-atlassian` 바이너리화
-    - Tauri `sidecar` 설정 추가
-    - `TauriShellTransport` → `TauriSidecarTransport` 전환 (또는 통합)
+- [ ] **Node.js 의존성 제거(선택지 비교 후 결정)**
+  - 옵션 A: `mcp-remote`를 바이너리화/번들링하여 Sidecar로 포함
+  - 옵션 B(권장 방향): 앱이 OAuth 2.1을 직접 처리하고, `https://mcp.atlassian.com/v1/sse`로 직접 MCP 연결 (프록시 제거)
+  - 목표: 일반 사용자 배포 시 Node.js 설치 없이도 Confluence_search 사용 가능
 
 - [ ] **추가 MCP 서버 연동**
   - [ ] Google Drive MCP

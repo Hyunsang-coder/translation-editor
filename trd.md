@@ -92,6 +92,9 @@ What (API 구조 - 채팅 모드):
   - get_target_document: 번역문 문서 on-demand 조회
   - suggest_translation_rule: 번역 규칙 제안
   - suggest_project_context: Project Context 제안
+  - (외부 참조 도구, 조건부) Confluence 문서 검색/가져오기: Rovo MCP `search()` / `fetch()`
+    - 사용자는 Chat 탭에서 `Confluence_search` 토글로 사용 여부를 제어한다(3.6 참조).
+    - 토글이 꺼져 있으면 모델에 도구를 바인딩/노출하지 않는다(웹검색 게이트와 동일 원칙).
 
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:
@@ -156,6 +159,7 @@ What:
   - 입력창 좌측 하단에 `+` 버튼을 두고, 클릭 시 드롭다운 메뉴를 연다.
     - 파일 또는 이미지 추가(프로젝트 단위 첨부)
     - 웹 검색 체크(웹검색 사용 여부)
+    - Confluence 검색 체크(`Confluence_search`, Atlassian Rovo MCP 사용 여부)
   - 채팅 모델 선택 드롭다운은 Send 버튼(화살표) **왼쪽**에 둔다.
   - Send 버튼은 입력창 **우측 하단**에 **화살표 아이콘**으로 표시한다(문자 “Send”는 표시하지 않음).
   - 입력 내용이 있어야 Send 버튼이 활성화된다.
@@ -168,6 +172,21 @@ What:
   - `webSearchEnabled=false`인 경우:
     - 명시적 트리거(`/web`, `웹검색:`)는 실행하지 않는다.
     - Tool-calling에서도 web search 도구를 모델에 바인딩/노출하지 않는다.
+ - Confluence 검색 게이트(중요)
+  - 배경:
+    - Atlassian Rovo MCP Server는 **OAuth 2.1 기반**이며, API Token/API Key를 사용자가 직접 입력해 연결하는 방식은 지원하지 않는다.
+    - MVP 단계에서는 공식 가이드 흐름에 맞춰 `mcp-remote`를 사용해 OAuth 플로우를 처리한다.
+      - 참고: https://support.atlassian.com/atlassian-rovo-mcp-server/docs/setting-up-ides/
+  - `confluenceSearchEnabled`가 **true일 때만** Rovo MCP의 `search()` / `fetch()` 도구를 사용할 수 있다.
+  - `confluenceSearchEnabled=false`인 경우:
+    - Tool-calling에서도 Rovo MCP 도구(`search`, `fetch`)를 모델에 바인딩/노출하지 않는다.
+  - 상태/스코프:
+    - `confluenceSearchEnabled`는 **채팅 탭(thread) 단위**로 관리한다.
+  - OAuth 트리거(Non-Intrusive / Lazy):
+    - 토글 ON은 “도구 사용 허용”만 의미한다(즉시 브라우저 인증을 강제하지 않는다).
+    - 실제로 `search()` / `fetch()`가 필요한 시점에 연결이 없으면, UI에서 “Atlassian 연결(Connect)” CTA를 노출하고 **사용자 클릭으로만** OAuth를 시작한다.
+  - 연결 엔드포인트(가이드 기준):
+    - `https://mcp.atlassian.com/v1/sse`
 - 패널 레이아웃/폭 (PanelGroup 규칙)
   - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel
   - 기본 분할 비율은 Editor 60% / Chat 40%이며, 사용자가 리사이즈 핸들로 최소 Chat 25% ~ 최대 80% 범위에서 조절할 수 있어야 한다.
