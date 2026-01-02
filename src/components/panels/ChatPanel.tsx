@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -33,6 +34,7 @@ function cleanCitationArtifacts(content: string): string {
  */
 export function ChatPanel(): JSX.Element {
   // 1. Hooks (Top-level)
+  const { t } = useTranslation();
   const { sidebarCollapsed, toggleSidebar, togglePanelSwap, isPanelsSwapped } = useUIStore();
 
   const { currentSession, sendMessage, isLoading } = useChatStore();
@@ -338,11 +340,10 @@ export function ChatPanel(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">1. Translator Persona</h3>
+            <h3 className="text-xs font-semibold text-editor-text">1. {t('settings.translatorPersona')}</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              번역 시 AI가 연기할 페르소나를 정의합니다.<br />
-              (채팅 답변 말투에는 영향을 주지 않고, 오직 <strong>번역</strong> 결과물에만 반영됩니다.)
+            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed whitespace-pre-line">
+              {t('settings.translatorPersonaDescription')}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -351,7 +352,7 @@ export function ChatPanel(): JSX.Element {
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setTranslatorPersona('')}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         </div>
@@ -360,7 +361,7 @@ export function ChatPanel(): JSX.Element {
           className="w-full min-h-[3.5rem] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
           value={translatorPersona}
           onDebouncedChange={setTranslatorPersona}
-          placeholder="예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요..."
+          placeholder={t('settings.translatorPersonaPlaceholder')}
           rows={2}
         />
       </section>
@@ -369,10 +370,10 @@ export function ChatPanel(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">2. Translation Rules</h3>
+            <h3 className="text-xs font-semibold text-editor-text">2. {t('settings.translationRules')}</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              포맷, 서식, 문체 등 번역에 적용되는 규칙입니다. (예: "해요체 사용", "따옴표 유지", "고유명사는 음차")
+              {t('settings.translationRulesDescription')}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -381,7 +382,7 @@ export function ChatPanel(): JSX.Element {
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setTranslationRules('')}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         </div>
@@ -390,7 +391,7 @@ export function ChatPanel(): JSX.Element {
           className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={translationRules}
           onDebouncedChange={setTranslationRules}
-          placeholder="Enter translation rules..."
+          placeholder={t('settings.translationRulesPlaceholder')}
         />
       </section>
 
@@ -398,10 +399,10 @@ export function ChatPanel(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">3. Project Context</h3>
+            <h3 className="text-xs font-semibold text-editor-text">3. {t('settings.projectContext')}</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              번역 시 참고할만한 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)를 저장합니다. AI가 자동으로 제안할 수 있습니다.
+              {t('settings.projectContextDescription')}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -410,7 +411,7 @@ export function ChatPanel(): JSX.Element {
               className="text-xs text-primary-500 hover:text-primary-600"
               onClick={() => setProjectContext('')}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         </div>
@@ -419,7 +420,7 @@ export function ChatPanel(): JSX.Element {
           className="w-full h-32 text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={projectContext}
           onDebouncedChange={setProjectContext}
-          placeholder="Enter project context..."
+          placeholder={t('settings.projectContextPlaceholder')}
         />
       </section>
 
@@ -427,9 +428,9 @@ export function ChatPanel(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold text-editor-text">4. Glossary</h3>
+            <h3 className="text-xs font-semibold text-editor-text">4. {t('settings.glossary')}</h3>
             <span className="text-[10px] text-editor-muted">
-              Columns: [Source] [Target] (Header required, case-insensitive)
+              {t('settings.glossaryColumns')}
             </span>
           </div>
           <div className="flex gap-2">
@@ -447,7 +448,7 @@ export function ChatPanel(): JSX.Element {
                 })();
               }}
             >
-              Import CSV
+              {t('settings.glossaryImportCsv')}
             </button>
             <button
               type="button"
@@ -463,14 +464,14 @@ export function ChatPanel(): JSX.Element {
                 })();
               }}
             >
-              Import Excel
+              {t('settings.glossaryImportExcel')}
             </button>
           </div>
         </div>
 
         {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
           <div className="p-2 rounded bg-editor-surface border border-editor-border">
-            <div className="text-xs text-editor-muted">Linked Glossaries:</div>
+            <div className="text-xs text-editor-muted">{t('settings.glossaryLinkedGlossaries')}</div>
             <ul className="mt-1 space-y-1">
               {project.metadata.glossaryPaths.map((p) => (
                 <li key={p} className="text-xs text-editor-text truncate" title={p}>• {p}</li>
@@ -478,7 +479,7 @@ export function ChatPanel(): JSX.Element {
             </ul>
           </div>
         ) : (
-          <div className="text-xs text-editor-muted italic p-2">No glossary files linked.</div>
+          <div className="text-xs text-editor-muted italic p-2">{t('settings.glossaryNoFiles')}</div>
         )}
       </section>
 
@@ -486,9 +487,9 @@ export function ChatPanel(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold text-editor-text">5. Attachments</h3>
+            <h3 className="text-xs font-semibold text-editor-text">5. {t('settings.attachments')}</h3>
             <span className="text-[10px] text-editor-muted">
-              PDF, Word, PPTX, Markdown (Max 4,000 chars each)
+              {t('settings.attachmentsDescription')}
             </span>
           </div>
           <button
@@ -505,7 +506,7 @@ export function ChatPanel(): JSX.Element {
             }}
           >
             <span>+</span>
-            <span>Attach</span>
+            <span>{t('settings.attachmentsAttach')}</span>
           </button>
         </div>
 
@@ -537,8 +538,8 @@ export function ChatPanel(): JSX.Element {
                   className="opacity-0 group-hover:opacity-100 p-1 rounded text-editor-muted hover:text-red-500 transition-opacity"
                   onClick={() => {
                     void (async () => {
-                      const ok = await confirm(`Delete "${att.filename}"?`, {
-                        title: 'Delete Attachment',
+                      const ok = await confirm(t('settings.attachmentsDeleteConfirm', { filename: att.filename }), {
+                        title: t('settings.attachmentsDeleteTitle'),
                         kind: 'warning',
                       });
                       if (ok) {
@@ -554,7 +555,7 @@ export function ChatPanel(): JSX.Element {
           </div>
         ) : (
           <div className="text-xs text-editor-muted italic p-2 border border-dashed border-editor-border rounded">
-            No files attached to this project.
+            {t('settings.attachmentsNoFiles')}
           </div>
         )}
       </section>
@@ -577,9 +578,9 @@ export function ChatPanel(): JSX.Element {
                 : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
               }
             `}
-            title="Settings"
+            title={t('chat.settings')}
           >
-            <span className="truncate flex-1">Settings</span>
+            <span className="truncate flex-1">{t('chat.settings')}</span>
           </div>
 
           {chatSessions.map((session) => (
@@ -608,7 +609,7 @@ export function ChatPanel(): JSX.Element {
                   onClick={(e) => {
                     e.stopPropagation();
                     void (async () => {
-                      const ok = await confirm('Delete this chat session?', { title: 'Delete Session', kind: 'warning' });
+                      const ok = await confirm(t('chat.deleteSessionConfirm'), { title: t('chat.deleteSessionTitle'), kind: 'warning' });
                       if (ok) {
                         useChatStore.getState().deleteSession(session.id);
                       }
@@ -631,7 +632,7 @@ export function ChatPanel(): JSX.Element {
                 }
               }}
               className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
-              title="New Chat"
+              title={t('chat.newChat')}
             >
               +
             </button>
@@ -644,7 +645,7 @@ export function ChatPanel(): JSX.Element {
             type="button"
             onClick={togglePanelSwap}
             className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title={isPanelsSwapped ? "Move to Right" : "Move to Left"}
+            title={isPanelsSwapped ? t('chat.moveToRight') : t('chat.moveToLeft')}
           >
             ⇄
           </button>
@@ -652,7 +653,7 @@ export function ChatPanel(): JSX.Element {
             type="button"
             onClick={toggleSidebar}
             className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title="Close Panel"
+            title={t('chat.closePanel')}
           >
             ✕
           </button>
@@ -672,7 +673,7 @@ export function ChatPanel(): JSX.Element {
               disabled={isSummarizing}
               onClick={() => void generateProjectContextSummary()}
             >
-              {isSummarizing ? 'Summarizing...' : 'Summarize'}
+              {isSummarizing ? t('chat.summarizing') : t('chat.summarize')}
             </button>
             <button
               type="button"
@@ -718,7 +719,7 @@ export function ChatPanel(): JSX.Element {
                               }
                             }
                           }}
-                          placeholder="Edit message..."
+                          placeholder={t('chat.editMessagePlaceholder')}
                         />
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -729,7 +730,7 @@ export function ChatPanel(): JSX.Element {
                               setEditingDraft('');
                             }}
                           >
-                            Cancel
+                            {t('common.cancel')}
                           </button>
                           <button
                             type="button"
@@ -741,9 +742,9 @@ export function ChatPanel(): JSX.Element {
                               setEditingDraft('');
                               void replayMessage(message.id);
                             }}
-                            title="Save (이후 대화는 삭제됩니다)"
+                            title={t('chat.saveAfterEdit')}
                           >
-                            Save
+                            {t('common.save')}
                           </button>
                         </div>
                       </div>
@@ -792,9 +793,9 @@ export function ChatPanel(): JSX.Element {
                             setEditingMessageId(message.id);
                             setEditingDraft(cleanCitationArtifacts(message.content));
                           }}
-                          title="Edit (이후 대화는 삭제됩니다)"
+                          title={t('chat.editAfterEdit')}
                         >
-                          Edit
+                          {t('common.edit')}
                         </button>
                       )}
                       <button
@@ -808,9 +809,9 @@ export function ChatPanel(): JSX.Element {
                           if (!ok) return;
                           deleteMessageFrom(message.id);
                         }}
-                        title="Delete (이후 대화는 삭제됩니다)"
+                        title={t('chat.deleteAfterEdit')}
                       >
-                        Delete
+                        {t('common.delete')}
                       </button>
                     </div>
                   )}
@@ -863,7 +864,7 @@ export function ChatPanel(): JSX.Element {
                               updateMessage(message.id, { metadata: { rulesAdded: true } });
                             }
                           }}
-                          title="이 내용을 Translation Rules에 추가"
+                          title={t('chat.addToRules')}
                         >
                           Add to Rules
                         </button>
@@ -880,7 +881,7 @@ export function ChatPanel(): JSX.Element {
                                 updateMessage(message.id, { metadata: { contextAdded: true } });
                               }
                             }}
-                            title="이 내용을 Project Context에 추가"
+                            title={t('chat.addToContext')}
                           >
                             Add to Context
                           </button>
@@ -906,7 +907,7 @@ export function ChatPanel(): JSX.Element {
                 ref={inputRef}
                 value={composerText}
                 onChange={(e) => setComposerText(e.target.value)}
-                placeholder="무엇이든 물어보세요 :)"
+                placeholder={t('chat.composerPlaceholder')}
                 className="w-full min-h-[96px] px-4 pt-4 pb-12 rounded-2xl bg-transparent
                            text-editor-text placeholder-editor-muted
                            focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
@@ -928,8 +929,8 @@ export function ChatPanel(): JSX.Element {
                     type="button"
                     className="w-9 h-9 rounded-full border border-editor-border bg-editor-bg text-editor-muted
                                hover:bg-editor-border hover:text-editor-text transition-colors"
-                    title="첨부/옵션"
-                    aria-label="첨부/옵션"
+                    title={t('chat.composerAttach')}
+                    aria-label={t('chat.composerAttachAriaLabel')}
                     onClick={() => {
                       setComposerMenuOpen((v) => !v);
                     }}
@@ -956,7 +957,7 @@ export function ChatPanel(): JSX.Element {
                           })();
                         }}
                       >
-                        파일 또는 이미지 추가
+                        {t('chat.addFileOrImage')}
                       </button>
                       <div className="h-px bg-editor-border" />
                       <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
@@ -967,7 +968,7 @@ export function ChatPanel(): JSX.Element {
                           onChange={(e) => setWebSearchEnabled(e.target.checked)}
                           disabled={isLoading}
                         />
-                        <span className="flex-1">웹 검색</span>
+                        <span className="flex-1">{t('chat.webSearch')}</span>
                         <span className="text-[11px] text-editor-muted">{webSearchEnabled ? 'ON' : 'OFF'}</span>
                       </label>
                       <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
@@ -978,7 +979,7 @@ export function ChatPanel(): JSX.Element {
                           onChange={(e) => setConfluenceSearchEnabled(e.target.checked)}
                           disabled={isLoading}
                         />
-                        <span className="flex-1">Confluence 검색</span>
+                        <span className="flex-1">{t('chat.confluenceSearch')}</span>
                         <span className="text-[11px] text-editor-muted">{confluenceSearchEnabled ? 'ON' : 'OFF'}</span>
                       </label>
                       
@@ -1005,8 +1006,8 @@ export function ChatPanel(): JSX.Element {
                     className="h-9 px-2 text-[11px] rounded-full border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
                     value={chatModel}
                     onChange={(e) => setChatModel(e.target.value)}
-                    aria-label="Chat model"
-                    title="Chat Model"
+                    aria-label={t('chat.chatModelAriaLabel')}
+                    title={t('chat.chatModelTitle')}
                     disabled={isLoading}
                   >
                     {chatPresets.map((p) => (
@@ -1021,8 +1022,8 @@ export function ChatPanel(): JSX.Element {
                     className="w-9 h-9 rounded-full bg-primary-500 text-white
                                hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                                transition-colors flex items-center justify-center"
-                    title="Send"
-                    aria-label="Send"
+                    title={t('chat.send')}
+                    aria-label={t('chat.sendAriaLabel')}
                   >
                     <span className="text-base leading-none">↑</span>
                   </button>
@@ -1041,7 +1042,7 @@ export function ChatPanel(): JSX.Element {
                       <button
                         type="button"
                         className="text-editor-muted hover:text-red-600"
-                        aria-label="첨부 제거"
+                        aria-label={t('chat.removeAttachment')}
                         onClick={() => removeComposerAttachment(a.id)}
                         disabled={isLoading}
                       >

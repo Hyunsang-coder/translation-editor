@@ -8,6 +8,7 @@ import type { EditorUIState, Toast } from '@/types';
 
 interface UIState extends EditorUIState {
   theme: 'light' | 'dark' | 'system';
+  language: 'ko' | 'en';
   toasts: Toast[];
 }
 
@@ -33,6 +34,9 @@ interface UIActions {
 
   // Theme
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+
+  // Language
+  setLanguage: (language: 'ko' | 'en') => void;
 
   // Panel Layout
   isPanelsSwapped: boolean;
@@ -62,6 +66,7 @@ export const useUIStore = create<UIStore>()(
       sidebarCollapsed: false,
       projectSidebarCollapsed: false,
       theme: 'system',
+      language: 'ko',
       isPanelsSwapped: false,
       toasts: [],
 
@@ -111,6 +116,11 @@ export const useUIStore = create<UIStore>()(
         set({ theme });
       },
 
+      // Language
+      setLanguage: (language: 'ko' | 'en'): void => {
+        set({ language });
+      },
+
       // Panel Layout
       togglePanelSwap: (): void => {
         set((state) => ({ isPanelsSwapped: !state.isPanelsSwapped }));
@@ -151,6 +161,7 @@ export const useUIStore = create<UIStore>()(
       name: 'ite-ui-storage',
       partialize: (state) => ({
         theme: state.theme,
+        language: state.language,
         focusMode: state.focusMode,
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,

@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 
@@ -142,11 +143,12 @@ export function SourceTipTapEditor({
   className?: string;
   onEditorReady?: (editor: Editor) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   // Props를 명시적으로 구성하여 undefined 값 제외
   const props: TipTapEditorProps = {
     content,
     editable: true,
-    placeholder: '원문을 입력하세요...',
+    placeholder: t('editor.sourcePlaceholder'),
     className: `source-editor ${className}`,
   };
 
@@ -173,11 +175,12 @@ export function TargetTipTapEditor({
   className?: string;
   onEditorReady?: (editor: Editor) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   // Props를 명시적으로 구성하여 undefined 값 제외
   const props: TipTapEditorProps = {
     content,
     editable: true,
-    placeholder: '번역문을 입력하세요...',
+    placeholder: t('editor.targetPlaceholder'),
     className: `target-editor ${className}`,
   };
 

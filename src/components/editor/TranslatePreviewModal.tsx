@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -53,6 +54,7 @@ export function TranslatePreviewModal(props: {
   onClose: () => void;
   onApply: () => void;
 }): JSX.Element | null {
+  const { t } = useTranslation();
   const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
@@ -182,7 +184,7 @@ export function TranslatePreviewModal(props: {
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
             <div className="text-sm font-medium text-editor-text">
-              {title ?? '번역 미리보기'}
+              {title ?? t('editor.previewDefaultTitle')}
             </div>
             {originalText.trim().length > 0 && !isLoading && !error && (
               <div className="flex bg-editor-bg border border-editor-border rounded-md p-0.5">
@@ -191,14 +193,14 @@ export function TranslatePreviewModal(props: {
                   onClick={() => setViewMode('preview')}
                   className={`px-2 py-1 text-[11px] rounded transition-colors ${viewMode === 'preview' ? 'bg-editor-surface text-primary-500 font-bold' : 'text-editor-muted hover:text-editor-text'}`}
                 >
-                  Preview
+                  {t('editor.preview')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('diff')}
                   className={`px-2 py-1 text-[11px] rounded transition-colors ${viewMode === 'diff' ? 'bg-editor-surface text-primary-500 font-bold' : 'text-editor-muted hover:text-editor-text'}`}
                 >
-                  Diff
+                  {t('editor.diff')}
                 </button>
               </div>
             )}
@@ -209,24 +211,24 @@ export function TranslatePreviewModal(props: {
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5"
               onClick={handleApply}
               disabled={isLoading || !docJson || isApplying}
-              title="Apply (전체 덮어쓰기)"
+              title={t('common.apply')}
             >
               {isApplying ? (
                 <>
                   <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Applying...</span>
+                  <span>{t('common.loading')}</span>
                 </>
               ) : (
-                'Apply'
+                t('common.apply')
               )}
             </button>
             <button
               type="button"
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-bg text-editor-text hover:bg-editor-border transition-colors"
               onClick={onClose}
-              title="Close (ESC)"
+              title={t('common.close')}
             >
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -238,10 +240,10 @@ export function TranslatePreviewModal(props: {
                 <div className="min-w-0 min-h-0 flex flex-col border-r border-editor-border overflow-hidden">
                   <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                      SOURCE
+                      {t('editor.source')}
                     </span>
                     <span className="text-[10px] text-editor-muted">
-                      {sourceWordCount.toLocaleString()} words
+                      {sourceWordCount.toLocaleString()} {t('editor.words')}
                     </span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 bg-editor-surface">
@@ -258,10 +260,10 @@ export function TranslatePreviewModal(props: {
                 <div className="min-w-0 min-h-0 flex flex-col overflow-hidden">
                   <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                      TRANSLATION
+                      {t('editor.target')}
                     </span>
                     <span className="text-[10px] text-editor-muted">
-                      {isLoading ? '—' : `${translationWordCount.toLocaleString()} words`}
+                      {isLoading ? '—' : `${translationWordCount.toLocaleString()} ${t('editor.words')}`}
                     </span>
                   </div>
                   <div className="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin">
@@ -271,9 +273,9 @@ export function TranslatePreviewModal(props: {
               </div>
               <div className="flex-shrink-0 px-4 py-3 border-t border-editor-border bg-editor-bg">
                 <div className="text-[11px] font-medium shimmer-text">
-                  번역 생성 중… 잠시만요.
+                  {t('editor.generatingTranslation')}
                   <span className="sr-only" aria-live="polite">
-                    번역 생성 중
+                    {t('editor.generatingTranslationAria')}
                   </span>
                 </div>
               </div>
@@ -282,7 +284,7 @@ export function TranslatePreviewModal(props: {
             <div className="h-full flex items-center justify-center p-6">
               <div className="max-w-xl w-full bg-editor-surface border border-editor-border rounded-lg p-4">
                 <div className="text-sm font-medium text-red-600 dark:text-red-400">
-                  번역 미리보기를 생성할 수 없습니다
+                  {t('editor.previewError')}
                 </div>
                 <div className="mt-2 text-sm text-editor-muted whitespace-pre-wrap">
                   {error}
@@ -301,17 +303,17 @@ export function TranslatePreviewModal(props: {
                   <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
-                      <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                      <div className="text-sm font-medium">{t('editor.applyingChanges')}</div>
                     </div>
                   </div>
                 )}
               </div>
               <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
                 <span className="text-[10px] text-editor-muted">
-                  Source: {countWords(originalText).toLocaleString()} words
+                  {t('editor.sourceLabel')} {countWords(originalText).toLocaleString()} {t('editor.words')}
                 </span>
                 <span className="text-[10px] text-editor-muted">
-                  Translation: {translationWordCount.toLocaleString()} words
+                  {t('editor.translationLabel')} {translationWordCount.toLocaleString()} {t('editor.words')}
                 </span>
               </div>
             </div>
@@ -329,14 +331,14 @@ export function TranslatePreviewModal(props: {
                   <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
-                      <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                      <div className="text-sm font-medium">{t('editor.applyingChanges')}</div>
                     </div>
                   </div>
                 )}
               </div>
               <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-end gap-4">
                 <span className="text-[10px] text-editor-muted">
-                  {translationWordCount.toLocaleString()} words
+                  {translationWordCount.toLocaleString()} {t('editor.words')}
                 </span>
               </div>
             </div>

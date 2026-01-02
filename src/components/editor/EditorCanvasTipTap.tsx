@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -21,6 +22,7 @@ interface EditorCanvasProps {
  * Notion 스타일의 리치 텍스트 편집 환경
  */
 export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Element {
+  const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
   const sourceDocument = useProjectStore((s) => s.sourceDocument);
   const targetDocument = useProjectStore((s) => s.targetDocument);
@@ -238,7 +240,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   if (!project) {
     return (
       <div className="h-full flex items-center justify-center text-editor-muted">
-        프로젝트를 불러오는 중...
+        {t('editor.loadingProject')}
       </div>
     );
   }
@@ -248,15 +250,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       {/* Header */}
       <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-editor-text tracking-wide">EDITOR</span>
+          <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
           <select
             className="h-7 px-2 text-[11px] rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
             value={translationModel}
             onChange={(e) => setTranslationModel(e.target.value)}
-            aria-label="Translation model"
-            title="Translation Model"
+            aria-label={t('editor.translationModelAriaLabel')}
+            title={t('editor.translationModel')}
           >
             {translationPresets.map((p) => (
               <option key={p.value} value={p.value}>
@@ -269,15 +271,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             onClick={() => void openTranslatePreview()}
             className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
             disabled={translateLoading}
-            title="Source 전체 번역 → Preview"
+            title={t('editor.translateTitle')}
           >
             {translateLoading ? (
               <>
                 <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>번역 중…</span>
+                <span>{t('editor.translating')}</span>
               </>
             ) : (
-              '번역'
+              t('editor.translate')
             )}
           </button>
         </div>
@@ -326,13 +328,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 value={project.metadata.targetLanguage || ''}
                 onChange={(e) => setTargetLanguage(e.target.value)}
               >
-                <option value="" disabled>언어 선택</option>
-                <option value="한국어">한국어</option>
-                <option value="영어">영어</option>
-                <option value="일본어">일본어</option>
-                <option value="중국어">중국어</option>
-                <option value="스페인어">스페인어</option>
-                <option value="러시아어">러시아어</option>
+                <option value="" disabled>{t('editor.selectLanguage')}</option>
+                <option value="한국어">{t('editor.languages.korean')}</option>
+                <option value="영어">{t('editor.languages.english')}</option>
+                <option value="일본어">{t('editor.languages.japanese')}</option>
+                <option value="중국어">{t('editor.languages.chinese')}</option>
+                <option value="스페인어">{t('editor.languages.spanish')}</option>
+                <option value="러시아어">{t('editor.languages.russian')}</option>
               </select>
             </div>
             <span className="text-[10px] text-editor-muted">

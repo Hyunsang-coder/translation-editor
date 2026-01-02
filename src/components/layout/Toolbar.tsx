@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 
@@ -5,6 +6,7 @@ import { useProjectStore } from '@/stores/projectStore';
  * 상단 툴바 컴포넌트
  */
 export function Toolbar(): JSX.Element {
+  const { t } = useTranslation();
   const { focusMode, toggleFocusMode, theme, setTheme, toggleSidebar } = useUIStore();
   const { project } = useProjectStore();
 
@@ -18,7 +20,7 @@ export function Toolbar(): JSX.Element {
       {/* 프로젝트 정보 */}
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-editor-text">
-          {project?.metadata.title ?? 'Untitled Project'}
+          {project?.metadata.title ?? t('common.untitledProject')}
         </h1>
       </div>
 
@@ -29,7 +31,7 @@ export function Toolbar(): JSX.Element {
           type="button"
           onClick={toggleSidebar}
           className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title="채팅/설정 패널 토글"
+          title={t('toolbar.toggleSidebar')}
         >
           📁
         </button>
@@ -46,16 +48,16 @@ export function Toolbar(): JSX.Element {
               : 'bg-editor-bg text-editor-text hover:bg-editor-border'
             }
           `}
-          title="Focus Mode (원문 패널 숨기기)"
+          title={t('toolbar.focusMode')}
         >
-          {focusMode ? '📖 Normal' : '🎯 Focus'}
+          {focusMode ? `📖 ${t('toolbar.focusModeNormal')}` : `🎯 ${t('toolbar.focusModeFocus')}`}
         </button>
 
         <button
           type="button"
           onClick={handleThemeToggle}
           className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title={`Current: ${theme}`}
+          title={t('toolbar.themeCurrent', { theme })}
         >
           {theme === 'dark' ? '🌙' : '☀️'}
         </button>

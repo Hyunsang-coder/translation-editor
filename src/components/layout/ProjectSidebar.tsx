@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import { createProject } from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
@@ -15,6 +16,7 @@ type NewProjectForm = {
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 
 export function ProjectSidebar(): JSX.Element {
+  const { t } = useTranslation();
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
   const toggleProjectSidebar = useUIStore((s) => s.toggleProjectSidebar);
   const project = useProjectStore((s) => s.project);
@@ -357,7 +359,7 @@ export function ProjectSidebar(): JSX.Element {
             onClick={() => setShowAppSettings(true)}
         >
             <span className="text-sm">⚙️</span>
-            App Settings
+            {t('projectSidebar.appSettings')}
         </button>
       </div>
 

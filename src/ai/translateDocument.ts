@@ -1,6 +1,7 @@
 import type { ITEProject } from '@/types';
 import { createChatModel } from '@/ai/client';
 import { getAiConfig } from '@/ai/config';
+import i18n from '@/i18n/config';
 
 export type TipTapDocJson = Record<string, unknown>;
 
@@ -222,10 +223,7 @@ export async function translateSourceDocToTargetDocJson(params: {
     const isTruncated = hasOpenBrace && openCount > closeCount;
     
     if (isTruncated) {
-      throw new Error(
-        `번역 응답이 중간에 잘렸습니다. 문서가 너무 길어 모델의 출력 제한(max_tokens)을 초과했을 수 있습니다.\n\n` +
-        `해결 방법: Settings에서 모델의 max_tokens 값을 높이거나, 더 짧은 문서로 나누어 번역해 보세요.`,
-      );
+      throw new Error(i18n.t('errors.translationPreviewError'));
     }
     
     // 디버깅을 위해 실제 응답 내용의 일부를 에러 메시지에 포함

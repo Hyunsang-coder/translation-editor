@@ -50,6 +50,7 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 ### UI / UX
 - **3-패널 레이아웃**: Source(편집 가능) / Target(편집) / Chat ✅
 - **Focus Mode**: Source 패널 숨김 토글 ✅
+- **다국어 지원**: 한국어/영어 UI 전환 (App Settings에서 설정) ✅
 - **선택 시 'Add to chat'**: 
   - Source/Target TipTap에서 텍스트 선택 시 버튼 표시 ✅
   - 동작: **채팅 입력창에 붙여넣기만**(자동 전송 X) ✅
@@ -105,6 +106,11 @@ english-playground/
 │   │   └── panels/               # Source/Target/Chat 패널
 │   ├── editor/                   # 에디터 엔진/확장/어댑터(TipTap 기반)
 │   ├── ai/                       # 프롬프트/클라이언트/대화 로직
+│   ├── i18n/                     # 다국어 지원 (i18next)
+│   │   ├── config.ts             # i18next 설정
+│   │   └── locales/              # 번역 파일
+│   │       ├── ko.json           # 한국어
+│   │       └── en.json           # 영어
 │   ├── stores/                   # Zustand 스토어
 │   ├── tauri/                    # 프론트↔타우리 invoke 래퍼
 │   ├── types/                    # 타입 정의

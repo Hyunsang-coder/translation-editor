@@ -5,6 +5,8 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import App from './App';
 import './index.css';
+import i18n from './i18n/config';
+import { useUIStore } from './stores/uiStore';
 
 // Monaco를 CDN(jsDelivr)에서 로드하지 않고, 로컬 npm 패키지(monaco-editor)를 사용하도록 고정합니다.
 // - Tauri(WebView) 환경에서 외부 CDN 접근/소스맵 로딩으로 인한 404 노이즈를 제거
@@ -18,6 +20,12 @@ loader.config({ monaco });
     return new EditorWorker();
   },
 };
+
+// i18n 언어 설정 로드 (uiStore에서 저장된 언어 설정 사용)
+const savedLanguage = useUIStore.getState().language;
+if (savedLanguage) {
+  i18n.changeLanguage(savedLanguage);
+}
 
 const rootElement = document.getElementById('root');
 

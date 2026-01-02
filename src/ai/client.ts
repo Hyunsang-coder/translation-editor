@@ -3,6 +3,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
+import i18n from '@/i18n/config';
 
 export function createChatModel(
   modelOverride?: string,
@@ -14,7 +15,7 @@ export function createChatModel(
 
   if (cfg.provider === 'openai') {
     if (!cfg.openaiApiKey) {
-      throw new Error('OpenAI API key is missing. Please enter it in App Settings.');
+      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
     }
 
     // GPT-5.2, GPT-5-mini 등 최신 모델은 temperature 파라미터를 지원하지 않거나 무시해야 함
@@ -37,7 +38,7 @@ export function createChatModel(
 
   if (cfg.provider === 'anthropic') {
     if (!cfg.anthropicApiKey) {
-      throw new Error('Anthropic API key is missing. Please enter it in App Settings.');
+      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
     }
     // 번역 모드에서는 max_tokens를 높게 설정
     const maxTokensOption = useFor === 'translation' ? { maxTokens: 16384 } : {};
@@ -51,7 +52,7 @@ export function createChatModel(
 
   if (cfg.provider === 'google') {
     if (!cfg.googleApiKey) {
-      throw new Error('Google API key is missing. Please enter it in App Settings.');
+      throw new Error(i18n.t('errors.googleApiKeyMissing'));
     }
     // 번역 모드에서는 max_tokens를 높게 설정
     const maxTokensOption = useFor === 'translation' ? { maxOutputTokens: 16384 } : {};
@@ -63,5 +64,5 @@ export function createChatModel(
     });
   }
 
-  throw new Error(`Unsupported AI provider: ${cfg.provider}. Please select a valid provider in App Settings.`);
+  throw new Error(i18n.t('errors.unsupportedProvider', { provider: cfg.provider }));
 }
