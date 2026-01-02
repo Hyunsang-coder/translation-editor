@@ -5,6 +5,7 @@ import { buildLangChainMessages, detectRequestType, type RequestType } from '@/a
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
+import { reviewTranslationTool } from '@/ai/tools/reviewTool';
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -337,6 +338,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)',
     '- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)',
+    '- review_translation: 번역 품질 검수(누락/오역/용어 일관성 체크). 번역 검수 요청 시 이 도구를 사용하세요.',
     (webSearchEnabled && hasOpenAiWebSearch)
       ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
       : '- web_search_preview: (비활성화됨)',
@@ -345,7 +347,8 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       : '- brave_search: (비활성화됨)',
     '',
     '규칙:',
-    '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
+    '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, review_translation 도구를 우선 사용한다. 이 도구가 원문/번역문을 자동으로 가져와 검수 지침과 함께 반환한다.',
+    '- review_translation이 사용 불가능한 경우에만, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
     '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
     '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
     '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 [Add to Rules]/[Add to Context] 버튼을 눌러 추가하세요"라고 안내한다.',
@@ -492,6 +495,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   const toolSpecs: any[] = [
     suggestTranslationRule,
     suggestProjectContext,
+    reviewTranslationTool,
     ...(webSearchEnabled ? [braveSearchTool] : []),
   ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
@@ -604,6 +608,7 @@ export async function streamAssistantReply(
   const toolSpecs: any[] = [
     suggestTranslationRule,
     suggestProjectContext,
+    reviewTranslationTool,
     ...(webSearchEnabled ? [braveSearchTool] : []),
     ...mcpTools,
   ];
