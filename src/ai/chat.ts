@@ -103,6 +103,10 @@ export interface GenerateReplyInput {
    */
   confluenceSearchEnabled?: boolean;
   /**
+   * 요청 취소용 AbortSignal
+   */
+  abortSignal?: AbortSignal;
+  /**
    * (레거시/확장용) 문서 접근 설정
    * - 현재 UX는 토글을 제공하지 않으며, 문서 조회는 on-demand Tool로만 수행합니다.
    */
@@ -203,6 +207,7 @@ async function runToolCallingLoop(params: {
   messages: BaseMessage[];
   maxSteps?: number;
   cb?: StreamCallbacks;
+  abortSignal?: AbortSignal;
 }): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[] }> {
   const maxSteps = Math.max(1, Math.min(8, params.maxSteps ?? 4));
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
@@ -220,8 +225,19 @@ async function runToolCallingLoop(params: {
   const loopMessages: BaseMessage[] = [...params.messages];
 
   for (let step = 0; step < maxSteps; step++) {
+    // AbortSignal 체크
+    if (params.abortSignal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
+
     params.cb?.onModelRun?.(step);
     const ai = await (modelWithTools as any).invoke(loopMessages);
+    
+    // AbortSignal 체크 (invoke 후에도 체크)
+    if (params.abortSignal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
+    
     loopMessages.push(ai);
 
     // OpenAI built-in tools(web_search_preview 등)은 function tool_calls로 노출되지 않을 수 있어 별도 감지
@@ -265,8 +281,19 @@ async function runToolCallingLoop(params: {
       }
 
       try {
+        // AbortSignal 체크
+        if (params.abortSignal?.aborted) {
+          throw new DOMException('Request aborted', 'AbortError');
+        }
+
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         const out = await tool.invoke(call.args ?? {});
+        
+        // AbortSignal 체크 (tool 호출 후에도 체크)
+        if (params.abortSignal?.aborted) {
+          throw new DOMException('Request aborted', 'AbortError');
+        }
+        
         const content = typeof out === 'string' ? out : JSON.stringify(out);
         loopMessages.push(
           new ToolMessage({
@@ -611,6 +638,7 @@ export async function streamAssistantReply(
       bindTools,
       messages: finalMessages,
       ...(cb ? { cb } : {}),
+      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
     }));
   } catch (e) {
     if (usedImages) {

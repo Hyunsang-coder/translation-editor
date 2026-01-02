@@ -788,8 +788,11 @@ export function ChatPanel(): JSX.Element {
                       <button
                         type="button"
                         className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-red-600 hover:bg-editor-border/60"
-                        onClick={() => {
-                          const ok = window.confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?');
+                        onClick={async () => {
+                          const ok = await confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?', {
+                            title: '대화 삭제',
+                            kind: 'warning',
+                          });
                           if (!ok) return;
                           deleteMessageFrom(message.id);
                         }}

@@ -155,6 +155,8 @@ interface ChatState {
   attachments: AttachmentDto[];
   /** 채팅 컴포저 전용 첨부(일회성, 비영속) */
   composerAttachments: AttachmentDto[];
+  /** 진행 중인 API 요청 취소용 AbortController */
+  abortController: AbortController | null;
 }
 
 interface ChatActions {
@@ -305,6 +307,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     lastInjectedGlossary: [],
     isSummarizing: false,
     isHydrating: false,
+    abortController: null,
     summarySuggestionOpen: false,
     summarySuggestionReason: '',
     lastSummaryAtMessageCountBySessionId: {},
@@ -597,7 +600,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       }
 
       // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
-        const webQuery = tryExtractWebSearchQuery(content);
+      const webQuery = tryExtractWebSearchQuery(content);
       if (webQuery) {
         if (!get().webSearchEnabled) {
           addMessage({
@@ -737,6 +740,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // 질문(question) 모드: 최근 히스토리(최대 10개) 포함
         const recent: ChatMessage[] = priorMessages;
 
+        // 이전 요청이 있으면 취소
+        const prevAbortController = get().abortController;
+        if (prevAbortController) {
+          prevAbortController.abort();
+        }
+
+        // 새로운 AbortController 생성
+        const abortController = new AbortController();
+        set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
+
         const assistantId = addMessage({
           role: 'assistant',
           content: '',
@@ -758,6 +771,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             projectContext,
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
+            abortSignal: abortController.signal,
             // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
             attachments: get().composerAttachments
               .filter((a) => a.extractedText)
@@ -858,9 +872,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         restoreGhostChips(replyMasked, maskSession);
-        set({ isLoading: false, streamingMessageId: null, statusMessage: null });
+        set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
         get().checkAndSuggestProjectContext();
       } catch (error) {
+        // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
+        if (error instanceof Error && error.name === 'AbortError') {
+          set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+          return;
+        }
+
         const assistantId = get().streamingMessageId;
         const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
         if (assistantId) {
@@ -877,6 +897,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          abortController: null,
         });
       }
     },
@@ -1135,7 +1156,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      set({ isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
+      // 이전 요청이 있으면 취소
+      const prevAbortController = get().abortController;
+      if (prevAbortController) {
+        prevAbortController.abort();
+      }
+
+      // 새로운 AbortController 생성
+      const abortController = new AbortController();
+      set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
       try {
         const cfg = getAiConfig();
@@ -1212,6 +1241,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             ...(glossaryInjected ? { glossaryInjected } : {}),
             projectContext,
             requestType: 'question',
+            abortSignal: abortController.signal,
             // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
             attachments: get().composerAttachments
               .filter((a) => a.extractedText)
@@ -1316,10 +1346,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
         }
 
-        set({ isLoading: false, streamingMessageId: null, statusMessage: null });
+        set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
         get().checkAndSuggestProjectContext();
         schedulePersist();
       } catch (error) {
+        // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
+        if (error instanceof Error && error.name === 'AbortError') {
+          set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+          return;
+        }
+
         const assistantId = get().streamingMessageId;
         const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
         if (assistantId) {
@@ -1334,6 +1370,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          abortController: null,
         });
       }
     },
@@ -1341,6 +1378,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
     deleteMessageFrom: (messageId: string): void => {
       const { currentSession, currentSessionId } = get();
       if (!currentSession || !currentSessionId) return;
+
+      // 진행 중인 API 요청 취소
+      const abortController = get().abortController;
+      if (abortController) {
+        abortController.abort();
+      }
 
       const idx = currentSession.messages.findIndex((m) => m.id === messageId);
       if (idx < 0) return;
@@ -1352,6 +1395,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         currentSession: updatedSession,
         streamingMessageId: null,
         isLoading: false,
+        abortController: null,
       }));
       schedulePersist();
     },
