@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { computeSideBySideDiff, SideBySideRow, DiffPart } from '@/utils/diff';
 
 interface VisualDiffViewerProps {
@@ -22,6 +23,7 @@ export function VisualDiffViewer({
   acceptLabel = '적용하기',
   rejectLabel = '초기화',
 }: VisualDiffViewerProps) {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
 
   // Diff 계산 (줄 단위 + 내부 단어 단위)
@@ -64,7 +66,7 @@ export function VisualDiffViewer({
             onClick={() => setViewMode(m => m === 'side-by-side' ? 'unified' : 'side-by-side')}
             className="px-3 py-1.5 text-xs font-medium border border-editor-border rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors whitespace-nowrap shadow-sm"
           >
-            {viewMode === 'side-by-side' ? '같이 보기' : '양옆에 배치'}
+            {viewMode === 'side-by-side' ? t('editor.viewTogether') : t('editor.sideBySide')}
           </button>
         </div>
       </div>

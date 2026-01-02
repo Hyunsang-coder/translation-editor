@@ -93,10 +93,13 @@
     "targetPlaceholder": "번역문을 입력하세요...",
     "selectLanguage": "언어 선택",
     "previewDefaultTitle": "번역 미리보기",
+    "previewTitleFull": "번역 미리보기 (Source 전체 → Target 전체)",
     "generatingTranslation": "번역 생성 중… 잠시만요.",
     "generatingTranslationAria": "번역 생성 중",
     "preview": "Preview",
     "diff": "Diff",
+    "viewTogether": "같이 보기",
+    "sideBySide": "양옆에 배치",
     "languages": {
       "korean": "한국어",
       "english": "영어",
@@ -147,4 +150,3 @@
     "aiResponseFailed": "AI 응답 생성 실패"
   }
 }
-

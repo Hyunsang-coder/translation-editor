@@ -53,9 +53,10 @@ export function TranslatePreviewModal(props: {
   error?: string | null;
   onClose: () => void;
   onApply: () => void;
+  onCancel?: () => void;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply } = props;
+  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply, onCancel } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
@@ -206,6 +207,16 @@ export function TranslatePreviewModal(props: {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {isLoading && onCancel && (
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-bg text-editor-text hover:bg-editor-border transition-colors"
+                onClick={onCancel}
+                title={t('common.cancel')}
+              >
+                {t('common.cancel')}
+              </button>
+            )}
             <button
               type="button"
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5"

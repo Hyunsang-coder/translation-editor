@@ -93,10 +93,13 @@
     "targetPlaceholder": "Enter translated text...",
     "selectLanguage": "Select Language",
     "previewDefaultTitle": "Translation Preview",
+    "previewTitleFull": "Translation Preview (Entire Source → Entire Target)",
     "generatingTranslation": "Generating translation... Please wait.",
     "generatingTranslationAria": "Generating translation",
     "preview": "Preview",
     "diff": "Diff",
+    "viewTogether": "View Together",
+    "sideBySide": "Side by Side",
     "languages": {
       "korean": "Korean",
       "english": "English",
@@ -147,4 +150,3 @@
     "aiResponseFailed": "Failed to generate AI response"
   }
 }
-

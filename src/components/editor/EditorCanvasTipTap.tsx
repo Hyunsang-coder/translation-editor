@@ -357,7 +357,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
       <TranslatePreviewModal
         open={translatePreviewOpen}
-        title="번역 미리보기 (Source 전체 → Target 전체)"
+        title={t('editor.previewTitleFull')}
         docJson={translatePreviewDoc}
         sourceHtml={sourceDocument}
         originalHtml={targetDocument}
@@ -367,6 +367,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslatePreviewOpen(false);
         }}
         onApply={applyTranslatePreview}
+        onCancel={() => {
+          setTranslateLoading(false);
+          setTranslatePreviewOpen(false);
+        }}
       />
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}
