@@ -267,11 +267,18 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <button
             type="button"
             onClick={() => void openTranslatePreview()}
-            className="px-2 py-1 text-[11px] rounded border border-editor-border hover:bg-editor-surface transition-colors disabled:opacity-60"
+            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
             disabled={translateLoading}
             title="Source 전체 번역 → Preview"
           >
-            {translateLoading ? '번역 중…' : '번역'}
+            {translateLoading ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>번역 중…</span>
+              </>
+            ) : (
+              '번역'
+            )}
           </button>
         </div>
       </div>
