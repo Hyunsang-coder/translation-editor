@@ -41,19 +41,23 @@ function extractFirstJsonObject(raw: string): string | null {
 
 function extractJsonObject(raw: string): string {
   let t = raw.trim();
-  // 흔한 케이스: ```json ... ```
-  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
-
-  // 응답에 앞/뒤 설명이 붙거나, 내부에 여분의 중괄호가 섞여 있을 때
+  
+  // 1) 코드펜스 제거 (```json ... ``` 또는 ``` ... ```)
+  // 여러 코드펜스가 있을 수 있으므로 전역 제거
+  t = t.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+  
+  // 2) 응답에 앞/뒤 설명이 붙거나, 내부에 여분의 중괄호가 섞여 있을 때
   // 첫 번째로 닫히는 JSON 오브젝트만 안전하게 잘라냅니다.
   const balanced = extractFirstJsonObject(t);
   if (balanced) return balanced.trim();
 
+  // 3) Fallback: 첫 { 부터 마지막 } 까지
   const first = t.indexOf('{');
   const last = t.lastIndexOf('}');
   if (first >= 0 && last > first) {
     return t.slice(first, last + 1).trim();
   }
+  
   return t;
 }
 
@@ -114,12 +118,24 @@ export async function translateSourceDocToTargetDocJson(params: {
     persona,
     `아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
-    '중요: 출력은 반드시 "단 하나의 JSON 객체"만 반환하세요.',
-    '- 마크다운, 코드펜스(```), 설명, 인사, 부연, HTML을 절대 출력하지 마세요.',
-    '- 출력 JSON은 다음 형태 중 하나여야 합니다:',
-    '  - 성공: {"doc": {"type":"doc","content":[...]} }',
-    '  - 실패: {"error": "사유", "doc": null }',
-    '- 성공 시 doc는 ProseMirror doc 스키마를 유지해야 합니다. (예: {"type":"doc","content":[...]})',
+    '=== 중요: 출력 형식 ===',
+    '반드시 아래 형태의 "단 하나의 JSON 객체"만 출력하세요:',
+    '',
+    '성공 시:',
+    '{"doc": {"type":"doc","content":[...]}}',
+    '',
+    '실패 시:',
+    '{"error": "사유 설명", "doc": null}',
+    '',
+    '절대 금지 사항:',
+    '- 코드펜스(```json, ```) 사용 금지',
+    '- 마크다운 포맷 사용 금지',
+    '- "번역 결과입니다", "다음과 같이 번역했습니다" 등의 설명문 금지',
+    '- HTML, 인사말, 부연 설명 금지',
+    '- 오직 위 JSON 객체만 출력',
+    '',
+    '=== 번역 규칙 ===',
+    '- 성공 시 doc는 ProseMirror doc 스키마를 유지해야 합니다.',
     '- 문서 구조/서식(heading/list/marks/link 등)은 그대로 유지하고, 텍스트 노드의 내용만 번역하세요.',
     '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
     '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
@@ -145,11 +161,12 @@ export async function translateSourceDocToTargetDocJson(params: {
     {
       role: 'user' as const,
       content: [
-        '다음 JSON 문서를 번역하여, 위에서 지정한 형태의 JSON 객체로만 반환하세요.',
+        '아래 JSON 문서를 번역하여, 위에서 지정한 형태의 JSON 객체로만 반환하세요.',
         '',
-        // JSON을 사람이 읽는 프롬프트로 감싸면 모델이 실수로 텍스트를 붙일 수 있어,
-        // 최대한 단순하게 전달합니다.
+        '입력 문서:',
         JSON.stringify(params.sourceDocJson),
+        '',
+        '다시 한 번 강조: 설명 없이 {"doc": {...}} 형태의 JSON만 출력하세요.',
       ].join('\n'),
     },
   ];
@@ -173,6 +190,12 @@ export async function translateSourceDocToTargetDocJson(params: {
   // 2) 폴백: 기존 문자열 파싱 (가장 안정적임)
   const res = await model.invoke(messages);
   const raw = contentToText((res as { content?: unknown })?.content);
+  
+  // 응답이 비어있는 경우
+  if (!raw || raw.trim().length === 0) {
+    throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
+  }
+  
   const extracted = extractJsonObject(raw);
 
   let parsed: unknown;
@@ -192,8 +215,23 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   if (lastError) {
+    // 불완전한 JSON인지 확인 (응답이 잘린 경우)
+    const hasOpenBrace = raw.includes('{');
+    const openCount = (raw.match(/\{/g) || []).length;
+    const closeCount = (raw.match(/\}/g) || []).length;
+    const isTruncated = hasOpenBrace && openCount > closeCount;
+    
+    if (isTruncated) {
+      throw new Error(
+        `번역 응답이 중간에 잘렸습니다. 문서가 너무 길어 모델의 출력 제한(max_tokens)을 초과했을 수 있습니다.\n\n` +
+        `해결 방법: Settings에서 모델의 max_tokens 값을 높이거나, 더 짧은 문서로 나누어 번역해 보세요.`,
+      );
+    }
+    
+    // 디버깅을 위해 실제 응답 내용의 일부를 에러 메시지에 포함
+    const preview = raw.slice(0, 300).replace(/\n/g, ' ');
     throw new Error(
-      '번역 결과 JSON 파싱에 실패했습니다. (모델이 JSON 이외의 텍스트를 출력했을 수 있습니다)',
+      `번역 결과 JSON 파싱에 실패했습니다. (모델이 JSON 이외의 텍스트를 출력했을 수 있습니다)\n\n응답 미리보기: ${preview}...`,
     );
   }
 

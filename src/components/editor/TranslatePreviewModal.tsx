@@ -207,41 +207,39 @@ export function TranslatePreviewModal(props: {
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {isLoading ? (
-            <div className="h-full flex flex-col">
-              <div className="flex-1 min-h-0 grid grid-cols-2 gap-0">
-                <div className="min-w-0 flex flex-col border-r border-editor-border">
-                  <div className="h-10 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+            <>
+              <div className="flex-1 min-h-0 grid grid-cols-2 gap-0 overflow-hidden">
+                <div className="min-w-0 min-h-0 flex flex-col border-r border-editor-border overflow-hidden">
+                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       SOURCE
                     </span>
                   </div>
-                  <div className="flex-1 min-h-0 p-4 overflow-hidden bg-editor-surface">
+                  <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 bg-editor-surface">
                     {sourceHtml ? (
-                      <div className="h-full overflow-y-auto scrollbar-thin">
-                        <div 
-                          className="tiptap ProseMirror focus:outline-none max-w-none" 
-                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sourceHtml) }} 
-                        />
-                      </div>
+                      <div 
+                        className="tiptap ProseMirror focus:outline-none max-w-none" 
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sourceHtml) }} 
+                      />
                     ) : (
                       <SkeletonParagraph seed={0} lines={9} />
                     )}
                   </div>
                 </div>
-                <div className="min-w-0 flex flex-col">
-                  <div className="h-10 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+                <div className="min-w-0 min-h-0 flex flex-col overflow-hidden">
+                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       TRANSLATION
                     </span>
                   </div>
-                  <div className="flex-1 min-h-0 p-4 overflow-hidden">
+                  <div className="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin">
                     <SkeletonParagraph seed={1} lines={9} />
                   </div>
                 </div>
               </div>
-              <div className="px-4 py-3 border-t border-editor-border bg-editor-bg">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-editor-border bg-editor-bg">
                 <div className="text-[11px] font-medium shimmer-text">
                   번역 생성 중… 잠시만요.
                   <span className="sr-only" aria-live="polite">
@@ -249,7 +247,7 @@ export function TranslatePreviewModal(props: {
                   </span>
                 </div>
               </div>
-            </div>
+            </>
           ) : error ? (
             <div className="h-full flex items-center justify-center p-6">
               <div className="max-w-xl w-full bg-editor-surface border border-editor-border rounded-lg p-4">

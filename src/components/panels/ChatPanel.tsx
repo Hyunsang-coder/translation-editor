@@ -706,6 +706,18 @@ export function ChatPanel(): JSX.Element {
                           className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
                           value={editingDraft}
                           onChange={(e) => setEditingDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            // Command + Enter (Mac) or Ctrl + Enter (Windows/Linux)
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                              e.preventDefault();
+                              if (editingDraft.trim()) {
+                                editMessage(message.id, editingDraft);
+                                setEditingMessageId(null);
+                                setEditingDraft('');
+                                void replayMessage(message.id);
+                              }
+                            }
+                          }}
                           placeholder="Edit message..."
                         />
                         <div className="flex items-center justify-end gap-2">

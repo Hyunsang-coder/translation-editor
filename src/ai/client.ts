@@ -21,11 +21,15 @@ export function createChatModel(
     // (o1, o3 등도 유사할 수 있으나 여기서는 명시된 gpt-5 계열만 처리)
     const isGpt5 = model.startsWith('gpt-5');
     const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
+    
+    // 번역 모드에서는 max_tokens를 높게 설정하여 긴 문서도 완전히 번역되도록 함
+    const maxTokensOption = useFor === 'translation' ? { maxTokens: 16384 } : {};
 
     return new ChatOpenAI({
       apiKey: cfg.openaiApiKey,
       model,
       ...temperatureOption,
+      ...maxTokensOption,
       // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
       ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
     });
@@ -35,10 +39,13 @@ export function createChatModel(
     if (!cfg.anthropicApiKey) {
       throw new Error('Anthropic API key is missing. Please enter it in App Settings.');
     }
+    // 번역 모드에서는 max_tokens를 높게 설정
+    const maxTokensOption = useFor === 'translation' ? { maxTokens: 16384 } : {};
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
       model,
       ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
+      ...maxTokensOption,
     });
   }
 
@@ -46,10 +53,13 @@ export function createChatModel(
     if (!cfg.googleApiKey) {
       throw new Error('Google API key is missing. Please enter it in App Settings.');
     }
+    // 번역 모드에서는 max_tokens를 높게 설정
+    const maxTokensOption = useFor === 'translation' ? { maxOutputTokens: 16384 } : {};
     return new ChatGoogleGenerativeAI({
       apiKey: cfg.googleApiKey,
       model,
       ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
+      ...maxTokensOption,
     });
   }
 
