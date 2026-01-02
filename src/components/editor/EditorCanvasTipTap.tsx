@@ -4,12 +4,13 @@ import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
+import { stripHtml } from '@/utils/hash';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -72,6 +73,24 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   }>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const selectionTokenRef = useRef<number>(0);
+
+  // 단어 수 계산 함수
+  const countWords = useCallback((text: string): number => {
+    if (!text || text.trim().length === 0) return 0;
+    return text.trim().split(/\s+/).filter(Boolean).length;
+  }, []);
+
+  // Source 단어 수 계산
+  const sourceWordCount = useMemo(() => {
+    if (!sourceDocument) return 0;
+    return countWords(stripHtml(sourceDocument));
+  }, [sourceDocument, countWords]);
+
+  // Target 단어 수 계산
+  const targetWordCount = useMemo(() => {
+    if (!targetDocument) return 0;
+    return countWords(stripHtml(targetDocument));
+  }, [targetDocument, countWords]);
 
   const clearSelectionTimer = (): void => {
     if (selectionTimerRef.current !== null) {
@@ -268,6 +287,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                     SOURCE
                   </span>
+                  <span className="text-[10px] text-editor-muted">
+                    {sourceWordCount.toLocaleString()} words
+                  </span>
                 </div>
                 <TipTapMenuBar editor={sourceEditor} />
                 <div className="min-h-0 flex-1 overflow-hidden">
@@ -306,7 +328,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 <option value="러시아어">러시아어</option>
               </select>
             </div>
-            <div className="flex items-center gap-2" />
+            <span className="text-[10px] text-editor-muted">
+              {targetWordCount.toLocaleString()} words
+            </span>
           </div>
           <TipTapMenuBar editor={targetEditor} />
           {/* 여기에 transition 효과 추가 */}

@@ -34,6 +34,14 @@ function prepareDiffText(text: string): string {
   return normalizeDiffText(text);
 }
 
+/**
+ * 단어 수 계산 (공백 기준)
+ */
+function countWords(text: string): number {
+  if (!text || text.trim().length === 0) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 export function TranslatePreviewModal(props: {
   open: boolean;
   title?: string;
@@ -129,6 +137,22 @@ export function TranslatePreviewModal(props: {
     }
   }, [docJson, extensions]);
 
+  // 단어 수 계산
+  const sourceWordCount = useMemo(() => {
+    if (!sourceHtml) return 0;
+    return countWords(stripHtml(sourceHtml));
+  }, [sourceHtml]);
+
+  const translationWordCount = useMemo(() => {
+    if (!docJson) return 0;
+    try {
+      const text = generateText(docJson, extensions);
+      return countWords(text);
+    } catch {
+      return 0;
+    }
+  }, [docJson, extensions]);
+
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {
     if (!editor) return;
@@ -216,6 +240,9 @@ export function TranslatePreviewModal(props: {
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       SOURCE
                     </span>
+                    <span className="text-[10px] text-editor-muted">
+                      {sourceWordCount.toLocaleString()} words
+                    </span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 bg-editor-surface">
                     {sourceHtml ? (
@@ -232,6 +259,9 @@ export function TranslatePreviewModal(props: {
                   <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       TRANSLATION
+                    </span>
+                    <span className="text-[10px] text-editor-muted">
+                      {isLoading ? '—' : `${translationWordCount.toLocaleString()} words`}
                     </span>
                   </div>
                   <div className="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin">
@@ -260,38 +290,55 @@ export function TranslatePreviewModal(props: {
               </div>
             </div>
           ) : viewMode === 'diff' && originalText.trim().length > 0 ? (
-            <div className="h-full relative">
-              <VisualDiffViewer
-                original={originalText}
-                suggested={translatedText}
-                className="h-full border-none rounded-none"
-              />
-              {isApplying && (
-                <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
-                    <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 relative">
+                <VisualDiffViewer
+                  original={originalText}
+                  suggested={translatedText}
+                  className="h-full border-none rounded-none"
+                />
+                {isApplying && (
+                  <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                      <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="h-full p-4 overflow-hidden relative">
-              <div className="tiptap-wrapper h-full">
-                {editor ? (
-                  <EditorContent editor={editor} className="h-full" />
-                ) : (
-                  <div className="h-full animate-pulse bg-editor-surface rounded-md" />
                 )}
               </div>
-              {isApplying && (
-                <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
-                    <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
-                  </div>
+              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
+                <span className="text-[10px] text-editor-muted">
+                  Source: {countWords(originalText).toLocaleString()} words
+                </span>
+                <span className="text-[10px] text-editor-muted">
+                  Translation: {translationWordCount.toLocaleString()} words
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 p-4 overflow-hidden relative">
+                <div className="tiptap-wrapper h-full">
+                  {editor ? (
+                    <EditorContent editor={editor} className="h-full" />
+                  ) : (
+                    <div className="h-full animate-pulse bg-editor-surface rounded-md" />
+                  )}
                 </div>
-              )}
+                {isApplying && (
+                  <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                      <div className="text-sm font-medium">변경사항을 적용하고 있습니다...</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-end gap-4">
+                <span className="text-[10px] text-editor-muted">
+                  {translationWordCount.toLocaleString()} words
+                </span>
+              </div>
             </div>
           )}
         </div>
