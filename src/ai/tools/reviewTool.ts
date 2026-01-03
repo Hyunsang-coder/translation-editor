@@ -57,8 +57,6 @@ const ReviewToolArgsSchema = z.object({
   maxChars: z.number().int().min(2000).max(30000).optional().describe('원문/번역문 각각 반환할 최대 문자 수 (기본 12000)'),
 });
 
-type ReviewToolArgs = z.infer<typeof ReviewToolArgsSchema>;
-
 /**
  * 번역 검수 도구
  * 원문과 번역문을 가져와서 검수 지침과 함께 반환합니다.
