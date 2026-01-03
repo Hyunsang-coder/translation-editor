@@ -7,6 +7,10 @@ export interface McpConnectionStatus {
   isConnecting: boolean;
   error?: string | null;
   serverName?: string | null;
+  /** 키체인에 저장된 유효한 토큰이 있는지 여부 */
+  hasStoredToken?: boolean;
+  /** 토큰 만료까지 남은 시간 (초), 토큰이 없으면 undefined */
+  tokenExpiresIn?: number | null;
 }
 
 interface McpTool {
@@ -117,18 +121,20 @@ function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeA
  * 
  * Rust 네이티브 MCP SSE 클라이언트를 사용합니다.
  * Node.js 의존성 없이 Atlassian MCP 서버에 직접 연결합니다.
+ * 
+ * OAuth 토큰은 OS 키체인에 영속화되어 앱 재시작 후에도 유지됩니다.
  */
 class McpClientManager {
   private _status: McpConnectionStatus = { isConnected: false, isConnecting: false };
   private statusListeners: ((status: McpConnectionStatus) => void)[] = [];
   private toolsCache: DynamicStructuredTool[] = [];
+  private initialized = false;
 
   // Singleton Instance
   private static instance: McpClientManager;
 
   private constructor() {
-    // 초기 상태 동기화
-    this.syncStatus();
+    // 생성 시에는 상태 동기화만 수행 (자동 연결은 별도 호출)
   }
 
   public static getInstance(): McpClientManager {
@@ -136,6 +142,37 @@ class McpClientManager {
       McpClientManager.instance = new McpClientManager();
     }
     return McpClientManager.instance;
+  }
+
+  /**
+   * 앱 시작 시 호출: 저장된 인증 정보 확인 및 자동 연결
+   * 키체인에 유효한 토큰이 있으면 자동으로 MCP 서버에 연결합니다.
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+    this.initialized = true;
+
+    try {
+      // 저장된 토큰 상태 확인
+      const status = await invoke<McpConnectionStatus>("mcp_check_auth");
+      this.updateStatus(status);
+      
+      console.log("[McpClientManager] Auth check:", {
+        hasStoredToken: status.hasStoredToken,
+        tokenExpiresIn: status.tokenExpiresIn,
+      });
+
+      // 유효한 토큰이 있으면 자동 연결
+      if (status.hasStoredToken && !status.isConnected) {
+        console.log("[McpClientManager] Found stored token, auto-connecting...");
+        await this.connectAtlassian();
+      }
+    } catch (error) {
+      console.error("[McpClientManager] Initialize failed:", error);
+      // 초기화 실패해도 앱은 계속 동작
+    }
   }
 
   /**
@@ -193,6 +230,35 @@ class McpClientManager {
     } catch (error) {
       console.error("[McpClientManager] Disconnect error:", error);
     }
+  }
+
+  /**
+   * 로그아웃 (토큰 삭제 포함)
+   * 키체인에서 저장된 토큰을 삭제하고 연결을 해제합니다.
+   */
+  async logout(): Promise<void> {
+    try {
+      await invoke("mcp_logout");
+      this.toolsCache = [];
+      await this.syncStatus();
+      console.log("[McpClientManager] Logged out, token deleted from keychain");
+    } catch (error) {
+      console.error("[McpClientManager] Logout error:", error);
+    }
+  }
+
+  /**
+   * 저장된 토큰이 있는지 확인
+   */
+  hasStoredToken(): boolean {
+    return this._status.hasStoredToken ?? false;
+  }
+
+  /**
+   * 토큰 만료까지 남은 시간 (초)
+   */
+  getTokenExpiresIn(): number | null {
+    return this._status.tokenExpiresIn ?? null;
   }
 
   /**

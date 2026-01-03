@@ -613,6 +613,22 @@ impl AtlassianOAuth {
         println!("[OAuth] Logged out, token deleted from keychain");
     }
 
+    /// 저장된 토큰 정보 조회 (자동 초기화 포함)
+    /// 반환값: (토큰 존재 여부, 남은 유효 시간(초))
+    pub async fn get_token_info(&self) -> (bool, Option<i64>) {
+        let _ = self.initialize().await;
+        
+        let token = self.token.lock().await;
+        match token.as_ref() {
+            Some(t) => {
+                let remaining = t.remaining_seconds();
+                let is_valid = !t.is_expired();
+                (is_valid, remaining)
+            }
+            None => (false, None),
+        }
+    }
+
     /// 완전 초기화 (토큰 + 클라이언트 모두 삭제)
     pub async fn clear_all(&self) {
         self.logout().await;

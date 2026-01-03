@@ -48,9 +48,16 @@ impl McpClient {
         }
     }
 
-    /// 현재 연결 상태 가져오기
+    /// 현재 연결 상태 가져오기 (토큰 정보 포함)
     pub async fn get_status(&self) -> McpConnectionStatus {
-        self.status.read().await.clone()
+        let mut status = self.status.read().await.clone();
+        
+        // OAuth 초기화 및 토큰 상태 조회
+        let (has_token, expires_in) = self.oauth.get_token_info().await;
+        status.has_stored_token = has_token;
+        status.token_expires_in = expires_in;
+        
+        status
     }
 
     /// 상태 업데이트

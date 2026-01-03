@@ -73,11 +73,21 @@
     - 기존 Node.js 의존성 제거: `mcp-proxy.cjs`, `TauriShellTransport.ts` 삭제
   - 사용 라이브러리: `reqwest-eventsource`, `oauth2`, `open`, `sha2`, `base64`
 
-- [ ] **옵션 B 검증(스파이크): Proxy 제거 가능성 확인**
-  - 방향성:
-    - 앱이 OAuth 2.1을 직접 처리하고 `https://mcp.atlassian.com/v1/sse`로 직접 MCP 연결
-  - 비고:
-    - “직접 연결”의 인증/전송 채널(양방향) 제약이 명확해진 뒤에 Go/No-Go 결정
+- [x] **옵션 A-3: OAuth 토큰 키체인 영속화** ✅
+  - 배경:
+    - 기존 구현에서는 OAuth 토큰이 메모리에만 저장되어 앱 재시작 시 재인증 필요
+    - Dynamic Client ID도 휘발성이라 매번 새로 등록해야 함
+  - 목표:
+    - 한 번 인증하면 앱 재시작 후에도 자동으로 연결
+    - 토큰 만료 시 자동 갱신
+  - 구현 완료 (2025-01-04):
+    - OAuth 토큰/client_id를 OS 키체인에 영속 저장 (`keyring` crate)
+    - 앱 시작 시 키체인에서 저장된 토큰 자동 로드
+    - 토큰 만료 5분 전부터 `refresh_token`으로 자동 갱신
+    - 갱신 실패 시 다음 연결 시점에 재인증 요청
+    - `McpConnectionStatus`에 `hasStoredToken`, `tokenExpiresIn` 필드 추가
+    - Tauri 커맨드: `mcp_check_auth`, `mcp_logout`
+    - 프론트엔드: `McpClientManager.initialize()` (앱 시작 시 자동 연결)
 
 - [ ] **추가 MCP 서버 연동**
   - [ ] Google Drive MCP

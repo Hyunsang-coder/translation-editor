@@ -92,3 +92,19 @@ pub async fn mcp_call_tool(
     MCP_CLIENT.call_tool(&name, arguments).await
 }
 
+/// 저장된 인증 정보 확인 (앱 시작 시 호출)
+/// 키체인에서 토큰을 로드하고 유효성을 확인합니다.
+#[tauri::command]
+pub async fn mcp_check_auth() -> Result<McpConnectionStatus, String> {
+    // get_status()가 내부적으로 OAuth 초기화 및 토큰 로드를 수행
+    Ok(MCP_CLIENT.get_status().await)
+}
+
+/// MCP 로그아웃 (토큰 삭제)
+/// 키체인에서 저장된 토큰을 삭제합니다.
+#[tauri::command]
+pub async fn mcp_logout() -> Result<(), String> {
+    MCP_CLIENT.logout().await;
+    Ok(())
+}
+

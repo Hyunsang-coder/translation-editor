@@ -3,6 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
+import { mcpClientManager } from '@/ai/mcp/McpClientManager';
 
 function App(): JSX.Element {
   const { theme } = useUIStore();
@@ -30,6 +31,11 @@ function App(): JSX.Element {
   useEffect(() => {
     void loadSecureKeys();
   }, [loadSecureKeys]);
+
+  // MCP 클라이언트 초기화 (저장된 토큰이 있으면 자동 연결)
+  useEffect(() => {
+    void mcpClientManager.initialize();
+  }, []);
 
   // Auto-save (Phase 4.2 안정화: Monaco 단일 문서 편집에서도 주기 저장)
   useEffect(() => {

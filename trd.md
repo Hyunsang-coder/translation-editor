@@ -179,6 +179,7 @@ What:
     - Atlassian Rovo MCP Server는 **OAuth 2.1 기반**이며, API Token/API Key를 사용자가 직접 입력해 연결하는 방식은 지원하지 않는다.
     - **Rust 네이티브 SSE 클라이언트**로 Node.js 의존성 없이 직접 Atlassian MCP 서버에 연결한다.
     - OAuth 2.1 PKCE 인증은 Rust에서 로컬 콜백 서버를 열어 처리한다.
+    - **OAuth 토큰은 OS 키체인에 영속화**되어 앱 재시작 후에도 재인증 없이 자동 연결된다.
   - `confluenceSearchEnabled`가 **true일 때만** Rovo MCP의 `search()` / `fetch()` 도구를 사용할 수 있다.
   - `confluenceSearchEnabled=false`인 경우:
     - Tool-calling에서도 Rovo MCP 도구(`search`, `fetch`)를 모델에 바인딩/노출하지 않는다.
@@ -190,6 +191,12 @@ What:
   - 연결 엔드포인트:
     - `https://mcp.atlassian.com/v1/sse`
     - Rust 구현: `src-tauri/src/mcp/` (client.rs, oauth.rs, types.rs)
+  - OAuth 토큰 영속화:
+    - 저장 위치: OS 키체인 (서비스: `com.ite.app`, 키: `mcp:oauth_token`, `mcp:client_id`)
+    - 앱 시작 시 키체인에서 저장된 토큰 자동 로드
+    - 토큰 만료 5분 전부터 `refresh_token`으로 자동 갱신 시도
+    - 갱신 실패 시 다음 연결 시점에 재인증 요청
+    - Tauri 커맨드: `mcp_check_auth` (저장된 토큰 확인), `mcp_logout` (토큰 삭제)
 - 패널 레이아웃/폭 (PanelGroup 규칙)
   - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel
   - 기본 분할 비율은 Editor 60% / Chat 40%이며, 사용자가 리사이즈 핸들로 최소 Chat 25% ~ 최대 80% 범위에서 조절할 수 있어야 한다.

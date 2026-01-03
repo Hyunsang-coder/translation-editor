@@ -197,6 +197,8 @@ pub fn run() {
             commands::mcp::mcp_get_status,
             commands::mcp::mcp_get_tools,
             commands::mcp::mcp_call_tool,
+            commands::mcp::mcp_check_auth,
+            commands::mcp::mcp_logout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

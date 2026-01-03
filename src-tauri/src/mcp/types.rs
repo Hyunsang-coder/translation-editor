@@ -168,6 +168,12 @@ pub struct McpConnectionStatus {
     pub error: Option<String>,
     #[serde(rename = "serverName", skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
+    /// 키체인에 저장된 유효한 토큰이 있는지 여부
+    #[serde(rename = "hasStoredToken", default)]
+    pub has_stored_token: bool,
+    /// 토큰 만료까지 남은 시간 (초), 토큰이 없으면 None
+    #[serde(rename = "tokenExpiresIn", skip_serializing_if = "Option::is_none")]
+    pub token_expires_in: Option<i64>,
 }
 
 impl Default for McpConnectionStatus {
@@ -177,6 +183,8 @@ impl Default for McpConnectionStatus {
             is_connecting: false,
             error: None,
             server_name: None,
+            has_stored_token: false,
+            token_expires_in: None,
         }
     }
 }
