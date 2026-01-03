@@ -40,19 +40,35 @@
     - Tool 사용 여부 표시("도구 사용됨/실행 중")는 보조 UX로 제공 가능
 
 #### 6.1.2 MCP 연동 (Production - 배포 단계)
-- [ ] **옵션 A 안정화(배포): Node.js 의존성 제거 (Sidecar)**
+- [x] **옵션 A-1: npx 제거 및 로컬 번들 사용** ✅
   - 배경:
     - 현재 구현은 `npx -y mcp-remote https://mcp.atlassian.com/v1/sse`를 실행하는 방식(MVP)이라,
       배포 환경에서 `npx`/PATH/Node 버전/네트워크 정책에 의해 실패할 수 있음.
   - 목표:
-    - 일반 사용자 배포 시 **Node.js 설치 없이도** Confluence_search 사용 가능
+    - `npx` 의존성 제거로 **네트워크 불안정 문제 해결**
     - 실행 환경(경로/권한/네트워크) 변수를 줄여 **연결 안정성**을 높임
-  - 구현 방향:
-    - `mcp-remote`를 바이너리화/번들링하여 **앱에 Sidecar로 포함**
-    - 프론트는 기존처럼 “게이트 토글 + Connect CTA” UX 유지
+  - 구현 완료 (2025-01-03):
+    - `mcp-remote`를 `esbuild`로 CJS 번들화 (`src-tauri/resources/mcp-proxy.cjs`)
+    - `node` 명령어로 로컬 번들 실행 (npx 불필요)
+    - `tauri.conf.json` resources에 번들 등록
+  - 제한 사항:
+    - **⚠️ Node.js 설치는 여전히 필요** (pkg 바이너리화 시도 → 호환성 문제로 실패)
   - 권장 안전장치:
-    - Sidecar 실행 실패 시 원인 분류(권한/네트워크/로그인) 및 재시도 UX
+    - Node.js 미설치 시 안내 메시지 표시
     - 연결 상태/재인증(토큰 만료) 안내 UX 정리
+
+- [ ] **옵션 A-2: Node.js 의존성 완전 제거 (Rust SSE 구현)**
+  - 배경:
+    - 옵션 A-1은 Node.js가 필요하므로 일반 사용자 배포에 제약
+    - pkg/nexe 등 Node.js 바이너리화 도구들의 ESM 호환성 문제
+  - 목표:
+    - **Node.js 설치 없이** Confluence_search 사용 가능
+    - 단일 바이너리 배포로 설치 간소화
+  - 구현 방향:
+    - Rust로 SSE 클라이언트 및 MCP 프로토콜 직접 구현
+    - OAuth 2.1 인증 흐름도 Rust에서 처리 (Tauri와 네이티브 통합)
+  - 예상 작업량: 1-2주
+  - 필요 라이브러리: `reqwest`, `eventsource-client`, `oauth2`, `serde_json`
 
 - [ ] **옵션 B 검증(스파이크): Proxy 제거 가능성 확인**
   - 방향성:

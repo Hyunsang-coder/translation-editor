@@ -1,6 +1,7 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { TauriShellTransport } from "./TauriShellTransport";
 import { Tool } from "@langchain/core/tools";
+import { resolveResource } from "@tauri-apps/api/path";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -28,6 +29,22 @@ class McpClientManager {
   }
 
   /**
+   * MCP 프록시 번들 경로를 가져옵니다.
+   * 개발 환경과 배포 환경 모두 지원합니다.
+   */
+  private async getMcpProxyPath(): Promise<string> {
+    try {
+      // Tauri 리소스 경로 해석 (배포 환경)
+      return await resolveResource("resources/mcp-proxy.cjs");
+    } catch {
+      // 개발 환경: src-tauri/resources/mcp-proxy.cjs
+      // resolveResource가 실패하면 개발 환경으로 가정
+      console.log("[McpClientManager] Using development path for mcp-proxy");
+      return "src-tauri/resources/mcp-proxy.cjs";
+    }
+  }
+
+  /**
    * Atlassian Rovo MCP 서버에 연결 (OAuth via mcp-remote)
    */
   async connectAtlassian(): Promise<void> {
@@ -39,14 +56,19 @@ class McpClientManager {
     this.updateStatus({ isConnecting: true, error: null });
 
     try {
+      // MCP 프록시 번들 경로 가져오기
+      const proxyPath = await this.getMcpProxyPath();
+      console.log("[McpClientManager] Using MCP proxy at:", proxyPath);
+
       // 동적 임포트로 Node.js 의존성 격리 (빌드 에러 방지)
       const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
 
-      // 1. Transport 생성 (mcp-remote 사용)
-      // 공식 가이드: npx -y mcp-remote https://mcp.atlassian.com/v1/sse
+      // 1. Transport 생성
+      // node 명령어로 번들된 mcp-proxy.cjs 실행
+      // 장점: pkg 바이너리화 문제 회피, npx 없이 직접 실행
       this.transport = new TauriShellTransport(
-        "npx", 
-        ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/sse"], 
+        "node", 
+        [proxyPath, "https://mcp.atlassian.com/v1/sse"], 
         {}
       );
 

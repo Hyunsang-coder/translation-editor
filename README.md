@@ -71,9 +71,12 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
 - **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
 
-### MCP / 외부 검색(계획)
-- **Confluence_search (Rovo MCP)**: Chat composer `+` 메뉴에 `Confluence_search` 토글 추가 → 필요 시 OAuth 2.1 인증 후 `search()`/`fetch()`로 Confluence 문서 검색/가져오기 (Lazy OAuth) *(계획/미구현)*
-- **기존 Atlassian MCP(토큰 입력형) 연동**: 계획 변경으로 제거/대체 예정 *(현재 구현이 존재할 수 있으나, TRD 기준으로 정리 예정)*
+### MCP / 외부 검색
+- **Confluence_search (Rovo MCP)**: Chat composer `+` 메뉴에 `Confluence_search` 토글 추가 ✅
+  - **Sidecar 방식**: 외부 Node.js 의존성 없이 앱 내장 바이너리로 안전하게 연결 ✅
+  - **Lazy OAuth**: 토글은 도구 활성화만 의미하며, 실제 사용 시 Connect 버튼을 통해 인증 시작 ✅
+- **웹검색**: Brave Search / OpenAI Web Search 연동 완료 ✅
+  - **웹검색 게이트**: 체크박스로 웹검색 사용 여부 제어 ✅
 
 ### AI Provider 및 API Key 관리
 - **App Settings API Key 입력**: 사용자가 직접 API Key 입력 가능 ✅

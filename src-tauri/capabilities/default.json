@@ -18,12 +18,6 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "npx",
-          "cmd": "npx",
-          "args": true,
-          "sidecar": false
-        },
-        {
           "name": "node",
           "cmd": "node",
           "args": true,
@@ -35,12 +29,6 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "npx",
-          "cmd": "npx",
-          "args": true,
-          "sidecar": false
-        },
-        {
           "name": "node",
           "cmd": "node",
           "args": true,
@@ -50,5 +38,3 @@
     }
   ]
 }
-
-

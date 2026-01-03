@@ -1,0 +1,13 @@
+{
+  "name": "mcp-proxy-wrapper",
+  "bin": "scripts/temp-mcp-proxy.js",
+  "pkg": {
+    "scripts": "scripts/temp-mcp-proxy.js",
+    "assets": [],
+    "targets": [
+      "node18-macos-arm64",
+      "node18-macos-x64"
+    ]
+  }
+}
+

@@ -3,7 +3,7 @@ import { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { Command, Child } from "@tauri-apps/plugin-shell";
 
 /**
- * Tauri Shell Plugin을 사용하여 로컬 프로세스(npx 등)와 통신하는 MCP Transport 구현체
+ * Tauri Shell Plugin을 사용하여 로컬 프로세스(node 등)와 통신하는 MCP Transport 구현체
  */
 export class TauriShellTransport implements Transport {
   private child: Child | null = null;
@@ -28,7 +28,7 @@ export class TauriShellTransport implements Transport {
         options.env = this.env;
       }
 
-      // Command 생성 (세 번째 인자로 SpawnOptions 전달)
+      // Command 생성 (일반 명령어 실행)
       const cmd = Command.create(this.command, this.args, options);
 
       // 자식 프로세스 stdout 이벤트 리스너
@@ -138,4 +138,3 @@ export class TauriShellTransport implements Transport {
     }
   }
 }
-
