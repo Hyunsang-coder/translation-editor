@@ -1,7 +1,6 @@
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { TauriShellTransport } from "./TauriShellTransport";
-import { Tool } from "@langchain/core/tools";
-import { resolveResource } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -10,16 +9,127 @@ export interface McpConnectionStatus {
   serverName?: string | null;
 }
 
+interface McpTool {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
+}
+
+interface McpContent {
+  type: "text" | "image" | "resource";
+  text?: string;
+  data?: string;
+  mimeType?: string;
+}
+
+interface McpToolResult {
+  content: McpContent[];
+  isError: boolean;
+}
+
+/**
+ * MCP 도구를 LangChain DynamicStructuredTool로 변환
+ */
+function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
+  // inputSchema를 zod 스키마로 변환
+  const zodSchema = jsonSchemaToZod(mcpTool.inputSchema);
+  
+  return new DynamicStructuredTool({
+    name: mcpTool.name,
+    description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
+    schema: zodSchema,
+    func: async (args: Record<string, unknown>) => {
+      try {
+        const result = await invoke<McpToolResult>("mcp_call_tool", {
+          name: mcpTool.name,
+          arguments: args,
+        });
+
+        if (result.isError) {
+          throw new Error(result.content.map(c => c.text || "").join("\n"));
+        }
+
+        // 결과를 텍스트로 변환
+        return result.content
+          .map(c => {
+            if (c.type === "text") return c.text || "";
+            if (c.type === "image") return `[Image: ${c.mimeType}]`;
+            return JSON.stringify(c);
+          })
+          .join("\n");
+      } catch (error) {
+        throw new Error(`MCP tool call failed: ${error}`);
+      }
+    },
+  });
+}
+
+/**
+ * JSON Schema를 Zod 스키마로 변환
+ */
+function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeAny>> {
+  if (typeof schema !== "object" || schema === null) {
+    return z.object({});
+  }
+  
+  const s = schema as Record<string, unknown>;
+  
+  if (s.type === "object" && typeof s.properties === "object") {
+    const props = s.properties as Record<string, { type?: string; description?: string }>;
+    const required = (s.required as string[]) || [];
+    const shape: Record<string, z.ZodTypeAny> = {};
+    
+    for (const [key, prop] of Object.entries(props)) {
+      let fieldSchema: z.ZodTypeAny;
+      
+      if (prop.type === "string") {
+        fieldSchema = z.string();
+      } else if (prop.type === "number" || prop.type === "integer") {
+        fieldSchema = z.number();
+      } else if (prop.type === "boolean") {
+        fieldSchema = z.boolean();
+      } else if (prop.type === "array") {
+        fieldSchema = z.array(z.any());
+      } else {
+        fieldSchema = z.any();
+      }
+      
+      if (prop.description) {
+        fieldSchema = fieldSchema.describe(prop.description);
+      }
+      
+      // required가 아니면 optional로
+      if (!required.includes(key)) {
+        fieldSchema = fieldSchema.optional();
+      }
+      
+      shape[key] = fieldSchema;
+    }
+    
+    return z.object(shape);
+  }
+  
+  return z.object({});
+}
+
+/**
+ * MCP 클라이언트 매니저
+ * 
+ * Rust 네이티브 MCP SSE 클라이언트를 사용합니다.
+ * Node.js 의존성 없이 Atlassian MCP 서버에 직접 연결합니다.
+ */
 class McpClientManager {
-  private client: Client | null = null;
-  private transport: TauriShellTransport | null = null;
   private _status: McpConnectionStatus = { isConnected: false, isConnecting: false };
   private statusListeners: ((status: McpConnectionStatus) => void)[] = [];
+  private toolsCache: DynamicStructuredTool[] = [];
 
   // Singleton Instance
   private static instance: McpClientManager;
 
-  private constructor() {}
+  private constructor() {
+    // 초기 상태 동기화
+    this.syncStatus();
+  }
 
   public static getInstance(): McpClientManager {
     if (!McpClientManager.instance) {
@@ -29,23 +139,20 @@ class McpClientManager {
   }
 
   /**
-   * MCP 프록시 번들 경로를 가져옵니다.
-   * 개발 환경과 배포 환경 모두 지원합니다.
+   * Rust 백엔드에서 현재 상태 동기화
    */
-  private async getMcpProxyPath(): Promise<string> {
+  private async syncStatus(): Promise<void> {
     try {
-      // Tauri 리소스 경로 해석 (배포 환경)
-      return await resolveResource("resources/mcp-proxy.cjs");
-    } catch {
-      // 개발 환경: src-tauri/resources/mcp-proxy.cjs
-      // resolveResource가 실패하면 개발 환경으로 가정
-      console.log("[McpClientManager] Using development path for mcp-proxy");
-      return "src-tauri/resources/mcp-proxy.cjs";
+      const status = await invoke<McpConnectionStatus>("mcp_get_status");
+      this.updateStatus(status);
+    } catch (error) {
+      console.error("[McpClientManager] Failed to sync status:", error);
     }
   }
 
   /**
-   * Atlassian Rovo MCP 서버에 연결 (OAuth via mcp-remote)
+   * Atlassian MCP 서버에 연결 (Rust 네이티브)
+   * OAuth 2.1 인증이 필요한 경우 브라우저에서 인증 플로우를 시작합니다.
    */
   async connectAtlassian(): Promise<void> {
     if (this._status.isConnected || this._status.isConnecting) {
@@ -56,52 +163,20 @@ class McpClientManager {
     this.updateStatus({ isConnecting: true, error: null });
 
     try {
-      // MCP 프록시 번들 경로 가져오기
-      const proxyPath = await this.getMcpProxyPath();
-      console.log("[McpClientManager] Using MCP proxy at:", proxyPath);
-
-      // 동적 임포트로 Node.js 의존성 격리 (빌드 에러 방지)
-      const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
-
-      // 1. Transport 생성
-      // node 명령어로 번들된 mcp-proxy.cjs 실행
-      // 장점: pkg 바이너리화 문제 회피, npx 없이 직접 실행
-      this.transport = new TauriShellTransport(
-        "node", 
-        [proxyPath, "https://mcp.atlassian.com/v1/sse"], 
-        {}
-      );
-
-      // 2. Client 초기화
-      this.client = new Client(
-        {
-          name: "ite-atlassian-client",
-          version: "0.1.0",
-        },
-        {
-          capabilities: {
-            sampling: {},
-          },
-        }
-      );
-
-      // 3. 연결 시작
-      await this.client.connect(this.transport);
-      console.log("[McpClientManager] Connected to Atlassian MCP");
-
-      this.updateStatus({ 
-        isConnected: true, 
-        isConnecting: false, 
-        serverName: "Atlassian"
-      });
+      await invoke("mcp_connect");
+      
+      // 도구 목록 미리 로드
+      await this.loadTools();
+      
+      await this.syncStatus();
+      console.log("[McpClientManager] Connected to Atlassian MCP (Rust native)");
 
     } catch (error) {
       console.error("[McpClientManager] Connection failed:", error);
-      this.disconnect(); // 정리
       this.updateStatus({ 
         isConnected: false, 
         isConnecting: false, 
-        error: error instanceof Error ? error.message : "Failed to connect to MCP server" 
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -112,42 +187,42 @@ class McpClientManager {
    */
   async disconnect(): Promise<void> {
     try {
-      if (this.client) {
-        await this.client.close();
-      }
-      if (this.transport) {
-        await this.transport.close();
-      }
-      
+      await invoke("mcp_disconnect");
+      this.toolsCache = [];
+      await this.syncStatus();
     } catch (error) {
       console.error("[McpClientManager] Disconnect error:", error);
-    } finally {
-      this.client = null;
-      this.transport = null;
-      this.updateStatus({ isConnected: false, isConnecting: false, serverName: null });
+    }
+  }
+
+  /**
+   * 도구 목록 로드
+   */
+  private async loadTools(): Promise<void> {
+    try {
+      const mcpTools = await invoke<McpTool[]>("mcp_get_tools");
+      this.toolsCache = mcpTools.map(tool => createLangChainTool(tool));
+      console.log(`[McpClientManager] Loaded ${this.toolsCache.length} tools`);
+    } catch (error) {
+      console.error("[McpClientManager] Failed to load tools:", error);
+      this.toolsCache = [];
     }
   }
 
   /**
    * LangChain 호환 도구 목록 가져오기
    */
-  async getTools(): Promise<Tool[]> {
-    if (!this.client || !this._status.isConnected) {
+  async getTools(): Promise<DynamicStructuredTool[]> {
+    if (!this._status.isConnected) {
       return [];
     }
 
-    try {
-      // 동적 임포트
-      const { loadMcpTools } = await import("@langchain/mcp-adapters");
-      
-      // serverName 인자가 필요하며(첫 번째), 반환 타입 캐스팅 필요
-      // Atlassian MCP 서버 이름은 보통 'atlassian' 또는 'rovo'로 가정
-      const tools = await loadMcpTools("atlassian", this.client);
-      return tools as unknown as Tool[];
-    } catch (error) {
-      console.error("[McpClientManager] Failed to load tools:", error);
-      return [];
+    // 캐시가 비어있으면 다시 로드
+    if (this.toolsCache.length === 0) {
+      await this.loadTools();
     }
+
+    return this.toolsCache;
   }
 
   subscribe(listener: (status: McpConnectionStatus) => void): () => void {

@@ -1,0 +1,7 @@
+{
+  "setup-worktree": [
+    "npm install",
+    "npm run tauri:build",
+    "npm run tauri:dev"
+  ]
+}

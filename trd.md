@@ -93,7 +93,8 @@ What (API 구조 - 채팅 모드):
   - suggest_translation_rule: 번역 규칙 제안
   - suggest_project_context: Project Context 제안
   - (외부 참조 도구, 조건부) Confluence 문서 검색/가져오기: Rovo MCP `search()` / `fetch()`
-    - **Sidecar 방식 (배포 안정성)**: `mcp-remote`를 바이너리로 내장(`bin/mcp-proxy`)하여 사용자 Node.js 설치 없이도 동작한다.
+    - **Rust 네이티브 SSE 클라이언트**: Node.js 의존성 없이 Rust에서 직접 Atlassian MCP 서버에 SSE 연결.
+    - OAuth 2.1 PKCE 인증도 Rust에서 네이티브로 처리 (로컬 콜백 서버 방식).
     - 사용자는 Chat 탭에서 `Confluence_search` 토글로 사용 여부를 제어한다(3.6 참조).
     - 토글이 꺼져 있으면 모델에 도구를 바인딩/노출하지 않는다(웹검색 게이트와 동일 원칙).
 
@@ -176,8 +177,8 @@ What:
  - Confluence 검색 게이트(중요)
   - 배경:
     - Atlassian Rovo MCP Server는 **OAuth 2.1 기반**이며, API Token/API Key를 사용자가 직접 입력해 연결하는 방식은 지원하지 않는다.
-    - 배포 환경(Production)에서도 안정적으로 동작하기 위해 `mcp-remote`를 **Sidecar 바이너리**(`mcp-proxy`)로 패키징하여 내장한다.
-      - 참고: https://support.atlassian.com/atlassian-rovo-mcp-server/docs/setting-up-ides/
+    - **Rust 네이티브 SSE 클라이언트**로 Node.js 의존성 없이 직접 Atlassian MCP 서버에 연결한다.
+    - OAuth 2.1 PKCE 인증은 Rust에서 로컬 콜백 서버를 열어 처리한다.
   - `confluenceSearchEnabled`가 **true일 때만** Rovo MCP의 `search()` / `fetch()` 도구를 사용할 수 있다.
   - `confluenceSearchEnabled=false`인 경우:
     - Tool-calling에서도 Rovo MCP 도구(`search`, `fetch`)를 모델에 바인딩/노출하지 않는다.
@@ -186,9 +187,9 @@ What:
   - OAuth 트리거(Non-Intrusive / Lazy):
     - 토글 ON은 “도구 사용 허용”만 의미한다(즉시 브라우저 인증을 강제하지 않는다).
     - 실제로 `search()` / `fetch()`가 필요한 시점에 연결이 없으면, UI에서 “Atlassian 연결(Connect)” CTA를 노출하고 **사용자 클릭으로만** OAuth를 시작한다.
-  - 연결 엔드포인트(가이드 기준):
+  - 연결 엔드포인트:
     - `https://mcp.atlassian.com/v1/sse`
-    - Sidecar: `bin/mcp-proxy` (Tauri `externalBin` 설정 참조)
+    - Rust 구현: `src-tauri/src/mcp/` (client.rs, oauth.rs, types.rs)
 - 패널 레이아웃/폭 (PanelGroup 규칙)
   - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel
   - 기본 분할 비율은 Editor 60% / Chat 40%이며, 사용자가 리사이즈 핸들로 최소 Chat 25% ~ 최대 80% 범위에서 조절할 수 있어야 한다.

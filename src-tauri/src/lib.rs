@@ -5,6 +5,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod mcp;
 pub mod models;
 pub mod utils;
 
@@ -190,6 +191,12 @@ pub fn run() {
             commands::mcp::save_mcp_server,
             commands::mcp::list_mcp_servers,
             commands::mcp::delete_mcp_server,
+            // MCP SSE 클라이언트 (Rust 네이티브)
+            commands::mcp::mcp_connect,
+            commands::mcp::mcp_disconnect,
+            commands::mcp::mcp_get_status,
+            commands::mcp::mcp_get_tools,
+            commands::mcp::mcp_call_tool,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,447 @@
+//! MCP SSE 클라이언트 구현
+//!
+//! Atlassian MCP 서버와 SSE(Server-Sent Events)로 통신합니다.
+
+use crate::mcp::oauth::AtlassianOAuth;
+use crate::mcp::types::*;
+use futures::StreamExt;
+use reqwest_eventsource::{Event, EventSource};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+
+const MCP_SSE_URL: &str = "https://mcp.atlassian.com/v1/sse";
+const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
+
+/// MCP 클라이언트
+pub struct McpClient {
+    /// OAuth 인증 핸들러
+    oauth: Arc<AtlassianOAuth>,
+    /// 연결 상태
+    status: Arc<RwLock<McpConnectionStatus>>,
+    /// 메시지 전송용 엔드포인트 (SSE 연결 후 받음)
+    message_endpoint: Arc<RwLock<Option<String>>>,
+    /// 대기 중인 응답 (request id -> response channel)
+    pending_requests: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
+    /// 다음 요청 ID
+    next_request_id: AtomicU64,
+    /// SSE 연결 종료용
+    shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    /// 캐시된 도구 목록
+    cached_tools: Arc<RwLock<Vec<McpTool>>>,
+    /// 서버 정보
+    server_info: Arc<RwLock<Option<ServerInfo>>>,
+}
+
+impl McpClient {
+    pub fn new() -> Self {
+        Self {
+            oauth: Arc::new(AtlassianOAuth::new()),
+            status: Arc::new(RwLock::new(McpConnectionStatus::default())),
+            message_endpoint: Arc::new(RwLock::new(None)),
+            pending_requests: Arc::new(Mutex::new(HashMap::new())),
+            next_request_id: AtomicU64::new(1),
+            shutdown_tx: Arc::new(Mutex::new(None)),
+            cached_tools: Arc::new(RwLock::new(Vec::new())),
+            server_info: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// 현재 연결 상태 가져오기
+    pub async fn get_status(&self) -> McpConnectionStatus {
+        self.status.read().await.clone()
+    }
+
+    /// 상태 업데이트
+    async fn update_status(&self, update: impl FnOnce(&mut McpConnectionStatus)) {
+        let mut status = self.status.write().await;
+        update(&mut status);
+    }
+
+    /// Atlassian MCP 서버에 연결
+    pub async fn connect(&self) -> Result<(), String> {
+        // 이미 연결 중이거나 연결된 경우
+        {
+            let status = self.status.read().await;
+            if status.is_connected || status.is_connecting {
+                return Ok(());
+            }
+        }
+
+        self.update_status(|s| {
+            s.is_connecting = true;
+            s.error = None;
+        }).await;
+
+        // OAuth 토큰 확인
+        if !self.oauth.has_token().await {
+            // OAuth 인증 시작
+            if let Err(e) = self.oauth.start_auth_flow().await {
+                self.update_status(|s| {
+                    s.is_connecting = false;
+                    s.error = Some(e.clone());
+                }).await;
+                return Err(e);
+            }
+        }
+
+        // SSE 연결 시작
+        match self.start_sse_connection().await {
+            Ok(()) => {
+                // MCP 초기화 수행
+                match self.initialize().await {
+                    Ok(()) => {
+                        // 도구 목록 가져오기
+                        if let Err(e) = self.fetch_tools().await {
+                            eprintln!("[MCP] Failed to fetch tools: {}", e);
+                        }
+
+                        self.update_status(|s| {
+                            s.is_connected = true;
+                            s.is_connecting = false;
+                            s.server_name = Some("Atlassian".to_string());
+                        }).await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        self.disconnect().await;
+                        self.update_status(|s| {
+                            s.is_connecting = false;
+                            s.error = Some(e.clone());
+                        }).await;
+                        Err(e)
+                    }
+                }
+            }
+            Err(e) => {
+                self.update_status(|s| {
+                    s.is_connecting = false;
+                    s.error = Some(e.clone());
+                }).await;
+                Err(e)
+            }
+        }
+    }
+
+    /// SSE 연결 시작
+    async fn start_sse_connection(&self) -> Result<(), String> {
+        let access_token = self.oauth.get_access_token().await
+            .ok_or("No access token available")?;
+
+        println!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
+        println!("[MCP] Access token (first 20 chars): {}...", &access_token[..access_token.len().min(20)]);
+
+        // reqwest 클라이언트 빌드 (TLS 설정 포함)
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
+        let request = client
+            .get(MCP_SSE_URL)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache");
+
+        let mut es = EventSource::new(request)
+            .map_err(|e| format!("Failed to create EventSource: {}", e))?;
+
+        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+        *self.shutdown_tx.lock().await = Some(shutdown_tx);
+
+        let message_endpoint = self.message_endpoint.clone();
+        let pending_requests = self.pending_requests.clone();
+        let status = self.status.clone();
+
+        // SSE 이벤트 처리 태스크
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    event = es.next() => {
+                        match event {
+                            Some(Ok(Event::Open)) => {
+                                println!("[MCP] SSE connection opened");
+                            }
+                            Some(Ok(Event::Message(msg))) => {
+                                // SSE 이벤트 타입에 따라 처리
+                                match msg.event.as_str() {
+                                    "endpoint" => {
+                                        // 메시지 전송 엔드포인트 수신
+                                        // 상대 경로인 경우 절대 URL로 변환
+                                        let endpoint_url = if msg.data.starts_with("http://") || msg.data.starts_with("https://") {
+                                            msg.data.clone()
+                                        } else {
+                                            // 상대 경로를 SSE URL 기준으로 절대 URL로 변환
+                                            match url::Url::parse(MCP_SSE_URL) {
+                                                Ok(base_url) => {
+                                                    match base_url.join(&msg.data) {
+                                                        Ok(full_url) => full_url.to_string(),
+                                                        Err(_) => format!("https://mcp.atlassian.com{}", msg.data)
+                                                    }
+                                                }
+                                                Err(_) => format!("https://mcp.atlassian.com{}", msg.data)
+                                            }
+                                        };
+                                        println!("[MCP] Received endpoint: {} -> {}", msg.data, endpoint_url);
+                                        *message_endpoint.write().await = Some(endpoint_url);
+                                    }
+                                    "message" => {
+                                        // JSON-RPC 응답 수신
+                                        if let Ok(response) = serde_json::from_str::<JsonRpcResponse>(&msg.data) {
+                                            if let Some(id) = &response.id {
+                                                let id_str = match id {
+                                                    serde_json::Value::Number(n) => n.to_string(),
+                                                    serde_json::Value::String(s) => s.clone(),
+                                                    _ => continue,
+                                                };
+                                                if let Some(tx) = pending_requests.lock().await.remove(&id_str) {
+                                                    let _ = tx.send(response);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        println!("[MCP] Unknown SSE event: {} - {}", msg.event, msg.data);
+                                    }
+                                }
+                            }
+                            Some(Err(e)) => {
+                                eprintln!("[MCP] SSE error: {}", e);
+                                status.write().await.error = Some(format!("SSE error: {}", e));
+                                break;
+                            }
+                            None => {
+                                println!("[MCP] SSE stream ended");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        println!("[MCP] Shutting down SSE connection");
+                        es.close();
+                        break;
+                    }
+                }
+            }
+
+            // 연결 종료 시 상태 업데이트
+            let mut s = status.write().await;
+            s.is_connected = false;
+            s.is_connecting = false;
+        });
+
+        // 엔드포인트 수신 대기 (최대 10초)
+        for _ in 0..100 {
+            if self.message_endpoint.read().await.is_some() {
+                return Ok(());
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        Err("Timeout waiting for message endpoint".to_string())
+    }
+
+    /// MCP 초기화 요청
+    async fn initialize(&self) -> Result<(), String> {
+        let params = InitializeParams {
+            protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+            capabilities: ClientCapabilities {
+                sampling: Some(serde_json::json!({})),
+                roots: None,
+            },
+            client_info: ClientInfo {
+                name: "ite-mcp-client".to_string(),
+                version: "1.0.0".to_string(),
+            },
+        };
+
+        let response = self.send_request("initialize", Some(serde_json::to_value(params).unwrap())).await?;
+        
+        if let Some(result) = response.result {
+            if let Ok(init_result) = serde_json::from_value::<InitializeResult>(result) {
+                *self.server_info.write().await = init_result.server_info;
+                
+                // initialized 알림 전송
+                self.send_notification("notifications/initialized", None).await?;
+                
+                return Ok(());
+            }
+        }
+
+        if let Some(error) = response.error {
+            return Err(format!("Initialize failed: {} (code: {})", error.message, error.code));
+        }
+
+        Err("Initialize failed: unknown error".to_string())
+    }
+
+    /// 도구 목록 가져오기
+    async fn fetch_tools(&self) -> Result<(), String> {
+        let response = self.send_request("tools/list", None).await?;
+        
+        if let Some(result) = response.result {
+            if let Ok(tools_result) = serde_json::from_value::<ListToolsResult>(result) {
+                *self.cached_tools.write().await = tools_result.tools;
+                return Ok(());
+            }
+        }
+
+        if let Some(error) = response.error {
+            return Err(format!("List tools failed: {} (code: {})", error.message, error.code));
+        }
+
+        Err("List tools failed: unknown error".to_string())
+    }
+
+    /// JSON-RPC 요청 전송
+    async fn send_request(&self, method: &str, params: Option<serde_json::Value>) -> Result<JsonRpcResponse, String> {
+        let endpoint = self.message_endpoint.read().await.clone()
+            .ok_or("Not connected to MCP server")?;
+
+        println!("[MCP] Sending request to endpoint: {}", endpoint);
+        println!("[MCP] Method: {}", method);
+
+        let access_token = self.oauth.get_access_token().await
+            .ok_or("No access token available")?;
+
+        let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        let request_body = JsonRpcRequest::new(id, method, params);
+
+        // 응답 채널 등록
+        let (tx, rx) = oneshot::channel();
+        self.pending_requests.lock().await.insert(id.to_string(), tx);
+
+        // HTTP POST로 요청 전송
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
+        let response = client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if !response.status().is_success() {
+            self.pending_requests.lock().await.remove(&id.to_string());
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Request failed with status {}: {}", status, body));
+        }
+
+        // SSE를 통한 응답 대기 (타임아웃: 30초)
+        match tokio::time::timeout(tokio::time::Duration::from_secs(30), rx).await {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(_)) => Err("Response channel closed".to_string()),
+            Err(_) => {
+                self.pending_requests.lock().await.remove(&id.to_string());
+                Err("Request timeout".to_string())
+            }
+        }
+    }
+
+    /// JSON-RPC 알림 전송 (응답 없음)
+    async fn send_notification(&self, method: &str, params: Option<serde_json::Value>) -> Result<(), String> {
+        let endpoint = self.message_endpoint.read().await.clone()
+            .ok_or("Not connected to MCP server")?;
+
+        let access_token = self.oauth.get_access_token().await
+            .ok_or("No access token available")?;
+
+        let notification = JsonRpcNotification {
+            jsonrpc: "2.0".to_string(),
+            method: method.to_string(),
+            params,
+        };
+
+        println!("[MCP] Sending notification: {}", method);
+
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
+        let response = client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .json(&notification)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send notification: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Notification failed with status {}: {}", status, body));
+        }
+
+        Ok(())
+    }
+
+    /// 도구 목록 가져오기 (캐시된 값)
+    pub async fn get_tools(&self) -> Vec<McpTool> {
+        self.cached_tools.read().await.clone()
+    }
+
+    /// 도구 호출
+    pub async fn call_tool(&self, name: &str, arguments: Option<HashMap<String, serde_json::Value>>) -> Result<McpToolResult, String> {
+        let params = CallToolParams {
+            name: name.to_string(),
+            arguments,
+        };
+
+        let response = self.send_request("tools/call", Some(serde_json::to_value(params).unwrap())).await?;
+
+        if let Some(result) = response.result {
+            return serde_json::from_value(result)
+                .map_err(|e| format!("Failed to parse tool result: {}", e));
+        }
+
+        if let Some(error) = response.error {
+            return Err(format!("Tool call failed: {} (code: {})", error.message, error.code));
+        }
+
+        Err("Tool call failed: unknown error".to_string())
+    }
+
+    /// 연결 해제
+    pub async fn disconnect(&self) {
+        // SSE 연결 종료
+        if let Some(tx) = self.shutdown_tx.lock().await.take() {
+            let _ = tx.send(()).await;
+        }
+
+        // 상태 초기화
+        *self.message_endpoint.write().await = None;
+        self.pending_requests.lock().await.clear();
+        *self.cached_tools.write().await = Vec::new();
+        *self.server_info.write().await = None;
+
+        self.update_status(|s| {
+            s.is_connected = false;
+            s.is_connecting = false;
+            s.server_name = None;
+        }).await;
+    }
+
+    /// 로그아웃 (토큰 삭제 포함)
+    pub async fn logout(&self) {
+        self.disconnect().await;
+        self.oauth.logout().await;
+    }
+}
+
+impl Default for McpClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// 전역 싱글톤 인스턴스
+use once_cell::sync::Lazy;
+
+pub static MCP_CLIENT: Lazy<McpClient> = Lazy::new(McpClient::new);
+

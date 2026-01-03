@@ -1,11 +1,12 @@
 use tauri::{AppHandle, State};
 use uuid::Uuid;
+use std::collections::HashMap;
 use crate::db::{DbState, McpServerRow};
-use crate::error::IteError;
+use crate::mcp::{McpConnectionStatus, McpTool, McpToolResult, MCP_CLIENT};
 
 #[tauri::command]
 pub async fn save_mcp_server(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, DbState>,
     name: String,
     server_type: String,
@@ -50,5 +51,44 @@ pub async fn delete_mcp_server(
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db.delete_mcp_server(&id).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ============================================================================
+// MCP SSE 클라이언트 커맨드 (Rust 네이티브 - Node.js 의존성 제거)
+// ============================================================================
+
+/// Atlassian MCP 서버에 연결
+/// OAuth 2.1 인증이 필요한 경우 브라우저에서 인증 플로우를 시작합니다.
+#[tauri::command]
+pub async fn mcp_connect() -> Result<(), String> {
+    MCP_CLIENT.connect().await
+}
+
+/// MCP 서버 연결 해제
+#[tauri::command]
+pub async fn mcp_disconnect() -> Result<(), String> {
+    MCP_CLIENT.disconnect().await;
+    Ok(())
+}
+
+/// 현재 MCP 연결 상태 가져오기
+#[tauri::command]
+pub async fn mcp_get_status() -> Result<McpConnectionStatus, String> {
+    Ok(MCP_CLIENT.get_status().await)
+}
+
+/// MCP 도구 목록 가져오기
+#[tauri::command]
+pub async fn mcp_get_tools() -> Result<Vec<McpTool>, String> {
+    Ok(MCP_CLIENT.get_tools().await)
+}
+
+/// MCP 도구 호출
+#[tauri::command]
+pub async fn mcp_call_tool(
+    name: String,
+    arguments: Option<HashMap<String, serde_json::Value>>,
+) -> Result<McpToolResult, String> {
+    MCP_CLIENT.call_tool(&name, arguments).await
 }
 
