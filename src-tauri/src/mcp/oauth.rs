@@ -2,8 +2,11 @@
 //! 
 //! Atlassian MCP 서버는 자체 OAuth 엔드포인트를 제공합니다.
 //! (auth.atlassian.com이 아닌 mcp.atlassian.com 사용)
+//! 
+//! 토큰은 OS 키체인에 영속화되어 앱 재시작 후에도 유지됩니다.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use keyring::Entry;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -12,13 +15,20 @@ use tokio::sync::{oneshot, Mutex};
 use url::Url;
 
 // Atlassian MCP 서버 자체 OAuth 엔드포인트
-// (https://mcp.atlassian.com/.well-known/oauth-authorization-server 에서 확인)
 const MCP_AUTH_URL: &str = "https://mcp.atlassian.com/v1/authorize";
 const MCP_TOKEN_URL: &str = "https://cf.mcp.atlassian.com/v1/token";
 const MCP_REGISTRATION_URL: &str = "https://cf.mcp.atlassian.com/v1/register";
 const REDIRECT_PORT: u16 = 23456;
 
-/// OAuth 토큰
+// 키체인 저장 키
+const KEYCHAIN_SERVICE: &str = "com.ite.app";
+const KEYCHAIN_MCP_TOKEN: &str = "mcp:oauth_token";
+const KEYCHAIN_MCP_CLIENT: &str = "mcp:client_id";
+
+// 토큰 만료 전 갱신 여유 시간 (5분)
+const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
+
+/// OAuth 토큰 (영속화 가능)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OAuthToken {
     pub access_token: String,
@@ -26,6 +36,33 @@ pub struct OAuthToken {
     pub expires_in: Option<i64>,
     pub refresh_token: Option<String>,
     pub scope: Option<String>,
+    /// 토큰 발급 시점 (Unix timestamp, 초)
+    #[serde(default)]
+    pub issued_at: i64,
+}
+
+impl OAuthToken {
+    /// 토큰이 만료되었는지 (또는 곧 만료될지) 확인
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_in) = self.expires_in {
+            let now = chrono::Utc::now().timestamp();
+            let expires_at = self.issued_at + expires_in;
+            // 만료 5분 전부터 갱신 필요
+            now >= expires_at - TOKEN_REFRESH_MARGIN_SECS
+        } else {
+            // expires_in이 없으면 만료되지 않은 것으로 간주
+            false
+        }
+    }
+
+    /// 남은 유효 시간 (초)
+    pub fn remaining_seconds(&self) -> Option<i64> {
+        self.expires_in.map(|exp| {
+            let now = chrono::Utc::now().timestamp();
+            let expires_at = self.issued_at + exp;
+            (expires_at - now).max(0)
+        })
+    }
 }
 
 /// Dynamic Client Registration 응답
@@ -40,11 +77,11 @@ struct ClientRegistrationResponse {
     client_secret_expires_at: Option<i64>,
 }
 
-/// 등록된 클라이언트 정보
-#[derive(Debug, Clone)]
+/// 등록된 클라이언트 정보 (영속화 가능)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct RegisteredClient {
     client_id: String,
-    #[allow(dead_code)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     client_secret: Option<String>,
 }
 
@@ -65,6 +102,8 @@ pub struct AtlassianOAuth {
     pending_pkce: Arc<Mutex<Option<PkceData>>>,
     /// OAuth 콜백 수신용
     callback_tx: Arc<Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
+    /// 초기화 완료 여부
+    initialized: Arc<Mutex<bool>>,
 }
 
 impl AtlassianOAuth {
@@ -74,20 +113,134 @@ impl AtlassianOAuth {
             registered_client: Arc::new(Mutex::new(None)),
             pending_pkce: Arc::new(Mutex::new(None)),
             callback_tx: Arc::new(Mutex::new(None)),
+            initialized: Arc::new(Mutex::new(false)),
         }
     }
 
-    /// 현재 토큰이 있는지 확인
+    /// 키체인에서 저장된 토큰/클라이언트 로드 (앱 시작 시 호출)
+    pub async fn initialize(&self) -> Result<(), String> {
+        let mut initialized = self.initialized.lock().await;
+        if *initialized {
+            return Ok(());
+        }
+
+        println!("[OAuth] Initializing from keychain...");
+
+        // 저장된 클라이언트 로드
+        if let Some(client_json) = Self::load_from_keychain(KEYCHAIN_MCP_CLIENT) {
+            if let Ok(client) = serde_json::from_str::<RegisteredClient>(&client_json) {
+                println!("[OAuth] Loaded client_id from keychain: {}", client.client_id);
+                *self.registered_client.lock().await = Some(client);
+            }
+        }
+
+        // 저장된 토큰 로드
+        if let Some(token_json) = Self::load_from_keychain(KEYCHAIN_MCP_TOKEN) {
+            if let Ok(token) = serde_json::from_str::<OAuthToken>(&token_json) {
+                if let Some(remaining) = token.remaining_seconds() {
+                    println!("[OAuth] Loaded token from keychain (expires in {} seconds)", remaining);
+                }
+                *self.token.lock().await = Some(token);
+            }
+        }
+
+        *initialized = true;
+        Ok(())
+    }
+
+    /// 키체인에서 값 로드
+    fn load_from_keychain(key: &str) -> Option<String> {
+        match Entry::new(KEYCHAIN_SERVICE, key) {
+            Ok(entry) => match entry.get_password() {
+                Ok(value) => Some(value),
+                Err(keyring::Error::NoEntry) => None,
+                Err(e) => {
+                    eprintln!("[OAuth] Keychain read error for {}: {}", key, e);
+                    None
+                }
+            },
+            Err(e) => {
+                eprintln!("[OAuth] Keychain entry error for {}: {}", key, e);
+                None
+            }
+        }
+    }
+
+    /// 키체인에 값 저장
+    fn save_to_keychain(key: &str, value: &str) -> Result<(), String> {
+        let entry = Entry::new(KEYCHAIN_SERVICE, key)
+            .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
+        entry
+            .set_password(value)
+            .map_err(|e| format!("Failed to save to keychain: {}", e))
+    }
+
+    /// 키체인에서 값 삭제
+    fn delete_from_keychain(key: &str) {
+        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, key) {
+            let _ = entry.delete_password();
+        }
+    }
+
+    /// 토큰 저장 (메모리 + 키체인)
+    async fn save_token(&self, token: OAuthToken) -> Result<(), String> {
+        let token_json = serde_json::to_string(&token)
+            .map_err(|e| format!("Failed to serialize token: {}", e))?;
+        
+        Self::save_to_keychain(KEYCHAIN_MCP_TOKEN, &token_json)?;
+        *self.token.lock().await = Some(token);
+        
+        println!("[OAuth] Token saved to keychain");
+        Ok(())
+    }
+
+    /// 클라이언트 저장 (메모리 + 키체인)
+    async fn save_client(&self, client: RegisteredClient) -> Result<(), String> {
+        let client_json = serde_json::to_string(&client)
+            .map_err(|e| format!("Failed to serialize client: {}", e))?;
+        
+        Self::save_to_keychain(KEYCHAIN_MCP_CLIENT, &client_json)?;
+        *self.registered_client.lock().await = Some(client);
+        
+        println!("[OAuth] Client saved to keychain");
+        Ok(())
+    }
+
+    /// 현재 토큰이 있는지 확인 (자동 초기화 포함)
     pub async fn has_token(&self) -> bool {
+        let _ = self.initialize().await;
         self.token.lock().await.is_some()
     }
 
-    /// 현재 액세스 토큰 가져오기
+    /// 유효한 액세스 토큰 가져오기 (필요 시 자동 갱신)
     pub async fn get_access_token(&self) -> Option<String> {
+        let _ = self.initialize().await;
+        
+        // 토큰 확인
+        let needs_refresh = {
+            let token = self.token.lock().await;
+            match token.as_ref() {
+                Some(t) => t.is_expired(),
+                None => return None,
+            }
+        };
+
+        // 만료된 경우 갱신 시도
+        if needs_refresh {
+            println!("[OAuth] Token expired, attempting refresh...");
+            match self.refresh_token().await {
+                Ok(()) => println!("[OAuth] Token refreshed successfully"),
+                Err(e) => {
+                    eprintln!("[OAuth] Token refresh failed: {}", e);
+                    // 갱신 실패 시 기존 토큰 반환 (만료되었더라도)
+                }
+            }
+        }
+
         self.token.lock().await.as_ref().map(|t| t.access_token.clone())
     }
 
-    /// PKCE code_verifier 생성 (43-128자 랜덤 문자열)
+    /// PKCE code_verifier 생성
     fn generate_code_verifier() -> String {
         let mut rng = rand::thread_rng();
         let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
@@ -109,9 +262,10 @@ impl AtlassianOAuth {
         URL_SAFE_NO_PAD.encode(&bytes)
     }
 
-    /// Dynamic Client Registration (RFC 7591)
-    /// Atlassian MCP 서버에 동적으로 OAuth 클라이언트를 등록하고 client_id를 받습니다.
+    /// Dynamic Client Registration
     async fn register_client(&self) -> Result<RegisteredClient, String> {
+        let _ = self.initialize().await;
+        
         // 이미 등록된 클라이언트가 있으면 재사용
         if let Some(client) = self.registered_client.lock().await.clone() {
             println!("[OAuth] Reusing existing client: {}", client.client_id);
@@ -128,10 +282,12 @@ impl AtlassianOAuth {
             "token_endpoint_auth_method": "none"
         });
 
-        println!("[OAuth] Registering OAuth client with Atlassian MCP server...");
-        println!("[OAuth] Registration URL: {}", MCP_REGISTRATION_URL);
+        println!("[OAuth] Registering OAuth client...");
         
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
         let response = client
             .post(MCP_REGISTRATION_URL)
             .header("Content-Type", "application/json")
@@ -143,7 +299,6 @@ impl AtlassianOAuth {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            // 응답 내용 축약 (HTML이 길면)
             let body_preview = if body.len() > 200 { &body[..200] } else { &body };
             return Err(format!("Client registration failed with status {}: {}", status, body_preview));
         }
@@ -153,51 +308,48 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Failed to parse registration response: {}", e))?;
 
-        println!("[OAuth] Client registered successfully: {}", reg_response.client_id);
+        println!("[OAuth] Client registered: {}", reg_response.client_id);
 
         let registered = RegisteredClient {
             client_id: reg_response.client_id,
             client_secret: reg_response.client_secret,
         };
 
-        *self.registered_client.lock().await = Some(registered.clone());
+        // 키체인에 저장
+        self.save_client(registered.clone()).await?;
+        
         Ok(registered)
     }
 
-    /// OAuth 인증 URL 생성 및 브라우저 열기
+    /// OAuth 인증 플로우 시작
     pub async fn start_auth_flow(&self) -> Result<String, String> {
-        // 1. 먼저 Dynamic Client Registration 수행
         let registered_client = self.register_client().await?;
 
         let code_verifier = Self::generate_code_verifier();
         let code_challenge = Self::generate_code_challenge(&code_verifier);
         let state = Self::generate_state();
 
-        // PKCE 데이터 저장
         *self.pending_pkce.lock().await = Some(PkceData {
             code_verifier: code_verifier.clone(),
             state: state.clone(),
         });
 
-        // 인증 URL 구성 (MCP 서버 자체 authorize 엔드포인트 사용)
         let redirect_uri = format!("http://localhost:{}/callback", REDIRECT_PORT);
         let auth_url = format!(
             "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
             MCP_AUTH_URL,
             urlencoding::encode(&registered_client.client_id),
             urlencoding::encode(&redirect_uri),
-            urlencoding::encode("offline_access"),  // MCP 스코프
+            urlencoding::encode("offline_access"),
             state,
             code_challenge
         );
 
         println!("[OAuth] Authorization URL: {}", auth_url);
 
-        // 로컬 콜백 서버 시작 및 브라우저 열기
         let (tx, rx) = oneshot::channel();
         *self.callback_tx.lock().await = Some(tx);
 
-        // 콜백 서버 시작
         let callback_tx = self.callback_tx.clone();
         let pending_pkce = self.pending_pkce.clone();
         let token_storage = self.token.clone();
@@ -209,17 +361,29 @@ impl AtlassianOAuth {
             }
         });
 
-        // 잠시 대기 후 브라우저 열기 (서버가 시작될 때까지)
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        // 브라우저에서 인증 URL 열기
         if let Err(e) = open::that(&auth_url) {
             return Err(format!("Failed to open browser: {}", e));
         }
 
-        // 콜백 대기 (타임아웃: 5분)
+        println!("[OAuth] Waiting for OAuth callback (max 5 minutes)...");
+        
         match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx).await {
-            Ok(Ok(result)) => result,
+            Ok(Ok(result)) => {
+                println!("[OAuth] Callback received: {:?}", result);
+                // 인증 성공 시 토큰을 키체인에 저장
+                if result.is_ok() {
+                    if let Some(token) = self.token.lock().await.clone() {
+                        if let Err(e) = self.save_token(token).await {
+                            eprintln!("[OAuth] Failed to save token: {}", e);
+                        } else {
+                            println!("[OAuth] Token persisted to keychain");
+                        }
+                    }
+                }
+                result
+            }
             Ok(Err(_)) => Err("OAuth callback channel closed".to_string()),
             Err(_) => Err("OAuth timeout (5 minutes)".to_string()),
         }
@@ -242,7 +406,6 @@ impl AtlassianOAuth {
 
         println!("[OAuth] Callback server listening on port {}", port);
 
-        // 단일 연결만 처리
         let (mut stream, _) = listener.accept()
             .await
             .map_err(|e| format!("Failed to accept connection: {}", e))?;
@@ -253,28 +416,31 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Failed to read request: {}", e))?;
 
-        // GET /callback?code=...&state=... 파싱
         let result = if let Some(path) = request_line.split_whitespace().nth(1) {
             if let Ok(url) = Url::parse(&format!("http://localhost{}", path)) {
                 let params: HashMap<_, _> = url.query_pairs().collect();
                 
                 if let (Some(code), Some(state)) = (params.get("code"), params.get("state")) {
-                    // state 검증
                     let pkce_data = pending_pkce.lock().await.take();
                     if let Some(pkce) = pkce_data {
                         if &pkce.state == state.as_ref() {
-                            // 토큰 교환 (MCP 토큰 엔드포인트 사용)
                             match Self::exchange_code_for_token(
                                 code,
                                 &pkce.code_verifier,
                                 port,
                                 &client_id,
                             ).await {
-                                Ok(token) => {
+                                Ok(mut token) => {
+                                    // 발급 시점 기록
+                                    token.issued_at = chrono::Utc::now().timestamp();
+                                    println!("[OAuth] Token stored in memory, issued_at: {}", token.issued_at);
                                     *token_storage.lock().await = Some(token);
                                     Ok("OAuth authentication successful".to_string())
                                 }
-                                Err(e) => Err(format!("Token exchange failed: {}", e))
+                                Err(e) => {
+                                    eprintln!("[OAuth] Token exchange error: {}", e);
+                                    Err(format!("Token exchange failed: {}", e))
+                                }
                             }
                         } else {
                             Err("Invalid OAuth state".to_string())
@@ -297,7 +463,6 @@ impl AtlassianOAuth {
             Err("Invalid HTTP request".to_string())
         };
 
-        // HTML 응답 전송
         let (status, body) = match &result {
             Ok(msg) => ("200 OK", format!(
                 r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Success</title></head>
@@ -328,7 +493,6 @@ impl AtlassianOAuth {
 
         let _ = stream.write_all(response.as_bytes()).await;
 
-        // 콜백 전송
         if let Some(tx) = callback_tx.lock().await.take() {
             let _ = tx.send(result);
         }
@@ -336,7 +500,7 @@ impl AtlassianOAuth {
         Ok(())
     }
 
-    /// Authorization code를 토큰으로 교환 (MCP 토큰 엔드포인트 사용)
+    /// Authorization code를 토큰으로 교환
     async fn exchange_code_for_token(
         code: &str,
         code_verifier: &str,
@@ -345,9 +509,12 @@ impl AtlassianOAuth {
     ) -> Result<OAuthToken, String> {
         let redirect_uri = format!("http://localhost:{}/callback", port);
         
-        println!("[OAuth] Exchanging code for token at: {}", MCP_TOKEN_URL);
+        println!("[OAuth] Exchanging code for token...");
         
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
         let params = [
             ("grant_type", "authorization_code"),
             ("client_id", client_id),
@@ -356,6 +523,8 @@ impl AtlassianOAuth {
             ("code_verifier", code_verifier),
         ];
 
+        println!("[OAuth] Sending token request to: {}", MCP_TOKEN_URL);
+        
         let response = client
             .post(MCP_TOKEN_URL)
             .form(&params)
@@ -363,19 +532,24 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Token request failed: {}", e))?;
 
+        println!("[OAuth] Token response status: {}", response.status());
+
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             return Err(format!("Token endpoint returned {}: {}", status, body));
         }
 
-        response
+        let token = response
             .json::<OAuthToken>()
             .await
-            .map_err(|e| format!("Failed to parse token response: {}", e))
+            .map_err(|e| format!("Failed to parse token response: {}", e))?;
+        
+        println!("[OAuth] Token exchange successful, access_token length: {}", token.access_token.len());
+        Ok(token)
     }
 
-    /// 토큰 갱신 (refresh_token이 있는 경우)
+    /// 토큰 갱신
     pub async fn refresh_token(&self) -> Result<(), String> {
         let current_token = self.token.lock().await.clone();
         let registered = self.registered_client.lock().await.clone();
@@ -388,7 +562,12 @@ impl AtlassianOAuth {
             .map(|r| r.client_id)
             .ok_or("No registered client")?;
 
-        let client = reqwest::Client::new();
+        println!("[OAuth] Refreshing token...");
+
+        let client = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        
         let params = [
             ("grant_type", "refresh_token"),
             ("client_id", &client_id),
@@ -408,12 +587,18 @@ impl AtlassianOAuth {
             return Err(format!("Token refresh returned {}: {}", status, body));
         }
 
-        let new_token: OAuthToken = response
+        let mut new_token: OAuthToken = response
             .json()
             .await
             .map_err(|e| format!("Failed to parse refresh token response: {}", e))?;
 
-        *self.token.lock().await = Some(new_token);
+        // 발급 시점 기록
+        new_token.issued_at = chrono::Utc::now().timestamp();
+
+        // 키체인에 저장
+        self.save_token(new_token).await?;
+
+        println!("[OAuth] Token refreshed and saved");
         Ok(())
     }
 
@@ -421,7 +606,23 @@ impl AtlassianOAuth {
     pub async fn logout(&self) {
         *self.token.lock().await = None;
         *self.pending_pkce.lock().await = None;
-        // registered_client는 유지 (재사용 가능)
+        
+        // 키체인에서 토큰 삭제
+        Self::delete_from_keychain(KEYCHAIN_MCP_TOKEN);
+        
+        println!("[OAuth] Logged out, token deleted from keychain");
+    }
+
+    /// 완전 초기화 (토큰 + 클라이언트 모두 삭제)
+    pub async fn clear_all(&self) {
+        self.logout().await;
+        *self.registered_client.lock().await = None;
+        *self.initialized.lock().await = false;
+        
+        // 키체인에서 클라이언트도 삭제
+        Self::delete_from_keychain(KEYCHAIN_MCP_CLIENT);
+        
+        println!("[OAuth] All credentials cleared");
     }
 }
 
