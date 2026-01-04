@@ -199,6 +199,13 @@ pub fn run() {
             commands::mcp::mcp_call_tool,
             commands::mcp::mcp_check_auth,
             commands::mcp::mcp_logout,
+            // MCP 레지스트리 (여러 MCP 서버 통합 관리)
+            commands::mcp::mcp_registry_status,
+            commands::mcp::mcp_registry_connect,
+            commands::mcp::mcp_registry_disconnect,
+            commands::mcp::mcp_registry_logout,
+            commands::mcp::mcp_registry_get_tools,
+            commands::mcp::mcp_registry_call_tool,
             // 커넥터 (OpenAI 빌트인 + MCP)
             commands::connector::connector_set_token,
             commands::connector::connector_get_token,

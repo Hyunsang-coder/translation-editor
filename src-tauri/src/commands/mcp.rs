@@ -2,7 +2,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 use std::collections::HashMap;
 use crate::db::{DbState, McpServerRow};
-use crate::mcp::{McpConnectionStatus, McpTool, McpToolResult, MCP_CLIENT};
+use crate::mcp::{McpConnectionStatus, McpTool, McpToolResult, MCP_CLIENT, McpRegistry, McpServerId, McpRegistryStatus};
 
 #[tauri::command]
 pub async fn save_mcp_server(
@@ -106,5 +106,51 @@ pub async fn mcp_check_auth() -> Result<McpConnectionStatus, String> {
 pub async fn mcp_logout() -> Result<(), String> {
     MCP_CLIENT.logout().await;
     Ok(())
+}
+
+// ============================================================================
+// MCP 레지스트리 커맨드 (여러 MCP 서버 통합 관리)
+// ============================================================================
+
+/// 전체 MCP 레지스트리 상태 조회
+#[tauri::command]
+pub async fn mcp_registry_status() -> Result<McpRegistryStatus, String> {
+    Ok(McpRegistry::get_registry_status().await)
+}
+
+/// 특정 MCP 서버에 연결
+#[tauri::command]
+pub async fn mcp_registry_connect(server_id: McpServerId) -> Result<(), String> {
+    McpRegistry::connect(server_id).await
+}
+
+/// 특정 MCP 서버 연결 해제
+#[tauri::command]
+pub async fn mcp_registry_disconnect(server_id: McpServerId) -> Result<(), String> {
+    McpRegistry::disconnect(server_id).await;
+    Ok(())
+}
+
+/// 특정 MCP 서버 로그아웃
+#[tauri::command]
+pub async fn mcp_registry_logout(server_id: McpServerId) -> Result<(), String> {
+    McpRegistry::logout(server_id).await;
+    Ok(())
+}
+
+/// 특정 MCP 서버의 도구 목록 조회
+#[tauri::command]
+pub async fn mcp_registry_get_tools(server_id: McpServerId) -> Result<Vec<McpTool>, String> {
+    Ok(McpRegistry::get_tools(server_id).await)
+}
+
+/// MCP 도구 호출 (레지스트리 경유)
+#[tauri::command]
+pub async fn mcp_registry_call_tool(
+    server_id: McpServerId,
+    name: String,
+    arguments: Option<HashMap<String, serde_json::Value>>,
+) -> Result<McpToolResult, String> {
+    McpRegistry::call_tool(server_id, &name, arguments).await
 }
 
