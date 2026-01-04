@@ -199,6 +199,12 @@ pub fn run() {
             commands::mcp::mcp_call_tool,
             commands::mcp::mcp_check_auth,
             commands::mcp::mcp_logout,
+            // 커넥터 (OpenAI 빌트인 + MCP)
+            commands::connector::connector_set_token,
+            commands::connector::connector_get_token,
+            commands::connector::connector_delete_token,
+            commands::connector::connector_list_status,
+            commands::connector::connector_start_oauth,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

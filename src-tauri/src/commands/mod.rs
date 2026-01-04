@@ -4,6 +4,7 @@
 
 pub mod block;
 pub mod chat;
+pub mod connector;
 pub mod glossary;
 pub mod history;
 pub mod project;

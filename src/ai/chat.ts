@@ -76,6 +76,7 @@ function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): str
 }
 
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
+import { buildConnectorTools, type ConnectorConfig } from '@/ai/connectors';
 
 export interface GenerateReplyInput {
   project: ITEProject | null;
@@ -103,6 +104,15 @@ export interface GenerateReplyInput {
    * - false면 Rovo MCP 도구를 모델에 바인딩/노출하지 않습니다.
    */
   confluenceSearchEnabled?: boolean;
+  /**
+   * 활성화된 커넥터 설정 목록
+   * - OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등)
+   */
+  connectorConfigs?: ConnectorConfig[];
+  /**
+   * 커넥터 토큰 조회 함수
+   */
+  getConnectorToken?: (connectorId: string) => Promise<string | null>;
   /**
    * 요청 취소용 AbortSignal
    */
@@ -615,8 +625,15 @@ export async function streamAssistantReply(
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
+  // OpenAI 빌트인 도구 (web_search)
   const openAiBuiltInTools = (webSearchEnabled && cfg.provider === 'openai') ? [{ type: 'web_search_preview' }] : [];
-  const bindTools = [...toolSpecs, ...openAiBuiltInTools];
+  
+  // OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등)
+  const connectorTools = (input.connectorConfigs && input.getConnectorToken)
+    ? await buildConnectorTools(input.connectorConfigs, input.getConnectorToken)
+    : [];
+  
+  const bindTools = [...toolSpecs, ...openAiBuiltInTools, ...connectorTools];
 
   const messagesWithGuide: BaseMessage[] = [
     // systemPrompt에 가이드를 병합하여 하나의 SystemMessage만 유지
