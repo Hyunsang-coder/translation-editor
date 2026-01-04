@@ -51,6 +51,7 @@
     "googleApiKey": "Google API 키",
     "googleApiKeyPlaceholder": "Google API 키를 입력하세요",
     "braveApiKey": "Brave Search API 키",
+    "braveApiKeyOptional": "선택 - 웹검색 폴백",
     "braveApiKeyPlaceholder": "Brave Search API 키를 입력하세요",
     "helpInfo": "도움말 및 정보",
     "helpInfoComingSoon": "곧 제공 예정",

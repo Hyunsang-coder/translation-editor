@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
-import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -13,17 +12,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const { t } = useTranslation();
   const { language, setLanguage } = useUIStore();
   const { 
-    provider, 
     openaiApiKey,
-    anthropicApiKey,
-    googleApiKey,
     braveApiKey,
-    setProvider, 
-    setTranslationModel, 
-    setChatModel,
     setOpenaiApiKey,
-    setAnthropicApiKey,
-    setGoogleApiKey,
     setBraveApiKey,
   } = useAiConfigStore();
 
@@ -40,22 +31,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
-
-  // Provider 변경 시 모델 목록이 달라지므로, 적절한 기본값으로 재설정
-  const handleProviderChange = (newProvider: AiProvider) => {
-    setProvider(newProvider);
-    
-    const presetsKey: Exclude<AiProvider, 'mock'> = newProvider === 'mock' ? 'openai' : newProvider;
-    const targetPresets = MODEL_PRESETS[presetsKey];
-    
-    // 현재 모델이 새 프리셋에 없으면 첫 번째 프리셋으로 변경
-    if (targetPresets && targetPresets.length > 0) {
-        // 번역 모델 리셋
-        setTranslationModel(targetPresets[0].value);
-        // 채팅 모델 리셋
-        setChatModel(targetPresets[0].value);
-    }
-  };
 
   // 언어 변경 핸들러
   const handleLanguageChange = (newLanguage: 'ko' | 'en') => {
@@ -122,43 +97,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
-            {/* 1. AI Provider */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🤖</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.aiProvider')}</h3>
-                </div>
-
-                {/* Provider Selection (Radio Group) */}
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.aiProviderLabel')}</label>
-                    <div className="flex items-center gap-4">
-                        {(['openai', 'anthropic', 'google'] as AiProvider[]).map((p) => {
-                            return (
-                                <label 
-                                    key={p} 
-                                    className="flex items-center gap-2 cursor-pointer group"
-                                >
-                                    <input 
-                                        type="radio" 
-                                        name="provider" 
-                                        value={p} 
-                                        checked={provider === p}
-                                        onChange={() => handleProviderChange(p)}
-                                        className="accent-primary-500 w-4 h-4 cursor-pointer"
-                                    />
-                                    <span className={`text-sm font-medium transition-colors ${provider === p ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
-                                        {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Google'}
-                                    </span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
-
-            </section>
-
-            {/* 2. API Keys */}
+            {/* API Keys */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🔑</span>
@@ -168,10 +107,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     {t('appSettings.apiKeysDescription')}
                 </p>
 
-                {/* OpenAI API Key */}
+                {/* OpenAI API Key (필수) */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-editor-text">{t('appSettings.openaiApiKey')}</label>
+                        <label className="text-xs font-semibold text-editor-text">
+                            {t('appSettings.openaiApiKey')}
+                            <span className="ml-1 text-red-400">*</span>
+                        </label>
                         {openaiApiKey && (
                             <button
                                 onClick={() => setOpenaiApiKey(undefined)}
@@ -192,58 +134,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                 </div>
 
-                {/* Anthropic API Key */}
+                {/* Brave Search API Key (선택 - 웹검색 폴백용) */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-editor-text">{t('appSettings.anthropicApiKey')}</label>
-                        {anthropicApiKey && (
-                            <button
-                                onClick={() => setAnthropicApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-                            >
-                                {t('common.clear')}
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <input
-                            type="password"
-                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={t('appSettings.anthropicApiKeyPlaceholder')}
-                            value={anthropicApiKey || ''}
-                            onChange={(e) => setAnthropicApiKey(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* Google API Key */}
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-editor-text">{t('appSettings.googleApiKey')}</label>
-                        {googleApiKey && (
-                            <button
-                                onClick={() => setGoogleApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-                            >
-                                {t('common.clear')}
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <input
-                            type="password"
-                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={t('appSettings.googleApiKeyPlaceholder')}
-                            value={googleApiKey || ''}
-                            onChange={(e) => setGoogleApiKey(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* Brave Search API Key */}
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-editor-text">{t('appSettings.braveApiKey')}</label>
+                        <label className="text-xs font-semibold text-editor-text">
+                            {t('appSettings.braveApiKey')}
+                            <span className="ml-1 text-editor-muted font-normal">({t('appSettings.braveApiKeyOptional')})</span>
+                        </label>
                         {braveApiKey && (
                             <button
                                 onClick={() => setBraveApiKey(undefined)}

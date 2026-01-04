@@ -1,10 +1,13 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { ChatAnthropic } from '@langchain/anthropic';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
 import i18n from '@/i18n/config';
 
+/**
+ * OpenAI 전용 Chat 모델 생성
+ * - Provider: OpenAI만 지원 (Anthropic/Google 제거됨)
+ * - mock 모드는 개발용으로 유지 (OpenAI 모델로 fallback)
+ */
 export function createChatModel(
   modelOverride?: string,
   options?: { useFor?: 'translation' | 'chat' }
@@ -13,13 +16,13 @@ export function createChatModel(
   const model = modelOverride ?? cfg.model;
   const useFor = options?.useFor ?? 'chat';
 
-  if (cfg.provider === 'openai') {
+  // OpenAI (또는 mock → OpenAI fallback)
+  if (cfg.provider === 'openai' || cfg.provider === 'mock') {
     if (!cfg.openaiApiKey) {
       throw new Error(i18n.t('errors.openaiApiKeyMissing'));
     }
 
     // GPT-5.2, GPT-5-mini 등 최신 모델은 temperature 파라미터를 지원하지 않거나 무시해야 함
-    // (o1, o3 등도 유사할 수 있으나 여기서는 명시된 gpt-5 계열만 처리)
     const isGpt5 = model.startsWith('gpt-5');
     const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
     
@@ -33,34 +36,6 @@ export function createChatModel(
       ...maxTokensOption,
       // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
       ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
-    });
-  }
-
-  if (cfg.provider === 'anthropic') {
-    if (!cfg.anthropicApiKey) {
-      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
-    }
-    // 번역 모드에서는 max_tokens를 높게 설정
-    const maxTokensOption = useFor === 'translation' ? { maxTokens: 16384 } : {};
-    return new ChatAnthropic({
-      apiKey: cfg.anthropicApiKey,
-      model,
-      ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
-      ...maxTokensOption,
-    });
-  }
-
-  if (cfg.provider === 'google') {
-    if (!cfg.googleApiKey) {
-      throw new Error(i18n.t('errors.googleApiKeyMissing'));
-    }
-    // 번역 모드에서는 max_tokens를 높게 설정
-    const maxTokensOption = useFor === 'translation' ? { maxOutputTokens: 16384 } : {};
-    return new ChatGoogleGenerativeAI({
-      apiKey: cfg.googleApiKey,
-      model,
-      ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
-      ...maxTokensOption,
     });
   }
 

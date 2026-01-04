@@ -51,6 +51,7 @@
     "googleApiKey": "Google API Key",
     "googleApiKeyPlaceholder": "Enter your Google API key",
     "braveApiKey": "Brave Search API Key",
+    "braveApiKeyOptional": "Optional - Web Search Fallback",
     "braveApiKeyPlaceholder": "Enter your Brave Search API key",
     "helpInfo": "Help & Info",
     "helpInfoComingSoon": "Coming soon",
