@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
+import { ConnectorsSection } from './ConnectorsSection';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -162,7 +163,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
-            {/* 4. Help & Info (Placeholder) */}
+            {/* Connectors */}
+            <ConnectorsSection />
+
+            {/* Help & Info (Placeholder) */}
             <section className="space-y-3 opacity-60">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">ℹ️</span>
