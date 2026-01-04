@@ -170,7 +170,9 @@ What:
   - 번역 모델 선택 드롭다운은 Editor의 “번역” 버튼 **왼쪽**에 둔다.
   - 기본 모델은 `gpt-5.2`, 커스텀 모델 입력은 지원하지 않는다.
 - 웹검색 게이트(중요)
-  - `webSearchEnabled`가 **true일 때만** 웹검색 도구(Brave/OpenAI web search)를 사용할 수 있다.
+  - `webSearchEnabled`가 **true일 때만** 웹검색 도구를 사용할 수 있다.
+  - **기본 웹검색**: OpenAI 내장 `web_search_preview` 도구 사용 (Responses API)
+  - **폴백**: Brave Search API (OpenAI 웹검색 실패 시, Brave API Key가 설정된 경우에만)
   - `webSearchEnabled=false`인 경우:
     - 명시적 트리거(`/web`, `웹검색:`)는 실행하지 않는다.
     - Tool-calling에서도 web search 도구를 모델에 바인딩/노출하지 않는다.
@@ -276,10 +278,14 @@ Testing: Vitest (Unit), Playwright (E2E for Tauri).
 
 7. AI Provider 및 API Key 관리
 7.1 Provider 지원 현황
+Why:
+- 구조 단순화 및 OpenAI 내장 도구(web_search_preview 등) 활용을 위해 단일 Provider로 통일합니다.
+- Anthropic/Google 등 멀티 Provider 지원은 코드 복잡도를 높이고, 각 Provider별 도구 호환성 문제를 야기합니다.
+
 What:
-- **OpenAI**: 활성화됨 (기본 provider)
-- **Anthropic**: UI에서 비활성화됨 (코드는 유지, 추후 활성화 예정)
-- **Mock**: UI에서 제거됨 (타입은 유지, 개발/테스트용)
+- **OpenAI**: 유일한 활성 Provider (Responses API 사용)
+- **Anthropic/Google**: 코드에서 제거 (향후 필요 시 재도입 가능)
+- **Mock**: 타입만 유지 (개발/테스트용, UI에서 제거됨)
 
 7.2 API Key 관리
 Why:
@@ -298,6 +304,61 @@ What:
 - **보안**: localStorage/DB에 저장하지 않음. 키는 OS 보안 저장소에만 존재
 - **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능
 - **비고**: Tauri 런타임이 아닌 경우 키는 메모리에서만 유지
+
+What (API Key 필드 목록):
+| 필드 | 필수 여부 | 용도 |
+|------|-----------|------|
+| OpenAI API Key | **필수** | 모든 AI 기능 (번역, 채팅, 웹검색) |
+| Brave Search API Key | 선택 (Optional) | 웹검색 폴백용 (OpenAI web_search_preview 실패 시) |
+
+- Brave API Key가 없어도 기본 웹검색(OpenAI 내장)은 정상 동작합니다.
+- Brave API Key가 입력된 경우, OpenAI 웹검색 실패 시 Brave Search로 폴백합니다.
+
+7.3 External Connectors (MCP/OAuth)
+Why:
+- 번역 작업 시 외부 참조 문서(Confluence, Google Docs 등)에 접근해야 하는 경우가 많습니다.
+- 각 커넥터는 OAuth 기반 인증을 사용하며, App Settings에서 통합 관리합니다.
+
+How:
+- 모든 커넥터는 **OAuth 2.1 PKCE** 기반으로 인증합니다.
+- OAuth 토큰은 **OS 키체인에 영속화**되어 앱 재시작 후에도 재인증 없이 사용 가능합니다.
+- 커넥터 연결/해제는 App Settings에서 관리하며, 각 커넥터별로 연결 상태를 표시합니다.
+- **Lazy OAuth**: 토글 ON은 "도구 사용 허용"만 의미하며, 실제 사용 시점에 연결이 없으면 CTA를 표시합니다.
+
+What (지원 커넥터):
+| 커넥터 | 상태 | 인증 방식 | 용도 |
+|--------|------|-----------|------|
+| Atlassian Confluence (Rovo MCP) | 구현됨 | OAuth 2.1 PKCE | Confluence 문서 검색/참조 |
+| Google Workspace | 계획됨 | OAuth 2.0 | Google Drive/Docs/Sheets 접근 |
+
+What (OAuth 토큰 관리):
+- **저장 위치**: OS 키체인 (서비스: `com.ite.app`)
+- **키 패턴**: `connector:<provider>:oauth_token`, `connector:<provider>:refresh_token`
+- **토큰 갱신**: 만료 5분 전부터 자동 갱신 시도, 실패 시 재인증 CTA 표시
+- **로그아웃**: App Settings에서 개별 커넥터 연결 해제 가능
+
+What (UI 구조 - App Settings):
+```
+App Settings
+├── API Keys
+│   ├── OpenAI API Key (필수)
+│   └── Brave Search API Key (선택)
+│
+├── Connectors
+│   ├── Atlassian Confluence
+│   │   ├── 연결 상태: [연결됨 ✓] / [연결 안 됨]
+│   │   └── [연결] / [연결 해제] 버튼
+│   └── Google Workspace (향후)
+│       ├── 연결 상태: [연결됨 ✓] / [연결 안 됨]
+│       └── [연결] / [연결 해제] 버튼
+│
+└── (기존 설정들...)
+```
+
+What (채팅 탭별 토글):
+- 각 커넥터는 **채팅 입력창의 토글**로 개별 활성화/비활성화할 수 있습니다.
+- 토글이 OFF인 경우 해당 커넥터의 도구는 모델에 바인딩되지 않습니다 (3.6 게이트 원칙).
+- 커넥터가 App Settings에서 "연결 안 됨" 상태이면 토글은 비활성화(disabled)됩니다.
 
 8. 다국어 지원 (i18n)
 8.1 언어 설정
