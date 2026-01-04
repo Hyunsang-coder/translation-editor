@@ -4,7 +4,7 @@
 
 ## 완료(요약)
 
-- [x] LangChain.js 설치/연동: `langchain`, `@langchain/openai`, `@langchain/anthropic`
+- [x] LangChain.js 설치/연동: `langchain`, `@langchain/openai` (Anthropic/Google 제거됨 - Phase 6.0)
 - [x] 환경변수 기반 API Key 구성
 - [x] ChatModel 생성 유틸 (`createChatModel`)
 - [x] 요청 유형 감지 (`detectRequestType`) 및 기본 프롬프트 빌더

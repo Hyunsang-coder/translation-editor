@@ -10,12 +10,16 @@
 
 ## Phase 문서
 
-- Phase 1: `tasks/phase-1.md`
-- Phase 2: `tasks/phase-2.md`
-- Phase 3: `tasks/phase-3.md`
-- Phase 4: `tasks/phase-4.md`
-- Phase 5: `tasks/phase-5.md`
-- Phase 6: `tasks/phase-6.md`
-- Phase 7: `tasks/phase-7.md`
+- Phase 1: `tasks/phase-1.md` - 기반 구축 및 TipTap 에디터 설정
+- Phase 2: `tasks/phase-2.md` - AI 연동 및 채팅 시스템
+- Phase 3: `tasks/phase-3.md` - 데이터 관리 및 .ite 파일 시스템
+- Phase 4: `tasks/phase-4.md` - 전문 기능 (용어집 & Context Memory)
+- Phase 5: `tasks/phase-5.md` - LangChain.js Tools 시스템
+- Phase 6: `tasks/phase-6.md` - 외부 도구 연동 **(OpenAI 전용화 & 커넥터 통합 포함)**
+- Phase 7: `tasks/phase-7.md` - 사용자 경험 개선
+
+## 최근 업데이트
+
+- **2025-01-04**: Phase 6에 OpenAI 전용 단순화(6.0) 추가 - Provider 정리, 커넥터 모듈, MCP 레지스트리
 
 

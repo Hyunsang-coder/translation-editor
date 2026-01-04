@@ -1,6 +1,60 @@
 # Phase 6: 외부 도구 연동
 
-**목표**: MCP 프로토콜 연동, 웹검색 등 외부 도구 통합.
+**목표**: MCP 프로토콜 연동, 웹검색 등 외부 도구 통합, OpenAI 커넥터 통합.
+
+## 완료 (2025-01-04)
+
+### 6.0 OpenAI 전용 단순화 및 커넥터 통합
+
+#### 6.0.1 Provider 단순화 ✅
+- [x] **Anthropic/Google Provider 제거**
+  - `AiProvider` 타입: `openai` | `mock` 만 지원
+  - `@langchain/anthropic`, `@langchain/google-genai` 의존성 제거
+  - `aiConfigStore`에서 anthropic/google API Key 제거
+  - App Settings에서 Provider 선택 UI 제거
+  - 변경 파일: `client.ts`, `config.ts`, `aiConfigStore.ts`, `AppSettingsModal.tsx`, `secureStore.ts`, `package.json`
+
+#### 6.0.2 OpenAI 빌트인 커넥터 모듈 ✅
+- [x] **커넥터 타입 정의** (`src/ai/connectors/index.ts`)
+  - 빌트인 커넥터: googledrive, googlecalendar, gmail, dropbox, sharepoint, microsoftteams
+  - MCP 커넥터: atlassian (기존 구현), notion (TODO)
+  - `buildConnectorTools()`: 활성화된 커넥터를 OpenAI Responses API tools 배열로 변환
+- [x] **커넥터 상태 관리** (`src/stores/connectorStore.ts`)
+  - 활성화/비활성화 토글
+  - 토큰 존재 여부/만료 시간 추적
+  - Zustand persist로 설정 영속화
+- [x] **Rust 백엔드 커넥터 명령** (`src-tauri/src/commands/connector.rs`)
+  - `connector_set_token`, `connector_get_token`, `connector_delete_token`
+  - `connector_list_status`, `connector_start_oauth` (TODO)
+  - 토큰은 OS 키체인에 안전 저장
+- [x] **chat.ts 통합**
+  - `connectorConfigs`, `getConnectorToken` 파라미터 추가
+  - 커넥터 tools를 `bindTools`에 자동 병합
+
+#### 6.0.3 MCP 레지스트리 ✅
+- [x] **다중 MCP 서버 통합 관리** (`src-tauri/src/mcp/registry.rs`)
+  - `McpServerId`: atlassian, notion
+  - `McpRegistry`: connect, disconnect, logout, get_status, get_tools, call_tool
+- [x] **레지스트리 Tauri 명령** (6개)
+  - `mcp_registry_status`, `mcp_registry_connect`, `mcp_registry_disconnect`
+  - `mcp_registry_logout`, `mcp_registry_get_tools`, `mcp_registry_call_tool`
+- [x] **TypeScript 래퍼** (`src/tauri/mcpRegistry.ts`)
+
+#### 6.0.4 App Settings 커넥터 UI ✅
+- [x] **커넥터 섹션 추가** (`src/components/settings/ConnectorsSection.tsx`)
+  - MCP 서비스: Atlassian (연결 가능), Notion (Coming Soon)
+  - 클라우드 서비스: Google, Dropbox, Microsoft (Coming Soon)
+  - 연결 상태 표시, 연결/해제 버튼
+  - "채팅에서 이 서비스 사용" 토글
+- [x] **i18n 지원** (한국어/영어)
+
+## 미완료 (향후 작업)
+
+### 6.0.5 OAuth 플로우 구현
+- [ ] **Google OAuth 2.0** (Drive, Calendar, Gmail)
+- [ ] **Dropbox OAuth 2.0**
+- [ ] **Microsoft Azure AD OAuth 2.0** (SharePoint, Teams)
+- [ ] **Notion OAuth 2.0**
 
 ## 진행 중 / 계획
 

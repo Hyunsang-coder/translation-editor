@@ -108,10 +108,17 @@
 - `checkConsistency`: 용어 일관성 체크
 - `reviewQuality`: 번역 품질 검수
 
-**MCP 연동 (추후 예정)**:
-- 웹검색
-- 외부 사전 연동
-- 다양한 참고 자료 검색
+**웹검색**:
+- OpenAI Web Search: 빌트인 웹 검색 (기본)
+- Brave Search: 폴백 웹 검색 (API 키 필요)
+
+**MCP 연동 (구현됨)**:
+- Atlassian (Confluence): 문서 검색/가져오기
+- Notion: 문서 검색/가져오기 (예정)
+
+**OpenAI 빌트인 커넥터 (예정)**:
+- Google Workspace: Drive, Calendar, Gmail
+- Dropbox, SharePoint, Microsoft Teams
 
 **도구 사용 표시(가시성)**:
 - 웹검색/문서 조회 등 Tool이 사용된 경우, 채팅 메시지 하단에 “도구 사용됨/실행 중” 배지를 작게 표시하여 사용자가 근거/맥락 출처를 인지할 수 있게 합니다.
@@ -215,6 +222,15 @@
 - LangChain.js Tools (오탈자/일관성/품질 검수)
 
 **Phase 3**:
-- MCP 연동 (웹검색, 외부 사전)
+- MCP 연동 확장 (Notion, 외부 사전)
+- OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft)
 - 고급 용어집 관리
 - 협업 기능 검토
+
+---
+
+## 8. 기술 스택 참고
+
+**AI Provider**: OpenAI 전용 (gpt-4o-mini, o4-mini 등)
+- 단일 Provider로 단순화하여 유지보수 비용 감소
+- OpenAI Responses API의 빌트인 도구/커넥터 활용
