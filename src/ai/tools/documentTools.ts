@@ -62,6 +62,9 @@ export const getSourceDocumentTool = tool(
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
     const text = resolveSourceDocumentText();
+    if (!text || text.trim().length === 0) {
+      throw new Error('원문 문서가 비어있습니다.');
+    }
     return autoSliceLargeDocument(text, parsed);
   },
   {
@@ -77,6 +80,9 @@ export const getTargetDocumentTool = tool(
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
     const text = resolveTargetDocumentText();
+    if (!text || text.trim().length === 0) {
+      throw new Error('번역문 문서가 비어있습니다.');
+    }
     return autoSliceLargeDocument(text, parsed);
   },
   {

@@ -56,7 +56,7 @@ export const braveSearchTool = tool(
     const count = args.count ?? 5;
 
     if (!query || query.trim().length === 0) {
-      return '검색어(query)가 비어있습니다.';
+      throw new Error('검색어(query)가 비어있습니다.');
     }
 
     try {
@@ -77,7 +77,7 @@ export const braveSearchTool = tool(
       return `## Brave Search 결과 ("${query}")\n\n${formattedResults}`;
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류';
-      return `검색 중 오류가 발생했습니다: ${message}\n(API 키가 올바르게 설정되었는지 확인하세요)`;
+      throw new Error(`Brave Search 실패: ${message} (API 키가 올바르게 설정되었는지 확인하세요)`);
     }
   },
   {

@@ -30,26 +30,50 @@ const LIMITS = {
 export function detectRequestType(message: string): RequestType {
   const lowerMessage = message.toLowerCase();
 
-  // 질문 관련 지표 (물음표, 의문사, 확인 요청 등)
+  // Priority 1: Explicit question markers (high confidence)
+  if (message.includes('?') || message.includes('？')) {
+    return 'question';
+  }
+
+  // Priority 2: Strong translation commands (exact matches for Korean verb endings)
+  const strongTranslate = ['번역해', '번역해줘', '옮겨줘', '바꿔줘'];
+  if (strongTranslate.some(cmd => lowerMessage.includes(cmd))) {
+    return 'translate';
+  }
+
+  // Priority 3: Question words with word boundary checking
+  // For Korean single-syllable words, check they're not inside other words
+  const shortKoreanWords = ['뭐', '맞아', '틀려', '어때'];
+  for (const word of shortKoreanWords) {
+    // Check if word appears with space/punctuation around it
+    const hasWordBoundary =
+      lowerMessage.startsWith(word) ||
+      lowerMessage.includes(` ${word}`) ||
+      lowerMessage.includes(`\n${word}`) ||
+      lowerMessage.endsWith(word);
+    if (hasWordBoundary) {
+      return 'question';
+    }
+  }
+
+  // Regular question indicators
   const questionIndicators = [
-    '?', '무엇', '뭐', '왜', '어떻게', '어디', '언제', '누가',
-    '알려', '설명', '의미', '뜻이', '차이', '맞아', '틀려', '어때', '맞나', '인가',
-    'correct', 'wrong', 'what', 'how', 'why', 'where', 'when', 'who', 'check'
+    '무엇', '왜', '어떻게', '어디', '언제', '누가',
+    '알려줘', '알려', '설명해', '의미', '뜻이', '차이', '맞나', '인가',
+    'how ', 'what ', 'why ', 'where ', 'when ', 'who ', 'check', 'correct', 'wrong'
   ];
 
-  // 번역 관련 키워드 (명령형 위주)
-  const translateKeywords = [
-    '번역해', 'translate', '옮겨', '바꿔줘', '변환', '한국어로', '영어로',
-    '일본어로', '중국어로', '다듬어', '수정해', '고쳐'
-  ];
-
-  // 질문 지표가 포함되어 있으면 우선적으로 질문으로 분류
-  // 예: "이 번역 맞아?" -> "번역"이 포함되어 있어도 "맞아" 때문에 질문임
   for (const indicator of questionIndicators) {
     if (lowerMessage.includes(indicator)) {
       return 'question';
     }
   }
+
+  // Priority 4: Weak translation indicators
+  const translateKeywords = [
+    'translate', '변환', '한국어로', '영어로',
+    '일본어로', '중국어로', '다듬어', '수정해', '고쳐', '옮겨', '바꿔'
+  ];
 
   for (const keyword of translateKeywords) {
     if (lowerMessage.includes(keyword)) {

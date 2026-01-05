@@ -375,22 +375,37 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       ? '- confluence_*: Atlassian Confluence 페이지 검색/조회.'
       : '- confluence_*: (비활성화됨)',
     '',
-    '규칙:',
-    '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, review_translation 도구를 우선 사용한다. 이 도구가 원문/번역문을 자동으로 가져와 검수 지침과 함께 반환한다.',
-    '- review_translation이 사용 불가능한 경우에만, 사용자가 문서를 붙이길 기다리기 전에 get_source_document + get_target_document를 먼저 호출한다.',
-    '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져온다.',
-    '- 그 외에는 문서 조회는 질문/검수에 꼭 필요할 때만 호출한다.',
-    '- suggest_* 호출 후 응답에는 "저장/추가 완료"라고 쓰지 말고, 필요 시 "원하시면 [Add to Rules]/[Add to Context] 버튼을 눌러 추가하세요"라고 안내한다.',
-    ...(webSearchEnabled
-      ? [
-        hasOpenAiWebSearch
-          ? '- 최신 정보/실시간 데이터가 필요한 질문에는 web_search_preview를 우선 사용하고, 불가능하면 brave_search를 사용한다.'
-          : '- 최신 정보/실시간 데이터가 필요한 질문에는 brave_search를 사용한다.',
-      ]
-      : []),
-    ...(notionEnabled
-      ? ['- Notion 관련 질문/참조가 필요하면 notion_search로 먼저 검색하고, 필요한 페이지를 notion_get_page로 조회한다.']
-      : []),
+    '도구 선택 우선순위 (위에서 아래로 평가):',
+    '',
+    '1. 검수/검토/대조 요청 ("번역 맞아?", "누락 확인", "오역 체크")',
+    '   → review_translation 사용',
+    '   → review_translation 사용 불가능 시: get_source_document + get_target_document',
+    '',
+    webSearchEnabled
+      ? hasOpenAiWebSearch
+        ? '2. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → web_search_preview 우선 사용, 실패시 brave_search'
+        : '2. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → brave_search 사용'
+      : '2. 최신 정보/실시간 데이터 필요\n   → (검색 비활성화됨)',
+    '',
+    notionEnabled
+      ? '3. Notion 참조 필요\n   → notion_search로 검색 후, notion_get_page로 내용 조회'
+      : '3. Notion 참조 필요\n   → (Notion 비활성화됨)',
+    '',
+    confluenceEnabled
+      ? '4. Confluence 참조 필요\n   → confluence 도구 사용'
+      : '4. Confluence 참조 필요\n   → (Confluence 비활성화됨)',
+    '',
+    '5. 문서 내용 필요 (질문/검수에 필요한 경우만)',
+    '   → get_source_document, get_target_document',
+    '   → 문서가 길면 query/maxChars 파라미터 사용',
+    '',
+    '6. 번역 스타일/포맷 규칙 발견',
+    '   → suggest_translation_rule',
+    '   → 응답: "[Add to Rules] 버튼을 눌러 추가하세요"',
+    '',
+    '7. 프로젝트 배경지식/맥락 정보 발견',
+    '   → suggest_project_context',
+    '   → 응답: "[Add to Context] 버튼을 눌러 추가하세요"',
   ].join('\n');
 
   return new SystemMessage(toolGuide);

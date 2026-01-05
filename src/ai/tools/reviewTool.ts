@@ -73,11 +73,7 @@ export const reviewTranslationTool = tool(
     const targetText = resolveTargetDocumentText();
 
     if (!sourceText || !targetText) {
-      return {
-        error: '원문 또는 번역문이 없습니다. 문서를 먼저 로드해주세요.',
-        sourceText: sourceText || '(없음)',
-        targetText: targetText || '(없음)',
-      };
+      throw new Error('원문 또는 번역문이 없습니다. 문서를 먼저 로드해주세요.');
     }
 
     // 큰 문서는 자동으로 잘라서 반환

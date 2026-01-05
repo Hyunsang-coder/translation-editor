@@ -47,7 +47,7 @@ export function createNotionSearchTool(): DynamicStructuredTool {
 
         return `Found ${parsed.results.length} result(s) in Notion:\n\n${formatted.join("\n\n")}`;
       } catch (error) {
-        return `Failed to search Notion: ${error}`;
+        throw new Error(`Notion 검색 실패: ${error}`);
       }
     },
   });
@@ -79,7 +79,7 @@ export function createNotionGetPageTool(): DynamicStructuredTool {
 
         return `Notion Page Content:\n\n${content}`;
       } catch (error) {
-        return `Failed to get Notion page: ${error}`;
+        throw new Error(`Notion 페이지 조회 실패: ${error}`);
       }
     },
   });
@@ -118,7 +118,7 @@ export function createNotionQueryDatabaseTool(): DynamicStructuredTool {
 
         return `Database entries (${parsed.results.length} items):\n\n${formatted.join("\n\n")}`;
       } catch (error) {
-        return `Failed to query Notion database: ${error}`;
+        throw new Error(`Notion 데이터베이스 쿼리 실패: ${error}`);
       }
     },
   });
