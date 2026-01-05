@@ -12,7 +12,7 @@
     "untitledProject": "제목 없음 프로젝트"
   },
   "settings": {
-    "title": "설정",
+    "title": "프로젝트 설정",
     "translatorPersona": "번역가 페르소나",
     "translatorPersonaDescription": "번역 시 AI가 연기할 페르소나를 정의합니다.\n(채팅 답변 말투에는 영향을 주지 않고, 오직 번역 결과물에만 반영됩니다.)",
     "translatorPersonaPlaceholder": "예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요...",
@@ -40,6 +40,10 @@
     "language": "언어",
     "languageKorean": "한국어",
     "languageEnglish": "English",
+    "theme": "테마",
+    "themeLight": "라이트",
+    "themeDark": "다크",
+    "themeSystem": "시스템",
     "aiProvider": "AI 제공자",
     "aiProviderLabel": "제공자",
     "apiKeys": "API 키",
@@ -79,8 +83,8 @@
     }
   },
   "toolbar": {
-    "toggleSidebar": "채팅/설정 패널 토글",
-    "focusMode": "포커스 모드 (원문 패널 숨기기)",
+    "toggleSidebar": "채팅/설정 패널",
+    "focusMode": "원문 숨기기",
     "focusModeNormal": "일반",
     "focusModeFocus": "포커스",
     "themeCurrent": "현재: {{theme}}"
@@ -130,7 +134,7 @@
     }
   },
   "chat": {
-    "settings": "설정",
+    "settings": "프로젝트 설정",
     "openChat": "채팅 열기",
     "newChat": "새 채팅",
     "moveToRight": "오른쪽으로 이동",

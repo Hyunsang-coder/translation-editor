@@ -10,11 +10,16 @@ import { stripHtml } from '@/utils/hash';
 
 export type RequestType = 'translate' | 'question' | 'general';
 
-// 토큰(문자) 최적화용 상한. 정확한 token count는 아니지만 비용 폭발을 방지합니다.
+// 토큰(문자) 최적화용 상한. GPT-5 시리즈 400k 컨텍스트 윈도우 기준으로 여유 있게 설정.
 const LIMITS = {
-  translationRulesChars: 1200,
-  blockContextMaxBlocks: 10,
-  blockContextCharsPerBlock: 280,
+  translationRulesChars: 10000,
+  projectContextChars: 30000,
+  glossaryChars: 30000,
+  documentChars: 100000,
+  attachmentCharsPerFile: 30000,
+  attachmentCharsTotal: 50000,
+  blockContextMaxBlocks: 20,
+  blockContextCharsPerBlock: 500,
 } as const;
 
 /**
@@ -187,7 +192,7 @@ function formatTranslationRules(rules?: string): string {
 function formatProjectContext(context?: string): string {
   const trimmed = context?.trim();
   if (!trimmed) return '';
-  const maxLen = 1200;
+  const maxLen = LIMITS.projectContextChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
   return ['[Project Context]', sliced].join('\n');
 }
@@ -195,7 +200,7 @@ function formatProjectContext(context?: string): string {
 function formatGlossaryInjected(glossary?: string): string {
   const trimmed = glossary?.trim();
   if (!trimmed) return '';
-  const maxLen = 1200;
+  const maxLen = LIMITS.glossaryChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
   return ['[글로서리(주입)]', sliced].join('\n');
 }
@@ -203,7 +208,7 @@ function formatGlossaryInjected(glossary?: string): string {
 function formatDocument(label: string, text?: string): string {
   const trimmed = text?.trim();
   if (!trimmed) return '';
-  const maxLen = 4000;
+  const maxLen = LIMITS.documentChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
   return [`[${label}]`, sliced].join('\n');
 }
@@ -212,8 +217,8 @@ function formatAttachments(attachments?: { filename: string; text: string }[]): 
   if (!attachments || attachments.length === 0) return '';
 
   const lines: string[] = ['[첨부 파일]'];
-  const maxLenPerFile = 4000;
-  const totalMaxLen = 8000;
+  const maxLenPerFile = LIMITS.attachmentCharsPerFile;
+  const totalMaxLen = LIMITS.attachmentCharsTotal;
   let currentTotal = 0;
 
   for (const att of attachments) {
@@ -241,11 +246,11 @@ export function buildBlockContextText(blocks: EditorBlock[]): string {
   if (blocks.length === 0) return '';
 
   const lines: string[] = ['[컨텍스트 블록]'];
-  const maxBlocks = LIMITS.blockContextMaxBlocks;
-  const maxChars = LIMITS.blockContextCharsPerBlock;
-  for (const b of blocks.slice(0, maxBlocks)) {
+  for (const b of blocks.slice(0, LIMITS.blockContextMaxBlocks)) {
     const plain = stripHtml(b.content);
-    const sliced = plain.length > maxChars ? `${plain.slice(0, maxChars)}...` : plain;
+    const sliced = plain.length > LIMITS.blockContextCharsPerBlock 
+      ? `${plain.slice(0, LIMITS.blockContextCharsPerBlock)}...` 
+      : plain;
     // 타입 라벨은 토큰 대비 정보량이 낮아 최소화
     lines.push(`- ${sliced}`);
   }

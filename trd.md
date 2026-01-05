@@ -78,6 +78,15 @@ What (Payload 구성 규칙: 우선순위):
 - 출력 포맷 강제:
   - Translate: TipTap JSON 전체만 출력(설명 금지)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
+- 컨텍스트 길이 제한 (GPT-5 시리즈 400k 컨텍스트 윈도우 기준):
+  - Translation Rules: 최대 10,000자
+  - Project Context: 최대 30,000자
+  - Glossary: 최대 30,000자
+  - Source/Target Document: 최대 100,000자 (채팅 모드에서는 on-demand tool 호출)
+  - 첨부파일 (개별): 최대 30,000자
+  - 첨부파일 (총합): 최대 50,000자
+  - Context Blocks: 최대 20개 블록, 블록당 최대 500자
+  - 출력 토큰 (번역 모드): 최대 65,536 토큰
 
 What (API 구조 - 채팅 모드):
 - LangChain `BaseMessage[]` 배열 사용

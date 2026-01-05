@@ -27,7 +27,8 @@ export function createChatModel(
     const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
     
     // 번역 모드에서는 max_tokens를 높게 설정하여 긴 문서도 완전히 번역되도록 함
-    const maxTokensOption = useFor === 'translation' ? { maxTokens: 16384 } : {};
+    // GPT-5 시리즈는 400k 컨텍스트 윈도우 지원, 출력 토큰도 충분히 확보
+    const maxTokensOption = useFor === 'translation' ? { maxTokens: 65536 } : {};
 
     return new ChatOpenAI({
       apiKey: cfg.openaiApiKey,

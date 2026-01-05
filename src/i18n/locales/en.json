@@ -12,7 +12,7 @@
     "untitledProject": "Untitled Project"
   },
   "settings": {
-    "title": "Settings",
+    "title": "Project Settings",
     "translatorPersona": "Translator Persona",
     "translatorPersonaDescription": "Define the persona that AI will play when translating.\n(This only affects translation results, not chat response tone.)",
     "translatorPersonaPlaceholder": "e.g., You are a professional web novel translator. Use vivid expressions...",
@@ -40,6 +40,10 @@
     "language": "Language",
     "languageKorean": "한국어",
     "languageEnglish": "English",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
     "aiProvider": "AI Provider",
     "aiProviderLabel": "Provider",
     "apiKeys": "API Keys",
@@ -130,7 +134,7 @@
     }
   },
   "chat": {
-    "settings": "Settings",
+    "settings": "Project Settings",
     "openChat": "Open Chat",
     "newChat": "New Chat",
     "moveToRight": "Move to Right",

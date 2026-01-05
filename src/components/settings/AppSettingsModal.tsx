@@ -11,7 +11,7 @@ interface AppSettingsModalProps {
 
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
   const { t } = useTranslation();
-  const { language, setLanguage } = useUIStore();
+  const { language, setLanguage, theme, setTheme } = useUIStore();
   const { 
     openaiApiKey,
     braveApiKey,
@@ -37,6 +37,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const handleLanguageChange = (newLanguage: 'ko' | 'en') => {
     setLanguage(newLanguage);
     i18n.changeLanguage(newLanguage);
+  };
+
+  // 테마 변경 핸들러
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
   };
 
   return (
@@ -95,6 +100,61 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             </span>
                         </label>
                     </div>
+                </div>
+            </section>
+
+            {/* Theme */}
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">🎨</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.theme')}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => handleThemeChange('light')}
+                        className={`
+                            flex items-center justify-center w-12 h-12 rounded-lg
+                            transition-all duration-200
+                            ${theme === 'light'
+                                ? 'bg-primary-500 text-white shadow-md scale-105'
+                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
+                            }
+                        `}
+                        title={t('appSettings.themeLight')}
+                    >
+                        <span className="text-xl">☀️</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleThemeChange('dark')}
+                        className={`
+                            flex items-center justify-center w-12 h-12 rounded-lg
+                            transition-all duration-200
+                            ${theme === 'dark'
+                                ? 'bg-primary-500 text-white shadow-md scale-105'
+                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
+                            }
+                        `}
+                        title={t('appSettings.themeDark')}
+                    >
+                        <span className="text-xl">🌙</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleThemeChange('system')}
+                        className={`
+                            flex items-center justify-center w-12 h-12 rounded-lg
+                            transition-all duration-200
+                            ${theme === 'system'
+                                ? 'bg-primary-500 text-white shadow-md scale-105'
+                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
+                            }
+                        `}
+                        title={t('appSettings.themeSystem')}
+                    >
+                        <span className="text-xl">🖥️</span>
+                    </button>
                 </div>
             </section>
 

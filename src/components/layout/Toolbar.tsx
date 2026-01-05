@@ -7,13 +7,8 @@ import { useProjectStore } from '@/stores/projectStore';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { focusMode, toggleFocusMode, theme, setTheme, toggleSidebar } = useUIStore();
+  const { focusMode, toggleFocusMode, toggleSidebar } = useUIStore();
   const { project } = useProjectStore();
-
-  const handleThemeToggle = (): void => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-  };
 
   return (
     <header className="h-14 border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
@@ -34,16 +29,6 @@ export function Toolbar(): JSX.Element {
           title={t('toolbar.focusMode')}
         >
           {focusMode ? '👁️' : '👀'}
-        </button>
-
-        {/* Theme 토글 */}
-        <button
-          type="button"
-          onClick={handleThemeToggle}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title={t('toolbar.themeCurrent', { theme })}
-        >
-          {theme === 'dark' ? '🌙' : '☀️'}
         </button>
 
         {/* Chat/Settings Sidebar 토글 */}
