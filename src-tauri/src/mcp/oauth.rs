@@ -275,7 +275,7 @@ impl AtlassianOAuth {
         let redirect_uri = format!("http://localhost:{}/callback", REDIRECT_PORT);
         
         let registration_request = serde_json::json!({
-            "client_name": "ITE - Integrated Translation Editor",
+            "client_name": "OddEyes.ai",
             "redirect_uris": [redirect_uri],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],

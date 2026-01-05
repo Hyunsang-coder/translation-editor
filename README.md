@@ -75,6 +75,8 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **Confluence_search (Rovo MCP)**: Chat composer `+` 메뉴에 `Confluence_search` 토글 추가 ✅
   - **Sidecar 방식**: 외부 Node.js 의존성 없이 앱 내장 바이너리로 안전하게 연결 ✅
   - **Lazy OAuth**: 토글은 도구 활성화만 의미하며, 실제 사용 시 Connect 버튼을 통해 인증 시작 ✅
+- **Notion MCP**: Notion 페이지 및 데이터베이스 검색 지원 ✅
+  - **Integration Token**: App Settings에서 Notion Integration Token 입력하여 연결 ✅
 - **웹검색**: Brave Search / OpenAI Web Search 연동 완료 ✅
   - **웹검색 게이트**: 체크박스로 웹검색 사용 여부 제어 ✅
 
@@ -222,7 +224,7 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 
 ```json
 {
-  "model": "gpt-4o",
+  "model": "gpt-5.2",
   "messages": [
     {
       "role": "system",
@@ -249,7 +251,6 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
       "content": "번역 규칙을 확인해주세요"
     }
   ],
-  "temperature": 0.7,
   "tools": [
     {
       "type": "function",
@@ -407,8 +408,6 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 ---
 
 ## 🔐 환경 변수 및 API Key 관리
-### 환경 변수 (선택적)
-AI 환경 변수 설정은 `ENV.md` 를 참고하세요.
 
 ### API Key 우선순위
 1. **App Settings에서 입력한 키** (OS 키체인에 저장, 단독 사용)

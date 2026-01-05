@@ -1,8 +1,8 @@
 [package]
 name = "integrated-translation-editor"
 version = "0.1.0"
-description = "AI를 동료로, 번역을 예술로 - Integrated Translation Editor"
-authors = ["ITE Team"]
+description = "AI를 동료로, 번역을 예술로 - OddEyes.ai"
+authors = ["OddEyes.ai Team"]
 edition = "2021"
 
 [lib]

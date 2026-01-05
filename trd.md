@@ -329,14 +329,13 @@ What (지원 커넥터):
 | 커넥터 | 타입 | 상태 | 인증 방식 | 용도 |
 |--------|------|------|-----------|------|
 | Atlassian Confluence | MCP (Rovo) | 구현됨 | OAuth 2.1 PKCE | Confluence 문서 검색/참조 |
-| Notion | MCP | 계획됨 | OAuth 2.0 | Notion 문서 검색/참조 |
-| Google Workspace | OpenAI Builtin | 계획됨 | OAuth 2.0 | Drive/Calendar/Gmail |
-| Dropbox | OpenAI Builtin | 계획됨 | OAuth 2.0 | 파일 저장소 접근 |
-| Microsoft | OpenAI Builtin | 계획됨 | Azure AD OAuth | SharePoint/Teams |
+| Notion | MCP | 구현됨 | Integration Token | Notion 문서 검색/참조 |
+| Google Drive | OpenAI Builtin | 준비 중 | OAuth 2.0 | Google Drive 파일 검색/접근 |
+| Gmail | OpenAI Builtin | 준비 중 | OAuth 2.0 | Gmail 이메일 검색/읽기 |
 
 What (MCP 레지스트리):
 - **McpRegistry**: 다중 MCP 서버를 통합 관리하는 Rust 모듈 (`src-tauri/src/mcp/registry.rs`)
-- **지원 서버**: Atlassian (구현됨), Notion (계획됨)
+- **지원 서버**: Atlassian (구현됨), Notion (구현됨)
 - **Tauri 명령**: `mcp_registry_status`, `mcp_registry_connect`, `mcp_registry_disconnect`, `mcp_registry_logout`, `mcp_registry_get_tools`, `mcp_registry_call_tool`
 - **TypeScript 래퍼**: `src/tauri/mcpRegistry.ts`
 
@@ -354,17 +353,18 @@ App Settings
 │   └── Brave Search API Key (선택)
 │
 ├── Connectors (구현됨: ConnectorsSection.tsx)
-│   ├── MCP 서비스
-│   │   ├── Atlassian Confluence
-│   │   │   ├── 연결 상태: [연결됨 ✓] / [연결 안 됨]
-│   │   │   ├── [연결] / [연결 해제] 버튼
-│   │   │   └── "채팅에서 이 서비스 사용" 토글
-│   │   └── Notion (Coming Soon)
-│   │
-│   └── 클라우드 서비스 (OpenAI Builtin Connectors)
-│       ├── Google Workspace (Coming Soon)
-│       ├── Dropbox (Coming Soon)
-│       └── Microsoft (Coming Soon)
+│   ├── Atlassian Confluence (MCP)
+│   │   ├── 연결 상태: [연결됨 ✓] / [연결 안 됨]
+│   │   ├── [연결] / [연결 해제] 버튼
+│   │   └── "채팅에서 이 서비스 사용" 토글
+│   ├── Notion (MCP)
+│   │   ├── 연결 상태: [연결됨 ✓] / [연결 안 됨]
+│   │   ├── [연결] / [연결 해제] 버튼
+│   │   └── "채팅에서 이 서비스 사용" 토글
+│   ├── Google Drive (OpenAI Builtin)
+│   │   └── 준비 중 (Coming Soon)
+│   └── Gmail (OpenAI Builtin)
+│       └── 준비 중 (Coming Soon)
 │
 └── (기존 설정들...)
 ```
