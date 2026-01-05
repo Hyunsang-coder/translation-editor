@@ -14,6 +14,7 @@ import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
+import { useConnectorStore } from '@/stores/connectorStore';
 
 /**
  * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
@@ -101,6 +102,20 @@ export function ChatPanel(): JSX.Element {
   
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());
   useEffect(() => mcpClientManager.subscribe(setMcpStatus), []);
+  
+  // Notion 상태 동기화 (토큰 존재 여부 확인용)
+  useEffect(() => {
+    const unsubscribe = mcpClientManager.subscribeNotion((status) => {
+      // 토큰 상태를 connectorStore에 동기화
+      useConnectorStore.getState().setTokenStatus('notion', status.hasStoredToken ?? false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Notion 검색 활성화 상태 (connectorStore에서 관리)
+  const notionEnabled = useConnectorStore((s) => s.enabledMap['notion'] ?? false);
+  const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
+  const setNotionEnabled = useConnectorStore((s) => s.setEnabled);
 
   const [showStreamingSkeleton, setShowStreamingSkeleton] = useState(false);
 
@@ -995,6 +1010,34 @@ export function ChatPanel(): JSX.Element {
                         >
                           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                           <span className="flex-1 text-left">{mcpStatus.isConnecting ? '연결 중...' : 'Atlassian 연결하기'}</span>
+                        </button>
+                      )}
+
+                      {/* Notion 검색 */}
+                      <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="accent-primary-500"
+                          checked={notionEnabled && notionHasToken}
+                          onChange={(e) => setNotionEnabled('notion', e.target.checked)}
+                          disabled={isLoading || !notionHasToken}
+                        />
+                        <span className="flex-1">{t('chat.notionSearch')}</span>
+                        <span className="text-[11px] text-editor-muted">{notionEnabled && notionHasToken ? 'ON' : 'OFF'}</span>
+                      </label>
+                      
+                      {notionEnabled && !notionHasToken && (
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 flex items-center gap-2 text-sm text-primary-500 hover:bg-editor-border/60 transition-colors"
+                          onClick={() => {
+                            setComposerMenuOpen(false);
+                            // Settings 탭으로 전환하여 Notion 연결 유도
+                            setActiveTab('settings');
+                          }}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          <span className="flex-1 text-left">Notion 연결하기 (설정)</span>
                         </button>
                       )}
                     </div>

@@ -113,10 +113,8 @@ interface ConnectorItemProps {
   icon: string;
   label: string;
   description: string | undefined;
-  enabled: boolean;
   hasToken: boolean;
   isConnecting?: boolean;
-  onToggle: (enabled: boolean) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   comingSoon?: boolean;
@@ -126,10 +124,8 @@ function ConnectorItem({
   icon,
   label,
   description,
-  enabled,
   hasToken,
   isConnecting,
-  onToggle,
   onConnect,
   onDisconnect,
   comingSoon,
@@ -148,10 +144,21 @@ function ConnectorItem({
       ? 'text-green-500'
       : 'text-editor-muted';
 
+  // 아이콘이 이미지 경로인지 확인 (확장자로 판단)
+  const isImagePath = icon && /\.(png|jpg|jpeg|svg|gif|webp)$/i.test(icon);
+
   return (
-    <div className={`p-3 rounded-lg border ${enabled && hasToken ? 'border-primary-500/30 bg-primary-500/5' : 'border-editor-border bg-editor-bg'} ${comingSoon ? 'opacity-50' : ''}`}>
+    <div className={`p-3 rounded-lg border ${hasToken ? 'border-primary-500/30 bg-primary-500/5' : 'border-editor-border bg-editor-bg'} ${comingSoon ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-3">
-        <span className="text-xl">{icon}</span>
+        {isImagePath ? (
+          <img 
+            src={icon} 
+            alt={label}
+            className="w-5 h-5 object-contain"
+          />
+        ) : (
+          <span className="text-xl">{icon}</span>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm text-editor-text">{label}</span>
@@ -190,28 +197,13 @@ function ConnectorItem({
           )}
         </div>
       </div>
-      {hasToken && !comingSoon && (
-        <div className="mt-2 pt-2 border-t border-editor-border/50">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => onToggle(e.target.checked)}
-              className="w-4 h-4 accent-primary-500"
-            />
-            <span className="text-xs text-editor-muted">
-              {t('appSettings.connectors.enableForChat')}
-            </span>
-          </label>
-        </div>
-      )}
     </div>
   );
 }
 
 export function ConnectorsSection(): JSX.Element {
   const { t } = useTranslation();
-  const { enabledMap, setEnabled, setTokenStatus } = useConnectorStore();
+  const { setTokenStatus } = useConnectorStore();
   
   // MCP 상태 (Atlassian)
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>({
@@ -340,31 +332,36 @@ export function ConnectorsSection(): JSX.Element {
         {t('appSettings.connectors.description')}
       </p>
 
-      {/* MCP 커넥터 (Atlassian, Notion) */}
+      {/* 커넥터 목록 (MCP + 빌트인) */}
       <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
-          {t('appSettings.connectors.mcpServices')}
-        </h4>
-        <div className="space-y-2">
-          {MCP_CONNECTORS.map((connector) => {
-            const props = getMcpConnectorProps(connector.id);
-            return (
-              <ConnectorItem
-                key={connector.id}
-                icon={connector.icon ?? '🔗'}
-                label={connector.label}
-                description={connector.description}
-                enabled={enabledMap[connector.id] ?? false}
-                hasToken={props.hasToken}
-                isConnecting={props.isConnecting}
-                onToggle={(enabled) => setEnabled(connector.id, enabled)}
-                onConnect={props.onConnect}
-                onDisconnect={props.onDisconnect}
-                comingSoon={props.comingSoon}
-              />
-            );
-          })}
-        </div>
+        {MCP_CONNECTORS.map((connector) => {
+          const props = getMcpConnectorProps(connector.id);
+          return (
+            <ConnectorItem
+              key={connector.id}
+              icon={connector.icon ?? '🔗'}
+              label={connector.label}
+              description={connector.description}
+              hasToken={props.hasToken}
+              isConnecting={props.isConnecting}
+              onConnect={props.onConnect}
+              onDisconnect={props.onDisconnect}
+              comingSoon={props.comingSoon}
+            />
+          );
+        })}
+        {BUILTIN_CONNECTORS.map((connector) => (
+          <ConnectorItem
+            key={connector.id}
+            icon={connector.icon ?? '📁'}
+            label={connector.label}
+            description={connector.description}
+            hasToken={false} // TODO: 토큰 상태 확인
+            onConnect={() => handleBuiltinConnect(connector.id)}
+            onDisconnect={() => handleBuiltinDisconnect(connector.id)}
+            comingSoon={true} // OAuth 구현 전까지 비활성화
+          />
+        ))}
       </div>
 
       {/* Notion 토큰 입력 다이얼로그 */}
@@ -373,29 +370,6 @@ export function ConnectorsSection(): JSX.Element {
         onClose={() => setShowNotionDialog(false)}
         onSubmit={handleNotionTokenSubmit}
       />
-
-      {/* OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft) */}
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
-          {t('appSettings.connectors.cloudServices')}
-        </h4>
-        <div className="space-y-2">
-          {BUILTIN_CONNECTORS.map((connector) => (
-            <ConnectorItem
-              key={connector.id}
-              icon={connector.icon ?? '📁'}
-              label={connector.label}
-              description={connector.description}
-              enabled={enabledMap[connector.id] ?? false}
-              hasToken={false} // TODO: 토큰 상태 확인
-              onToggle={(enabled) => setEnabled(connector.id, enabled)}
-              onConnect={() => handleBuiltinConnect(connector.id)}
-              onDisconnect={() => handleBuiltinDisconnect(connector.id)}
-              comingSoon={true} // OAuth 구현 전까지 비활성화
-            />
-          ))}
-        </div>
-      </div>
     </section>
   );
 }

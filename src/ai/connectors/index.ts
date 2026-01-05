@@ -17,11 +17,7 @@ export type ConnectorType = 'builtin' | 'mcp';
  */
 export type BuiltinConnectorId =
   | 'googledrive'
-  | 'googlecalendar'
-  | 'gmail'
-  | 'dropbox'
-  | 'sharepoint'
-  | 'microsoftteams';
+  | 'gmail';
 
 /**
  * 커넥터 설정
@@ -57,15 +53,7 @@ export const BUILTIN_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[]
     builtinId: 'googledrive',
     label: 'Google Drive',
     description: 'Google Drive 파일 검색 및 접근',
-    icon: '📁',
-  },
-  {
-    id: 'googlecalendar',
-    type: 'builtin',
-    builtinId: 'googlecalendar',
-    label: 'Google Calendar',
-    description: 'Google Calendar 일정 조회',
-    icon: '📅',
+    icon: '/assets/images/googledrive-logo.png',
   },
   {
     id: 'gmail',
@@ -73,31 +61,7 @@ export const BUILTIN_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[]
     builtinId: 'gmail',
     label: 'Gmail',
     description: 'Gmail 이메일 검색 및 읽기',
-    icon: '✉️',
-  },
-  {
-    id: 'dropbox',
-    type: 'builtin',
-    builtinId: 'dropbox',
-    label: 'Dropbox',
-    description: 'Dropbox 파일 검색 및 접근',
-    icon: '📦',
-  },
-  {
-    id: 'sharepoint',
-    type: 'builtin',
-    builtinId: 'sharepoint',
-    label: 'SharePoint',
-    description: 'Microsoft SharePoint 문서 검색',
-    icon: '📊',
-  },
-  {
-    id: 'microsoftteams',
-    type: 'builtin',
-    builtinId: 'microsoftteams',
-    label: 'Microsoft Teams',
-    description: 'Teams 채널 및 메시지 검색',
-    icon: '💬',
+    icon: '/assets/images/gmail-logo.png',
   },
 ];
 
@@ -110,14 +74,14 @@ export const MCP_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[] = [
     type: 'mcp',
     label: 'Atlassian Confluence',
     description: 'Confluence 페이지 검색 및 조회',
-    icon: '🔗',
+    icon: '/assets/images/rovo-logo.png',
   },
   {
     id: 'notion',
     type: 'mcp',
     label: 'Notion',
     description: 'Notion 페이지 및 데이터베이스 검색',
-    icon: '📝',
+    icon: '/assets/images/notion-logo.png',
   },
 ];
 
