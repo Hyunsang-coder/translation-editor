@@ -124,6 +124,12 @@ src/
 7. [x] **i18n 업데이트**
    - 새로운 텍스트 번역
 
+8. [x] **채팅에 Notion 도구 통합**
+   - chat.ts에 notionSearchEnabled 옵션 추가
+   - streamAssistantReply에서 Notion 도구 로드
+   - chatStore에서 connectorStore 연동
+   - 도구 안내 메시지에 Notion 도구 추가
+
 ## Notion API 참고
 
 - **Base URL**: `https://api.notion.com/v1`

@@ -105,6 +105,11 @@ export interface GenerateReplyInput {
    */
   confluenceSearchEnabled?: boolean;
   /**
+   * Notion 검색 사용 여부 (tool availability gate)
+   * - false면 Notion 도구를 모델에 바인딩/노출하지 않습니다.
+   */
+  notionSearchEnabled?: boolean;
+  /**
    * 활성화된 커넥터 설정 목록
    * - OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등)
    */
@@ -334,10 +339,12 @@ async function runToolCallingLoop(params: {
   };
 }
 
-function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string; webSearchEnabled?: boolean }): SystemMessage {
+function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string; webSearchEnabled?: boolean; notionEnabled?: boolean; confluenceEnabled?: boolean }): SystemMessage {
   const { includeSource, includeTarget, provider } = params;
   const hasOpenAiWebSearch = provider === 'openai';
   const webSearchEnabled = !!params.webSearchEnabled;
+  const notionEnabled = !!params.notionEnabled;
+  const confluenceEnabled = !!params.confluenceEnabled;
   const toolGuide = [
     '도구 사용 가이드(짧게):',
     includeSource
@@ -355,6 +362,18 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     webSearchEnabled
       ? '- brave_search: (fallback) 웹 검색이 필요하지만 web_search_preview가 비활성/실패/제약일 때 사용.'
       : '- brave_search: (비활성화됨)',
+    // Notion 도구 안내
+    ...(notionEnabled
+      ? [
+        '- notion_search: Notion 워크스페이스에서 페이지/데이터베이스 검색. Notion 관련 정보가 필요할 때 사용.',
+        '- notion_get_page: Notion 페이지 내용 조회. 검색 결과에서 특정 페이지의 내용을 읽을 때 사용.',
+        '- notion_query_database: Notion 데이터베이스의 항목 조회.',
+      ]
+      : ['- notion_*: (비활성화됨)']),
+    // Confluence 도구 안내
+    confluenceEnabled
+      ? '- confluence_*: Atlassian Confluence 페이지 검색/조회.'
+      : '- confluence_*: (비활성화됨)',
     '',
     '규칙:',
     '- 번역 검수/대조/정확성 확인(누락/오역/고유명사/기관명 등) 요청이면, review_translation 도구를 우선 사용한다. 이 도구가 원문/번역문을 자동으로 가져와 검수 지침과 함께 반환한다.',
@@ -368,6 +387,9 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
           ? '- 최신 정보/실시간 데이터가 필요한 질문에는 web_search_preview를 우선 사용하고, 불가능하면 brave_search를 사용한다.'
           : '- 최신 정보/실시간 데이터가 필요한 질문에는 brave_search를 사용한다.',
       ]
+      : []),
+    ...(notionEnabled
+      ? ['- Notion 관련 질문/참조가 필요하면 notion_search로 먼저 검색하고, 필요한 페이지를 notion_get_page로 조회한다.']
       : []),
   ].join('\n');
 
@@ -613,7 +635,11 @@ export async function streamAssistantReply(
     },
   );
 
+  // MCP 도구 (Atlassian Confluence)
   const mcpTools = input.confluenceSearchEnabled ? await mcpClientManager.getTools() : [];
+  
+  // Notion 도구 (REST API 기반)
+  const notionTools = input.notionSearchEnabled ? await mcpClientManager.getNotionTools() : [];
 
   const toolSpecs: any[] = [
     suggestTranslationRule,
@@ -621,6 +647,7 @@ export async function streamAssistantReply(
     reviewTranslationTool,
     ...(webSearchEnabled ? [braveSearchTool] : []),
     ...mcpTools,
+    ...notionTools,
   ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
@@ -640,7 +667,14 @@ export async function streamAssistantReply(
     new SystemMessage([
       (messages[0] as SystemMessage).content,
       '',
-      buildToolGuideMessage({ includeSource, includeTarget, provider: cfg.provider, webSearchEnabled }).content,
+      buildToolGuideMessage({
+        includeSource,
+        includeTarget,
+        provider: cfg.provider,
+        webSearchEnabled,
+        notionEnabled: !!input.notionSearchEnabled,
+        confluenceEnabled: !!input.confluenceSearchEnabled,
+      }).content,
     ].join('\n')),
     ...messages.slice(1),
   ];

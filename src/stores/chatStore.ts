@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
 import { streamAssistantReply } from '@/ai/chat';
+import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { detectRequestType } from '@/ai/prompt';
@@ -781,6 +782,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled,
             confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
+            // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
+            notionSearchEnabled: (() => {
+              const { enabledMap, tokenMap } = useConnectorStore.getState();
+              return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
+            })(),
           },
           {
             onToken: (full) => {
@@ -804,7 +810,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
                   'get_source_document': '원문 문서 조회',
                   'get_target_document': '번역문 문서 조회',
                   'suggest_translation_rule': '번역 규칙 생성',
-                  'suggest_project_context': '프로젝트 맥락 분석'
+                  'suggest_project_context': '프로젝트 맥락 분석',
+                  'notion_search': 'Notion 검색',
+                  'notion_get_page': 'Notion 페이지 조회',
+                  'notion_query_database': 'Notion 데이터베이스 조회',
                 };
                 const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
                 set({ statusMessage: `${friendlyName} 진행 중...` });
@@ -1251,6 +1260,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled: get().webSearchEnabled,
             confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
+            // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
+            notionSearchEnabled: (() => {
+              const { enabledMap, tokenMap } = useConnectorStore.getState();
+              return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
+            })(),
           },
           {
             onToken: (full) => {
@@ -1274,7 +1288,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
                   'get_source_document': '원문 문서 조회',
                   'get_target_document': '번역문 문서 조회',
                   'suggest_translation_rule': '번역 규칙 생성',
-                  'suggest_project_context': '프로젝트 맥락 분석'
+                  'suggest_project_context': '프로젝트 맥락 분석',
+                  'notion_search': 'Notion 검색',
+                  'notion_get_page': 'Notion 페이지 조회',
+                  'notion_query_database': 'Notion 데이터베이스 조회',
                 };
                 const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
                 set({ statusMessage: `${friendlyName} 진행 중...` });
