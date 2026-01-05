@@ -26,33 +26,17 @@ export function Toolbar(): JSX.Element {
 
       {/* 툴바 액션 */}
       <div className="flex items-center gap-2">
-        {/* Chat/Settings Sidebar 토글 */}
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title={t('toolbar.toggleSidebar')}
-        >
-          📁
-        </button>
-
         {/* Focus Mode 토글 */}
         <button
           type="button"
           onClick={toggleFocusMode}
-          className={`
-            px-3 py-1.5 rounded-md text-sm font-medium
-            transition-colors duration-200
-            ${focusMode
-              ? 'bg-primary-500 text-white'
-              : 'bg-editor-bg text-editor-text hover:bg-editor-border'
-            }
-          `}
+          className="p-2 rounded-md hover:bg-editor-border transition-colors"
           title={t('toolbar.focusMode')}
         >
-          {focusMode ? `📖 ${t('toolbar.focusModeNormal')}` : `🎯 ${t('toolbar.focusModeFocus')}`}
+          {focusMode ? '👁️' : '👀'}
         </button>
 
+        {/* Theme 토글 */}
         <button
           type="button"
           onClick={handleThemeToggle}
@@ -60,6 +44,16 @@ export function Toolbar(): JSX.Element {
           title={t('toolbar.themeCurrent', { theme })}
         >
           {theme === 'dark' ? '🌙' : '☀️'}
+        </button>
+
+        {/* Chat/Settings Sidebar 토글 */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="p-2 rounded-md hover:bg-editor-border transition-colors"
+          title={t('toolbar.toggleSidebar')}
+        >
+          💬
         </button>
       </div>
     </header>
