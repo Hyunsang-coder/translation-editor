@@ -3,6 +3,7 @@
 //! 여러 MCP 서버(Atlassian, Notion 등)를 통합 관리합니다.
 
 use crate::mcp::client::MCP_CLIENT;
+use crate::mcp::notion_client::NOTION_MCP_CLIENT;
 use crate::mcp::types::{McpConnectionStatus, McpTool, McpToolResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -59,7 +60,7 @@ impl McpRegistry {
     pub fn supported_servers() -> Vec<McpServerId> {
         vec![
             McpServerId::Atlassian,
-            // McpServerId::Notion, // TODO: Phase 3에서 활성화
+            McpServerId::Notion,
         ]
     }
 
@@ -70,8 +71,7 @@ impl McpRegistry {
                 MCP_CLIENT.connect().await
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
-                Err("Notion MCP is not yet implemented".to_string())
+                NOTION_MCP_CLIENT.connect().await
             }
         }
     }
@@ -83,7 +83,7 @@ impl McpRegistry {
                 MCP_CLIENT.disconnect().await;
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
+                NOTION_MCP_CLIENT.disconnect().await;
             }
         }
     }
@@ -95,7 +95,7 @@ impl McpRegistry {
                 MCP_CLIENT.logout().await;
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
+                NOTION_MCP_CLIENT.logout().await;
             }
         }
     }
@@ -107,8 +107,7 @@ impl McpRegistry {
                 MCP_CLIENT.get_status().await
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
-                McpConnectionStatus::default()
+                NOTION_MCP_CLIENT.get_status().await
             }
         }
     }
@@ -158,8 +157,7 @@ impl McpRegistry {
                 MCP_CLIENT.get_tools().await
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
-                Vec::new()
+                NOTION_MCP_CLIENT.get_tools().await
             }
         }
     }
@@ -192,10 +190,19 @@ impl McpRegistry {
                 MCP_CLIENT.call_tool(name, arguments).await
             }
             McpServerId::Notion => {
-                // TODO: Notion MCP 클라이언트 구현
-                Err("Notion MCP is not yet implemented".to_string())
+                NOTION_MCP_CLIENT.call_tool(name, arguments).await
             }
         }
+    }
+
+    /// Notion MCP 설정 저장 (URL + Auth Token)
+    pub async fn set_notion_config(
+        mcp_url: Option<String>,
+        auth_token: String,
+    ) -> Result<(), String> {
+        NOTION_MCP_CLIENT
+            .set_config(mcp_url, auth_token)
+            .await
     }
 
     /// 도구 이름으로 해당 MCP 서버 찾기

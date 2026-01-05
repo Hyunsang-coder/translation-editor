@@ -154,3 +154,13 @@ pub async fn mcp_registry_call_tool(
     McpRegistry::call_tool(server_id, &name, arguments).await
 }
 
+/// Notion MCP 설정 저장
+/// 로컬 MCP 서버의 URL과 Auth Token을 저장합니다.
+#[tauri::command]
+pub async fn mcp_set_notion_config(
+    mcp_url: Option<String>,
+    auth_token: String,
+) -> Result<(), String> {
+    McpRegistry::set_notion_config(mcp_url, auth_token).await
+}
+

@@ -15,7 +15,7 @@ export type ConnectorType = 'builtin' | 'mcp';
 /**
  * 빌트인 커넥터 ID (OpenAI Responses API)
  */
-export type BuiltinConnectorId = 
+export type BuiltinConnectorId =
   | 'googledrive'
   | 'googlecalendar'
   | 'gmail'
@@ -112,14 +112,13 @@ export const MCP_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[] = [
     description: 'Confluence 페이지 검색 및 조회',
     icon: '🔗',
   },
-  // 향후 추가: Notion
-  // {
-  //   id: 'notion',
-  //   type: 'mcp',
-  //   label: 'Notion',
-  //   description: 'Notion 페이지 및 데이터베이스 검색',
-  //   icon: '📝',
-  // },
+  {
+    id: 'notion',
+    type: 'mcp',
+    label: 'Notion',
+    description: 'Notion 페이지 및 데이터베이스 검색',
+    icon: '📝',
+  },
 ];
 
 /**

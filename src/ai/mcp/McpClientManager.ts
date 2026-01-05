@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -116,18 +117,26 @@ function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeA
   return z.object({});
 }
 
+/** MCP 서버 ID */
+export type McpServerId = 'atlassian' | 'notion';
+
 /**
  * MCP 클라이언트 매니저
  * 
- * Rust 네이티브 MCP SSE 클라이언트를 사용합니다.
- * Node.js 의존성 없이 Atlassian MCP 서버에 직접 연결합니다.
+ * Rust 네이티브 MCP 클라이언트를 사용합니다.
+ * Node.js 의존성 없이 MCP 서버에 직접 연결합니다.
+ * - Atlassian: SSE transport + OAuth 2.1 PKCE
+ * - Notion: REST API 직접 호출 (MCP 대신)
  * 
- * OAuth 토큰은 OS 키체인에 영속화되어 앱 재시작 후에도 유지됩니다.
+ * 토큰은 OS 키체인에 영속화되어 앱 재시작 후에도 유지됩니다.
  */
 class McpClientManager {
   private _status: McpConnectionStatus = { isConnected: false, isConnecting: false };
+  private _notionStatus: McpConnectionStatus = { isConnected: false, isConnecting: false };
   private statusListeners: ((status: McpConnectionStatus) => void)[] = [];
+  private notionStatusListeners: ((status: McpConnectionStatus) => void)[] = [];
   private toolsCache: DynamicStructuredTool[] = [];
+  private notionToolsCache: DynamicStructuredTool[] = [];
   private initialized = false;
 
   // Singleton Instance
@@ -155,7 +164,7 @@ class McpClientManager {
     this.initialized = true;
 
     try {
-      // 저장된 토큰 상태 확인
+      // Atlassian: 저장된 토큰 상태 확인
       const status = await invoke<McpConnectionStatus>("mcp_check_auth");
       this.updateStatus(status);
       
@@ -169,6 +178,12 @@ class McpClientManager {
         console.log("[McpClientManager] Found stored token, auto-connecting...");
         await this.connectAtlassian();
       }
+
+      // Notion: 토큰 존재 여부만 확인
+      const notionHasToken = await hasNotionToken();
+      this.updateNotionStatus({ hasStoredToken: notionHasToken });
+      console.log("[McpClientManager] Notion token check:", { hasStoredToken: notionHasToken });
+
     } catch (error) {
       console.error("[McpClientManager] Initialize failed:", error);
       // 초기화 실패해도 앱은 계속 동작
@@ -306,6 +321,154 @@ class McpClientManager {
   private updateStatus(newStatus: Partial<McpConnectionStatus>) {
     this._status = { ...this._status, ...newStatus };
     this.statusListeners.forEach(listener => listener(this._status));
+  }
+
+  // ============================================================================
+  // Notion REST API 관련 메서드 (MCP 대신 직접 API 호출)
+  // ============================================================================
+
+  /**
+   * Notion Integration Token 저장
+   */
+  async setNotionToken(token: string): Promise<void> {
+    try {
+      await setNotionToken(token);
+      this.updateNotionStatus({ hasStoredToken: true, error: null });
+      console.log("[McpClientManager] Notion token saved");
+    } catch (error) {
+      console.error("[McpClientManager] Failed to set Notion token:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Notion "연결" - 실제로는 토큰 검증만 수행
+   * REST API 방식이므로 별도의 연결 과정이 없음
+   */
+  async connectNotion(): Promise<void> {
+    if (this._notionStatus.isConnected || this._notionStatus.isConnecting) {
+      console.warn("[McpClientManager] Notion already connected or connecting");
+      return;
+    }
+
+    this.updateNotionStatus({ isConnecting: true, error: null });
+
+    try {
+      // 토큰 존재 여부 확인
+      const hasToken = await hasNotionToken();
+      if (!hasToken) {
+        throw new Error("No Notion token. Please set your Integration Token first.");
+      }
+      
+      // 도구 생성
+      this.notionToolsCache = createNotionTools();
+      
+      this.updateNotionStatus({ 
+        isConnected: true, 
+        isConnecting: false,
+        hasStoredToken: true,
+        serverName: "Notion",
+      });
+      console.log("[McpClientManager] Notion connected (REST API mode)");
+
+    } catch (error) {
+      console.error("[McpClientManager] Notion connection failed:", error);
+      this.updateNotionStatus({ 
+        isConnected: false, 
+        isConnecting: false, 
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Notion 연결 해제
+   */
+  async disconnectNotion(): Promise<void> {
+    this.notionToolsCache = [];
+    this.updateNotionStatus({ 
+      isConnected: false, 
+      isConnecting: false,
+      serverName: null,
+    });
+    console.log("[McpClientManager] Notion disconnected");
+  }
+
+  /**
+   * Notion 로그아웃 (토큰 삭제 포함)
+   */
+  async logoutNotion(): Promise<void> {
+    try {
+      await clearNotionToken();
+      this.notionToolsCache = [];
+      this.updateNotionStatus({ 
+        isConnected: false, 
+        isConnecting: false,
+        hasStoredToken: false,
+        serverName: null,
+      });
+      console.log("[McpClientManager] Notion logged out, token deleted from keychain");
+    } catch (error) {
+      console.error("[McpClientManager] Notion logout error:", error);
+    }
+  }
+
+  /**
+   * Notion LangChain 호환 도구 목록 가져오기
+   */
+  async getNotionTools(): Promise<DynamicStructuredTool[]> {
+    // 토큰이 있으면 도구 사용 가능
+    const hasToken = await hasNotionToken();
+    if (!hasToken) {
+      return [];
+    }
+
+    // 캐시가 비어있으면 생성
+    if (this.notionToolsCache.length === 0) {
+      this.notionToolsCache = createNotionTools();
+    }
+
+    return this.notionToolsCache;
+  }
+
+  /**
+   * 모든 연결된 MCP 서버의 도구 목록 가져오기
+   */
+  async getAllTools(): Promise<DynamicStructuredTool[]> {
+    const atlassianTools = await this.getTools();
+    const notionTools = await this.getNotionTools();
+    return [...atlassianTools, ...notionTools];
+  }
+
+  /**
+   * Notion 상태 구독
+   */
+  subscribeNotion(listener: (status: McpConnectionStatus) => void): () => void {
+    this.notionStatusListeners.push(listener);
+    listener(this._notionStatus);
+    return () => {
+      this.notionStatusListeners = this.notionStatusListeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Notion 상태 조회
+   */
+  getNotionStatus(): McpConnectionStatus {
+    return { ...this._notionStatus };
+  }
+
+  /**
+   * Notion 저장된 토큰이 있는지 확인
+   */
+  hasNotionStoredToken(): boolean {
+    return this._notionStatus.hasStoredToken ?? false;
+  }
+
+  private updateNotionStatus(newStatus: Partial<McpConnectionStatus>) {
+    this._notionStatus = { ...this._notionStatus, ...newStatus };
+    this.notionStatusListeners.forEach(listener => listener(this._notionStatus));
   }
 }
 

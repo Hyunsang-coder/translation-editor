@@ -7,6 +7,7 @@ pub mod db;
 pub mod error;
 pub mod mcp;
 pub mod models;
+pub mod notion;
 pub mod utils;
 
 use std::path::{Path, PathBuf};
@@ -206,12 +207,21 @@ pub fn run() {
             commands::mcp::mcp_registry_logout,
             commands::mcp::mcp_registry_get_tools,
             commands::mcp::mcp_registry_call_tool,
+            commands::mcp::mcp_set_notion_config,
             // 커넥터 (OpenAI 빌트인 + MCP)
             commands::connector::connector_set_token,
             commands::connector::connector_get_token,
             commands::connector::connector_delete_token,
             commands::connector::connector_list_status,
             commands::connector::connector_start_oauth,
+            // Notion REST API
+            commands::notion::notion_set_token,
+            commands::notion::notion_has_token,
+            commands::notion::notion_clear_token,
+            commands::notion::notion_search,
+            commands::notion::notion_get_page,
+            commands::notion::notion_get_page_content,
+            commands::notion::notion_query_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

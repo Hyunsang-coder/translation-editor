@@ -69,7 +69,15 @@
       "connect": "Connect",
       "disconnect": "Disconnect",
       "enableForChat": "Use this service in chat",
-      "comingSoon": "Coming Soon"
+      "comingSoon": "Coming Soon",
+      "notion": {
+        "dialogTitle": "Connect Notion",
+        "dialogDescription": "Enter your Notion Integration Token. You can create a token in your Notion settings.",
+        "tokenLabel": "Integration Token",
+        "tokenRequired": "Token is required",
+        "invalidTokenFormat": "Invalid token format. Token should start with 'ntn_' or 'secret_'.",
+        "helpText": "You can create an Integration Token in your Notion settings:"
+      }
     }
   },
   "toolbar": {

@@ -4,11 +4,110 @@
  * OpenAI 빌트인 커넥터와 MCP 커넥터의 연결 상태를 표시하고 관리합니다.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
+
+interface NotionTokenDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (token: string) => void;
+}
+
+function NotionTokenDialog({ isOpen, onClose, onSubmit }: NotionTokenDialogProps): JSX.Element | null {
+  const { t } = useTranslation();
+  const [token, setToken] = useState('');
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setToken('');
+      setError('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token.trim()) {
+      setError(t('appSettings.connectors.notion.tokenRequired'));
+      return;
+    }
+    // Integration Token 형식 검증
+    if (!token.startsWith('ntn_') && !token.startsWith('secret_')) {
+      setError(t('appSettings.connectors.notion.invalidTokenFormat'));
+      return;
+    }
+    onSubmit(token.trim());
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-editor-bg border border-editor-border rounded-lg shadow-xl w-full max-w-md p-4">
+        <h3 className="text-lg font-semibold text-editor-text mb-2">
+          {t('appSettings.connectors.notion.dialogTitle')}
+        </h3>
+        <p className="text-sm text-editor-muted mb-4">
+          {t('appSettings.connectors.notion.dialogDescription')}
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-editor-text mb-1">
+              {t('appSettings.connectors.notion.tokenLabel')}
+            </label>
+            <input
+              ref={inputRef}
+              type="password"
+              value={token}
+              onChange={(e) => {
+                setToken(e.target.value);
+                setError('');
+              }}
+              placeholder="ntn_xxx... or secret_xxx..."
+              className="w-full px-3 py-2 bg-editor-bg border border-editor-border rounded text-sm text-editor-text focus:outline-none focus:border-primary-500"
+            />
+            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-editor-muted hover:text-editor-text transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 text-sm bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors"
+            >
+              {t('appSettings.connectors.connect')}
+            </button>
+          </div>
+        </form>
+        <div className="mt-4 pt-4 border-t border-editor-border">
+          <p className="text-xs text-editor-muted">
+            {t('appSettings.connectors.notion.helpText')}{' '}
+            <a
+              href="https://www.notion.so/my-integrations"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-400 hover:underline"
+            >
+              notion.so/my-integrations
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ConnectorItemProps {
   icon: string;
@@ -114,18 +213,37 @@ export function ConnectorsSection(): JSX.Element {
   const { t } = useTranslation();
   const { enabledMap, setEnabled, setTokenStatus } = useConnectorStore();
   
-  // MCP 상태
+  // MCP 상태 (Atlassian)
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>({
     isConnected: false,
     isConnecting: false,
   });
 
-  // MCP 상태 구독
+  // Notion MCP 상태
+  const [notionStatus, setNotionStatus] = useState<McpConnectionStatus>({
+    isConnected: false,
+    isConnecting: false,
+  });
+
+  // Notion 토큰 다이얼로그
+  const [showNotionDialog, setShowNotionDialog] = useState(false);
+
+  // MCP 상태 구독 (Atlassian)
   useEffect(() => {
     const unsubscribe = mcpClientManager.subscribe((status) => {
       setMcpStatus(status);
       // Atlassian 커넥터 토큰 상태 동기화
       setTokenStatus('atlassian', status.hasStoredToken ?? false);
+    });
+    return unsubscribe;
+  }, [setTokenStatus]);
+
+  // Notion MCP 상태 구독
+  useEffect(() => {
+    const unsubscribe = mcpClientManager.subscribeNotion((status) => {
+      setNotionStatus(status);
+      // Notion 커넥터 토큰 상태 동기화
+      setTokenStatus('notion', status.hasStoredToken ?? false);
     });
     return unsubscribe;
   }, [setTokenStatus]);
@@ -148,6 +266,30 @@ export function ConnectorsSection(): JSX.Element {
     }
   }, []);
 
+  // Notion MCP 연결 (토큰 입력 다이얼로그 표시)
+  const handleNotionConnect = useCallback(() => {
+    setShowNotionDialog(true);
+  }, []);
+
+  // Notion 토큰 제출 및 연결
+  const handleNotionTokenSubmit = useCallback(async (token: string) => {
+    try {
+      await mcpClientManager.setNotionToken(token);
+      await mcpClientManager.connectNotion();
+    } catch (error) {
+      console.error('[Connectors] Notion connect failed:', error);
+    }
+  }, []);
+
+  // Notion MCP 연결 해제
+  const handleNotionDisconnect = useCallback(async () => {
+    try {
+      await mcpClientManager.logoutNotion();
+    } catch (error) {
+      console.error('[Connectors] Notion disconnect failed:', error);
+    }
+  }, []);
+
   // 빌트인 커넥터 연결 (TODO: OAuth 구현 후 활성화)
   const handleBuiltinConnect = useCallback((connectorId: string) => {
     console.log(`[Connectors] Connect ${connectorId} - OAuth not implemented yet`);
@@ -159,6 +301,35 @@ export function ConnectorsSection(): JSX.Element {
     // TODO: deleteConnectorToken(connectorId)
   }, []);
 
+  // MCP 커넥터별 상태 및 핸들러 가져오기
+  const getMcpConnectorProps = useCallback((connectorId: string) => {
+    if (connectorId === 'atlassian') {
+      return {
+        hasToken: mcpStatus.hasStoredToken ?? false,
+        isConnecting: mcpStatus.isConnecting,
+        onConnect: handleAtlassianConnect,
+        onDisconnect: handleAtlassianDisconnect,
+        comingSoon: false,
+      };
+    }
+    if (connectorId === 'notion') {
+      return {
+        hasToken: notionStatus.hasStoredToken ?? false,
+        isConnecting: notionStatus.isConnecting,
+        onConnect: handleNotionConnect,
+        onDisconnect: handleNotionDisconnect,
+        comingSoon: false,
+      };
+    }
+    return {
+      hasToken: false,
+      isConnecting: false,
+      onConnect: () => {},
+      onDisconnect: () => {},
+      comingSoon: true,
+    };
+  }, [mcpStatus, notionStatus, handleAtlassianConnect, handleAtlassianDisconnect, handleNotionConnect, handleNotionDisconnect]);
+
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
@@ -169,29 +340,39 @@ export function ConnectorsSection(): JSX.Element {
         {t('appSettings.connectors.description')}
       </p>
 
-      {/* MCP 커넥터 (Atlassian) */}
+      {/* MCP 커넥터 (Atlassian, Notion) */}
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
           {t('appSettings.connectors.mcpServices')}
         </h4>
         <div className="space-y-2">
-          {MCP_CONNECTORS.map((connector) => (
-            <ConnectorItem
-              key={connector.id}
-              icon={connector.icon ?? '🔗'}
-              label={connector.label}
-              description={connector.description}
-              enabled={enabledMap[connector.id] ?? false}
-              hasToken={connector.id === 'atlassian' ? (mcpStatus.hasStoredToken ?? false) : false}
-              isConnecting={connector.id === 'atlassian' ? mcpStatus.isConnecting : false}
-              onToggle={(enabled) => setEnabled(connector.id, enabled)}
-              onConnect={connector.id === 'atlassian' ? handleAtlassianConnect : () => {}}
-              onDisconnect={connector.id === 'atlassian' ? handleAtlassianDisconnect : () => {}}
-              comingSoon={connector.id !== 'atlassian'}
-            />
-          ))}
+          {MCP_CONNECTORS.map((connector) => {
+            const props = getMcpConnectorProps(connector.id);
+            return (
+              <ConnectorItem
+                key={connector.id}
+                icon={connector.icon ?? '🔗'}
+                label={connector.label}
+                description={connector.description}
+                enabled={enabledMap[connector.id] ?? false}
+                hasToken={props.hasToken}
+                isConnecting={props.isConnecting}
+                onToggle={(enabled) => setEnabled(connector.id, enabled)}
+                onConnect={props.onConnect}
+                onDisconnect={props.onDisconnect}
+                comingSoon={props.comingSoon}
+              />
+            );
+          })}
         </div>
       </div>
+
+      {/* Notion 토큰 입력 다이얼로그 */}
+      <NotionTokenDialog
+        isOpen={showNotionDialog}
+        onClose={() => setShowNotionDialog(false)}
+        onSubmit={handleNotionTokenSubmit}
+      />
 
       {/* OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft) */}
       <div className="space-y-2">
