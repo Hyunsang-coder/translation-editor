@@ -1,6 +1,8 @@
-🛠 [TRD] Integrated Translation Editor (ITE) Technical Specifications
+🛠 [TRD] OddEyes.ai Technical Specifications
 
-이 문서는 ITE의 **기술 설계도(Source of Truth)**입니다. 구현/문서가 충돌하면 본 문서를 기준으로 정리합니다.
+이 문서는 OddEyes.ai의 **기술 설계도(Source of Truth)**입니다. 구현/문서가 충돌하면 본 문서를 기준으로 정리합니다.
+
+(내부 코드명: Integrated Translation Editor / ITE)
 
 표기 규칙:
 - **Why**: 왜 필요한가(의도/리스크)

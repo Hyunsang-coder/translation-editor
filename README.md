@@ -1,9 +1,11 @@
-# Integrated Translation Editor (ITE)
+# OddEyes.ai
 
 > "AI를 동료로, 번역을 예술로."
 
-**Integrated Translation Editor (ITE)** 는 전문 번역가를 위한 “Cursor AI 방식의 번역 워크스테이션”을 목표로 합니다.  
+**OddEyes.ai**는 전문 번역가를 위한 "Cursor AI 방식의 번역 워크스테이션"을 목표로 합니다.
 이 레포의 최상위 제품/기술 기준은 **`prd.md` + `trd.md`** 입니다.
+
+(내부 코드명: ITE / Integrated Translation Editor)
 
 ---
 
@@ -152,7 +154,7 @@ npm run tauri build
 
 ## 📡 AI API 호출 Payload 구조
 
-ITE는 **LangChain.js**를 사용하여 AI 모델(OpenAI/Anthropic)에 요청을 전달합니다.  
+OddEyes.ai는 **LangChain.js**를 사용하여 AI 모델(OpenAI/Anthropic)에 요청을 전달합니다.  
 실제 API 호출은 LangChain이 내부적으로 처리하지만, 전달되는 메시지 구조는 다음과 같습니다.
 
 ### 요청 유형별 메시지 구조

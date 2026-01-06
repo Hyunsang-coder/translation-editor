@@ -1,4 +1,5 @@
-//! ITE (Integrated Translation Editor) - Tauri Backend Library
+//! OddEyes.ai - Tauri Backend Library
+//! (Internal codename: ITE / Integrated Translation Editor)
 //!
 //! Rust 백엔드 라이브러리로, 파일 I/O, SQLite 관리, 시스템 연동을 담당합니다.
 

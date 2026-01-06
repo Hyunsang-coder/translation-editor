@@ -210,8 +210,8 @@ const createInitialProject = (): ITEProject => {
     [sourceBlock1Id]: {
       id: sourceBlock1Id,
       type: 'source',
-      content: '<p>Hello, welcome to the Integrated Translation Editor.</p>',
-      hash: hashContent('Hello, welcome to the Integrated Translation Editor.'),
+      content: '<p>Hello, welcome to OddEyes.ai.</p>',
+      hash: hashContent('Hello, welcome to OddEyes.ai.'),
       metadata: {
         createdAt: now,
         updatedAt: now,

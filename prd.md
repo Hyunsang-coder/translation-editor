@@ -1,15 +1,15 @@
-📝 [PRD] Integrated Translation Editor (ITE)
+📝 [PRD] OddEyes.ai
 
-이 문서는 ITE의 **제품 요구사항(Product Requirements Document)**입니다.
+이 문서는 OddEyes.ai의 **제품 요구사항(Product Requirements Document)**입니다.
 개발 과정에서 방향을 잃지 않도록 하는 나침반 역할을 합니다.
 
 ---
 
 ## 1. 제품 개요 (Product Overview)
 
-**제품명**: Integrated Translation Editor (ITE)
+**제품명**: OddEyes.ai (내부 코드명: Integrated Translation Editor / ITE)
 
-**비전**: "전문 번역가가 주도권을 가지고, AI가 조력하는" 지능형 번역 워크스테이션.
+**비전**: "AI를 동료로, 번역을 예술로" - 전문 번역가가 주도권을 가지고, AI가 조력하는 지능형 번역 워크스테이션.
 번역가 본연의 작업 리듬을 방해하지 않으면서, 필요할 때 AI의 도움을 받아 효율을 높이는 경험을 제공합니다.
 
 **핵심 컨셉**:

@@ -1,5 +1,6 @@
 /**
- * ITE (Integrated Translation Editor) Core Types
+ * OddEyes.ai Core Types
+ * (Internal codename: ITE / Integrated Translation Editor)
  * N:M 매핑 구조 기반의 타입 정의
  */
 
