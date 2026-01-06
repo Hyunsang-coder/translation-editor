@@ -70,6 +70,10 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **Markdown 렌더링**: 채팅 메시지 GFM 지원 (HTML 렌더링 금지) ✅
 - **Add to Rules/Context**: assistant 응답을 규칙/컨텍스트에 추가 ✅
 - **Smart Context Memory**: 대화 토큰 모니터링 및 요약 제안 ✅
+- **실시간 토큰 스트리밍**: LangChain `.stream()` API 기반 실시간 응답 ✅
+  - 첫 토큰 표시: 0.5~2초 (이전: 5~30초)
+  - Claude App처럼 타이핑 효과
+  - 도구 호출 중 상태 표시
 - **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
 - **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
 

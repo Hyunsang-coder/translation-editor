@@ -109,6 +109,32 @@ What (API 구조 - 채팅 모드):
     - 사용자는 Chat 탭에서 `Confluence_search` 토글로 사용 여부를 제어한다(3.6 참조).
     - 토글이 꺼져 있으면 모델에 도구를 바인딩/노출하지 않는다(웹검색 게이트와 동일 원칙).
 
+### 실시간 토큰 스트리밍 (Real-time Token Streaming)
+
+Why:
+- 번역가는 AI 응답을 기다리는 동안 불안감을 느끼며, 첫 토큰이 빠르게 표시될수록 "응답이 진행 중"임을 인지합니다.
+- Claude App과 같은 실시간 타이핑 효과는 사용자 체감 응답성을 대폭 향상시킵니다.
+
+How:
+- LangChain `.stream()` API를 사용하여 토큰별로 실시간 수신
+- 각 토큰을 즉시 UI 콜백(`onToken`)으로 전달
+- 도구 호출 청크(`tool_call_chunks`)를 수집하여 완성된 도구 호출로 병합
+
+What:
+- 스트리밍 구현 위치: `src/ai/chat.ts` → `runToolCallingLoop()` 함수
+- 응답 흐름:
+  ```
+  .stream() → for await (chunk) {
+    - 텍스트 토큰: 즉시 onToken 콜백 호출
+    - 도구 호출 청크: 수집 후 병합
+    - 최종 메시지: concat으로 누적
+  }
+  ```
+- 첫 토큰 표시 시간: 0.5~2초 (이전 의사-스트리밍: 5~30초)
+- 도구 호출 중 상태 표시: `onToolCall` 콜백으로 진행 상태 전달
+- 요청 취소: 기존 `AbortSignal` 패턴 유지
+- 네트워크 에러 시: 부분 응답 반환 (토큰 손실 방지)
+
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:
 - 선택/문서 컨텍스트를 안정적으로 주입해 일관된 응답을 받기 위함입니다.
