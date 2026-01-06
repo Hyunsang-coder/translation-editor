@@ -6,8 +6,8 @@ import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documen
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { reviewTranslationTool } from '@/ai/tools/reviewTool';
-import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
-import type { ToolCall } from '@langchain/core/messages/tool';
+import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
 import { v4 as uuidv4 } from 'uuid';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -209,6 +209,60 @@ function extractToolCalls(ai: unknown): ToolCall[] {
   return [];
 }
 
+/**
+ * 스트리밍 청크에서 텍스트 콘텐츠 추출
+ */
+function extractChunkContent(chunk: AIMessageChunk): string {
+  const content = chunk.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => {
+        if (typeof c === 'string') return c;
+        if (typeof c === 'object' && c && 'text' in c) return String((c as any).text ?? '');
+        return '';
+      })
+      .join('');
+  }
+  return '';
+}
+
+/**
+ * 도구 호출 청크를 병합하여 완성된 ToolCall 배열로 변환
+ * LangChain은 tool_call_chunks를 여러 청크에 걸쳐 전송할 수 있음
+ */
+function mergeToolCallChunks(chunks: ToolCallChunk[]): ToolCall[] {
+  // index별로 청크를 그룹화
+  const byIndex = new Map<number, ToolCallChunk[]>();
+  for (const chunk of chunks) {
+    const idx = chunk.index ?? 0;
+    if (!byIndex.has(idx)) byIndex.set(idx, []);
+    byIndex.get(idx)!.push(chunk);
+  }
+
+  const result: ToolCall[] = [];
+  for (const [, groupChunks] of byIndex) {
+    let id = '';
+    let name = '';
+    let argsStr = '';
+    for (const c of groupChunks) {
+      if (c.id) id = c.id;
+      if (c.name) name = c.name;
+      if (c.args) argsStr += c.args;
+    }
+    if (name) {
+      const args = safeJsonParse(argsStr) ?? {};
+      result.push({ id: id || uuidv4(), name, args } as ToolCall);
+    }
+  }
+  return result;
+}
+
+/**
+ * 실시간 토큰 스트리밍을 지원하는 도구 호출 루프
+ * - LangChain .stream() API를 사용하여 토큰별로 UI에 전달
+ * - 도구 호출 시 도구 실행 후 재스트리밍
+ */
 async function runToolCallingLoop(params: {
   model: ReturnType<typeof createChatModel>;
   /**
@@ -230,7 +284,6 @@ async function runToolCallingLoop(params: {
   const toolsUsed: string[] = [];
 
   // 정석: tool calling은 bindTools()로 모델에 도구를 바인딩합니다. (LangChain 공식 문서 패턴)
-  // - Provider/버전에 따라 bindTools 유무가 다를 수 있어 방어적으로 처리합니다.
   const modelAny = params.model as any;
   const bindTools = params.bindTools ?? params.tools;
   const modelWithTools =
@@ -247,17 +300,62 @@ async function runToolCallingLoop(params: {
     }
 
     params.cb?.onModelRun?.(step);
-    const ai = await (modelWithTools as any).invoke(loopMessages);
-    
-    // AbortSignal 체크 (invoke 후에도 체크)
-    if (params.abortSignal?.aborted) {
-      throw new DOMException('Request aborted', 'AbortError');
-    }
-    
-    loopMessages.push(ai);
 
-    // OpenAI built-in tools(web_search_preview 등)은 function tool_calls로 노출되지 않을 수 있어 별도 감지
-    const builtIns = detectOpenAiBuiltInToolsFromMessage(ai, bindTools);
+    // 실시간 스트리밍: .stream() 사용
+    let accumulatedText = '';
+    let accumulatedToolCallChunks: ToolCallChunk[] = [];
+    let finalAiMessage: AIMessageChunk | null = null;
+
+    try {
+      const stream = await (modelWithTools as any).stream(loopMessages, {
+        signal: params.abortSignal,
+      });
+
+      for await (const chunk of stream) {
+        // AbortSignal 체크
+        if (params.abortSignal?.aborted) {
+          throw new DOMException('Request aborted', 'AbortError');
+        }
+
+        // 텍스트 토큰 처리
+        const textDelta = extractChunkContent(chunk);
+        if (textDelta) {
+          accumulatedText += textDelta;
+          // 실시간으로 UI에 전달
+          params.cb?.onToken?.(accumulatedText, textDelta);
+        }
+
+        // 도구 호출 청크 수집
+        if (chunk.tool_call_chunks && Array.isArray(chunk.tool_call_chunks)) {
+          accumulatedToolCallChunks.push(...chunk.tool_call_chunks);
+        }
+
+        // 최종 메시지 누적 (concat으로 병합)
+        if (finalAiMessage === null) {
+          finalAiMessage = chunk;
+        } else {
+          finalAiMessage = finalAiMessage.concat(chunk);
+        }
+      }
+    } catch (e) {
+      // 스트림 에러 처리
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        throw e;
+      }
+      // 네트워크 에러 등 - 부분 응답이 있으면 반환
+      if (accumulatedText) {
+        return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed };
+      }
+      throw e;
+    }
+
+    // 최종 메시지를 대화 기록에 추가
+    if (finalAiMessage) {
+      loopMessages.push(finalAiMessage);
+    }
+
+    // OpenAI built-in tools 감지 (web_search_preview 등)
+    const builtIns = detectOpenAiBuiltInToolsFromMessage(finalAiMessage, bindTools);
     for (const t of builtIns) {
       if (!toolsUsed.includes(t)) toolsUsed.push(t);
     }
@@ -265,24 +363,27 @@ async function runToolCallingLoop(params: {
       console.info('[AI builtin_tools_used]', builtIns);
     }
 
-    const toolCalls: ToolCall[] = extractToolCalls(ai);
-    if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
-      const content = (ai as any)?.content;
-      const text =
-        typeof content === 'string'
-          ? content
-          : Array.isArray(content)
-            ? content.map((c) => (typeof c === 'string' ? c : typeof c === 'object' && c && 'text' in c ? String((c as any).text ?? '') : '')).join('')
-            : JSON.stringify(content);
-      return { finalText: text, usedTools: toolsUsed.length > 0, toolsUsed };
+    // 도구 호출 처리
+    // 1) 스트리밍 청크에서 병합된 도구 호출
+    let toolCalls = mergeToolCallChunks(accumulatedToolCallChunks);
+
+    // 2) 최종 메시지에서 추출 (일부 모델은 스트리밍 중 tool_calls 대신 최종 메시지에만 포함)
+    if (toolCalls.length === 0 && finalAiMessage) {
+      toolCalls = extractToolCalls(finalAiMessage);
     }
 
+    // 도구 호출이 없으면 최종 응답 반환
+    if (toolCalls.length === 0) {
+      return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed };
+    }
+
+    // 도구 호출 실행
     for (const call of toolCalls) {
       const tool = toolMap.get(call.name);
       const toolCallId = getToolCallId(call);
       if (!toolsUsed.includes(call.name)) toolsUsed.push(call.name);
-      // 문서 내용은 로그로 찍지 않음(보안/노이즈 방지). 도구명/인자만 로깅.
       console.info('[AI tool_call]', { name: call.name, args: call.args ?? {} });
+
       if (!tool) {
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         loopMessages.push(
@@ -304,12 +405,12 @@ async function runToolCallingLoop(params: {
 
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
         const out = await tool.invoke(call.args ?? {});
-        
+
         // AbortSignal 체크 (tool 호출 후에도 체크)
         if (params.abortSignal?.aborted) {
           throw new DOMException('Request aborted', 'AbortError');
         }
-        
+
         const content = typeof out === 'string' ? out : JSON.stringify(out);
         loopMessages.push(
           new ToolMessage({
@@ -737,15 +838,9 @@ export async function streamAssistantReply(
 
   cb?.onToolsUsed?.(toolsUsed);
 
-  // 실제 모델 토큰 스트리밍 대신, 결과를 UI에 점진적으로 전달(추가 모델 호출 없이 비용 절감)
-  let full = '';
-  const chunkSize = 24;
-  for (let i = 0; i < finalText.length; i += chunkSize) {
-    const delta = finalText.slice(i, i + chunkSize);
-    full += delta;
-    cb?.onToken?.(full, delta);
-  }
-  return full;
+  // 실시간 스트리밍: onToken 콜백은 runToolCallingLoop 내에서 이미 호출됨
+  // 최종 텍스트만 반환
+  return finalText;
 }
 
 /**
