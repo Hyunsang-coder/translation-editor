@@ -128,6 +128,10 @@ interface ChatState {
   isLoading: boolean;
   isHydrating: boolean;
   streamingMessageId: string | null;
+  /** 스트리밍 중인 메시지 콘텐츠 (배열 갱신 없이 단일 필드만 업데이트) */
+  streamingContent: string | null;
+  /** 스트리밍 중인 메시지의 메타데이터 */
+  streamingMetadata: ChatMessage['metadata'] | null;
   error: string | null;
   statusMessage: string | null;
   // 최근 요청에서 주입된 글로서리(디버깅/가시화)
@@ -229,6 +233,11 @@ interface ChatActions {
   hydrateForProject: (projectId: string | null) => Promise<void>;
 
   // AI Interaction Feedback
+
+  // Streaming 상태 관리 (성능 최적화: 배열 갱신 없이 단일 필드만 업데이트)
+  setStreamingContent: (content: string) => void;
+  setStreamingMetadata: (metadata: ChatMessage['metadata']) => void;
+  finalizeStreaming: () => void;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -303,6 +312,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
     currentSession: null,
     isLoading: false,
     streamingMessageId: null,
+    streamingContent: null,
+    streamingMetadata: null,
     error: null,
     statusMessage: null,
     lastInjectedGlossary: [],
@@ -793,14 +804,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (get().statusMessage !== '답변 생성 중...') {
                 set({ statusMessage: '답변 생성 중...' });
               }
-              if (assistantId) {
-                updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
-              }
+              // 성능 최적화: 배열 갱신 없이 단일 필드만 업데이트
+              set({ streamingContent: restoreGhostChips(full, maskSession) });
             },
             onToolCall: (evt) => {
               if (!assistantId) return;
-              const sessionNow = get().currentSession;
-              const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              // 성능 최적화: 스트리밍 메타데이터 사용 (배열 갱신 없음)
+              const currentMetadata = get().streamingMetadata ?? {};
 
               if (evt.phase === 'start') {
                 const toolNameMap: Record<string, string> = {
@@ -822,14 +832,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
               }
 
               // 1. Tool Call Badge (Running state)
-              const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
+              const prev = currentMetadata.toolCallsInProgress ?? [];
               const next =
                 evt.phase === 'start'
                   ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
                   : prev.filter((n) => n !== evt.toolName);
 
               // 2. Suggestion Handling (Smart Buttons)
-              let nextMetadata = msgNow?.metadata ?? {};
+              let nextMetadata = { ...currentMetadata };
 
               // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록
               if (evt.phase === 'start' && evt.args) {
@@ -847,17 +857,20 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 }
               }
 
-              updateMessage(assistantId, {
-                metadata: {
+              // 성능 최적화: 스트리밍 메타데이터만 업데이트 (배열 갱신 없음)
+              set({
+                streamingMetadata: {
                   ...nextMetadata,
                   toolCallsInProgress: next,
                 },
               });
             },
             onToolsUsed: (toolsUsed) => {
-              if (assistantId) {
-                updateMessage(assistantId, { metadata: { toolsUsed } });
-              }
+              // 성능 최적화: 스트리밍 메타데이터만 업데이트
+              const currentMetadata = get().streamingMetadata ?? {};
+              set({
+                streamingMetadata: { ...currentMetadata, toolsUsed },
+              });
             },
           },
         );
@@ -866,27 +879,34 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
-          updateMessage(assistantId, { content: restored });
 
           // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
-          const msgNow = get().currentSession?.messages.find((m) => m.id === assistantId);
-          if (!msgNow?.metadata?.suggestion) {
+          const currentMetadata = get().streamingMetadata ?? {};
+          if (!currentMetadata.suggestion) {
             const inferred = inferSuggestionFromAssistantText(restored);
             if (inferred) {
-              updateMessage(assistantId, { metadata: { suggestion: inferred } });
+              set({ streamingMetadata: { ...currentMetadata, suggestion: inferred } });
             }
           }
 
-          updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+          // 최종 콘텐츠 설정 후 한 번에 messages 배열에 반영
+          set({ streamingContent: restored });
+          get().finalizeStreaming();
         }
 
-        restoreGhostChips(replyMasked, maskSession);
-        set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+        set({ abortController: null });
         get().checkAndSuggestProjectContext();
       } catch (error) {
         // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
         if (error instanceof Error && error.name === 'AbortError') {
-          set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+          set({
+            isLoading: false,
+            streamingMessageId: null,
+            streamingContent: null,
+            streamingMetadata: null,
+            statusMessage: null,
+            abortController: null,
+          });
           return;
         }
 
@@ -906,6 +926,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          streamingContent: null,
+          streamingMetadata: null,
           abortController: null,
         });
       }
@@ -1271,14 +1293,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (get().statusMessage !== '답변 생성 중...') {
                 set({ statusMessage: '답변 생성 중...' });
               }
-              if (assistantId) {
-                get().updateMessage(assistantId, { content: restoreGhostChips(full, maskSession) });
-              }
+              // 성능 최적화: 배열 갱신 없이 단일 필드만 업데이트
+              set({ streamingContent: restoreGhostChips(full, maskSession) });
             },
             onToolCall: (evt) => {
               if (!assistantId) return;
-              const sessionNow = get().currentSession;
-              const msgNow = sessionNow?.messages.find((m) => m.id === assistantId);
+              // 성능 최적화: 스트리밍 메타데이터 사용 (배열 갱신 없음)
+              const currentMetadata = get().streamingMetadata ?? {};
 
               if (evt.phase === 'start') {
                 const toolNameMap: Record<string, string> = {
@@ -1300,14 +1321,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
               }
 
               // 1) Tool Call Badge
-              const prev = msgNow?.metadata?.toolCallsInProgress ?? [];
+              const prev = currentMetadata.toolCallsInProgress ?? [];
               const next =
                 evt.phase === 'start'
                   ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
                   : prev.filter((n) => n !== evt.toolName);
 
               // 2) Suggestion Handling (Smart Buttons)
-              let nextMetadata = msgNow?.metadata ?? {};
+              let nextMetadata = { ...currentMetadata };
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
                   nextMetadata = {
@@ -1322,8 +1343,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 }
               }
 
-              get().updateMessage(assistantId, {
-                metadata: {
+              // 성능 최적화: 스트리밍 메타데이터만 업데이트 (배열 갱신 없음)
+              set({
+                streamingMetadata: {
                   ...nextMetadata,
                   toolCallsInProgress: next,
                 },
@@ -1339,9 +1361,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
               }
             },
             onToolsUsed: (toolsUsed) => {
-              if (assistantId) {
-                get().updateMessage(assistantId, { metadata: { toolsUsed } });
-              }
+              // 성능 최적화: 스트리밍 메타데이터만 업데이트
+              const currentMetadata = get().streamingMetadata ?? {};
+              set({
+                streamingMetadata: { ...currentMetadata, toolsUsed },
+              });
             },
           },
         );
@@ -1350,26 +1374,35 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
-          get().updateMessage(assistantId, { content: restored });
 
-          const msgNow = get().currentSession?.messages.find((m) => m.id === assistantId);
-          if (!msgNow?.metadata?.suggestion) {
+          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
+          const currentMetadata = get().streamingMetadata ?? {};
+          if (!currentMetadata.suggestion) {
             const inferred = inferSuggestionFromAssistantText(restored);
             if (inferred) {
-              get().updateMessage(assistantId, { metadata: { suggestion: inferred } });
+              set({ streamingMetadata: { ...currentMetadata, suggestion: inferred } });
             }
           }
 
-          get().updateMessage(assistantId, { metadata: { toolCallsInProgress: [] } });
+          // 최종 콘텐츠 설정 후 한 번에 messages 배열에 반영
+          set({ streamingContent: restored });
+          get().finalizeStreaming();
         }
 
-        set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+        set({ abortController: null });
         get().checkAndSuggestProjectContext();
         schedulePersist();
       } catch (error) {
         // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
         if (error instanceof Error && error.name === 'AbortError') {
-          set({ isLoading: false, streamingMessageId: null, statusMessage: null, abortController: null });
+          set({
+            isLoading: false,
+            streamingMessageId: null,
+            streamingContent: null,
+            streamingMetadata: null,
+            statusMessage: null,
+            abortController: null,
+          });
           return;
         }
 
@@ -1387,6 +1420,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          streamingContent: null,
+          streamingMetadata: null,
           abortController: null,
         });
       }
@@ -1620,6 +1655,41 @@ export const useChatStore = create<ChatStore>((set, get) => {
       } catch (e) {
         console.error('Failed to load attachments:', e);
       }
+    },
+
+    // ============================================
+    // Streaming 상태 관리 (성능 최적화)
+    // ============================================
+    // 배열 갱신 없이 단일 필드만 업데이트하여 리렌더링 최소화
+
+    setStreamingContent: (content: string): void => {
+      set({ streamingContent: content });
+    },
+
+    setStreamingMetadata: (metadata: ChatMessage['metadata']): void => {
+      set({ streamingMetadata: metadata });
+    },
+
+    finalizeStreaming: (): void => {
+      const { streamingMessageId, streamingContent, streamingMetadata } = get();
+      if (!streamingMessageId) return;
+
+      // 스트리밍 완료 후 한 번만 messages 배열에 반영
+      if (streamingContent !== null) {
+        get().updateMessage(streamingMessageId, {
+          content: streamingContent,
+          metadata: { ...streamingMetadata, toolCallsInProgress: [] },
+        });
+      }
+
+      // 스트리밍 상태 초기화
+      set({
+        streamingContent: null,
+        streamingMetadata: null,
+        streamingMessageId: null,
+        isLoading: false,
+        statusMessage: null,
+      });
     },
   };
 });

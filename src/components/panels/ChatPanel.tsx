@@ -8,26 +8,14 @@ import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile, pickChatA
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
+import type { ChatMessageMetadata } from '@/types';
 
-/**
- * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
- * 예: citeturn0search2turn0search3 (Perplexity/Brave Search 등에서 발생)
- */
-function cleanCitationArtifacts(content: string): string {
-  if (!content) return '';
-  return content
-    // 1. "cite" 또는 "turnXsearchY" 패턴과 주변의 PUA(Private Use Area) 문자 제거
-    .replace(/([\uE000-\uF8FF]*(?:cite|turn\d+search\d+)[\uE000-\uF8FF]*)+/g, '')
-    // 2. 남은 PUA 문자 제거 (안전장치)
-    .replace(/[\uE000-\uF8FF]/g, '');
-}
 
 /**
  * AI 채팅 패널 컴포넌트
@@ -60,8 +48,6 @@ export function ChatPanel(): JSX.Element {
   const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingDraft, setEditingDraft] = useState<string>('');
 
   const provider = useAiConfigStore((s) => s.provider);
   const chatModel = useAiConfigStore((s) => s.chatModel);
@@ -131,6 +117,10 @@ export function ChatPanel(): JSX.Element {
     return () => window.clearTimeout(t);
   }, [isLoading]);
 
+  // 성능 최적화: 스트리밍 콘텐츠 및 메타데이터 직접 구독
+  const streamingContent = useChatStore((s) => s.streamingContent);
+  const streamingMetadata = useChatStore((s) => s.streamingMetadata);
+
   const streamingMessage = useMemo(() => {
     if (!streamingMessageId) return null;
     return currentSession?.messages.find((m) => m.id === streamingMessageId) ?? null;
@@ -178,73 +168,30 @@ export function ChatPanel(): JSX.Element {
     );
   }, [statusMessage]);
 
-  const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
-    const tools = toolNames.filter(Boolean);
-    if (tools.length === 0) return null;
-    const humanize = (t: string): string => {
-      switch (t) {
-        case 'web_search':
-        case 'web_search_preview':
-          return '웹검색';
-        case 'brave_search':
-          return '웹검색(Brave)';
-        case 'get_source_document':
-          return '원문 조회';
-        case 'get_target_document':
-          return '번역문 조회';
-        case 'suggest_translation_rule':
-          return '규칙 제안';
-        case 'suggest_project_context':
-          return '컨텍스트 제안';
-        default:
-          return t;
-      }
-    };
+  // 메모이제이션된 메시지 이벤트 핸들러
+  const handleEditMessage = useCallback((messageId: string, content: string) => {
+    editMessage(messageId, content);
+  }, [editMessage]);
 
-    const label =
-      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
-    return (
-      <div className="mt-2">
-        <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
-          <span className="inline-block w-3 h-3 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
-          <span className="truncate">툴 실행 중: {label}</span>
-        </div>
-      </div>
-    );
-  }, []);
+  const handleReplayMessage = useCallback((messageId: string) => {
+    void replayMessage(messageId);
+  }, [replayMessage]);
 
-  const renderToolsUsedBadge = useCallback((toolNames: string[]): JSX.Element | null => {
-    const tools = toolNames.filter(Boolean);
-    if (tools.length === 0) return null;
-    const humanize = (t: string): string => {
-      switch (t) {
-        case 'web_search_preview':
-          return '웹검색(OpenAI)';
-        case 'brave_search':
-          return '웹검색(Brave)';
-        case 'get_source_document':
-          return '원문 조회';
-        case 'get_target_document':
-          return '번역문 조회';
-        case 'suggest_translation_rule':
-          return '규칙 제안';
-        case 'suggest_project_context':
-          return '컨텍스트 제안';
-        default:
-          return t;
-      }
-    };
-    const label =
-      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
-    return (
-      <div className="mt-2">
-        <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500" />
-          <span className="truncate">도구 사용됨: {label}</span>
-        </div>
-      </div>
-    );
-  }, []);
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    deleteMessageFrom(messageId);
+  }, [deleteMessageFrom]);
+
+  const handleAppendToRules = useCallback((content: string) => {
+    appendToTranslationRules(content);
+  }, [appendToTranslationRules]);
+
+  const handleAppendToContext = useCallback((content: string) => {
+    appendToProjectContext(content);
+  }, [appendToProjectContext]);
+
+  const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
+    updateMessage(messageId, { metadata });
+  }, [updateMessage]);
 
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원 + 탭 초기화
   const lastHydratedId = useRef<string | null>(null);
@@ -708,203 +655,21 @@ export function ChatPanel(): JSX.Element {
           {/* 메시지 목록 */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {currentSession?.messages.map((message) => (
-              <div
+              <ChatMessageItem
                 key={message.id}
-                className={`chat-message ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
-                  } ${streamingMessageId === message.id ? 'ring-1 ring-primary-300/70' : ''}`}
-              >
-                {/* Message toolbar */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    {editingMessageId === message.id ? (
-                      <div className="space-y-2">
-                        <textarea
-                          className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          value={editingDraft}
-                          onChange={(e) => setEditingDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            // Command + Enter (Mac) or Ctrl + Enter (Windows/Linux)
-                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                              e.preventDefault();
-                              if (editingDraft.trim()) {
-                                editMessage(message.id, editingDraft);
-                                setEditingMessageId(null);
-                                setEditingDraft('');
-                                void replayMessage(message.id);
-                              }
-                            }
-                          }}
-                          placeholder={t('chat.editMessagePlaceholder')}
-                        />
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 rounded-md text-xs border border-editor-border text-editor-muted hover:text-editor-text"
-                            onClick={() => {
-                              setEditingMessageId(null);
-                              setEditingDraft('');
-                            }}
-                          >
-                            {t('common.cancel')}
-                          </button>
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
-                            disabled={!editingDraft.trim()}
-                            onClick={() => {
-                              editMessage(message.id, editingDraft);
-                              setEditingMessageId(null);
-                              setEditingDraft('');
-                              void replayMessage(message.id);
-                            }}
-                            title={t('chat.saveAfterEdit')}
-                          >
-                            {t('common.save')}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {message.role === 'assistant' &&
-                          streamingMessageId === message.id &&
-                          message.content.trim().length === 0 ? (
-                          <div className="text-sm leading-relaxed">
-                            {showStreamingSkeleton && renderAssistantSkeleton(message.metadata?.toolCallsInProgress)}
-                          </div>
-                        ) : (
-                          <div className="text-sm leading-relaxed chat-markdown">
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              skipHtml
-                              urlTransform={defaultUrlTransform}
-                              components={{
-                                a: ({ node: _node, ...props }) => (
-                                  <a {...props} target="_blank" rel="noreferrer noopener" className="underline break-all text-primary-500 hover:text-primary-600" />
-                                ),
-                              }}
-                            >
-                              {cleanCitationArtifacts(message.content)}
-                            </ReactMarkdown>
-                          </div>
-                        )}
-                        {message.role === 'assistant' &&
-                          !!message.metadata?.toolCallsInProgress?.length &&
-                          renderToolCallingBadge(message.metadata.toolCallsInProgress)}
-                        {message.role === 'assistant' &&
-                          !!message.metadata?.toolsUsed?.length &&
-                          renderToolsUsedBadge(message.metadata.toolsUsed)}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Edit/Delete (truncate) */}
-                  {editingMessageId !== message.id && (
-                    <div className="shrink-0 flex items-center gap-1">
-                      {message.role === 'user' && (
-                        <button
-                          type="button"
-                          className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-editor-text hover:bg-editor-border/60"
-                          onClick={() => {
-                            setEditingMessageId(message.id);
-                            setEditingDraft(cleanCitationArtifacts(message.content));
-                          }}
-                          title={t('chat.editAfterEdit')}
-                        >
-                          {t('common.edit')}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="px-2 py-1 rounded text-[11px] text-editor-muted hover:text-red-600 hover:bg-editor-border/60"
-                        onClick={async () => {
-                          const ok = await confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?', {
-                            title: '대화 삭제',
-                            kind: 'warning',
-                          });
-                          if (!ok) return;
-                          deleteMessageFrom(message.id);
-                        }}
-                        title={t('chat.deleteAfterEdit')}
-                      >
-                        {t('common.delete')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-end justify-between gap-2 mt-1">
-                  <span className="text-xs text-editor-muted">
-                    {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
-                    {message.metadata?.editedAt && (
-                      <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
-                        (edited)
-                        <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
-                          <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">Original Content:</div>
-                          <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
-                        </div>
-                      </span>
-                    )}
-                  </span>
-                </div>
-
-                {/* Add to Rules / Context */}
-                {message.role === 'assistant' &&
-                  streamingMessageId !== message.id &&
-                  message.metadata?.suggestion && (
-                    <div className="mt-2">
-                      {/* 제안 내용 미리보기 (아직 추가 안 된 경우만) */}
-                      {!message.metadata.rulesAdded && !message.metadata.contextAdded && (
-                        <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <div className="w-1 h-3 bg-primary-500 rounded-full" />
-                            <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                              {message.metadata.suggestion.type === 'rule' ? 'Suggested Rule' : 
-                               message.metadata.suggestion.type === 'context' ? 'Suggested Context' : 
-                               'Suggested Rule / Context'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
-                            {message.metadata.suggestion.content}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                      {(message.metadata.suggestion.type === 'rule' || message.metadata.suggestion.type === 'both') && !message.metadata.rulesAdded && (
-                        <button
-                          type="button"
-                          className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
-                          onClick={() => {
-                            if (message.metadata?.suggestion?.content) {
-                              appendToTranslationRules(message.metadata.suggestion.content);
-                              updateMessage(message.id, { metadata: { rulesAdded: true } });
-                            }
-                          }}
-                          title={t('chat.addToRules')}
-                        >
-                          Add to Rules
-                        </button>
-                      )}
-                      {(message.metadata.suggestion.type === 'context' || message.metadata.suggestion.type === 'both') &&
-                        !message.metadata.contextAdded &&
-                        (
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                            onClick={() => {
-                              if (message.metadata?.suggestion?.content) {
-                                appendToProjectContext(message.metadata.suggestion.content);
-                                updateMessage(message.id, { metadata: { contextAdded: true } });
-                              }
-                            }}
-                            title={t('chat.addToContext')}
-                          >
-                            Add to Context
-                          </button>
-                        )}
-                    </div>
-                  </div>
-                  )}
-              </div>
+                message={message}
+                isStreaming={streamingMessageId === message.id}
+                streamingContent={streamingContent}
+                streamingMetadata={streamingMetadata}
+                showStreamingSkeleton={showStreamingSkeleton}
+                statusMessage={statusMessage}
+                onEdit={handleEditMessage}
+                onReplay={handleReplayMessage}
+                onDelete={handleDeleteMessage}
+                onAppendToRules={handleAppendToRules}
+                onAppendToContext={handleAppendToContext}
+                onUpdateMessageMetadata={handleUpdateMessageMetadata}
+              />
             ))}
 
             {isLoading && (!streamingMessageId || !streamingBubbleExists) && (
