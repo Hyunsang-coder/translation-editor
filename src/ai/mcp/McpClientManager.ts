@@ -38,7 +38,7 @@ interface McpToolResult {
 function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
   // inputSchema를 zod 스키마로 변환
   const zodSchema = jsonSchemaToZod(mcpTool.inputSchema);
-  
+
   return new DynamicStructuredTool({
     name: mcpTool.name,
     description: mcpTool.description || `MCP tool: ${mcpTool.name}`,
@@ -76,17 +76,17 @@ function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeA
   if (typeof schema !== "object" || schema === null) {
     return z.object({});
   }
-  
+
   const s = schema as Record<string, unknown>;
-  
+
   if (s.type === "object" && typeof s.properties === "object") {
     const props = s.properties as Record<string, { type?: string; description?: string }>;
     const required = (s.required as string[]) || [];
     const shape: Record<string, z.ZodTypeAny> = {};
-    
+
     for (const [key, prop] of Object.entries(props)) {
       let fieldSchema: z.ZodTypeAny;
-      
+
       if (prop.type === "string") {
         fieldSchema = z.string();
       } else if (prop.type === "number" || prop.type === "integer") {
@@ -99,22 +99,22 @@ function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeA
       } else {
         fieldSchema = z.any();
       }
-      
+
       if (prop.description) {
         fieldSchema = fieldSchema.describe(prop.description);
       }
-      
+
       // required가 아니면 optional로
       if (!required.includes(key)) {
         fieldSchema = fieldSchema.optional();
       }
-      
+
       shape[key] = fieldSchema;
     }
-    
+
     return z.object(shape);
   }
-  
+
   return z.object({});
 }
 
@@ -170,7 +170,7 @@ class McpClientManager {
       // Atlassian: 저장된 토큰 상태 확인
       const status = await invoke<McpConnectionStatus>("mcp_check_auth");
       this.updateStatus(status);
-      
+
       console.log("[McpClientManager] Auth check:", {
         hasStoredToken: status.hasStoredToken,
         tokenExpiresIn: status.tokenExpiresIn,
@@ -182,10 +182,24 @@ class McpClientManager {
         await this.connectAtlassian();
       }
 
-      // Notion: 토큰 존재 여부만 확인
+      // Notion: 토큰 존재 여부 확인 및 자동 연결
       const notionHasToken = await hasNotionToken();
-      this.updateNotionStatus({ hasStoredToken: notionHasToken });
       console.log("[McpClientManager] Notion token check:", { hasStoredToken: notionHasToken });
+
+      if (notionHasToken) {
+        // Notion은 REST API이므로 토큰이 있으면 바로 사용 가능
+        // 자동으로 "연결됨" 상태로 설정
+        this.notionToolsCache = createNotionTools();
+        this.updateNotionStatus({
+          isConnected: true,
+          isConnecting: false,
+          hasStoredToken: true,
+          serverName: "Notion",
+        });
+        console.log("[McpClientManager] Notion auto-connected (token found in vault)");
+      } else {
+        this.updateNotionStatus({ hasStoredToken: false });
+      }
 
     } catch (error) {
       console.error("[McpClientManager] Initialize failed:", error);
@@ -258,10 +272,10 @@ class McpClientManager {
 
     try {
       await invoke("mcp_connect");
-      
+
       // 도구 목록 미리 로드
       await this.loadTools();
-      
+
       await this.syncStatus();
       if (this._status.isConnecting) {
         void this.pollAtlassianStatusUntilSettled();
@@ -270,9 +284,9 @@ class McpClientManager {
 
     } catch (error) {
       console.error("[McpClientManager] Connection failed:", error);
-      this.updateStatus({ 
-        isConnected: false, 
-        isConnecting: false, 
+      this.updateStatus({
+        isConnected: false,
+        isConnecting: false,
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;
@@ -405,12 +419,12 @@ class McpClientManager {
       if (!hasToken) {
         throw new Error("No Notion token. Please set your Integration Token first.");
       }
-      
+
       // 도구 생성
       this.notionToolsCache = createNotionTools();
-      
-      this.updateNotionStatus({ 
-        isConnected: true, 
+
+      this.updateNotionStatus({
+        isConnected: true,
         isConnecting: false,
         hasStoredToken: true,
         serverName: "Notion",
@@ -419,9 +433,9 @@ class McpClientManager {
 
     } catch (error) {
       console.error("[McpClientManager] Notion connection failed:", error);
-      this.updateNotionStatus({ 
-        isConnected: false, 
-        isConnecting: false, 
+      this.updateNotionStatus({
+        isConnected: false,
+        isConnecting: false,
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;
@@ -433,8 +447,8 @@ class McpClientManager {
    */
   async disconnectNotion(): Promise<void> {
     this.notionToolsCache = [];
-    this.updateNotionStatus({ 
-      isConnected: false, 
+    this.updateNotionStatus({
+      isConnected: false,
       isConnecting: false,
       serverName: null,
     });
@@ -448,8 +462,8 @@ class McpClientManager {
     try {
       await clearNotionToken();
       this.notionToolsCache = [];
-      this.updateNotionStatus({ 
-        isConnected: false, 
+      this.updateNotionStatus({
+        isConnected: false,
         isConnecting: false,
         hasStoredToken: false,
         serverName: null,
