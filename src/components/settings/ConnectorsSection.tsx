@@ -224,8 +224,8 @@ function ConnectorItem({
                   {isConnecting ? '...' : t('appSettings.connectors.connect')}
                 </button>
               )}
-              {/* 에러 상태이거나 토큰이 있을 때 초기화 버튼 표시 */}
-              {(error || hasToken) && onClearAll && (
+              {/* 연결 해제 상태에서 에러가 있거나 토큰이 있을 때 초기화 버튼 표시 */}
+              {!isConnected && (error || hasToken) && onClearAll && (
                 <button
                   onClick={onClearAll}
                   disabled={isConnecting}
