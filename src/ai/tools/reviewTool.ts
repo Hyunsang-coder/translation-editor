@@ -50,7 +50,7 @@ const REVIEW_INSTRUCTIONS = `다음 원문과 번역문을 비교하여 **중대
 [참고 자료 활용]
 - Translation Rules: 번역 스타일/포맷/문체 규칙을 확인하여 번역문이 규칙을 따르는지 검사하세요
 - Project Context: 프로젝트 배경 지식/맥락 정보를 참고하여 번역이 맥락에 맞는지 확인하세요
-- Glossary: 용어집에 정의된 용어가 번역문에서 올바르게 사용되었는지, 일관되게 사용되었는지 체크하세요
+- Glossary: 첨부된 용어집이 있다면 번역문에서 올바르고, 일관되게 사용되었는지 체크하세요
 - Attachments: 첨부된 참고 자료가 있다면 번역의 정확성과 맥락 적합성을 검증하는 데 활용하세요`;
 
 const ReviewToolArgsSchema = z.object({

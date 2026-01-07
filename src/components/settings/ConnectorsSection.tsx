@@ -114,6 +114,7 @@ interface ConnectorItemProps {
   label: string;
   description: string | undefined;
   hasToken: boolean;
+  isConnected: boolean;
   isConnecting?: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -125,6 +126,7 @@ function ConnectorItem({
   label,
   description,
   hasToken,
+  isConnected,
   isConnecting,
   onConnect,
   onDisconnect,
@@ -134,14 +136,18 @@ function ConnectorItem({
 
   const statusText = isConnecting
     ? t('appSettings.connectors.connecting')
-    : hasToken
+    : isConnected
       ? t('appSettings.connectors.connected')
+      : hasToken
+        ? t('appSettings.connectors.authenticated')
       : t('appSettings.connectors.notConnected');
 
   const statusColor = isConnecting
     ? 'text-yellow-500'
-    : hasToken
+    : isConnected
       ? 'text-green-500'
+      : hasToken
+        ? 'text-blue-500'
       : 'text-editor-muted';
 
   // 아이콘이 이미지 경로인지 확인 (확장자로 판단)
@@ -177,7 +183,7 @@ function ConnectorItem({
             {statusText}
           </span>
           {!comingSoon && (
-            hasToken ? (
+            isConnected ? (
               <button
                 onClick={onDisconnect}
                 disabled={isConnecting}
@@ -252,7 +258,7 @@ export function ConnectorsSection(): JSX.Element {
   // Atlassian MCP 연결 해제
   const handleAtlassianDisconnect = useCallback(async () => {
     try {
-      await mcpClientManager.logout();
+      await mcpClientManager.disconnect();
     } catch (error) {
       console.error('[Connectors] Atlassian disconnect failed:', error);
     }
@@ -298,6 +304,7 @@ export function ConnectorsSection(): JSX.Element {
     if (connectorId === 'atlassian') {
       return {
         hasToken: mcpStatus.hasStoredToken ?? false,
+        isConnected: mcpStatus.isConnected,
         isConnecting: mcpStatus.isConnecting,
         onConnect: handleAtlassianConnect,
         onDisconnect: handleAtlassianDisconnect,
@@ -307,6 +314,7 @@ export function ConnectorsSection(): JSX.Element {
     if (connectorId === 'notion') {
       return {
         hasToken: notionStatus.hasStoredToken ?? false,
+        isConnected: notionStatus.isConnected,
         isConnecting: notionStatus.isConnecting,
         onConnect: handleNotionConnect,
         onDisconnect: handleNotionDisconnect,
@@ -315,6 +323,7 @@ export function ConnectorsSection(): JSX.Element {
     }
     return {
       hasToken: false,
+      isConnected: false,
       isConnecting: false,
       onConnect: () => {},
       onDisconnect: () => {},
@@ -343,6 +352,7 @@ export function ConnectorsSection(): JSX.Element {
               label={connector.label}
               description={connector.description}
               hasToken={props.hasToken}
+              isConnected={props.isConnected}
               isConnecting={props.isConnecting}
               onConnect={props.onConnect}
               onDisconnect={props.onDisconnect}
@@ -357,6 +367,7 @@ export function ConnectorsSection(): JSX.Element {
             label={connector.label}
             description={connector.description}
             hasToken={false} // TODO: 토큰 상태 확인
+            isConnected={false}
             onConnect={() => handleBuiltinConnect(connector.id)}
             onDisconnect={() => handleBuiltinDisconnect(connector.id)}
             comingSoon={true} // OAuth 구현 전까지 비활성화
@@ -373,4 +384,3 @@ export function ConnectorsSection(): JSX.Element {
     </section>
   );
 }
-

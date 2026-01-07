@@ -67,6 +67,7 @@
       "description": "Connect to external services so AI can search and utilize your data.",
       "cloudServices": "Cloud Services",
       "connected": "Connected",
+      "authenticated": "Authenticated",
       "notConnected": "Not Connected",
       "connecting": "Connecting...",
       "connect": "Connect",

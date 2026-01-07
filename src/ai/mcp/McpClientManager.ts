@@ -94,7 +94,8 @@ function jsonSchemaToZod(schema: unknown): z.ZodObject<Record<string, z.ZodTypeA
       } else if (prop.type === "boolean") {
         fieldSchema = z.boolean();
       } else if (prop.type === "array") {
-        fieldSchema = z.array(z.any());
+        // z.any() would drop "items" in JSON schema; use unknown to keep it valid.
+        fieldSchema = z.array(z.unknown());
       } else {
         fieldSchema = z.any();
       }
@@ -138,6 +139,8 @@ class McpClientManager {
   private toolsCache: DynamicStructuredTool[] = [];
   private notionToolsCache: DynamicStructuredTool[] = [];
   private initialized = false;
+  private isAtlassianStatusPolling = false;
+  private lastAtlassianConnectAttemptAt: number | null = null;
 
   // Singleton Instance
   private static instance: McpClientManager;
@@ -202,16 +205,55 @@ class McpClientManager {
     }
   }
 
+  private async pollAtlassianStatusUntilSettled(): Promise<void> {
+    if (this.isAtlassianStatusPolling) {
+      return;
+    }
+    this.isAtlassianStatusPolling = true;
+
+    const timeoutMs = 60000;
+    const intervalMs = 1000;
+    const startedAt = Date.now();
+
+    try {
+      while (Date.now() - startedAt < timeoutMs) {
+        await this.syncStatus();
+        if (!this._status.isConnecting) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+
+      await this.syncStatus();
+      if (this._status.isConnecting) {
+        this.updateStatus({ isConnecting: false });
+      }
+    } finally {
+      this.isAtlassianStatusPolling = false;
+    }
+  }
+
   /**
    * Atlassian MCP 서버에 연결 (Rust 네이티브)
    * OAuth 2.1 인증이 필요한 경우 브라우저에서 인증 플로우를 시작합니다.
    */
   async connectAtlassian(): Promise<void> {
-    if (this._status.isConnected || this._status.isConnecting) {
-      console.warn("[McpClientManager] Already connected or connecting");
+    await this.syncStatus();
+    if (this._status.isConnected) {
+      console.warn("[McpClientManager] Already connected");
       return;
     }
+    if (this._status.isConnecting) {
+      const now = Date.now();
+      if (this.lastAtlassianConnectAttemptAt && now - this.lastAtlassianConnectAttemptAt < 10000) {
+        void this.pollAtlassianStatusUntilSettled();
+        return;
+      }
+      // Stale connecting state; allow a fresh attempt.
+      this.updateStatus({ isConnecting: false });
+    }
 
+    this.lastAtlassianConnectAttemptAt = Date.now();
     this.updateStatus({ isConnecting: true, error: null });
 
     try {
@@ -221,6 +263,9 @@ class McpClientManager {
       await this.loadTools();
       
       await this.syncStatus();
+      if (this._status.isConnecting) {
+        void this.pollAtlassianStatusUntilSettled();
+      }
       console.log("[McpClientManager] Connected to Atlassian MCP (Rust native)");
 
     } catch (error) {
@@ -241,6 +286,7 @@ class McpClientManager {
     try {
       await invoke("mcp_disconnect");
       this.toolsCache = [];
+      this.lastAtlassianConnectAttemptAt = null;
       await this.syncStatus();
     } catch (error) {
       console.error("[McpClientManager] Disconnect error:", error);
