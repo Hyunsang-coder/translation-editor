@@ -102,6 +102,8 @@ pub struct AtlassianOAuth {
     pending_pkce: Arc<Mutex<Option<PkceData>>>,
     /// OAuth 콜백 수신용
     callback_tx: Arc<Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
+    /// 콜백 서버 종료 signal
+    callback_shutdown_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
     /// 초기화 완료 여부
     initialized: Arc<Mutex<bool>>,
 }
@@ -113,6 +115,7 @@ impl AtlassianOAuth {
             registered_client: Arc::new(Mutex::new(None)),
             pending_pkce: Arc::new(Mutex::new(None)),
             callback_tx: Arc::new(Mutex::new(None)),
+            callback_shutdown_tx: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
         }
     }
@@ -327,8 +330,12 @@ impl AtlassianOAuth {
         let token_storage = self.token.clone();
         let client_id = registered_client.client_id.clone();
         
+        // 콜백 서버 shutdown 채널 생성
+        let (shutdown_tx, shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+        *self.callback_shutdown_tx.lock().await = Some(shutdown_tx);
+        
         tokio::spawn(async move {
-            if let Err(e) = Self::run_callback_server(REDIRECT_PORT, callback_tx, pending_pkce, token_storage, client_id).await {
+            if let Err(e) = Self::run_callback_server(REDIRECT_PORT, callback_tx, pending_pkce, token_storage, client_id, shutdown_rx).await {
                 eprintln!("[OAuth] Callback server error: {}", e);
             }
         });
@@ -336,6 +343,8 @@ impl AtlassianOAuth {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         if let Err(e) = open::that(&auth_url) {
+            // 브라우저 열기 실패 시 콜백 서버 즉시 종료
+            self.shutdown_callback_server().await;
             return Err(format!("Failed to open browser: {}", e));
         }
 
@@ -364,36 +373,84 @@ impl AtlassianOAuth {
                 }
                 result
             }
-            Ok(Err(_)) => Err("OAuth callback channel closed".to_string()),
-            Err(_) => Err("OAuth timeout (5 minutes)".to_string()),
+            Ok(Err(_)) => {
+                self.shutdown_callback_server().await;
+                Err("OAuth callback channel closed".to_string())
+            }
+            Err(_) => {
+                // 타임아웃 시 콜백 서버 종료
+                self.shutdown_callback_server().await;
+                Err("OAuth timeout (5 minutes)".to_string())
+            }
         };
         
         println!("[OAuth] start_auth_flow returning: {:?}", auth_result);
         auth_result
     }
 
+    /// 콜백 서버 종료
+    async fn shutdown_callback_server(&self) {
+        if let Some(tx) = self.callback_shutdown_tx.lock().await.take() {
+            let _ = tx.send(()).await;
+            println!("[OAuth] Sent shutdown signal to callback server");
+        }
+    }
+
     /// 로컬 콜백 서버 실행
+    /// 
+    /// shutdown signal 수신 시 또는 6분 자체 타임아웃 시 종료됨
     async fn run_callback_server(
         port: u16,
         callback_tx: Arc<Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
         pending_pkce: Arc<Mutex<Option<PkceData>>>,
         token_storage: Arc<Mutex<Option<OAuthToken>>>,
         client_id: String,
+        mut shutdown_rx: tokio::sync::mpsc::Receiver<()>,
     ) -> Result<(), String> {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         use tokio::net::TcpListener;
+
+        // 서버 자체 타임아웃 (OAuth 흐름 타임아웃 + 여유)
+        const SERVER_TIMEOUT_SECS: u64 = 360; // 6분
 
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
             .await
             .map_err(|e| format!("Failed to bind callback server: {}", e))?;
 
-        println!("[OAuth] Callback server listening on port {}", port);
+        println!("[OAuth] Callback server listening on port {} (timeout: {}s)", port, SERVER_TIMEOUT_SECS);
 
-        // /callback 요청이 올 때까지 연결을 계속 수락
+        let server_start = std::time::Instant::now();
+
+        // /callback 요청이 올 때까지 연결을 계속 수락 (shutdown signal 또는 타임아웃 시 종료)
         loop {
-            let (stream, addr) = listener.accept()
-                .await
-                .map_err(|e| format!("Failed to accept connection: {}", e))?;
+            // 서버 타임아웃 체크
+            if server_start.elapsed().as_secs() >= SERVER_TIMEOUT_SECS {
+                println!("[OAuth] Callback server timeout, shutting down");
+                return Err("Callback server timeout".to_string());
+            }
+
+            // accept + shutdown signal 동시 대기
+            let stream_result = tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    println!("[OAuth] Callback server received shutdown signal");
+                    return Ok(());
+                }
+                accept_result = tokio::time::timeout(
+                    tokio::time::Duration::from_secs(5),
+                    listener.accept()
+                ) => {
+                    match accept_result {
+                        Ok(Ok((s, a))) => Some((s, a)),
+                        Ok(Err(e)) => return Err(format!("Failed to accept connection: {}", e)),
+                        Err(_) => None, // 타임아웃, 다음 루프
+                    }
+                }
+            };
+
+            let (stream, addr) = match stream_result {
+                Some(v) => v,
+                None => continue,
+            };
 
             println!("[OAuth] Accepted connection from {}", addr);
 

@@ -18,10 +18,11 @@ export interface SecretEntry {
 
 /**
  * 초기화 결과
+ * 주의: Rust에서 #[serde(rename_all = "camelCase")]로 직렬화됨
  */
 export interface SecretsInitResult {
-  initialized: boolean;
-  cached_count: number;
+  success: boolean;
+  cachedCount: number;
 }
 
 /**
@@ -42,12 +43,12 @@ export interface MigrationResult {
 export async function initializeSecrets(): Promise<SecretsInitResult> {
   if (!isTauriRuntime()) {
     console.warn('[Secrets] Not in Tauri runtime, skipping initialization');
-    return { initialized: false, cached_count: 0 };
+    return { success: false, cachedCount: 0 };
   }
 
   try {
     const result = await invoke<SecretsInitResult>('secrets_initialize');
-    console.log('[Secrets] Initialized, cached secrets:', result.cached_count);
+    console.log('[Secrets] Initialized, cached secrets:', result.cachedCount);
     return result;
   } catch (error) {
     console.error('[Secrets] Initialization failed:', error);

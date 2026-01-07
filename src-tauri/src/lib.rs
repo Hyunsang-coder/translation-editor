@@ -155,10 +155,9 @@ pub fn run() {
             app.manage(db::DbState(std::sync::Mutex::new(db)));
 
             // SecretManager에 app_data_dir 설정 (Vault 경로용)
-            // 초기화는 lazy하게 첫 사용 시 수행됨
-            let secrets_app_data_dir = app_data_dir.clone();
-            tauri::async_runtime::spawn(async move {
-                secrets::SECRETS.set_app_data_dir(secrets_app_data_dir).await;
+            // 동기 실행: 프론트엔드의 initializeSecrets()보다 먼저 완료되어야 함
+            tauri::async_runtime::block_on(async {
+                secrets::SECRETS.set_app_data_dir(app_data_dir.clone()).await;
             });
 
             Ok(())

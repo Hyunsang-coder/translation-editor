@@ -46,6 +46,12 @@ pub enum SecretManagerError {
 
     #[error("App data dir not set")]
     AppDataDirNotSet,
+
+    #[error("Previous initialization failed: {0}")]
+    PreviousInitFailed(String),
+
+    #[error("Vault decryption failed (possible key mismatch or corruption): {0}")]
+    VaultDecryptFailed(String),
 }
 
 /// 초기화 상태
@@ -105,18 +111,37 @@ impl SecretManager {
     /// 1. Keychain에서 마스터키 로드 (없으면 생성하고 저장)
     /// 2. vault 파일이 있으면 복호화하여 캐시에 로드
     pub async fn initialize(&self) -> Result<(), SecretManagerError> {
-        // 이미 초기화되었는지 확인
-        {
+        // 이미 초기화되었는지 확인 (동시 호출 시 대기)
+        // 키체인 프롬프트 응답 대기를 고려하여 60초 타임아웃
+        const MAX_WAIT_MS: u64 = 60_000;
+        const POLL_INTERVAL_MS: u64 = 50;
+        let mut waited_ms: u64 = 0;
+
+        loop {
             let state = self.state.read().await;
             match &*state {
                 InitState::Ready => return Ok(()),
-                InitState::Initializing => return Ok(()), // 다른 곳에서 초기화 중
-                InitState::Failed(msg) => {
-                    return Err(SecretManagerError::Vault(
-                        crate::secrets::vault::VaultError::InvalidFormat(msg.clone()),
-                    ))
+                InitState::Initializing => {
+                    // 다른 곳에서 초기화 중 - 완료될 때까지 대기 (timeout 적용)
+                    drop(state);
+                    if waited_ms >= MAX_WAIT_MS {
+                        // 60초 후에도 초기화 중이면 hang으로 간주, 상태 리셋하여 재시도 가능하게
+                        eprintln!("[SecretManager] Initialization timeout (60s), resetting state for retry");
+                        *self.state.write().await = InitState::NotInitialized;
+                        return Err(SecretManagerError::PreviousInitFailed(
+                            "Timeout waiting for initialization (60s). \
+                            This may happen if Keychain prompt was not answered. \
+                            Retrying...".to_string(),
+                        ));
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+                    waited_ms += POLL_INTERVAL_MS;
+                    continue;
                 }
-                InitState::NotInitialized => {}
+                InitState::Failed(msg) => {
+                    return Err(SecretManagerError::PreviousInitFailed(msg.clone()))
+                }
+                InitState::NotInitialized => break,
             }
         }
 
@@ -134,7 +159,13 @@ impl SecretManager {
                 // 마스터키가 없으면 새로 생성
                 println!("[SecretManager] No master key found, generating new one...");
                 let new_key = Self::generate_master_key();
-                self.save_master_key_to_keychain(&new_key)?;
+                if let Err(e) = self.save_master_key_to_keychain(&new_key) {
+                    // 키체인 저장 실패 시 Failed 상태로 전환
+                    let error_msg = format!("Failed to save master key to keychain: {}", e);
+                    eprintln!("[SecretManager] {}", error_msg);
+                    *self.state.write().await = InitState::Failed(error_msg);
+                    return Err(e);
+                }
                 println!("[SecretManager] New master key saved to keychain");
                 new_key
             }
@@ -162,8 +193,17 @@ impl SecretManager {
                         );
                     }
                     Err(e) => {
-                        println!("[SecretManager] Failed to load vault: {}", e);
-                        // Vault 로드 실패는 치명적이지 않음 (새 vault로 시작)
+                        // Vault가 존재하는데 복호화 실패 → 토큰 손실 방지를 위해 에러 반환
+                        // (마스터키 불일치 또는 vault 손상)
+                        let error_msg = format!(
+                            "Vault exists but decryption failed: {}. \
+                            This may indicate a master key mismatch or vault corruption. \
+                            To reset, delete the vault file manually: {:?}",
+                            e, vault_path
+                        );
+                        eprintln!("[SecretManager] {}", error_msg);
+                        *self.state.write().await = InitState::Failed(error_msg.clone());
+                        return Err(SecretManagerError::VaultDecryptFailed(error_msg));
                     }
                 }
             } else {

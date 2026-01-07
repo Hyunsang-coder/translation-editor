@@ -151,7 +151,7 @@ impl McpClient {
             .ok_or("No access token available")?;
 
         println!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
-        println!("[MCP] Access token (first 20 chars): {}...", &access_token[..access_token.len().min(20)]);
+        println!("[MCP] Access token: [REDACTED] (length: {})", access_token.len());
 
         // reqwest 클라이언트 빌드 (TLS 설정 포함)
         let client = reqwest::Client::builder()
@@ -257,6 +257,12 @@ impl McpClient {
                 return Ok(());
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+
+        // 타임아웃 시 SSE 태스크 종료
+        if let Some(tx) = self.shutdown_tx.lock().await.take() {
+            let _ = tx.send(()).await;
+            println!("[MCP] Sent shutdown signal due to endpoint timeout");
         }
 
         Err("Timeout waiting for message endpoint".to_string())
