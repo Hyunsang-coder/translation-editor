@@ -459,6 +459,13 @@ impl McpClient {
         self.disconnect().await;
         self.oauth.logout().await;
     }
+
+    /// 완전 초기화 (토큰 + OAuth 클라이언트 모두 삭제)
+    /// Client ID mismatch 등 복구 불가능한 상태일 때 사용
+    pub async fn clear_all(&self) {
+        self.disconnect().await;
+        self.oauth.clear_all().await;
+    }
 }
 
 impl Default for McpClient {

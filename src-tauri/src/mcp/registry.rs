@@ -100,6 +100,19 @@ impl McpRegistry {
         }
     }
 
+    /// 특정 MCP 서버 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+    /// Client ID mismatch 등 복구 불가능한 상태일 때 사용
+    pub async fn clear_all(server_id: McpServerId) {
+        match server_id {
+            McpServerId::Atlassian => {
+                MCP_CLIENT.clear_all().await;
+            }
+            McpServerId::Notion => {
+                NOTION_MCP_CLIENT.clear_all().await;
+            }
+        }
+    }
+
     /// 특정 MCP 서버 상태 조회
     pub async fn get_status(server_id: McpServerId) -> McpConnectionStatus {
         match server_id {

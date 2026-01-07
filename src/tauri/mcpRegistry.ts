@@ -156,6 +156,18 @@ export async function logoutMcpServer(serverId: McpServerId): Promise<void> {
 }
 
 /**
+ * 특정 MCP 서버 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+ * Client ID mismatch 등 복구 불가능한 상태일 때 사용
+ */
+export async function clearAllMcpServer(serverId: McpServerId): Promise<void> {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke('mcp_registry_clear_all', { serverId });
+}
+
+/**
  * 특정 MCP 서버의 도구 목록 조회
  */
 export async function getMcpTools(serverId: McpServerId): Promise<McpTool[]> {

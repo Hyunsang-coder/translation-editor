@@ -78,6 +78,9 @@
       "connecting": "연결 중...",
       "connect": "연결",
       "disconnect": "연결 해제",
+      "clearAll": "초기화",
+      "clearAllTooltip": "토큰 및 인증 정보를 완전히 삭제합니다",
+      "error": "오류",
       "comingSoon": "준비 중",
       "notion": {
         "dialogTitle": "Notion 연결",

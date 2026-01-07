@@ -385,6 +385,13 @@ impl NotionMcpClient {
         self.disconnect().await;
         self.config.logout().await;
     }
+
+    /// 완전 초기화 (설정 모두 삭제)
+    /// 복구 불가능한 상태일 때 사용
+    pub async fn clear_all(&self) {
+        self.disconnect().await;
+        self.config.clear_all().await;
+    }
 }
 
 impl Default for NotionMcpClient {

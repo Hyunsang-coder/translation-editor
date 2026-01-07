@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
+import { clearAllMcpServer, type McpServerId } from '@/tauri/mcpRegistry';
 
 interface NotionTokenDialogProps {
   isOpen: boolean;
@@ -130,8 +131,10 @@ interface ConnectorItemProps {
   hasToken: boolean;
   isConnected: boolean;
   isConnecting?: boolean;
+  error?: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  onClearAll?: () => void;
   comingSoon?: boolean;
 }
 
@@ -142,27 +145,33 @@ function ConnectorItem({
   hasToken,
   isConnected,
   isConnecting,
+  error,
   onConnect,
   onDisconnect,
+  onClearAll,
   comingSoon,
 }: ConnectorItemProps): JSX.Element {
   const { t } = useTranslation();
 
-  const statusText = isConnecting
-    ? t('appSettings.connectors.connecting')
-    : isConnected
-      ? t('appSettings.connectors.connected')
-      : hasToken
-        ? t('appSettings.connectors.authenticated')
-      : t('appSettings.connectors.notConnected');
+  const statusText = error
+    ? t('appSettings.connectors.error')
+    : isConnecting
+      ? t('appSettings.connectors.connecting')
+      : isConnected
+        ? t('appSettings.connectors.connected')
+        : hasToken
+          ? t('appSettings.connectors.authenticated')
+          : t('appSettings.connectors.notConnected');
 
-  const statusColor = isConnecting
-    ? 'text-yellow-500'
-    : isConnected
-      ? 'text-green-500'
-      : hasToken
-        ? 'text-blue-500'
-      : 'text-editor-muted';
+  const statusColor = error
+    ? 'text-red-500'
+    : isConnecting
+      ? 'text-yellow-500'
+      : isConnected
+        ? 'text-green-500'
+        : hasToken
+          ? 'text-blue-500'
+          : 'text-editor-muted';
 
   // 아이콘이 이미지 경로인지 확인 (확장자로 판단)
   const isImagePath = icon && /\.(png|jpg|jpeg|svg|gif|webp)$/i.test(icon);
@@ -197,26 +206,45 @@ function ConnectorItem({
             {statusText}
           </span>
           {!comingSoon && (
-            isConnected ? (
-              <button
-                onClick={onDisconnect}
-                disabled={isConnecting}
-                className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
-              >
-                {t('appSettings.connectors.disconnect')}
-              </button>
-            ) : (
-              <button
-                onClick={onConnect}
-                disabled={isConnecting}
-                className="px-2 py-1 text-xs rounded bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
-              >
-                {isConnecting ? '...' : t('appSettings.connectors.connect')}
-              </button>
-            )
+            <>
+              {isConnected ? (
+                <button
+                  onClick={onDisconnect}
+                  disabled={isConnecting}
+                  className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                >
+                  {t('appSettings.connectors.disconnect')}
+                </button>
+              ) : (
+                <button
+                  onClick={onConnect}
+                  disabled={isConnecting}
+                  className="px-2 py-1 text-xs rounded bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
+                >
+                  {isConnecting ? '...' : t('appSettings.connectors.connect')}
+                </button>
+              )}
+              {/* 에러 상태이거나 토큰이 있을 때 초기화 버튼 표시 */}
+              {(error || hasToken) && onClearAll && (
+                <button
+                  onClick={onClearAll}
+                  disabled={isConnecting}
+                  className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                  title={error || t('appSettings.connectors.clearAllTooltip')}
+                >
+                  {t('appSettings.connectors.clearAll')}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
+      {/* 에러 메시지 표시 */}
+      {error && (
+        <p className="mt-2 text-xs text-red-400 truncate" title={error}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -305,6 +333,28 @@ export function ConnectorsSection(): JSX.Element {
     }
   }, []);
 
+  // Atlassian 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+  const handleAtlassianClearAll = useCallback(async () => {
+    try {
+      await mcpClientManager.disconnect();
+      await clearAllMcpServer('atlassian' as McpServerId);
+      console.log('[Connectors] Atlassian cleared all credentials');
+    } catch (error) {
+      console.error('[Connectors] Atlassian clear all failed:', error);
+    }
+  }, []);
+
+  // Notion 완전 초기화
+  const handleNotionClearAll = useCallback(async () => {
+    try {
+      await mcpClientManager.disconnectNotion();
+      await clearAllMcpServer('notion' as McpServerId);
+      console.log('[Connectors] Notion cleared all credentials');
+    } catch (error) {
+      console.error('[Connectors] Notion clear all failed:', error);
+    }
+  }, []);
+
   // 빌트인 커넥터 연결 (TODO: OAuth 구현 후 활성화)
   const handleBuiltinConnect = useCallback((connectorId: string) => {
     console.log(`[Connectors] Connect ${connectorId} - OAuth not implemented yet`);
@@ -323,8 +373,10 @@ export function ConnectorsSection(): JSX.Element {
         hasToken: mcpStatus.hasStoredToken ?? false,
         isConnected: mcpStatus.isConnected,
         isConnecting: mcpStatus.isConnecting,
+        error: mcpStatus.error,
         onConnect: handleAtlassianConnect,
         onDisconnect: handleAtlassianDisconnect,
+        onClearAll: handleAtlassianClearAll,
         comingSoon: false,
       };
     }
@@ -333,8 +385,10 @@ export function ConnectorsSection(): JSX.Element {
         hasToken: notionStatus.hasStoredToken ?? false,
         isConnected: notionStatus.isConnected,
         isConnecting: notionStatus.isConnecting,
+        error: notionStatus.error,
         onConnect: handleNotionConnect,
         onDisconnect: handleNotionDisconnect,
+        onClearAll: handleNotionClearAll,
         comingSoon: false,
       };
     }
@@ -342,11 +396,13 @@ export function ConnectorsSection(): JSX.Element {
       hasToken: false,
       isConnected: false,
       isConnecting: false,
+      error: null,
       onConnect: () => {},
       onDisconnect: () => {},
+      onClearAll: undefined,
       comingSoon: true,
     };
-  }, [mcpStatus, notionStatus, handleAtlassianConnect, handleAtlassianDisconnect, handleNotionConnect, handleNotionDisconnect]);
+  }, [mcpStatus, notionStatus, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll, handleNotionConnect, handleNotionDisconnect, handleNotionClearAll]);
 
   return (
     <section className="space-y-4">
@@ -371,8 +427,10 @@ export function ConnectorsSection(): JSX.Element {
               hasToken={props.hasToken}
               isConnected={props.isConnected}
               isConnecting={props.isConnecting}
+              error={props.error}
               onConnect={props.onConnect}
               onDisconnect={props.onDisconnect}
+              onClearAll={props.onClearAll}
               comingSoon={props.comingSoon}
             />
           );

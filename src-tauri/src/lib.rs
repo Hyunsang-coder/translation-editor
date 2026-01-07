@@ -214,6 +214,7 @@ pub fn run() {
             commands::mcp::mcp_registry_connect,
             commands::mcp::mcp_registry_disconnect,
             commands::mcp::mcp_registry_logout,
+            commands::mcp::mcp_registry_clear_all,
             commands::mcp::mcp_registry_get_tools,
             commands::mcp::mcp_registry_call_tool,
             commands::mcp::mcp_set_notion_config,

@@ -138,6 +138,14 @@ pub async fn mcp_registry_logout(server_id: McpServerId) -> Result<(), String> {
     Ok(())
 }
 
+/// 특정 MCP 서버 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+/// Client ID mismatch 등 복구 불가능한 상태일 때 사용
+#[tauri::command]
+pub async fn mcp_registry_clear_all(server_id: McpServerId) -> Result<(), String> {
+    McpRegistry::clear_all(server_id).await;
+    Ok(())
+}
+
 /// 특정 MCP 서버의 도구 목록 조회
 #[tauri::command]
 pub async fn mcp_registry_get_tools(server_id: McpServerId) -> Result<Vec<McpTool>, String> {

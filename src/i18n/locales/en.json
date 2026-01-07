@@ -78,6 +78,9 @@
       "connecting": "Connecting...",
       "connect": "Connect",
       "disconnect": "Disconnect",
+      "clearAll": "Clear All",
+      "clearAllTooltip": "Delete all tokens and authentication info",
+      "error": "Error",
       "comingSoon": "Coming Soon",
       "notion": {
         "dialogTitle": "Connect Notion",
