@@ -1,10 +1,12 @@
-# 전략 B: Master Key + Encrypted Vault(Secret Manager) 구현 계획
+# Secret Manager: Master Key + Encrypted Vault
+
+> **상태**: ✅ 구현 완료
 
 ## 목표
 
-- macOS에서 로그인/앱 시작 시 **키체인 암호 입력을 1회로 고정**
-- 시크릿(API 키, MCP/OAuth 토큰, Notion 토큰, 커넥터 토큰 등)을 **로컬 평문 저장 금지**
-- 프로젝트 내보내기(`.ite` export)에 **시크릿이 절대 포함되지 않도록** 보장
+- macOS에서 로그인/앱 시작 시 **키체인 암호 입력을 1회로 고정** ✅
+- 시크릿(API 키, MCP/OAuth 토큰, Notion 토큰, 커넥터 토큰 등)을 **로컬 평문 저장 금지** ✅
+- 프로젝트 내보내기(`.ite` export)에 **시크릿이 절대 포함되지 않도록** 보장 ✅
 
 ## 현상(원인) 요약
 
@@ -172,9 +174,69 @@ flowchart TD
     로 변경
   - `.ite export`에 시크릿이 포함되지 않도록 설계 원칙을 명시
 
-## 검증 체크리스트(완료 기준)
+## 검증 체크리스트
 
-- macOS에서 앱 시작 시 키체인 프롬프트가 **최대 1회**만 뜬다.
-- MCP/Notion/Connector 상태 조회가 프롬프트를 유발하지 않는다.
-- `.ite` export 파일에 시크릿이 포함되지 않는다(파일 내용/DB 테이블 확인).
+- [x] macOS에서 앱 시작 시 키체인 프롬프트가 **최대 1회**만 뜬다.
+- [x] MCP/Notion/Connector 상태 조회가 프롬프트를 유발하지 않는다.
+- [x] `.ite` export 파일에 시크릿이 포함되지 않는다(파일 내용/DB 테이블 확인).
+
+## 🔧 Known Issues & 수정 계획
+
+> 코드 리뷰에서 발견된 이슈 (2026-01-07)
+
+### High Priority
+
+#### Issue #1: Concurrent Initialization Race
+- **위치**: `manager.rs` 라인 113
+- **문제**: `InitState::Initializing` 상태에서 `Ok(())`를 반환하면, 두 번째 호출자가 `master_key`가 없는 상태에서 `get()`/`set()` 시도 가능
+- **해결**: 초기화 완료까지 대기하는 polling 로직 추가
+- **상태**: [x] 완료 (2026-01-07)
+
+#### Issue #2: set_app_data_dir Race Condition
+- **위치**: `lib.rs` 라인 160, `manager.rs` 라인 173
+- **문제**: `spawn()`으로 `set_app_data_dir`을 비동기 실행하므로, `initializeSecrets()`가 먼저 호출되면 vault 로드 실패. Ready 상태가 되어도 vault가 로드되지 않음
+- **해결**: `lib.rs`에서 `block_on()` 동기 실행으로 변경
+- **상태**: [x] 완료 (2026-01-07)
+
+### Medium Priority
+
+#### Issue #3: Token Prefix Logging
+- **위치**: `client.rs` 라인 154
+- **문제**: 액세스 토큰의 앞 20자를 로그에 출력 → 로그 수집 시 보안 위험
+- **해결**: 토큰 로그를 `[REDACTED]`로 마스킹
+- **상태**: [x] 완료 (2026-01-07)
+
+#### Issue #4: Error Type Conflation
+- **위치**: `manager.rs` 라인 114-117
+- **문제**: 이전 초기화 실패를 `VaultError::InvalidFormat`으로 감싸서 에러 원인 모호
+- **해결**: `SecretManagerError::PreviousInitFailed` 전용 에러 타입 추가
+- **상태**: [x] 완료 (2026-01-07)
+
+---
+
+## 구현 완료 항목
+
+### Rust 백엔드
+- [x] `src-tauri/src/secrets/mod.rs` - 모듈 re-export
+- [x] `src-tauri/src/secrets/vault.rs` - 파일 I/O, 포맷 파싱/생성, atomic write
+- [x] `src-tauri/src/secrets/manager.rs` - master key 로드/생성, vault encrypt/decrypt, in-memory cache
+
+### Tauri 명령
+- [x] `secrets_initialize()` - 앱 시작 시 1회 호출
+- [x] `secrets_get_one(key)` / `secrets_set_one(key, value)` - 단일 항목 CRUD
+- [x] `secrets_delete(keys)` - 다중 삭제
+- [x] `secrets_has(key)` - 존재 여부 확인
+- [x] `secrets_migrate_legacy()` - 기존 Keychain → Vault 마이그레이션
+
+### 기존 모듈 리팩터링
+- [x] `src-tauri/src/mcp/oauth.rs` - Atlassian OAuth 토큰을 SecretManager로 저장
+- [x] `src-tauri/src/notion/client.rs` - Notion 토큰을 SecretManager로 저장
+- [x] `src-tauri/src/commands/connector.rs` - 커넥터 토큰을 Vault에서 읽기/저장
+- [x] `src-tauri/src/commands/secure_store.rs` - API 키 번들을 SecretManager로 저장
+
+### 프론트엔드
+- [x] `src/tauri/secrets.ts` - SecretManager Tauri 명령 래퍼
+- [x] `src/App.tsx` - 앱 시작 시 `initializeSecrets()` 호출
+- [x] `src/stores/connectorStore.ts` - `initializeConnectors()`로 토큰 상태 동기화
+- [x] Settings → Security - "기존 로그인 정보 가져오기" 마이그레이션 버튼
 

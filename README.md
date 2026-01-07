@@ -77,19 +77,28 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
 - **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
 
-### MCP / 외부 검색
-- **Confluence_search (Rovo MCP)**: Chat composer `+` 메뉴에 `Confluence_search` 토글 추가 ✅
+### MCP / 외부 커넥터
+- **Atlassian MCP (Confluence/Jira)**: OAuth 2.1 PKCE 인증 ✅
   - **Sidecar 방식**: 외부 Node.js 의존성 없이 앱 내장 바이너리로 안전하게 연결 ✅
   - **Lazy OAuth**: 토글은 도구 활성화만 의미하며, 실제 사용 시 Connect 버튼을 통해 인증 시작 ✅
-- **Notion MCP**: Notion 페이지 및 데이터베이스 검색 지원 ✅
+  - **토큰 자동 갱신**: 만료 시 refresh token으로 자동 갱신 ✅
+  - **토큰 영속화**: 앱 재시작 시 자동 재연결 ✅
+- **Notion**: 페이지 및 데이터베이스 검색 지원 ✅
   - **Integration Token**: App Settings에서 Notion Integration Token 입력하여 연결 ✅
+  - **토큰 영속화**: 앱 재시작 시 자동 재연결 ✅
+  - **기존 토큰 재사용**: 연결 해제 후 재연결 시 기존 토큰 사용 가능 ✅
 - **웹검색**: Brave Search / OpenAI Web Search 연동 완료 ✅
   - **웹검색 게이트**: 체크박스로 웹검색 사용 여부 제어 ✅
 
 ### AI Provider 및 API Key 관리
 - **App Settings API Key 입력**: 사용자가 직접 API Key 입력 가능 ✅
-- **보안 저장**: 모든 API Key는 통합된 JSON 번들로 OS 키체인/키링에 안전하게 저장됨 ✅ (최초 실행 시 1회 인증)
-- **우선순위**: 사용자 입력 키(키체인)만 사용 ✅ (환경 변수 폴백 없음)
+- **보안 저장 (Secret Manager)**: Master Key + Encrypted Vault 패턴 ✅
+  - Keychain에는 마스터키 1개만 저장 (앱 시작 시 1회 인증)
+  - 모든 시크릿(API Key, OAuth 토큰 등)은 `secrets.vault`에 암호화 저장
+  - XChaCha20-Poly1305 AEAD 암호화
+  - `.ite` export에 시크릿 포함되지 않음
+- **우선순위**: 사용자 입력 키(Vault)만 사용 ✅ (환경 변수 폴백 없음)
+- **레거시 마이그레이션**: Settings에서 기존 Keychain 항목을 Vault로 마이그레이션 ✅
 
 ### 용어집 (Glossary)
 - **CSV/Excel 임포트**: 용어집 파일 업로드 및 프로젝트 연결 ✅
@@ -418,10 +427,22 @@ LangChain이 내부적으로 OpenAI/Anthropic API 형식으로 변환합니다:
 
 ---
 
-## 🔐 환경 변수 및 API Key 관리
+## 🔐 보안 저장소 (Secret Manager)
 
-### API Key 우선순위
-1. **App Settings에서 입력한 키** (OS 키체인에 저장, 단독 사용)
+### 아키텍처
+- **Master Key**: OS Keychain에 1개만 저장 (`ite:master_key_v1`)
+- **Encrypted Vault**: `app_data_dir/secrets.vault` 파일에 XChaCha20-Poly1305 AEAD로 암호화 저장
+- **앱 시작 시**: Keychain에서 마스터키 1회 로드 → Vault 복호화 → 메모리 캐시
 
-**참고**: 보안 강화를 위해 API Key는 OS 키체인에만 저장되며, 환경 변수(`VITE_...`)나 `localStorage`는 사용하지 않습니다. App Settings에서 Clear 버튼으로 저장된 키를 삭제할 수 있습니다.
+### 저장되는 시크릿
+- `ai/api_keys_bundle`: OpenAI, Anthropic, Brave 등 API 키 번들
+- `mcp/atlassian/oauth_token_json`: Atlassian OAuth 토큰
+- `notion/integration_token`: Notion Integration Token
+- `connector/<id>/token_json`: 기타 커넥터 토큰
+
+### 보안 원칙
+- API Key는 Vault에만 저장 (환경 변수/localStorage 사용 안 함)
+- `.ite` export 파일에 시크릿 포함되지 않음
+- App Settings에서 Clear 버튼으로 저장된 키 삭제 가능
+- Settings → Security에서 기존 Keychain 항목을 Vault로 마이그레이션 가능
 
