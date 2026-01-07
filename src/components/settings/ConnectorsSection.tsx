@@ -12,11 +12,12 @@ import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientMa
 
 interface NotionTokenDialogProps {
   isOpen: boolean;
+  hasStoredToken: boolean;
   onClose: () => void;
-  onSubmit: (token: string) => void;
+  onSubmit: (token: string | null) => void; // null = 기존 토큰 사용
 }
 
-function NotionTokenDialog({ isOpen, onClose, onSubmit }: NotionTokenDialogProps): JSX.Element | null {
+function NotionTokenDialog({ isOpen, hasStoredToken, onClose, onSubmit }: NotionTokenDialogProps): JSX.Element | null {
   const { t } = useTranslation();
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
@@ -34,6 +35,14 @@ function NotionTokenDialog({ isOpen, onClose, onSubmit }: NotionTokenDialogProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 기존 토큰이 있고 새 토큰 입력 안 했으면 기존 토큰 사용
+    if (!token.trim() && hasStoredToken) {
+      onSubmit(null); // null = 기존 토큰 사용
+      onClose();
+      return;
+    }
+    
     if (!token.trim()) {
       setError(t('appSettings.connectors.notion.tokenRequired'));
       return;
@@ -70,9 +79,14 @@ function NotionTokenDialog({ isOpen, onClose, onSubmit }: NotionTokenDialogProps
                 setToken(e.target.value);
                 setError('');
               }}
-              placeholder="ntn_xxx... or secret_xxx..."
+              placeholder={hasStoredToken ? "••••••••••••••••" : "ntn_xxx... or secret_xxx..."}
               className="w-full px-3 py-2 bg-editor-bg border border-editor-border rounded text-sm text-editor-text focus:outline-none focus:border-primary-500"
             />
+            {hasStoredToken && !token && (
+              <p className="text-xs text-editor-muted mt-1">
+                {t('appSettings.connectors.notion.useExistingToken')}
+              </p>
+            )}
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -270,19 +284,22 @@ export function ConnectorsSection(): JSX.Element {
   }, []);
 
   // Notion 토큰 제출 및 연결
-  const handleNotionTokenSubmit = useCallback(async (token: string) => {
+  const handleNotionTokenSubmit = useCallback(async (token: string | null) => {
     try {
-      await mcpClientManager.setNotionToken(token);
+      // token이 null이면 기존 토큰 사용 (setNotionToken 스킵)
+      if (token) {
+        await mcpClientManager.setNotionToken(token);
+      }
       await mcpClientManager.connectNotion();
     } catch (error) {
       console.error('[Connectors] Notion connect failed:', error);
     }
   }, []);
 
-  // Notion MCP 연결 해제
+  // Notion MCP 연결 해제 (토큰은 유지)
   const handleNotionDisconnect = useCallback(async () => {
     try {
-      await mcpClientManager.logoutNotion();
+      await mcpClientManager.disconnectNotion();
     } catch (error) {
       console.error('[Connectors] Notion disconnect failed:', error);
     }
@@ -378,6 +395,7 @@ export function ConnectorsSection(): JSX.Element {
       {/* Notion 토큰 입력 다이얼로그 */}
       <NotionTokenDialog
         isOpen={showNotionDialog}
+        hasStoredToken={notionStatus.hasStoredToken ?? false}
         onClose={() => setShowNotionDialog(false)}
         onSubmit={handleNotionTokenSubmit}
       />

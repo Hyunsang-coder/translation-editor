@@ -85,7 +85,8 @@
         "tokenLabel": "Integration Token",
         "tokenRequired": "토큰을 입력해주세요",
         "invalidTokenFormat": "올바르지 않은 토큰 형식입니다. 토큰은 'ntn_' 또는 'secret_'로 시작해야 합니다.",
-        "helpText": "Integration Token은 Notion 설정에서 생성할 수 있습니다:"
+        "helpText": "Integration Token은 Notion 설정에서 생성할 수 있습니다:",
+        "useExistingToken": "기존 토큰을 사용하려면 그대로 연결을 누르세요"
       }
     }
   },

@@ -85,7 +85,8 @@
         "tokenLabel": "Integration Token",
         "tokenRequired": "Token is required",
         "invalidTokenFormat": "Invalid token format. Token should start with 'ntn_' or 'secret_'.",
-        "helpText": "You can create an Integration Token in your Notion settings:"
+        "helpText": "You can create an Integration Token in your Notion settings:",
+        "useExistingToken": "Press Connect to use your existing token"
       }
     }
   },
