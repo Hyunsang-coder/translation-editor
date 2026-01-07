@@ -62,6 +62,12 @@
     "helpInfoVersion": "Version: 0.1.0-alpha",
     "helpInfoTutorials": "Tutorials and FAQ will be added soon.",
     "footerAutoSave": "Changes are saved automatically.",
+    "security": "Security",
+    "securityDescription": "Import login information from previous versions to the new secure storage.",
+    "migrateLegacy": "Import Legacy Credentials",
+    "migrating": "Migrating...",
+    "migrationSuccess": "{{count}} item(s) migrated successfully.",
+    "migrationNone": "No items to migrate.",
     "connectors": {
       "title": "Connectors",
       "description": "Connect to external services so AI can search and utilize your data.",

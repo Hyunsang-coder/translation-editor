@@ -4,6 +4,8 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
+import { initializeSecrets } from '@/tauri/secrets';
+import { initializeConnectors } from '@/stores/connectorStore';
 
 function App(): JSX.Element {
   const { theme } = useUIStore();
@@ -27,9 +29,25 @@ function App(): JSX.Element {
     initializeProject();
   }, [initializeProject]);
 
-  // 보안 저장소에서 API 키 로드
+  // SecretManager 초기화 및 보안 저장소에서 API 키 로드
+  // 앱 시작 시 1회 Keychain 접근으로 마스터키 로드 후 Vault 복호화
   useEffect(() => {
-    void loadSecureKeys();
+    const initSecrets = async () => {
+      try {
+        // 1. SecretManager 초기화 (Keychain에서 마스터키 로드)
+        await initializeSecrets();
+        
+        // 2. API 키 로드 (Vault에서 복호화된 캐시 사용)
+        await loadSecureKeys();
+        
+        // 3. 커넥터 상태 동기화 (Vault에서 토큰 상태 확인)
+        await initializeConnectors();
+      } catch (error) {
+        console.error('[App] Failed to initialize secrets:', error);
+      }
+    };
+    
+    void initSecrets();
   }, [loadSecureKeys]);
 
   // MCP 클라이언트 초기화 (저장된 토큰이 있으면 자동 연결)

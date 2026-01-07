@@ -1,6 +1,6 @@
 //! Notion MCP 설정 관리
 //!
-//! 로컬 Notion MCP 서버 연결 설정을 OS 키체인에 저장/로드합니다.
+//! 로컬 Notion MCP 서버 연결 설정을 SecretManager vault에 저장/로드합니다.
 //!
 //! 설정 항목:
 //! - MCP 서버 URL (기본값: http://localhost:3000/mcp)
@@ -11,13 +11,12 @@
 //! 2. 서버가 출력한 Auth Token을 앱 설정에 입력
 //! 3. 앱이 로컬 서버에 연결
 
-use keyring::Entry;
+use crate::secrets::SECRETS;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-// 키체인 저장 키
-const KEYCHAIN_SERVICE: &str = "com.ite.app";
-const KEYCHAIN_NOTION_CONFIG: &str = "mcp:notion_config";
+// Vault 저장 키 (SecretManager용)
+const VAULT_NOTION_CONFIG: &str = "mcp/notion/config_json";
 
 // 기본 MCP 서버 URL
 const DEFAULT_MCP_URL: &str = "http://localhost:3000/mcp";
@@ -67,24 +66,32 @@ impl NotionOAuth {
         }
     }
 
-    /// 키체인에서 저장된 설정 로드 (앱 시작 시 호출)
+    /// SecretManager에서 저장된 설정 로드 (앱 시작 시 호출)
     pub async fn initialize(&self) -> Result<(), String> {
         let mut initialized = self.initialized.lock().await;
         if *initialized {
             return Ok(());
         }
 
-        println!("[NotionMCP] Initializing config from keychain...");
+        println!("[NotionMCP] Initializing config from vault...");
 
-        // 저장된 설정 로드
-        if let Some(config_json) = Self::load_from_keychain(KEYCHAIN_NOTION_CONFIG) {
-            if let Ok(config) = serde_json::from_str::<NotionMcpConfig>(&config_json) {
-                println!(
-                    "[NotionMCP] Loaded config from keychain (URL: {}, has_token: {})",
-                    config.mcp_url,
-                    !config.auth_token.is_empty()
-                );
-                *self.config.lock().await = Some(config);
+        // vault에서 설정 로드
+        match SECRETS.get(VAULT_NOTION_CONFIG).await {
+            Ok(Some(config_json)) => {
+                if let Ok(config) = serde_json::from_str::<NotionMcpConfig>(&config_json) {
+                    println!(
+                        "[NotionMCP] Loaded config from vault (URL: {}, has_token: {})",
+                        config.mcp_url,
+                        !config.auth_token.is_empty()
+                    );
+                    *self.config.lock().await = Some(config);
+                }
+            }
+            Ok(None) => {
+                println!("[NotionMCP] No config found in vault");
+            }
+            Err(e) => {
+                eprintln!("[NotionMCP] Failed to load config from vault: {}", e);
             }
         }
 
@@ -92,49 +99,18 @@ impl NotionOAuth {
         Ok(())
     }
 
-    /// 키체인에서 값 로드
-    fn load_from_keychain(key: &str) -> Option<String> {
-        match Entry::new(KEYCHAIN_SERVICE, key) {
-            Ok(entry) => match entry.get_password() {
-                Ok(value) => Some(value),
-                Err(keyring::Error::NoEntry) => None,
-                Err(e) => {
-                    eprintln!("[NotionMCP] Keychain read error for {}: {}", key, e);
-                    None
-                }
-            },
-            Err(e) => {
-                eprintln!("[NotionMCP] Keychain entry error for {}: {}", key, e);
-                None
-            }
-        }
-    }
-
-    /// 키체인에 값 저장
-    fn save_to_keychain(key: &str, value: &str) -> Result<(), String> {
-        let entry = Entry::new(KEYCHAIN_SERVICE, key)
-            .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
-        entry
-            .set_password(value)
-            .map_err(|e| format!("Failed to save to keychain: {}", e))
-    }
-
-    /// 키체인에서 값 삭제
-    fn delete_from_keychain(key: &str) {
-        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, key) {
-            let _ = entry.delete_password();
-        }
-    }
-
-    /// 설정 저장 (메모리 + 키체인)
+    /// 설정 저장 (메모리 + vault)
     pub async fn save_config(&self, config: NotionMcpConfig) -> Result<(), String> {
         let config_json = serde_json::to_string(&config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-        Self::save_to_keychain(KEYCHAIN_NOTION_CONFIG, &config_json)?;
+        SECRETS
+            .set(VAULT_NOTION_CONFIG, &config_json)
+            .await
+            .map_err(|e| format!("Failed to save config: {}", e))?;
         *self.config.lock().await = Some(config);
 
-        println!("[NotionMCP] Config saved to keychain");
+        println!("[NotionMCP] Config saved to vault");
         Ok(())
     }
 
@@ -205,10 +181,10 @@ impl NotionOAuth {
     pub async fn logout(&self) {
         *self.config.lock().await = None;
 
-        // 키체인에서 설정 삭제
-        Self::delete_from_keychain(KEYCHAIN_NOTION_CONFIG);
+        // vault에서 설정 삭제
+        let _ = SECRETS.delete(VAULT_NOTION_CONFIG).await;
 
-        println!("[NotionMCP] Logged out, config deleted from keychain");
+        println!("[NotionMCP] Logged out, config deleted from vault");
     }
 
     /// 완전 초기화 (설정 삭제)

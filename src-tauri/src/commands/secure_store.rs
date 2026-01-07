@@ -1,13 +1,12 @@
 //! Secure Store Commands
 //!
-//! OS 키체인/키링을 사용해 민감한 값을 안전하게 저장합니다.
+//! SecretManager를 통해 민감한 값을 안전하게 저장합니다.
+//! (기존 keyring 직접 사용에서 SecretManager로 마이그레이션됨)
 
 use serde::Deserialize;
-use keyring::{Entry, Error as KeyringError};
 
 use crate::error::{CommandError, CommandResult};
-
-const SERVICE_NAME: &str = "com.ite.app";
+use crate::secrets::SECRETS;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +15,7 @@ pub struct SecureSecretArgs {
     pub value: String,
 }
 
-fn map_keyring_error(err: KeyringError) -> CommandError {
+fn map_secret_error(err: crate::secrets::manager::SecretManagerError) -> CommandError {
     CommandError {
         code: "SECURE_STORE_ERROR".to_string(),
         message: format!("Secure store error: {}", err),
@@ -35,34 +34,40 @@ fn validate_key(key: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// 키를 vault namespace로 변환
+/// 예: "ai:api_keys_bundle" -> "ai/api_keys_bundle"
+fn to_vault_key(key: &str) -> String {
+    key.replace(':', "/")
+}
+
 #[tauri::command]
-pub fn set_secure_secret(args: SecureSecretArgs) -> CommandResult<()> {
+pub async fn set_secure_secret(args: SecureSecretArgs) -> CommandResult<()> {
     validate_key(&args.key)?;
-    let entry = Entry::new(SERVICE_NAME, &args.key).map_err(map_keyring_error)?;
-    entry
-        .set_password(&args.value)
-        .map_err(map_keyring_error)?;
+    let vault_key = to_vault_key(&args.key);
+    SECRETS
+        .set(&vault_key, &args.value)
+        .await
+        .map_err(map_secret_error)?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_secure_secret(key: String) -> CommandResult<Option<String>> {
+pub async fn get_secure_secret(key: String) -> CommandResult<Option<String>> {
     validate_key(&key)?;
-    let entry = Entry::new(SERVICE_NAME, &key).map_err(map_keyring_error)?;
-    match entry.get_password() {
-        Ok(value) => Ok(Some(value)),
-        Err(KeyringError::NoEntry) => Ok(None),
-        Err(err) => Err(map_keyring_error(err)),
-    }
+    let vault_key = to_vault_key(&key);
+    SECRETS
+        .get(&vault_key)
+        .await
+        .map_err(map_secret_error)
 }
 
 #[tauri::command]
-pub fn delete_secure_secret(key: String) -> CommandResult<()> {
+pub async fn delete_secure_secret(key: String) -> CommandResult<()> {
     validate_key(&key)?;
-    let entry = Entry::new(SERVICE_NAME, &key).map_err(map_keyring_error)?;
-    match entry.delete_password() {
-        Ok(()) => Ok(()),
-        Err(KeyringError::NoEntry) => Ok(()),
-        Err(err) => Err(map_keyring_error(err)),
-    }
+    let vault_key = to_vault_key(&key);
+    SECRETS
+        .delete(&vault_key)
+        .await
+        .map_err(map_secret_error)?;
+    Ok(())
 }

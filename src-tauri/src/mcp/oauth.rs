@@ -3,10 +3,9 @@
 //! Atlassian MCP 서버는 자체 OAuth 엔드포인트를 제공합니다.
 //! (auth.atlassian.com이 아닌 mcp.atlassian.com 사용)
 //! 
-//! 토큰은 OS 키체인에 영속화되어 앱 재시작 후에도 유지됩니다.
+//! 토큰은 SecretManager vault에 영속화되어 앱 재시작 후에도 유지됩니다.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use keyring::Entry;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -14,16 +13,17 @@ use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 use url::Url;
 
+use crate::secrets::SECRETS;
+
 // Atlassian MCP 서버 자체 OAuth 엔드포인트
 const MCP_AUTH_URL: &str = "https://mcp.atlassian.com/v1/authorize";
 const MCP_TOKEN_URL: &str = "https://cf.mcp.atlassian.com/v1/token";
 const MCP_REGISTRATION_URL: &str = "https://cf.mcp.atlassian.com/v1/register";
 const REDIRECT_PORT: u16 = 23456;
 
-// 키체인 저장 키
-const KEYCHAIN_SERVICE: &str = "com.ite.app";
-const KEYCHAIN_MCP_TOKEN: &str = "mcp:oauth_token";
-const KEYCHAIN_MCP_CLIENT: &str = "mcp:client_id";
+// Vault 저장 키 (SecretManager용)
+const VAULT_MCP_TOKEN: &str = "mcp/atlassian/oauth_token_json";
+const VAULT_MCP_CLIENT: &str = "mcp/atlassian/client_json";
 
 // 토큰 만료 전 갱신 여유 시간 (5분)
 const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
@@ -117,28 +117,28 @@ impl AtlassianOAuth {
         }
     }
 
-    /// 키체인에서 저장된 토큰/클라이언트 로드 (앱 시작 시 호출)
+    /// SecretManager에서 저장된 토큰/클라이언트 로드 (앱 시작 시 호출)
     pub async fn initialize(&self) -> Result<(), String> {
         let mut initialized = self.initialized.lock().await;
         if *initialized {
             return Ok(());
         }
 
-        println!("[OAuth] Initializing from keychain...");
+        println!("[OAuth] Initializing from SecretManager vault...");
 
         // 저장된 클라이언트 로드
-        if let Some(client_json) = Self::load_from_keychain(KEYCHAIN_MCP_CLIENT) {
+        if let Ok(Some(client_json)) = SECRETS.get(VAULT_MCP_CLIENT).await {
             if let Ok(client) = serde_json::from_str::<RegisteredClient>(&client_json) {
-                println!("[OAuth] Loaded client_id from keychain: {}", client.client_id);
+                println!("[OAuth] Loaded client_id from vault: {}", client.client_id);
                 *self.registered_client.lock().await = Some(client);
             }
         }
 
         // 저장된 토큰 로드
-        if let Some(token_json) = Self::load_from_keychain(KEYCHAIN_MCP_TOKEN) {
+        if let Ok(Some(token_json)) = SECRETS.get(VAULT_MCP_TOKEN).await {
             if let Ok(token) = serde_json::from_str::<OAuthToken>(&token_json) {
                 if let Some(remaining) = token.remaining_seconds() {
-                    println!("[OAuth] Loaded token from keychain (expires in {} seconds)", remaining);
+                    println!("[OAuth] Loaded token from vault (expires in {} seconds)", remaining);
                 }
                 *self.token.lock().await = Some(token);
             }
@@ -148,61 +148,33 @@ impl AtlassianOAuth {
         Ok(())
     }
 
-    /// 키체인에서 값 로드
-    fn load_from_keychain(key: &str) -> Option<String> {
-        match Entry::new(KEYCHAIN_SERVICE, key) {
-            Ok(entry) => match entry.get_password() {
-                Ok(value) => Some(value),
-                Err(keyring::Error::NoEntry) => None,
-                Err(e) => {
-                    eprintln!("[OAuth] Keychain read error for {}: {}", key, e);
-                    None
-                }
-            },
-            Err(e) => {
-                eprintln!("[OAuth] Keychain entry error for {}: {}", key, e);
-                None
-            }
-        }
-    }
-
-    /// 키체인에 값 저장
-    fn save_to_keychain(key: &str, value: &str) -> Result<(), String> {
-        let entry = Entry::new(KEYCHAIN_SERVICE, key)
-            .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
-        entry
-            .set_password(value)
-            .map_err(|e| format!("Failed to save to keychain: {}", e))
-    }
-
-    /// 키체인에서 값 삭제
-    fn delete_from_keychain(key: &str) {
-        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, key) {
-            let _ = entry.delete_password();
-        }
-    }
-
-    /// 토큰 저장 (메모리 + 키체인)
+    /// 토큰 저장 (메모리 + vault)
     async fn save_token(&self, token: OAuthToken) -> Result<(), String> {
         let token_json = serde_json::to_string(&token)
             .map_err(|e| format!("Failed to serialize token: {}", e))?;
         
-        Self::save_to_keychain(KEYCHAIN_MCP_TOKEN, &token_json)?;
+        SECRETS
+            .set(VAULT_MCP_TOKEN, &token_json)
+            .await
+            .map_err(|e| format!("Failed to save token: {}", e))?;
         *self.token.lock().await = Some(token);
         
-        println!("[OAuth] Token saved to keychain");
+        println!("[OAuth] Token saved to vault");
         Ok(())
     }
 
-    /// 클라이언트 저장 (메모리 + 키체인)
+    /// 클라이언트 저장 (메모리 + vault)
     async fn save_client(&self, client: RegisteredClient) -> Result<(), String> {
         let client_json = serde_json::to_string(&client)
             .map_err(|e| format!("Failed to serialize client: {}", e))?;
         
-        Self::save_to_keychain(KEYCHAIN_MCP_CLIENT, &client_json)?;
+        SECRETS
+            .set(VAULT_MCP_CLIENT, &client_json)
+            .await
+            .map_err(|e| format!("Failed to save client: {}", e))?;
         *self.registered_client.lock().await = Some(client);
         
-        println!("[OAuth] Client saved to keychain");
+        println!("[OAuth] Client saved to vault");
         Ok(())
     }
 
@@ -315,7 +287,7 @@ impl AtlassianOAuth {
             client_secret: reg_response.client_secret,
         };
 
-        // 키체인에 저장
+        // vault에 저장
         self.save_client(registered.clone()).await?;
         
         Ok(registered)
@@ -369,24 +341,35 @@ impl AtlassianOAuth {
 
         println!("[OAuth] Waiting for OAuth callback (max 5 minutes)...");
         
-        match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx).await {
+        let auth_result = match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx).await {
             Ok(Ok(result)) => {
                 println!("[OAuth] Callback received: {:?}", result);
-                // 인증 성공 시 토큰을 키체인에 저장
+                // 인증 성공 시 토큰을 vault에 저장
                 if result.is_ok() {
-                    if let Some(token) = self.token.lock().await.clone() {
+                    // lock scope를 분리하여 데드락 방지
+                    // (save_token 내부에서 다시 lock을 잡기 때문)
+                    let token_opt = {
+                        self.token.lock().await.clone()
+                    };
+                    
+                    if let Some(token) = token_opt {
                         if let Err(e) = self.save_token(token).await {
                             eprintln!("[OAuth] Failed to save token: {}", e);
                         } else {
-                            println!("[OAuth] Token persisted to keychain");
+                            println!("[OAuth] Token persisted to vault");
                         }
+                    } else {
+                        eprintln!("[OAuth] Warning: callback succeeded but no token in memory!");
                     }
                 }
                 result
             }
             Ok(Err(_)) => Err("OAuth callback channel closed".to_string()),
             Err(_) => Err("OAuth timeout (5 minutes)".to_string()),
-        }
+        };
+        
+        println!("[OAuth] start_auth_flow returning: {:?}", auth_result);
+        auth_result
     }
 
     /// 로컬 콜백 서버 실행
@@ -406,18 +389,66 @@ impl AtlassianOAuth {
 
         println!("[OAuth] Callback server listening on port {}", port);
 
-        let (mut stream, _) = listener.accept()
-            .await
-            .map_err(|e| format!("Failed to accept connection: {}", e))?;
+        // /callback 요청이 올 때까지 연결을 계속 수락
+        loop {
+            let (stream, addr) = listener.accept()
+                .await
+                .map_err(|e| format!("Failed to accept connection: {}", e))?;
 
-        let mut reader = BufReader::new(&mut stream);
-        let mut request_line = String::new();
-        reader.read_line(&mut request_line)
-            .await
-            .map_err(|e| format!("Failed to read request: {}", e))?;
+            println!("[OAuth] Accepted connection from {}", addr);
 
-        let result = if let Some(path) = request_line.split_whitespace().nth(1) {
-            if let Ok(url) = Url::parse(&format!("http://localhost{}", path)) {
+            // 읽기/쓰기 분리 (BufReader와 write_all 충돌 방지)
+            let (reader_half, mut writer_half) = stream.into_split();
+            let mut reader = BufReader::new(reader_half);
+            
+            // HTTP 요청 라인 읽기
+            let mut request_line = String::new();
+            if let Err(e) = reader.read_line(&mut request_line).await {
+                eprintln!("[OAuth] Failed to read request line: {}", e);
+                continue;
+            }
+
+            println!("[OAuth] Received request line: {:?}", request_line.trim());
+
+            // HTTP 헤더 모두 읽기 (빈 줄까지)
+            loop {
+                let mut header_line = String::new();
+                match reader.read_line(&mut header_line).await {
+                    Ok(0) => break, // EOF
+                    Ok(_) => {
+                        if header_line.trim().is_empty() {
+                            break; // 헤더 종료
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+
+            // 요청 경로 추출
+            let path = match request_line.split_whitespace().nth(1) {
+                Some(p) => p.to_string(),
+                None => {
+                    eprintln!("[OAuth] Invalid HTTP request format");
+                    let error_resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = writer_half.write_all(error_resp.as_bytes()).await;
+                    let _ = writer_half.shutdown().await;
+                    continue;
+                }
+            };
+
+            println!("[OAuth] Request path: {}", path);
+
+            // /callback 경로가 아닌 요청은 404 응답 후 다음 연결 대기
+            if !path.starts_with("/callback") {
+                println!("[OAuth] Ignoring non-callback request: {}", path);
+                let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = writer_half.write_all(not_found.as_bytes()).await;
+                let _ = writer_half.shutdown().await;
+                continue; // 다음 연결 대기
+            }
+
+            // /callback 요청 처리
+            let result = if let Ok(url) = Url::parse(&format!("http://localhost{}", path)) {
                 let params: HashMap<_, _> = url.query_pairs().collect();
                 
                 if let (Some(code), Some(state)) = (params.get("code"), params.get("state")) {
@@ -458,46 +489,47 @@ impl AtlassianOAuth {
                 }
             } else {
                 Err("Failed to parse callback URL".to_string())
+            };
+
+            // 응답 생성
+            let (status, body) = match &result {
+                Ok(msg) => ("200 OK", format!(
+                    r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Success</title></head>
+                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
+                    <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h1 style="color: #36B37E; margin-bottom: 16px;">✓ {}</h1>
+                    <p style="color: #42526e;">You can close this window and return to the app.</p>
+                    </div></body></html>"#,
+                    msg
+                )),
+                Err(msg) => ("400 Bad Request", format!(
+                    r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head>
+                    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
+                    <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h1 style="color: #FF5630; margin-bottom: 16px;">✗ Error</h1>
+                    <p style="color: #42526e;">{}</p>
+                    </div></body></html>"#,
+                    msg
+                )),
+            };
+
+            let response = format!(
+                "HTTP/1.1 {}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                status,
+                body.len(),
+                body
+            );
+
+            let _ = writer_half.write_all(response.as_bytes()).await;
+            let _ = writer_half.shutdown().await;
+
+            // 결과 전송 후 서버 종료
+            if let Some(tx) = callback_tx.lock().await.take() {
+                let _ = tx.send(result);
             }
-        } else {
-            Err("Invalid HTTP request".to_string())
-        };
 
-        let (status, body) = match &result {
-            Ok(msg) => ("200 OK", format!(
-                r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Success</title></head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
-                <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h1 style="color: #36B37E; margin-bottom: 16px;">✓ {}</h1>
-                <p style="color: #42526e;">You can close this window and return to the app.</p>
-                </div></body></html>"#,
-                msg
-            )),
-            Err(msg) => ("400 Bad Request", format!(
-                r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
-                <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h1 style="color: #FF5630; margin-bottom: 16px;">✗ Error</h1>
-                <p style="color: #42526e;">{}</p>
-                </div></body></html>"#,
-                msg
-            )),
-        };
-
-        let response = format!(
-            "HTTP/1.1 {}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-            status,
-            body.len(),
-            body
-        );
-
-        let _ = stream.write_all(response.as_bytes()).await;
-
-        if let Some(tx) = callback_tx.lock().await.take() {
-            let _ = tx.send(result);
+            return Ok(());
         }
-
-        Ok(())
     }
 
     /// Authorization code를 토큰으로 교환
@@ -595,7 +627,7 @@ impl AtlassianOAuth {
         // 발급 시점 기록
         new_token.issued_at = chrono::Utc::now().timestamp();
 
-        // 키체인에 저장
+        // vault에 저장
         self.save_token(new_token).await?;
 
         println!("[OAuth] Token refreshed and saved");
@@ -607,10 +639,10 @@ impl AtlassianOAuth {
         *self.token.lock().await = None;
         *self.pending_pkce.lock().await = None;
         
-        // 키체인에서 토큰 삭제
-        Self::delete_from_keychain(KEYCHAIN_MCP_TOKEN);
+        // vault에서 토큰 삭제
+        let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
         
-        println!("[OAuth] Logged out, token deleted from keychain");
+        println!("[OAuth] Logged out, token deleted from vault");
     }
 
     /// 저장된 토큰 정보 조회 (자동 초기화 포함)
@@ -635,8 +667,8 @@ impl AtlassianOAuth {
         *self.registered_client.lock().await = None;
         *self.initialized.lock().await = false;
         
-        // 키체인에서 클라이언트도 삭제
-        Self::delete_from_keychain(KEYCHAIN_MCP_CLIENT);
+        // vault에서 클라이언트도 삭제
+        let _ = SECRETS.delete(VAULT_MCP_CLIENT).await;
         
         println!("[OAuth] All credentials cleared");
     }

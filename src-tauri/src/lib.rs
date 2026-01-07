@@ -9,6 +9,7 @@ pub mod error;
 pub mod mcp;
 pub mod models;
 pub mod notion;
+pub mod secrets;
 pub mod utils;
 
 use std::path::{Path, PathBuf};
@@ -134,11 +135,12 @@ pub fn run() {
 
             // 데이터베이스 초기화
             let app_handle = app.handle();
-            let db_path = app_handle
+            let app_data_dir = app_handle
                 .path()
                 .app_data_dir()
-                .expect("Failed to get app data dir")
-                .join("ite.db");
+                .expect("Failed to get app data dir");
+
+            let db_path = app_data_dir.join("ite.db");
 
             // DB 디렉토리 생성
             if let Some(parent) = db_path.parent() {
@@ -151,6 +153,13 @@ pub fn run() {
 
             // 앱 상태로 데이터베이스 관리
             app.manage(db::DbState(std::sync::Mutex::new(db)));
+
+            // SecretManager에 app_data_dir 설정 (Vault 경로용)
+            // 초기화는 lazy하게 첫 사용 시 수행됨
+            let secrets_app_data_dir = app_data_dir.clone();
+            tauri::async_runtime::spawn(async move {
+                secrets::SECRETS.set_app_data_dir(secrets_app_data_dir).await;
+            });
 
             Ok(())
         })
@@ -223,6 +232,16 @@ pub fn run() {
             commands::notion::notion_get_page,
             commands::notion::notion_get_page_content,
             commands::notion::notion_query_database,
+            // Secret Manager
+            commands::secrets::secrets_initialize,
+            commands::secrets::secrets_get,
+            commands::secrets::secrets_get_one,
+            commands::secrets::secrets_set,
+            commands::secrets::secrets_set_one,
+            commands::secrets::secrets_delete,
+            commands::secrets::secrets_has,
+            commands::secrets::secrets_list_keys,
+            commands::secrets::secrets_migrate_legacy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

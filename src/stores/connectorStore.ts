@@ -14,6 +14,7 @@ import {
   BUILTIN_CONNECTORS,
   MCP_CONNECTORS,
 } from '@/ai/connectors';
+import { listConnectorStatus } from '@/tauri/connector';
 
 interface ConnectorState {
   /** 커넥터별 활성화 상태 (id -> enabled) */
@@ -164,9 +165,23 @@ export const useConnectorStore = create<ConnectorState & ConnectorActions>()(
  * - MCP 연결 상태 확인
  */
 export async function initializeConnectors(): Promise<void> {
-  // TODO: Phase 2-oauth에서 구현
-  // - 각 커넥터별로 저장된 토큰 존재 여부 확인
-  // - MCP 커넥터는 mcpClientManager에서 상태 동기화
-  console.log('[ConnectorStore] Initialized');
+  const { setTokenStatus } = useConnectorStore.getState();
+  
+  try {
+    // 1. 빌트인 커넥터 토큰 상태 조회 (Vault에서)
+    const builtinIds = BUILTIN_CONNECTORS.map((c) => c.id);
+    const builtinStatuses = await listConnectorStatus(builtinIds);
+    
+    for (const status of builtinStatuses) {
+      setTokenStatus(status.connector_id, status.has_token, status.expires_at);
+    }
+    
+    // 2. MCP 커넥터 상태는 mcpClientManager에서 관리
+    // (이미 App.tsx에서 mcpClientManager.initialize() 호출)
+    
+    console.log('[ConnectorStore] Initialized, synced', builtinStatuses.length, 'connector statuses');
+  } catch (error) {
+    console.error('[ConnectorStore] Initialization failed:', error);
+  }
 }
 

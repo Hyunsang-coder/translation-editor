@@ -1,17 +1,19 @@
 //! Notion REST API 클라이언트
 //!
 //! Notion API를 직접 호출하여 페이지 검색, 조회 등을 수행합니다.
+//! 토큰은 SecretManager vault에 저장됩니다.
 
 use crate::notion::types::*;
-use keyring::Entry;
+use crate::secrets::SECRETS;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 const NOTION_API_BASE: &str = "https://api.notion.com/v1";
 const NOTION_VERSION: &str = "2022-06-28";
-const KEYCHAIN_SERVICE: &str = "com.ite.app";
-const KEYCHAIN_NOTION_TOKEN: &str = "notion:integration_token";
+
+// Vault 저장 키 (SecretManager용)
+const VAULT_NOTION_TOKEN: &str = "notion/integration_token";
 
 /// 전역 Notion 클라이언트
 pub static NOTION_CLIENT: Lazy<NotionClient> = Lazy::new(NotionClient::new);
@@ -32,7 +34,7 @@ impl NotionClient {
         }
     }
 
-    /// 토큰 저장 (메모리 + 키체인)
+    /// 토큰 저장 (메모리 + vault)
     pub async fn set_token(&self, token: String) -> Result<(), String> {
         if token.is_empty() {
             return Err("Token cannot be empty".to_string());
@@ -43,37 +45,35 @@ impl NotionClient {
             return Err("Invalid token format. Token should start with 'ntn_' or 'secret_'".to_string());
         }
 
-        // 키체인에 저장
-        let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_NOTION_TOKEN)
-            .map_err(|e| format!("Failed to create keychain entry: {}", e))?;
-        entry
-            .set_password(&token)
-            .map_err(|e| format!("Failed to save token to keychain: {}", e))?;
+        // vault에 저장
+        SECRETS
+            .set(VAULT_NOTION_TOKEN, &token)
+            .await
+            .map_err(|e| format!("Failed to save token to vault: {}", e))?;
 
         // 메모리 캐시 업데이트
         *self.token.write().await = Some(token);
 
-        println!("[Notion] Token saved to keychain");
+        println!("[Notion] Token saved to vault");
         Ok(())
     }
 
-    /// 토큰 로드 (키체인에서)
+    /// 토큰 로드 (vault에서)
     async fn load_token(&self) -> Option<String> {
         // 먼저 캐시 확인
         if let Some(token) = self.token.read().await.clone() {
             return Some(token);
         }
 
-        // 키체인에서 로드
-        let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_NOTION_TOKEN).ok()?;
-        match entry.get_password() {
-            Ok(token) => {
+        // vault에서 로드
+        match SECRETS.get(VAULT_NOTION_TOKEN).await {
+            Ok(Some(token)) => {
                 *self.token.write().await = Some(token.clone());
                 Some(token)
             }
-            Err(keyring::Error::NoEntry) => None,
+            Ok(None) => None,
             Err(e) => {
-                eprintln!("[Notion] Failed to load token from keychain: {}", e);
+                eprintln!("[Notion] Failed to load token from vault: {}", e);
                 None
             }
         }
@@ -88,9 +88,7 @@ impl NotionClient {
     pub async fn clear_token(&self) {
         *self.token.write().await = None;
 
-        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_NOTION_TOKEN) {
-            let _ = entry.delete_password();
-        }
+        let _ = SECRETS.delete(VAULT_NOTION_TOKEN).await;
 
         println!("[Notion] Token cleared");
     }
@@ -379,4 +377,3 @@ impl Default for NotionClient {
         Self::new()
     }
 }
-

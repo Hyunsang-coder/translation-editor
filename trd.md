@@ -230,9 +230,10 @@ What:
   - 연결 엔드포인트:
     - `https://mcp.atlassian.com/v1/sse`
     - Rust 구현: `src-tauri/src/mcp/` (client.rs, oauth.rs, types.rs)
-  - OAuth 토큰 영속화:
-    - 저장 위치: OS 키체인 (서비스: `com.ite.app`, 키: `mcp:oauth_token`, `mcp:client_id`)
-    - 앱 시작 시 키체인에서 저장된 토큰 자동 로드
+  - OAuth 토큰 영속화 (SecretManager Vault):
+    - 저장 위치: `app_data_dir/secrets.vault` (마스터키로 암호화)
+    - 키: `mcp/atlassian/oauth_token_json`, `mcp/atlassian/client_json`
+    - 앱 시작 시 SecretManager가 vault에서 저장된 토큰 자동 로드 (Keychain 프롬프트 없음)
     - 토큰 만료 5분 전부터 `refresh_token`으로 자동 갱신 시도
     - 갱신 실패 시 다음 연결 시점에 재인증 요청
     - Tauri 커맨드: `mcp_check_auth` (저장된 토큰 확인), `mcp_logout` (토큰 삭제)
@@ -324,23 +325,34 @@ What:
 - **Anthropic/Google**: 코드에서 제거 (향후 필요 시 재도입 가능)
 - **Mock**: 타입만 유지 (개발/테스트용, UI에서 제거됨)
 
-7.2 API Key 관리
+7.2 API Key 관리 (SecretManager/Vault 아키텍처)
 Why:
 - 사용자가 App Settings에서 직접 API Key를 입력할 수 있어야 합니다.
 - macOS 등에서 앱 실행 시마다 키체인 접근 권한을 묻는 횟수를 최소화(1회)해야 합니다.
+- `.ite` export 파일에 시크릿이 절대 포함되지 않도록 보장해야 합니다.
 
-How:
-- Tauri 백엔드에서 OS 키체인/키링을 사용해 API Key 저장
-- 모든 API 키를 하나의 JSON 번들(`ai:api_keys_bundle`)로 묶어서 저장/로드
-- 프론트는 secure store 명령을 통해 저장/조회, localStorage에는 저장하지 않음
-- 앱 시작 시 키체인에서 번들을 로드(1회 접근)하여 메모리에 반영
+How (Master Key + Encrypted Vault 아키텍처):
+- **Keychain에는 마스터키 1개만 저장**: `ite:master_key_v1` (32 bytes, Base64)
+- 모든 시크릿(API 키, OAuth 토큰, 커넥터 토큰 등)은 `app_data_dir/secrets.vault` 파일에 **AEAD(XChaCha20-Poly1305)로 암호화**하여 저장
+- 앱 시작 시 SecretManager가:
+  1. Keychain에서 마스터키를 1회 로드 (프롬프트 1회)
+  2. `secrets.vault`를 복호화하여 메모리 캐시로 보관
+  3. 이후 모든 시크릿 읽기/쓰기는 **메모리 + 로컬 파일 업데이트**만 수행 (Keychain 추가 접근 없음)
+- 프론트는 secrets 명령(`secrets_get`, `secrets_set` 등)을 통해 저장/조회, localStorage에는 저장하지 않음
 
 What:
-- **저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ai:api_keys_bundle` (JSON))
-- **우선순위**: 키체인 저장값만 사용 (환경 변수 또는 localStorage 폴백 없음)
-- **보안**: localStorage/DB에 저장하지 않음. 키는 OS 보안 저장소에만 존재
+- **마스터키 저장 위치**: OS 키체인/키링 (서비스: `com.ite.app`, 키: `ite:master_key_v1`)
+- **시크릿 저장 위치**: `app_data_dir/secrets.vault` (AEAD 암호화)
+- **Vault 파일 포맷 (v1)**: `ITESECR1` (8 bytes magic) + nonce (24 bytes) + ciphertext
+- **시크릿 키 네이밍**: namespace/key 형식 (예: `ai/openai_api_key`, `ai/brave_api_key`)
+- **우선순위**: vault 저장값만 사용 (환경 변수 또는 localStorage 폴백 없음)
+- **보안**: 
+  - localStorage/DB(`ite.db`)에 저장하지 않음
+  - `.ite` export는 DB 파일만 포함하므로 시크릿이 절대 포함되지 않음
+  - 마스터키 메모리에서 `zeroize`로 drop 시 안전하게 삭제
 - **UI**: App Settings에서 API Key 입력 필드 제공, Clear 버튼으로 삭제 가능
-- **비고**: Tauri 런타임이 아닌 경우 키는 메모리에서만 유지
+- **Rust 모듈**: `src-tauri/src/secrets/` (mod.rs, vault.rs, manager.rs)
+- **Tauri 명령**: `secrets_initialize`, `secrets_get`, `secrets_set`, `secrets_delete`, `secrets_has`, `secrets_list_keys`, `secrets_migrate_legacy`
 
 What (API Key 필드 목록):
 | 필드 | 필수 여부 | 용도 |
@@ -376,11 +388,18 @@ What (MCP 레지스트리):
 - **Tauri 명령**: `mcp_registry_status`, `mcp_registry_connect`, `mcp_registry_disconnect`, `mcp_registry_logout`, `mcp_registry_get_tools`, `mcp_registry_call_tool`
 - **TypeScript 래퍼**: `src/tauri/mcpRegistry.ts`
 
-What (OAuth 토큰 관리):
-- **저장 위치**: OS 키체인 (서비스: `com.ite.app`)
-- **키 패턴**: `connector:<provider>:oauth_token`, `connector:<provider>:refresh_token`
+What (OAuth 토큰 관리 - SecretManager Vault):
+- **저장 위치**: `app_data_dir/secrets.vault` (마스터키로 암호화)
+- **키 패턴**: `mcp/<provider>/oauth_token_json`, `mcp/<provider>/client_json`, `connector/<id>/token_json`
+- **예시 키**:
+  - `mcp/atlassian/oauth_token_json`: Atlassian MCP OAuth 토큰
+  - `mcp/atlassian/client_json`: Atlassian 등록된 클라이언트 정보
+  - `mcp/notion/config_json`: Notion MCP 설정
+  - `notion/integration_token`: Notion Integration Token
+  - `connector/google/token_json`: Google 커넥터 토큰
 - **토큰 갱신**: 만료 5분 전부터 자동 갱신 시도, 실패 시 재인증 CTA 표시
 - **로그아웃**: App Settings에서 개별 커넥터 연결 해제 가능
+- **마이그레이션**: Settings → Security에서 "기존 Keychain 로그인 정보 가져오기" 버튼으로 레거시 키체인 엔트리를 vault로 이전
 
 What (UI 구조 - App Settings):
 ```

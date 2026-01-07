@@ -68,10 +68,13 @@ impl McpClient {
 
     /// Atlassian MCP 서버에 연결
     pub async fn connect(&self) -> Result<(), String> {
+        println!("[MCP] connect() called");
+        
         // 이미 연결 중이거나 연결된 경우
         {
             let status = self.status.read().await;
             if status.is_connected || status.is_connecting {
+                println!("[MCP] Already connected or connecting, skipping");
                 return Ok(());
             }
         }
@@ -82,18 +85,29 @@ impl McpClient {
         }).await;
 
         // OAuth 토큰 확인
+        println!("[MCP] Checking OAuth token...");
         if !self.oauth.has_token().await {
+            println!("[MCP] No token found, starting OAuth flow...");
             // OAuth 인증 시작
-            if let Err(e) = self.oauth.start_auth_flow().await {
-                self.update_status(|s| {
-                    s.is_connecting = false;
-                    s.error = Some(e.clone());
-                }).await;
-                return Err(e);
+            match self.oauth.start_auth_flow().await {
+                Ok(msg) => {
+                    println!("[MCP] OAuth flow completed successfully: {}", msg);
+                }
+                Err(e) => {
+                    println!("[MCP] OAuth flow failed: {}", e);
+                    self.update_status(|s| {
+                        s.is_connecting = false;
+                        s.error = Some(e.clone());
+                    }).await;
+                    return Err(e);
+                }
             }
+        } else {
+            println!("[MCP] Token already exists");
         }
 
         // SSE 연결 시작
+        println!("[MCP] Starting SSE connection...");
         match self.start_sse_connection().await {
             Ok(()) => {
                 // MCP 초기화 수행
