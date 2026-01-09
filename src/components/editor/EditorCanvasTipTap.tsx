@@ -28,6 +28,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const targetDocument = useProjectStore((s) => s.targetDocument);
   const setSourceDocument = useProjectStore((s) => s.setSourceDocument);
   const setTargetDocument = useProjectStore((s) => s.setTargetDocument);
+  const setSourceDocJson = useProjectStore((s) => s.setSourceDocJson);
+  const setTargetDocJson = useProjectStore((s) => s.setTargetDocJson);
   const setTargetLanguage = useProjectStore((s) => s.setTargetLanguage);
 
   const appendComposerText = useChatStore((s) => s.appendComposerText);
@@ -305,6 +307,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   <SourceTipTapEditor
                     content={sourceDocument || ''}
                     onChange={setSourceDocument}
+                    onJsonChange={setSourceDocJson}
                     className="h-full"
                     onEditorReady={handleSourceEditorReady}
                   />
@@ -347,6 +350,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             <TargetTipTapEditor
               content={targetDocument || ''}
               onChange={setTargetDocument}
+              onJsonChange={setTargetDocJson}
               className="h-full"
               onEditorReady={handleTargetEditorReady}
             />

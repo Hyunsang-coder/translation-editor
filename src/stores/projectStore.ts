@@ -10,6 +10,7 @@ import type {
   DiffResult,
   EditSession,
 } from '@/types';
+import type { TipTapDocJson } from '@/ai/translateDocument';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { loadProject as tauriLoadProject, saveProject as tauriSaveProject } from '@/tauri/project';
 import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
@@ -43,6 +44,20 @@ interface ProjectState {
    * - 기본은 blocks에서 파생되지만, UI 편집본을 별도 보관합니다.
    */
   sourceDocument: string;
+
+  /**
+   * TipTap JSON (Source) - AI 도구용 캐시
+   * - TipTap 에디터에서 변경 시 업데이트됨
+   * - generateText()로 plain text 추출 가능 (stripHtml보다 성능 우수)
+   */
+  sourceDocJson: TipTapDocJson | null;
+
+  /**
+   * TipTap JSON (Target) - AI 도구용 캐시
+   * - TipTap 에디터에서 변경 시 업데이트됨
+   * - generateText()로 plain text 추출 가능 (stripHtml보다 성능 우수)
+   */
+  targetDocJson: TipTapDocJson | null;
 
   /**
    * Target 단일 문서에서 Apply를 위한 pending diff (1차: offset 기반)
@@ -125,6 +140,8 @@ interface ProjectActions {
   // Target 단일 문서
   setTargetDocument: (next: string) => void;
   setSourceDocument: (next: string) => void;
+  setTargetDocJson: (json: TipTapDocJson | null) => void;
+  setSourceDocJson: (json: TipTapDocJson | null) => void;
   setTargetLanguage: (lang: string) => void;
   rebuildTargetDocument: () => void;
   rebuildSourceDocument: () => void;
@@ -312,6 +329,8 @@ export const useProjectStore = create<ProjectStore>()(
       pendingDiffs: {},
       targetDocument: '',
       sourceDocument: '',
+      sourceDocJson: null,
+      targetDocJson: null,
       pendingDocDiff: null,
       targetDocHandle: null,
       editSessions: [],
@@ -760,6 +779,14 @@ export const useProjectStore = create<ProjectStore>()(
       setSourceDocument: (next: string): void => {
         set({ sourceDocument: next, isDirty: true, lastChangeAt: Date.now() });
         scheduleWriteThroughSave(set, get);
+      },
+
+      setTargetDocJson: (json: TipTapDocJson | null): void => {
+        set({ targetDocJson: json });
+      },
+
+      setSourceDocJson: (json: TipTapDocJson | null): void => {
+        set({ sourceDocJson: json });
       },
 
       setTargetLanguage: (lang: string): void => {

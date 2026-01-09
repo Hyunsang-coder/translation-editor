@@ -131,10 +131,10 @@ interface ConnectorItemProps {
   hasToken: boolean;
   isConnected: boolean;
   isConnecting?: boolean;
-  error?: string | null;
+  error?: string | null | undefined;
   onConnect: () => void;
-  onDisconnect: () => void;
-  onClearAll?: () => void;
+  onDisconnect: () => void | Promise<void>;
+  onClearAll?: (() => void | Promise<void>) | undefined;
   comingSoon?: boolean;
 }
 

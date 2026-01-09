@@ -3,18 +3,43 @@ import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { stripHtml } from '@/utils/hash';
+import { extractTextFromTipTap } from '@/utils/tipTapText';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { searchGlossary } from '@/tauri/glossary';
 
+/**
+ * Source 문서 텍스트 추출
+ * - 우선순위: TipTap JSON (성능 우수) → HTML fallback → blocks fallback
+ */
 function resolveSourceDocumentText(): string {
-  const { project, sourceDocument } = useProjectStore.getState();
+  const { project, sourceDocument, sourceDocJson } = useProjectStore.getState();
+
+  // 1. TipTap JSON이 있으면 generateText 사용 (성능 우수)
+  if (sourceDocJson) {
+    const text = extractTextFromTipTap(sourceDocJson);
+    if (text.trim()) return text;
+  }
+
+  // 2. Fallback: HTML에서 추출
   const raw = sourceDocument?.trim() ? sourceDocument : project ? buildSourceDocument(project).text : '';
   return raw ? stripHtml(raw) : '';
 }
 
+/**
+ * Target 문서 텍스트 추출
+ * - 우선순위: TipTap JSON (성능 우수) → HTML fallback → blocks fallback
+ */
 function resolveTargetDocumentText(): string {
-  const { project, targetDocument } = useProjectStore.getState();
+  const { project, targetDocument, targetDocJson } = useProjectStore.getState();
+
+  // 1. TipTap JSON이 있으면 generateText 사용 (성능 우수)
+  if (targetDocJson) {
+    const text = extractTextFromTipTap(targetDocJson);
+    if (text.trim()) return text;
+  }
+
+  // 2. Fallback: HTML에서 추출
   const raw = targetDocument?.trim() ? targetDocument : project ? buildTargetDocument(project).text : '';
   return raw ? stripHtml(raw) : '';
 }
@@ -34,23 +59,65 @@ function autoSliceLargeDocument(text: string, maxChars: number): string {
   return `${head}${marker}${tail}`;
 }
 
-const REVIEW_INSTRUCTIONS = `다음 원문과 번역문을 비교하여 **중대한 오류만** 검수하세요.
+const REVIEW_INSTRUCTIONS = `당신은 한국어-영어 바이링구얼 20년 차 전문 번역가입니다. 
+주어진 **원문** 과 **번역문** 을 비교하여, **의미 기준으로 확실한 오역/누락만** 검출하세요.
 
-[검수 우선순위]
-1. 누락: 원문에는 있으나 번역문에서 빠진 내용
-2. 명백한 오역: 의미가 명확히 바뀌거나 수치 등이 달라진 경우
-3. 일관성: 번역문 내에 용어나 문체가 일관성 없이 사용된 경우
-4. 자연스러움: 번역문이 타겟 언어의 원어민이 작성한 것처럼 자연스럽지 않은 경우
+### 1. 분석 원칙
+- 공백, 줄바꿈, 문장부호 차이는 무시하고 **의미 중심으로** 비교합니다.
+- 섹션, 문단, 문장 단위로 분할하여 **원문 각 요소가 번역문 어디에 대응되는지**를 찾습니다.
+- 다음과 같은 경우를 **오역/누락** 으로 간주합니다.
+  - **중요 정보 누락**: 수량, 조건, 제한, 예외, 주의사항, 경고, 전제 등이 번역문에 없음.
+  - **강도/정도 왜곡**: major ↔ minor, must ↔ can, always ↔ sometimes 등 의미 강도가 달라짐.
+  - **주체/대상 변경**: 누가/무엇이 행동하는지가 바뀜.
+  - **범위/조건 변경**: "일부"가 "전체"로, "특정 상황에서만"이 "항상"으로 바뀌는 등.
+  - **사실 관계 변경**: 시제, 인과 관계, 부정/긍정이 뒤바뀜.
+- 다음과 같은 경우는 **허용되는 의역** 으로 보고, 표에 포함하지 않습니다.
+  - 어순, 스타일, 표현 방식만 다른 자연스러운 의역
+  - 중복 표현 제거, 사소한 수식어 생략 등으로 **핵심 의미가 완전히 보존**된 경우
+  - 맞춤법/철자 오류 등 **의미를 해치지 않는** 경미한 문제
 
+### 2. 검출 기준
+- **정말 확실한 경우에만** 오역/누락으로 표시합니다. 애매하면 표에 넣지 않습니다.
+- 하나의 원문 문장 안에 여러 문제가 있으면, **각각 별도의 행으로** 리포트합니다.
 
-[검수 지침]
-- 애매하거나 논쟁적인 판단은 지적하지 않습니다.
-- 사소한 스타일 및 문체 차이는 언급하지 않습니다
-- 대안 번역 제안은 별도 요청이 있기 전까지는 금지합니다.
-- 각 이슈는 원문/번역문 해당 부분을 인용해 1~2문장으로 간단히 설명하세요.
-- 이슈가 없으면 "문제 없음"이라고만 답하세요.
+### 3. 출력 형식 (반드시 준수)
+- 출력은 **아래 두 부분만** 포함해야 합니다.
+  1. 마크다운 표 (있으면 1개, 없으면 생략)
+  2. 마지막 줄에 통계 한 줄
 
-[참고 자료 활용]
+1) **마크다운 표 형식**
+- 열 이름과 순서는 다음 형식을 **정확히** 따르세요.
+
+| 누락된 원문 | 오역/누락 여부 |
+|------|----------------|
+
+- 각 행은 다음 규칙을 따릅니다.
+  - **누락된 원문 열**: 문제를 포함한 원문 구절만 넣되, 35자 이상이면 끝을 \`...\` 으로 줄입니다.
+  - **오역/누락 여부 열**: 35자 이내로, 아래 예시처럼 **간결하게** 한국어로 요약합니다.
+    - 예: \`번역문에 없음\`, \`major가 minor로 축소\`, \`post-CBT에서 post-가 누락\` 등
+
+2) **통계 한 줄**
+- 표에 한 행이라도 있으면, 표 바로 아래에 다음 형식으로 **정확히 한 줄**을 추가합니다.
+  - \`총 누락된 문장 수: N (오역 포함)\`  ← N은 표의 행 개수
+- 오역과 누락을 따로 세지 말고, **표에 적힌 항목의 개수**를 N으로 둡니다.
+
+3) **오역/누락이 전혀 없는 경우**
+- **아무 표도 출력하지 말고**, 아래 문장 한 줄만 출력합니다.
+  - \`오역이나 누락이 발견되지 않았습니다.\`
+
+### 4. 예시
+
+예시 출력 (실제 상황에서는 예시 문장은 바뀔 수 있음):
+
+| 누락된 원문 | 오역/누락 여부 |
+|------|----------------|
+| Mini-Boss Weakpoints are over the heart. | 번역문에 없음 |
+| ... can cover it with their arms/weapon. | weapon 관련 내용 누락 |
+| ... place more objects on the map. | map을 지도로 오역 |
+
+총 누락된 문장 수: 3 (오역 포함)
+
+### 5. 참고 자료 활용
 - Translation Rules: 번역 스타일/포맷/문체 규칙을 확인하여 번역문이 규칙을 따르는지 검사하세요
 - Project Context: 프로젝트 배경 지식/맥락 정보를 참고하여 번역이 맥락에 맞는지 확인하세요
 - Glossary: 첨부된 용어집이 있다면 번역문에서 올바르고, 일관되게 사용되었는지 체크하세요
