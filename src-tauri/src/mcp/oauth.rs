@@ -207,7 +207,9 @@ impl AtlassianOAuth {
                 Ok(()) => println!("[OAuth] Token refreshed successfully"),
                 Err(e) => {
                     eprintln!("[OAuth] Token refresh failed: {}", e);
-                    // 갱신 실패 시 기존 토큰 반환 (만료되었더라도)
+                    // 만료된 토큰 삭제 - 호출자가 재인증 트리거하도록
+                    *self.token.lock().await = None;
+                    return None;
                 }
             }
         }
@@ -298,6 +300,14 @@ impl AtlassianOAuth {
 
     /// OAuth 인증 플로우 시작
     pub async fn start_auth_flow(&self) -> Result<String, String> {
+        // Single-flight guard: 이미 진행 중인 OAuth 플로우가 있으면 거부
+        {
+            let existing = self.pending_pkce.lock().await;
+            if existing.is_some() {
+                return Err("OAuth flow already in progress. Please wait or cancel.".to_string());
+            }
+        }
+
         let registered_client = self.register_client().await?;
 
         let code_verifier = Self::generate_code_verifier();
@@ -343,7 +353,9 @@ impl AtlassianOAuth {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         if let Err(e) = open::that(&auth_url) {
-            // 브라우저 열기 실패 시 콜백 서버 즉시 종료
+            // 브라우저 열기 실패 시 상태 정리 후 콜백 서버 종료
+            *self.pending_pkce.lock().await = None;
+            *self.callback_tx.lock().await = None;
             self.shutdown_callback_server().await;
             return Err(format!("Failed to open browser: {}", e));
         }
