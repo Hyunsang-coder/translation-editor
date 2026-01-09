@@ -238,7 +238,9 @@ What:
     - 키: `mcp/atlassian/oauth_token_json`, `mcp/atlassian/client_json`
     - 앱 시작 시 SecretManager가 vault에서 저장된 토큰 자동 로드 (Keychain 프롬프트 없음)
     - 토큰 만료 5분 전부터 `refresh_token`으로 자동 갱신 시도
-    - 갱신 실패 시 다음 연결 시점에 재인증 요청
+    - 갱신 실패 시 토큰 삭제(메모리 + vault) 후 즉시 재인증 요청
+    - **동시 OAuth 플로우 방지**: 진행 중인 인증이 있으면 새 인증 요청 거부 (single-flight guard)
+    - **타임아웃/실패 시 상태 정리**: 5분 타임아웃 또는 콜백 실패 시 pending 상태 자동 정리
     - Tauri 커맨드: `mcp_check_auth` (저장된 토큰 확인), `mcp_logout` (토큰 삭제)
 - 패널 레이아웃/폭 (PanelGroup 규칙)
   - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel

@@ -79,10 +79,11 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 
 ### MCP / 외부 커넥터
 - **Atlassian MCP (Confluence/Jira)**: OAuth 2.1 PKCE 인증 ✅
-  - **Sidecar 방식**: 외부 Node.js 의존성 없이 앱 내장 바이너리로 안전하게 연결 ✅
+  - **Rust 네이티브 SSE 클라이언트**: 외부 Node.js 의존성 없이 Rust에서 직접 연결 ✅
   - **Lazy OAuth**: 토글은 도구 활성화만 의미하며, 실제 사용 시 Connect 버튼을 통해 인증 시작 ✅
-  - **토큰 자동 갱신**: 만료 시 refresh token으로 자동 갱신 ✅
+  - **토큰 자동 갱신**: 만료 시 refresh token으로 자동 갱신, 실패 시 토큰 삭제 후 재인증 ✅
   - **토큰 영속화**: 앱 재시작 시 자동 재연결 ✅
+  - **동시 인증 방지**: 진행 중인 OAuth 플로우가 있으면 중복 요청 거부 ✅
 - **Notion**: 페이지 및 데이터베이스 검색 지원 ✅
   - **Integration Token**: App Settings에서 Notion Integration Token 입력하여 연결 ✅
   - **토큰 영속화**: 앱 재시작 시 자동 재연결 ✅
