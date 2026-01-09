@@ -207,8 +207,9 @@ impl AtlassianOAuth {
                 Ok(()) => println!("[OAuth] Token refreshed successfully"),
                 Err(e) => {
                     eprintln!("[OAuth] Token refresh failed: {}", e);
-                    // 만료된 토큰 삭제 - 호출자가 재인증 트리거하도록
+                    // 만료된 토큰 삭제 (메모리 + vault) - 호출자가 재인증 트리거하도록
                     *self.token.lock().await = None;
+                    let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
                     return None;
                 }
             }
@@ -386,11 +387,14 @@ impl AtlassianOAuth {
                 result
             }
             Ok(Err(_)) => {
+                // 채널 닫힘 시 상태 정리
+                *self.pending_pkce.lock().await = None;
                 self.shutdown_callback_server().await;
                 Err("OAuth callback channel closed".to_string())
             }
             Err(_) => {
-                // 타임아웃 시 콜백 서버 종료
+                // 타임아웃 시 상태 정리 후 콜백 서버 종료
+                *self.pending_pkce.lock().await = None;
                 self.shutdown_callback_server().await;
                 Err("OAuth timeout (5 minutes)".to_string())
             }
