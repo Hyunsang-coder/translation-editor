@@ -14,7 +14,7 @@ src-tauri/Cargo.lock
 .vscode/*
 !.vscode/extensions.json
 .idea/
-.claude/
+.claude/settings.local.json
 *.swp
 *.swo
 *~
