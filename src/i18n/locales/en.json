@@ -160,8 +160,9 @@
     "restart": "Review Again",
     "noIssues": "No mistranslations or omissions found.",
     "totalIssues": "Total {{count}} issue(s)",
+    "issue": "Issue",
     "segment": "Segment",
-    "sourceExcerpt": "Source Excerpt",
+    "sourceExcerpt": "Source",
     "issueType": "Type",
     "description": "Description"
   },

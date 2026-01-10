@@ -18,6 +18,11 @@ function categorizeIssueType(typeText: string): IssueType {
     return 'distortion';
   }
 
+  if (normalized.includes('일관성') || normalized.includes('consistency') ||
+      normalized.includes('용어') || normalized.includes('glossary') || normalized.includes('term')) {
+    return 'consistency';
+  }
+
   // 기타 경우 기본값
   return 'error';
 }

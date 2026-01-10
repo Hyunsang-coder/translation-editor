@@ -6,7 +6,7 @@ import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
 // Review Result Types
 // ============================================
 
-export type IssueType = 'error' | 'omission' | 'distortion';
+export type IssueType = 'error' | 'omission' | 'distortion' | 'consistency';
 
 export interface ReviewIssue {
   segmentOrder: number;

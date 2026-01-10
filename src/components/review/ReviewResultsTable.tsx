@@ -13,6 +13,8 @@ function getIssueTypeLabel(type: IssueType): string {
       return '누락';
     case 'distortion':
       return '왜곡';
+    case 'consistency':
+      return '일관성';
     default:
       return type;
   }
@@ -26,9 +28,22 @@ function getIssueTypeColor(type: IssueType): string {
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
     case 'distortion':
       return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400';
+    case 'consistency':
+      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
     default:
       return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
   }
+}
+
+/**
+ * 마크다운 태그 제거
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
+    .replace(/`([^`]+)`/g, '$1')         // `code` → code
+    .replace(/~~([^~]+)~~/g, '$1');      // ~~strikethrough~~ → strikethrough
 }
 
 export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Element {
@@ -81,22 +96,27 @@ export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Ele
               왜곡 {counts.distortion}
             </span>
           )}
+          {counts.consistency && (
+            <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              일관성 {counts.consistency}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 테이블 */}
+      {/* 테이블 - 컬럼 순서: 이슈 | 유형 | 원문 | 설명 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-editor-border">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-16">
+                {t('review.issue', '이슈')}
+              </th>
               <th className="px-3 py-2 text-left font-medium text-editor-muted w-20">
-                {t('review.segment', '세그먼트')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted">
-                {t('review.sourceExcerpt', '원문 구절')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-24">
                 {t('review.issueType', '유형')}
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-editor-muted min-w-[300px]">
+                {t('review.sourceExcerpt', '원문')}
               </th>
               <th className="px-3 py-2 text-left font-medium text-editor-muted">
                 {t('review.description', '설명')}
@@ -109,13 +129,8 @@ export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Ele
                 key={`${issue.segmentOrder}-${idx}`}
                 className="border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors"
               >
-                <td className="px-3 py-2 text-editor-muted">
-                  #{issue.segmentOrder}
-                </td>
-                <td className="px-3 py-2 text-editor-text max-w-[200px]">
-                  <span className="line-clamp-2" title={issue.sourceExcerpt}>
-                    {issue.sourceExcerpt}
-                  </span>
+                <td className="px-3 py-2 text-editor-muted font-medium">
+                  {idx + 1}
                 </td>
                 <td className="px-3 py-2">
                   <span className={`px-2 py-0.5 rounded text-xs ${getIssueTypeColor(issue.type)}`}>
@@ -123,7 +138,12 @@ export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Ele
                   </span>
                 </td>
                 <td className="px-3 py-2 text-editor-text">
-                  {issue.description}
+                  <span className="line-clamp-3" title={issue.sourceExcerpt}>
+                    {issue.sourceExcerpt}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-editor-text">
+                  {stripMarkdown(issue.description)}
                 </td>
               </tr>
             ))}

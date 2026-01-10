@@ -21,6 +21,14 @@
 - [x] A. parseReviewResult.ts 생성
 - [x] B. 중복 제거 및 에러 핸들링 추가
 
+### Phase 5: UI 개선
+- [x] A. IssueType에 `consistency`(일관성) 추가
+- [x] B. 컬럼 순서 변경: 이슈 | 유형 | 원문 | 설명
+- [x] C. 이슈 번호 순차 표시 (1, 2, 3)
+- [x] D. 원문 컬럼 너비 3배 증가
+- [x] E. 마크다운 태그 제거
+- [x] F. i18n 키 추가
+
 ### 기타
 - [x] i18n 번역 키 추가 (ko.json, en.json)
 - [x] chat.ts에 getReviewChunkTool 바인딩 추가
