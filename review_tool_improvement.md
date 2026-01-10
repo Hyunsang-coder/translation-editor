@@ -1,578 +1,358 @@
-# ReviewTool 번역 검수 정확도 개선 계획
+# ReviewTool 번역 검수 기능 개선
 
 ## 구현 진행 체크리스트
 
-### Phase 1: Quick Wins
-- [x] A. REVIEW_INSTRUCTIONS 개선 (`src/ai/tools/reviewTool.ts`)
-- [x] B. Glossary 검색 제한 완화 (2000→4000, 20→40)
+### ✅ 완료된 Phase (1~5)
 
-### Phase 2: Core Improvements
-- [x] A. buildAlignedChunks 함수 구현
-- [x] B. reviewStore.ts 생성
-- [x] C. getReviewChunkTool 추가
-- [x] D. reviewTranslationTool 개선
-
-### Phase 3: UI 구현
-- [x] A. 검수 버튼 추가 (EditorCanvasTipTap)
-- [x] B. ReviewModal.tsx 생성
-- [x] C. ReviewResultsTable.tsx 생성
-
-### Phase 4: 결과 처리 및 Polish
-- [x] A. parseReviewResult.ts 생성
-- [x] B. 중복 제거 및 에러 핸들링 추가
-
-### Phase 5: UI 개선
-- [x] A. IssueType에 `consistency`(일관성) 추가
-- [x] B. 컬럼 순서 변경: 이슈 | 유형 | 원문 | 설명
-- [x] C. 이슈 번호 순차 표시 (1, 2, 3)
-- [x] D. 원문 컬럼 너비 3배 증가
-- [x] E. 마크다운 태그 제거
-- [x] F. i18n 키 추가
-
-### 기타
-- [x] i18n 번역 키 추가 (ko.json, en.json)
-- [x] chat.ts에 getReviewChunkTool 바인딩 추가
+| Phase | 내용 | 주요 파일 |
+|-------|------|----------|
+| 1 | REVIEW_INSTRUCTIONS 개선, Glossary 제한 완화 | `reviewTool.ts` |
+| 2 | buildAlignedChunks, reviewStore, getReviewChunkTool | `reviewTool.ts`, `reviewStore.ts` |
+| 3 | 검수 버튼, ReviewModal, ReviewResultsTable | `EditorCanvasTipTap.tsx`, `ReviewModal.tsx` |
+| 4 | parseReviewResult, 중복 제거, 에러 핸들링 | `parseReviewResult.ts` |
+| 5 | UI 개선 (일관성 타입, 컬럼 순서, 마크다운 제거) | `ReviewResultsTable.tsx` |
 
 ---
 
-## 1. 문제 분석 요약
+### 🚧 Phase 6: 검수 결과 하이라이트 기능 (안정형 설계)
 
-### 1.1 핵심 문제점
+**컨셉**: 자동 치환 ❌ → 하이라이트 + 수동 수정 ✅
 
-| 문제 | 원인 | 영향도 |
-|------|------|--------|
-| **문서 중간 부분 누락** | `autoSliceLargeDocument`가 head(62%)+tail(38%)로 자름 | 심각 |
-| **원문-번역문 정렬 불일치** | Source/Target 각각 독립적으로 슬라이싱 | 심각 |
-| **구조 정보 미활용** | `blockRanges`, `segmentStartOffsets` 무시 | 중간 |
-| **Glossary 검색 제한** | 쿼리 2000자, 결과 20개 제한 | 중간 |
-| **보수적 검수 지침** | "확실한 경우에만" 표시 → Recall 저하 | 중간 |
-
-### 1.2 활용 가능한 기존 인프라
-
-- `SegmentGroup` 구조: `sourceIds` + `targetIds` + `order`로 정렬된 쌍 제공
-- `buildSourceDocument/buildTargetDocument`: `blockRanges` 반환 (현재 미활용)
-- `chat.ts`의 tool calling loop: 최대 8스텝 반복 실행 가능
-- `documentTools.ts`의 `query/aroundChars` 파라미터: 특정 구절 주변 발췌
+**핵심 원칙** (PRD/TRD 정합):
+- Non-Intrusive: 문서 자동 변경 없음, Decoration은 비영속
+- 2분할 레이아웃 유지: 새 컬럼 추가 대신 ChatPanel에 Review 탭 추가
+- JSON 출력 포맷: TRD 3.2에서 "검수는 JSON 리포트 허용"으로 명시
 
 ---
 
-## 2. 개선 방안 상세
+## Phase 6 구현 순서 (안정형)
 
-### 2.1 Phase 1: Quick Wins (1-2일)
+> 각 단계가 독립적으로 가치를 제공하며, 이전 단계 없이도 배포 가능
 
-#### A. REVIEW_INSTRUCTIONS 개선
-**파일**: `src/ai/tools/reviewTool.ts` (62-124행)
+### Step 1: 데이터 모델 + 스토어 확장
 
-**변경 내용**:
-```typescript
-const REVIEW_INSTRUCTIONS = `당신은 한국어-영어 바이링구얼 20년 차 전문 번역가입니다.
-주어진 **원문**과 **번역문**을 비교하여 번역 품질을 검수합니다.
+**목표**: ReviewIssue 확장 및 체크 상태 관리
 
-### 1. 검수 범위와 기준
-
-**검출 대상 (확신도 70% 이상)**:
-- 🔴 **심각한 오역**: 의미가 반대이거나 완전히 다른 경우
-- 🟠 **중요 정보 누락**: 수량, 조건, 제한, 예외, 주의사항 등
-- 🟡 **강도/정도 왜곡**: must→can, always→sometimes 등
-- 🟡 **주체/대상 변경**: 행위자나 대상이 바뀐 경우
-- 🟡 **범위/조건 변경**: 부분↔전체, 조건부↔무조건
-- 🟡 **사실 관계 변경**: 시제, 인과관계, 부정/긍정 역전
-
-**허용되는 의역 (검출 제외)**:
-- 어순, 스타일, 표현 방식만 다른 자연스러운 의역
-- 중복 표현 제거, 사소한 수식어 생략 (핵심 의미 보존 시)
-- 맞춤법/철자 오류 (의미 무관)
-
-### 2. 검수 방식
-
-1. **전체 훑기**: 원문 전체 구조 파악 (섹션, 문단, 핵심 포인트)
-2. **1:1 대조**: 원문의 각 문장/구절이 번역문에 대응되는지 확인
-3. **용어 일관성**: Glossary 제공 시 용어 사용 일관성 체크
-4. **맥락 검증**: Project Context 참고하여 맥락 적합성 확인
-
-### 3. 출력 형식
-
-**문제 발견 시**:
-
-| 세그먼트 | 원문 구절 | 문제 유형 | 설명 |
-|----------|----------|----------|------|
-| #N | 원문 35자 이내... | 오역/누락/왜곡 | 간결한 설명 |
-
-**통계**: 총 N건 (오역 X, 누락 Y, 왜곡 Z)
-
-**문제 없음 시**:
-\`오역이나 누락이 발견되지 않았습니다.\`
-
-### 4. 확신도 기준
-- **70-84%**: 표에 포함하되 "가능성" 표현 사용
-- **85-100%**: 확정적 표현 사용
-- **70% 미만**: 표에 포함하지 않음
-
-### 5. 참고 자료 활용
-- **Translation Rules**: 번역 스타일/포맷 규칙 준수 여부
-- **Project Context**: 도메인 지식, 맥락 정보 활용
-- **Glossary**: 용어 번역 일관성 체크
-- **Attachments**: 참고 자료 기반 정확성 검증`;
-```
-
-**효과**: Precision-Recall 균형 개선, 위치 정보 추가
-
-#### B. Glossary 검색 제한 완화
-**파일**: `src/ai/tools/reviewTool.ts` (161-167행)
-
-**변경 내용**:
-```typescript
-// Before
-const query = [...].slice(0, 2000);
-const hits = await searchGlossary({ limit: 20 });
-
-// After
-const query = [...].slice(0, 4000);  // 2000 → 4000
-const hits = await searchGlossary({ limit: 40 });  // 20 → 40
-```
-
----
-
-### 2.2 Phase 2: Core Improvements (4-5일)
-
-#### A. 세그먼트 기반 청킹 함수 구현
-**파일**: `src/ai/tools/reviewTool.ts` (새 함수 추가)
+#### 1-A. ReviewIssue 인터페이스 확장
 
 ```typescript
-interface AlignedChunk {
-  chunkIndex: number;
-  segments: Array<{
-    groupId: string;
-    order: number;
-    sourceText: string;
-    targetText: string;
-  }>;
-  totalChars: number;
-}
-
-function buildAlignedChunks(
-  project: ITEProject,
-  maxCharsPerChunk: number = 10000
-): AlignedChunk[] {
-  const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
-  const chunks: AlignedChunk[] = [];
-  let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
-
-  for (const seg of orderedSegments) {
-    const sourceText = seg.sourceIds
-      .map(id => stripHtml(project.blocks[id]?.content || ''))
-      .join('\n');
-    const targetText = seg.targetIds
-      .map(id => stripHtml(project.blocks[id]?.content || ''))
-      .join('\n');
-    const segmentSize = sourceText.length + targetText.length;
-
-    // 청크 크기 초과 시 새 청크 시작
-    if (currentChunk.totalChars + segmentSize > maxCharsPerChunk && currentChunk.segments.length > 0) {
-      chunks.push(currentChunk);
-      currentChunk = { chunkIndex: chunks.length, segments: [], totalChars: 0 };
-    }
-
-    currentChunk.segments.push({
-      groupId: seg.groupId,
-      order: seg.order,
-      sourceText,
-      targetText,
-    });
-    currentChunk.totalChars += segmentSize;
-  }
-
-  if (currentChunk.segments.length > 0) chunks.push(currentChunk);
-  return chunks;
-}
-```
-
-#### B. 청크 캐싱 및 상태 관리
-**파일**: `src/stores/reviewStore.ts` (새 파일)
-
-```typescript
-interface ReviewState {
-  chunks: AlignedChunk[];
-  currentChunkIndex: number;
-  results: ReviewResult[];
-  isReviewing: boolean;
-  progress: { completed: number; total: number };
-}
-
-export const useReviewStore = create<ReviewState>((set, get) => ({
-  chunks: [],
-  currentChunkIndex: 0,
-  results: [],
-  isReviewing: false,
-  progress: { completed: 0, total: 0 },
-
-  initializeReview: (project: ITEProject) => {
-    const chunks = buildAlignedChunks(project);
-    set({ chunks, currentChunkIndex: 0, results: [], progress: { completed: 0, total: chunks.length } });
-  },
-
-  addResult: (result: ReviewResult) => {
-    const { results, progress } = get();
-    set({
-      results: [...results, result],
-      progress: { ...progress, completed: progress.completed + 1 }
-    });
-  },
-}));
-```
-
-#### C. 청크 도구 추가
-**파일**: `src/ai/tools/reviewTool.ts`
-
-```typescript
-export const getReviewChunkTool = tool(
-  async ({ chunkIndex }) => {
-    const { chunks } = useReviewStore.getState();
-    if (chunkIndex >= chunks.length) {
-      return {
-        error: 'No more chunks',
-        totalChunks: chunks.length,
-        message: '모든 청크 검수가 완료되었습니다. 최종 결과를 종합해주세요.'
-      };
-    }
-
-    const chunk = chunks[chunkIndex];
-    return {
-      chunkIndex,
-      totalChunks: chunks.length,
-      segmentCount: chunk.segments.length,
-      segments: chunk.segments.map(seg => ({
-        id: seg.groupId,
-        order: seg.order,
-        source: seg.sourceText,
-        target: seg.targetText,
-      })),
-    };
-  },
-  {
-    name: 'get_review_chunk',
-    description: '검수할 다음 청크를 가져옵니다. 문서가 길면 청크 단위로 순차 검수하세요.',
-    schema: z.object({
-      chunkIndex: z.number().int().min(0).describe('청크 인덱스 (0부터 시작)'),
-    }),
-  },
-);
-```
-
-#### D. reviewTranslationTool 개선
-**파일**: `src/ai/tools/reviewTool.ts`
-
-```typescript
-export const reviewTranslationTool = tool(
-  async (rawArgs) => {
-    const { project } = useProjectStore.getState();
-    if (!project) throw new Error('프로젝트가 로드되지 않았습니다.');
-
-    // 청크 분할 및 초기화
-    const chunks = buildAlignedChunks(project);
-    useReviewStore.getState().initializeReview(project);
-
-    // 첫 번째 청크 반환 + 메타데이터
-    const firstChunk = chunks[0];
-
-    // Glossary, Rules, Context 수집 (기존 로직)
-    const { translationRules, projectContext, attachments } = useChatStore.getState();
-    let glossaryText = await searchGlossaryForDocument(project, firstChunk);
-
-    return {
-      instructions: REVIEW_INSTRUCTIONS,
-      totalChunks: chunks.length,
-      currentChunk: {
-        index: 0,
-        segments: firstChunk.segments,
-      },
-      translationRules: translationRules?.trim() || undefined,
-      projectContext: projectContext?.trim() || undefined,
-      glossary: glossaryText || undefined,
-      note: chunks.length > 1
-        ? `문서가 ${chunks.length}개 청크로 분할되었습니다. get_review_chunk 도구로 나머지 청크를 가져와 순차 검수하세요.`
-        : undefined,
-    };
-  },
-  // ... (기존 schema 유지)
-);
-```
-
----
-
-### 2.3 Phase 3: UI 구현 (2-3일)
-
-#### A. 검수 버튼 추가
-**파일**: `src/components/panels/TargetPanel.tsx` (또는 툴바 컴포넌트)
-
-```typescript
-// 번역 버튼 옆에 검수 버튼 추가
-<Button
-  variant="outline"
-  onClick={() => setIsReviewModalOpen(true)}
-  disabled={!hasContent}
->
-  <CheckCircle className="w-4 h-4 mr-2" />
-  검수
-</Button>
-```
-
-#### B. 검수 결과 모달
-**파일**: `src/components/modals/ReviewModal.tsx` (새 파일)
-
-```typescript
-interface ReviewModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
-  const { progress, results, isReviewing } = useReviewStore();
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>번역 검수 결과</DialogTitle>
-          {isReviewing && (
-            <Progress value={(progress.completed / progress.total) * 100} />
-          )}
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {results.length === 0 && !isReviewing ? (
-            <p className="text-muted-foreground">검수를 시작하세요.</p>
-          ) : (
-            <ReviewResultsTable results={results} />
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button onClick={startReview} disabled={isReviewing}>
-            {isReviewing ? '검수 중...' : '검수 시작'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-```
-
-#### C. 검수 결과 테이블 컴포넌트
-**파일**: `src/components/review/ReviewResultsTable.tsx` (새 파일)
-
-```typescript
-interface ReviewResultsTableProps {
-  results: ReviewResult[];
-}
-
-export function ReviewResultsTable({ results }: ReviewResultsTableProps) {
-  const allIssues = results.flatMap(r => r.issues);
-
-  if (allIssues.length === 0) {
-    return <p className="text-green-600">오역이나 누락이 발견되지 않았습니다.</p>;
-  }
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>세그먼트</TableHead>
-          <TableHead>원문</TableHead>
-          <TableHead>문제 유형</TableHead>
-          <TableHead>설명</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {allIssues.map((issue, idx) => (
-          <TableRow key={idx} className={issueTypeColor(issue.type)}>
-            <TableCell>#{issue.segmentOrder}</TableCell>
-            <TableCell className="max-w-[200px] truncate">{issue.sourceExcerpt}</TableCell>
-            <TableCell>{issue.type}</TableCell>
-            <TableCell>{issue.description}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-```
-
----
-
-### 2.4 Phase 4: 결과 처리 및 Polish (1-2일)
-
-#### A. 결과 파싱 로직
-**파일**: `src/ai/review/parseReviewResult.ts` (새 파일)
-
-```typescript
-interface ParsedIssue {
+// src/stores/reviewStore.ts
+export interface ReviewIssue {
+  id: string;                    // 결정적 ID (중복 제거/상태 유지용)
   segmentOrder: number;
-  sourceExcerpt: string;
-  type: '오역' | '누락' | '왜곡';
+  segmentGroupId?: string;       // (신규) 세그먼트 단위 하이라이트용
+  sourceExcerpt: string;         // 원문 구절
+  targetExcerpt: string;         // (신규) 현재 번역 (하이라이트 대상)
+  suggestedFix: string;          // (신규) 수정 제안 (참고용)
+  type: IssueType;
   description: string;
-}
-
-export function parseReviewResult(aiResponse: string): ParsedIssue[] {
-  // 마크다운 테이블 파싱
-  const tableRegex = /\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|/g;
-  const rows = aiResponse.match(tableRegex) || [];
-
-  // 헤더 제외하고 데이터 행만 파싱
-  return rows.slice(2).map(row => {
-    const cells = row.split('|').filter(c => c.trim());
-    return {
-      segmentOrder: parseInt(cells[0]?.replace('#', '') || '0'),
-      sourceExcerpt: cells[1]?.trim() || '',
-      type: categorizeIssueType(cells[2]?.trim() || ''),
-      description: cells[3]?.trim() || '',
-    };
-  });
+  checked: boolean;              // (신규) 체크 상태
 }
 ```
 
-#### B. 중복 제거 로직
+**ID 생성 전략 (결정적)**:
 ```typescript
-export function deduplicateIssues(issues: ParsedIssue[]): ParsedIssue[] {
-  const seen = new Map<string, ParsedIssue>();
+// 중복 제거 + 체크 상태 유지에 유리
+const id = hashContent(`${segmentOrder}|${type}|${sourceExcerpt}|${targetExcerpt}`);
+```
 
-  for (const issue of issues) {
-    const key = `${issue.segmentOrder}-${issue.sourceExcerpt.slice(0, 20)}`;
-    if (!seen.has(key)) {
-      seen.set(key, issue);
+#### 1-B. reviewStore 액션 추가
+
+```typescript
+interface ReviewActions {
+  // 기존...
+  toggleIssueCheck: (issueId: string) => void;
+  setAllIssuesChecked: (checked: boolean) => void;
+  getCheckedIssues: () => ReviewIssue[];
+}
+```
+
+#### 체크리스트
+- [ ] ReviewIssue에 `id`, `segmentGroupId`, `targetExcerpt`, `suggestedFix`, `checked` 추가
+- [ ] `toggleIssueCheck`, `setAllIssuesChecked`, `getCheckedIssues` 액션 추가
+- [ ] `getAllIssues()` 중복 제거 키를 `id` 기반으로 변경
+
+---
+
+### Step 2: AI 출력 포맷 → JSON 전환
+
+**목표**: 파싱 안정성 확보 (마크다운 테이블 → JSON)
+
+#### 2-A. ReviewModal 프롬프트 변경 (⚠️ 중요)
+
+> `reviewTool.ts`만 바꾸면 적용 안 됨. ReviewModal이 직접 호출하는 프롬프트를 변경해야 함.
+
+```typescript
+// src/components/modals/ReviewModal.tsx
+const userMessage = `다음 번역을 검수하고, 반드시 아래 JSON 형식으로만 출력하세요.
+설명이나 마크다운 없이 JSON만 출력합니다.
+
+검수 대상:
+${segmentsText}
+
+출력 형식:
+{
+  "issues": [
+    {
+      "segmentOrder": 0,
+      "segmentGroupId": "...",
+      "type": "오역|누락|왜곡|일관성",
+      "sourceExcerpt": "원문 35자 이내",
+      "targetExcerpt": "현재 번역 35자 이내",
+      "suggestedFix": "수정 제안",
+      "description": "간결한 설명"
     }
+  ]
+}
+
+문제가 없으면: { "issues": [] }`;
+```
+
+#### 2-B. parseReviewResult 수정
+
+```typescript
+// src/ai/review/parseReviewResult.ts
+export function parseReviewResult(aiResponse: string): ReviewIssue[] {
+  // 1. JSON 파싱 시도
+  const jsonMatch = aiResponse.match(/\{[\s\S]*"issues"[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return (parsed.issues ?? []).map((issue: any) => ({
+        id: hashContent(`${issue.segmentOrder}|${issue.type}|${issue.sourceExcerpt}|${issue.targetExcerpt}`),
+        segmentOrder: issue.segmentOrder ?? 0,
+        segmentGroupId: issue.segmentGroupId,
+        sourceExcerpt: issue.sourceExcerpt ?? '',
+        targetExcerpt: issue.targetExcerpt ?? '',
+        suggestedFix: issue.suggestedFix ?? '',
+        type: categorizeIssueType(issue.type ?? ''),
+        description: issue.description ?? '',
+        checked: false,
+      }));
+    } catch { /* fallback to markdown */ }
   }
-
-  return Array.from(seen.values());
+  
+  // 2. 기존 마크다운 테이블 파싱 (폴백)
+  return parseMarkdownTable(aiResponse);
 }
 ```
 
-#### C. 에러 핸들링
+#### 체크리스트
+- [ ] ReviewModal의 `userMessage`에 JSON 출력 형식 강제
+- [ ] parseReviewResult에 JSON 파싱 로직 추가 (마크다운 폴백 유지)
+- [ ] reviewTool.ts의 REVIEW_INSTRUCTIONS도 JSON 형식으로 업데이트 (참고용)
+
+---
+
+### Step 3: ChatPanel에 Review 탭 추가
+
+**목표**: Modal → 탭 전환 (2분할 레이아웃 유지)
+
+#### 3-A. 레이아웃 결정
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ [Editor: Source | Target]      │  [Chat Panel]          │
+│                                │  ┌──────────────────┐  │
+│                                │  │ Settings │ Chat │ Review │
+│                                │  ├──────────────────┤  │
+│                                │  │  (탭 콘텐츠)      │  │
+│                                │  └──────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Settings 탭처럼 "기능 탭"으로 추가 (채팅 탭 3개 제한과 별개)
+- Review 탭 선택 시 검수 UI로 전환
+- 채팅 탭과 Review 탭은 전환형 (동시 표시 X)
+
+#### 3-B. 상태 관리
+
 ```typescript
-// reviewStore에 추가
-handleChunkError: (chunkIndex: number, error: Error) => {
-  set(state => ({
-    results: [...state.results, {
-      chunkIndex,
-      issues: [],
-      error: error.message,
-    }],
-    progress: { ...state.progress, completed: state.progress.completed + 1 }
-  }));
+// src/stores/uiStore.ts
+interface UIState {
+  // 기존...
+  reviewPanelOpen: boolean;      // Review 탭 활성 여부
 }
+
+// 또는 ChatPanel 내부 상태로 관리
+// activeTab: 'settings' | 'chat' | 'review'
 ```
 
----
+#### 3-C. ReviewPanel 컴포넌트
 
-## 3. 파일 수정 목록
-
-### 신규 파일
-| 파일 | 설명 |
-|------|------|
-| `src/stores/reviewStore.ts` | 검수 상태 관리 |
-| `src/components/modals/ReviewModal.tsx` | 검수 결과 모달 |
-| `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 |
-| `src/ai/review/parseReviewResult.ts` | AI 응답 파싱 |
-
-### 수정 파일
-| 파일 | 변경 내용 |
-|------|----------|
-| `src/ai/tools/reviewTool.ts` | REVIEW_INSTRUCTIONS 개선, 청킹 로직, getReviewChunkTool 추가 |
-| `src/ai/chat.ts` | getReviewChunkTool 바인딩 추가 |
-| `src/components/panels/TargetPanel.tsx` | 검수 버튼 추가 |
-| `src/i18n/locales/ko.json` | 검수 관련 번역 키 추가 |
-| `src/i18n/locales/en.json` | 검수 관련 번역 키 추가 |
-
----
-
-## 4. 구현 로드맵
-
-```
-Week 1:
-├─ Day 1-2: Phase 1 (Quick Wins)
-│  ├─ REVIEW_INSTRUCTIONS 개선
-│  └─ Glossary 제한 완화
-│
-├─ Day 3-5: Phase 2 (Core)
-│  ├─ buildAlignedChunks 함수 구현
-│  ├─ reviewStore 생성
-│  └─ getReviewChunkTool 추가
-
-Week 2:
-├─ Day 1-2: Phase 3 (UI)
-│  ├─ ReviewModal 구현
-│  ├─ ReviewResultsTable 구현
-│  └─ 검수 버튼 추가
-│
-├─ Day 3: Phase 4 (Polish)
-│  ├─ 결과 파싱 로직
-│  ├─ 중복 제거
-│  └─ 에러 핸들링
-│
-└─ Day 4: 테스트 및 버그 수정
-```
-
----
-
-## 5. 검증 방법
-
-### 5.1 단위 테스트
 ```typescript
-// buildAlignedChunks 테스트
-describe('buildAlignedChunks', () => {
-  it('should split large document into multiple chunks', () => {
-    const mockProject = createMockProject(50); // 50 segments
-    const chunks = buildAlignedChunks(mockProject, 5000);
-    expect(chunks.length).toBeGreaterThan(1);
-  });
-
-  it('should maintain source-target alignment', () => {
-    const chunks = buildAlignedChunks(mockProject);
-    for (const chunk of chunks) {
-      for (const seg of chunk.segments) {
-        expect(seg.sourceText).toBeDefined();
-        expect(seg.targetText).toBeDefined();
-      }
-    }
-  });
-});
+// src/components/review/ReviewPanel.tsx
+// ReviewModal의 콘텐츠를 추출하여 패널 형태로 리팩토링
+// - 검수 시작/취소 버튼
+// - 진행 상태 표시
+// - ReviewResultsTable
+// - 하이라이트 버튼
 ```
 
-### 5.2 통합 테스트
-1. **작은 문서 (< 10,000자)**: 단일 청크로 처리되는지 확인
-2. **중간 문서 (10,000-50,000자)**: 2-5개 청크로 분할되는지 확인
-3. **큰 문서 (> 50,000자)**: 다중 청크 순차 검수 완료 확인
-
-### 5.3 수동 테스트 시나리오
-1. 번역 버튼 옆에 "검수" 버튼이 표시되는지 확인
-2. 검수 버튼 클릭 시 모달이 열리는지 확인
-3. "검수 시작" 클릭 시 진행률 표시 확인
-4. 검수 완료 후 결과 테이블에 문제가 표시되는지 확인
-5. 오역/누락/왜곡 유형별로 색상 구분되는지 확인
-
-### 5.4 API 호출 비용 모니터링
-- 청크당 토큰 사용량 로깅
-- 전체 검수 비용 요약 표시
+#### 체크리스트
+- [ ] ChatPanel에 `activeTab` 상태 확장 (`'settings' | 'chat' | 'review'`)
+- [ ] Review 탭 UI 추가 (탭 헤더)
+- [ ] ReviewPanel 컴포넌트 생성 (ReviewModal 콘텐츠 추출)
+- [ ] ReviewModal 제거 또는 deprecated 처리
+- [ ] EditorCanvasTipTap에서 검수 버튼 → Review 탭 열기로 변경
 
 ---
 
-## 6. 예상 효과
+### Step 4: 테이블 UI 업데이트
 
-| 지표 | 현재 | 개선 후 |
-|------|------|--------|
-| 문서 커버리지 | ~40% (head+tail) | 100% |
-| Source-Target 정렬 | 미보장 | 세그먼트 단위 보장 |
-| 검출 정확도 (Recall) | 낮음 (보수적 지침) | 개선 (70% threshold) |
-| Glossary 커버리지 | 2000자 쿼리 | 4000자+ 청크별 검색 |
-| 사용자 경험 | 없음 | 전용 모달 + 진행률 표시 |
+**목표**: 체크박스 + 새 컬럼 추가
+
+#### 4-A. 테이블 컬럼 변경
+
+| 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명 |
+|:----:|:-:|:----:|------|----------|----------|------|
+| ☑️ | 1 | 오역 | 1~5cm | 1-12cm | 1~5cm | 숫자 변환 오류 |
+| ☐ | 2 | 누락 | 제주까지 | (없음) | 제주까지 추가 | 지명 누락 |
+
+**컬럼 너비:**
+- 체크: `w-10`
+- #: `w-8`
+- 유형: `w-16`
+- 원문/현재 번역/수정 제안: `flex-1` (균등 분배)
+- 설명: 숨김 또는 hover 표시
+
+#### 4-B. React key 변경
+
+```typescript
+// 기존: key={`${issue.segmentOrder}-${idx}`}
+// 변경: key={issue.id}
+```
+
+#### 체크리스트
+- [ ] ReviewResultsTable에 체크박스 컬럼 추가
+- [ ] targetExcerpt, suggestedFix 컬럼 추가
+- [ ] React key를 `issue.id`로 변경
+- [ ] "전체 선택/해제" 기능 추가
 
 ---
 
-## 7. 리스크 및 완화 방안
+### Step 5: TipTap 하이라이트 (Decoration)
 
-| 리스크 | 완화 방안 |
-|--------|----------|
-| API 호출 비용 증가 | 청크 크기 조절 (10,000 → 15,000), 빠른 검수 모드 옵션 |
-| 모델의 도구 사용 불일관성 | 시스템 프롬프트에 명시적 지침 추가 |
-| 청크 경계 중복 검출 | 세그먼트 단위 분할로 중복 최소화 + 후처리 중복 제거 |
-| 8스텝 제한 초과 | 매우 긴 문서는 경고 표시 + 수동 재시작 옵션 |
+**목표**: 체크된 이슈의 targetExcerpt를 에디터에 하이라이트
+
+#### 5-A. 하이라이트 매칭 전략
+
+```
+1단계: segmentGroupId가 있으면
+       → 해당 세그먼트의 target 텍스트에서 targetExcerpt 검색
+
+2단계: 1단계 실패 시
+       → 전체 문서에서 targetExcerpt substring 검색 (첫 매치)
+
+3단계: 2단계도 실패 시
+       → 하이라이트 없이 패널에 "매칭 실패" 표시 (무해)
+```
+
+#### 5-B. Decoration 구현 (비영속)
+
+```typescript
+// TipTap Decoration 사용
+// - 문서 데이터에 포함되지 않음
+// - Review 탭 닫으면 자동 해제
+// - 검색 결과 하이라이트와 유사한 패턴
+```
+
+#### 5-C. 하이라이트 트리거
+
+```typescript
+// "표시" 버튼 클릭 시
+// 또는 체크된 이슈 변경 시 자동 업데이트
+const highlightCheckedIssues = () => {
+  const checked = reviewStore.getCheckedIssues();
+  // targetExcerpt로 위치 찾기 → Decoration 적용
+};
+```
+
+#### 체크리스트
+- [ ] TipTapEditor에 Decoration 관리 로직 추가
+- [ ] 하이라이트 색상/스타일 정의 (CSS)
+- [ ] ReviewPanel에 "표시" 버튼 추가
+- [ ] 매칭 실패 시 토스트/상태 표시
+- [ ] Review 탭 닫을 때 Decoration 해제
+
+---
+
+### Step 6: i18n + 마무리
+
+#### 체크리스트
+- [ ] `ko.json`, `en.json`에 Review 탭 관련 키 추가
+- [ ] 에러 메시지, 버튼 라벨 번역
+- [ ] 접근성(aria-label) 추가
+
+---
+
+## 수정 파일 목록 (최종)
+
+| 파일 | 변경 내용 | Step |
+|------|----------|:----:|
+| `src/stores/reviewStore.ts` | ReviewIssue 확장, 체크 관리 액션 | 1 |
+| `src/components/modals/ReviewModal.tsx` | 프롬프트 JSON 형식 강제 | 2 |
+| `src/ai/review/parseReviewResult.ts` | JSON 파싱 로직 추가 | 2 |
+| `src/ai/tools/reviewTool.ts` | REVIEW_INSTRUCTIONS 업데이트 (참고용) | 2 |
+| `src/components/panels/ChatPanel.tsx` | Review 탭 추가 | 3 |
+| `src/components/review/ReviewPanel.tsx` | (신규) Review 탭 콘텐츠 | 3 |
+| `src/components/editor/EditorCanvasTipTap.tsx` | 검수 버튼 → Review 탭 열기 | 3 |
+| `src/components/review/ReviewResultsTable.tsx` | 체크박스 + 새 컬럼 | 4 |
+| `src/components/editor/TipTapEditor.tsx` | Decoration 로직 | 5 |
+| `src/i18n/locales/*.json` | 번역 키 추가 | 6 |
+
+---
+
+## 아키텍처 참고
+
+### 주요 파일 위치
+```
+src/
+├── ai/
+│   ├── review/
+│   │   └── parseReviewResult.ts   # AI 응답 파싱 (JSON + 마크다운)
+│   └── tools/
+│       └── reviewTool.ts          # 검수 도구 정의
+├── stores/
+│   ├── reviewStore.ts             # 검수 상태 + 체크 관리
+│   └── uiStore.ts                 # (선택) 리뷰 탭 상태
+└── components/
+    ├── panels/
+    │   └── ChatPanel.tsx          # Settings | Chat | Review 탭
+    ├── review/
+    │   ├── ReviewPanel.tsx        # (신규) Review 탭 콘텐츠
+    │   └── ReviewResultsTable.tsx # 결과 테이블 + 체크박스
+    └── editor/
+        ├── EditorCanvasTipTap.tsx # 검수 버튼 연결
+        └── TipTapEditor.tsx       # Decoration 하이라이트
+```
+
+### 데이터 흐름
+```
+[검수 버튼] → Review 탭 열기 + reviewStore.initializeReview()
+    ↓
+[검수 시작] → AI 호출 (JSON 형식 강제)
+    ↓
+[응답 파싱] → parseReviewResult() (JSON 우선, 마크다운 폴백)
+    ↓
+[결과 저장] → reviewStore.addResult() (id 기반 중복 제거)
+    ↓
+[테이블 표시] → ReviewResultsTable (체크박스 + 새 컬럼)
+    ↓
+[체크 선택] → toggleIssueCheck()
+    ↓
+[표시 클릭] → Target 에디터에 Decoration 하이라이트
+    ↓
+[수동 수정] → 사용자가 하이라이트 보며 직접 편집
+```
+
+---
+
+## 리스크 및 대응
+
+| 리스크 | 대응 |
+|--------|------|
+| 모델이 JSON 형식을 안 지킬 수 있음 | 마크다운 테이블 폴백 파싱 유지 |
+| targetExcerpt 매칭 실패 | 매칭 실패를 정상 플로우로 처리 (토스트만) |
+| 체크 상태 유실 (청크 합칠 때) | 결정적 id로 상태 유지 |
+| 탭 전환 시 검수 진행 상태 유실 | reviewStore에서 상태 관리 (컴포넌트 독립) |
