@@ -64,6 +64,7 @@ interface ReviewState {
   progress: { completed: number; total: number };
   highlightEnabled: boolean;  // 하이라이트 활성화 여부
   highlightNonce: number;     // 하이라이트 업데이트 트리거 (nonce 증가 시 재계산)
+  initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
 }
 
 interface ReviewActions {
@@ -113,6 +114,11 @@ interface ReviewActions {
   toggleIssueCheck: (issueId: string) => void;
 
   /**
+   * 이슈 삭제
+   */
+  deleteIssue: (issueId: string) => void;
+
+  /**
    * 모든 이슈 체크 상태 설정
    */
   setAllIssuesChecked: (checked: boolean) => void;
@@ -152,12 +158,18 @@ const initialState: ReviewState = {
   progress: { completed: 0, total: 0 },
   highlightEnabled: false,
   highlightNonce: 0,
+  initializedProjectId: null,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...initialState,
 
   initializeReview: (project: ITEProject) => {
+    const { initializedProjectId } = get();
+    // 이미 같은 프로젝트로 초기화되어 있으면 스킵 (탭 전환 시 상태 유지)
+    if (initializedProjectId === project.id) {
+      return;
+    }
     const chunks = buildAlignedChunks(project);
     set({
       chunks,
@@ -165,6 +177,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       results: [],
       isReviewing: false,
       progress: { completed: 0, total: chunks.length },
+      initializedProjectId: project.id,
     });
   },
 
@@ -241,6 +254,15 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       issues: result.issues.map((issue) =>
         issue.id === issueId ? { ...issue, checked: !issue.checked } : issue,
       ),
+    }));
+    set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
+  },
+
+  deleteIssue: (issueId: string) => {
+    const { results, highlightNonce } = get();
+    const updatedResults = results.map((result) => ({
+      ...result,
+      issues: result.issues.filter((issue) => issue.id !== issueId),
     }));
     set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
   },

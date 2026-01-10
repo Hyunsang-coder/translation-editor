@@ -170,6 +170,7 @@
     "selectedCount": "{{count}}개 선택됨",
     "selectAll": "전체 선택",
     "selectIssue": "이슈 선택",
+    "deleteIssue": "이슈 삭제",
     "highlight": "표시",
     "highlighting": "표시 중",
     "showHighlight": "에디터에서 표시",

@@ -5,6 +5,7 @@ interface ReviewResultsTableProps {
   issues: ReviewIssue[];
   onToggleCheck?: (issueId: string) => void;
   onToggleAll?: () => void;
+  onDelete?: (issueId: string) => void;
   allChecked?: boolean;
 }
 
@@ -53,6 +54,7 @@ export function ReviewResultsTable({
   issues,
   onToggleCheck,
   onToggleAll,
+  onDelete,
   allChecked = false,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
@@ -156,15 +158,28 @@ export function ReviewResultsTable({
                   ${issue.checked ? 'bg-primary-500/5' : ''}
                 `}
               >
-                {/* 체크박스 */}
-                <td className="px-2 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    checked={issue.checked}
-                    onChange={() => onToggleCheck?.(issue.id)}
-                    className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                    aria-label={t('review.selectIssue', '이슈 선택')}
-                  />
+                {/* 체크박스 + 삭제 버튼 */}
+                <td className="px-2 py-2">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={issue.checked}
+                      onChange={() => onToggleCheck?.(issue.id)}
+                      className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                      aria-label={t('review.selectIssue', '이슈 선택')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onDelete?.(issue.id)}
+                      className="p-0.5 rounded hover:bg-red-500/10 text-editor-muted hover:text-red-500 transition-colors"
+                      aria-label={t('review.deleteIssue', '이슈 삭제')}
+                      title={t('review.deleteIssue', '이슈 삭제')}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
                 <td className="px-2 py-2 text-editor-muted font-medium text-center">
                   {idx + 1}

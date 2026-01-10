@@ -170,6 +170,7 @@
     "selectedCount": "{{count}} selected",
     "selectAll": "Select All",
     "selectIssue": "Select Issue",
+    "deleteIssue": "Delete Issue",
     "highlight": "Highlight",
     "highlighting": "Highlighting",
     "showHighlight": "Show in Editor",

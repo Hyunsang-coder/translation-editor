@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -31,19 +31,17 @@ export function ReviewPanel(): JSX.Element {
     resetReview,
     getAllIssues,
     toggleIssueCheck,
+    deleteIssue,
     setAllIssuesChecked,
     getCheckedIssues,
     disableHighlight,
   } = useReviewStore();
 
   const [abortController, setAbortController] = useState<AbortController | null>(null);
-  const initializedProjectIdRef = useRef<string | null>(null);
 
-  // 패널이 열릴 때 초기화 (프로젝트가 바뀌지 않으면 상태 유지)
+  // 패널이 열릴 때 초기화 (스토어에서 프로젝트 ID 체크하여 중복 초기화 방지)
   useEffect(() => {
-    if (project && project.id !== initializedProjectIdRef.current) {
-      // 새로운 프로젝트인 경우에만 초기화
-      initializedProjectIdRef.current = project.id;
+    if (project) {
       initializeReview(project);
     }
   }, [project, initializeReview]);
@@ -193,6 +191,7 @@ ${segmentsText}
             <ReviewResultsTable
               issues={allIssues}
               onToggleCheck={toggleIssueCheck}
+              onDelete={deleteIssue}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
             />
