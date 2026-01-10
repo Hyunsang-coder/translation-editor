@@ -142,7 +142,28 @@
       "chinese": "Chinese",
       "spanish": "Spanish",
       "russian": "Russian"
-    }
+    },
+    "review": "Review",
+    "reviewTitle": "Translation Review"
+  },
+  "review": {
+    "title": "Translation Review Results",
+    "progress": "Reviewing...",
+    "completed": "Review Complete",
+    "analyzing": "AI is analyzing the translation...",
+    "readyToStart": "Click the button below to start review.",
+    "chunkInfo": "Total {{count}} chunk(s) to review.",
+    "hasErrors": "Some chunks encountered errors.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "start": "Start Review",
+    "restart": "Review Again",
+    "noIssues": "No mistranslations or omissions found.",
+    "totalIssues": "Total {{count}} issue(s)",
+    "segment": "Segment",
+    "sourceExcerpt": "Source Excerpt",
+    "issueType": "Type",
+    "description": "Description"
   },
   "chat": {
     "settings": "Project Settings",

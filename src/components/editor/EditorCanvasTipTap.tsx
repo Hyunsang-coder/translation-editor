@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
+import { ReviewModal } from '@/components/modals/ReviewModal';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
@@ -69,6 +70,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
+
+  // 검수 모달 상태
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
   const [addToChatBubble, setAddToChatBubble] = useState<null | {
     top: number;
@@ -284,6 +288,17 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               t('editor.translate')
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setReviewModalOpen(true)}
+            className="px-2 py-1 rounded text-xs border border-editor-border text-editor-text hover:bg-editor-bg flex items-center gap-1 transition-colors"
+            title={t('editor.reviewTitle', '번역 검수')}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {t('editor.review', '검수')}
+          </button>
         </div>
       </div>
 
@@ -375,6 +390,11 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslateLoading(false);
           setTranslatePreviewOpen(false);
         }}
+      />
+
+      <ReviewModal
+        open={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
       />
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}

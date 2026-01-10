@@ -5,7 +5,7 @@ import { buildLangChainMessages, detectRequestType, type RequestType } from '@/a
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
-import { reviewTranslationTool } from '@/ai/tools/reviewTool';
+import { reviewTranslationTool, getReviewChunkTool } from '@/ai/tools/reviewTool';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -644,6 +644,7 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
     suggestTranslationRule,
     suggestProjectContext,
     reviewTranslationTool,
+    getReviewChunkTool,
     ...(webSearchEnabled ? [braveSearchTool] : []),
   ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
@@ -761,6 +762,7 @@ export async function streamAssistantReply(
     suggestTranslationRule,
     suggestProjectContext,
     reviewTranslationTool,
+    getReviewChunkTool,
     ...(webSearchEnabled ? [braveSearchTool] : []),
     ...mcpTools,
     ...notionTools,
