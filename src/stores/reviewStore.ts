@@ -169,11 +169,13 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   addResult: (result: ReviewResult) => {
-    const { results, progress } = get();
+    const { results, progress, highlightNonce } = get();
     set({
       results: [...results, result],
       currentChunkIndex: result.chunkIndex + 1,
       progress: { ...progress, completed: progress.completed + 1 },
+      highlightEnabled: true, // 결과가 추가되면 하이라이트 자동 활성화
+      highlightNonce: highlightNonce + 1,
     });
   },
 
@@ -233,23 +235,23 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   toggleIssueCheck: (issueId: string) => {
-    const { results } = get();
+    const { results, highlightNonce } = get();
     const updatedResults = results.map((result) => ({
       ...result,
       issues: result.issues.map((issue) =>
         issue.id === issueId ? { ...issue, checked: !issue.checked } : issue,
       ),
     }));
-    set({ results: updatedResults });
+    set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
   },
 
   setAllIssuesChecked: (checked: boolean) => {
-    const { results } = get();
+    const { results, highlightNonce } = get();
     const updatedResults = results.map((result) => ({
       ...result,
       issues: result.issues.map((issue) => ({ ...issue, checked })),
     }));
-    set({ results: updatedResults });
+    set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
   },
 
   getCheckedIssues: () => {
