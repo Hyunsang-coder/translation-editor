@@ -3,6 +3,9 @@ import type { ReviewIssue, IssueType } from '@/stores/reviewStore';
 
 interface ReviewResultsTableProps {
   issues: ReviewIssue[];
+  onToggleCheck?: (issueId: string) => void;
+  onToggleAll?: () => void;
+  allChecked?: boolean;
 }
 
 function getIssueTypeLabel(type: IssueType): string {
@@ -46,7 +49,12 @@ function stripMarkdown(text: string): string {
     .replace(/~~([^~]+)~~/g, '$1');      // ~~strikethrough~~ → strikethrough
 }
 
-export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Element {
+export function ReviewResultsTable({
+  issues,
+  onToggleCheck,
+  onToggleAll,
+  allChecked = false,
+}: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
 
   if (issues.length === 0) {
@@ -83,42 +91,58 @@ export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Ele
         <div className="flex items-center gap-2">
           {counts.error && (
             <span className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 dark:text-red-400">
-              오역 {counts.error}
+              {t('review.typeError', '오역')} {counts.error}
             </span>
           )}
           {counts.omission && (
             <span className="px-2 py-0.5 rounded text-xs bg-orange-500/10 text-orange-600 dark:text-orange-400">
-              누락 {counts.omission}
+              {t('review.typeOmission', '누락')} {counts.omission}
             </span>
           )}
           {counts.distortion && (
             <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-              왜곡 {counts.distortion}
+              {t('review.typeDistortion', '왜곡')} {counts.distortion}
             </span>
           )}
           {counts.consistency && (
             <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              일관성 {counts.consistency}
+              {t('review.typeConsistency', '일관성')} {counts.consistency}
             </span>
           )}
         </div>
       </div>
 
-      {/* 테이블 - 컬럼 순서: 이슈 | 유형 | 원문 | 설명 */}
+      {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-editor-border">
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-16">
-                {t('review.issue', '이슈')}
+              {/* 체크박스 헤더 */}
+              <th className="px-2 py-2 text-center w-10">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={() => onToggleAll?.()}
+                  className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                  aria-label={t('review.selectAll', '전체 선택')}
+                />
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-20">
+              <th className="px-2 py-2 text-left font-medium text-editor-muted w-8">
+                #
+              </th>
+              <th className="px-2 py-2 text-left font-medium text-editor-muted w-16">
                 {t('review.issueType', '유형')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted min-w-[300px]">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted">
                 {t('review.sourceExcerpt', '원문')}
               </th>
               <th className="px-3 py-2 text-left font-medium text-editor-muted">
+                {t('review.targetExcerpt', '현재 번역')}
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-editor-muted">
+                {t('review.suggestedFix', '수정 제안')}
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-editor-muted min-w-[120px]">
                 {t('review.description', '설명')}
               </th>
             </tr>
@@ -126,24 +150,47 @@ export function ReviewResultsTable({ issues }: ReviewResultsTableProps): JSX.Ele
           <tbody>
             {issues.map((issue, idx) => (
               <tr
-                key={`${issue.segmentOrder}-${idx}`}
-                className="border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors"
+                key={issue.id}
+                className={`
+                  border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors
+                  ${issue.checked ? 'bg-primary-500/5' : ''}
+                `}
               >
-                <td className="px-3 py-2 text-editor-muted font-medium">
+                {/* 체크박스 */}
+                <td className="px-2 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={issue.checked}
+                    onChange={() => onToggleCheck?.(issue.id)}
+                    className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                    aria-label={t('review.selectIssue', '이슈 선택')}
+                  />
+                </td>
+                <td className="px-2 py-2 text-editor-muted font-medium text-center">
                   {idx + 1}
                 </td>
-                <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs ${getIssueTypeColor(issue.type)}`}>
+                <td className="px-2 py-2">
+                  <span className={`px-2 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
                     {getIssueTypeLabel(issue.type)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-text">
-                  <span className="line-clamp-3" title={issue.sourceExcerpt}>
-                    {issue.sourceExcerpt}
+                <td className="px-3 py-2 text-editor-text max-w-[180px]">
+                  <span className="line-clamp-2 break-words" title={issue.sourceExcerpt}>
+                    {issue.sourceExcerpt || '-'}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-text">
-                  {stripMarkdown(issue.description)}
+                <td className="px-3 py-2 text-editor-text max-w-[180px]">
+                  <span className="line-clamp-2 break-words" title={issue.targetExcerpt}>
+                    {issue.targetExcerpt || '-'}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-primary-600 dark:text-primary-400 max-w-[180px]">
+                  <span className="line-clamp-2 break-words" title={issue.suggestedFix}>
+                    {issue.suggestedFix || '-'}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-editor-muted text-xs">
+                  {stripMarkdown(issue.description) || '-'}
                 </td>
               </tr>
             ))}

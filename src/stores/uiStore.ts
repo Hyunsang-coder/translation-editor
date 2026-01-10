@@ -10,6 +10,7 @@ interface UIState extends EditorUIState {
   theme: 'light' | 'dark' | 'system';
   language: 'ko' | 'en';
   toasts: Toast[];
+  reviewPanelOpen: boolean; // Review 탭 활성화 요청
 }
 
 interface UIActions {
@@ -47,6 +48,10 @@ interface UIActions {
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
   clearToasts: () => void;
+
+  // Review Panel
+  openReviewPanel: () => void;
+  closeReviewPanel: () => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -69,6 +74,7 @@ export const useUIStore = create<UIStore>()(
       language: 'ko',
       isPanelsSwapped: false,
       toasts: [],
+      reviewPanelOpen: false,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -155,6 +161,20 @@ export const useUIStore = create<UIStore>()(
 
       clearToasts: (): void => {
         set({ toasts: [] });
+      },
+
+      // Review Panel
+      openReviewPanel: (): void => {
+        // 사이드바가 닫혀있으면 열기
+        const { sidebarCollapsed } = get();
+        if (sidebarCollapsed) {
+          set({ sidebarCollapsed: false });
+        }
+        set({ reviewPanelOpen: true });
+      },
+
+      closeReviewPanel: (): void => {
+        set({ reviewPanelOpen: false });
       },
     }),
     {

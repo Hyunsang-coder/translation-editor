@@ -147,7 +147,7 @@
     "reviewTitle": "Translation Review"
   },
   "review": {
-    "title": "Translation Review Results",
+    "title": "Review",
     "progress": "Reviewing...",
     "completed": "Review Complete",
     "analyzing": "AI is analyzing the translation...",
@@ -163,8 +163,21 @@
     "issue": "Issue",
     "segment": "Segment",
     "sourceExcerpt": "Source",
+    "targetExcerpt": "Current Translation",
+    "suggestedFix": "Suggested Fix",
     "issueType": "Type",
-    "description": "Description"
+    "description": "Description",
+    "selectedCount": "{{count}} selected",
+    "selectAll": "Select All",
+    "selectIssue": "Select Issue",
+    "highlight": "Highlight",
+    "highlighting": "Highlighting",
+    "showHighlight": "Show in Editor",
+    "hideHighlight": "Hide Highlight",
+    "typeError": "Error",
+    "typeOmission": "Omission",
+    "typeDistortion": "Distortion",
+    "typeConsistency": "Consistency"
   },
   "chat": {
     "settings": "Project Settings",

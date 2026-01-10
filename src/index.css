@@ -596,3 +596,70 @@
   opacity: 0.03;
 }
 
+/* ============================================
+   Review Highlight - 검수 이슈 하이라이트
+   ============================================ */
+
+.review-highlight {
+  background: rgba(251, 191, 36, 0.35); /* amber-400 */
+  border-bottom: 2px solid rgba(245, 158, 11, 0.85); /* amber-500 */
+  border-radius: 2px;
+  padding: 1px 0;
+  transition: background 0.2s ease;
+}
+
+.review-highlight:hover {
+  background: rgba(251, 191, 36, 0.55);
+}
+
+/* 이슈 유형별 색상 */
+.review-highlight[data-issue-type="error"] {
+  background: rgba(239, 68, 68, 0.25); /* red-500 */
+  border-bottom-color: rgba(220, 38, 38, 0.85); /* red-600 */
+}
+
+.review-highlight[data-issue-type="omission"] {
+  background: rgba(249, 115, 22, 0.25); /* orange-500 */
+  border-bottom-color: rgba(234, 88, 12, 0.85); /* orange-600 */
+}
+
+.review-highlight[data-issue-type="distortion"] {
+  background: rgba(234, 179, 8, 0.25); /* yellow-500 */
+  border-bottom-color: rgba(202, 138, 4, 0.85); /* yellow-600 */
+}
+
+.review-highlight[data-issue-type="consistency"] {
+  background: rgba(59, 130, 246, 0.25); /* blue-500 */
+  border-bottom-color: rgba(37, 99, 235, 0.85); /* blue-600 */
+}
+
+/* Dark 테마 */
+.dark .review-highlight {
+  background: rgba(251, 191, 36, 0.25);
+  border-bottom-color: rgba(251, 191, 36, 0.75);
+}
+
+.dark .review-highlight:hover {
+  background: rgba(251, 191, 36, 0.4);
+}
+
+.dark .review-highlight[data-issue-type="error"] {
+  background: rgba(248, 113, 113, 0.25); /* red-400 */
+  border-bottom-color: rgba(248, 113, 113, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="omission"] {
+  background: rgba(251, 146, 60, 0.25); /* orange-400 */
+  border-bottom-color: rgba(251, 146, 60, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="distortion"] {
+  background: rgba(250, 204, 21, 0.25); /* yellow-400 */
+  border-bottom-color: rgba(250, 204, 21, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="consistency"] {
+  background: rgba(96, 165, 250, 0.25); /* blue-400 */
+  border-bottom-color: rgba(96, 165, 250, 0.75);
+}
+

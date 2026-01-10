@@ -8,11 +8,42 @@ import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
 
 export type IssueType = 'error' | 'omission' | 'distortion' | 'consistency';
 
+/**
+ * 결정적 ID 생성 (중복 제거 + 체크 상태 유지용)
+ * 간단한 해시 구현 - 브라우저에서 동작
+ */
+function hashContent(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
+ * ReviewIssue에 대한 결정적 ID 생성
+ */
+export function generateIssueId(
+  segmentOrder: number,
+  type: string,
+  sourceExcerpt: string,
+  targetExcerpt: string,
+): string {
+  return hashContent(`${segmentOrder}|${type}|${sourceExcerpt}|${targetExcerpt}`);
+}
+
 export interface ReviewIssue {
+  id: string;                    // 결정적 ID (중복 제거/상태 유지용)
   segmentOrder: number;
-  sourceExcerpt: string;
+  segmentGroupId: string | undefined;  // 세그먼트 단위 하이라이트용
+  sourceExcerpt: string;         // 원문 구절
+  targetExcerpt: string;         // 현재 번역 (하이라이트 대상)
+  suggestedFix: string;          // 수정 제안 (참고용)
   type: IssueType;
   description: string;
+  checked: boolean;              // 체크 상태
 }
 
 export interface ReviewResult {
@@ -31,6 +62,8 @@ interface ReviewState {
   results: ReviewResult[];
   isReviewing: boolean;
   progress: { completed: number; total: number };
+  highlightEnabled: boolean;  // 하이라이트 활성화 여부
+  highlightNonce: number;     // 하이라이트 업데이트 트리거 (nonce 증가 시 재계산)
 }
 
 interface ReviewActions {
@@ -73,6 +106,36 @@ interface ReviewActions {
    * 모든 이슈 가져오기 (중복 제거됨)
    */
   getAllIssues: () => ReviewIssue[];
+
+  /**
+   * 이슈 체크 상태 토글
+   */
+  toggleIssueCheck: (issueId: string) => void;
+
+  /**
+   * 모든 이슈 체크 상태 설정
+   */
+  setAllIssuesChecked: (checked: boolean) => void;
+
+  /**
+   * 체크된 이슈만 가져오기
+   */
+  getCheckedIssues: () => ReviewIssue[];
+
+  /**
+   * 하이라이트 표시 토글
+   */
+  toggleHighlight: () => void;
+
+  /**
+   * 하이라이트 비활성화
+   */
+  disableHighlight: () => void;
+
+  /**
+   * 하이라이트 새로고침 (nonce 증가)
+   */
+  refreshHighlight: () => void;
 }
 
 type ReviewStore = ReviewState & ReviewActions;
@@ -87,6 +150,8 @@ const initialState: ReviewState = {
   results: [],
   isReviewing: false,
   progress: { completed: 0, total: 0 },
+  highlightEnabled: false,
+  highlightNonce: 0,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
@@ -156,15 +221,56 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     const { results } = get();
     const allIssues = results.flatMap((r) => r.issues);
 
-    // 중복 제거: segmentOrder + sourceExcerpt 앞 20자 기준
+    // 중복 제거: id 기반 (결정적 ID)
     const seen = new Map<string, ReviewIssue>();
     for (const issue of allIssues) {
-      const key = `${issue.segmentOrder}-${issue.sourceExcerpt.slice(0, 20)}`;
-      if (!seen.has(key)) {
-        seen.set(key, issue);
+      if (!seen.has(issue.id)) {
+        seen.set(issue.id, issue);
       }
     }
 
     return Array.from(seen.values());
+  },
+
+  toggleIssueCheck: (issueId: string) => {
+    const { results } = get();
+    const updatedResults = results.map((result) => ({
+      ...result,
+      issues: result.issues.map((issue) =>
+        issue.id === issueId ? { ...issue, checked: !issue.checked } : issue,
+      ),
+    }));
+    set({ results: updatedResults });
+  },
+
+  setAllIssuesChecked: (checked: boolean) => {
+    const { results } = get();
+    const updatedResults = results.map((result) => ({
+      ...result,
+      issues: result.issues.map((issue) => ({ ...issue, checked })),
+    }));
+    set({ results: updatedResults });
+  },
+
+  getCheckedIssues: () => {
+    const allIssues = get().getAllIssues();
+    return allIssues.filter((issue) => issue.checked);
+  },
+
+  toggleHighlight: () => {
+    const { highlightEnabled, highlightNonce } = get();
+    set({
+      highlightEnabled: !highlightEnabled,
+      highlightNonce: highlightNonce + 1,
+    });
+  },
+
+  disableHighlight: () => {
+    set({ highlightEnabled: false });
+  },
+
+  refreshHighlight: () => {
+    const { highlightNonce } = get();
+    set({ highlightNonce: highlightNonce + 1 });
   },
 }));

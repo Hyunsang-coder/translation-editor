@@ -68,9 +68,9 @@ interface ReviewActions {
 ```
 
 #### 체크리스트
-- [ ] ReviewIssue에 `id`, `segmentGroupId`, `targetExcerpt`, `suggestedFix`, `checked` 추가
-- [ ] `toggleIssueCheck`, `setAllIssuesChecked`, `getCheckedIssues` 액션 추가
-- [ ] `getAllIssues()` 중복 제거 키를 `id` 기반으로 변경
+- [x] ReviewIssue에 `id`, `segmentGroupId`, `targetExcerpt`, `suggestedFix`, `checked` 추가
+- [x] `toggleIssueCheck`, `setAllIssuesChecked`, `getCheckedIssues` 액션 추가
+- [x] `getAllIssues()` 중복 제거 키를 `id` 기반으로 변경
 
 ---
 
@@ -138,9 +138,9 @@ export function parseReviewResult(aiResponse: string): ReviewIssue[] {
 ```
 
 #### 체크리스트
-- [ ] ReviewModal의 `userMessage`에 JSON 출력 형식 강제
-- [ ] parseReviewResult에 JSON 파싱 로직 추가 (마크다운 폴백 유지)
-- [ ] reviewTool.ts의 REVIEW_INSTRUCTIONS도 JSON 형식으로 업데이트 (참고용)
+- [x] ReviewModal의 `userMessage`에 JSON 출력 형식 강제
+- [x] parseReviewResult에 JSON 파싱 로직 추가 (마크다운 폴백 유지)
+- [ ] reviewTool.ts의 REVIEW_INSTRUCTIONS도 JSON 형식으로 업데이트 (참고용) - 선택사항
 
 ---
 
@@ -190,11 +190,11 @@ interface UIState {
 ```
 
 #### 체크리스트
-- [ ] ChatPanel에 `activeTab` 상태 확장 (`'settings' | 'chat' | 'review'`)
-- [ ] Review 탭 UI 추가 (탭 헤더)
-- [ ] ReviewPanel 컴포넌트 생성 (ReviewModal 콘텐츠 추출)
-- [ ] ReviewModal 제거 또는 deprecated 처리
-- [ ] EditorCanvasTipTap에서 검수 버튼 → Review 탭 열기로 변경
+- [x] ChatPanel에 `activeTab` 상태 확장 (`'settings' | 'chat' | 'review'`)
+- [x] Review 탭 UI 추가 (탭 헤더)
+- [x] ReviewPanel 컴포넌트 생성 (ReviewModal 콘텐츠 추출)
+- [x] ReviewModal 제거 또는 deprecated 처리
+- [x] EditorCanvasTipTap에서 검수 버튼 → Review 탭 열기로 변경
 
 ---
 
@@ -224,10 +224,10 @@ interface UIState {
 ```
 
 #### 체크리스트
-- [ ] ReviewResultsTable에 체크박스 컬럼 추가
-- [ ] targetExcerpt, suggestedFix 컬럼 추가
-- [ ] React key를 `issue.id`로 변경
-- [ ] "전체 선택/해제" 기능 추가
+- [x] ReviewResultsTable에 체크박스 컬럼 추가
+- [x] targetExcerpt, suggestedFix 컬럼 추가
+- [x] React key를 `issue.id`로 변경
+- [x] "전체 선택/해제" 기능 추가
 
 ---
 
@@ -269,20 +269,20 @@ const highlightCheckedIssues = () => {
 ```
 
 #### 체크리스트
-- [ ] TipTapEditor에 Decoration 관리 로직 추가
-- [ ] 하이라이트 색상/스타일 정의 (CSS)
-- [ ] ReviewPanel에 "표시" 버튼 추가
-- [ ] 매칭 실패 시 토스트/상태 표시
-- [ ] Review 탭 닫을 때 Decoration 해제
+- [x] TipTapEditor에 Decoration 관리 로직 추가
+- [x] 하이라이트 색상/스타일 정의 (CSS)
+- [x] ReviewPanel에 "표시" 버튼 추가
+- [ ] 매칭 실패 시 토스트/상태 표시 (선택사항)
+- [x] Review 탭 닫을 때 Decoration 해제
 
 ---
 
 ### Step 6: i18n + 마무리
 
 #### 체크리스트
-- [ ] `ko.json`, `en.json`에 Review 탭 관련 키 추가
-- [ ] 에러 메시지, 버튼 라벨 번역
-- [ ] 접근성(aria-label) 추가
+- [x] `ko.json`, `en.json`에 Review 탭 관련 키 추가
+- [x] 에러 메시지, 버튼 라벨 번역
+- [x] 접근성(aria-label) 추가
 
 ---
 

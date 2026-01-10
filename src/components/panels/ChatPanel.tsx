@@ -14,6 +14,7 @@ import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
+import { ReviewPanel } from '@/components/review/ReviewPanel';
 import type { ChatMessageMetadata } from '@/types';
 
 
@@ -45,7 +46,9 @@ export function ChatPanel(): JSX.Element {
   const setTranslationRules = useChatStore((s) => s.setTranslationRules);
   const projectContext = useChatStore((s) => s.projectContext);
   const setProjectContext = useChatStore((s) => s.setProjectContext);
-  const [activeTab, setActiveTab] = useState<'settings' | 'chat'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'chat' | 'review'>('settings');
+  const reviewPanelOpen = useUIStore((s) => s.reviewPanelOpen);
+  const closeReviewPanel = useUIStore((s) => s.closeReviewPanel);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -203,6 +206,20 @@ export function ChatPanel(): JSX.Element {
     void hydrateForProject(projectId);
     setActiveTab('settings');
   }, [project?.id, hydrateForProject]);
+
+  // Review Panel 열기 요청 시 Review 탭으로 전환
+  useEffect(() => {
+    if (reviewPanelOpen) {
+      setActiveTab('review');
+    }
+  }, [reviewPanelOpen]);
+
+  // Review 탭에서 벗어나면 reviewPanelOpen 상태 정리
+  useEffect(() => {
+    if (activeTab !== 'review' && reviewPanelOpen) {
+      closeReviewPanel();
+    }
+  }, [activeTab, reviewPanelOpen, closeReviewPanel]);
 
   useEffect(() => {
     if (focusNonce === 0) return;
@@ -545,6 +562,21 @@ export function ChatPanel(): JSX.Element {
             <span className="truncate flex-1">{t('chat.settings')}</span>
           </div>
 
+          {/* Review 탭 */}
+          <div
+            onClick={() => setActiveTab('review')}
+            className={`
+              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
+              ${activeTab === 'review'
+                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+              }
+            `}
+            title={t('review.title', '검수')}
+          >
+            <span className="truncate flex-1">{t('review.title', '검수')}</span>
+          </div>
+
           {chatSessions.map((session) => (
             <div
               key={session.id}
@@ -650,6 +682,8 @@ export function ChatPanel(): JSX.Element {
 
       {activeTab === 'settings' ? (
         renderSettings()
+      ) : activeTab === 'review' ? (
+        <ReviewPanel />
       ) : (
         <>
           {/* 메시지 목록 */}

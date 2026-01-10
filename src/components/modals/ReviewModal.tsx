@@ -66,7 +66,28 @@ export function ReviewModal({ open, onClose }: ReviewModalProps): JSX.Element | 
           .map((s) => `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`)
           .join('\n\n');
 
-        const userMessage = `다음 번역을 검수해주세요:\n\n${segmentsText}`;
+        const userMessage = `다음 번역을 검수하고, 반드시 아래 JSON 형식으로만 출력하세요.
+설명이나 마크다운 없이 JSON만 출력합니다.
+
+검수 대상:
+${segmentsText}
+
+출력 형식:
+{
+  "issues": [
+    {
+      "segmentOrder": 0,
+      "segmentGroupId": "세그먼트 ID (있으면)",
+      "type": "오역|누락|왜곡|일관성",
+      "sourceExcerpt": "원문 구절 35자 이내",
+      "targetExcerpt": "현재 번역 35자 이내",
+      "suggestedFix": "수정 제안",
+      "description": "간결한 설명"
+    }
+  ]
+}
+
+문제가 없으면: { "issues": [] }`;
 
         try {
           const response = await streamAssistantReply(

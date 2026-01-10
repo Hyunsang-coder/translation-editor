@@ -5,7 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
-import { ReviewModal } from '@/components/modals/ReviewModal';
+// ReviewModal은 더 이상 사용하지 않음 (ChatPanel의 Review 탭으로 대체)
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
@@ -42,6 +42,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActivePanel = useUIStore((s) => s.setActivePanel);
+  const openReviewPanel = useUIStore((s) => s.openReviewPanel);
 
   const provider = useAiConfigStore((s) => s.provider);
   const translationModel = useAiConfigStore((s) => s.translationModel);
@@ -71,8 +72,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
 
-  // 검수 모달 상태
-  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
   const [addToChatBubble, setAddToChatBubble] = useState<null | {
     top: number;
@@ -290,7 +290,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           </button>
           <button
             type="button"
-            onClick={() => setReviewModalOpen(true)}
+            onClick={() => openReviewPanel()}
             className="px-2 py-1 rounded text-xs border border-editor-border text-editor-text hover:bg-editor-bg flex items-center gap-1 transition-colors"
             title={t('editor.reviewTitle', '번역 검수')}
           >
@@ -390,11 +390,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslateLoading(false);
           setTranslatePreviewOpen(false);
         }}
-      />
-
-      <ReviewModal
-        open={reviewModalOpen}
-        onClose={() => setReviewModalOpen(false)}
       />
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}
