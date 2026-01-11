@@ -131,6 +131,7 @@ export function TipTapEditor({
 
 /**
  * Source 패널용 편집 가능 에디터
+ * ReviewHighlight Extension이 포함되어 검수 이슈 하이라이트 지원 (sourceExcerpt 기반)
  */
 export function SourceTipTapEditor({
   content,
@@ -146,19 +147,102 @@ export function SourceTipTapEditor({
   onEditorReady?: (editor: Editor) => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  // Props를 명시적으로 구성하여 undefined 값 제외
-  const props: TipTapEditorProps = {
+  const highlightNonce = useReviewStore((s) => s.highlightNonce);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3, 4, 5, 6],
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'tiptap-link',
+        },
+      }),
+      Placeholder.configure({
+        placeholder: t('editor.sourcePlaceholder'),
+        emptyEditorClass: 'tiptap-empty',
+      }),
+      ReviewHighlight.configure({
+        highlightClass: 'review-highlight',
+        excerptField: 'sourceExcerpt',
+      }),
+    ],
     content,
     editable: true,
-    placeholder: t('editor.sourcePlaceholder'),
-    className: `source-editor ${className}`,
-  };
+    editorProps: {
+      attributes: {
+        class: 'tiptap-editor focus:outline-none',
+      },
+      handleKeyDown: (_view, event) => {
+        const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
+          (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
 
-  if (onChange) props.onChange = onChange;
-  if (onJsonChange) props.onJsonChange = onJsonChange;
-  if (onEditorReady) props.onEditorReady = onEditorReady;
+        if (isSelectionShortcut && editor) {
+          const { from, to } = editor.state.selection;
+          if (from === to) return false;
 
-  return <TipTapEditor {...props} />;
+          event.preventDefault();
+          const selected = editor.state.doc.textBetween(from, to, ' ').trim();
+
+          const { setChatPanelOpen } = useUIStore.getState();
+          const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+
+          // 플로팅 Chat 패널 열기
+          setChatPanelOpen(true);
+          if (selected.length > 0) {
+            appendComposerText(selected);
+          }
+          requestComposerFocus();
+          return true;
+        }
+
+        return false;
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      if (onChange) {
+        onChange(ed.getHTML());
+      }
+      if (onJsonChange) {
+        onJsonChange(ed.getJSON() as Record<string, unknown>);
+      }
+    },
+  });
+
+  // 외부 content 변경 시 에디터 업데이트
+  useEffect(() => {
+    if (editor && content !== editor.getHTML()) {
+      editor.commands.setContent(content);
+    }
+  }, [editor, content]);
+
+  // 에디터 준비 완료 콜백
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
+
+  // highlightNonce 변경 시 decoration 새로고침
+  useEffect(() => {
+    if (editor && highlightNonce > 0) {
+      refreshEditorHighlight(editor);
+    }
+  }, [editor, highlightNonce]);
+
+  if (!editor) {
+    return <div className="h-full animate-pulse bg-editor-surface rounded-md" />;
+  }
+
+  return (
+    <div className={`tiptap-wrapper source-editor ${className}`}>
+      <EditorContent editor={editor} className="h-full" />
+    </div>
+  );
 }
 
 /**
@@ -200,6 +284,7 @@ export function TargetTipTapEditor({
       }),
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
+        excerptField: 'targetExcerpt',
       }),
     ],
     content,

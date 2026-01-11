@@ -7,6 +7,7 @@ import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 
 export interface ReviewHighlightOptions {
   highlightClass: string;
+  excerptField: 'sourceExcerpt' | 'targetExcerpt';
 }
 
 const reviewHighlightPluginKey = new PluginKey('reviewHighlight');
@@ -18,13 +19,13 @@ function createDecorations(
   doc: ProseMirrorNode,
   issues: ReviewIssue[],
   highlightClass: string,
+  excerptField: 'sourceExcerpt' | 'targetExcerpt',
 ): DecorationSet {
   const decorations: Decoration[] = [];
 
   issues.forEach((issue) => {
-    if (!issue.targetExcerpt) return;
-
-    const searchText = issue.targetExcerpt;
+    const searchText = issue[excerptField];
+    if (!searchText) return;
     let found = false;
 
     // 문서의 모든 텍스트 노드 순회
@@ -65,11 +66,12 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
   addOptions() {
     return {
       highlightClass: 'review-highlight',
+      excerptField: 'targetExcerpt' as const,
     };
   },
 
   addProseMirrorPlugins() {
-    const { highlightClass } = this.options;
+    const { highlightClass, excerptField } = this.options;
 
     return [
       new Plugin({
@@ -84,7 +86,7 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
             }
 
             const checkedIssues = getCheckedIssues();
-            return createDecorations(state.doc, checkedIssues, highlightClass);
+            return createDecorations(state.doc, checkedIssues, highlightClass, excerptField);
           },
 
           apply: (tr, oldDecorationSet, _oldState, newState) => {
@@ -98,7 +100,7 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
             // 문서가 변경되었거나 meta에 refresh 플래그가 있으면 재계산
             if (tr.docChanged || tr.getMeta('reviewHighlightRefresh')) {
               const checkedIssues = getCheckedIssues();
-              return createDecorations(newState.doc, checkedIssues, highlightClass);
+              return createDecorations(newState.doc, checkedIssues, highlightClass, excerptField);
             }
 
             // 변경 없으면 기존 decoration 유지 (position mapping)

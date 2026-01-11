@@ -51,6 +51,7 @@ export function useBlockEditor({
       }),
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
+        excerptField: readOnly ? 'sourceExcerpt' : 'targetExcerpt',
       }),
     ],
     content: stableContent,

@@ -105,23 +105,41 @@ useEffect(() => {
 }, [editor, highlightNonce]);
 ```
 
-### Phase 2: Source 하이라이트 추가 (선택)
+### Phase 2: Source 하이라이트 추가
 
 **수정 파일:**
-- `src/editor/extensions/ReviewHighlight.ts` - sourceExcerpt 검색 옵션
-- 또는 새 extension `ReviewHighlightSource.ts` 생성
+- `src/editor/extensions/ReviewHighlight.ts` - excerptField 옵션 추가
+- `src/hooks/useBlockEditor.ts` - readOnly 기반 excerptField 설정
 
 **변경 내용:**
 
 ```typescript
-// ReviewHighlight.ts 수정 또는 새 extension
-function createDecorations(doc, issues, highlightClass, field: 'sourceExcerpt' | 'targetExcerpt') {
+// ReviewHighlight.ts - excerptField 옵션 추가
+export interface ReviewHighlightOptions {
+  highlightClass: string;
+  excerptField: 'sourceExcerpt' | 'targetExcerpt';
+}
+
+function createDecorations(
+  doc: ProseMirrorNode,
+  issues: ReviewIssue[],
+  highlightClass: string,
+  excerptField: 'sourceExcerpt' | 'targetExcerpt',
+): DecorationSet {
   issues.forEach((issue) => {
-    const searchText = issue[field];
+    const searchText = issue[excerptField];
     if (!searchText) return;
     // 기존 로직...
   });
 }
+```
+
+```typescript
+// useBlockEditor.ts - readOnly 기반으로 excerptField 자동 설정
+ReviewHighlight.configure({
+  highlightClass: 'review-highlight',
+  excerptField: readOnly ? 'sourceExcerpt' : 'targetExcerpt',
+}),
 ```
 
 ---
@@ -153,4 +171,12 @@ function createDecorations(doc, issues, highlightClass, field: 'sourceExcerpt' |
 - [x] Phase 1: Target 하이라이트 복구
   - [x] useBlockEditor.ts 수정 - ReviewHighlight 확장 추가
   - [x] TranslationBlock.tsx 수정 - highlightNonce 감지 및 refreshEditorHighlight 호출
-- [ ] Phase 2: Source 하이라이트 추가 (선택)
+- [x] Phase 2: Source 하이라이트 추가
+  - [x] ReviewHighlight.ts 수정 - `excerptField` 옵션 추가 (`sourceExcerpt` | `targetExcerpt`)
+  - [x] useBlockEditor.ts 수정 - `readOnly` 기반으로 excerptField 자동 설정
+  - [x] **TipTapEditor.tsx 수정** - `SourceTipTapEditor`에 ReviewHighlight 확장 추가 (실제 사용되는 에디터)
+
+## 추가 발견 사항
+
+메인 에디터 캔버스(`EditorCanvasTipTap.tsx`)는 `TranslationBlock`이 아닌 `SourceTipTapEditor`/`TargetTipTapEditor`를 사용함.
+따라서 실제 수정이 필요한 파일은 `TipTapEditor.tsx`였음.
