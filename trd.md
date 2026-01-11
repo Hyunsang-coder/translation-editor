@@ -242,11 +242,21 @@ What:
     - **동시 OAuth 플로우 방지**: 진행 중인 인증이 있으면 새 인증 요청 거부 (single-flight guard)
     - **타임아웃/실패 시 상태 정리**: 5분 타임아웃 또는 콜백 실패 시 pending 상태 자동 정리
     - Tauri 커맨드: `mcp_check_auth` (저장된 토큰 확인), `mcp_logout` (토큰 삭제)
-- 패널 레이아웃/폭 (PanelGroup 규칙)
-  - 메인 에디터 영역(프로젝트 사이드바 제외)은 2분할 PanelGroup으로 구성한다: Editor Panel + AI Chat Panel
-  - 기본 분할 비율은 Editor 60% / Chat 40%이며, 사용자가 리사이즈 핸들로 최소 Chat 25% ~ 최대 80% 범위에서 조절할 수 있어야 한다.
-  - Chat이 80%까지 확장되도록 Editor Panel의 최소 폭은 20%로 제한하되, 기본 상태에서는 Document-First 철학을 위해 60%를 유지한다.
-  - PanelGroup의 설정은 패널 스왑(좌/우 위치 변경) 시에도 동일한 폭 규칙을 적용한다.
+- 패널 레이아웃 (Hybrid Panel Layout)
+  - **Settings/Review 사이드바**: 고정 사이드바로 우측에 배치
+    - 드래그로 너비 조정 가능 (최소 280px ~ 최대 600px, 기본값 320px)
+    - 탭 전환: Settings | Review (Review는 검수 시작 시에만 표시)
+    - 닫기 버튼으로 사이드바 숨김/표시 전환
+  - **플로팅 Chat 패널**: react-rnd 기반 드래그/리사이즈 가능한 플로팅 패널
+    - 헤더로 드래그 이동 (화면 경계 내)
+    - 8방향 리사이즈 (최소 320×400px)
+    - 위치/크기는 localStorage에 persist
+    - X 버튼 또는 플로팅 버튼으로 닫기
+  - **플로팅 Chat 버튼**: 우측 하단 FAB 스타일 버튼
+    - 드래그로 위치 변경 가능 (기본: 우측 하단)
+    - 더블클릭으로 기본 위치 리셋
+    - 클릭으로 Chat 패널 열기/닫기
+  - **기본 상태**: Settings 사이드바 열림, Chat 패널 닫힘
 - Settings 화면 전환(Replace)
   - 기존 “System Prompt” 버튼은 “Settings”로 명명한다.
   - Settings를 열면 채팅 메시지 리스트/입력창은 숨겨지고, 해당 탭의 화면이 Settings UI로 “교체(replace)”된다.
@@ -301,9 +311,9 @@ What (핵심 원칙):
 - **JSON 출력 포맷**: TRD 3.2에서 "검수는 JSON 리포트 허용"으로 명시
 
 What (UI 구성):
-- **Review 탭**: ChatPanel의 기능 탭으로 추가 (Settings | Chat | Review)
-  - 탭 전환형: 채팅 탭 3개 제한과 별개로 관리
-  - Review 탭 선택 시 검수 UI로 전환
+- **Review 탭**: SettingsSidebar의 기능 탭으로 추가 (Settings | Review)
+  - Settings 사이드바 내에서 탭 전환 형태로 관리
+  - 검수 시작 시에만 Review 탭 표시, 닫으면 Settings 탭으로 복귀
 - **검수 시작**: 버튼 클릭으로 검수 시작, 취소 가능
 - **결과 테이블**: 체크박스 + 이슈 정보 (컬럼: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명)
 - **하이라이트 토글**: 체크된 이슈만 Target 에디터에서 하이라이트
@@ -349,6 +359,11 @@ What (구현 파일):
 | 파일 | 역할 |
 |------|------|
 | `src/stores/reviewStore.ts` | 검수 상태 관리 (체크, 하이라이트, 중복 제거) |
+| `src/stores/uiStore.ts` | UI 상태 관리 (패널 위치, 크기, 탭 상태 등) |
+| `src/components/panels/SettingsSidebar.tsx` | Settings/Review 사이드바 (탭 전환) |
+| `src/components/panels/FloatingChatPanel.tsx` | 플로팅 Chat 패널 (react-rnd) |
+| `src/components/chat/ChatContent.tsx` | Chat 기능 컨텐츠 |
+| `src/components/ui/FloatingChatButton.tsx` | 플로팅 Chat 버튼 (드래그 가능) |
 | `src/components/review/ReviewPanel.tsx` | Review 탭 콘텐츠 |
 | `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 + 체크박스 |
 | `src/ai/review/parseReviewResult.ts` | AI 응답 JSON/마크다운 파싱 |

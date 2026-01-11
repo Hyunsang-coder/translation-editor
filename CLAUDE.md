@@ -52,6 +52,7 @@ cd src-tauri && cargo test
 - **Editor**: TipTap (ProseMirror) - dual instances for Source/Target documents
 - **State Management**: Zustand with persistence
 - **AI Integration**: LangChain.js (OpenAI/Anthropic)
+- **UI Layout**: Hybrid Panel Layout (Settings sidebar + Floating Chat with react-rnd)
 - **Backend**: Tauri 2 + Rust
 - **Storage**: SQLite (`.ite` project files)
 - **i18n**: i18next (Korean/English UI)
@@ -109,7 +110,7 @@ Critical stores in `src/stores/`:
 - `chatStore.ts`: Multi-tab chat sessions, messages, tool call tracking
 - `aiConfigStore.ts`: AI provider settings, model selection, system prompts
 - `connectorStore.ts`: MCP connector states (Confluence, Notion, web search)
-- `uiStore.ts`: Layout state, Focus Mode, panel sizes, Review panel state
+- `uiStore.ts`: Layout state, Focus Mode, panel positions/sizes, sidebar width, floating button position
 - `reviewStore.ts`: Translation review state (chunks, results, check states, highlight)
 
 #### 6. Security: API Key Management
@@ -202,6 +203,10 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 - **Preview-First**: Translation results shown in modal before applying
 - **Keyboard-First**: All core actions have shortcuts (Cmd+L for Add to Chat, etc.)
 - **Focus Mode**: Source panel can be hidden (3-panel → 2-panel)
+- **Hybrid Panel Layout**:
+  - Settings/Review sidebar: Fixed right sidebar with draggable width (280-600px)
+  - Floating Chat panel: Draggable/resizable via react-rnd (min 320×400px)
+  - Floating Chat button: Draggable FAB, double-click to reset position
 - **Chat Composer**:
   - `+` button (bottom-left) for attachments/web search toggle
   - Send button (bottom-right) as arrow icon
@@ -269,7 +274,12 @@ cd src-tauri && cargo check
 - **Feature Co-location**: Related files grouped by feature (e.g., `ai/`, `editor/`, `stores/`)
 - **Type Definitions**: `src/types/index.ts` for shared interfaces
 - **Tauri Wrappers**: `src/tauri/*.ts` mirrors `src-tauri/src/commands/*.rs`
-- **UI Components**: Organized by layout hierarchy (`components/panels/`, `components/editor/`, `components/review/`)
+- **UI Components**: Organized by layout hierarchy
+  - `components/panels/`: SettingsSidebar, FloatingChatPanel, SourcePanel, TargetPanel
+  - `components/chat/`: ChatContent (extracted from ChatPanel)
+  - `components/ui/`: FloatingChatButton, common UI components
+  - `components/editor/`: Editor-related UI
+  - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (parsing), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 
 ## When Adding New Features
