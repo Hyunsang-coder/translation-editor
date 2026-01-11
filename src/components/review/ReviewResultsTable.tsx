@@ -189,18 +189,18 @@ export function ReviewResultsTable({
                     {getIssueTypeLabel(issue.type)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-text max-w-[180px]">
+                <td className="px-3 py-2 text-editor-text min-w-[120px]">
                   <span className="line-clamp-2 break-words" title={issue.sourceExcerpt}>
                     {issue.sourceExcerpt || '-'}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-text max-w-[180px]">
-                  <span className="line-clamp-2 break-words" title={issue.targetExcerpt}>
+                <td className="px-3 py-2 text-editor-text min-w-[120px]">
+                  <span className="break-words">
                     {issue.targetExcerpt || '-'}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-primary-600 dark:text-primary-400 max-w-[180px]">
-                  <span className="line-clamp-2 break-words" title={issue.suggestedFix}>
+                <td className="px-3 py-2 text-primary-600 dark:text-primary-400 min-w-[120px]">
+                  <span className="break-words">
                     {issue.suggestedFix || '-'}
                   </span>
                 </td>

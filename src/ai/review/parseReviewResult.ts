@@ -68,7 +68,7 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
         suggestedFix,
         type: categorizeIssueType(typeStr),
         description,
-        checked: false,
+        checked: true,
       };
     });
   } catch {
@@ -124,7 +124,7 @@ function parseMarkdownTable(aiResponse: string): ReviewIssue[] {
           suggestedFix: '',  // 마크다운 테이블에서는 없음
           type: issueType,
           description,
-          checked: false,
+          checked: true,
         });
       } else if (cells.length >= 2) {
         const sourceExcerpt = cells[0] ?? '';
@@ -140,7 +140,7 @@ function parseMarkdownTable(aiResponse: string): ReviewIssue[] {
           suggestedFix: '',
           type: issueType,
           description,
-          checked: false,
+          checked: true,
         });
       }
     } else if (inTable && trimmed.length === 0) {
