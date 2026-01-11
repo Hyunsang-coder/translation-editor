@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
@@ -16,8 +16,14 @@ import { createProject } from '@/tauri/project';
  */
 export function MainLayout(): JSX.Element {
   const { focusMode, sidebarCollapsed, projectSidebarCollapsed } = useUIStore();
+  const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
+  const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const project = useProjectStore((s) => s.project);
   const loadProject = useProjectStore((s) => s.loadProject);
+
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
 
   const handleCreateProject = useCallback(async () => {
     try {
@@ -30,6 +36,42 @@ export function MainLayout(): JSX.Element {
       console.error('Failed to create project:', e);
     }
   }, [loadProject]);
+
+  // 사이드바 리사이즈 핸들러
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    startX.current = e.clientX;
+    startWidth.current = settingsSidebarWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [settingsSidebarWidth]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      // 왼쪽으로 드래그하면 너비 증가 (사이드바는 오른쪽에 있으므로)
+      const delta = startX.current - e.clientX;
+      const newWidth = startWidth.current + delta;
+      setSettingsSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [setSettingsSidebarWidth]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -75,9 +117,17 @@ export function MainLayout(): JSX.Element {
             )}
           </div>
 
-          {/* Settings/Review 사이드바 (고정 너비) */}
+          {/* Settings/Review 사이드바 (드래그로 너비 조정 가능) */}
           {!sidebarCollapsed && project && (
-            <aside className="w-80 shrink-0 border-l border-editor-border bg-editor-bg overflow-hidden">
+            <aside
+              className="shrink-0 border-l border-editor-border bg-editor-bg overflow-hidden relative"
+              style={{ width: settingsSidebarWidth }}
+            >
+              {/* 리사이즈 핸들 */}
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
+                onMouseDown={handleResizeStart}
+              />
               <SettingsSidebar />
             </aside>
           )}

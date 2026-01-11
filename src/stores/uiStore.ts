@@ -17,6 +17,12 @@ interface UIState extends EditorUIState {
   chatPanelOpen: boolean;
   chatPanelPosition: { x: number; y: number };
   chatPanelSize: { width: number; height: number };
+
+  // Settings sidebar width (resizable)
+  settingsSidebarWidth: number;
+
+  // Floating chat button position
+  floatingButtonPosition: { x: number; y: number } | null; // null = 기본 위치 (우측 하단)
 }
 
 interface UIActions {
@@ -65,6 +71,12 @@ interface UIActions {
   toggleChatPanel: () => void;
   setChatPanelPosition: (position: { x: number; y: number }) => void;
   setChatPanelSize: (size: { width: number; height: number }) => void;
+
+  // Settings sidebar width
+  setSettingsSidebarWidth: (width: number) => void;
+
+  // Floating button position
+  setFloatingButtonPosition: (position: { x: number; y: number } | null) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -94,6 +106,12 @@ export const useUIStore = create<UIStore>()(
       chatPanelOpen: false,
       chatPanelPosition: { x: 0, y: 100 }, // 실제 위치는 컴포넌트에서 계산
       chatPanelSize: { width: 420, height: 600 },
+
+      // Settings sidebar width
+      settingsSidebarWidth: 320,
+
+      // Floating button position (null = 기본 우측 하단)
+      floatingButtonPosition: null,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -216,6 +234,16 @@ export const useUIStore = create<UIStore>()(
       setChatPanelSize: (size: { width: number; height: number }): void => {
         set({ chatPanelSize: size });
       },
+
+      // Settings sidebar width
+      setSettingsSidebarWidth: (width: number): void => {
+        set({ settingsSidebarWidth: Math.max(280, Math.min(600, width)) }); // min 280, max 600
+      },
+
+      // Floating button position
+      setFloatingButtonPosition: (position: { x: number; y: number } | null): void => {
+        set({ floatingButtonPosition: position });
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -231,6 +259,9 @@ export const useUIStore = create<UIStore>()(
         chatPanelOpen: state.chatPanelOpen,
         chatPanelPosition: state.chatPanelPosition,
         chatPanelSize: state.chatPanelSize,
+        // Settings sidebar & floating button
+        settingsSidebarWidth: state.settingsSidebarWidth,
+        floatingButtonPosition: state.floatingButtonPosition,
       }),
     }
   )
