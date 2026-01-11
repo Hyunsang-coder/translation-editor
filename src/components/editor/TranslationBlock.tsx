@@ -1,8 +1,10 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { EditorContent } from '@tiptap/react';
 import type { EditorBlock } from '@/types';
 import { useBlockEditor } from '@/hooks/useBlockEditor';
 import { useProjectStore } from '@/stores/projectStore';
+import { useReviewStore } from '@/stores/reviewStore';
+import { refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 
 interface TranslationBlockProps {
   block: EditorBlock;
@@ -31,6 +33,15 @@ export const TranslationBlock = memo(function TranslationBlock({
   };
 
   const { editor, isFocused } = useBlockEditor(editorOptions);
+
+  // 검수 하이라이트 동기화
+  const highlightNonce = useReviewStore((s) => s.highlightNonce);
+
+  useEffect(() => {
+    if (editor && highlightNonce > 0) {
+      refreshEditorHighlight(editor);
+    }
+  }, [editor, highlightNonce]);
 
   return (
     <div

@@ -118,9 +118,9 @@ export function FloatingChatPanel(): JSX.Element | null {
           type="button"
           onClick={handleClose}
           className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('chat.closePanel')}
+          title={t('chat.minimizePanel')}
         >
-          ✕
+          <span className="text-lg leading-none">−</span>
         </button>
       </div>
 

@@ -103,6 +103,10 @@ What (API 구조 - 채팅 모드):
   - get_target_document: 번역문 문서 on-demand 조회
   - suggest_translation_rule: 번역 규칙 제안
   - suggest_project_context: Project Context 제안
+- **채팅에서 지원하지 않는 기능** (전용 버튼/탭 사용):
+  - 전체 문서 번역: **Translate 버튼** 사용 (Source 전체 → Target으로 번역)
+  - 번역 검수: **Review 탭** 사용 (3.9 참조)
+  - 사용자가 채팅에서 전체 번역/검수를 요청하면 해당 버튼/탭 사용을 안내
   - (외부 참조 도구, 조건부) Confluence 문서 검색/가져오기: Rovo MCP `search()` / `fetch()`
     - **Rust 네이티브 SSE 클라이언트**: Node.js 의존성 없이 Rust에서 직접 Atlassian MCP 서버에 SSE 연결.
     - OAuth 2.1 PKCE 인증도 Rust에서 네이티브로 처리 (로컬 콜백 서버 방식).
@@ -307,7 +311,9 @@ How:
 
 What (핵심 원칙):
 - **Non-Intrusive**: 문서 자동 변경 없음, Decoration은 비영속적
-- **2분할 레이아웃 유지**: 새 컬럼 추가 대신 ChatPanel에 Review 탭 추가
+- **전용 UI로만 실행**: 채팅에서 검수 요청 불가, Review 탭에서만 실행
+  - 채팅에서 검수 요청 시 "Review 탭을 사용해주세요" 안내
+- **2분할 레이아웃 유지**: 새 컬럼 추가 대신 SettingsSidebar에 Review 탭 추가
 - **JSON 출력 포맷**: TRD 3.2에서 "검수는 JSON 리포트 허용"으로 명시
 
 What (UI 구성):

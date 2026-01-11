@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { ReviewHighlight } from '@/editor/extensions/ReviewHighlight';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -47,6 +48,9 @@ export function useBlockEditor({
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
+      }),
+      ReviewHighlight.configure({
+        highlightClass: 'review-highlight',
       }),
     ],
     content: stableContent,

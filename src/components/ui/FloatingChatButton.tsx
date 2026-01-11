@@ -125,7 +125,8 @@ export function FloatingChatButton(): JSX.Element {
     });
   }, [setFloatingButtonPosition]);
 
-  if (!currentPos) return <></>;
+  // 채팅 패널이 열려있으면 버튼 숨김
+  if (!currentPos || chatPanelOpen) return <></>;
 
   return (
     <button

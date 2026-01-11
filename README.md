@@ -79,8 +79,10 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
   - 도구 호출 중 상태 표시
 - **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
 - **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
+- **채팅에서 미지원**: 전체 번역(→ Translate 버튼), 검수(→ Review 탭) - 채팅에서 요청 시 해당 UI 사용 안내
 
 ### 번역 검수 (Translation Review)
+- **Review 탭 전용**: 채팅에서 검수 요청 불가, Review 탭에서만 실행 ✅
 - **Review 탭**: SettingsSidebar에 Settings와 함께 Review 탭 추가 ✅
 - **청크 기반 검수**: 문서를 청크로 분할하여 순차적으로 AI 검수 ✅
 - **JSON 기반 결과**: AI 응답을 JSON 형식으로 파싱 (마크다운 폴백 지원) ✅
