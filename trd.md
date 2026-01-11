@@ -268,7 +268,7 @@ What:
 
 3.8 첨부 파일(Reference Attachments) 확장 명세
 Why:
-- CSV/Excel뿐 아니라, PDF/PPTX/이미지/Markdown/DOCX 등 다양한 참고 자료를 “프로젝트에 첨부”하여 모델에 전달할 수 있어야 한다.
+- CSV/Excel뿐 아니라, PDF/PPTX/이미지/Markdown/DOCX 등 다양한 참고 자료를 "프로젝트에 첨부"하여 모델에 전달할 수 있어야 한다.
 
 What:
 - 지원 파일(1차 목표): csv, xlsx/xls, pdf, pptx, png/jpg/webp, md, docx
@@ -281,9 +281,89 @@ What:
   - 현재 구현(Phase 1):
     - 문서(pdf/docx/pptx/md/txt)는 로컬에서 텍스트를 추출하여 system context로 주입한다(길이 제한 적용).
     - 이미지(png/jpg/jpeg/webp/gif)는 **멀티모달(vision) 입력**으로, 로컬 파일을 base64로 읽어 표준 content blocks로 모델 입력에 포함한다(파일 크기/개수 제한 적용).
-  - 향후(확장): Provider가 제공하는 “파일 업로드/첨부(file_id 등)” 메커니즘을 사용해 원형 전달을 지원할 수 있다.
+  - 향후(확장): Provider가 제공하는 "파일 업로드/첨부(file_id 등)" 메커니즘을 사용해 원형 전달을 지원할 수 있다.
   - (호환성/폴백) 특정 모델/Provider에서 멀티모달/첨부가 불가한 경우 에러 메시지 또는 안내 메시지로 폴백한다.
   - 과도한 컨텍스트 방지를 위해 파일별/전체 길이 제한 및 우선순위(사용자 선택/최근 첨부/키워드 매칭)를 둔다.
+
+3.9 번역 검수 (Translation Review)
+Why:
+- 번역 완료 후 오역, 누락, 왜곡, 일관성 문제를 AI가 자동으로 검출하여 번역사의 검토 시간을 단축합니다.
+- 검수 결과를 에디터에서 시각적으로 확인하며 수정할 수 있어야 합니다.
+
+How:
+- 문서를 청크로 분할하여 순차적으로 AI 검수 요청
+- 검수 결과는 JSON 형식으로 파싱하여 테이블로 표시
+- 체크된 이슈만 에디터에서 하이라이트 (TipTap Decoration)
+
+What (핵심 원칙):
+- **Non-Intrusive**: 문서 자동 변경 없음, Decoration은 비영속적
+- **2분할 레이아웃 유지**: 새 컬럼 추가 대신 ChatPanel에 Review 탭 추가
+- **JSON 출력 포맷**: TRD 3.2에서 "검수는 JSON 리포트 허용"으로 명시
+
+What (UI 구성):
+- **Review 탭**: ChatPanel의 기능 탭으로 추가 (Settings | Chat | Review)
+  - 탭 전환형: 채팅 탭 3개 제한과 별개로 관리
+  - Review 탭 선택 시 검수 UI로 전환
+- **검수 시작**: 버튼 클릭으로 검수 시작, 취소 가능
+- **결과 테이블**: 체크박스 + 이슈 정보 (컬럼: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명)
+- **하이라이트 토글**: 체크된 이슈만 Target 에디터에서 하이라이트
+
+What (데이터 모델):
+```typescript
+interface ReviewIssue {
+  id: string;                    // 결정적 ID (hashContent로 생성)
+  segmentOrder: number;
+  segmentGroupId?: string;       // 세그먼트 단위 하이라이트용
+  sourceExcerpt: string;         // 원문 구절 (35자 이내)
+  targetExcerpt: string;         // 현재 번역 (하이라이트 대상)
+  suggestedFix: string;          // 수정 제안
+  type: 'error' | 'omission' | 'distortion' | 'consistency';
+  description: string;
+  checked: boolean;              // 체크 상태
+}
+```
+
+What (AI 출력 형식):
+```json
+{
+  "issues": [
+    {
+      "segmentOrder": 0,
+      "segmentGroupId": "...",
+      "type": "오역|누락|왜곡|일관성",
+      "sourceExcerpt": "원문 35자 이내",
+      "targetExcerpt": "현재 번역 35자 이내",
+      "suggestedFix": "수정 제안",
+      "description": "간결한 설명"
+    }
+  ]
+}
+```
+
+What (하이라이트 매칭 전략):
+1. segmentGroupId가 있으면 해당 세그먼트의 target 텍스트에서 targetExcerpt 검색
+2. 1단계 실패 시 전체 문서에서 targetExcerpt substring 검색 (첫 매치)
+3. 2단계도 실패 시 하이라이트 없이 패널에 "매칭 실패" 표시 (무해)
+
+What (구현 파일):
+| 파일 | 역할 |
+|------|------|
+| `src/stores/reviewStore.ts` | 검수 상태 관리 (체크, 하이라이트, 중복 제거) |
+| `src/components/review/ReviewPanel.tsx` | Review 탭 콘텐츠 |
+| `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 + 체크박스 |
+| `src/ai/review/parseReviewResult.ts` | AI 응답 JSON/마크다운 파싱 |
+| `src/editor/extensions/ReviewHighlight.ts` | TipTap Decoration 하이라이트 |
+
+What (상태 관리 - reviewStore):
+- `initializeReview(project)`: 프로젝트를 청크로 분할, 상태 초기화
+- `addResult(result)`: 청크별 검수 결과 추가
+- `toggleIssueCheck(issueId)`: 이슈 체크 상태 토글
+- `deleteIssue(issueId)`: 개별 이슈 삭제
+- `setAllIssuesChecked(checked)`: 전체 선택/해제
+- `getAllIssues()`: 중복 제거된 전체 이슈 목록
+- `getCheckedIssues()`: 체크된 이슈만 반환
+- `toggleHighlight()`: 하이라이트 활성화/비활성화
+- `disableHighlight()`: Review 탭 닫을 때 호출
 
 4. 데이터 영속성 (Data & Storage)
 4.1 SQLite 기반의 단일 파일 구조 (.ite)

@@ -77,6 +77,20 @@ README를 포함한 다른 문서/구현과 내용이 충돌할 경우, 원칙�
 - **LangChain.js**: OpenAI 모델 지원 ✅ (Anthropic은 UI에서 비활성화, 추후 활성화 예정)
 - **Tool Calling**: 문서 조회(`get_source_document`, `get_target_document`), 제안(`suggest_translation_rule`, `suggest_project_context`) ✅
 
+### 번역 검수 (Translation Review)
+- **Review 탭**: ChatPanel에 Settings/Chat과 함께 Review 탭 추가 ✅
+- **청크 기반 검수**: 문서를 청크로 분할하여 순차적으로 AI 검수 ✅
+- **JSON 기반 결과**: AI 응답을 JSON 형식으로 파싱 (마크다운 폴백 지원) ✅
+- **검수 결과 테이블**: 체크박스 + 이슈 유형별 색상 표시 ✅
+  - 컬럼: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명
+  - 전체 선택/해제 기능
+  - 개별 이슈 삭제 기능
+- **이슈 유형**: 오역(error), 누락(omission), 왜곡(distortion), 일관성(consistency) ✅
+- **에디터 하이라이트**: 체크된 이슈의 targetExcerpt를 Target 에디터에서 하이라이트 ✅
+  - TipTap Decoration 기반 (비영속적)
+  - Review 탭 닫을 때 자동 해제
+- **Non-Intrusive 원칙**: 문서 자동 변경 없음, 사용자가 직접 수정 ✅
+
 ### MCP / 외부 커넥터
 - **Atlassian MCP (Confluence/Jira)**: OAuth 2.1 PKCE 인증 ✅
   - **Rust 네이티브 SSE 클라이언트**: 외부 Node.js 의존성 없이 Rust에서 직접 연결 ✅

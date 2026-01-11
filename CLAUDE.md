@@ -80,6 +80,13 @@ cd src-tauri && cargo test
 
 - **Request Type Detection**: `prompt.ts` → `detectRequestType()` analyzes user message to determine `translate` | `question` | `general`
 
+- **Review Mode** (`ReviewPanel.tsx`):
+  - AI-assisted translation review for error, omission, distortion, consistency issues
+  - Document split into chunks → sequential AI review → JSON result parsing
+  - Results displayed in table with checkboxes
+  - Checked issues highlighted in Target editor via TipTap Decoration
+  - Non-intrusive: no automatic document modification
+
 #### 3. Tool Calling Architecture
 Implemented in `src/ai/chat.ts` with LangChain tools:
 - `get_source_document`: Fetch Source document on-demand
@@ -102,7 +109,8 @@ Critical stores in `src/stores/`:
 - `chatStore.ts`: Multi-tab chat sessions, messages, tool call tracking
 - `aiConfigStore.ts`: AI provider settings, model selection, system prompts
 - `connectorStore.ts`: MCP connector states (Confluence, Notion, web search)
-- `uiStore.ts`: Layout state, Focus Mode, panel sizes
+- `uiStore.ts`: Layout state, Focus Mode, panel sizes, Review panel state
+- `reviewStore.ts`: Translation review state (chunks, results, check states, highlight)
 
 #### 6. Security: API Key Management
 - **Primary Storage**: OS keychain (macOS Keychain, Windows Credential Manager, Linux keyring)
@@ -118,6 +126,7 @@ Critical stores in `src/stores/`:
 // Editor instances: src/components/panels/SourcePanel.tsx, TargetPanel.tsx
 // Document builders: src/editor/sourceDocument.ts, targetDocument.ts
 // TipTap JSON ↔ SQLite: projectStore.ts → loadProject/saveProject
+// Review highlight: src/editor/extensions/ReviewHighlight.ts (Decoration-based, non-persistent)
 ```
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
@@ -260,7 +269,8 @@ cd src-tauri && cargo check
 - **Feature Co-location**: Related files grouped by feature (e.g., `ai/`, `editor/`, `stores/`)
 - **Type Definitions**: `src/types/index.ts` for shared interfaces
 - **Tauri Wrappers**: `src/tauri/*.ts` mirrors `src-tauri/src/commands/*.rs`
-- **UI Components**: Organized by layout hierarchy (`components/panels/`, `components/editor/`)
+- **UI Components**: Organized by layout hierarchy (`components/panels/`, `components/editor/`, `components/review/`)
+- **Review Feature**: `src/ai/review/` (parsing), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 
 ## When Adding New Features
 
