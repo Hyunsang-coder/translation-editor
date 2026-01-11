@@ -11,6 +11,12 @@ interface UIState extends EditorUIState {
   language: 'ko' | 'en';
   toasts: Toast[];
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
+
+  // Floating Chat Panel state
+  sidebarActiveTab: 'settings' | 'review';
+  chatPanelOpen: boolean;
+  chatPanelPosition: { x: number; y: number };
+  chatPanelSize: { width: number; height: number };
 }
 
 interface UIActions {
@@ -52,6 +58,13 @@ interface UIActions {
   // Review Panel
   openReviewPanel: () => void;
   closeReviewPanel: () => void;
+
+  // Floating Chat Panel
+  setSidebarActiveTab: (tab: 'settings' | 'review') => void;
+  setChatPanelOpen: (open: boolean) => void;
+  toggleChatPanel: () => void;
+  setChatPanelPosition: (position: { x: number; y: number }) => void;
+  setChatPanelSize: (size: { width: number; height: number }) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -75,6 +88,12 @@ export const useUIStore = create<UIStore>()(
       isPanelsSwapped: false,
       toasts: [],
       reviewPanelOpen: false,
+
+      // Floating Chat Panel - 기본값
+      sidebarActiveTab: 'settings',
+      chatPanelOpen: false,
+      chatPanelPosition: { x: 0, y: 100 }, // 실제 위치는 컴포넌트에서 계산
+      chatPanelSize: { width: 420, height: 600 },
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -176,6 +195,27 @@ export const useUIStore = create<UIStore>()(
       closeReviewPanel: (): void => {
         set({ reviewPanelOpen: false });
       },
+
+      // Floating Chat Panel
+      setSidebarActiveTab: (tab: 'settings' | 'review'): void => {
+        set({ sidebarActiveTab: tab });
+      },
+
+      setChatPanelOpen: (open: boolean): void => {
+        set({ chatPanelOpen: open });
+      },
+
+      toggleChatPanel: (): void => {
+        set((state) => ({ chatPanelOpen: !state.chatPanelOpen }));
+      },
+
+      setChatPanelPosition: (position: { x: number; y: number }): void => {
+        set({ chatPanelPosition: position });
+      },
+
+      setChatPanelSize: (size: { width: number; height: number }): void => {
+        set({ chatPanelSize: size });
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -186,6 +226,11 @@ export const useUIStore = create<UIStore>()(
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
         isPanelsSwapped: state.isPanelsSwapped,
+        // Floating Chat Panel persist
+        sidebarActiveTab: state.sidebarActiveTab,
+        chatPanelOpen: state.chatPanelOpen,
+        chatPanelPosition: state.chatPanelPosition,
+        chatPanelSize: state.chatPanelSize,
       }),
     }
   )

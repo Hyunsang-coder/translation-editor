@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -7,8 +8,43 @@ import { useProjectStore } from '@/stores/projectStore';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { focusMode, toggleFocusMode, toggleSidebar } = useUIStore();
+  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel } = useUIStore();
   const { project } = useProjectStore();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [dropdownOpen]);
+
+  const handleProjectSettings = () => {
+    setSidebarCollapsed(false);
+    setSidebarActiveTab('settings');
+    setDropdownOpen(false);
+  };
+
+  const handleReview = () => {
+    openReviewPanel();
+    setDropdownOpen(false);
+  };
 
   return (
     <header className="h-14 border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
@@ -31,15 +67,45 @@ export function Toolbar(): JSX.Element {
           {focusMode ? '👁️' : '👀'}
         </button>
 
-        {/* Chat/Settings Sidebar 토글 */}
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title={t('toolbar.toggleSidebar')}
-        >
-          💬
-        </button>
+        {/* Settings 드롭다운 */}
+        <div ref={dropdownRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setDropdownOpen((v) => !v)}
+            className={`
+              px-3 py-2 rounded-md flex items-center gap-1.5
+              hover:bg-editor-border transition-colors
+              ${dropdownOpen ? 'bg-editor-border' : ''}
+            `}
+            title={t('toolbar.settings')}
+          >
+            <span>⚙️</span>
+            <span className="text-sm text-editor-text">{t('toolbar.settings')}</span>
+            <span className="text-xs text-editor-muted">▼</span>
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50">
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                onClick={handleProjectSettings}
+              >
+                <span>⚙️</span>
+                <span>{t('toolbar.projectSettings')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                onClick={handleReview}
+              >
+                <span>🔍</span>
+                <span>{t('toolbar.review')}</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

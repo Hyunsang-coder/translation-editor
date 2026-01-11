@@ -98,7 +98,10 @@
     "focusMode": "Focus Mode (Hide source panel)",
     "focusModeNormal": "Normal",
     "focusModeFocus": "Focus",
-    "themeCurrent": "Current: {{theme}}"
+    "themeCurrent": "Current: {{theme}}",
+    "settings": "Settings",
+    "projectSettings": "Project Settings",
+    "review": "Review"
   },
   "projectSidebar": {
     "appSettings": "App Settings",

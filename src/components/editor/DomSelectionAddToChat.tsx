@@ -107,8 +107,8 @@ export function DomSelectionAddToChat(): JSX.Element | null {
         }}
         onClick={() => {
           const ui = useUIStore.getState();
-          if (ui.sidebarCollapsed) ui.toggleSidebar();
-          ui.setActivePanel('chat');
+          // 플로팅 Chat 패널 열기
+          ui.setChatPanelOpen(true);
 
           const chat = useChatStore.getState();
           chat.appendComposerText(bubble.text);

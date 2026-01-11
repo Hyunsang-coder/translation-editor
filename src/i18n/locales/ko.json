@@ -98,7 +98,10 @@
     "focusMode": "원문 숨기기",
     "focusModeNormal": "일반",
     "focusModeFocus": "포커스",
-    "themeCurrent": "현재: {{theme}}"
+    "themeCurrent": "현재: {{theme}}",
+    "settings": "설정",
+    "projectSettings": "프로젝트 설정",
+    "review": "검수"
   },
   "projectSidebar": {
     "appSettings": "앱 설정",

@@ -39,9 +39,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const projectContext = useChatStore((s) => s.projectContext);
   const translatorPersona = useChatStore((s) => s.translatorPersona);
 
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const setActivePanel = useUIStore((s) => s.setActivePanel);
+  const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
 
   const provider = useAiConfigStore((s) => s.provider);
@@ -407,8 +405,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           onClick={() => {
             const text = addToChatBubble.text.trim();
             if (!text) return;
-            if (sidebarCollapsed) toggleSidebar();
-            setActivePanel('chat');
+            // 플로팅 Chat 패널 열기
+            setChatPanelOpen(true);
             appendComposerText(text);
             requestComposerFocus();
             setAddToChatBubble(null);

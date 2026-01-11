@@ -72,11 +72,11 @@ export function TipTapEditor({
           event.preventDefault();
           const selected = editor.state.doc.textBetween(from, to, ' ').trim();
 
-          const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+          const { setChatPanelOpen } = useUIStore.getState();
           const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-          if (sidebarCollapsed) toggleSidebar();
-          setActivePanel('chat');
+          // 플로팅 Chat 패널 열기
+          setChatPanelOpen(true);
           if (selected.length > 0) {
             appendComposerText(selected);
           }
@@ -219,11 +219,11 @@ export function TargetTipTapEditor({
           event.preventDefault();
           const selected = editor.state.doc.textBetween(from, to, ' ').trim();
 
-          const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+          const { setChatPanelOpen } = useUIStore.getState();
           const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-          if (sidebarCollapsed) toggleSidebar();
-          setActivePanel('chat');
+          // 플로팅 Chat 패널 열기
+          setChatPanelOpen(true);
           if (selected.length > 0) {
             appendComposerText(selected);
           }
