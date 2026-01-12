@@ -170,6 +170,7 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
     '',
     '=== 질문 응답 모드 ===',
     '- 질문에 간결하게 답변합니다.',
+    '- 문서 관련 질문이면 추측하지 말고 먼저 get_source_document / get_target_document를 호출하여 정확한 근거를 확보하세요.',
     '- 필요한 경우에만 예시를 들어 설명합니다.',
     '- suggest_translation_rule / suggest_project_context 도구의 정의/구분은 tool description을 따른다.',
     '- suggest_* 도구는 "저장 제안" 생성일 뿐이며, 실제 저장/반영은 사용자가 버튼을 눌러야만 가능합니다.',

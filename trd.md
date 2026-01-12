@@ -106,11 +106,14 @@ What (API 구조 - 채팅 모드):
   - SystemMessage 1개: Tool Guide (문서 조회 도구 및 제안 도구 사용 가이드)
   - MessagesPlaceholder: 히스토리 메시지 (question 모드에서만 최근 10개)
   - HumanMessage 1개: 사용자 입력
-- Tool Calling 지원:
-  - get_source_document: 원문 문서 on-demand 조회
-  - get_target_document: 번역문 문서 on-demand 조회
+- Tool Calling 지원 (적극적 도구 사용 정책):
+  - get_source_document: 원문 문서 조회 - 문서 관련 질문 시 먼저 호출 권장
+  - get_target_document: 번역문 문서 조회 - 번역 품질/표현 질문 시 먼저 호출 권장
   - suggest_translation_rule: 번역 규칙 제안
   - suggest_project_context: Project Context 제안
+- Tool Calling Loop 설정:
+  - maxSteps 기본값: 6 (이전: 4), 최대값: 12 (이전: 8)
+  - 복합 쿼리 시 충분한 도구 호출 허용
 - **채팅에서 지원하지 않는 기능** (전용 버튼/탭 사용):
   - 전체 문서 번역: **Translate 버튼** 사용 (Source 전체 → Target으로 번역)
   - 번역 검수: **Review 탭** 사용 (3.9 참조)
@@ -222,6 +225,7 @@ What:
   - 번역 모델 선택 드롭다운은 Editor의 “번역” 버튼 **왼쪽**에 둔다.
   - 기본 모델은 `gpt-5.2`, 커스텀 모델 입력은 지원하지 않는다.
 - 웹검색 게이트(중요)
+  - `webSearchEnabled` 기본값: **true** (새 세션에서 웹검색 기본 활성화)
   - `webSearchEnabled`가 **true일 때만** 웹검색 도구를 사용할 수 있다.
   - **기본 웹검색**: OpenAI 내장 `web_search_preview` 도구 사용 (Responses API)
   - **폴백**: Brave Search API (OpenAI 웹검색 실패 시, Brave API Key가 설정된 경우에만)

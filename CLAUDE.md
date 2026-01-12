@@ -94,10 +94,12 @@ cd src-tauri && cargo test
 
 #### 3. Tool Calling Architecture
 Implemented in `src/ai/chat.ts` with LangChain tools:
-- `get_source_document`: Fetch Source document on-demand
-- `get_target_document`: Fetch Target document on-demand
+- `get_source_document`: Fetch Source document - **proactively called** for document-related questions
+- `get_target_document`: Fetch Target document - **proactively called** for translation quality questions
 - `suggest_translation_rule`: AI proposes new translation rules
 - `suggest_project_context`: AI proposes context additions
+
+**Proactive Tool Usage Policy**: AI is instructed to call document tools first rather than guessing. Tool calling loop allows up to 6 steps (max 12) to support complex queries.
 
 User confirms before suggestions are added (no automatic application).
 
@@ -233,7 +235,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 
 1. **TipTap JSON Format**: Always validate JSON structure before storing. Fallback to plain text on parse errors.
 2. **Chat History**: `question` mode includes last 10 messages; `translate` mode excludes all history.
-3. **Tool Calling**: Documents fetched on-demand in chat mode to save tokens.
+3. **Tool Calling**: AI proactively calls document tools for relevant questions. Web search enabled by default for new sessions.
 4. **Keychain Access**: First run requires OS authentication prompt for keychain access.
 5. **Sidecar Lifecycle**: MCP sidecar processes must be cleaned up on app exit.
 6. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.

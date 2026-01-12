@@ -328,7 +328,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     projectContext: '',
-    webSearchEnabled: false,
+    webSearchEnabled: true,
     translationContextSessionId: null,
     loadedProjectId: null,
     attachments: [],

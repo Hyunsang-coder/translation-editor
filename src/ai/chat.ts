@@ -278,7 +278,7 @@ async function runToolCallingLoop(params: {
   cb?: StreamCallbacks;
   abortSignal?: AbortSignal;
 }): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[] }> {
-  const maxSteps = Math.max(1, Math.min(8, params.maxSteps ?? 4));
+  const maxSteps = Math.max(1, Math.min(12, params.maxSteps ?? 6));
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
   const toolsUsed: string[] = [];
 
@@ -446,12 +446,14 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
   const notionEnabled = !!params.notionEnabled;
   const confluenceEnabled = !!params.confluenceEnabled;
   const toolGuide = [
-    '도구 사용 가이드(짧게):',
+    '도구 사용 가이드:',
+    '★ 도구를 적극적으로 활용하세요. 추측보다 도구 호출로 정확한 정보를 얻는 것이 좋습니다.',
+    '',
     includeSource
-      ? '- get_source_document: 원문을 가져옴(문서가 아주 길면 일부만 반환될 수 있음). 꼭 필요할 때만.'
+      ? '- get_source_document: 원문 조회. 사용자가 문서 내용에 대해 질문하면 먼저 호출하세요.'
       : '- get_source_document: (비활성화됨)',
     includeTarget
-      ? '- get_target_document: 번역문을 가져옴(문서가 아주 길면 일부만 반환될 수 있음). 꼭 필요할 때만.'
+      ? '- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.'
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)',
     '- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)',
@@ -498,9 +500,9 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       ? '5. Confluence 참조 필요\n   → confluence 도구 사용'
       : '5. Confluence 참조 필요\n   → (Confluence 비활성화됨)',
     '',
-    '6. 문서 내용 필요 (부분 질문에 필요한 경우만)',
-    '   → get_source_document, get_target_document',
-    '   → 문서가 길면 query/maxChars 파라미터 사용',
+    '6. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)',
+    '   → get_source_document, get_target_document를 먼저 호출하여 근거 확보',
+    '   → 문서가 길면 query/maxChars 파라미터로 필요한 부분만 조회',
     '',
     '7. 번역 스타일/포맷 규칙 발견',
     '   → suggest_translation_rule',

@@ -70,7 +70,7 @@ export const getSourceDocumentTool = tool(
   {
     name: 'get_source_document',
     description:
-      '원문(Source) 문서를 가져옵니다. 문서가 아주 길면 자동으로 일부만 반환될 수 있습니다. (필요할 때만 사용)',
+      '원문(Source) 문서를 가져옵니다. 사용자가 문서 내용, 번역 품질, 표현에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다.',
     schema: DocumentToolArgsSchema,
   },
 );
@@ -88,7 +88,7 @@ export const getTargetDocumentTool = tool(
   {
     name: 'get_target_document',
     description:
-      '번역문(Target) 문서를 가져옵니다. 문서가 아주 길면 자동으로 일부만 반환될 수 있습니다. (필요할 때만 사용)',
+      '번역문(Target) 문서를 가져옵니다. 사용자가 번역 결과, 표현 자연스러움, 오역 여부에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다.',
     schema: DocumentToolArgsSchema,
   },
 );
