@@ -1,33 +1,9 @@
 import type { ITEProject } from '@/types';
-import { createChatModel } from '@/ai/client';
 import { getAiConfig } from '@/ai/config';
 import i18n from '@/i18n/config';
-import { z } from 'zod';
+import { ChatOpenAI } from '@langchain/openai';
 
 export type TipTapDocJson = Record<string, unknown>;
-
-// ============================================================
-// Structured Output 스키마 정의
-// ============================================================
-
-// TipTap doc content 스키마 (재귀 구조)
-const TipTapNodeSchema: z.ZodType<Record<string, unknown>> = z.lazy(() =>
-  z.object({
-    type: z.string(),
-    content: z.array(TipTapNodeSchema).optional(),
-    text: z.string().optional(),
-    marks: z.array(z.record(z.unknown())).optional(),
-    attrs: z.record(z.unknown()).optional(),
-  }).passthrough()
-);
-
-const TranslationResultSchema = z.object({
-  doc: z.object({
-    type: z.literal('doc'),
-    content: z.array(TipTapNodeSchema),
-  }).passthrough().nullable(),
-  error: z.string().optional(),
-});
 
 // ============================================================
 // 동적 토큰 계산 및 truncation 감지
@@ -196,11 +172,16 @@ export async function translateSourceDocToTargetDocJson(params: {
   projectContext?: string;
   translatorPersona?: string;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const cfg = getAiConfig();
+  const cfg = getAiConfig({ useFor: 'translation' });
 
   // mock provider는 더 이상 지원하지 않음 - 실제 API 호출 필요
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
+  }
+
+  // API 키 검증
+  if (!cfg.openaiApiKey) {
+    throw new Error(i18n.t('errors.openaiApiKeyMissing'));
   }
 
   const srcLang = 'Source';
@@ -276,7 +257,20 @@ export async function translateSourceDocToTargetDocJson(params: {
     );
   }
 
-  const model = createChatModel(undefined, { useFor: 'translation', maxTokens: calculatedMaxTokens });
+  // JSON mode를 사용하는 ChatOpenAI 인스턴스 생성
+  // Structured Output은 복잡한 중첩 구조(TipTap)와 호환성 문제가 있어 JSON mode 사용
+  const isGpt5 = cfg.model.startsWith('gpt-5');
+  const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
+
+  const jsonModel = new ChatOpenAI({
+    apiKey: cfg.openaiApiKey,
+    model: cfg.model,
+    ...temperatureOption,
+    maxTokens: calculatedMaxTokens,
+    modelKwargs: {
+      response_format: { type: 'json_object' },
+    },
+  });
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -293,42 +287,19 @@ export async function translateSourceDocToTargetDocJson(params: {
     },
   ];
 
-  // 1) 1차: LangChain structured output (OpenAI JSON/tool calling 등)로 파싱 안정화
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const structured = (model as any).withStructuredOutput(TranslationResultSchema, {
-      name: 'translate_doc',
-      strict: false,
-      includeRaw: true,
-    });
-    const structuredRes = await structured.invoke(messages);
+  // JSON mode로 번역 실행
+  const res = await jsonModel.invoke(messages);
 
-    // includeRaw: true일 때 { raw: AIMessage, parsed: {...} } 형태로 반환됨
-    const parsed = structuredRes?.parsed;
-    const rawMessage = structuredRes?.raw;
-    const rawContent = contentToText(rawMessage?.content);
-
-    if (parsed) {
-      // 에러 응답 처리
-      if (typeof parsed.error === 'string' && parsed.error.trim()) {
-        throw new Error(parsed.error);
-      }
-
-      // 성공적으로 파싱된 경우
-      if (parsed.doc && isTipTapDocJson(parsed.doc)) {
-        return { doc: parsed.doc, raw: rawContent || JSON.stringify(parsed.doc) };
-      }
-    }
-
-    // parsed가 없거나 doc가 유효하지 않으면 폴백으로 진행
-    console.warn('Structured output parsed but doc invalid, falling back to text parsing');
-  } catch (e) {
-    // Structured output 자체가 실패한 경우 폴백
-    console.warn('Structured output failed, falling back to text parsing:', e);
+  // finish_reason 확인 (응답 잘림 감지)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finishReason = (res as any)?.response_metadata?.finish_reason;
+  if (finishReason === 'length') {
+    throw new Error(
+      `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
+      `문서를 분할하여 번역하거나 다시 시도해주세요.`
+    );
   }
 
-  // 2) 폴백: 기존 문자열 파싱
-  const res = await model.invoke(messages);
   const raw = contentToText((res as { content?: unknown })?.content);
   
   // 응답이 비어있는 경우

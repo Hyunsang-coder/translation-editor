@@ -58,7 +58,6 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "mcp-remote": "^0.1.37",
-    "pkg": "^5.8.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",

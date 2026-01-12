@@ -54,9 +54,12 @@ What:
   - UserMessage 1개: TipTap JSON 문서를 문자열로 전달
   - 히스토리 메시지 없음
 - JSON 파싱 안정성:
-  - **1차 시도**: LangChain `withStructuredOutput` (Structured Output)
-  - **폴백**: 기존 텍스트 파싱 (`extractJsonObject`)
+  - **JSON mode**: OpenAI `response_format: { type: 'json_object' }` 사용
+    - Structured Output은 복잡한 중첩 구조(TipTap)와 호환성 문제로 사용하지 않음
+    - JSON mode는 유효한 JSON 출력을 보장하면서 스키마 제약 없이 복잡한 구조 처리
+  - **폴백**: 텍스트 파싱 (`extractJsonObject`) - 코드펜스 제거, balanced JSON 추출
   - **Truncation 감지**: 중괄호/대괄호 불일치, 문자열 중간 끊김 감지
+  - **finish_reason 검사**: `length`인 경우 토큰 제한 에러로 처리
 - 동적 max_tokens 계산:
   - 입력 문서 크기 기반으로 출력 토큰 자동 계산
   - GPT-5 400k 컨텍스트 윈도우 기준, 안전 마진 10%
