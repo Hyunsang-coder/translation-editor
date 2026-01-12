@@ -19,6 +19,7 @@ export type {
   ChunkedTranslationResult,
   ChunkTranslationResult,
   TranslationProgressCallback,
+  MarkdownChunk,
 } from './types';
 
 export {
@@ -36,6 +37,7 @@ export {
   estimateDocTokens,
   identifyChunkBoundaries,
   splitDocIntoChunks,
+  splitMarkdownSafely,
   chunkToDoc,
   calculateDocComplexity,
   shouldChunk,

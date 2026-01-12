@@ -37,11 +37,10 @@ export interface TipTapNode {
  * TipTap 문서 JSON 구조
  * Record<string, unknown>과 호환성을 위해 인덱스 시그니처 추가
  */
-export interface TipTapDocJson {
+export type TipTapDocJson = Record<string, unknown> & {
   type: 'doc';
   content: TipTapNode[];
-  [key: string]: unknown;
-}
+};
 
 /**
  * 청크 분할 경계점 정보
@@ -72,6 +71,15 @@ export interface TranslationChunk {
   status: TranslationChunkStatus;
   result?: TipTapDocJson;
   error?: string;
+}
+
+/**
+ * Markdown 기반 청크 (중간 형식)
+ */
+export interface MarkdownChunk {
+  index: number;
+  markdown: string;
+  estimatedTokens: number;
 }
 
 /**

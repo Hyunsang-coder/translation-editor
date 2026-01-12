@@ -2,6 +2,10 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
@@ -52,6 +56,10 @@ export function TipTapEditor({
         placeholder,
         emptyEditorClass: 'tiptap-empty',
       }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content,
     editable,
@@ -166,6 +174,10 @@ export function SourceTipTapEditor({
         placeholder: t('editor.sourcePlaceholder'),
         emptyEditorClass: 'tiptap-empty',
       }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: 'sourceExcerpt',
@@ -282,6 +294,10 @@ export function TargetTipTapEditor({
         placeholder: t('editor.targetPlaceholder'),
         emptyEditorClass: 'tiptap-empty',
       }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: 'targetExcerpt',

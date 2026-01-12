@@ -7,55 +7,22 @@ import {
   type TranslationProgressCallback,
   type ChunkedTranslationResult,
 } from './chunking';
+import {
+  tipTapJsonToMarkdown,
+  markdownToTipTapJson,
+  estimateMarkdownTokens,
+  detectMarkdownTruncation,
+  extractTranslationMarkdown,
+  isValidTipTapDocJson,
+  type TipTapDocJson,
+} from '@/utils/markdownConverter';
 
-export type TipTapDocJson = Record<string, unknown>;
+// TipTapDocJson 타입을 re-export
+export type { TipTapDocJson };
 
 // ============================================================
-// 동적 토큰 계산 및 truncation 감지
+// 타임아웃/재시도 에러 판단
 // ============================================================
-
-/**
- * 텍스트 기반 토큰 수 추정
- * - 영어: 약 4자 = 1토큰
- * - 한글: 약 2자 = 1토큰
- * - JSON 구조 오버헤드 약 20% 추가
- */
-function estimateTokenCount(text: string): number {
-  const chars = text.length;
-  // 평균적으로 3자당 1토큰으로 추정 (한영 혼용 고려)
-  const estimatedTokens = Math.ceil(chars / 3);
-  // JSON 구조 오버헤드 20% 추가
-  return Math.ceil(estimatedTokens * 1.2);
-}
-
-/**
- * 개선된 truncation 감지
- */
-function detectTruncation(raw: string): { isTruncated: boolean; reason?: string } {
-  const openBrace = (raw.match(/\{/g) || []).length;
-  const closeBrace = (raw.match(/\}/g) || []).length;
-  const openBracket = (raw.match(/\[/g) || []).length;
-  const closeBracket = (raw.match(/\]/g) || []).length;
-
-  if (openBrace > closeBrace) {
-    return { isTruncated: true, reason: `Unmatched braces: ${openBrace} open, ${closeBrace} close` };
-  }
-  if (openBracket > closeBracket) {
-    return { isTruncated: true, reason: `Unmatched brackets: ${openBracket} open, ${closeBracket} close` };
-  }
-
-  // 문자열 내부에서 끊긴 경우 감지
-  const lastQuote = raw.lastIndexOf('"');
-  if (lastQuote > 0) {
-    const afterQuote = raw.slice(lastQuote + 1).trim();
-    // 정상적인 JSON이라면 " 뒤에 ,}] 중 하나가 와야 함
-    if (afterQuote.length === 0 || !/^[,}\]]/.test(afterQuote)) {
-      return { isTruncated: true, reason: 'Response ends mid-string' };
-    }
-  }
-
-  return { isTruncated: false };
-}
 
 /**
  * 타임아웃 에러인지 판단
@@ -80,11 +47,6 @@ export function isRetryableTranslationError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const msg = error.message.toLowerCase();
 
-  // 재시도 가능한 에러:
-  // - 응답 잘림 (truncation)
-  // - JSON 파싱 실패
-  // - 빈 응답
-  // - 네트워크/타임아웃 에러
   return (
     msg.includes('파싱') ||
     msg.includes('비어') ||
@@ -93,8 +55,8 @@ export function isRetryableTranslationError(error: unknown): boolean {
     msg.includes('timed out') ||
     msg.includes('network') ||
     msg.includes('translationpreviewerror') ||
-    msg.includes('unmatched') ||
-    msg.includes('mid-string') ||
+    msg.includes('unclosed') ||
+    msg.includes('incomplete') ||
     msg.includes('econnreset') ||
     msg.includes('socket hang up')
   );
@@ -122,100 +84,21 @@ export function formatTranslationError(error: unknown): string {
     return '번역 응답이 비어 있습니다. 다시 시도해주세요.';
   }
 
-  if (msg.includes('truncat') || msg.includes('잘렸')) {
+  if (msg.includes('truncat') || msg.includes('잘렸') || msg.includes('Unclosed')) {
     return '번역 응답이 잘렸습니다. 문서를 분할하여 다시 시도합니다.';
   }
 
   return msg;
 }
 
-function extractFirstJsonObject(raw: string): string | null {
-  let inString = false;
-  let escaped = false;
-  let depth = 0;
-  let start = -1;
-
-  for (let i = 0; i < raw.length; i += 1) {
-    const ch = raw[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (ch === '{') {
-      if (depth === 0) start = i;
-      depth += 1;
-    } else if (ch === '}' && depth > 0) {
-      depth -= 1;
-      if (depth === 0 && start !== -1) {
-        return raw.slice(start, i + 1);
-      }
-    }
-  }
-
-  return null;
-}
-
-function extractJsonObject(raw: string): string {
-  let t = raw.trim();
-  
-  // 1) 코드펜스 제거 (```json ... ``` 또는 ``` ... ```)
-  // 여러 코드펜스가 있을 수 있으므로 전역 제거
-  t = t.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
-  
-  // 2) 응답에 앞/뒤 설명이 붙거나, 내부에 여분의 중괄호가 섞여 있을 때
-  // 첫 번째로 닫히는 JSON 오브젝트만 안전하게 잘라냅니다.
-  const balanced = extractFirstJsonObject(t);
-  if (balanced) return balanced.trim();
-
-  // 3) Fallback: 첫 { 부터 마지막 } 까지
-  const first = t.indexOf('{');
-  const last = t.lastIndexOf('}');
-  if (first >= 0 && last > first) {
-    return t.slice(first, last + 1).trim();
-  }
-  
-  return t;
-}
-
-function isTipTapDocJson(v: unknown): v is TipTapDocJson {
-  if (!v || typeof v !== 'object') return false;
-  const obj = v as Record<string, unknown>;
-  return obj.type === 'doc' && Array.isArray(obj.content);
-}
-
-function contentToText(content: unknown): string {
-  if (content === null || content === undefined) return '';
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    const texts = content
-      .map((c) => {
-        if (!c) return '';
-        if (typeof c === 'string') return c;
-        if (typeof c === 'object' && 'text' in c && typeof (c as { text?: unknown }).text === 'string') {
-          return (c as { text: string }).text;
-        }
-        return '';
-      })
-      .filter((t) => t.trim().length > 0);
-    if (texts.length > 0) {
-      return texts.join('\n');
-    }
-  }
-  return JSON.stringify(content);
-}
-
 /**
- * Source 전체를 TipTap JSON 형태로 번역합니다. (서식/구조 보존)
- * - 모델 출력은 "JSON만" 강제
+ * Source 전체를 TipTap JSON 형태로 번역합니다.
+ *
+ * Markdown 파이프라인:
+ * 1. TipTap JSON → Markdown 변환
+ * 2. Markdown으로 LLM 호출 (토큰 효율적)
+ * 3. Markdown 응답 → TipTap JSON 변환
+ *
  * - 번역(Translate) 모드는 채팅 히스토리를 컨텍스트에 포함하지 않습니다.
  */
 export async function translateSourceDocToTargetDocJson(params: {
@@ -229,7 +112,7 @@ export async function translateSourceDocToTargetDocJson(params: {
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig({ useFor: 'translation' });
 
-  // mock provider는 더 이상 지원하지 않음 - 실제 API 호출 필요
+  // mock provider는 더 이상 지원하지 않음
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
   }
@@ -238,6 +121,11 @@ export async function translateSourceDocToTargetDocJson(params: {
   if (!cfg.openaiApiKey) {
     throw new Error(i18n.t('errors.openaiApiKeyMissing'));
   }
+
+  // ============================================================
+  // TipTap JSON → Markdown 변환
+  // ============================================================
+  const sourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
 
   const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
@@ -248,27 +136,23 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   const systemLines: string[] = [
     persona,
-    `아래에 제공되는 TipTap/ProseMirror 문서 JSON의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
+    `아래에 제공되는 Markdown 문서의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '=== 중요: 출력 형식 ===',
-    '반드시 아래 형태의 "단 하나의 JSON 객체"만 출력하세요:',
+    '반드시 아래 형태로만 출력하세요:',
     '',
-    '성공 시:',
-    '{"doc": {"type":"doc","content":[...]}}',
-    '',
-    '실패 시:',
-    '{"error": "사유 설명", "doc": null}',
+    '---TRANSLATION_START---',
+    '[번역된 Markdown]',
+    '---TRANSLATION_END---',
     '',
     '절대 금지 사항:',
-    '- 코드펜스(```json, ```) 사용 금지',
-    '- 마크다운 포맷 사용 금지',
     '- "번역 결과입니다", "다음과 같이 번역했습니다" 등의 설명문 금지',
-    '- HTML, 인사말, 부연 설명 금지',
-    '- 오직 위 JSON 객체만 출력',
+    '- 인사말, 부연 설명 금지',
+    '- 구분자 외부에 텍스트 금지',
+    '- 오직 구분자 내부에 번역된 Markdown만 출력',
     '',
     '=== 번역 규칙 ===',
-    '- 성공 시 doc는 ProseMirror doc 스키마를 유지해야 합니다.',
-    '- 문서 구조/서식(heading/list/marks/link 등)은 그대로 유지하고, 텍스트 노드의 내용만 번역하세요.',
+    '- 문서 구조/서식(heading, list, bold, italic, link 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
     '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
     '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
     '',
@@ -287,11 +171,10 @@ export async function translateSourceDocToTargetDocJson(params: {
   const systemPrompt = systemLines.join('\n').trim();
 
   // ============================================================
-  // 동적 max_tokens 계산
+  // 동적 max_tokens 계산 (Markdown 기준, JSON 오버헤드 없음)
   // ============================================================
-  const inputJson = JSON.stringify(params.sourceDocJson);
-  const estimatedInputTokens = estimateTokenCount(inputJson);
-  const systemPromptTokens = estimateTokenCount(systemPrompt);
+  const estimatedInputTokens = estimateMarkdownTokens(sourceMarkdown);
+  const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
 
   // GPT-5 컨텍스트 윈도우: 400k, 안전 마진 10%
@@ -312,23 +195,20 @@ export async function translateSourceDocToTargetDocJson(params: {
     );
   }
 
-  // JSON mode를 사용하는 ChatOpenAI 인스턴스 생성
-  // Structured Output은 복잡한 중첩 구조(TipTap)와 호환성 문제가 있어 JSON mode 사용
+  // Markdown은 JSON mode 불필요 - 자연스러운 텍스트 출력
   const isGpt5 = cfg.model.startsWith('gpt-5');
   const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
 
-  // 타임아웃: 복잡한 JSON 구조 생성에 시간이 걸릴 수 있으므로 3분으로 설정
+  // 타임아웃: 3분
   const TRANSLATION_TIMEOUT_MS = 180_000;
 
-  const jsonModel = new ChatOpenAI({
+  const model = new ChatOpenAI({
     apiKey: cfg.openaiApiKey,
     model: cfg.model,
     ...temperatureOption,
     maxTokens: calculatedMaxTokens,
     timeout: TRANSLATION_TIMEOUT_MS,
-    modelKwargs: {
-      response_format: { type: 'json_object' },
-    },
+    // JSON mode 제거 - Markdown 출력에는 불필요
   });
 
   const messages = [
@@ -336,12 +216,12 @@ export async function translateSourceDocToTargetDocJson(params: {
     {
       role: 'user' as const,
       content: [
-        '아래 JSON 문서를 번역하여, 위에서 지정한 형태의 JSON 객체로만 반환하세요.',
+        '아래 Markdown 문서를 번역하여, 구분자 내에 번역된 Markdown만 반환하세요.',
         '',
         '입력 문서:',
-        JSON.stringify(params.sourceDocJson),
+        sourceMarkdown,
         '',
-        '다시 한 번 강조: 설명 없이 {"doc": {...}} 형태의 JSON만 출력하세요.',
+        '다시 한 번 강조: ---TRANSLATION_START--- 와 ---TRANSLATION_END--- 사이에 번역된 Markdown만 출력하세요.',
       ].join('\n'),
     },
   ];
@@ -351,9 +231,9 @@ export async function translateSourceDocToTargetDocJson(params: {
     throw new Error('번역이 취소되었습니다.');
   }
 
-  // JSON mode로 번역 실행 (AbortSignal 전달)
+  // 번역 실행
   const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-  const res = await jsonModel.invoke(messages, invokeOptions);
+  const res = await model.invoke(messages, invokeOptions);
 
   // finish_reason 확인 (응답 잘림 감지)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -365,65 +245,44 @@ export async function translateSourceDocToTargetDocJson(params: {
     );
   }
 
-  const raw = contentToText((res as { content?: unknown })?.content);
-  
+  // 응답 텍스트 추출
+  const rawContent = res.content;
+  const raw = typeof rawContent === 'string'
+    ? rawContent
+    : Array.isArray(rawContent)
+      ? rawContent.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+      : String(rawContent);
+
   // 응답이 비어있는 경우
   if (!raw || raw.trim().length === 0) {
     throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
   }
-  
-  const extracted = extractJsonObject(raw);
 
-  let parsed: unknown;
-  let lastError: unknown;
-  const candidates = [extracted, extracted !== raw ? raw : null].filter(
-    (c): c is string => typeof c === 'string' && c.length > 0,
-  );
+  // ============================================================
+  // Markdown 응답 추출 및 검증
+  // ============================================================
+  const translatedMarkdown = extractTranslationMarkdown(raw);
 
-  for (const candidate of candidates) {
-    try {
-      parsed = JSON.parse(candidate);
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  if (lastError) {
-    // 개선된 truncation 감지
-    const truncation = detectTruncation(raw);
-
-    if (truncation.isTruncated) {
-      throw new Error(
-        `${i18n.t('errors.translationPreviewError')}\n` +
-        `응답이 잘렸습니다: ${truncation.reason}\n` +
-        `다시 시도해주세요.`
-      );
-    }
-
-    // 디버깅을 위해 실제 응답 내용의 일부를 에러 메시지에 포함
-    const preview = raw.slice(0, 300).replace(/\n/g, ' ');
+  // Markdown truncation 감지
+  const truncation = detectMarkdownTruncation(translatedMarkdown);
+  if (truncation.isTruncated) {
     throw new Error(
-      `번역 결과 JSON 파싱에 실패했습니다. (모델이 JSON 이외의 텍스트를 출력했을 수 있습니다)\n\n응답 미리보기: ${preview}...`,
+      `${i18n.t('errors.translationPreviewError')}\n` +
+      `응답이 잘렸습니다: ${truncation.reason}\n` +
+      `다시 시도해주세요.`
     );
   }
 
-  if (parsed && typeof parsed === 'object') {
-    const obj = parsed as Record<string, unknown>;
-    if (typeof obj.error === 'string') {
-      throw new Error(obj.error);
-    }
-    if (obj.doc && isTipTapDocJson(obj.doc)) {
-      return { doc: obj.doc, raw };
-    }
-  }
+  // ============================================================
+  // Markdown → TipTap JSON 변환
+  // ============================================================
+  const translatedDoc = markdownToTipTapJson(translatedMarkdown);
 
-  if (!isTipTapDocJson(parsed)) {
+  if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
   }
 
-  return { doc: parsed, raw };
+  return { doc: translatedDoc, raw };
 }
 
 // ============================================================

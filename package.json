@@ -26,6 +26,10 @@
     "@tiptap/extension-link": "^2.27.1",
     "@tiptap/extension-paragraph": "^2.10.4",
     "@tiptap/extension-placeholder": "^2.27.1",
+    "@tiptap/extension-table": "^2.27.2",
+    "@tiptap/extension-table-cell": "^2.27.2",
+    "@tiptap/extension-table-header": "^2.27.2",
+    "@tiptap/extension-table-row": "^2.27.2",
     "@tiptap/extension-text": "^2.10.4",
     "@tiptap/pm": "^2.10.4",
     "@tiptap/react": "^2.10.4",
@@ -43,6 +47,7 @@
     "react-resizable-panels": "^4.0.15",
     "react-rnd": "^10.5.2",
     "remark-gfm": "^4.0.1",
+    "tiptap-markdown": "^0.8.10",
     "uuid": "^11.0.3",
     "zod": "^3.25.76",
     "zustand": "^5.0.2"
