@@ -218,6 +218,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     setTimeout(() => setTargetFlash(false), 1000);
   }, [translatePreviewDoc, setTargetDocument]);
 
+  // 번역 재시도 핸들러
+  const handleTranslateRetry = useCallback((): void => {
+    // 기존 에러 클리어하고 다시 번역 시도
+    void openTranslatePreview();
+  }, [openTranslatePreview]);
+
   // Source 에디터 준비 완료 콜백
   const handleSourceEditorReady = useCallback((editor: Editor) => {
     sourceEditorRef.current = editor;
@@ -388,6 +394,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslateLoading(false);
           setTranslatePreviewOpen(false);
         }}
+        {...(translatePreviewError ? { onRetry: handleTranslateRetry } : {})}
       />
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}

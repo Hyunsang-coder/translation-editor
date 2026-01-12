@@ -54,9 +54,10 @@ export function TranslatePreviewModal(props: {
   onClose: () => void;
   onApply: () => void;
   onCancel?: () => void;
+  onRetry?: () => void;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply, onCancel } = props;
+  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply, onCancel, onRetry } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
@@ -300,6 +301,17 @@ export function TranslatePreviewModal(props: {
                 <div className="mt-2 text-sm text-editor-muted whitespace-pre-wrap">
                   {error}
                 </div>
+                {onRetry && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                    >
+                      {t('common.retry')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : viewMode === 'diff' && originalText.trim().length > 0 ? (

@@ -48,11 +48,19 @@ What:
 - Trigger: Translate(Preview) 버튼/단축키
 - Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
 - Output: TipTap JSON (문서 전체), JSON 파싱 실패 시 폴백 로직
-- UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음.
+- UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음. **에러 시 Retry 버튼 표시**.
 - API 구조: LangChain `BaseMessage[]` 배열
   - SystemMessage 1개: 번역 전용 프롬프트 (페르소나, 번역 규칙, Project Context 포함)
   - UserMessage 1개: TipTap JSON 문서를 문자열로 전달
   - 히스토리 메시지 없음
+- JSON 파싱 안정성:
+  - **1차 시도**: LangChain `withStructuredOutput` (Structured Output)
+  - **폴백**: 기존 텍스트 파싱 (`extractJsonObject`)
+  - **Truncation 감지**: 중괄호/대괄호 불일치, 문자열 중간 끊김 감지
+- 동적 max_tokens 계산:
+  - 입력 문서 크기 기반으로 출력 토큰 자동 계산
+  - GPT-5 400k 컨텍스트 윈도우 기준, 안전 마진 10%
+  - 문서가 너무 큰 경우 사전 에러 발생 (분할 번역 안내)
 
 3.2 Context Collection 명세 (Payload 규칙)
 Why:
@@ -429,7 +437,7 @@ Why:
 What:
 - **OpenAI**: 유일한 활성 Provider (Responses API 사용)
 - **Anthropic/Google**: 코드에서 제거 (향후 필요 시 재도입 가능)
-- **Mock**: 타입만 유지 (개발/테스트용, UI에서 제거됨)
+- **Mock**: 번역 모드에서 제거됨. mock 설정 시 에러 발생하며 OpenAI API 키 설정 안내
 
 7.2 API Key 관리 (SecretManager/Vault 아키텍처)
 Why:

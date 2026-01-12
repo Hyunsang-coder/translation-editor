@@ -2,8 +2,103 @@ import type { ITEProject } from '@/types';
 import { createChatModel } from '@/ai/client';
 import { getAiConfig } from '@/ai/config';
 import i18n from '@/i18n/config';
+import { z } from 'zod';
 
 export type TipTapDocJson = Record<string, unknown>;
+
+// ============================================================
+// Structured Output 스키마 정의
+// ============================================================
+
+// TipTap doc content 스키마 (재귀 구조)
+const TipTapNodeSchema: z.ZodType<Record<string, unknown>> = z.lazy(() =>
+  z.object({
+    type: z.string(),
+    content: z.array(TipTapNodeSchema).optional(),
+    text: z.string().optional(),
+    marks: z.array(z.record(z.unknown())).optional(),
+    attrs: z.record(z.unknown()).optional(),
+  }).passthrough()
+);
+
+const TranslationResultSchema = z.object({
+  doc: z.object({
+    type: z.literal('doc'),
+    content: z.array(TipTapNodeSchema),
+  }).passthrough().nullable(),
+  error: z.string().optional(),
+});
+
+// ============================================================
+// 동적 토큰 계산 및 truncation 감지
+// ============================================================
+
+/**
+ * 텍스트 기반 토큰 수 추정
+ * - 영어: 약 4자 = 1토큰
+ * - 한글: 약 2자 = 1토큰
+ * - JSON 구조 오버헤드 약 20% 추가
+ */
+function estimateTokenCount(text: string): number {
+  const chars = text.length;
+  // 평균적으로 3자당 1토큰으로 추정 (한영 혼용 고려)
+  const estimatedTokens = Math.ceil(chars / 3);
+  // JSON 구조 오버헤드 20% 추가
+  return Math.ceil(estimatedTokens * 1.2);
+}
+
+/**
+ * 개선된 truncation 감지
+ */
+function detectTruncation(raw: string): { isTruncated: boolean; reason?: string } {
+  const openBrace = (raw.match(/\{/g) || []).length;
+  const closeBrace = (raw.match(/\}/g) || []).length;
+  const openBracket = (raw.match(/\[/g) || []).length;
+  const closeBracket = (raw.match(/\]/g) || []).length;
+
+  if (openBrace > closeBrace) {
+    return { isTruncated: true, reason: `Unmatched braces: ${openBrace} open, ${closeBrace} close` };
+  }
+  if (openBracket > closeBracket) {
+    return { isTruncated: true, reason: `Unmatched brackets: ${openBracket} open, ${closeBracket} close` };
+  }
+
+  // 문자열 내부에서 끊긴 경우 감지
+  const lastQuote = raw.lastIndexOf('"');
+  if (lastQuote > 0) {
+    const afterQuote = raw.slice(lastQuote + 1).trim();
+    // 정상적인 JSON이라면 " 뒤에 ,}] 중 하나가 와야 함
+    if (afterQuote.length === 0 || !/^[,}\]]/.test(afterQuote)) {
+      return { isTruncated: true, reason: 'Response ends mid-string' };
+    }
+  }
+
+  return { isTruncated: false };
+}
+
+/**
+ * 재시도 가능한 번역 에러인지 판단
+ */
+export function isRetryableTranslationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+
+  // 재시도 가능한 에러:
+  // - 응답 잘림 (truncation)
+  // - JSON 파싱 실패
+  // - 빈 응답
+  // - 네트워크/타임아웃 에러
+  return (
+    msg.includes('파싱') ||
+    msg.includes('비어') ||
+    msg.includes('truncat') ||
+    msg.includes('timeout') ||
+    msg.includes('network') ||
+    msg.includes('translationpreviewerror') ||
+    msg.includes('unmatched') ||
+    msg.includes('mid-string')
+  );
+}
 
 function extractFirstJsonObject(raw: string): string | null {
   let inString = false;
@@ -103,9 +198,9 @@ export async function translateSourceDocToTargetDocJson(params: {
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig();
 
+  // mock provider는 더 이상 지원하지 않음 - 실제 API 호출 필요
   if (cfg.provider === 'mock') {
-    // mock은 실제 번역 대신 "그대로 반환"하여 파이프라인 테스트 가능하게 함
-    return { doc: params.sourceDocJson, raw: JSON.stringify(params.sourceDocJson) };
+    throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
   }
 
   const srcLang = 'Source';
@@ -155,7 +250,33 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   const systemPrompt = systemLines.join('\n').trim();
 
-  const model = createChatModel(undefined, { useFor: 'translation' });
+  // ============================================================
+  // 동적 max_tokens 계산
+  // ============================================================
+  const inputJson = JSON.stringify(params.sourceDocJson);
+  const estimatedInputTokens = estimateTokenCount(inputJson);
+  const systemPromptTokens = estimateTokenCount(systemPrompt);
+  const totalInputTokens = estimatedInputTokens + systemPromptTokens;
+
+  // GPT-5 컨텍스트 윈도우: 400k, 안전 마진 10%
+  const MAX_CONTEXT = 400_000;
+  const SAFETY_MARGIN = 0.9;
+  const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
+
+  // 최소 출력 토큰 보장 (입력보다 약간 많게 - 번역 시 텍스트가 늘어날 수 있음)
+  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
+  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, 65536));
+
+  // 입력이 너무 큰 경우 사전 에러
+  if (availableOutputTokens < minOutputTokens) {
+    throw new Error(
+      `문서가 너무 큽니다. 예상 입력: ${totalInputTokens.toLocaleString()} 토큰, ` +
+      `최대 허용: ${Math.floor(MAX_CONTEXT * 0.6).toLocaleString()} 토큰. ` +
+      `문서를 분할하여 번역해주세요.`
+    );
+  }
+
+  const model = createChatModel(undefined, { useFor: 'translation', maxTokens: calculatedMaxTokens });
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -173,22 +294,40 @@ export async function translateSourceDocToTargetDocJson(params: {
   ];
 
   // 1) 1차: LangChain structured output (OpenAI JSON/tool calling 등)로 파싱 안정화
-  // 1) 1차: LangChain structured output 시도 (현재 스키마 에러로 인해 일시적으로 텍스트 파생 폴백 우선 사용)
-  /*
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const structured = (model as any).withStructuredOutput(TranslationResultSchema, {
       name: 'translate_doc',
       strict: false,
       includeRaw: true,
     });
-    const res = await structured.invoke(messages);
-    // ... (기존 로직)
+    const structuredRes = await structured.invoke(messages);
+
+    // includeRaw: true일 때 { raw: AIMessage, parsed: {...} } 형태로 반환됨
+    const parsed = structuredRes?.parsed;
+    const rawMessage = structuredRes?.raw;
+    const rawContent = contentToText(rawMessage?.content);
+
+    if (parsed) {
+      // 에러 응답 처리
+      if (typeof parsed.error === 'string' && parsed.error.trim()) {
+        throw new Error(parsed.error);
+      }
+
+      // 성공적으로 파싱된 경우
+      if (parsed.doc && isTipTapDocJson(parsed.doc)) {
+        return { doc: parsed.doc, raw: rawContent || JSON.stringify(parsed.doc) };
+      }
+    }
+
+    // parsed가 없거나 doc가 유효하지 않으면 폴백으로 진행
+    console.warn('Structured output parsed but doc invalid, falling back to text parsing');
   } catch (e) {
+    // Structured output 자체가 실패한 경우 폴백
     console.warn('Structured output failed, falling back to text parsing:', e);
   }
-  */
 
-  // 2) 폴백: 기존 문자열 파싱 (가장 안정적임)
+  // 2) 폴백: 기존 문자열 파싱
   const res = await model.invoke(messages);
   const raw = contentToText((res as { content?: unknown })?.content);
   
@@ -216,16 +355,17 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   if (lastError) {
-    // 불완전한 JSON인지 확인 (응답이 잘린 경우)
-    const hasOpenBrace = raw.includes('{');
-    const openCount = (raw.match(/\{/g) || []).length;
-    const closeCount = (raw.match(/\}/g) || []).length;
-    const isTruncated = hasOpenBrace && openCount > closeCount;
-    
-    if (isTruncated) {
-      throw new Error(i18n.t('errors.translationPreviewError'));
+    // 개선된 truncation 감지
+    const truncation = detectTruncation(raw);
+
+    if (truncation.isTruncated) {
+      throw new Error(
+        `${i18n.t('errors.translationPreviewError')}\n` +
+        `응답이 잘렸습니다: ${truncation.reason}\n` +
+        `다시 시도해주세요.`
+      );
     }
-    
+
     // 디버깅을 위해 실제 응답 내용의 일부를 에러 메시지에 포함
     const preview = raw.slice(0, 300).replace(/\n/g, ' ');
     throw new Error(

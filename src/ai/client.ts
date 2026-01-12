@@ -10,7 +10,7 @@ import i18n from '@/i18n/config';
  */
 export function createChatModel(
   modelOverride?: string,
-  options?: { useFor?: 'translation' | 'chat' }
+  options?: { useFor?: 'translation' | 'chat'; maxTokens?: number }
 ): BaseChatModel {
   const cfg = getAiConfig(options);
   const model = modelOverride ?? cfg.model;
@@ -25,10 +25,13 @@ export function createChatModel(
     // GPT-5.2, GPT-5-mini 등 최신 모델은 temperature 파라미터를 지원하지 않거나 무시해야 함
     const isGpt5 = model.startsWith('gpt-5');
     const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
-    
+
     // 번역 모드에서는 max_tokens를 높게 설정하여 긴 문서도 완전히 번역되도록 함
     // GPT-5 시리즈는 400k 컨텍스트 윈도우 지원, 출력 토큰도 충분히 확보
-    const maxTokensOption = useFor === 'translation' ? { maxTokens: 65536 } : {};
+    // options.maxTokens가 명시적으로 전달되면 해당 값 사용
+    const maxTokensOption = options?.maxTokens
+      ? { maxTokens: options.maxTokens }
+      : (useFor === 'translation' ? { maxTokens: 65536 } : {});
 
     return new ChatOpenAI({
       apiKey: cfg.openaiApiKey,

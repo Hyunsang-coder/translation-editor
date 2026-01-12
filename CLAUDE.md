@@ -51,7 +51,7 @@ cd src-tauri && cargo test
 - **Frontend**: React 18 + TypeScript + Vite + TailwindCSS
 - **Editor**: TipTap (ProseMirror) - dual instances for Source/Target documents
 - **State Management**: Zustand with persistence
-- **AI Integration**: LangChain.js (OpenAI/Anthropic)
+- **AI Integration**: LangChain.js (OpenAI only)
 - **UI Layout**: Hybrid Panel Layout (Settings sidebar + Floating Chat with react-rnd)
 - **Backend**: Tauri 2 + Rust
 - **Storage**: SQLite (`.ite` project files)
@@ -72,6 +72,10 @@ cd src-tauri && cargo test
   - No chat history in payload
   - Output enforced as TipTap JSON only
   - Uses: System Prompt + Translation Rules + Project Context + Glossary
+  - **Structured Output**: Primary parsing via `withStructuredOutput`, fallback to text extraction
+  - **Dynamic max_tokens**: Calculated based on input document size (GPT-5 400k context)
+  - **Truncation Detection**: Detects unmatched braces/brackets, mid-string breaks
+  - **Retry on Error**: Preview modal shows retry button for recoverable errors
 
 - **Chat/Question Mode** (`chat.ts`):
   - User-initiated Q&A with chat history (max 10 messages)
@@ -216,8 +220,9 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 1. User writes Source document
 2. User clicks "Translate" button
 3. AI generates translation → Preview modal with diff view
-4. User reviews and clicks "Apply" → Target document replaced entirely
-5. User manually edits Target if needed
+4. If error occurs → Retry button shown in modal (recoverable errors only)
+5. User reviews and clicks "Apply" → Target document replaced entirely
+6. User manually edits Target if needed
 
 ### Context Limits
 - Translation Rules max 10,000 chars (App Settings enforced)
@@ -232,6 +237,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 4. **Keychain Access**: First run requires OS authentication prompt for keychain access.
 5. **Sidecar Lifecycle**: MCP sidecar processes must be cleaned up on app exit.
 6. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.
+7. **Mock Provider**: Mock mode is not supported for translation. Setting `mock` provider throws an error with guidance to configure OpenAI API key.
+8. **Translation Truncation**: Large documents may cause response truncation. Dynamic max_tokens calculation and truncation detection handle this automatically.
 
 ## Testing Patterns
 

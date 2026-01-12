@@ -9,7 +9,8 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "loading": "Loading...",
-    "untitledProject": "Untitled Project"
+    "untitledProject": "Untitled Project",
+    "retry": "Retry"
   },
   "settings": {
     "title": "Project Settings",
