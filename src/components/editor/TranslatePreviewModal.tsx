@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
@@ -9,6 +9,15 @@ import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
+
+/**
+ * 경과 시간을 포맷팅 (mm:ss)
+ */
+function formatElapsedTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
 
 /**
  * Diff 비교를 위한 텍스트 정규화
@@ -51,17 +60,86 @@ export function TranslatePreviewModal(props: {
   originalHtml?: string | null;
   isLoading?: boolean;
   error?: string | null;
+  /** 청크 분할 번역 진행률 */
+  progress?: { completed: number; total: number } | null;
   onClose: () => void;
   onApply: () => void;
   onCancel?: () => void;
   onRetry?: () => void;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, onClose, onApply, onCancel, onRetry } = props;
+  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, progress, onClose, onApply, onCancel, onRetry } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
+
+  // 경과 시간 상태
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [finalElapsedSeconds, setFinalElapsedSeconds] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedSecondsRef = useRef(0);
+
+  // elapsedSeconds가 변경될 때마다 ref도 업데이트
+  useEffect(() => {
+    elapsedSecondsRef.current = elapsedSeconds;
+  }, [elapsedSeconds]);
+
+  // 타이머 시작
+  const startTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setElapsedSeconds(0);
+    setFinalElapsedSeconds(null);
+    elapsedSecondsRef.current = 0;
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => {
+        elapsedSecondsRef.current = prev + 1;
+        return prev + 1;
+      });
+    }, 1000);
+  }, []);
+
+  // 타이머 정지
+  const stopTimer = useCallback((saveFinal: boolean = false) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (saveFinal && elapsedSecondsRef.current > 0) {
+      setFinalElapsedSeconds(elapsedSecondsRef.current);
+    }
+  }, []);
+
+  // isLoading 상태에 따라 타이머 제어
+  useEffect(() => {
+    if (isLoading) {
+      startTimer();
+    } else {
+      // 로딩이 끝날 때 최종 시간 저장 (에러가 없고 결과가 있을 때만)
+      stopTimer(docJson !== null && !error);
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isLoading, docJson, error, startTimer, stopTimer]);
+
+  // 모달이 닫힐 때 타이머 리셋
+  useEffect(() => {
+    if (!open) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setFinalElapsedSeconds(null);
+      setElapsedSeconds(0);
+      elapsedSecondsRef.current = 0;
+    }
+  }, [open]);
 
   // Diff의 기준(original)은 모달을 열 때의 target 상태로 스냅샷 고정합니다.
   // Apply로 targetDocument가 바뀌어도 DiffEditor의 모델이 갈아끼워지지 않게 해서
@@ -284,11 +362,38 @@ export function TranslatePreviewModal(props: {
                 </div>
               </div>
               <div className="flex-shrink-0 px-4 py-3 border-t border-editor-border bg-editor-bg">
-                <div className="text-[11px] font-medium shimmer-text">
-                  {t('editor.generatingTranslation')}
-                  <span className="sr-only" aria-live="polite">
-                    {t('editor.generatingTranslationAria')}
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="text-[11px] font-medium shimmer-text">
+                      {progress && progress.total > 1 ? (
+                        <>
+                          {t('editor.generatingTranslation')} ({progress.completed}/{progress.total} {t('editor.chunks', '섹션')})
+                        </>
+                      ) : (
+                        t('editor.generatingTranslation')
+                      )}
+                      <span className="sr-only" aria-live="polite">
+                        {t('editor.generatingTranslationAria')}
+                      </span>
+                    </div>
+                    {/* 경과 시간 표시 */}
+                    <span className="text-[10px] text-editor-muted tabular-nums">
+                      {formatElapsedTime(elapsedSeconds)}
+                    </span>
+                  </div>
+                  {progress && progress.total > 1 && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 h-1.5 bg-editor-border rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                          style={{ width: `${Math.round((progress.completed / progress.total) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-editor-muted tabular-nums">
+                        {Math.round((progress.completed / progress.total) * 100)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -332,9 +437,16 @@ export function TranslatePreviewModal(props: {
                 )}
               </div>
               <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
-                <span className="text-[10px] text-editor-muted">
-                  {t('editor.sourceLabel')} {countWords(originalText).toLocaleString()} {t('editor.words')}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-editor-muted">
+                    {t('editor.sourceLabel')} {countWords(originalText).toLocaleString()} {t('editor.words')}
+                  </span>
+                  {finalElapsedSeconds !== null && (
+                    <span className="text-[10px] text-primary-500 tabular-nums">
+                      {t('editor.completedIn', '완료')} {formatElapsedTime(finalElapsedSeconds)}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-editor-muted">
                   {t('editor.translationLabel')} {translationWordCount.toLocaleString()} {t('editor.words')}
                 </span>
@@ -359,7 +471,14 @@ export function TranslatePreviewModal(props: {
                   </div>
                 )}
               </div>
-              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-end gap-4">
+              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {finalElapsedSeconds !== null && (
+                    <span className="text-[10px] text-primary-500 tabular-nums">
+                      {t('editor.completedIn', '완료')} {formatElapsedTime(finalElapsedSeconds)}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-editor-muted">
                   {translationWordCount.toLocaleString()} {t('editor.words')}
                 </span>

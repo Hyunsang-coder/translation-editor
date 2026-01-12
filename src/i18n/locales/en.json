@@ -148,7 +148,9 @@
       "russian": "Russian"
     },
     "review": "Review",
-    "reviewTitle": "Translation Review"
+    "reviewTitle": "Translation Review",
+    "chunks": "sections",
+    "completedIn": "Completed in"
   },
   "review": {
     "title": "Review",

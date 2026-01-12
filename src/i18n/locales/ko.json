@@ -148,7 +148,9 @@
       "russian": "러시아어"
     },
     "review": "검수",
-    "reviewTitle": "번역 검수"
+    "reviewTitle": "번역 검수",
+    "chunks": "섹션",
+    "completedIn": "완료"
   },
   "review": {
     "title": "검수",

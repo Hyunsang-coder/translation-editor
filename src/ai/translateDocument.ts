@@ -2,6 +2,11 @@ import type { ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import i18n from '@/i18n/config';
 import { ChatOpenAI } from '@langchain/openai';
+import {
+  translateInChunks,
+  type TranslationProgressCallback,
+  type ChunkedTranslationResult,
+} from './chunking';
 
 export type TipTapDocJson = Record<string, unknown>;
 
@@ -53,6 +58,22 @@ function detectTruncation(raw: string): { isTruncated: boolean; reason?: string 
 }
 
 /**
+ * 타임아웃 에러인지 판단
+ */
+export function isTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('timedout') ||
+    msg.includes('econnreset') ||
+    msg.includes('socket hang up') ||
+    msg.includes('aborted')
+  );
+}
+
+/**
  * 재시도 가능한 번역 에러인지 판단
  */
 export function isRetryableTranslationError(error: unknown): boolean {
@@ -69,11 +90,43 @@ export function isRetryableTranslationError(error: unknown): boolean {
     msg.includes('비어') ||
     msg.includes('truncat') ||
     msg.includes('timeout') ||
+    msg.includes('timed out') ||
     msg.includes('network') ||
     msg.includes('translationpreviewerror') ||
     msg.includes('unmatched') ||
-    msg.includes('mid-string')
+    msg.includes('mid-string') ||
+    msg.includes('econnreset') ||
+    msg.includes('socket hang up')
   );
+}
+
+/**
+ * 에러 메시지를 사용자 친화적으로 변환
+ */
+export function formatTranslationError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  if (isTimeoutError(error)) {
+    return '번역 요청 시간이 초과되었습니다. 문서가 복잡하거나 길 경우 자동으로 분할 번역됩니다. 다시 시도해주세요.';
+  }
+
+  const msg = error.message;
+
+  if (msg.includes('파싱') || msg.includes('JSON')) {
+    return '번역 결과를 처리하는 중 오류가 발생했습니다. 다시 시도해주세요.';
+  }
+
+  if (msg.includes('비어') || msg.includes('empty')) {
+    return '번역 응답이 비어 있습니다. 다시 시도해주세요.';
+  }
+
+  if (msg.includes('truncat') || msg.includes('잘렸')) {
+    return '번역 응답이 잘렸습니다. 문서를 분할하여 다시 시도합니다.';
+  }
+
+  return msg;
 }
 
 function extractFirstJsonObject(raw: string): string | null {
@@ -168,9 +221,11 @@ function contentToText(content: unknown): string {
 export async function translateSourceDocToTargetDocJson(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
-  translationRules?: string;
-  projectContext?: string;
-  translatorPersona?: string;
+  translationRules?: string | undefined;
+  projectContext?: string | undefined;
+  translatorPersona?: string | undefined;
+  /** 취소 신호 */
+  abortSignal?: AbortSignal | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig({ useFor: 'translation' });
 
@@ -262,11 +317,15 @@ export async function translateSourceDocToTargetDocJson(params: {
   const isGpt5 = cfg.model.startsWith('gpt-5');
   const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
 
+  // 타임아웃: 복잡한 JSON 구조 생성에 시간이 걸릴 수 있으므로 3분으로 설정
+  const TRANSLATION_TIMEOUT_MS = 180_000;
+
   const jsonModel = new ChatOpenAI({
     apiKey: cfg.openaiApiKey,
     model: cfg.model,
     ...temperatureOption,
     maxTokens: calculatedMaxTokens,
+    timeout: TRANSLATION_TIMEOUT_MS,
     modelKwargs: {
       response_format: { type: 'json_object' },
     },
@@ -287,8 +346,14 @@ export async function translateSourceDocToTargetDocJson(params: {
     },
   ];
 
-  // JSON mode로 번역 실행
-  const res = await jsonModel.invoke(messages);
+  // 취소 확인
+  if (params.abortSignal?.aborted) {
+    throw new Error('번역이 취소되었습니다.');
+  }
+
+  // JSON mode로 번역 실행 (AbortSignal 전달)
+  const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+  const res = await jsonModel.invoke(messages, invokeOptions);
 
   // finish_reason 확인 (응답 잘림 감지)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -361,4 +426,110 @@ export async function translateSourceDocToTargetDocJson(params: {
   return { doc: parsed, raw };
 }
 
+// ============================================================
+// 진행률 콜백 타입 export
+// ============================================================
 
+export type { TranslationProgressCallback, ChunkedTranslationResult };
+
+// ============================================================
+// 청크 분할 번역 (대용량 문서 지원)
+// ============================================================
+
+/**
+ * 청크 분할 번역 파라미터
+ */
+export interface ChunkedTranslationParams {
+  project: ITEProject;
+  sourceDocJson: TipTapDocJson;
+  translationRules?: string;
+  projectContext?: string;
+  translatorPersona?: string;
+  /** 진행률 콜백 */
+  onProgress?: TranslationProgressCallback;
+  /** 취소 신호 */
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * 청크 분할 번역 결과 (호환성)
+ */
+export interface TranslationResult {
+  doc: TipTapDocJson;
+  raw: string;
+  /** 청킹 사용 여부 */
+  wasChunked?: boolean;
+  /** 총 청크 수 */
+  totalChunks?: number;
+  /** 성공한 청크 수 */
+  successfulChunks?: number;
+}
+
+/**
+ * 대용량 문서를 위한 청크 분할 번역
+ *
+ * - 8K 토큰 미만: 단일 호출 (기존 방식)
+ * - 8K 토큰 이상: 청크 분할 후 순차 번역
+ * - 진행률 콜백 지원
+ * - 부분 실패 시 원본 노드로 폴백
+ *
+ * @param params - 번역 파라미터
+ * @returns 번역 결과 (doc, raw, 메타 정보)
+ */
+export async function translateSourceDocWithChunking(
+  params: ChunkedTranslationParams
+): Promise<TranslationResult> {
+  const {
+    project,
+    sourceDocJson,
+    translationRules,
+    projectContext,
+    translatorPersona,
+    onProgress,
+    abortSignal,
+  } = params;
+
+  // 청크 분할 번역 실행
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await translateInChunks({
+    project,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sourceDocJson: sourceDocJson as any,
+    translationRules,
+    projectContext,
+    translatorPersona,
+    onProgress,
+    abortSignal,
+    translateSingleChunk: async (chunkParams) => {
+      // 기존 단일 번역 함수 호출 (abortSignal 전달)
+      const translated = await translateSourceDocToTargetDocJson({
+        project: chunkParams.project,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        sourceDocJson: chunkParams.sourceDocJson as any,
+        translationRules: chunkParams.translationRules,
+        projectContext: chunkParams.projectContext,
+        translatorPersona: chunkParams.translatorPersona,
+        abortSignal,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return translated as any;
+    },
+  });
+
+  // 결과 처리
+  if (!result.success) {
+    throw new Error(result.error || '번역에 실패했습니다.');
+  }
+
+  if (!result.doc) {
+    throw new Error('번역 결과가 없습니다.');
+  }
+
+  return {
+    doc: result.doc as TipTapDocJson,
+    raw: result.raw || JSON.stringify(result.doc),
+    wasChunked: result.wasChunked,
+    totalChunks: result.totalChunks,
+    successfulChunks: result.successfulChunks,
+  };
+}

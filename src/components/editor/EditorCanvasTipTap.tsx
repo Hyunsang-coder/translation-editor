@@ -8,7 +8,11 @@ import { TranslatePreviewModal } from './TranslatePreviewModal';
 // ReviewModal은 더 이상 사용하지 않음 (ChatPanel의 Review 탭으로 대체)
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
-import { translateSourceDocToTargetDocJson } from '@/ai/translateDocument';
+import {
+  translateSourceDocWithChunking,
+  formatTranslationError,
+  type TranslationProgressCallback,
+} from '@/ai/translateDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
@@ -69,6 +73,11 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
+  const translateAbortController = useRef<AbortController | null>(null);
 
   // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
@@ -176,21 +185,42 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     setTranslatePreviewDoc(null);
     setTranslatePreviewOpen(true);
     setTranslateLoading(true);
+    setTranslateProgress(null);
+
+    // AbortController 생성
+    const abortController = new AbortController();
+    translateAbortController.current = abortController;
+
+    // 진행률 콜백
+    const onProgress: TranslationProgressCallback = (progress) => {
+      setTranslateProgress({
+        completed: progress.completed,
+        total: progress.total,
+      });
+    };
 
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
-      const { doc } = await translateSourceDocToTargetDocJson({
+      const { doc } = await translateSourceDocWithChunking({
         project,
         sourceDocJson,
         translationRules,
         projectContext,
         translatorPersona,
+        onProgress,
+        abortSignal: abortController.signal,
       });
       setTranslatePreviewDoc(doc);
     } catch (e) {
-      setTranslatePreviewError(e instanceof Error ? e.message : '번역 생성에 실패했습니다.');
+      // 취소된 경우
+      if (abortController.signal.aborted) {
+        setTranslatePreviewError('번역이 취소되었습니다.');
+      } else {
+        setTranslatePreviewError(formatTranslationError(e));
+      }
     } finally {
       setTranslateLoading(false);
+      translateAbortController.current = null;
     }
   }, [
     project,
@@ -198,6 +228,16 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     projectContext,
     translatorPersona,
   ]);
+
+  // 번역 취소 핸들러
+  const handleTranslateCancel = useCallback((): void => {
+    if (translateAbortController.current) {
+      translateAbortController.current.abort();
+    }
+    setTranslateLoading(false);
+    setTranslatePreviewOpen(false);
+    setTranslateProgress(null);
+  }, []);
 
   const applyTranslatePreview = useCallback((): void => {
     if (!translatePreviewDoc) return;
@@ -386,14 +426,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         originalHtml={targetDocument}
         isLoading={translateLoading}
         error={translatePreviewError}
+        progress={translateProgress}
         onClose={() => {
           setTranslatePreviewOpen(false);
         }}
         onApply={applyTranslatePreview}
-        onCancel={() => {
-          setTranslateLoading(false);
-          setTranslatePreviewOpen(false);
-        }}
+        onCancel={handleTranslateCancel}
         {...(translatePreviewError ? { onRetry: handleTranslateRetry } : {})}
       />
 
