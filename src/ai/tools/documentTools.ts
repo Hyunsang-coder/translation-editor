@@ -4,15 +4,48 @@ import { useProjectStore } from '@/stores/projectStore';
 import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
+import { tipTapJsonToMarkdown, type TipTapDocJson } from '@/utils/markdownConverter';
 
-function resolveSourceDocumentText(): string {
-  const { project, sourceDocument } = useProjectStore.getState();
+/**
+ * Source 문서를 Markdown 형식으로 반환
+ * - TipTap JSON이 있으면 Markdown으로 변환 (서식 보존)
+ * - 없으면 plain text fallback
+ */
+function resolveSourceDocumentMarkdown(): string {
+  const { sourceDocJson, project, sourceDocument } = useProjectStore.getState();
+
+  // TipTap JSON이 있으면 Markdown으로 변환
+  if (sourceDocJson && typeof sourceDocJson === 'object' && sourceDocJson.type === 'doc') {
+    try {
+      return tipTapJsonToMarkdown(sourceDocJson as TipTapDocJson);
+    } catch (e) {
+      console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed:', e);
+    }
+  }
+
+  // Fallback: plain text
   const raw = sourceDocument?.trim() ? sourceDocument : project ? buildSourceDocument(project).text : '';
   return raw ? stripHtml(raw) : '';
 }
 
-function resolveTargetDocumentText(): string {
-  const { project, targetDocument } = useProjectStore.getState();
+/**
+ * Target 문서를 Markdown 형식으로 반환
+ * - TipTap JSON이 있으면 Markdown으로 변환 (서식 보존)
+ * - 없으면 plain text fallback
+ */
+function resolveTargetDocumentMarkdown(): string {
+  const { targetDocJson, project, targetDocument } = useProjectStore.getState();
+
+  // TipTap JSON이 있으면 Markdown으로 변환
+  if (targetDocJson && typeof targetDocJson === 'object' && targetDocJson.type === 'doc') {
+    try {
+      return tipTapJsonToMarkdown(targetDocJson as TipTapDocJson);
+    } catch (e) {
+      console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed:', e);
+    }
+  }
+
+  // Fallback: plain text
   const raw = targetDocument?.trim() ? targetDocument : project ? buildTargetDocument(project).text : '';
   return raw ? stripHtml(raw) : '';
 }
@@ -61,16 +94,16 @@ export const getSourceDocumentTool = tool(
   async (rawArgs) => {
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
-    const text = resolveSourceDocumentText();
-    if (!text || text.trim().length === 0) {
+    const markdown = resolveSourceDocumentMarkdown();
+    if (!markdown || markdown.trim().length === 0) {
       throw new Error('원문 문서가 비어있습니다.');
     }
-    return autoSliceLargeDocument(text, parsed);
+    return autoSliceLargeDocument(markdown, parsed);
   },
   {
     name: 'get_source_document',
     description:
-      '원문(Source) 문서를 가져옵니다. 사용자가 문서 내용, 번역 품질, 표현에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다.',
+      '원문(Source) 문서를 Markdown 형식으로 가져옵니다. 사용자가 문서 내용, 번역 품질, 표현에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다. 서식(헤딩, 리스트, 볼드 등)이 Markdown으로 표현됩니다.',
     schema: DocumentToolArgsSchema,
   },
 );
@@ -79,16 +112,16 @@ export const getTargetDocumentTool = tool(
   async (rawArgs) => {
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
-    const text = resolveTargetDocumentText();
-    if (!text || text.trim().length === 0) {
+    const markdown = resolveTargetDocumentMarkdown();
+    if (!markdown || markdown.trim().length === 0) {
       throw new Error('번역문 문서가 비어있습니다.');
     }
-    return autoSliceLargeDocument(text, parsed);
+    return autoSliceLargeDocument(markdown, parsed);
   },
   {
     name: 'get_target_document',
     description:
-      '번역문(Target) 문서를 가져옵니다. 사용자가 번역 결과, 표현 자연스러움, 오역 여부에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다.',
+      '번역문(Target) 문서를 Markdown 형식으로 가져옵니다. 사용자가 번역 결과, 표현 자연스러움, 오역 여부에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다. 서식(헤딩, 리스트, 볼드 등)이 Markdown으로 표현됩니다.',
     schema: DocumentToolArgsSchema,
   },
 );
