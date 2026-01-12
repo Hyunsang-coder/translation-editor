@@ -37,33 +37,37 @@ What (권장 옵션):
 3. AI 상호작용 및 Preview 워크플로우
 3.1 문서 전체 번역 (Preview → Apply)
 Why:
-- HTML/서식 손상 없이 번역문을 적용하려면 TipTap JSON 단위로 Preview 후 사용자가 명시적으로 Apply 해야 합니다.
+- HTML/서식 손상 없이 번역문을 적용하려면 Preview 후 사용자가 명시적으로 Apply 해야 합니다.
+- **Markdown 중간 형식**을 사용하여 토큰 효율성을 높이고, 청킹 복잡도를 낮춥니다.
 
 How:
-- Translate 버튼/단축키로 Source 전체를 TipTap JSON으로 모델에 전달하고, 출력도 TipTap JSON으로 강제합니다.
-- Preview 모달에서 원문-번역 Diff를 보여주고, Apply 시 Target을 전체 덮어쓰기 합니다.
+- Translate 버튼/단축키로 Source 전체를 **Markdown으로 변환**하여 모델에 전달하고, 출력도 **Markdown**으로 받습니다.
+- 응답 Markdown을 TipTap JSON으로 변환하여 Preview 모달에서 원문-번역 Diff를 보여주고, Apply 시 Target을 전체 덮어쓰기 합니다.
 - 문서 전체 번역(Translate)은 채팅 히스토리를 컨텍스트에 포함하지 않습니다. (Settings의 페르소나/번역 규칙/Project Context/글로서리/문서 컨텍스트만 사용)
 
 What:
 - Trigger: Translate(Preview) 버튼/단축키
-- Input: sourceDocJson(TipTap JSON), project meta(sourceLanguage/targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
-- Output: TipTap JSON (문서 전체), JSON 파싱 실패 시 폴백 로직
+- Input: Source 문서를 **Markdown으로 변환** + project meta(sourceLanguage/targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
+- Output: **Markdown** (문서 전체) → TipTap JSON으로 변환 후 Preview 표시
 - UX: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음. **에러 시 Retry 버튼 표시**.
 - API 구조: LangChain `BaseMessage[]` 배열
   - SystemMessage 1개: 번역 전용 프롬프트 (페르소나, 번역 규칙, Project Context 포함)
-  - UserMessage 1개: TipTap JSON 문서를 문자열로 전달
+  - UserMessage 1개: **Markdown 문서**를 문자열로 전달
   - 히스토리 메시지 없음
-- JSON 파싱 안정성:
-  - **JSON mode**: OpenAI `response_format: { type: 'json_object' }` 사용
-    - Structured Output은 복잡한 중첩 구조(TipTap)와 호환성 문제로 사용하지 않음
-    - JSON mode는 유효한 JSON 출력을 보장하면서 스키마 제약 없이 복잡한 구조 처리
-  - **폴백**: 텍스트 파싱 (`extractJsonObject`) - 코드펜스 제거, balanced JSON 추출
-  - **Truncation 감지**: 중괄호/대괄호 불일치, 문자열 중간 끊김 감지
+- Markdown 변환 파이프라인:
+  - **TipTap → Markdown**: `tiptap-markdown` extension 사용 (`editor.storage.markdown.getMarkdown()`)
+  - **Markdown → TipTap**: `tiptap-markdown` extension 사용 (`editor.commands.setContent(markdown)`)
+  - **지원 서식**: Headings, Bold, Italic, Strike, Lists (중첩), Blockquote (중첩), CodeBlock, Link, Table, HorizontalRule
+  - **손실 가능 항목**: 링크의 `target` 속성, 복잡한 테이블(colspan/rowspan) - 번역에 영향 없음
+- 출력 안정성:
+  - **구분자 사용**: `---TRANSLATION_START---` / `---TRANSLATION_END---`로 번역 결과 구분
+  - **후처리**: 구분자 사이 내용만 추출, 없으면 전체 응답 사용 (경고 로그)
+  - **Truncation 감지**: 열린 코드블록(홀수 ` ``` `), 미완성 리스트 아이템 체크
   - **finish_reason 검사**: `length`인 경우 토큰 제한 에러로 처리
 - 동적 max_tokens 계산:
-  - 입력 문서 크기 기반으로 출력 토큰 자동 계산
+  - 입력 문서 크기 기반으로 출력 토큰 자동 계산 (JSON 오버헤드 없이 순수 텍스트 기준)
   - GPT-5 400k 컨텍스트 윈도우 기준, 안전 마진 10%
-  - 문서가 너무 큰 경우 사전 에러 발생 (분할 번역 안내)
+  - 문서가 너무 큰 경우 **Context-aware 청킹**으로 분할 번역 (코드블록/리스트 내부 분할 금지)
 
 3.2 Context Collection 명세 (Payload 규칙)
 Why:
@@ -89,7 +93,7 @@ What (Payload 구성 규칙: 우선순위):
 - 조건부 포함: Glossary/첨부, before/after 문맥
 - 질문(Question) 모드에서만 포함: 최근 메시지(최대 10개)
 - 출력 포맷 강제:
-  - Translate: TipTap JSON 전체만 출력(설명 금지)
+  - Translate: **Markdown 전체만 출력**(설명 금지, `---TRANSLATION_START/END---` 구분자 사용)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
 - 컨텍스트 길이 제한 (GPT-5 시리즈 400k 컨텍스트 윈도우 기준):
   - Translation Rules: 최대 10,000자

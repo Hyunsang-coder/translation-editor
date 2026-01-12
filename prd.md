@@ -64,10 +64,10 @@
 - Source 문서 전체를 대상으로 번역을 생성하고, 결과를 **Preview로 확인한 뒤 Apply**로 Target 문서를 **전체 덮어쓰기**합니다.
 - 사용자는 Apply를 누르기 전까지 문서가 변경되지 않습니다(Non-Intrusive).
 - 번역 생성 시 채팅 히스토리는 포함하지 않으며, Settings의 페르소나/번역 규칙/Project Context/글로서리만 컨텍스트로 사용합니다.
-- 출력은 TipTap JSON으로 강제하며, JSON 파싱 실패 시 폴백 처리 후 Preview로 표시합니다.
+- 출력은 **Markdown**으로 받아 TipTap JSON으로 변환 후 Preview로 표시합니다. (토큰 효율성 및 청킹 단순화를 위해)
 
 **프롬프트 전략**:
-- 번역 요청: 불필요한 설명 없이 **TipTap JSON 번역문만** 출력
+- 번역 요청: 불필요한 설명 없이 **Markdown 번역문만** 출력 (`---TRANSLATION_START/END---` 구분자 사용)
 - 질문 요청: 맥락에 맞는 간결한 설명 제공 (필요 시 JSON 리포트)
 
 **채팅 UX (일반적인 채팅 앱 수준)**:

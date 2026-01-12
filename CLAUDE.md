@@ -68,15 +68,15 @@ cd src-tauri && cargo test
 
 #### 2. AI Interaction Model
 - **Translation Mode** (`translateDocument.ts`):
-  - Full Source document → TipTap JSON → Preview modal → Apply to Target
+  - Full Source document → **Markdown** → LLM → **Markdown** → TipTap JSON → Preview modal → Apply to Target
   - No chat history in payload
-  - Output enforced as TipTap JSON only
+  - Output enforced as **Markdown only** (with `---TRANSLATION_START/END---` markers)
   - Uses: System Prompt + Translation Rules + Project Context + Glossary
-  - **JSON mode**: Uses OpenAI `response_format: { type: 'json_object' }` (NOT Structured Output)
-    - Structured Output has compatibility issues with complex nested structures like TipTap
-    - JSON mode guarantees valid JSON while handling complex nested structures
+  - **Markdown Pipeline**: Uses `tiptap-markdown` for TipTap ↔ Markdown conversion
+    - Token-efficient: No JSON structure overhead
+    - Simplified chunking: Context-aware text splitting (respects code blocks, lists)
   - **Dynamic max_tokens**: Calculated based on input document size (GPT-5 400k context)
-  - **Truncation Detection**: Detects unmatched braces/brackets, mid-string breaks, finish_reason='length'
+  - **Truncation Detection**: Detects unclosed code blocks, incomplete list items, finish_reason='length'
   - **Retry on Error**: Preview modal shows retry button for recoverable errors
 
 - **Chat/Question Mode** (`chat.ts`):
@@ -147,9 +147,9 @@ Critical stores in `src/stores/`:
 //   Documents accessed via Tool Calling (on-demand)
 
 // Translation mode: src/ai/translateDocument.ts
-//   Uses ChatOpenAI with response_format: { type: 'json_object' }
+//   Uses Markdown pipeline: TipTap JSON → Markdown → LLM → Markdown → TipTap JSON
 //   Direct message array: SystemMessage + HumanMessage
-//   Full Source document included as TipTap JSON string
+//   Full Source document converted to Markdown string
 //   No chat history
 ```
 
@@ -244,7 +244,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 6. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.
 7. **Mock Provider**: Mock mode is not supported for translation. Setting `mock` provider throws an error with guidance to configure OpenAI API key.
 8. **Translation Truncation**: Large documents may cause response truncation. Dynamic max_tokens calculation and truncation detection handle this automatically.
-9. **JSON mode vs Structured Output**: Translation uses JSON mode (`response_format: { type: 'json_object' }`), NOT Structured Output. Structured Output has compatibility issues with complex nested structures like TipTap JSON.
+9. **Markdown Translation Pipeline**: Translation uses Markdown as intermediate format (NOT TipTap JSON directly). TipTap ↔ Markdown conversion via `tiptap-markdown` extension. Output uses `---TRANSLATION_START/END---` markers.
 
 ## Testing Patterns
 
