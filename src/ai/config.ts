@@ -74,7 +74,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(braveApiKey ? { braveApiKey } : {}),
-    maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 12))),
+    maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 20))),
     judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',
   };
 }

@@ -114,10 +114,14 @@ What (API 구조 - 채팅 모드):
   - MessagesPlaceholder: 히스토리 메시지 (question 모드에서만 최근 10개)
   - HumanMessage 1개: 사용자 입력
 - Tool Calling 지원 (적극적 도구 사용 정책):
-  - get_source_document: 원문 문서 조회 - 문서 관련 질문 시 먼저 호출 권장
-  - get_target_document: 번역문 문서 조회 - 번역 품질/표현 질문 시 먼저 호출 권장
+  - get_source_document: 원문 문서 조회 (**Markdown 형식 반환**) - 문서 관련 질문 시 먼저 호출 권장
+  - get_target_document: 번역문 문서 조회 (**Markdown 형식 반환**) - 번역 품질/표현 질문 시 먼저 호출 권장
   - suggest_translation_rule: 번역 규칙 제안
   - suggest_project_context: Project Context 제안
+- 문서 조회 도구 Markdown 변환:
+  - TipTap JSON이 있으면 `tipTapJsonToMarkdown()`으로 변환하여 서식 보존
+  - 서식(헤딩, 리스트, 볼드, 이탤릭, 링크 등)이 Markdown으로 표현됨
+  - 변환 실패 시 plain text fallback (stripHtml)
 - Tool Calling Loop 설정:
   - maxSteps 기본값: 6 (이전: 4), 최대값: 12 (이전: 8)
   - 복합 쿼리 시 충분한 도구 호출 허용
@@ -159,6 +163,30 @@ What:
 - 도구 호출 중 상태 표시: `onToolCall` 콜백으로 진행 상태 전달
 - 요청 취소: 기존 `AbortSignal` 패턴 유지
 - 네트워크 에러 시: 부분 응답 반환 (토큰 손실 방지)
+
+### 스트리밍 번역 (Streaming Translation)
+
+Why:
+- 번역 결과를 기다리는 동안 사용자에게 진행 상황을 실시간으로 보여줍니다.
+- Preview 모달에서 번역 텍스트가 타이핑되는 효과를 제공합니다.
+
+How:
+- LangChain `.stream()` API를 사용하여 토큰별로 실시간 수신
+- `onToken` 콜백으로 누적된 텍스트를 UI에 전달
+- 완료 후 Markdown → TipTap JSON 변환
+
+What:
+- 스트리밍 구현 위치: `src/ai/translateDocument.ts` → `translateWithStreaming()` 함수
+- Markdown 파이프라인과 동일: Source → Markdown → LLM (streaming) → Markdown → TipTap JSON
+- 응답 흐름:
+  ```
+  .stream() → for await (chunk) {
+    - 텍스트 토큰: 누적 후 onToken 콜백 호출
+    - 완료 시: extractTranslationMarkdown() → markdownToTipTapJson()
+  }
+  ```
+- 구분자 추출: `---TRANSLATION_START/END---` 마커 사용
+- Truncation 감지: 완료 후 Markdown 구조 검증
 
 3.3 Selection/Context 매핑 (TipTap 기반)
 Why:

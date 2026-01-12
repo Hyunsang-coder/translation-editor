@@ -570,9 +570,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createSession();
       }
 
-      // question 모드에서만 최근 채팅 히스토리(최대 10개)를 모델 컨텍스트에 포함
+      // question 모드에서만 최근 채팅 히스토리를 모델 컨텍스트에 포함
       // - translate 모드는 채팅에서 처리하지 않음(Translate Preview→Apply로 유도)
-      const priorMessages = (get().currentSession?.messages ?? []).slice(-10);
+      const maxRecent = getAiConfig().maxRecentMessages;
+      const priorMessages = (get().currentSession?.messages ?? []).slice(-maxRecent);
 
       // 채팅은 "질문 전용"으로 운영: 번역/리라이트 요청은 Translate(Preview) 워크플로우로 유도
       const req = detectRequestType(content);
@@ -1158,9 +1159,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       const req = detectRequestType(content);
 
-      // question 모드에서만: 해당 메시지 "이전"까지의 히스토리(최대 10개) 포함
+      // question 모드에서만: 해당 메시지 "이전"까지의 히스토리 포함
+      const maxRecent = getAiConfig().maxRecentMessages;
       const idx = session.messages.findIndex((m) => m.id === messageId);
-      const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - 10), idx) : [];
+      const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - maxRecent), idx) : [];
 
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();

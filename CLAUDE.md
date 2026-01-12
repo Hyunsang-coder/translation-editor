@@ -62,7 +62,7 @@ cd src-tauri && cargo test
 #### 1. TipTap Document-First Approach
 - **Two Editor Instances**: Source (left, editable) and Target (right, editable)
 - **Storage Format**: TipTap JSON stored in SQLite `documents` table
-- **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links
+- **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, **tables**
 - **Notion-Style UX**: Pretendard font, 16px, line-height 1.8, max-width 800px
 - Both editors are editable; Focus Mode can hide Source panel
 
@@ -96,10 +96,12 @@ cd src-tauri && cargo test
 
 #### 3. Tool Calling Architecture
 Implemented in `src/ai/chat.ts` with LangChain tools:
-- `get_source_document`: Fetch Source document - **proactively called** for document-related questions
-- `get_target_document`: Fetch Target document - **proactively called** for translation quality questions
+- `get_source_document`: Fetch Source document **as Markdown** - proactively called for document-related questions
+- `get_target_document`: Fetch Target document **as Markdown** - proactively called for translation quality questions
 - `suggest_translation_rule`: AI proposes new translation rules
 - `suggest_project_context`: AI proposes context additions
+
+**Document Tools Return Markdown**: When TipTap JSON is available, document tools convert to Markdown preserving formatting (headings, lists, bold, etc.). Falls back to plain text if conversion fails.
 
 **Proactive Tool Usage Policy**: AI is instructed to call document tools first rather than guessing. Tool calling loop allows up to 6 steps (max 12) to support complex queries.
 
@@ -287,6 +289,10 @@ cd src-tauri && cargo check
 - **Feature Co-location**: Related files grouped by feature (e.g., `ai/`, `editor/`, `stores/`)
 - **Type Definitions**: `src/types/index.ts` for shared interfaces
 - **Tauri Wrappers**: `src/tauri/*.ts` mirrors `src-tauri/src/commands/*.rs`
+- **Utilities**: `src/utils/` for shared helpers
+  - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`)
+  - `hash.ts`: Content hashing, `stripHtml`
+  - `diff.ts`: Diff utilities
 - **UI Components**: Organized by layout hierarchy
   - `components/panels/`: SettingsSidebar, FloatingChatPanel, SourcePanel, TargetPanel
   - `components/chat/`: ChatContent (extracted from ChatPanel)
