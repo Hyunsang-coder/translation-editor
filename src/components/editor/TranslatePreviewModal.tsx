@@ -62,13 +62,15 @@ export function TranslatePreviewModal(props: {
   error?: string | null;
   /** 청크 분할 번역 진행률 */
   progress?: { completed: number; total: number } | null;
+  /** 스트리밍 중 실시간 Markdown 텍스트 */
+  streamingText?: string | null;
   onClose: () => void;
   onApply: () => void;
   onCancel?: () => void;
   onRetry?: () => void;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, progress, onClose, onApply, onCancel, onRetry } = props;
+  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, progress, streamingText, onClose, onApply, onCancel, onRetry } = props;
   // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
@@ -357,7 +359,14 @@ export function TranslatePreviewModal(props: {
                     </span>
                   </div>
                   <div className="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin">
-                    <SkeletonParagraph seed={1} lines={9} />
+                    {streamingText ? (
+                      <div className="whitespace-pre-wrap font-mono text-sm text-editor-text leading-relaxed">
+                        {streamingText}
+                        <span className="inline-block w-2 h-4 bg-primary-500 animate-pulse ml-0.5 align-middle" />
+                      </div>
+                    ) : (
+                      <SkeletonParagraph seed={1} lines={9} />
+                    )}
                   </div>
                 </div>
               </div>

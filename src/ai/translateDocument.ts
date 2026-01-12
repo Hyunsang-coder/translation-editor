@@ -292,6 +292,193 @@ export async function translateSourceDocToTargetDocJson(params: {
 export type { TranslationProgressCallback, ChunkedTranslationResult };
 
 // ============================================================
+// 스트리밍 번역 (실시간 타이핑 효과)
+// ============================================================
+
+/**
+ * 스트리밍 번역 파라미터
+ */
+export interface StreamingTranslationParams {
+  project: ITEProject;
+  sourceDocJson: TipTapDocJson;
+  translationRules?: string;
+  projectContext?: string;
+  translatorPersona?: string;
+  /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
+  onToken?: (accumulatedText: string) => void;
+  /** 취소 신호 */
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * 스트리밍 방식으로 번역을 수행합니다.
+ *
+ * - 실시간으로 번역 텍스트가 타이핑되는 효과
+ * - 완료 후 TipTap JSON으로 변환
+ * - onToken 콜백으로 누적된 텍스트 전달
+ */
+export async function translateWithStreaming(
+  params: StreamingTranslationParams
+): Promise<{ doc: TipTapDocJson; raw: string }> {
+  const cfg = getAiConfig({ useFor: 'translation' });
+
+  if (cfg.provider === 'mock') {
+    throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
+  }
+
+  if (!cfg.openaiApiKey) {
+    throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+  }
+
+  // TipTap JSON → Markdown 변환
+  const sourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+
+  const srcLang = 'Source';
+  const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
+
+  const persona = params.translatorPersona?.trim()
+    ? params.translatorPersona
+    : '당신은 경험많은 전문 번역가입니다.';
+
+  const systemLines: string[] = [
+    persona,
+    `아래에 제공되는 Markdown 문서의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
+    '',
+    '=== 중요: 출력 형식 ===',
+    '반드시 아래 형태로만 출력하세요:',
+    '',
+    '---TRANSLATION_START---',
+    '[번역된 Markdown]',
+    '---TRANSLATION_END---',
+    '',
+    '절대 금지 사항:',
+    '- "번역 결과입니다", "다음과 같이 번역했습니다" 등의 설명문 금지',
+    '- 인사말, 부연 설명 금지',
+    '- 구분자 외부에 텍스트 금지',
+    '- 오직 구분자 내부에 번역된 Markdown만 출력',
+    '',
+    '=== 번역 규칙 ===',
+    '- 문서 구조/서식(heading, list, bold, italic, link 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
+    '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
+    '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
+    '',
+  ];
+
+  const rules = params.translationRules?.trim();
+  if (rules) {
+    systemLines.push('[번역 규칙]', rules, '');
+  }
+
+  const projectContext = params.projectContext?.trim();
+  if (projectContext) {
+    systemLines.push('[Project Context]', projectContext, '');
+  }
+
+  const systemPrompt = systemLines.join('\n').trim();
+
+  // 동적 max_tokens 계산
+  const estimatedInputTokens = estimateMarkdownTokens(sourceMarkdown);
+  const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
+  const totalInputTokens = estimatedInputTokens + systemPromptTokens;
+
+  const MAX_CONTEXT = 400_000;
+  const SAFETY_MARGIN = 0.9;
+  const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
+
+  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
+  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, 65536));
+
+  if (availableOutputTokens < minOutputTokens) {
+    throw new Error(
+      `문서가 너무 큽니다. 예상 입력: ${totalInputTokens.toLocaleString()} 토큰, ` +
+      `최대 허용: ${Math.floor(MAX_CONTEXT * 0.6).toLocaleString()} 토큰. ` +
+      `문서를 분할하여 번역해주세요.`
+    );
+  }
+
+  const isGpt5 = cfg.model.startsWith('gpt-5');
+  const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
+
+  const model = new ChatOpenAI({
+    apiKey: cfg.openaiApiKey,
+    model: cfg.model,
+    ...temperatureOption,
+    maxTokens: calculatedMaxTokens,
+    streaming: true,
+  });
+
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    {
+      role: 'user' as const,
+      content: [
+        '아래 Markdown 문서를 번역하여, 구분자 내에 번역된 Markdown만 반환하세요.',
+        '',
+        '입력 문서:',
+        sourceMarkdown,
+        '',
+        '다시 한 번 강조: ---TRANSLATION_START--- 와 ---TRANSLATION_END--- 사이에 번역된 Markdown만 출력하세요.',
+      ].join('\n'),
+    },
+  ];
+
+  // 취소 확인
+  if (params.abortSignal?.aborted) {
+    throw new Error('번역이 취소되었습니다.');
+  }
+
+  // 스트리밍 실행
+  let accumulated = '';
+  const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+  const stream = await model.stream(messages, streamOptions);
+
+  for await (const chunk of stream) {
+    // 취소 확인
+    if (params.abortSignal?.aborted) {
+      throw new Error('번역이 취소되었습니다.');
+    }
+
+    // chunk.content에서 텍스트 추출
+    const delta = typeof chunk.content === 'string'
+      ? chunk.content
+      : Array.isArray(chunk.content)
+        ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+        : '';
+
+    if (delta) {
+      accumulated += delta;
+      params.onToken?.(accumulated);
+    }
+  }
+
+  // 응답이 비어있는 경우
+  if (!accumulated || accumulated.trim().length === 0) {
+    throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
+  }
+
+  // Markdown 응답 추출 및 검증
+  const translatedMarkdown = extractTranslationMarkdown(accumulated);
+
+  const truncation = detectMarkdownTruncation(translatedMarkdown);
+  if (truncation.isTruncated) {
+    throw new Error(
+      `${i18n.t('errors.translationPreviewError')}\n` +
+      `응답이 잘렸습니다: ${truncation.reason}\n` +
+      `다시 시도해주세요.`
+    );
+  }
+
+  // Markdown → TipTap JSON 변환
+  const translatedDoc = markdownToTipTapJson(translatedMarkdown);
+
+  if (!isValidTipTapDocJson(translatedDoc)) {
+    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
+  }
+
+  return { doc: translatedDoc, raw: accumulated };
+}
+
+// ============================================================
 // 청크 분할 번역 (대용량 문서 지원)
 // ============================================================
 
