@@ -6,7 +6,7 @@ import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 // ReviewModal은 더 이상 사용하지 않음 (ChatPanel의 Review 탭으로 대체)
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Editor } from '@tiptap/react';
 import {
   translateWithStreaming,
@@ -44,6 +44,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
   const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
+
+  // Source/Target 패널별 폰트 설정
+  const sourceFontSize = useUIStore((s) => s.sourceFontSize);
+  const sourceLineHeight = useUIStore((s) => s.sourceLineHeight);
+  const targetFontSize = useUIStore((s) => s.targetFontSize);
+  const targetLineHeight = useUIStore((s) => s.targetLineHeight);
 
   const provider = useAiConfigStore((s) => s.provider);
   const translationModel = useAiConfigStore((s) => s.translationModel);
@@ -343,7 +349,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         {!focusMode && (
           <>
             <Panel id="source" defaultSize="50" minSize="20" className="min-w-0">
-              <div className="h-full flex flex-col min-w-0">
+              <div
+                className="h-full flex flex-col min-w-0"
+                style={{
+                  '--editor-font-size': `${sourceFontSize}px`,
+                  '--editor-line-height': sourceLineHeight,
+                } as CSSProperties}
+              >
                 <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
                   <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                     SOURCE
@@ -352,7 +364,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                     {sourceWordCount.toLocaleString()} words
                   </span>
                 </div>
-                <TipTapMenuBar editor={sourceEditor} />
+                <TipTapMenuBar editor={sourceEditor} panelType="source" />
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <SourceTipTapEditor
                     content={sourceDocument || ''}
@@ -370,7 +382,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
         {/* Target Panel */}
         <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="20" className="min-w-0">
-          <div className="h-full flex flex-col min-w-0">
+          <div
+            className="h-full flex flex-col min-w-0"
+            style={{
+              '--editor-font-size': `${targetFontSize}px`,
+              '--editor-line-height': targetLineHeight,
+            } as CSSProperties}
+          >
           <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
             <div className="flex items-center gap-3">
               <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
@@ -394,7 +412,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               {targetWordCount.toLocaleString()} words
             </span>
           </div>
-          <TipTapMenuBar editor={targetEditor} />
+          <TipTapMenuBar editor={targetEditor} panelType="target" />
           {/* 여기에 transition 효과 추가 */}
           <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 ${targetFlash ? 'bg-green-500/10' : ''}`}>
             <TargetTipTapEditor

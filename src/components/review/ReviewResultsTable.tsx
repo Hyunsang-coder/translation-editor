@@ -114,7 +114,7 @@ export function ReviewResultsTable({
         </div>
       </div>
 
-      {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명 */}
+      {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 수정 제안 | 설명 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -132,19 +132,13 @@ export function ReviewResultsTable({
               <th className="px-2 py-2 text-left font-medium text-editor-muted w-8">
                 #
               </th>
-              <th className="px-2 py-2 text-left font-medium text-editor-muted w-16">
+              <th className="px-1 py-2 text-left font-medium text-editor-muted whitespace-nowrap">
                 {t('review.issueType', '유형')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted">
-                {t('review.sourceExcerpt', '원문')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted">
-                {t('review.targetExcerpt', '현재 번역')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[45%]">
                 {t('review.suggestedFix', '수정 제안')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted min-w-[120px]">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[45%]">
                 {t('review.description', '설명')}
               </th>
             </tr>
@@ -184,28 +178,24 @@ export function ReviewResultsTable({
                 <td className="px-2 py-2 text-editor-muted font-medium text-center">
                   {idx + 1}
                 </td>
-                <td className="px-2 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
+                <td className="px-1 py-2">
+                  <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
                     {getIssueTypeLabel(issue.type)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-text min-w-[120px]">
-                  <span className="line-clamp-2 break-words" title={issue.sourceExcerpt}>
-                    {issue.sourceExcerpt || '-'}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-editor-text min-w-[120px]">
-                  <span className="break-words">
-                    {issue.targetExcerpt || '-'}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-primary-600 dark:text-primary-400 min-w-[120px]">
+                <td className="px-3 py-2 text-editor-text text-xs">
                   <span className="break-words">
                     {issue.suggestedFix || '-'}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-editor-muted text-xs">
-                  {stripMarkdown(issue.description) || '-'}
+                <td className="px-3 py-2 text-editor-text text-xs">
+                  {issue.description ? (
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {stripMarkdown(issue.description).split(' | ').map((item, i) => (
+                        <li key={i} className="break-words">{item}</li>
+                      ))}
+                    </ul>
+                  ) : '-'}
                 </td>
               </tr>
             ))}

@@ -23,6 +23,12 @@ interface UIState extends EditorUIState {
 
   // Floating chat button position
   floatingButtonPosition: { x: number; y: number } | null; // null = 기본 위치 (우측 하단)
+
+  // Editor typography settings (Source/Target 패널별 독립 설정)
+  sourceFontSize: number; // px
+  sourceLineHeight: number; // ratio
+  targetFontSize: number; // px
+  targetLineHeight: number; // ratio
 }
 
 interface UIActions {
@@ -77,6 +83,16 @@ interface UIActions {
 
   // Floating button position
   setFloatingButtonPosition: (position: { x: number; y: number } | null) => void;
+
+  // Editor typography (Source/Target 패널별 독립 설정)
+  setSourceFontSize: (size: number) => void;
+  adjustSourceFontSize: (delta: number) => void;
+  setSourceLineHeight: (height: number) => void;
+  adjustSourceLineHeight: (delta: number) => void;
+  setTargetFontSize: (size: number) => void;
+  adjustTargetFontSize: (delta: number) => void;
+  setTargetLineHeight: (height: number) => void;
+  adjustTargetLineHeight: (delta: number) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -112,6 +128,12 @@ export const useUIStore = create<UIStore>()(
 
       // Floating button position (null = 기본 우측 하단)
       floatingButtonPosition: null,
+
+      // Editor typography defaults (Source/Target 패널별 독립 설정)
+      sourceFontSize: 14,
+      sourceLineHeight: 1.4,
+      targetFontSize: 14,
+      targetLineHeight: 1.4,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -244,6 +266,47 @@ export const useUIStore = create<UIStore>()(
       setFloatingButtonPosition: (position: { x: number; y: number } | null): void => {
         set({ floatingButtonPosition: position });
       },
+
+      // Editor typography (Source/Target 패널별 독립 설정)
+      setSourceFontSize: (size: number): void => {
+        set({ sourceFontSize: Math.max(10, Math.min(24, size)) }); // 10-24px
+      },
+
+      adjustSourceFontSize: (delta: number): void => {
+        set((state) => ({
+          sourceFontSize: Math.max(10, Math.min(24, state.sourceFontSize + delta)),
+        }));
+      },
+
+      setSourceLineHeight: (height: number): void => {
+        set({ sourceLineHeight: Math.max(1.0, Math.min(2.5, height)) }); // 1.0-2.5
+      },
+
+      adjustSourceLineHeight: (delta: number): void => {
+        set((state) => ({
+          sourceLineHeight: Math.max(1.0, Math.min(2.5, Math.round((state.sourceLineHeight + delta) * 10) / 10)),
+        }));
+      },
+
+      setTargetFontSize: (size: number): void => {
+        set({ targetFontSize: Math.max(10, Math.min(24, size)) }); // 10-24px
+      },
+
+      adjustTargetFontSize: (delta: number): void => {
+        set((state) => ({
+          targetFontSize: Math.max(10, Math.min(24, state.targetFontSize + delta)),
+        }));
+      },
+
+      setTargetLineHeight: (height: number): void => {
+        set({ targetLineHeight: Math.max(1.0, Math.min(2.5, height)) }); // 1.0-2.5
+      },
+
+      adjustTargetLineHeight: (delta: number): void => {
+        set((state) => ({
+          targetLineHeight: Math.max(1.0, Math.min(2.5, Math.round((state.targetLineHeight + delta) * 10) / 10)),
+        }));
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -262,6 +325,11 @@ export const useUIStore = create<UIStore>()(
         // Settings sidebar & floating button
         settingsSidebarWidth: state.settingsSidebarWidth,
         floatingButtonPosition: state.floatingButtonPosition,
+        // Editor typography (Source/Target 패널별 독립 설정)
+        sourceFontSize: state.sourceFontSize,
+        sourceLineHeight: state.sourceLineHeight,
+        targetFontSize: state.targetFontSize,
+        targetLineHeight: state.targetLineHeight,
       }),
     }
   )
