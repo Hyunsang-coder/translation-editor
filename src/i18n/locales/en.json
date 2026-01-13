@@ -184,7 +184,21 @@
     "typeError": "Error",
     "typeOmission": "Omission",
     "typeDistortion": "Distortion",
-    "typeConsistency": "Consistency"
+    "typeConsistency": "Consistency",
+    "settings": "Review Settings",
+    "intensity": "Review Intensity",
+    "intensity.minimal": "Obvious errors only",
+    "intensity.balanced": "Important errors",
+    "intensity.thorough": "Thorough review",
+    "categories": "Review Categories",
+    "category.mistranslation": "Mistranslation",
+    "category.mistranslation.desc": "Meaning differs from source",
+    "category.omission": "Omission",
+    "category.omission.desc": "Source information missing",
+    "category.distortion": "Distortion",
+    "category.distortion.desc": "Intensity/scope/conditions changed",
+    "category.consistency": "Term Consistency",
+    "category.consistency.desc": "Same term translated differently"
   },
   "chat": {
     "settings": "Project Settings",

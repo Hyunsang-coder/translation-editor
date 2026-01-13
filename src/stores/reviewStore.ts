@@ -3,6 +3,29 @@ import type { ITEProject } from '@/types';
 import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
 
 // ============================================
+// Review Settings Types
+// ============================================
+
+/** 검수 강도 */
+export type ReviewIntensity = 'minimal' | 'balanced' | 'thorough';
+
+/** 검수 항목 */
+export interface ReviewCategories {
+  mistranslation: boolean;  // 오역
+  omission: boolean;        // 누락
+  distortion: boolean;      // 왜곡 (강도/범위 변경)
+  consistency: boolean;     // 용어 일관성
+}
+
+/** 검수 설정 기본값 */
+const defaultCategories: ReviewCategories = {
+  mistranslation: true,
+  omission: true,
+  distortion: false,  // 기본 off (과잉 검출 방지)
+  consistency: true,
+};
+
+// ============================================
 // Review Result Types
 // ============================================
 
@@ -57,6 +80,12 @@ export interface ReviewResult {
 // ============================================
 
 interface ReviewState {
+  // 검수 설정 (persist됨)
+  intensity: ReviewIntensity;
+  categories: ReviewCategories;
+  settingsExpanded: boolean;  // 아코디언 상태
+
+  // 검수 실행 상태
   chunks: AlignedChunk[];
   currentChunkIndex: number;
   results: ReviewResult[];
@@ -142,6 +171,21 @@ interface ReviewActions {
    * 하이라이트 새로고침 (nonce 증가)
    */
   refreshHighlight: () => void;
+
+  /**
+   * 검수 강도 설정
+   */
+  setIntensity: (intensity: ReviewIntensity) => void;
+
+  /**
+   * 검수 항목 토글
+   */
+  toggleCategory: (category: keyof ReviewCategories) => void;
+
+  /**
+   * 설정 섹션 펼침/접기
+   */
+  setSettingsExpanded: (expanded: boolean) => void;
 }
 
 type ReviewStore = ReviewState & ReviewActions;
@@ -151,6 +195,12 @@ type ReviewStore = ReviewState & ReviewActions;
 // ============================================
 
 const initialState: ReviewState = {
+  // 검수 설정 기본값
+  intensity: 'balanced',
+  categories: { ...defaultCategories },
+  settingsExpanded: false,
+
+  // 검수 실행 상태 기본값
   chunks: [],
   currentChunkIndex: 0,
   results: [],
@@ -296,5 +346,23 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   refreshHighlight: () => {
     const { highlightNonce } = get();
     set({ highlightNonce: highlightNonce + 1 });
+  },
+
+  setIntensity: (intensity: ReviewIntensity) => {
+    set({ intensity });
+  },
+
+  toggleCategory: (category: keyof ReviewCategories) => {
+    const { categories } = get();
+    set({
+      categories: {
+        ...categories,
+        [category]: !categories[category],
+      },
+    });
+  },
+
+  setSettingsExpanded: (expanded: boolean) => {
+    set({ settingsExpanded: expanded });
   },
 }));

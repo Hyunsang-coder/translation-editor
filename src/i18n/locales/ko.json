@@ -184,7 +184,21 @@
     "typeError": "오역",
     "typeOmission": "누락",
     "typeDistortion": "왜곡",
-    "typeConsistency": "일관성"
+    "typeConsistency": "일관성",
+    "settings": "검수 설정",
+    "intensity": "검수 강도",
+    "intensity.minimal": "명백한 오류만 검출",
+    "intensity.balanced": "중요한 오류 검출",
+    "intensity.thorough": "세밀하게 검토",
+    "categories": "검수 항목",
+    "category.mistranslation": "오역",
+    "category.mistranslation.desc": "의미가 다르게 번역된 경우",
+    "category.omission": "누락",
+    "category.omission.desc": "원문 정보가 빠진 경우",
+    "category.distortion": "왜곡",
+    "category.distortion.desc": "강도/범위/조건이 변경된 경우",
+    "category.consistency": "용어 일관성",
+    "category.consistency.desc": "같은 용어가 다르게 번역된 경우"
   },
   "chat": {
     "settings": "프로젝트 설정",

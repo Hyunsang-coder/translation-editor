@@ -1,12 +1,56 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useReviewStore } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
+
+/** 체크박스 아이템 컴포넌트 */
+function CheckboxItem({
+  checked,
+  onChange,
+  label,
+  description,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  description: string;
+}) {
+  return (
+    <label className="flex items-start gap-2 cursor-pointer group">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="mt-0.5 w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500/20 bg-editor-bg"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-editor-text group-hover:text-primary-500 transition-colors">
+          {label}
+        </div>
+        <div className="text-xs text-editor-muted">{description}</div>
+      </div>
+    </label>
+  );
+}
+
+/** 아코디언 아이콘 */
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`w-4 h-4 text-editor-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
 
 /**
  * Review Panel 컴포넌트
@@ -20,6 +64,14 @@ export function ReviewPanel(): JSX.Element {
   const closeReviewPanel = useUIStore((s) => s.closeReviewPanel);
 
   const {
+    // 검수 설정
+    intensity,
+    categories,
+    settingsExpanded,
+    setIntensity,
+    toggleCategory,
+    setSettingsExpanded,
+    // 검수 실행 상태
     chunks,
     results,
     isReviewing,
@@ -155,15 +207,83 @@ ${segmentsText}
       <div className="flex-1 overflow-y-auto p-4">
         {results.length === 0 && !isReviewing ? (
           // 검수 시작 전 초기 상태
-          <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-500/10 mb-4">
-              <svg className="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
+          <div className="space-y-6">
+            {/* 안내 메시지 */}
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-500/10 mb-4">
+                <svg className="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+              <p className="text-editor-muted">
+                {t('review.readyToStart', '검수를 시작하려면 아래 버튼을 클릭하세요.')}
+              </p>
             </div>
-            <p className="text-editor-muted">
-              {t('review.readyToStart', '검수를 시작하려면 아래 버튼을 클릭하세요.')}
-            </p>
+
+            {/* 검수 설정 - 접이식 섹션 */}
+            <div className="border border-editor-border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSettingsExpanded(!settingsExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between bg-editor-surface/50 hover:bg-editor-surface transition-colors"
+              >
+                <span className="text-sm font-medium">{t('review.settings', '검수 설정')}</span>
+                <ChevronIcon expanded={settingsExpanded} />
+              </button>
+
+              {settingsExpanded && (
+                <div className="px-4 py-3 space-y-4 border-t border-editor-border">
+                  {/* 검수 강도 */}
+                  <div>
+                    <label className="block text-xs text-editor-muted mb-2">
+                      {t('review.intensity', '검수 강도')}
+                    </label>
+                    <select
+                      value={intensity}
+                      onChange={(e) => setIntensity(e.target.value as ReviewIntensity)}
+                      className="w-full px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    >
+                      <option value="minimal">{t('review.intensity.minimal', '명백한 오류만 검출')}</option>
+                      <option value="balanced">{t('review.intensity.balanced', '중요한 오류 검출')}</option>
+                      <option value="thorough">{t('review.intensity.thorough', '세밀하게 검토')}</option>
+                    </select>
+                  </div>
+
+                  {/* 검수 항목 */}
+                  <div>
+                    <label className="block text-xs text-editor-muted mb-2">
+                      {t('review.categories', '검수 항목')}
+                    </label>
+                    <div className="space-y-2">
+                      <CheckboxItem
+                        checked={categories.mistranslation}
+                        onChange={() => toggleCategory('mistranslation')}
+                        label={t('review.category.mistranslation', '오역')}
+                        description={t('review.category.mistranslation.desc', '의미가 다르게 번역된 경우')}
+                      />
+                      <CheckboxItem
+                        checked={categories.omission}
+                        onChange={() => toggleCategory('omission')}
+                        label={t('review.category.omission', '누락')}
+                        description={t('review.category.omission.desc', '원문 정보가 빠진 경우')}
+                      />
+                      <CheckboxItem
+                        checked={categories.distortion}
+                        onChange={() => toggleCategory('distortion')}
+                        label={t('review.category.distortion', '왜곡')}
+                        description={t('review.category.distortion.desc', '강도/범위/조건이 변경된 경우')}
+                      />
+                      <CheckboxItem
+                        checked={categories.consistency}
+                        onChange={() => toggleCategory('consistency')}
+                        label={t('review.category.consistency', '용어 일관성')}
+                        description={t('review.category.consistency.desc', '같은 용어가 다르게 번역된 경우')}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : results.length === 0 && isReviewing ? (
           // 검수 진행 중이지만 아직 결과가 없는 상태

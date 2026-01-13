@@ -2,6 +2,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useReviewStore, type ReviewIntensity, type ReviewCategories } from '@/stores/reviewStore';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
@@ -68,54 +69,101 @@ export function buildAlignedChunks(
 // are no longer used after switching to segment-based chunking (Phase 2)
 // Kept for reference but removed to avoid unused variable warnings
 
-const REVIEW_INSTRUCTIONS = `당신은 한국어-영어 바이링구얼 20년 차 전문 번역가입니다.
-주어진 **원문**과 **번역문**을 비교하여 번역 품질을 검수합니다.
+// ============================================
+// 검수 강도별 프롬프트
+// ============================================
 
-### 1. 검수 범위와 기준
+const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
+  minimal: `## 검출 기준: 명백한 오류만
+- 의미가 정반대인 오역
+- 금액/날짜/수량 등 팩트 누락
+- 애매하면 검출하지 않음
+- 의역/스타일 차이는 모두 허용`,
 
-**검출 대상 (확신도 70% 이상)**:
-- 🔴 **심각한 오역**: 의미가 반대이거나 완전히 다른 경우
-- 🟠 **중요 정보 누락**: 수량, 조건, 제한, 예외, 주의사항 등
-- 🟡 **강도/정도 왜곡**: must→can, always→sometimes 등
-- 🟡 **주체/대상 변경**: 행위자나 대상이 바뀐 경우
-- 🟡 **범위/조건 변경**: 부분↔전체, 조건부↔무조건
-- 🟡 **사실 관계 변경**: 시제, 인과관계, 부정/긍정 역전
+  balanced: `## 검출 기준: 중요한 오류
+- 의미가 크게 달라진 오역
+- 중요 정보(조건, 예외, 주의사항) 누락
+- 확실한 경우만 검출
+- 자연스러운 의역은 허용`,
 
-**허용되는 의역 (검출 제외)**:
-- 어순, 스타일, 표현 방식만 다른 자연스러운 의역
-- 중복 표현 제거, 사소한 수식어 생략 (핵심 의미 보존 시)
-- 맞춤법/철자 오류 (의미 무관)
+  thorough: `## 검출 기준: 세밀한 검토
+- 의미 차이가 있는 모든 오역
+- 정보 누락 (사소한 것 포함)
+- 강도/범위 변경 (must→can 등)
+- 미세한 뉘앙스 차이도 검출`,
+};
 
-### 2. 검수 방식
+// ============================================
+// 검수 항목별 지침
+// ============================================
 
-1. **전체 훑기**: 원문 전체 구조 파악 (섹션, 문단, 핵심 포인트)
-2. **1:1 대조**: 원문의 각 문장/구절이 번역문에 대응되는지 확인
-3. **용어 일관성**: Glossary 제공 시 용어 사용 일관성 체크
-4. **맥락 검증**: Project Context 참고하여 맥락 적합성 확인
+const CATEGORY_PROMPTS: Record<keyof ReviewCategories, string> = {
+  mistranslation: `**오역**: 원문과 번역문의 의미가 다른 경우`,
+  omission: `**누락**: 원문에 있는 정보가 번역문에 없는 경우`,
+  distortion: `**왜곡**: 강도(must→can), 범위(전체→부분), 조건 등이 변경된 경우`,
+  consistency: `**일관성**: 같은 용어가 다르게 번역된 경우 (Glossary 기준)`,
+};
 
-### 3. 출력 형식
+// ============================================
+// 개선된 출력 형식
+// ============================================
 
-**문제 발견 시**:
+const OUTPUT_FORMAT = `## 출력 형식
 
-| 세그먼트 | 원문 구절 | 문제 유형 | 설명 |
-|----------|----------|----------|------|
-| #N | 원문 35자 이내... | 오역/누락/왜곡 | 간결한 설명 |
+문제 발견 시 JSON으로 출력:
+{
+  "issues": [
+    {
+      "segmentOrder": 1,
+      "type": "오역|누락|왜곡|일관성",
+      "sourceExcerpt": "원문 30자 이내",
+      "targetExcerpt": "번역문 30자 이내",
+      "problem": "무엇이 문제인지 (1줄)",
+      "reason": "왜 문제인지 - 원문과 대비 (1줄)",
+      "impact": "독자가 받을 오해 (1줄)",
+      "suggestedFix": "수정 제안"
+    }
+  ]
+}
 
-**통계**: 총 N건 (오역 X, 누락 Y, 왜곡 Z)
+문제 없음: { "issues": [] }`;
 
-**문제 없음 시**:
-\`오역이나 누락이 발견되지 않았습니다.\`
+// ============================================
+// 프롬프트 생성 함수
+// ============================================
 
-### 4. 확신도 기준
-- **70-84%**: 표에 포함하되 "가능성" 표현 사용
-- **85-100%**: 확정적 표현 사용
-- **70% 미만**: 표에 포함하지 않음
+/**
+ * 검수 설정에 따른 동적 프롬프트 생성
+ */
+export function buildReviewPrompt(
+  intensity: ReviewIntensity,
+  categories: ReviewCategories,
+): string {
+  // 활성화된 검수 항목만 포함
+  const enabledCategories = Object.entries(categories)
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => CATEGORY_PROMPTS[key as keyof ReviewCategories])
+    .join('\n');
 
-### 5. 참고 자료 활용
-- **Translation Rules**: 번역 스타일/포맷 규칙 준수 여부
-- **Project Context**: 도메인 지식, 맥락 정보 활용
-- **Glossary**: 용어 번역 일관성 체크
-- **Attachments**: 참고 자료 기반 정확성 검증`;
+  // 활성화된 항목이 없으면 경고
+  if (!enabledCategories) {
+    return `검수할 항목이 선택되지 않았습니다. 검수 설정에서 하나 이상의 항목을 활성화해주세요.`;
+  }
+
+  return `당신은 번역 품질 검수자입니다.
+
+${INTENSITY_PROMPTS[intensity]}
+
+## 검수 항목 (이것만 검출)
+${enabledCategories}
+
+## 검출하지 않는 것
+- 어순, 문체, 표현 방식 차이
+- 자연스러운 의역
+- 위에서 지정하지 않은 항목
+
+${OUTPUT_FORMAT}`;
+}
 
 const ReviewToolArgsSchema = z.object({
   maxChars: z.number().int().min(2000).max(30000).optional().describe('원문/번역문 각각 반환할 최대 문자 수 (기본 12000)'),
@@ -147,6 +195,9 @@ export const reviewTranslationTool = tool(
 
     // Translation Rules, Project Context, Attachments 가져오기
     const { translationRules, projectContext, attachments } = useChatStore.getState();
+
+    // 검수 설정 가져오기
+    const { intensity, categories } = useReviewStore.getState();
 
     // Glossary 검색 (첫 번째 청크 기반)
     let glossaryText = '';
@@ -180,8 +231,11 @@ export const reviewTranslationTool = tool(
       .map((a) => `[${a.filename}]\n${a.extractedText}`)
       .join('\n\n') || '';
 
+    // 검수 설정 기반 동적 프롬프트 생성
+    const dynamicInstructions = buildReviewPrompt(intensity, categories);
+
     return {
-      instructions: REVIEW_INSTRUCTIONS,
+      instructions: dynamicInstructions,
       totalChunks: chunks.length,
       currentChunk: {
         index: 0,
