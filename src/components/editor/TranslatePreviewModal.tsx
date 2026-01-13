@@ -4,6 +4,15 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
+import Underline from '@tiptap/extension-underline';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
 import DOMPurify from 'dompurify';
 import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
@@ -189,6 +198,18 @@ export function TranslatePreviewModal(props: {
       openOnClick: false,
       HTMLAttributes: { class: 'tiptap-link' },
     }),
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    Image.configure({
+      inline: false,
+      allowBase64: true,
+    }),
+    Underline,
+    Highlight.configure({ multicolor: false }),
+    Subscript,
+    Superscript,
   ], []);
 
   const editor = useEditor({

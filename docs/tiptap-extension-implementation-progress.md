@@ -71,6 +71,8 @@
 | 2025-01-13 | Phase 1 완료 (패키지 설치 + 4개 파일 수정) | 완료 |
 | 2025-01-13 | Phase 2 완료 (imagePlaceholder.ts 생성 + translateDocument.ts 통합) | 완료 |
 | 2025-01-13 | 빌드 검증 완료 | 완료 |
+| 2025-01-13 | Issue 1 수정 - TranslatePreviewModal.tsx extensions 추가 | 완료 |
+| 2025-01-13 | Issue 2 분석 - Confluence 테이블 헤더 중복 (Phase 3로 해결 예정) | 분석 완료 |
 
 ---
 
@@ -84,6 +86,30 @@
 | `src/utils/tipTapText.ts` | 수정 | Table(4개) + Image extension 추가 |
 | `src/ai/translateDocument.ts` | 수정 | 이미지 플레이스홀더 로직 통합 |
 | `src/utils/imagePlaceholder.ts` | **신규** | 이미지 추출/복원 유틸리티 |
+| `src/components/editor/TranslatePreviewModal.tsx` | 수정 | extensions에 누락된 extension 추가 (Issue 1 수정) |
+
+---
+
+## 발견된 이슈
+
+### Issue 1: 스트리밍 번역 후 최종 화면 블랭크
+- **증상**: 번역 시 실시간 스트리밍은 정상 작동하지만, 최종 화면에서 내용이 표시되지 않음 (빈 화면)
+- **상태**: 🟡 원인 파악됨 → 수정 필요
+- **원인**: `TranslatePreviewModal.tsx`의 `extensions` 배열에 새로 추가한 extension이 누락됨
+  - 184-192행: StarterKit, Link만 포함
+  - 누락: Image, Table(4개), Underline, Highlight, Subscript, Superscript
+- **해결 방법**: TranslatePreviewModal의 extensions에 누락된 extension 추가
+
+### Issue 2: Confluence 테이블 붙여넣기 시 헤더 중복
+- **증상**: Confluence 페이지에서 테이블 복사 → 붙여넣기 시 헤더 행이 두 번 표시됨
+- **상태**: 🟡 원인 추정됨 → Phase 3 htmlNormalizer로 해결 가능
+- **스크린샷**: 첫 번째 행 "Name of LoL Arena-mode buff | Buff effect"가 테이블 외부 + 테이블 내부에 모두 존재
+- **추정 원인**:
+  - Confluence HTML이 테이블 외부에 캡션/헤더 텍스트를 `<p>` 또는 `<div>`로 별도 포함
+  - TipTap이 테이블 외부 텍스트와 `<thead>` 내용을 모두 파싱하여 중복 발생
+- **해결 방안**:
+  - Phase 3 htmlNormalizer.ts에서 테이블 직전 중복 텍스트 제거 로직 구현
+  - 또는 TipTap의 paste 핸들러에서 Confluence 특화 정규화
 
 ---
 

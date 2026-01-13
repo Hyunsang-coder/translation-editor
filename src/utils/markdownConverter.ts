@@ -123,31 +123,38 @@ export function estimateMarkdownTokens(text: string): number {
 /**
  * Markdown 응답의 truncation 감지
  *
+ * 주의: 이 함수는 실제로 응답이 잘린 경우만 감지해야 합니다.
+ * 정상적인 Markdown에서 오탐(false positive)이 발생하지 않도록 보수적으로 판단합니다.
+ *
  * @param markdown - Markdown 텍스트
  * @returns truncation 감지 결과
  */
 export function detectMarkdownTruncation(markdown: string): { isTruncated: boolean; reason?: string } {
+  // 빈 응답은 truncation이 아님 (별도 검증에서 처리)
+  if (!markdown || markdown.trim().length === 0) {
+    return { isTruncated: false };
+  }
+
   // 열린 코드 블록 체크 (```가 홀수개)
+  // 코드 블록이 열려있으면 명확한 truncation
   const codeBlockCount = (markdown.match(/```/g) || []).length;
   if (codeBlockCount % 2 !== 0) {
     return { isTruncated: true, reason: `Unclosed code block: ${codeBlockCount} markers` };
   }
 
-  // 미완성 리스트 아이템 체크 (줄 끝에 - 만 있는 경우)
-  if (/\n-\s*$/.test(markdown)) {
-    return { isTruncated: true, reason: 'Incomplete list item at end' };
+  // 문서 끝이 불완전한 경우만 체크 (마지막 50자 검사)
+  const tail = markdown.slice(-50);
+
+  // 미완성 링크/이미지 체크: 문서 끝에 열린 bracket이 있는 경우만
+  // 예: "자세한 내용은 [여기" 또는 "![이미지"
+  if (/\[[^\]]*$/.test(tail)) {
+    return { isTruncated: true, reason: 'Incomplete link/image at end' };
   }
 
-  // 미완성 heading 체크 (줄 끝에 # 만 있는 경우)
-  if (/\n#{1,6}\s*$/.test(markdown)) {
-    return { isTruncated: true, reason: 'Incomplete heading at end' };
-  }
-
-  // 미완성 링크 체크
-  const openBrackets = (markdown.match(/\[/g) || []).length;
-  const closeBrackets = (markdown.match(/\]/g) || []).length;
-  if (openBrackets > closeBrackets) {
-    return { isTruncated: true, reason: `Unclosed brackets: ${openBrackets} open, ${closeBrackets} close` };
+  // 미완성 링크 URL 체크: ](까지 있지만 )가 없는 경우
+  // 예: "[링크](https://exam"
+  if (/\]\([^)]*$/.test(tail)) {
+    return { isTruncated: true, reason: 'Incomplete link URL at end' };
   }
 
   return { isTruncated: false };
