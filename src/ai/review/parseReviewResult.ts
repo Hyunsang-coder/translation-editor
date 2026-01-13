@@ -57,7 +57,17 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
       const targetExcerpt = typeof i.targetExcerpt === 'string' ? i.targetExcerpt : '';
       const suggestedFix = typeof i.suggestedFix === 'string' ? i.suggestedFix : '';
       const typeStr = typeof i.type === 'string' ? i.type : '';
-      const description = typeof i.description === 'string' ? i.description : '';
+
+      // problem, reason, impact 필드를 합쳐서 description 생성
+      const problem = typeof i.problem === 'string' ? i.problem : '';
+      const reason = typeof i.reason === 'string' ? i.reason : '';
+      const impact = typeof i.impact === 'string' ? i.impact : '';
+      const legacyDescription = typeof i.description === 'string' ? i.description : '';
+
+      // 새 형식(problem/reason/impact) 우선, 없으면 기존 description 사용
+      const description = problem
+        ? [problem, reason, impact].filter(Boolean).join(' | ')
+        : legacyDescription;
 
       return {
         id: generateIssueId(segmentOrder, typeStr, sourceExcerpt, targetExcerpt),
