@@ -347,6 +347,35 @@
   @apply my-8 border-t border-editor-border;
 }
 
+/* Tables */
+.ProseMirror table {
+  @apply w-full my-4 border-collapse;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  @apply border border-editor-border px-3 py-2 text-left align-top;
+  min-width: 100px;
+}
+
+.ProseMirror th {
+  @apply bg-editor-surface font-semibold;
+}
+
+.ProseMirror tr:first-child th,
+.ProseMirror tr:first-child td {
+  @apply border-t;
+}
+
+/* 선택된 셀 하이라이트 */
+.ProseMirror .selectedCell {
+  @apply bg-primary-100;
+}
+
+.dark .ProseMirror .selectedCell {
+  @apply bg-primary-900/30;
+}
+
 /* Placeholder */
 .ProseMirror p.is-empty::before,
 .ProseMirror.tiptap-empty::before {
