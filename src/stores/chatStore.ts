@@ -595,6 +595,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       // 번역 요청은 모델 호출 없이 즉시 안내(번역 결과를 채팅으로 출력하지 않음)
       if (req === 'translate') {
+        // 기존 진행 중인 요청이 있으면 abort
+        const prevAbortController = get().abortController;
+        if (prevAbortController) {
+          prevAbortController.abort();
+          set({ abortController: null });
+        }
         const translationRulesRaw = get().translationRules?.trim();
         const projectContextRaw = get().projectContext?.trim();
 
@@ -615,10 +621,17 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
       const webQuery = tryExtractWebSearchQuery(content);
       if (webQuery) {
+        // 기존 진행 중인 요청이 있으면 abort
+        const prevAbortController = get().abortController;
+        if (prevAbortController) {
+          prevAbortController.abort();
+          set({ abortController: null });
+        }
+
         if (!get().webSearchEnabled) {
           addMessage({
             role: 'assistant',
-            content: '웹 검색이 꺼져 있어 실행하지 않았습니다. 채팅 입력창의 + 메뉴에서 “웹 검색”을 켜면 사용할 수 있어요.',
+            content: '웹 검색이 꺼져 있어 실행하지 않았습니다. 채팅 입력창의 + 메뉴에서 "웹 검색"을 켜면 사용할 수 있어요.',
           });
           set({ isLoading: false, streamingMessageId: null, error: null });
           schedulePersist();
