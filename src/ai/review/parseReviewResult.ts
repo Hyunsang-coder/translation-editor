@@ -51,7 +51,12 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
 
     return rawIssues.map((issue: unknown) => {
       const i = issue as Record<string, unknown>;
-      const segmentOrder = typeof i.segmentOrder === 'number' ? i.segmentOrder : 0;
+      // segmentOrder가 문자열("1")인 경우에도 숫자로 변환
+      const segmentOrder = typeof i.segmentOrder === 'number'
+        ? i.segmentOrder
+        : typeof i.segmentOrder === 'string'
+          ? parseInt(i.segmentOrder, 10) || 0
+          : 0;
       const segmentGroupId = typeof i.segmentGroupId === 'string' ? i.segmentGroupId : undefined;
       const sourceExcerpt = typeof i.sourceExcerpt === 'string' ? i.sourceExcerpt : '';
       const targetExcerpt = typeof i.targetExcerpt === 'string' ? i.targetExcerpt : '';
