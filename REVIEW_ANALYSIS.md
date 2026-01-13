@@ -18,5 +18,6 @@
   - ✅ **Fixed**: translate 및 web search 경로 시작 시 기존 `abortController.abort()` 호출 추가
 - [x] **Low**: 검수 항목을 전부 해제해도 리뷰 실행을 막지 않습니다. 경고 문자열을 그대로 프롬프트로 보내 JSON 형식이 깨지고 "이슈 없음"으로 보일 수 있습니다. (`src/ai/tools/reviewTool.ts:139`, `src/components/review/ReviewPanel.tsx:109`)
   - ✅ **Fixed**: `hasEnabledCategories` 체크 추가, 버튼 비활성화 및 툴팁 표시
-- **Low**: 세션 최대치 상태에서 `currentSession`이 null이면 `createSession()`이 상태를 갱신하지 않아 `addMessage`가 null을 반환할 수 있습니다(상태 불일치 시 메시지 유실). (`src/stores/chatStore.ts:479`, `src/stores/chatStore.ts:585`)
+- [x] **Low**: 세션 최대치 상태에서 `currentSession`이 null이면 `createSession()`이 상태를 갱신하지 않아 `addMessage`가 null을 반환할 수 있습니다(상태 불일치 시 메시지 유실). (`src/stores/chatStore.ts:479`, `src/stores/chatStore.ts:585`)
+  - ✅ **Fixed**: `currentSession`이 null인 경우 첫 번째 세션으로 전환하도록 수정
 

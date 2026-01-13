@@ -480,7 +480,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 최대 3개 제한: 초과 생성은 조용히 무시
       const existing = get().sessions;
       if (existing.length >= MAX_CHAT_SESSIONS) {
-        return get().currentSessionId ?? existing[0]?.id ?? '';
+        // 현재 세션이 null이면 첫 번째 세션으로 전환
+        const { currentSessionId, currentSession } = get();
+        if (currentSessionId && currentSession) {
+          return currentSessionId;
+        }
+        // currentSession이 null인 경우 첫 번째 세션으로 전환
+        const firstSession = existing[0];
+        if (firstSession) {
+          set({ currentSessionId: firstSession.id, currentSession: firstSession });
+          return firstSession.id;
+        }
+        return '';
       }
 
       const sessionId = uuidv4();
