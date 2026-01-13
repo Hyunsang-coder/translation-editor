@@ -6,6 +6,11 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
+import Underline from '@tiptap/extension-underline';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
@@ -60,6 +65,14 @@ export function TipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+      }),
+      Underline,
+      Highlight.configure({ multicolor: false }),
+      Subscript,
+      Superscript,
     ],
     content,
     editable,
@@ -178,6 +191,14 @@ export function SourceTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+      }),
+      Underline,
+      Highlight.configure({ multicolor: false }),
+      Subscript,
+      Superscript,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: 'sourceExcerpt',
@@ -298,6 +319,14 @@ export function TargetTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+      }),
+      Underline,
+      Highlight.configure({ multicolor: false }),
+      Subscript,
+      Superscript,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: 'targetExcerpt',

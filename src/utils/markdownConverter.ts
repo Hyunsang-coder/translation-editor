@@ -12,6 +12,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
 
 /**
@@ -39,6 +40,10 @@ function getExtensions() {
     TableRow,
     TableHeader,
     TableCell,
+    Image.configure({
+      inline: false,
+      allowBase64: true,
+    }),
     Markdown.configure({
       html: false,                  // HTML 태그 비활성화
       tightLists: true,             // 리스트 항목 사이 빈 줄 제거

@@ -7,17 +7,28 @@
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 
 /**
  * generateText에 필요한 TipTap extensions
  * - TipTapEditor.tsx와 동일한 extension 구성 사용
+ * - Table, Image extension 포함 (텍스트 추출 시 누락 방지)
  */
 const extensions = [
   StarterKit.configure({
     heading: { levels: [1, 2, 3, 4, 5, 6] },
   }),
   Link.configure({ openOnClick: false }),
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
+  Image.configure({ inline: false, allowBase64: true }),
 ];
 
 /**

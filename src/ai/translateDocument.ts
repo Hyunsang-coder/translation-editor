@@ -16,6 +16,11 @@ import {
   isValidTipTapDocJson,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
+import {
+  extractImages,
+  restoreImages,
+  estimateTokenSavings,
+} from '@/utils/imagePlaceholder';
 
 // TipTapDocJson 타입을 re-export
 export type { TipTapDocJson };
@@ -123,9 +128,18 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   // ============================================================
-  // TipTap JSON → Markdown 변환
+  // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
   // ============================================================
-  const sourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+  const rawSourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+
+  // 이미지 URL(특히 Base64)을 플레이스홀더로 대체하여 토큰 절약
+  const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
+
+  // 이미지 토큰 절약량 로깅 (디버그용)
+  if (imageMap.size > 0) {
+    const savedTokens = estimateTokenSavings(imageMap);
+    console.log(`[Translation] Image placeholder: ${imageMap.size} images, ~${savedTokens.toLocaleString()} tokens saved`);
+  }
 
   const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
@@ -261,10 +275,10 @@ export async function translateSourceDocToTargetDocJson(params: {
   // ============================================================
   // Markdown 응답 추출 및 검증
   // ============================================================
-  const translatedMarkdown = extractTranslationMarkdown(raw);
+  const translatedMarkdownRaw = extractTranslationMarkdown(raw);
 
   // Markdown truncation 감지
-  const truncation = detectMarkdownTruncation(translatedMarkdown);
+  const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
   if (truncation.isTruncated) {
     throw new Error(
       `${i18n.t('errors.translationPreviewError')}\n` +
@@ -274,8 +288,12 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   // ============================================================
-  // Markdown → TipTap JSON 변환
+  // 이미지 플레이스홀더 복원 + Markdown → TipTap JSON 변환
   // ============================================================
+  const translatedMarkdown = imageMap.size > 0
+    ? restoreImages(translatedMarkdownRaw, imageMap)
+    : translatedMarkdownRaw;
+
   const translatedDoc = markdownToTipTapJson(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
@@ -330,8 +348,15 @@ export async function translateWithStreaming(
     throw new Error(i18n.t('errors.openaiApiKeyMissing'));
   }
 
-  // TipTap JSON → Markdown 변환
-  const sourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+  // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
+  const rawSourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+  const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
+
+  // 이미지 토큰 절약량 로깅 (디버그용)
+  if (imageMap.size > 0) {
+    const savedTokens = estimateTokenSavings(imageMap);
+    console.log(`[Streaming Translation] Image placeholder: ${imageMap.size} images, ~${savedTokens.toLocaleString()} tokens saved`);
+  }
 
   const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
@@ -457,9 +482,9 @@ export async function translateWithStreaming(
   }
 
   // Markdown 응답 추출 및 검증
-  const translatedMarkdown = extractTranslationMarkdown(accumulated);
+  const translatedMarkdownRaw = extractTranslationMarkdown(accumulated);
 
-  const truncation = detectMarkdownTruncation(translatedMarkdown);
+  const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
   if (truncation.isTruncated) {
     throw new Error(
       `${i18n.t('errors.translationPreviewError')}\n` +
@@ -468,7 +493,11 @@ export async function translateWithStreaming(
     );
   }
 
-  // Markdown → TipTap JSON 변환
+  // 이미지 플레이스홀더 복원 + Markdown → TipTap JSON 변환
+  const translatedMarkdown = imageMap.size > 0
+    ? restoreImages(translatedMarkdownRaw, imageMap)
+    : translatedMarkdownRaw;
+
   const translatedDoc = markdownToTipTapJson(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
