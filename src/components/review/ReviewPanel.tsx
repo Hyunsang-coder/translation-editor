@@ -6,6 +6,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
+import { buildReviewPrompt } from '@/ai/tools/reviewTool';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 
 /** 체크박스 아이템 컴포넌트 */
@@ -105,6 +106,9 @@ export function ReviewPanel(): JSX.Element {
     setAbortController(controller);
     startReview();
 
+    // 검수 설정 기반 동적 프롬프트 생성
+    const reviewInstructions = buildReviewPrompt(intensity, categories);
+
     try {
       for (let i = 0; i < chunks.length; i++) {
         if (controller.signal.aborted) break;
@@ -114,27 +118,12 @@ export function ReviewPanel(): JSX.Element {
           .map((s) => `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`)
           .join('\n\n');
 
-        const userMessage = `다음 번역을 검수하고, 반드시 아래 JSON 형식으로만 출력하세요.
-설명이나 마크다운 없이 JSON만 출력합니다.
+        const userMessage = `${reviewInstructions}
 
-검수 대상:
+## 검수 대상
 ${segmentsText}
 
-출력 형식:
-{
-  "issues": [
-    {
-      "segmentOrder": 0,
-      "segmentGroupId": "세그먼트 ID (있으면)",
-      "type": "오역|누락|왜곡|일관성",
-      "sourceExcerpt": "원문 구절 35자 이내",
-      "targetExcerpt": "현재 번역 35자 이내",
-      "suggestedFix": "수정 제안",
-      "description": "간결한 설명"
-    }
-  ]
-}
-
+반드시 위 출력 형식의 JSON만 출력하세요. 설명이나 마크다운 없이 JSON만 출력합니다.
 문제가 없으면: { "issues": [] }`;
 
         try {
@@ -172,6 +161,8 @@ ${segmentsText}
   }, [
     project,
     chunks,
+    intensity,
+    categories,
     translationRules,
     projectContext,
     startReview,
