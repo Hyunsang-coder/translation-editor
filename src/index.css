@@ -10,9 +10,19 @@
   --editor-text: #1e293b;
   --editor-muted: #64748b;
 
+  /* Primary 컬러 - 라이트 모드: 더 진한 톤으로 대비 향상 */
+  --primary-500: #0284c7;
+  /* sky-600 */
+  --primary-600: #0369a1;
+  /* sky-700 */
+  --primary-400: #0ea5e9;
+  /* sky-500 (아이콘/강조용) */
+
   /* Diff: 변경(삽입/삭제)만 강하게, 나머지는 최대한 조용하게 */
-  --diff-insertion: #16a34a; /* green-600 */
-  --diff-deletion: #dc2626; /* red-600 */
+  --diff-insertion: #16a34a;
+  /* green-600 */
+  --diff-deletion: #dc2626;
+  /* red-600 */
   --diff-insertion-bg: rgba(22, 163, 74, 0.22);
   --diff-deletion-bg: rgba(220, 38, 38, 0.22);
 
@@ -28,6 +38,14 @@
   --editor-border: #334155;
   --editor-text: #f1f5f9;
   --editor-muted: #94a3b8;
+
+  /* Primary 컬러 - 다크 모드: 더 밝은 톤으로 가시성 향상 */
+  --primary-500: #38bdf8;
+  /* sky-400 */
+  --primary-600: #0ea5e9;
+  /* sky-500 */
+  --primary-400: #7dd3fc;
+  /* sky-300 (아이콘/강조용) */
 
   --diff-insertion: #4ade80;
   --diff-deletion: #f87171;
@@ -75,6 +93,7 @@
 
 /* Component Styles */
 @layer components {
+
   /* Ghost Chips (변수 보호) */
   .ghost-chip {
     @apply inline-flex items-center px-2 py-0.5 mx-0.5;
@@ -113,16 +132,20 @@
 
   /* Shimmer Text Effect */
   @keyframes shimmer-text {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
+    0% {
+      background-position: -200% center;
+    }
+
+    100% {
+      background-position: 200% center;
+    }
   }
 
   .shimmer-text {
-    background: linear-gradient(to right, 
-      var(--editor-muted) 20%, 
-      var(--editor-text) 50%, 
-      var(--editor-muted) 80%
-    );
+    background: linear-gradient(to right,
+        var(--editor-muted) 20%,
+        var(--editor-text) 50%,
+        var(--editor-muted) 80%);
     background-size: 200% auto;
     background-clip: text;
     -webkit-background-clip: text;
@@ -158,40 +181,52 @@
   .chat-markdown {
     @apply break-words max-w-full;
   }
+
   .chat-markdown p {
     @apply my-2;
   }
+
   .chat-markdown ul {
     @apply list-disc pl-6 my-2;
   }
+
   .chat-markdown ol {
     @apply list-decimal pl-6 my-2;
   }
+
   .chat-markdown li {
     @apply my-1;
   }
+
   .chat-markdown blockquote {
     @apply border-l-2 border-editor-border pl-3 my-2 text-editor-muted;
   }
+
   .chat-markdown pre {
     @apply bg-editor-surface p-3 rounded-md overflow-x-auto max-w-full my-2 border border-editor-border;
   }
+
   .chat-markdown code {
     @apply bg-editor-surface px-1.5 py-0.5 rounded text-xs font-mono break-all;
   }
+
   .chat-markdown pre code {
     @apply bg-transparent p-0 text-sm break-normal;
   }
+
   .chat-markdown img {
     @apply max-w-full h-auto rounded my-2 border border-editor-border;
   }
+
   .chat-markdown table {
     @apply block overflow-x-auto max-w-full my-2 border-collapse;
   }
+
   .chat-markdown th,
   .chat-markdown td {
     @apply border border-editor-border px-3 py-1.5 text-sm;
   }
+
   .chat-markdown th {
     @apply bg-editor-surface font-semibold;
   }
@@ -415,18 +450,21 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   padding: 0 6px;
   border-radius: 6px;
-  background: rgba(59, 130, 246, 0.12); /* primary-500 계열 */
+  background: rgba(59, 130, 246, 0.12);
+  /* primary-500 계열 */
   border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
 .dark .monaco-ghost-chip {
-  background: rgba(99, 102, 241, 0.22); /* indigo 계열 */
+  background: rgba(99, 102, 241, 0.22);
+  /* indigo 계열 */
   border: 1px solid rgba(129, 140, 248, 0.35);
 }
 
 /* Monaco Pending Diff (In-place Preview) */
 .monaco-pending-diff {
-  background: rgba(16, 185, 129, 0.24); /* emerald-500 */
+  background: rgba(16, 185, 129, 0.24);
+  /* emerald-500 */
   border-bottom: 1px dashed rgba(16, 185, 129, 0.95);
 }
 
@@ -437,14 +475,16 @@
 
 /* Monaco Pending Diff - deletion-like highlight (range to be replaced) */
 .monaco-pending-delete {
-  background: rgba(239, 68, 68, 0.20); /* red-500 */
+  background: rgba(239, 68, 68, 0.20);
+  /* red-500 */
   text-decoration: line-through;
   text-decoration-color: rgba(239, 68, 68, 0.95);
   border-bottom: 1px dashed rgba(239, 68, 68, 0.92);
 }
 
 .dark .monaco-pending-delete {
-  background: rgba(248, 113, 113, 0.30); /* red-400 */
+  background: rgba(248, 113, 113, 0.30);
+  /* red-400 */
   text-decoration-color: rgba(248, 113, 113, 0.95);
   border-bottom: 1px dashed rgba(248, 113, 113, 0.92);
 }
@@ -453,7 +493,8 @@
 .monaco-pending-insert-widget {
   max-width: min(680px, 90vw);
   border-radius: 10px;
-  border: 1px solid rgba(34, 197, 94, 0.55); /* green-500 */
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  /* green-500 */
   background: rgba(34, 197, 94, 0.10);
   backdrop-filter: blur(6px);
   padding: 10px 12px;
@@ -461,7 +502,8 @@
 }
 
 .dark .monaco-pending-insert-widget {
-  border: 1px solid rgba(74, 222, 128, 0.55); /* green-400 */
+  border: 1px solid rgba(74, 222, 128, 0.55);
+  /* green-400 */
   background: rgba(74, 222, 128, 0.12);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
@@ -552,25 +594,30 @@
 /* 삭제된 줄 배경 (왼쪽 패널) */
 .monaco-diff-editor .editor.original .view-overlays .line-delete,
 .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
-  background: rgba(254, 202, 202, 0.65) !important; /* red-200 */
+  background: rgba(254, 202, 202, 0.65) !important;
+  /* red-200 */
 }
 
 /* 추가된 줄 배경 (오른쪽 패널) */
 .monaco-diff-editor .editor.modified .view-overlays .line-insert,
 .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
-  background: rgba(187, 247, 208, 0.65) !important; /* green-200 */
+  background: rgba(187, 247, 208, 0.65) !important;
+  /* green-200 */
 }
 
 /* 삭제된 문자 하이라이트 - 빨간색 배경 + 취소선 */
 .monaco-diff-editor .editor.original .view-overlays .char-delete {
-  background: rgba(254, 202, 202, 0.92) !important; /* red-200 */
+  background: rgba(254, 202, 202, 0.92) !important;
+  /* red-200 */
   text-decoration: line-through !important;
-  text-decoration-color: #dc2626 !important; /* red-600 */
+  text-decoration-color: #dc2626 !important;
+  /* red-600 */
 }
 
 /* 추가된 문자 하이라이트 - 초록색 배경 */
 .monaco-diff-editor .editor.modified .view-overlays .char-insert {
-  background: rgba(134, 239, 172, 0.82) !important; /* green-300 */
+  background: rgba(134, 239, 172, 0.82) !important;
+  /* green-300 */
 }
 
 /* 삭제된 텍스트에 취소선 적용 (Monaco 텍스트 레이어) */
@@ -590,22 +637,27 @@
 /* Dark 테마 */
 .dark .monaco-diff-editor .editor.original .view-overlays .line-delete,
 .dark .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
-  background: rgba(127, 29, 29, 0.55) !important; /* red-900 */
+  background: rgba(127, 29, 29, 0.55) !important;
+  /* red-900 */
 }
 
 .dark .monaco-diff-editor .editor.modified .view-overlays .line-insert,
 .dark .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
-  background: rgba(20, 83, 45, 0.55) !important; /* green-900 */
+  background: rgba(20, 83, 45, 0.55) !important;
+  /* green-900 */
 }
 
 .dark .monaco-diff-editor .editor.original .view-overlays .char-delete {
-  background: rgba(185, 28, 28, 0.72) !important; /* red-700 */
+  background: rgba(185, 28, 28, 0.72) !important;
+  /* red-700 */
   text-decoration: line-through !important;
-  text-decoration-color: #fca5a5 !important; /* red-300 */
+  text-decoration-color: #fca5a5 !important;
+  /* red-300 */
 }
 
 .dark .monaco-diff-editor .editor.modified .view-overlays .char-insert {
-  background: rgba(22, 163, 74, 0.62) !important; /* green-600 */
+  background: rgba(22, 163, 74, 0.62) !important;
+  /* green-600 */
 }
 
 .dark .monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
@@ -630,8 +682,10 @@
    ============================================ */
 
 .review-highlight {
-  background: rgba(251, 191, 36, 0.35); /* amber-400 */
-  border-bottom: 2px solid rgba(245, 158, 11, 0.85); /* amber-500 */
+  background: rgba(251, 191, 36, 0.35);
+  /* amber-400 */
+  border-bottom: 2px solid rgba(245, 158, 11, 0.85);
+  /* amber-500 */
   border-radius: 2px;
   padding: 1px 0;
   transition: background 0.2s ease;
@@ -643,23 +697,31 @@
 
 /* 이슈 유형별 색상 */
 .review-highlight[data-issue-type="error"] {
-  background: rgba(239, 68, 68, 0.25); /* red-500 */
-  border-bottom-color: rgba(220, 38, 38, 0.85); /* red-600 */
+  background: rgba(239, 68, 68, 0.25);
+  /* red-500 */
+  border-bottom-color: rgba(220, 38, 38, 0.85);
+  /* red-600 */
 }
 
 .review-highlight[data-issue-type="omission"] {
-  background: rgba(249, 115, 22, 0.25); /* orange-500 */
-  border-bottom-color: rgba(234, 88, 12, 0.85); /* orange-600 */
+  background: rgba(249, 115, 22, 0.25);
+  /* orange-500 */
+  border-bottom-color: rgba(234, 88, 12, 0.85);
+  /* orange-600 */
 }
 
 .review-highlight[data-issue-type="distortion"] {
-  background: rgba(234, 179, 8, 0.25); /* yellow-500 */
-  border-bottom-color: rgba(202, 138, 4, 0.85); /* yellow-600 */
+  background: rgba(234, 179, 8, 0.25);
+  /* yellow-500 */
+  border-bottom-color: rgba(202, 138, 4, 0.85);
+  /* yellow-600 */
 }
 
 .review-highlight[data-issue-type="consistency"] {
-  background: rgba(59, 130, 246, 0.25); /* blue-500 */
-  border-bottom-color: rgba(37, 99, 235, 0.85); /* blue-600 */
+  background: rgba(59, 130, 246, 0.25);
+  /* blue-500 */
+  border-bottom-color: rgba(37, 99, 235, 0.85);
+  /* blue-600 */
 }
 
 /* Dark 테마 */
@@ -673,22 +735,25 @@
 }
 
 .dark .review-highlight[data-issue-type="error"] {
-  background: rgba(248, 113, 113, 0.25); /* red-400 */
+  background: rgba(248, 113, 113, 0.25);
+  /* red-400 */
   border-bottom-color: rgba(248, 113, 113, 0.75);
 }
 
 .dark .review-highlight[data-issue-type="omission"] {
-  background: rgba(251, 146, 60, 0.25); /* orange-400 */
+  background: rgba(251, 146, 60, 0.25);
+  /* orange-400 */
   border-bottom-color: rgba(251, 146, 60, 0.75);
 }
 
 .dark .review-highlight[data-issue-type="distortion"] {
-  background: rgba(250, 204, 21, 0.25); /* yellow-400 */
+  background: rgba(250, 204, 21, 0.25);
+  /* yellow-400 */
   border-bottom-color: rgba(250, 204, 21, 0.75);
 }
 
 .dark .review-highlight[data-issue-type="consistency"] {
-  background: rgba(96, 165, 250, 0.25); /* blue-400 */
+  background: rgba(96, 165, 250, 0.25);
+  /* blue-400 */
   border-bottom-color: rgba(96, 165, 250, 0.75);
 }
-
