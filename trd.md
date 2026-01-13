@@ -32,7 +32,8 @@ How:
 
 What (권장 옵션):
 - 폰트/스타일: Pretendard, 16px, line-height 1.8, max-width 800px, padding 24px
-- 지원 포맷: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Placeholder, (선택) Code Block
+- 지원 포맷: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Table, Image, Placeholder, (선택) Code Block
+- 추가 포맷 (에디터 표시용): Underline, Highlight, Subscript, Superscript (Markdown 변환 시 손실)
 
 3. AI 상호작용 및 Preview 워크플로우
 3.1 문서 전체 번역 (Preview → Apply)
@@ -62,12 +63,17 @@ What:
 - 출력 안정성:
   - **구분자 사용**: `---TRANSLATION_START---` / `---TRANSLATION_END---`로 번역 결과 구분
   - **후처리**: 구분자 사이 내용만 추출, 없으면 전체 응답 사용 (경고 로그)
-  - **Truncation 감지**: 열린 코드블록(홀수 ` ``` `), 미완성 리스트 아이템 체크
+  - **Truncation 감지**: 열린 코드블록(홀수 ` ``` `), 문서 끝 미완성 링크 체크 (보수적 판단으로 오탐 방지)
   - **finish_reason 검사**: `length`인 경우 토큰 제한 에러로 처리
 - 동적 max_tokens 계산:
   - 입력 문서 크기 기반으로 출력 토큰 자동 계산 (JSON 오버헤드 없이 순수 텍스트 기준)
   - GPT-5 400k 컨텍스트 윈도우 기준, 안전 마진 10%
   - 문서가 너무 큰 경우 **Context-aware 청킹**으로 분할 번역 (코드블록/리스트 내부 분할 금지)
+- 이미지 플레이스홀더 시스템:
+  - **목적**: Base64 이미지(수만 토큰)를 플레이스홀더로 대체하여 토큰 절약
+  - **처리 흐름**: Markdown → `extractImages()` → 번역 → `restoreImages()` → TipTap JSON
+  - **토큰 절약**: Base64 50KB 기준 ~16,500 토큰 → 1-2 토큰 (99.99% 절약)
+  - **구현 파일**: `src/utils/imagePlaceholder.ts`
 
 3.2 Context Collection 명세 (Payload 규칙)
 Why:
@@ -91,7 +97,7 @@ What (Payload 구성 규칙: 우선순위):
   - 방법: 모델이 필요하다고 판단하면 문서 조회 Tool을 호출하여 원문/번역문을 on-demand로 가져온다.
   - 보호(단순화): 현재는 Source/Target 접근 토글을 제공하지 않으며, 문서 조회는 on-demand Tool 호출로만 수행한다.
 - 조건부 포함: Glossary/첨부, before/after 문맥
-- 질문(Question) 모드에서만 포함: 최근 메시지(최대 10개)
+- 질문(Question) 모드에서만 포함: 최근 메시지 (기본 20개, `VITE_AI_MAX_RECENT_MESSAGES` 환경변수로 조정 가능)
 - 출력 포맷 강제:
   - Translate: **Markdown 전체만 출력**(설명 금지, `---TRANSLATION_START/END---` 구분자 사용)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)

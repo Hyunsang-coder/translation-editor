@@ -62,7 +62,8 @@ cd src-tauri && cargo test
 #### 1. TipTap Document-First Approach
 - **Two Editor Instances**: Source (left, editable) and Target (right, editable)
 - **Storage Format**: TipTap JSON stored in SQLite `documents` table
-- **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, **tables**
+- **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, tables, images
+- **Editor-only Formats**: Underline, Highlight, Subscript, Superscript (lost during Markdown conversion)
 - **Notion-Style UX**: Pretendard font, 16px, line-height 1.8, max-width 800px
 - Both editors are editable; Focus Mode can hide Source panel
 
@@ -76,11 +77,12 @@ cd src-tauri && cargo test
     - Token-efficient: No JSON structure overhead
     - Simplified chunking: Context-aware text splitting (respects code blocks, lists)
   - **Dynamic max_tokens**: Calculated based on input document size (GPT-5 400k context)
-  - **Truncation Detection**: Detects unclosed code blocks, incomplete list items, finish_reason='length'
+  - **Image Placeholder**: Base64 images replaced with placeholders before translation, restored after (saves 99%+ tokens)
+  - **Truncation Detection**: Detects unclosed code blocks, incomplete links at document end (conservative to avoid false positives)
   - **Retry on Error**: Preview modal shows retry button for recoverable errors
 
 - **Chat/Question Mode** (`chat.ts`):
-  - User-initiated Q&A with chat history (max 10 messages)
+  - User-initiated Q&A with chat history (max 20 messages, configurable via `VITE_AI_MAX_RECENT_MESSAGES`)
   - **On-demand document access**: Documents NOT included in initial payload
   - Uses Tool Calling to fetch Source/Target when needed
   - Prevents unnecessary token consumption
@@ -239,7 +241,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 ## Common Gotchas
 
 1. **TipTap JSON Format**: Always validate JSON structure before storing. Fallback to plain text on parse errors.
-2. **Chat History**: `question` mode includes last 10 messages; `translate` mode excludes all history.
+2. **Chat History**: `question` mode includes last 20 messages (configurable); `translate` mode excludes all history.
 3. **Tool Calling**: AI proactively calls document tools for relevant questions. Web search enabled by default for new sessions.
 4. **Keychain Access**: First run requires OS authentication prompt for keychain access.
 5. **Sidecar Lifecycle**: MCP sidecar processes must be cleaned up on app exit.
@@ -291,6 +293,7 @@ cd src-tauri && cargo check
 - **Tauri Wrappers**: `src/tauri/*.ts` mirrors `src-tauri/src/commands/*.rs`
 - **Utilities**: `src/utils/` for shared helpers
   - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`)
+  - `imagePlaceholder.ts`: Image URL extraction/restoration for translation (`extractImages`, `restoreImages`)
   - `hash.ts`: Content hashing, `stripHtml`
   - `diff.ts`: Diff utilities
 - **UI Components**: Organized by layout hierarchy
