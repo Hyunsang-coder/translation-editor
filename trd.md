@@ -413,6 +413,7 @@ What (하이라이트 매칭 전략):
 1. segmentGroupId가 있으면 해당 세그먼트의 target 텍스트에서 targetExcerpt 검색
 2. 1단계 실패 시 전체 문서에서 targetExcerpt substring 검색 (첫 매치)
 3. 2단계도 실패 시 하이라이트 없이 패널에 "매칭 실패" 표시 (무해)
+4. **노드 경계 처리**: `buildTextWithPositions()`로 전체 텍스트/위치 매핑을 구축하여 TipTap 노드 경계를 넘는 텍스트도 검색 가능
 
 What (구현 파일):
 | 파일 | 역할 |
@@ -438,6 +439,20 @@ What (상태 관리 - reviewStore):
 - `getCheckedIssues()`: 체크된 이슈만 반환
 - `toggleHighlight()`: 하이라이트 활성화/비활성화
 - `disableHighlight()`: Review 탭 닫을 때 호출
+
+What (요청 취소 및 리소스 관리):
+- **AbortController**: 검수 요청 시 `AbortController` 생성, 취소/닫기 시 `abort()` 호출
+- **AbortSignal 전달**: `streamAssistantReply` 호출 시 `abortSignal: controller.signal` 명시적 전달
+- **청크 크기 일관성**: `DEFAULT_REVIEW_CHUNK_SIZE` 상수(12000)로 초기화와 후속 청킹 기준 통일
+
+What (JSON 파싱 안정성):
+- **균형 중괄호 매칭**: greedy 정규식 대신 `extractJsonObject()`에서 중괄호 카운팅으로 정확한 JSON 범위 추출
+- **segmentOrder 타입 처리**: 문자열("1")도 `parseInt`로 변환하여 숫자로 처리
+- **마크다운 폴백**: JSON 파싱 실패 시 마크다운 테이블 형식으로 폴백
+
+What (검수 항목 검증):
+- **hasEnabledCategories**: 검수 카테고리가 하나 이상 선택되어야 검수 실행 가능
+- **버튼 비활성화**: 카테고리 미선택 시 버튼 disabled 처리 및 툴팁 표시
 
 4. 데이터 영속성 (Data & Storage)
 4.1 SQLite 기반의 단일 파일 구조 (.ite)
