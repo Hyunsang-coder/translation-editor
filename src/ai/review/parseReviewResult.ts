@@ -38,15 +38,48 @@ function extractSegmentOrder(text: string): number {
 }
 
 /**
+ * 균형 잡힌 중괄호로 JSON 객체 추출
+ * greedy 정규식 대신 중괄호 카운팅으로 정확한 JSON 범위 찾기
+ */
+function extractJsonObject(text: string): string | null {
+  // "issues" 키워드가 포함된 첫 번째 { 찾기
+  const issuesIndex = text.indexOf('"issues"');
+  if (issuesIndex === -1) return null;
+
+  // "issues" 앞의 가장 가까운 { 찾기
+  let startIndex = -1;
+  for (let i = issuesIndex - 1; i >= 0; i--) {
+    if (text[i] === '{') {
+      startIndex = i;
+      break;
+    }
+  }
+  if (startIndex === -1) return null;
+
+  // 중괄호 카운팅으로 매칭되는 } 찾기
+  let depth = 0;
+  for (let i = startIndex; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * JSON 형식의 AI 응답 파싱 시도
  */
 function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
-  // JSON 블록 추출 (```json ... ``` 또는 { "issues": [...] })
-  const jsonMatch = aiResponse.match(/\{[\s\S]*"issues"[\s\S]*\}/);
-  if (!jsonMatch) return null;
+  // JSON 블록 추출 (균형 잡힌 중괄호 매칭)
+  const jsonStr = extractJsonObject(aiResponse);
+  if (!jsonStr) return null;
 
   try {
-    const parsed = JSON.parse(jsonMatch[0]) as { issues?: unknown[] };
+    const parsed = JSON.parse(jsonStr) as { issues?: unknown[] };
     const rawIssues = parsed.issues ?? [];
 
     return rawIssues.map((issue: unknown) => {
