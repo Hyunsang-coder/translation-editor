@@ -13,6 +13,19 @@ export interface ReviewHighlightOptions {
 const reviewHighlightPluginKey = new PluginKey('reviewHighlight');
 
 /**
+ * 마크다운 서식 제거
+ * AI가 반환하는 excerpt에 마크다운 서식이 포함될 수 있어 plain text로 변환
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
+    .replace(/`([^`]+)`/g, '$1')         // `code` → code
+    .replace(/~~([^~]+)~~/g, '$1')       // ~~strikethrough~~ → strikethrough
+    .replace(/_([^_]+)_/g, '$1');        // _underline_ → underline
+}
+
+/**
  * 문서의 전체 텍스트와 위치 매핑 구축
  * 노드 경계를 넘는 텍스트 검색을 위해 필요
  */
@@ -47,8 +60,12 @@ function createDecorations(
   const { text: fullText, positions } = buildTextWithPositions(doc);
 
   issues.forEach((issue) => {
-    const searchText = issue[excerptField];
-    if (!searchText || searchText.length === 0) return;
+    const rawSearchText = issue[excerptField];
+    if (!rawSearchText || rawSearchText.length === 0) return;
+
+    // 마크다운 서식 제거 후 검색 (AI가 **bold** 등을 포함할 수 있음)
+    const searchText = stripMarkdown(rawSearchText);
+    if (searchText.length === 0) return;
 
     // 전체 텍스트에서 검색 (노드 경계 무시)
     const index = fullText.indexOf(searchText);
