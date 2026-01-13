@@ -13,7 +13,29 @@ export interface ReviewHighlightOptions {
 const reviewHighlightPluginKey = new PluginKey('reviewHighlight');
 
 /**
+ * 문서의 전체 텍스트와 위치 매핑 구축
+ * 노드 경계를 넘는 텍스트 검색을 위해 필요
+ */
+function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
+  let text = '';
+  const positions: number[] = []; // positions[i] = text[i]에 해당하는 doc 내 위치
+
+  doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
+    if (node.isText && node.text) {
+      for (let i = 0; i < node.text.length; i++) {
+        positions.push(pos + i);
+      }
+      text += node.text;
+    }
+  });
+
+  return { text, positions };
+}
+
+/**
  * 문서에서 텍스트를 찾아 Decoration 생성
+ * - 노드 경계를 넘는 텍스트도 검색 가능
+ * - 이슈당 첫 번째 매치만 사용 (동일 텍스트 다중 매치 시 혼란 방지)
  */
 function createDecorations(
   doc: ProseMirrorNode,
@@ -22,24 +44,22 @@ function createDecorations(
   excerptField: 'sourceExcerpt' | 'targetExcerpt',
 ): DecorationSet {
   const decorations: Decoration[] = [];
+  const { text: fullText, positions } = buildTextWithPositions(doc);
 
   issues.forEach((issue) => {
     const searchText = issue[excerptField];
-    if (!searchText) return;
-    let found = false;
+    if (!searchText || searchText.length === 0) return;
 
-    // 문서의 모든 텍스트 노드 순회
-    doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
-      if (found) return false; // 첫 번째 매치만 사용
-      if (!node.isText || !node.text) return;
+    // 전체 텍스트에서 검색 (노드 경계 무시)
+    const index = fullText.indexOf(searchText);
 
-      const text = node.text;
-      const index = text.indexOf(searchText);
+    if (index !== -1 && index < positions.length) {
+      const from = positions[index];
+      const endIndex = index + searchText.length - 1;
+      // endIndex가 positions 범위 내인지 확인
+      const to = endIndex < positions.length ? positions[endIndex]! + 1 : from + searchText.length;
 
-      if (index !== -1) {
-        const from = pos + index;
-        const to = from + searchText.length;
-
+      if (from !== undefined && to > from) {
         decorations.push(
           Decoration.inline(from, to, {
             class: highlightClass,
@@ -47,10 +67,8 @@ function createDecorations(
             'data-issue-type': issue.type,
           }),
         );
-        found = true;
-        return false;
       }
-    });
+    }
   });
 
   return DecorationSet.create(doc, decorations);
