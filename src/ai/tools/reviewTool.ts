@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useReviewStore, type ReviewIntensity, type ReviewCategories } from '@/stores/reviewStore';
-import { stripHtml } from '@/utils/hash';
+import { htmlToMarkdown } from '@/utils/markdownConverter';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
 
@@ -38,11 +38,12 @@ export function buildAlignedChunks(
   let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
 
   for (const seg of orderedSegments) {
+    // HTML → Markdown 변환으로 포맷 정보 유지 (제목, 리스트, 볼드 등)
     const sourceText = seg.sourceIds
-      .map(id => stripHtml(project.blocks[id]?.content || ''))
+      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
       .join('\n');
     const targetText = seg.targetIds
-      .map(id => stripHtml(project.blocks[id]?.content || ''))
+      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
       .join('\n');
     const segmentSize = sourceText.length + targetText.length;
 

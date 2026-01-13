@@ -161,6 +161,30 @@ export function detectMarkdownTruncation(markdown: string): { isTruncated: boole
 }
 
 /**
+ * HTML 문자열 -> Markdown 변환
+ *
+ * 세그먼트 검수 등에서 블록의 HTML content를 Markdown으로 변환할 때 사용합니다.
+ * TipTap 에디터의 HTML 출력을 Markdown으로 변환합니다.
+ *
+ * @param html - HTML 문자열
+ * @returns Markdown 문자열
+ */
+export function htmlToMarkdown(html: string): string {
+  if (!html || !html.trim()) return '';
+
+  // HTML을 TipTap 에디터로 로드 후 Markdown으로 변환
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: html, // HTML string을 직접 content로 전달
+  });
+
+  const markdown = editor.storage.markdown.getMarkdown();
+  editor.destroy();
+
+  return markdown;
+}
+
+/**
  * 번역 응답에서 Markdown 추출 (구분자 사용)
  *
  * @param response - LLM 응답 텍스트
