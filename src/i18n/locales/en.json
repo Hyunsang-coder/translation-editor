@@ -156,7 +156,7 @@
     "title": "Review",
     "progress": "Reviewing...",
     "completed": "Review Complete",
-    "analyzing": "AI is analyzing the translation...",
+    "analyzing": "Analyzing the translation...",
     "readyToStart": "Click the button below to start review.",
     "chunkInfo": "Total {{count}} chunk(s) to review.",
     "hasErrors": "Some chunks encountered errors.",

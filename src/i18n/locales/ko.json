@@ -156,7 +156,7 @@
     "title": "검수",
     "progress": "검수 진행 중...",
     "completed": "검수 완료",
-    "analyzing": "AI가 번역을 분석하고 있습니다...",
+    "analyzing": "번역을 분석하고 있습니다...",
     "readyToStart": "검수를 시작하려면 아래 버튼을 클릭하세요.",
     "chunkInfo": "총 {{count}}개 청크를 검수합니다.",
     "hasErrors": "일부 청크에서 오류가 발생했습니다.",

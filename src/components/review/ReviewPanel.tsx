@@ -97,7 +97,7 @@ ${segmentsText}
               requestType: 'question',
             },
             {
-              onToken: () => {}, // 스트리밍 토큰은 무시
+              onToken: () => { }, // 스트리밍 토큰은 무시
             },
           );
 
@@ -161,11 +161,8 @@ ${segmentsText}
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
             </div>
-            <p className="text-editor-muted mb-4">
+            <p className="text-editor-muted">
               {t('review.readyToStart', '검수를 시작하려면 아래 버튼을 클릭하세요.')}
-            </p>
-            <p className="text-sm text-editor-muted">
-              {t('review.chunkInfo', '총 {count}개 청크를 검수합니다.', { count: chunks.length })}
             </p>
           </div>
         ) : results.length === 0 && isReviewing ? (
@@ -177,7 +174,7 @@ ${segmentsText}
               </svg>
             </div>
             <p className="text-editor-muted">
-              {t('review.analyzing', 'AI가 번역을 분석하고 있습니다...')}
+              {t('review.analyzing', '번역을 분석하고 있습니다...')}
             </p>
           </div>
         ) : (
