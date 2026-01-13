@@ -136,6 +136,7 @@ ${segmentsText}
               translationRules,
               projectContext,
               requestType: 'question',
+              abortSignal: controller.signal,
             },
             {
               onToken: () => { }, // 스트리밍 토큰은 무시
