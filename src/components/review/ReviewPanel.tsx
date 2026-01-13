@@ -99,8 +99,14 @@ export function ReviewPanel(): JSX.Element {
     }
   }, [project, initializeReview]);
 
+  // 검수 항목이 하나라도 선택되어 있는지 확인
+  const hasEnabledCategories = Object.values(categories).some(Boolean);
+
   const runReview = useCallback(async () => {
     if (!project || chunks.length === 0) return;
+
+    // 검수 항목이 하나도 선택되지 않았으면 실행하지 않음
+    if (!hasEnabledCategories) return;
 
     const controller = new AbortController();
     setAbortController(controller);
@@ -170,6 +176,7 @@ ${segmentsText}
     finishReview,
     addResult,
     handleChunkError,
+    hasEnabledCategories,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -338,7 +345,8 @@ ${segmentsText}
               <button
                 type="button"
                 onClick={runReview}
-                disabled={chunks.length === 0}
+                disabled={chunks.length === 0 || !hasEnabledCategories}
+                title={!hasEnabledCategories ? t('review.noCategoriesSelected', '검수 항목을 하나 이상 선택해주세요') : undefined}
                 className="px-3 py-1.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
               >
                 {results.length > 0
