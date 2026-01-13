@@ -6,7 +6,8 @@
 
 - [x] **High**: 리뷰 취소가 실제 요청을 중단하지 않습니다. `AbortController`는 생성/체크하지만 `streamAssistantReply`에 `abortSignal`을 전달하지 않아, 취소/닫기 후에도 응답이 들어와 `addResult`가 실행될 수 있습니다. (`src/components/review/ReviewPanel.tsx:102`, `src/components/review/ReviewPanel.tsx:129`, `src/components/review/ReviewPanel.tsx:174`)
   - ✅ **Fixed**: `streamAssistantReply` 호출 시 `abortSignal: controller.signal` 전달하도록 수정
-- **High**: `review_translation`과 `get_review_chunk`의 청킹 기준이 불일치합니다. 첫 호출은 `maxChars`(기본 12000)로 청킹하고, 후속은 기본 10000으로 재청킹해서 청크 인덱스/세그먼트가 어긋날 수 있습니다. (`src/ai/tools/reviewTool.ts:183`, `src/ai/tools/reviewTool.ts:296`)
+- [x] **High**: `review_translation`과 `get_review_chunk`의 청킹 기준이 불일치합니다. 첫 호출은 `maxChars`(기본 12000)로 청킹하고, 후속은 기본 10000으로 재청킹해서 청크 인덱스/세그먼트가 어긋날 수 있습니다. (`src/ai/tools/reviewTool.ts:183`, `src/ai/tools/reviewTool.ts:296`)
+  - ✅ **Fixed**: `DEFAULT_REVIEW_CHUNK_SIZE` 상수(12000)를 도입하여 `buildAlignedChunks` 기본값 통일
 - **Medium**: JSON 파싱에서 `segmentOrder`가 문자열("1")이면 0으로 처리되어 ID 충돌/정렬 오류가 발생할 수 있습니다. (`src/ai/review/parseReviewResult.ts:54`)
 - **Medium**: JSON 추출 정규식이 greedy라서 응답에 여분의 `{}`가 있으면 파싱 실패 → 마크다운 폴백(대부분 빈 결과)로 이어질 수 있습니다. (`src/ai/review/parseReviewResult.ts:45`)
 - **Medium**: 하이라이트가 첫 번째 `indexOf` 매치만 사용합니다. 짧은 발췌가 여러 위치에 있거나 노드 경계를 넘으면 잘못된 위치를 강조하거나 누락될 수 있습니다. (`src/editor/extensions/ReviewHighlight.ts:31`)

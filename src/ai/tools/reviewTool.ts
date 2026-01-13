@@ -11,6 +11,11 @@ import type { ITEProject } from '@/types';
 // 세그먼트 기반 청킹 (Phase 2)
 // ============================================
 
+/**
+ * 청킹 기본값 (review_translation과 get_review_chunk에서 일관되게 사용)
+ */
+export const DEFAULT_REVIEW_CHUNK_SIZE = 12000;
+
 export interface AlignedSegment {
   groupId: string;
   order: number;
@@ -31,7 +36,7 @@ export interface AlignedChunk {
  */
 export function buildAlignedChunks(
   project: ITEProject,
-  maxCharsPerChunk: number = 10000
+  maxCharsPerChunk: number = DEFAULT_REVIEW_CHUNK_SIZE
 ): AlignedChunk[] {
   const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
   const chunks: AlignedChunk[] = [];
@@ -167,7 +172,7 @@ ${OUTPUT_FORMAT}`;
 }
 
 const ReviewToolArgsSchema = z.object({
-  maxChars: z.number().int().min(2000).max(30000).optional().describe('원문/번역문 각각 반환할 최대 문자 수 (기본 12000)'),
+  maxChars: z.number().int().min(2000).max(30000).optional().describe(`원문/번역문 각각 반환할 최대 문자 수 (기본 ${DEFAULT_REVIEW_CHUNK_SIZE})`),
 });
 
 /**
@@ -180,7 +185,7 @@ export const reviewTranslationTool = tool(
   async (rawArgs) => {
     const args = ReviewToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
-    const maxChars = parsed.maxChars ?? 12000;
+    const maxChars = parsed.maxChars ?? DEFAULT_REVIEW_CHUNK_SIZE;
 
     const { project } = useProjectStore.getState();
     if (!project) {
