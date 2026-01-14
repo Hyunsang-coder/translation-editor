@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ITEProject } from '@/types';
 import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { useProjectStore } from '@/stores/projectStore';
 
 // ============================================
 // Review Settings Types
@@ -367,3 +368,30 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set({ settingsExpanded: expanded });
   },
 }));
+
+// ============================================
+// Issue #6 Fix: 문서 변경 시 하이라이트 무효화
+// ============================================
+// projectStore의 targetDocJson 변경을 구독하여
+// 검수 결과가 있고 하이라이트가 활성화된 상태에서 문서가 변경되면
+// 하이라이트를 비활성화합니다 (오프셋 불일치 방지)
+
+let prevTargetDocJson: unknown = null;
+
+useProjectStore.subscribe((state) => {
+  const { targetDocJson } = state;
+  const reviewState = useReviewStore.getState();
+
+  // 문서가 실제로 변경되었고, 하이라이트가 활성화되어 있고, 검수 결과가 있을 때만 처리
+  if (
+    prevTargetDocJson !== null &&
+    targetDocJson !== prevTargetDocJson &&
+    reviewState.highlightEnabled &&
+    reviewState.results.length > 0
+  ) {
+    console.log('[reviewStore] Target document changed while highlight active, disabling highlight');
+    useReviewStore.getState().disableHighlight();
+  }
+
+  prevTargetDocJson = targetDocJson;
+});

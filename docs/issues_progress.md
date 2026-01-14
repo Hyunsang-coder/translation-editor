@@ -6,9 +6,9 @@
 
 | 상태 | 개수 |
 |------|------|
-| 완료 | 11 / 13 |
+| 완료 | 13 / 13 |
 | 진행 중 | 0 |
-| 대기 | 2 |
+| 대기 | 0 |
 
 ---
 
@@ -92,13 +92,21 @@
 
 ## 독립 이슈 (언제든 진행 가능)
 
-- [ ] **#6** [MEDIUM] 검수 하이라이트 vs 문서 변경 불일치
+- [x] **#6** [MEDIUM] 검수 하이라이트 vs 문서 변경 불일치 ✅
   - 파일: `src/stores/reviewStore.ts`
   - 작업: 문서 편집 시 하이라이트 무효화
+  - 완료: 2025-01-14
+    - projectStore의 targetDocJson 변경을 구독하여 문서 변경 감지
+    - 하이라이트가 활성화되고 검수 결과가 있는 상태에서 문서 변경 시 자동으로 하이라이트 비활성화
+    - 오프셋 불일치로 인한 잘못된 텍스트 하이라이트 방지
 
-- [ ] **#10** [LOW] Document Tools null 체크 없음
+- [x] **#10** [LOW] Document Tools null 체크 없음 ✅
   - 파일: `src/ai/tools/documentTools.ts`
   - 작업: null 안전성 검사 추가
+  - 완료: 2025-01-14
+    - `resolveSourceDocumentMarkdown()`, `resolveTargetDocumentMarkdown()`에 프로젝트 null 체크 추가
+    - 도구 호출 시 더 의미 있는 에러 메시지 반환 ("프로젝트가 로드되지 않았습니다", "Source/Target 패널에 내용을 입력해주세요")
+    - `sourceDocJson`/`targetDocJson` null 검증 강화
 
 - [x] **#12** [LOW] composerAttachments 조기 정리 ✅
   - 파일: `src/stores/chatStore.ts`
@@ -118,3 +126,5 @@
 | 2025-01-14 | #12 완료 - #7 수정 과정에서 composerAttachments 조기 정리 문제도 함께 해결 |
 | 2025-01-14 | Track 1 완료 (#4) - TipTap JSON 캐시 동기화: setContent() 후 onJsonChange() 명시적 호출 |
 | 2025-01-14 | Track 3 완료 (#2, #9) - AbortController 정리 및 채팅 저장 Debounce Race 수정 |
+| 2025-01-14 | 독립 이슈 완료 (#6, #10) - 검수 하이라이트 문서 변경 감지, Document Tools null 체크 추가 |
+| 2025-01-14 | **전체 이슈 수정 완료 (13/13)** |

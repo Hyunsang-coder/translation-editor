@@ -10,21 +10,30 @@ import { tipTapJsonToMarkdown, type TipTapDocJson } from '@/utils/markdownConver
  * Source 문서를 Markdown 형식으로 반환
  * - TipTap JSON이 있으면 Markdown으로 변환 (서식 보존)
  * - 없으면 plain text fallback
+ *
+ * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
 function resolveSourceDocumentMarkdown(): string {
-  const { sourceDocJson, project, sourceDocument } = useProjectStore.getState();
+  const state = useProjectStore.getState();
+  const { sourceDocJson, project, sourceDocument } = state;
+
+  // Issue #10 Fix: 프로젝트가 로드되지 않은 경우 명확한 에러 메시지
+  if (!project) {
+    console.warn('[resolveSourceDocumentMarkdown] No project loaded');
+    return '';
+  }
 
   // TipTap JSON이 있으면 Markdown으로 변환
-  if (sourceDocJson && typeof sourceDocJson === 'object' && sourceDocJson.type === 'doc') {
+  if (sourceDocJson != null && typeof sourceDocJson === 'object' && sourceDocJson.type === 'doc') {
     try {
       return tipTapJsonToMarkdown(sourceDocJson as TipTapDocJson);
     } catch (e) {
-      console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed:', e);
+      console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }
   }
 
   // Fallback: plain text
-  const raw = sourceDocument?.trim() ? sourceDocument : project ? buildSourceDocument(project).text : '';
+  const raw = sourceDocument?.trim() ? sourceDocument : buildSourceDocument(project).text;
   return raw ? stripHtml(raw) : '';
 }
 
@@ -32,21 +41,30 @@ function resolveSourceDocumentMarkdown(): string {
  * Target 문서를 Markdown 형식으로 반환
  * - TipTap JSON이 있으면 Markdown으로 변환 (서식 보존)
  * - 없으면 plain text fallback
+ *
+ * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
 function resolveTargetDocumentMarkdown(): string {
-  const { targetDocJson, project, targetDocument } = useProjectStore.getState();
+  const state = useProjectStore.getState();
+  const { targetDocJson, project, targetDocument } = state;
+
+  // Issue #10 Fix: 프로젝트가 로드되지 않은 경우 명확한 에러 메시지
+  if (!project) {
+    console.warn('[resolveTargetDocumentMarkdown] No project loaded');
+    return '';
+  }
 
   // TipTap JSON이 있으면 Markdown으로 변환
-  if (targetDocJson && typeof targetDocJson === 'object' && targetDocJson.type === 'doc') {
+  if (targetDocJson != null && typeof targetDocJson === 'object' && targetDocJson.type === 'doc') {
     try {
       return tipTapJsonToMarkdown(targetDocJson as TipTapDocJson);
     } catch (e) {
-      console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed:', e);
+      console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }
   }
 
   // Fallback: plain text
-  const raw = targetDocument?.trim() ? targetDocument : project ? buildTargetDocument(project).text : '';
+  const raw = targetDocument?.trim() ? targetDocument : buildTargetDocument(project).text;
   return raw ? stripHtml(raw) : '';
 }
 
@@ -95,8 +113,13 @@ export const getSourceDocumentTool = tool(
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
     const markdown = resolveSourceDocumentMarkdown();
+    // Issue #10 Fix: 더 의미 있는 에러 메시지
     if (!markdown || markdown.trim().length === 0) {
-      throw new Error('원문 문서가 비어있습니다.');
+      const { project } = useProjectStore.getState();
+      if (!project) {
+        throw new Error('프로젝트가 로드되지 않았습니다. 프로젝트를 먼저 열어주세요.');
+      }
+      throw new Error('원문 문서가 비어있습니다. Source 패널에 내용을 입력해주세요.');
     }
     return autoSliceLargeDocument(markdown, parsed);
   },
@@ -113,8 +136,13 @@ export const getTargetDocumentTool = tool(
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
     const markdown = resolveTargetDocumentMarkdown();
+    // Issue #10 Fix: 더 의미 있는 에러 메시지
     if (!markdown || markdown.trim().length === 0) {
-      throw new Error('번역문 문서가 비어있습니다.');
+      const { project } = useProjectStore.getState();
+      if (!project) {
+        throw new Error('프로젝트가 로드되지 않았습니다. 프로젝트를 먼저 열어주세요.');
+      }
+      throw new Error('번역문 문서가 비어있습니다. 먼저 번역을 실행하거나 Target 패널에 내용을 입력해주세요.');
     }
     return autoSliceLargeDocument(markdown, parsed);
   },
