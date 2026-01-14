@@ -32,6 +32,7 @@ export type SingleChunkTranslator = (params: {
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
+  glossary?: string | undefined;
   chunkIndex?: number | undefined;
   totalChunks?: number | undefined;
 }) => Promise<{ doc: TipTapDocJson; raw: string }>;
@@ -45,6 +46,8 @@ export interface ChunkedTranslationParams {
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
+  /** 용어집 (source = target 형식) */
+  glossary?: string | undefined;
   /** 청크 설정 */
   chunkConfig?: Partial<ChunkConfig> | undefined;
   /** 진행률 콜백 */
@@ -70,6 +73,7 @@ export async function translateInChunks(
     translationRules,
     projectContext,
     translatorPersona,
+    glossary,
     chunkConfig = {},
     onProgress,
     translateSingleChunk,
@@ -95,6 +99,7 @@ export async function translateInChunks(
         translationRules,
         projectContext,
         translatorPersona,
+        glossary,
       });
 
       onProgress?.({
@@ -187,6 +192,7 @@ export async function translateInChunks(
         translationRules,
         projectContext,
         translatorPersona,
+        glossary,
         chunkIndex: i,
         totalChunks,
       });
@@ -238,6 +244,7 @@ export async function retryFailedChunks(
     translationRules,
     projectContext,
     translatorPersona,
+    glossary,
     onProgress,
     translateSingleChunk,
     abortSignal,
@@ -280,6 +287,7 @@ export async function retryFailedChunks(
         translationRules,
         projectContext,
         translatorPersona,
+        glossary,
         chunkIndex: index,
         totalChunks,
       });

@@ -112,6 +112,8 @@ export async function translateSourceDocToTargetDocJson(params: {
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
+  /** 용어집 (source = target 형식) */
+  glossary?: string | undefined;
   /** 취소 신호 */
   abortSignal?: AbortSignal | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
@@ -180,6 +182,11 @@ export async function translateSourceDocToTargetDocJson(params: {
   const projectContext = params.projectContext?.trim();
   if (projectContext) {
     systemLines.push('[Project Context]', projectContext, '');
+  }
+
+  const glossary = params.glossary?.trim();
+  if (glossary) {
+    systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();
@@ -322,6 +329,8 @@ export interface StreamingTranslationParams {
   translationRules?: string;
   projectContext?: string;
   translatorPersona?: string;
+  /** 용어집 (source = target 형식) */
+  glossary?: string;
   /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
   onToken?: (accumulatedText: string) => void;
   /** 취소 신호 */
@@ -397,6 +406,11 @@ export async function translateWithStreaming(
   const projectContext = params.projectContext?.trim();
   if (projectContext) {
     systemLines.push('[Project Context]', projectContext, '');
+  }
+
+  const glossary = params.glossary?.trim();
+  if (glossary) {
+    systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();
@@ -520,6 +534,8 @@ export interface ChunkedTranslationParams {
   translationRules?: string;
   projectContext?: string;
   translatorPersona?: string;
+  /** 용어집 (source = target 형식) */
+  glossary?: string;
   /** 진행률 콜백 */
   onProgress?: TranslationProgressCallback;
   /** 취소 신호 */
@@ -560,6 +576,7 @@ export async function translateSourceDocWithChunking(
     translationRules,
     projectContext,
     translatorPersona,
+    glossary,
     onProgress,
     abortSignal,
   } = params;
@@ -573,6 +590,7 @@ export async function translateSourceDocWithChunking(
     translationRules,
     projectContext,
     translatorPersona,
+    glossary,
     onProgress,
     abortSignal,
     translateSingleChunk: async (chunkParams) => {
@@ -584,6 +602,7 @@ export async function translateSourceDocWithChunking(
         translationRules: chunkParams.translationRules,
         projectContext: chunkParams.projectContext,
         translatorPersona: chunkParams.translatorPersona,
+        glossary: chunkParams.glossary,
         abortSignal,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

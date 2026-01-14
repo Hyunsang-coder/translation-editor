@@ -16,6 +16,8 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
+import { searchGlossary } from '@/tauri/glossary';
+import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -195,12 +197,39 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
+
+      // 용어집 검색 (채팅 모드와 동일한 패턴)
+      let glossary = '';
+      try {
+        // 원문을 Markdown으로 변환하여 검색 쿼리로 사용
+        const sourceMarkdown = tipTapJsonToMarkdown(sourceDocJson);
+        const query = sourceMarkdown.slice(0, 2000); // 앞부분 2000자로 검색
+        if (query.trim().length > 0) {
+          const hits = await searchGlossary({
+            projectId: project.id,
+            query,
+            domain: project.metadata.domain,
+            limit: 30, // 번역은 전체 문서이므로 더 많이
+          });
+          if (hits.length > 0) {
+            glossary = hits
+              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+              .join('\n');
+            console.log(`[Translation] Glossary injected: ${hits.length} terms`);
+          }
+        }
+      } catch (glossaryError) {
+        // 용어집 검색 실패는 조용히 무시 (번역은 계속 진행)
+        console.warn('[Translation] Glossary search failed:', glossaryError);
+      }
+
       const { doc } = await translateWithStreaming({
         project,
         sourceDocJson,
         translationRules,
         projectContext,
         translatorPersona,
+        glossary,
         onToken: (text) => {
           setStreamingText(text);
         },
