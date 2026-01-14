@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -8,7 +7,6 @@ import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
-import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
 
 /**
@@ -18,8 +16,6 @@ import { ReviewPanel } from '@/components/review/ReviewPanel';
 export function SettingsSidebar(): JSX.Element {
   const { t } = useTranslation();
   const { sidebarCollapsed, toggleSidebar, sidebarActiveTab, setSidebarActiveTab } = useUIStore();
-  const reviewPanelOpen = useUIStore((s) => s.reviewPanelOpen);
-  const closeReviewPanel = useUIStore((s) => s.closeReviewPanel);
 
   const translatorPersona = useChatStore((s) => s.translatorPersona);
   const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
@@ -34,20 +30,6 @@ export function SettingsSidebar(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const settingsKey = project?.id ?? 'none';
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
-
-  // reviewPanelOpen 변경 시에만 탭 전환 (이전 값 추적)
-  const prevReviewPanelOpen = useRef(reviewPanelOpen);
-  useEffect(() => {
-    // reviewPanelOpen이 false → true로 변경될 때만 검수 탭으로 전환
-    if (reviewPanelOpen && !prevReviewPanelOpen.current) {
-      setSidebarActiveTab('review');
-    }
-    // reviewPanelOpen이 true → false로 변경될 때, 현재 탭이 review면 settings로
-    else if (!reviewPanelOpen && prevReviewPanelOpen.current && sidebarActiveTab === 'review') {
-      setSidebarActiveTab('settings');
-    }
-    prevReviewPanelOpen.current = reviewPanelOpen;
-  }, [reviewPanelOpen, sidebarActiveTab, setSidebarActiveTab]);
 
   // 사이드바 축소 상태
   if (sidebarCollapsed) {
@@ -313,39 +295,20 @@ export function SettingsSidebar(): JSX.Element {
             <span className="truncate flex-1">{t('chat.settings')}</span>
           </div>
 
-          {/* Review 탭 - reviewPanelOpen일 때만 표시 */}
-          {reviewPanelOpen && (
-            <div
-              onClick={() => setSidebarActiveTab('review')}
-              className={`
-                group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
-                ${sidebarActiveTab === 'review'
-                  ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                  : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-                }
-              `}
-              title={t('review.title', '검수')}
-            >
-              <span className="truncate flex-1">{t('review.title', '검수')}</span>
-              <button
-                className={`
-                  opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50
-                  ${sidebarActiveTab === 'review' ? 'opacity-100' : ''}
-                `}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // 검수 상태 리셋
-                  const { resetReview, disableHighlight } = useReviewStore.getState();
-                  disableHighlight();
-                  resetReview();
-                  closeReviewPanel();
-                  setSidebarActiveTab('settings');
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
+          {/* Review 탭 - 항상 표시 */}
+          <div
+            onClick={() => setSidebarActiveTab('review')}
+            className={`
+              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
+              ${sidebarActiveTab === 'review'
+                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+              }
+            `}
+            title={t('review.title', '검수')}
+          >
+            <span className="truncate flex-1">{t('review.title', '검수')}</span>
+          </div>
         </div>
 
         {/* Panel Controls */}

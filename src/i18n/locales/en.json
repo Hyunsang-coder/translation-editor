@@ -162,6 +162,7 @@
     "hasErrors": "Some chunks encountered errors.",
     "cancel": "Cancel",
     "close": "Close",
+    "reset": "Reset",
     "start": "Start Review",
     "restart": "Review Again",
     "noIssues": "No mistranslations or omissions found.",

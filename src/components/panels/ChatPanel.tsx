@@ -14,7 +14,6 @@ import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
-import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
 import type { ChatMessageMetadata } from '@/types';
 
@@ -48,8 +47,6 @@ export function ChatPanel(): JSX.Element {
   const projectContext = useChatStore((s) => s.projectContext);
   const setProjectContext = useChatStore((s) => s.setProjectContext);
   const [activeTab, setActiveTab] = useState<'settings' | 'chat' | 'review'>('settings');
-  const reviewPanelOpen = useUIStore((s) => s.reviewPanelOpen);
-  const closeReviewPanel = useUIStore((s) => s.closeReviewPanel);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -208,19 +205,6 @@ export function ChatPanel(): JSX.Element {
     setActiveTab('settings');
   }, [project?.id, hydrateForProject]);
 
-  // reviewPanelOpen 변경 시에만 탭 전환 (이전 값 추적)
-  const prevReviewPanelOpen = useRef(reviewPanelOpen);
-  useEffect(() => {
-    // reviewPanelOpen이 false → true로 변경될 때만 검수 탭으로 전환
-    if (reviewPanelOpen && !prevReviewPanelOpen.current) {
-      setActiveTab('review');
-    }
-    // reviewPanelOpen이 true → false로 변경될 때, 현재 탭이 review면 settings로
-    else if (!reviewPanelOpen && prevReviewPanelOpen.current && activeTab === 'review') {
-      setActiveTab('settings');
-    }
-    prevReviewPanelOpen.current = reviewPanelOpen;
-  }, [reviewPanelOpen, activeTab]);
 
 
   useEffect(() => {
@@ -564,39 +548,20 @@ export function ChatPanel(): JSX.Element {
             <span className="truncate flex-1">{t('chat.settings')}</span>
           </div>
 
-          {/* Review 탭 - reviewPanelOpen일 때만 표시 */}
-          {reviewPanelOpen && (
-            <div
-              onClick={() => setActiveTab('review')}
-              className={`
-                group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
-                ${activeTab === 'review'
-                  ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                  : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-                }
-              `}
-              title={t('review.title', '검수')}
-            >
-              <span className="truncate flex-1">{t('review.title', '검수')}</span>
-              <button
-                className={`
-                  opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50
-                  ${activeTab === 'review' ? 'opacity-100' : ''}
-                `}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // 검수 상태 리셋
-                  const { resetReview, disableHighlight } = useReviewStore.getState();
-                  disableHighlight();
-                  resetReview();
-                  closeReviewPanel();
-                  setActiveTab('settings');
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
+          {/* Review 탭 - 항상 표시 */}
+          <div
+            onClick={() => setActiveTab('review')}
+            className={`
+              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
+              ${activeTab === 'review'
+                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+              }
+            `}
+            title={t('review.title', '검수')}
+          >
+            <span className="truncate flex-1">{t('review.title', '검수')}</span>
+          </div>
 
           {chatSessions.map((session) => (
             <div

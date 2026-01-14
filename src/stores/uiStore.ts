@@ -224,16 +224,17 @@ export const useUIStore = create<UIStore>()(
 
       // Review Panel
       openReviewPanel: (): void => {
-        // 사이드바가 닫혀있으면 열기
+        // 사이드바가 닫혀있으면 열기 + Review 탭으로 전환
         const { sidebarCollapsed } = get();
         if (sidebarCollapsed) {
           set({ sidebarCollapsed: false });
         }
-        set({ reviewPanelOpen: true });
+        set({ sidebarActiveTab: 'review' });
       },
 
       closeReviewPanel: (): void => {
-        set({ reviewPanelOpen: false });
+        // 더 이상 reviewPanelOpen 상태를 사용하지 않지만, 하위 호환성을 위해 유지
+        set({ sidebarActiveTab: 'settings' });
       },
 
       // Floating Chat Panel

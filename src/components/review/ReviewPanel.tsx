@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useUIStore } from '@/stores/uiStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildReviewPrompt } from '@/ai/tools/reviewTool';
@@ -62,7 +61,6 @@ export function ReviewPanel(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const translationRules = useChatStore((s) => s.translationRules);
   const projectContext = useChatStore((s) => s.projectContext);
-  const closeReviewPanel = useUIStore((s) => s.closeReviewPanel);
 
   const {
     // 검수 설정
@@ -186,14 +184,13 @@ ${segmentsText}
     finishReview();
   }, [abortController, finishReview]);
 
-  const handleClose = useCallback(() => {
+  const handleReset = useCallback(() => {
     if (isReviewing) {
       handleCancel();
     }
-    disableHighlight(); // Review 탭 닫을 때 하이라이트 해제
+    disableHighlight(); // 검수 상태 초기화 시 하이라이트 해제
     resetReview();
-    closeReviewPanel();
-  }, [isReviewing, handleCancel, disableHighlight, resetReview, closeReviewPanel]);
+  }, [isReviewing, handleCancel, disableHighlight, resetReview]);
 
   const allIssues = getAllIssues();
   const checkedIssues = getCheckedIssues();
@@ -335,13 +332,15 @@ ${segmentsText}
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-3 py-1.5 text-xs rounded border border-editor-border hover:bg-editor-bg transition-colors"
-              >
-                {t('review.close', '닫기')}
-              </button>
+              {results.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-3 py-1.5 text-xs rounded border border-editor-border hover:bg-editor-bg transition-colors"
+                >
+                  {t('review.reset', '초기화')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={runReview}
