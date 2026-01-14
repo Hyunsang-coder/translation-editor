@@ -108,6 +108,12 @@ export function TipTapEditor({
         return false;
       },
     },
+    onCreate: ({ editor }) => {
+      // 에디터 초기화 시 JSON 상태 동기화 (AI 도구용)
+      if (onJsonChange) {
+        onJsonChange(editor.getJSON() as Record<string, unknown>);
+      }
+    },
     onUpdate: ({ editor }) => {
       if (onChange) {
         onChange(editor.getHTML());
@@ -236,6 +242,12 @@ export function SourceTipTapEditor({
         return false;
       },
     },
+    onCreate: ({ editor: ed }) => {
+      // 에디터 초기화 시 JSON 상태 동기화 (AI 도구용)
+      if (onJsonChange) {
+        onJsonChange(ed.getJSON() as Record<string, unknown>);
+      }
+    },
     onUpdate: ({ editor: ed }) => {
       if (onChange) {
         onChange(ed.getHTML());
@@ -363,6 +375,12 @@ export function TargetTipTapEditor({
 
         return false;
       },
+    },
+    onCreate: ({ editor: ed }) => {
+      // 에디터 초기화 시 JSON 상태 동기화 (AI 도구용)
+      if (onJsonChange) {
+        onJsonChange(ed.getJSON() as Record<string, unknown>);
+      }
     },
     onUpdate: ({ editor: ed }) => {
       if (onChange) {

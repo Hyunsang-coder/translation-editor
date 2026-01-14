@@ -13,6 +13,10 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
+import Underline from '@tiptap/extension-underline';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
 import { Markdown } from 'tiptap-markdown';
 
 /**
@@ -24,7 +28,9 @@ export type TipTapDocJson = Record<string, unknown>;
 
 /**
  * 헤드리스 에디터용 공통 extension 구성
- * 에디터 UI와 동일한 extension을 사용하여 변환 일관성 보장
+ * 에디터 UI(TipTapEditor.tsx)와 동일한 extension을 사용하여 변환 일관성 보장
+ *
+ * 주의: TipTapEditor.tsx의 extension 목록과 동기화 필요
  */
 function getExtensions() {
   return [
@@ -44,6 +50,11 @@ function getExtensions() {
       inline: false,
       allowBase64: true,
     }),
+    // TipTapEditor.tsx와 동일한 mark extensions (Markdown 변환 시 손실되지만 JSON 파싱에 필요)
+    Underline,
+    Highlight.configure({ multicolor: false }),
+    Subscript,
+    Superscript,
     Markdown.configure({
       html: false,                  // HTML 태그 비활성화
       tightLists: true,             // 리스트 항목 사이 빈 줄 제거
@@ -182,6 +193,32 @@ export function htmlToMarkdown(html: string): string {
   editor.destroy();
 
   return markdown;
+}
+
+/**
+ * HTML 문자열 -> TipTap JSON 변환
+ *
+ * 프로젝트 로드 시 HTML 문서를 TipTap JSON으로 변환하여 저장합니다.
+ * 이를 통해 에디터 마운트 여부와 관계없이 AI 도구가 문서에 접근할 수 있습니다.
+ *
+ * @param html - HTML 문자열
+ * @returns TipTap document JSON (빈 문서일 경우 기본 doc 구조 반환)
+ */
+export function htmlToTipTapJson(html: string): TipTapDocJson {
+  // 빈 HTML이면 기본 빈 문서 구조 반환
+  if (!html || !html.trim()) {
+    return { type: 'doc', content: [] };
+  }
+
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: html, // HTML string을 직접 content로 전달
+  });
+
+  const json = editor.getJSON() as TipTapDocJson;
+  editor.destroy();
+
+  return json;
 }
 
 /**

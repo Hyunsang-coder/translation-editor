@@ -17,6 +17,7 @@ import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
 import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
+import { htmlToTipTapJson } from '@/utils/markdownConverter';
 
 // ============================================
 // Store State Interface
@@ -346,13 +347,17 @@ export const useProjectStore = create<ProjectStore>()(
             try {
               const loaded = await tauriLoadProject(lastProjectId);
               const td = buildTargetDocument(loaded);
+              const sd = buildSourceDocument(loaded);
               set({
                 project: loaded,
                 isDirty: false,
                 isLoading: false,
                 error: null,
                 targetDocument: td.text,
-                sourceDocument: buildSourceDocument(loaded).text,
+                sourceDocument: sd.text,
+                // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+                sourceDocJson: htmlToTipTapJson(sd.text),
+                targetDocJson: htmlToTipTapJson(td.text),
               });
               return;
             } catch {
@@ -367,6 +372,7 @@ export const useProjectStore = create<ProjectStore>()(
             if (first) {
               const loaded = await tauriLoadProject(first);
               const td = buildTargetDocument(loaded);
+              const sd = buildSourceDocument(loaded);
               set({
                 project: loaded,
                 isDirty: false,
@@ -374,7 +380,10 @@ export const useProjectStore = create<ProjectStore>()(
                 error: null,
                 lastProjectId: loaded.id,
                 targetDocument: td.text,
-                sourceDocument: buildSourceDocument(loaded).text,
+                sourceDocument: sd.text,
+                // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+                sourceDocJson: htmlToTipTapJson(sd.text),
+                targetDocJson: htmlToTipTapJson(td.text),
               });
               return;
             }
@@ -387,6 +396,8 @@ export const useProjectStore = create<ProjectStore>()(
             project: null,
             isLoading: false,
             lastProjectId: null,
+            sourceDocJson: null,
+            targetDocJson: null,
           });
         })();
       },
@@ -488,6 +499,7 @@ export const useProjectStore = create<ProjectStore>()(
         }
 
         const td = buildTargetDocument(project);
+        const sd = buildSourceDocument(project);
         set({
           project,
           isDirty: false,
@@ -495,7 +507,10 @@ export const useProjectStore = create<ProjectStore>()(
           error: null,
           lastProjectId: project.id,
           targetDocument: td.text,
-          sourceDocument: buildSourceDocument(project).text,
+          sourceDocument: sd.text,
+          // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+          sourceDocJson: htmlToTipTapJson(sd.text),
+          targetDocJson: htmlToTipTapJson(td.text),
           // pendingDocDiff 초기화 (이전 프로젝트의 diff가 남아있으면 문제)
           pendingDocDiff: null,
         });
@@ -532,12 +547,16 @@ export const useProjectStore = create<ProjectStore>()(
             },
           };
           const td = buildTargetDocument(nextProject);
+          const sd = buildSourceDocument(nextProject);
           set({
             project: nextProject,
             isDirty: true,
             lastProjectId: initialProject.id,
             targetDocument: td.text,
-            sourceDocument: buildSourceDocument(nextProject).text,
+            sourceDocument: sd.text,
+            // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+            sourceDocJson: htmlToTipTapJson(sd.text),
+            targetDocJson: htmlToTipTapJson(td.text),
           });
           scheduleWriteThroughSave(set, get);
         }
