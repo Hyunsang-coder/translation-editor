@@ -59,16 +59,35 @@ function createDecorations(
   const decorations: Decoration[] = [];
   const { text: fullText, positions } = buildTextWithPositions(doc);
 
-  issues.forEach((issue) => {
+  // 디버깅: 에디터에서 추출한 전체 텍스트 (처음 500자)
+  console.log(`[ReviewHighlight:${excerptField}] fullText (first 500):`, fullText.slice(0, 500));
+  console.log(`[ReviewHighlight:${excerptField}] issues count:`, issues.length);
+
+  issues.forEach((issue, idx) => {
     const rawSearchText = issue[excerptField];
-    if (!rawSearchText || rawSearchText.length === 0) return;
+    if (!rawSearchText || rawSearchText.length === 0) {
+      console.log(`[ReviewHighlight:${excerptField}] issue #${idx}: empty excerpt, skipping`);
+      return;
+    }
 
     // 마크다운 서식 제거 후 검색 (AI가 **bold** 등을 포함할 수 있음)
     const searchText = stripMarkdown(rawSearchText);
-    if (searchText.length === 0) return;
+    if (searchText.length === 0) {
+      console.log(`[ReviewHighlight:${excerptField}] issue #${idx}: empty after stripMarkdown, skipping`);
+      return;
+    }
 
     // 전체 텍스트에서 검색 (노드 경계 무시)
     const index = fullText.indexOf(searchText);
+
+    // 디버깅: 검색 결과
+    console.log(`[ReviewHighlight:${excerptField}] issue #${idx}:`, {
+      raw: rawSearchText,
+      stripped: searchText,
+      found: index !== -1,
+      index,
+      type: issue.type,
+    });
 
     if (index !== -1 && index < positions.length) {
       const from = positions[index];

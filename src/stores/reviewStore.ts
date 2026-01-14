@@ -215,9 +215,10 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...initialState,
 
   initializeReview: (project: ITEProject) => {
-    const { initializedProjectId } = get();
-    // 이미 같은 프로젝트로 초기화되어 있으면 스킵 (탭 전환 시 상태 유지)
-    if (initializedProjectId === project.id) {
+    const { initializedProjectId, results } = get();
+    // 이미 같은 프로젝트로 초기화되어 있고 검수 결과가 있으면 스킵 (탭 전환 시 상태 유지)
+    // 검수 결과가 없으면 항상 재초기화 (resetReview 후 또는 첫 진입)
+    if (initializedProjectId === project.id && results.length > 0) {
       return;
     }
     const chunks = buildAlignedChunks(project);

@@ -5,7 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildReviewPrompt } from '@/ai/tools/reviewTool';
+import { buildReviewPrompt, buildAlignedChunks } from '@/ai/tools/reviewTool';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 
 /** 체크박스 아이템 컴포넌트 */
@@ -101,10 +101,14 @@ export function ReviewPanel(): JSX.Element {
   const hasEnabledCategories = Object.values(categories).some(Boolean);
 
   const runReview = useCallback(async () => {
-    if (!project || chunks.length === 0) return;
+    if (!project) return;
 
     // 검수 항목이 하나도 선택되지 않았으면 실행하지 않음
     if (!hasEnabledCategories) return;
+
+    // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
+    const freshChunks = buildAlignedChunks(project);
+    if (freshChunks.length === 0) return;
 
     const controller = new AbortController();
     setAbortController(controller);
@@ -114,10 +118,10 @@ export function ReviewPanel(): JSX.Element {
     const reviewInstructions = buildReviewPrompt(intensity, categories);
 
     try {
-      for (let i = 0; i < chunks.length; i++) {
+      for (let i = 0; i < freshChunks.length; i++) {
         if (controller.signal.aborted) break;
 
-        const chunk = chunks[i]!;
+        const chunk = freshChunks[i]!;
         const segmentsText = chunk.segments
           .map((s) => `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`)
           .join('\n\n');
@@ -165,7 +169,6 @@ ${segmentsText}
     }
   }, [
     project,
-    chunks,
     intensity,
     categories,
     translationRules,
@@ -344,7 +347,7 @@ ${segmentsText}
               <button
                 type="button"
                 onClick={runReview}
-                disabled={chunks.length === 0 || !hasEnabledCategories}
+                disabled={!project || !hasEnabledCategories}
                 title={!hasEnabledCategories ? t('review.noCategoriesSelected', '검수 항목을 하나 이상 선택해주세요') : undefined}
                 className="px-3 py-1.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
               >
