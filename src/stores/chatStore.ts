@@ -127,6 +127,8 @@ interface ChatState {
   currentSession: ChatSession | null;
   isLoading: boolean;
   isHydrating: boolean;
+  /** finalization 진행 중 여부 (Race Condition 방지) */
+  isFinalizingStreaming: boolean;
   streamingMessageId: string | null;
   /** 스트리밍 중인 메시지 콘텐츠 (배열 갱신 없이 단일 필드만 업데이트) */
   streamingContent: string | null;
@@ -311,6 +313,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     currentSessionId: null,
     currentSession: null,
     isLoading: false,
+    isFinalizingStreaming: false,
     streamingMessageId: null,
     streamingContent: null,
     streamingMetadata: null,
@@ -345,6 +348,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       console.log(`[chatStore] hydrateForProject starting for: ${projectId} (current: ${currentLoadedId})`);
 
+      // Issue #3 수정: 프로젝트 전환 시 진행 중인 API 요청 취소
+      const prevAbortController = get().abortController;
+      if (prevAbortController) {
+        prevAbortController.abort();
+        set({ abortController: null });
+      }
+
       // 2. 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
       if (chatPersistTimer !== null) {
         window.clearTimeout(chatPersistTimer);
@@ -369,6 +379,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           summarySuggestionReason: '',
           lastSummaryAtMessageCountBySessionId: {},
           isHydrating: false,
+          isFinalizingStreaming: false,
           loadedProjectId: null,
           composerText: '',
           translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
@@ -379,6 +390,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
           composerAttachments: [],
           attachments: [],
           streamingMessageId: null,
+          streamingContent: null,
+          streamingMetadata: null,
           isLoading: false,
         });
         return;
@@ -401,8 +414,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         attachments: [],
         composerAttachments: [],
         streamingMessageId: null,
+        streamingContent: null,
+        streamingMetadata: null,
         isLoading: false,
         isHydrating: true,
+        isFinalizingStreaming: false,
         error: null,
         loadedProjectId: null,
       });
@@ -421,8 +437,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
         const atts = attachmentsRes ?? [];
 
+        // Issue #3 수정: 프로젝트 ID 재검증 강화
+        // 비동기 로드 중 프로젝트가 전환되었으면 이 결과를 무시
         const activeProjectId = useProjectStore.getState().project?.id ?? null;
-        if (requestId !== hydrateRequestId || activeProjectId !== projectId) {
+        if (requestId !== hydrateRequestId) {
+          console.log(`[chatStore] hydrateForProject aborted: newer request exists (current: ${hydrateRequestId}, this: ${requestId})`);
+          return;
+        }
+        if (activeProjectId !== projectId) {
+          console.log(`[chatStore] hydrateForProject aborted: project changed during load (expected: ${projectId}, active: ${activeProjectId})`);
+          set({ isHydrating: false });
           return;
         }
 
@@ -574,6 +598,19 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     // 메시지 전송
     sendMessage: async (content: string): Promise<void> => {
+      // Race Condition 방지: finalization 진행 중이면 완료 대기
+      if (get().isFinalizingStreaming) {
+        // 최대 1초 대기 (100ms 간격으로 체크)
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (!get().isFinalizingStreaming) break;
+        }
+        // 여전히 진행 중이면 강제 완료
+        if (get().isFinalizingStreaming) {
+          set({ isFinalizingStreaming: false, streamingMessageId: null, streamingContent: null, streamingMetadata: null });
+        }
+      }
+
       const { currentSession, createSession, addMessage, updateMessage } = get();
 
       // 세션이 없으면 생성
@@ -931,6 +968,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             streamingMetadata: null,
             statusMessage: null,
             abortController: null,
+            isFinalizingStreaming: false,
           });
           return;
         }
@@ -947,13 +985,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
           // assistant 버블이 생성되기 전에 실패한 경우(매우 드묾)에도 에러를 남깁니다.
           get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
+        // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
         set({
           error: errText,
           isLoading: false,
           streamingMessageId: null,
           streamingContent: null,
           streamingMetadata: null,
+          statusMessage: null,
           abortController: null,
+          isFinalizingStreaming: false,
+          // 에러 발생 시에도 composerAttachments 정리 (재시도 시 중복 방지)
+          composerAttachments: [],
         });
       }
     },
@@ -1428,6 +1471,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             streamingMetadata: null,
             statusMessage: null,
             abortController: null,
+            isFinalizingStreaming: false,
           });
           return;
         }
@@ -1442,13 +1486,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
         } else {
           get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
+        // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
         set({
           error: errText,
           isLoading: false,
           streamingMessageId: null,
           streamingContent: null,
           streamingMetadata: null,
+          statusMessage: null,
           abortController: null,
+          isFinalizingStreaming: false,
+          // 에러 발생 시에도 composerAttachments 정리 (재시도 시 중복 방지)
+          composerAttachments: [],
         });
       }
     },
@@ -1697,25 +1746,36 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
 
     finalizeStreaming: (): void => {
-      const { streamingMessageId, streamingContent, streamingMetadata } = get();
+      const { streamingMessageId, streamingContent, streamingMetadata, isFinalizingStreaming } = get();
       if (!streamingMessageId) return;
 
-      // 스트리밍 완료 후 한 번만 messages 배열에 반영
-      if (streamingContent !== null) {
-        get().updateMessage(streamingMessageId, {
-          content: streamingContent,
-          metadata: { ...streamingMetadata, toolCallsInProgress: [] },
+      // Race Condition 방지: 이미 finalization 진행 중이면 스킵
+      if (isFinalizingStreaming) return;
+
+      // finalization 시작
+      set({ isFinalizingStreaming: true });
+
+      try {
+        // 스트리밍 완료 후 한 번만 messages 배열에 반영
+        if (streamingContent !== null) {
+          // Issue #11 수정: toolCallsInProgress만 초기화하고 나머지 메타데이터는 보존
+          const { toolCallsInProgress: _, ...preservedMetadata } = streamingMetadata ?? {};
+          get().updateMessage(streamingMessageId, {
+            content: streamingContent,
+            metadata: { ...preservedMetadata, toolCallsInProgress: [] },
+          });
+        }
+      } finally {
+        // 스트리밍 상태 초기화 (항상 실행 보장)
+        set({
+          streamingContent: null,
+          streamingMetadata: null,
+          streamingMessageId: null,
+          isLoading: false,
+          statusMessage: null,
+          isFinalizingStreaming: false,
         });
       }
-
-      // 스트리밍 상태 초기화
-      set({
-        streamingContent: null,
-        streamingMetadata: null,
-        streamingMessageId: null,
-        isLoading: false,
-        statusMessage: null,
-      });
     },
   };
 });

@@ -774,7 +774,10 @@ export const useProjectStore = create<ProjectStore>()(
         if (project?.id === projectId) return;
 
         stopAutoSave();
-        set({ isLoading: true, error: null });
+        // Issue #5 수정: 프로젝트 전환 시작 시 pendingDocDiff 즉시 정리
+        // loadProject()에서도 정리하지만, 전환 시작 시점에 명시적으로 정리하여
+        // 비동기 작업 중 stale diff 참조 방지
+        set({ isLoading: true, error: null, pendingDocDiff: null });
 
         try {
           if (isDirty) {
@@ -788,6 +791,11 @@ export const useProjectStore = create<ProjectStore>()(
 
           const loaded = await tauriLoadProject(projectId);
           loadProject(loaded);
+
+          // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출
+          // React useEffect 의존 대신 직접 호출하여 race condition 방지
+          const { useChatStore } = await import('@/stores/chatStore');
+          await useChatStore.getState().hydrateForProject(loaded.id);
         } catch (e) {
           set({
             error: e instanceof Error ? e.message : 'Failed to switch project',
