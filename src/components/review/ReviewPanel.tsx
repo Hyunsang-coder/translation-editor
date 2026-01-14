@@ -59,8 +59,8 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 export function ReviewPanel(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
-  const translationRules = useChatStore((s) => s.translationRules);
-  const projectContext = useChatStore((s) => s.projectContext);
+  // Note: translationRules/projectContext는 useCallback 내에서 getState()로 직접 가져옴
+  // 검수 중 규칙이 변경되어도 각 청크 처리 시 최신 값 사용 (Issue #13 Fix)
 
   const {
     // 검수 설정
@@ -134,14 +134,19 @@ ${segmentsText}
 문제가 없으면: { "issues": [] }`;
 
         try {
+          // Issue #13 Fix: 각 청크 처리 시 최신 번역 규칙/컨텍스트 가져오기
+          const currentState = useChatStore.getState();
+          const currentRules = currentState.translationRules;
+          const currentContext = currentState.projectContext;
+
           const response = await streamAssistantReply(
             {
               project,
               contextBlocks: [],
               recentMessages: [],
               userMessage,
-              translationRules,
-              projectContext,
+              translationRules: currentRules,
+              projectContext: currentContext,
               requestType: 'question',
               abortSignal: controller.signal,
             },
@@ -150,7 +155,16 @@ ${segmentsText}
             },
           );
 
-          const issues = parseReviewResult(response);
+          // Issue #8 Fix: parseReviewResult try-catch 래핑
+          let issues: ReturnType<typeof parseReviewResult>;
+          try {
+            issues = parseReviewResult(response);
+          } catch (parseError) {
+            console.error(`[ReviewPanel] Failed to parse review result for chunk ${i}:`, parseError);
+            handleChunkError(i, parseError instanceof Error ? parseError : new Error('JSON 파싱 실패'));
+            continue; // 다음 청크 계속 진행
+          }
+
           addResult({
             chunkIndex: i,
             issues,
@@ -170,8 +184,6 @@ ${segmentsText}
     project,
     intensity,
     categories,
-    translationRules,
-    projectContext,
     startReview,
     finishReview,
     addResult,
