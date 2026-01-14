@@ -359,6 +359,9 @@ export const useProjectStore = create<ProjectStore>()(
                 sourceDocJson: htmlToTipTapJson(sd.text),
                 targetDocJson: htmlToTipTapJson(td.text),
               });
+              // chatStore 하이드레이션 (프로젝트별 설정 로드)
+              const { useChatStore } = await import('@/stores/chatStore');
+              await useChatStore.getState().hydrateForProject(loaded.id);
               return;
             } catch {
               // 로드 실패 시 무시
@@ -385,6 +388,9 @@ export const useProjectStore = create<ProjectStore>()(
                 sourceDocJson: htmlToTipTapJson(sd.text),
                 targetDocJson: htmlToTipTapJson(td.text),
               });
+              // chatStore 하이드레이션 (프로젝트별 설정 로드)
+              const { useChatStore } = await import('@/stores/chatStore');
+              await useChatStore.getState().hydrateForProject(loaded.id);
               return;
             }
           } catch {
@@ -399,6 +405,9 @@ export const useProjectStore = create<ProjectStore>()(
             sourceDocJson: null,
             targetDocJson: null,
           });
+          // chatStore 초기화 (프로젝트 없음)
+          const { useChatStore } = await import('@/stores/chatStore');
+          await useChatStore.getState().hydrateForProject(null);
         })();
       },
 
