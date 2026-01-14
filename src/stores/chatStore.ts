@@ -36,6 +36,8 @@ let chatPersistTimer: number | null = null;
 let chatPersistInFlight = false;
 let chatPersistQueued = false;
 let hydrateRequestId = 0;
+// Issue #9 Fix: 타이머 스케줄 시점의 프로젝트 ID를 캡처하여 persist 시 재검증
+let scheduledPersistProjectId: string | null = null;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
 const MAX_CHAT_SESSIONS = 3;
@@ -287,7 +289,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
       window.clearTimeout(chatPersistTimer);
       chatPersistTimer = null;
     }
+    // Issue #9 Fix: 스케줄 시점의 프로젝트 ID 캡처
+    scheduledPersistProjectId = get().loadedProjectId;
     chatPersistTimer = window.setTimeout(() => {
+      // Issue #9 Fix: persist 실행 전 프로젝트 ID 재검증
+      const currentProjectId = get().loadedProjectId;
+      if (scheduledPersistProjectId !== currentProjectId) {
+        console.warn(`[chatStore] schedulePersist skipped: project changed from ${scheduledPersistProjectId} to ${currentProjectId}`);
+        scheduledPersistProjectId = null;
+        return;
+      }
       if (chatPersistInFlight) {
         chatPersistQueued = true;
         return;
@@ -299,6 +310,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         })
         .finally(() => {
           chatPersistInFlight = false;
+          scheduledPersistProjectId = null;
           if (chatPersistQueued) {
             chatPersistQueued = false;
             schedulePersist();
@@ -359,6 +371,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (chatPersistTimer !== null) {
         window.clearTimeout(chatPersistTimer);
         chatPersistTimer = null;
+        // Issue #9 Fix: 타이머 취소 시 캡처된 프로젝트 ID도 정리
+        scheduledPersistProjectId = null;
       }
       if (currentLoadedId && !get().isHydrating) {
         try {
@@ -814,10 +828,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // 질문(question) 모드: 최근 히스토리(최대 10개) 포함
         const recent: ChatMessage[] = priorMessages;
 
-        // 이전 요청이 있으면 취소
+        // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
         const prevAbortController = get().abortController;
         if (prevAbortController) {
           prevAbortController.abort();
+          set({ abortController: null }); // abort 후 즉시 null로 설정
         }
 
         // 새로운 AbortController 생성
@@ -1256,10 +1271,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      // 이전 요청이 있으면 취소
+      // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
       const prevAbortController = get().abortController;
       if (prevAbortController) {
         prevAbortController.abort();
+        set({ abortController: null }); // abort 후 즉시 null로 설정
       }
 
       // 새로운 AbortController 생성

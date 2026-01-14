@@ -6,9 +6,9 @@
 
 | 상태 | 개수 |
 |------|------|
-| 완료 | 9 / 13 |
+| 완료 | 11 / 13 |
 | 진행 중 | 0 |
-| 대기 | 4 |
+| 대기 | 2 |
 
 ---
 
@@ -45,14 +45,20 @@
 
 ## Track 3: AbortController / 요청 관리 (순차: #2 → #9)
 
-- [ ] **#2** [HIGH] AbortController 정리 누락
+- [x] **#2** [HIGH] AbortController 정리 누락 ✅
   - 파일: `src/stores/chatStore.ts`
   - 작업: AbortController 정리 큐 구현, try-finally 패턴
+  - 완료: 2025-01-14
+    - `sendMessage()`, `replayMessage()`에서 abort 후 즉시 `abortController: null` 설정
+    - 새 controller 생성 전 이전 controller 상태를 완전히 정리하여 race window 제거
 
-- [ ] **#9** [HIGH] 채팅 저장 Debounce vs 프로젝트 저장 Race
+- [x] **#9** [HIGH] 채팅 저장 Debounce vs 프로젝트 저장 Race ✅
   - 파일: `src/stores/chatStore.ts`
   - 작업: 프로젝트별 타이머 사용, persist 시 프로젝트 ID 재검증
-  - 의존: #2 완료 후
+  - 완료: 2025-01-14
+    - `scheduledPersistProjectId` 변수 추가: 스케줄 시점의 프로젝트 ID 캡처
+    - `schedulePersist()` 실행 전 프로젝트 ID 변경 여부 검증, 변경 시 persist 건너뜀
+    - `hydrateForProject()`에서 타이머 취소 시 캡처된 ID도 함께 정리
 
 ---
 
@@ -111,3 +117,4 @@
 | 2025-01-14 | Track 2 완료 (#1, #11, #7) - chatStore 스트리밍 Race Condition, 메타데이터 손실, 에러 복구 수정 |
 | 2025-01-14 | #12 완료 - #7 수정 과정에서 composerAttachments 조기 정리 문제도 함께 해결 |
 | 2025-01-14 | Track 1 완료 (#4) - TipTap JSON 캐시 동기화: setContent() 후 onJsonChange() 명시적 호출 |
+| 2025-01-14 | Track 3 완료 (#2, #9) - AbortController 정리 및 채팅 저장 Debounce Race 수정 |
