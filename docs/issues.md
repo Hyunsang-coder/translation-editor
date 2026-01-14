@@ -2,6 +2,8 @@
 
 > 채팅, 에디터, 검수, 번역 시스템 간 유기적 관계 코드 리뷰 결과
 
+**진행 상황 추적**: [`docs/issues_progress.md`](./issues_progress.md)
+
 ## 목차
 
 - [개요](#개요)
