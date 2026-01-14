@@ -119,6 +119,7 @@ User confirms before suggestions are added (no automatic application).
 #### 5. State Management (Zustand Stores)
 Critical stores in `src/stores/`:
 - `projectStore.ts`: Project metadata, Source/Target documents, glossary, attachments
+  - **`sourceDocJson` / `targetDocJson`**: TipTap JSON cache for AI tools (initialized on project load)
 - `chatStore.ts`: Multi-tab chat sessions, messages, tool call tracking
 - `aiConfigStore.ts`: AI provider settings, model selection, system prompts
 - `connectorStore.ts`: MCP connector states (Confluence, Notion, web search)
@@ -255,6 +256,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 13. **Abort Existing Requests**: In `chatStore.ts`, always abort existing `abortController` before starting new translate or web search requests to prevent response mixing.
 14. **Session Null Handling**: When creating sessions at max limit, ensure `currentSession` is updated to prevent null reference errors in subsequent operations.
 15. **Review Chunk Size Consistency**: Use `DEFAULT_REVIEW_CHUNK_SIZE` constant (12000) from `reviewTool.ts` for both initial chunking and subsequent operations to maintain segment alignment.
+16. **TipTap JSON Initialization on Project Load**: `sourceDocJson`/`targetDocJson` must be initialized in `projectStore` at project load time (via `htmlToTipTapJson`), not just on editor mount. This ensures AI tools work in Focus Mode (Source panel hidden).
+17. **Extension Sync Between Editor and Converter**: `markdownConverter.ts`'s `getExtensions()` must include all extensions used by `TipTapEditor.tsx` (including Underline, Highlight, Subscript, Superscript) to prevent JSON parsing errors like "no mark type underline in schema".
 
 ## Testing Patterns
 
@@ -298,7 +301,7 @@ cd src-tauri && cargo check
 - **Type Definitions**: `src/types/index.ts` for shared interfaces
 - **Tauri Wrappers**: `src/tauri/*.ts` mirrors `src-tauri/src/commands/*.rs`
 - **Utilities**: `src/utils/` for shared helpers
-  - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`)
+  - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`, `htmlToTipTapJson`)
   - `imagePlaceholder.ts`: Image URL extraction/restoration for translation (`extractImages`, `restoreImages`)
   - `hash.ts`: Content hashing, `stripHtml`
   - `diff.ts`: Diff utilities

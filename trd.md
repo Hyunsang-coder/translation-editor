@@ -128,6 +128,7 @@ What (API 구조 - 채팅 모드):
   - TipTap JSON이 있으면 `tipTapJsonToMarkdown()`으로 변환하여 서식 보존
   - 서식(헤딩, 리스트, 볼드, 이탤릭, 링크 등)이 Markdown으로 표현됨
   - 변환 실패 시 plain text fallback (stripHtml)
+  - **TipTap JSON 초기화**: 프로젝트 로드 시점에 `sourceDocJson`/`targetDocJson`을 `htmlToTipTapJson()`으로 초기화하여 에디터 마운트 전에도 도구 접근 보장 (Focus Mode 대응)
 - Tool Calling Loop 설정:
   - maxSteps 기본값: 6 (이전: 4), 최대값: 12 (이전: 8)
   - 복합 쿼리 시 충분한 도구 호출 허용
