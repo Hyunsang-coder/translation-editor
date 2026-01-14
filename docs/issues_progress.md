@@ -6,17 +6,21 @@
 
 | 상태 | 개수 |
 |------|------|
-| 완료 | 8 / 13 |
+| 완료 | 9 / 13 |
 | 진행 중 | 0 |
-| 대기 | 5 |
+| 대기 | 4 |
 
 ---
 
 ## Track 1: TipTap JSON 캐시 (독립)
 
-- [ ] **#4** [CRITICAL] TipTap JSON 캐시 동기화 불일치
-  - 파일: `src/stores/projectStore.ts`
-  - 작업: TipTap `onUpdate` 콜백에서 JSON 캐시 동기화 보장
+- [x] **#4** [CRITICAL] TipTap JSON 캐시 동기화 불일치 ✅
+  - 파일: `src/components/editor/TipTapEditor.tsx`, `src/components/editor/EditorCanvasTipTap.tsx`
+  - 작업: TipTap `setContent()` 호출 후 JSON 캐시 명시적 동기화
+  - 완료: 2025-01-14
+    - TipTapEditor, SourceTipTapEditor, TargetTipTapEditor의 외부 content 변경 시 `setContent()` 후 `onJsonChange()` 명시적 호출
+    - EditorCanvasTipTap의 번역 적용(handleApply) 시 `setTargetDocJson()` 명시적 호출
+    - 이로써 AI 도구(get_source_document, get_target_document)가 항상 최신 TipTap JSON을 참조
 
 ---
 
@@ -90,9 +94,10 @@
   - 파일: `src/ai/tools/documentTools.ts`
   - 작업: null 안전성 검사 추가
 
-- [ ] **#12** [LOW] composerAttachments 조기 정리
+- [x] **#12** [LOW] composerAttachments 조기 정리 ✅
   - 파일: `src/stores/chatStore.ts`
   - 작업: finally 블록에서 정리
+  - 완료: 2025-01-14 - #7 수정 과정에서 함께 해결: 에러 발생 시에도 catch 블록에서 `composerAttachments: []` 정리, finalization 실패 시에도 첨부파일 정리 보장
 
 ---
 
@@ -104,3 +109,5 @@
 | 2025-01-14 | Track 5 완료 (#8, #13) - Review 컴포넌트 에러 처리 및 규칙 스냅샷 문제 수정 |
 | 2025-01-14 | Track 4 완료 (#3, #5) - 프로젝트 하이드레이션 Race Condition 및 pendingDocDiff 상태 정리 |
 | 2025-01-14 | Track 2 완료 (#1, #11, #7) - chatStore 스트리밍 Race Condition, 메타데이터 손실, 에러 복구 수정 |
+| 2025-01-14 | #12 완료 - #7 수정 과정에서 composerAttachments 조기 정리 문제도 함께 해결 |
+| 2025-01-14 | Track 1 완료 (#4) - TipTap JSON 캐시 동기화: setContent() 후 onJsonChange() 명시적 호출 |

@@ -128,8 +128,12 @@ export function TipTapEditor({
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
+      // Issue #4 수정: setContent는 onUpdate를 트리거하지 않을 수 있으므로 명시적 동기화
+      if (onJsonChange) {
+        onJsonChange(editor.getJSON() as Record<string, unknown>);
+      }
     }
-  }, [editor, content]);
+  }, [editor, content, onJsonChange]);
 
   // editable 상태 변경 시 업데이트
   useEffect(() => {
@@ -262,8 +266,12 @@ export function SourceTipTapEditor({
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
+      // Issue #4 수정: setContent는 onUpdate를 트리거하지 않을 수 있으므로 명시적 동기화
+      if (onJsonChange) {
+        onJsonChange(editor.getJSON() as Record<string, unknown>);
+      }
     }
-  }, [editor, content]);
+  }, [editor, content, onJsonChange]);
 
   // 에디터 준비 완료 콜백
   useEffect(() => {
@@ -396,8 +404,12 @@ export function TargetTipTapEditor({
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
+      // Issue #4 수정: setContent는 onUpdate를 트리거하지 않을 수 있으므로 명시적 동기화
+      if (onJsonChange) {
+        onJsonChange(editor.getJSON() as Record<string, unknown>);
+      }
     }
-  }, [editor, content]);
+  }, [editor, content, onJsonChange]);
 
   // 에디터 준비 완료 콜백
   useEffect(() => {
