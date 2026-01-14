@@ -32,7 +32,11 @@ export type TipTapDocJson = Record<string, unknown>;
  *
  * 주의: TipTapEditor.tsx의 extension 목록과 동기화 필요
  */
-function getExtensions() {
+
+// Extension 캐시 (성능 최적화: 매번 새로 생성하지 않음)
+let cachedExtensions: ReturnType<typeof createExtensions> | null = null;
+
+function createExtensions() {
   return [
     StarterKit.configure({
       heading: {
@@ -66,6 +70,13 @@ function getExtensions() {
       transformCopiedText: false,   // 복사 시 변환 비활성화
     }),
   ];
+}
+
+function getExtensions() {
+  if (!cachedExtensions) {
+    cachedExtensions = createExtensions();
+  }
+  return cachedExtensions;
 }
 
 /**

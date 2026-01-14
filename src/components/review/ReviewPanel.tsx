@@ -71,7 +71,6 @@ export function ReviewPanel(): JSX.Element {
     toggleCategory,
     setSettingsExpanded,
     // 검수 실행 상태
-    chunks,
     results,
     isReviewing,
     initializeReview,

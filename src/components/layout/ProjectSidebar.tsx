@@ -317,7 +317,12 @@ export function ProjectSidebar(): JSX.Element {
                   }`}
                 onContextMenu={(e) => onContextMenu(e, p.id)}
                 onClick={() => {
-                  if (!isRenaming) void switchProjectById(p.id);
+                  if (!isRenaming) {
+                    void (async () => {
+                      await switchProjectById(p.id);
+                      await useChatStore.getState().hydrateForProject(p.id);
+                    })();
+                  }
                 }}
                 title={p.title}
               >

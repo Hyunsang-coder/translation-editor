@@ -24,6 +24,7 @@ export function FloatingChatPanel(): JSX.Element | null {
   const setChatPanelSize = useUIStore((s) => s.setChatPanelSize);
 
   const hasInitialized = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // 초기 위치 설정 (첫 렌더링 시)
   useEffect(() => {
@@ -63,6 +64,24 @@ export function FloatingChatPanel(): JSX.Element | null {
       useChatStore.getState().abortController?.abort();
     }
   }, [chatPanelOpen]);
+
+  // 외부 클릭 시 패널 최소화
+  useEffect(() => {
+    if (!chatPanelOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // 패널 내부 클릭이면 무시
+      if (panelRef.current?.contains(target)) return;
+
+      setChatPanelOpen(false);
+    };
+
+    // mousedown 사용 (click보다 먼저 발생, 에디터 클릭과 충돌 방지)
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chatPanelOpen, setChatPanelOpen]);
 
   const handleClose = useCallback(() => {
     setChatPanelOpen(false);
@@ -109,24 +128,26 @@ export function FloatingChatPanel(): JSX.Element | null {
       style={{ zIndex: 9998 }}
       className="rounded-xl shadow-2xl border border-editor-border bg-editor-bg overflow-hidden"
     >
-      {/* 드래그 핸들 (헤더) */}
-      <div className="floating-chat-handle h-10 flex items-center justify-between px-3 border-b border-editor-border bg-editor-surface cursor-move select-none">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-editor-text">Chat</span>
+      <div ref={panelRef} className="h-full flex flex-col">
+        {/* 드래그 핸들 (헤더) */}
+        <div className="floating-chat-handle h-10 flex items-center justify-between px-3 border-b border-editor-border bg-editor-surface cursor-move select-none">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-editor-text">Chat</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+            title={t('chat.minimizePanel')}
+          >
+            <span className="text-lg leading-none">−</span>
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('chat.minimizePanel')}
-        >
-          <span className="text-lg leading-none">−</span>
-        </button>
-      </div>
 
-      {/* 채팅 콘텐츠 */}
-      <div className="h-[calc(100%-40px)]">
-        <ChatContent />
+        {/* 채팅 콘텐츠 */}
+        <div className="flex-1 min-h-0">
+          <ChatContent />
+        </div>
       </div>
     </Rnd>
   );

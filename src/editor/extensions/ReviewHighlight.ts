@@ -91,11 +91,12 @@ function createDecorations(
 
     if (index !== -1 && index < positions.length) {
       const from = positions[index];
+      if (from === undefined) return;
       const endIndex = index + searchText.length - 1;
       // endIndex가 positions 범위 내인지 확인
       const to = endIndex < positions.length ? positions[endIndex]! + 1 : from + searchText.length;
 
-      if (from !== undefined && to > from) {
+      if (to > from) {
         decorations.push(
           Decoration.inline(from, to, {
             class: highlightClass,
