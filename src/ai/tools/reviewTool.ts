@@ -104,8 +104,8 @@ const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
 // ============================================
 
 const CATEGORY_PROMPTS: Record<keyof ReviewCategories, string> = {
-  mistranslation: `**오역**: 원문과 번역문의 의미가 다른 경우`,
-  omission: `**누락**: 원문에 있는 정보가 번역문에 없는 경우`,
+  mistranslation: `**오역**: 원문과 번역문의 의미가 다른 경우 (단어/구문 누락 포함 - 번역문에 대응 텍스트가 있으면 오역)`,
+  omission: `**누락**: 원문의 문장/절이 번역문에 **완전히 빠진** 경우 (번역문에 대응하는 텍스트 자체가 없음)`,
   distortion: `**왜곡**: 강도(must→can), 범위(전체→부분), 조건 등이 변경된 경우`,
   consistency: `**일관성**: 같은 용어가 다르게 번역된 경우 (Glossary 기준)`,
 };
@@ -180,6 +180,19 @@ ${enabledCategories}
 - 어순, 문체, 표현 방식 차이
 - 자연스러운 의역
 - 위에서 지정하지 않은 항목
+
+## 누락 vs 오역 구분 (중요!)
+- **오역**: 번역문에 대응 텍스트가 있지만 틀림/부족함 → targetExcerpt에 교체 대상 지정
+- **누락**: 번역문에 대응 텍스트 자체가 없음 → targetExcerpt 비워둠
+
+판단 기준: "번역문의 어느 부분을 수정하면 되는가?"
+- 수정할 부분이 있다 → 오역 (targetExcerpt 지정)
+- 수정할 부분이 없다 (통째로 빠짐) → 누락
+
+예시:
+- 원문 "빨간 사과" / 번역 "사과" → **오역** (targetExcerpt: "사과", suggestedFix: "빨간 사과")
+- 원문 "A 그리고 B" / 번역 "A" → **오역** (targetExcerpt: "A", suggestedFix: "A 그리고 B")
+- 원문 "1. 첫째 2. 둘째" / 번역 "1. 첫째" (2번 항목 통째로 없음) → **누락**
 
 ${OUTPUT_FORMAT}`;
 }
