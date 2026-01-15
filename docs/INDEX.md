@@ -27,13 +27,6 @@
 | Phase 6 | `/tasks/phase-6.md` | 외부 연동 ✅ |
 | Phase 7 | `/tasks/phase-7.md` | UX 개선 🚧 |
 
-## 기술 분석
-
-| 문서 | 경로 | 설명 |
-|------|------|------|
-| **시스템 이슈** | `/docs/issues.md` | 채팅/에디터/검수/번역 연동 분석 (13개 이슈) |
-| **이슈 진행** | `/docs/issues_progress.md` | 이슈 수정 진행 체크리스트 ✅ (13/13 완료) |
-
 ## 완료된 스펙 (Archive)
 
 | 문서 | 경로 | 설명 |
@@ -43,6 +36,8 @@
 | Notion 연동 | `/docs/archive/notion-mcp-implementation.md` | Notion API 연동 |
 | 검수 개선 | `/docs/archive/review_tool_improvement.md` | 번역 검수 기능 |
 | Secret Manager | `/docs/archive/secret_manager.md` | 보안 저장소 |
+| 시스템 이슈 | `/docs/archive/issues.md` | 채팅/에디터/검수/번역 연동 분석 (13개 이슈) |
+| 이슈 진행 | `/docs/archive/issues_progress.md` | 이슈 수정 체크리스트 ✅ (13/13 완료) |
 
 ## MCP 스펙
 
