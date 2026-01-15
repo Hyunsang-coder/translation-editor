@@ -270,12 +270,13 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   startReview: () => {
-    const { chunks } = get();
+    const { chunks, highlightNonce } = get();
     set({
       isReviewing: true,
       results: [],
       currentChunkIndex: 0,
       progress: { completed: 0, total: chunks.length },
+      highlightNonce: highlightNonce + 1, // 즉시 이전 하이라이트 제거
     });
   },
 
@@ -284,7 +285,11 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   resetReview: () => {
-    set(initialState);
+    const { highlightNonce } = get();
+    set({
+      ...initialState,
+      highlightNonce: highlightNonce + 1, // 에디터에 refresh 신호 전송
+    });
   },
 
   getChunk: (chunkIndex: number) => {

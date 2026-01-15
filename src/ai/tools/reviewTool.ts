@@ -131,15 +131,19 @@ const OUTPUT_FORMAT = `## 출력 형식
   ]
 }
 
-## suggestedFix 작성 규칙 (중요!)
-- targetExcerpt를 직접 대체할 텍스트만 작성
-- 설명, 지시문, 따옴표, 마크다운 서식 없이 순수 번역문만
-- 예시:
-  - ✅ 좋음: targetExcerpt "사용자 인터페이스" → suggestedFix: "UI"
-  - ✅ 좋음: targetExcerpt "할 수 있습니다" → suggestedFix: "해야 합니다"
-  - ❌ 나쁨: "'사용자 인터페이스'를 'UI'로 바꾸세요"
-  - ❌ 나쁨: "**UI**로 변경 권장"
-  - ❌ 나쁨: "UI (약어 사용 권장)"
+## suggestedFix 작성 규칙 (필수!)
+- suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
+- 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
+- 범위가 다르면 문장이 깨짐!
+
+올바른 예시:
+  - targetExcerpt: "할 수 있습니다" → suggestedFix: "해야 합니다" ✅
+  - targetExcerpt: "알파채널로" → suggestedFix: "알파채널(DXT5)로" ✅
+  - targetExcerpt: "UI" → suggestedFix: "사용자 인터페이스" ✅
+
+잘못된 예시:
+  - targetExcerpt: "알파채널로" → suggestedFix: "전체 문장 반복..." ❌ (범위 불일치)
+  - suggestedFix에 설명/지시문/따옴표/마크다운 포함 ❌
 
 문제 없음: { "issues": [] }`;
 

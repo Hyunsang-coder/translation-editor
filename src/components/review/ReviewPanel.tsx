@@ -9,6 +9,8 @@ import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildReviewPrompt, buildAlignedChunks } from '@/ai/tools/reviewTool';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
+import { normalizeForSearch } from '@/utils/normalizeForSearch';
+import { stripHtml } from '@/utils/hash';
 
 /** 체크박스 아이템 컴포넌트 */
 function CheckboxItem({
@@ -86,7 +88,6 @@ export function ReviewPanel(): JSX.Element {
     deleteIssue,
     setAllIssuesChecked,
     getCheckedIssues,
-    disableHighlight,
     setIsApplyingSuggestion,
   } = useReviewStore();
 
@@ -226,21 +227,10 @@ ${segmentsText}
       if (!window.confirm(t('review.applyConfirm.delete'))) return;
     }
 
-    // Markdown 문법 제거하여 plain text로 검색 (에디터는 plain text 기반 검색)
-    const stripMarkdown = (text: string): string => {
-      return text
-        .replace(/\*\*(.+?)\*\*/g, '$1')  // bold
-        .replace(/\*(.+?)\*/g, '$1')      // italic
-        .replace(/__(.+?)__/g, '$1')      // bold alt
-        .replace(/_(.+?)_/g, '$1')        // italic alt
-        .replace(/~~(.+?)~~/g, '$1')      // strikethrough
-        .replace(/`(.+?)`/g, '$1')        // inline code
-        .replace(/\[(.+?)\]\(.+?\)/g, '$1') // links
-        .trim();
-    };
-
-    const searchText = stripMarkdown(issue.targetExcerpt);
-    const replaceText = stripMarkdown(issue.suggestedFix);
+    // 검색용: 마크다운 서식/리스트 마커 제거 (에디터는 plain text 기반 검색)
+    const searchText = normalizeForSearch(issue.targetExcerpt);
+    // 교체용: suggestedFix는 그대로 사용 (AI가 순수 텍스트로 반환)
+    const replaceText = issue.suggestedFix;
 
     // 에디터에서 검색
     editor.commands.setSearchTerm(searchText);
@@ -278,13 +268,43 @@ ${segmentsText}
     });
   }, [t, deleteIssue, setIsApplyingSuggestion]);
 
+  /**
+   * 누락 유형: suggestedFix를 클립보드에 복사
+   * 번역문에 없는 텍스트이므로 자동 적용이 불가능하여 수동 삽입 유도
+   */
+  const handleCopySuggestion = useCallback(async (issue: ReviewIssue) => {
+    const { addToast } = useUIStore.getState();
+
+    if (!issue.suggestedFix) {
+      addToast({
+        type: 'error',
+        message: t('review.applyError.missingData'),
+      });
+      return;
+    }
+
+    try {
+      // HTML 태그 제거 후 복사
+      const cleanText = stripHtml(issue.suggestedFix).trim();
+      await navigator.clipboard.writeText(cleanText);
+      addToast({
+        type: 'success',
+        message: t('review.copySuccess', '클립보드에 복사되었습니다. 적절한 위치에 붙여넣어 주세요.'),
+      });
+    } catch {
+      addToast({
+        type: 'error',
+        message: t('review.copyError', '클립보드 복사에 실패했습니다.'),
+      });
+    }
+  }, [t]);
+
   const handleReset = useCallback(() => {
     if (isReviewing) {
       handleCancel();
     }
-    disableHighlight(); // 검수 상태 초기화 시 하이라이트 해제
-    resetReview();
-  }, [isReviewing, handleCancel, disableHighlight, resetReview]);
+    resetReview(); // 내부에서 하이라이트 비활성화 + nonce 증가 처리
+  }, [isReviewing, handleCancel, resetReview]);
 
   const allIssues = getAllIssues();
   const checkedIssues = getCheckedIssues();
@@ -400,6 +420,7 @@ ${segmentsText}
               onToggleCheck={toggleIssueCheck}
               onDelete={deleteIssue}
               onApply={handleApplySuggestion}
+              onCopy={handleCopySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
             />

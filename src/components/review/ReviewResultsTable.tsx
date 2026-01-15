@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType } from '@/stores/reviewStore';
+import { stripMarkdownInline } from '@/utils/normalizeForSearch';
+import { stripHtml } from '@/utils/hash';
 
 interface ReviewResultsTableProps {
   issues: ReviewIssue[];
@@ -7,6 +9,7 @@ interface ReviewResultsTableProps {
   onToggleAll?: () => void;
   onDelete?: (issueId: string) => void;
   onApply?: (issue: ReviewIssue) => void;
+  onCopy?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
 }
 
@@ -40,23 +43,13 @@ function getIssueTypeColor(type: IssueType): string {
   }
 }
 
-/**
- * 마크다운 태그 제거
- */
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
-    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
-    .replace(/`([^`]+)`/g, '$1')         // `code` → code
-    .replace(/~~([^~]+)~~/g, '$1');      // ~~strikethrough~~ → strikethrough
-}
-
 export function ReviewResultsTable({
   issues,
   onToggleCheck,
   onToggleAll,
   onDelete,
   onApply,
+  onCopy,
   allChecked = false,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
@@ -175,10 +168,20 @@ export function ReviewResultsTable({
                 <td className="px-3 py-2 text-editor-text text-xs">
                   <div className="flex flex-col gap-1.5">
                     <span className="break-words">
-                      {issue.suggestedFix || '-'}
+                      {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
                     </span>
                     <div className="flex items-center gap-1.5">
-                      {issue.suggestedFix && onApply && (
+                      {issue.suggestedFix && issue.type === 'omission' && onCopy && (
+                        <button
+                          type="button"
+                          onClick={() => onCopy(issue)}
+                          className="px-1.5 py-0.5 text-xs rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                          title={t('review.copy', '복사')}
+                        >
+                          {t('review.copy', '복사')}
+                        </button>
+                      )}
+                      {issue.suggestedFix && issue.type !== 'omission' && onApply && (
                         <button
                           type="button"
                           onClick={() => onApply(issue)}
@@ -204,7 +207,7 @@ export function ReviewResultsTable({
                 <td className="px-3 py-2 text-editor-text text-xs">
                   {issue.description ? (
                     <ul className="list-disc list-inside space-y-0.5">
-                      {stripMarkdown(issue.description).split(' | ').map((item, i) => (
+                      {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
                         <li key={i} className="break-words">{item}</li>
                       ))}
                     </ul>

@@ -219,8 +219,11 @@
     "category.consistency.desc": "Same term translated differently",
     "highlight": "Highlight",
     "apply": "Apply",
+    "copy": "Copy",
     "ignore": "Ignore",
     "applySuccess": "Suggested fix applied.",
+    "copySuccess": "Copied to clipboard. Paste it in the appropriate location.",
+    "copyError": "Failed to copy to clipboard.",
     "applyError": {
       "missingData": "No suggestion data available.",
       "notFound": "Text not found in translation. The document may have changed."
