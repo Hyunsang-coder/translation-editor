@@ -15,8 +15,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const { 
     language, setLanguage, 
     theme, setTheme,
-    maxChatSessions, setMaxChatSessions,
-    chatLengthNotifyThreshold, setChatLengthNotifyThreshold,
   } = useUIStore();
   const { 
     openaiApiKey,
@@ -307,58 +305,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             )}
                         </div>
                     )}
-                </div>
-            </section>
-
-            {/* Chat Settings */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">💬</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.chatSettings', '채팅 설정')}</h3>
-                </div>
-                <div className="space-y-4">
-                    {/* Max Chat Sessions */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-editor-text">
-                            {t('appSettings.maxChatSessions', '최대 채팅 세션 수')}
-                        </label>
-                        <p className="text-[10px] text-editor-muted">
-                            {t('appSettings.maxChatSessionsDescription', '동시에 열 수 있는 채팅 탭의 최대 개수입니다. (1-5)')}
-                        </p>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min="1"
-                                max="5"
-                                value={maxChatSessions}
-                                onChange={(e) => setMaxChatSessions(Number(e.target.value))}
-                                className="flex-1 accent-primary-500"
-                            />
-                            <span className="w-6 text-center text-sm font-medium text-editor-text">{maxChatSessions}</span>
-                        </div>
-                    </div>
-                    
-                    {/* Chat Length Notify Threshold */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-editor-text">
-                            {t('appSettings.chatLengthNotifyThreshold', '대화 길이 알림 임계값')}
-                        </label>
-                        <p className="text-[10px] text-editor-muted">
-                            {t('appSettings.chatLengthNotifyThresholdDescription', '이 개수 이상의 메시지가 쌓이면 새 세션 시작을 권장합니다. (10-50)')}
-                        </p>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="range"
-                                min="10"
-                                max="50"
-                                step="5"
-                                value={chatLengthNotifyThreshold}
-                                onChange={(e) => setChatLengthNotifyThreshold(Number(e.target.value))}
-                                className="flex-1 accent-primary-500"
-                            />
-                            <span className="w-8 text-center text-sm font-medium text-editor-text">{chatLengthNotifyThreshold}</span>
-                        </div>
-                    </div>
                 </div>
             </section>
 

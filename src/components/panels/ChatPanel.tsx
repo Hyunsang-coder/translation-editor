@@ -25,13 +25,24 @@ import type { ChatMessageMetadata } from '@/types';
 export function ChatPanel(): JSX.Element {
   // 1. Hooks (Top-level)
   const { t } = useTranslation();
-  const { sidebarCollapsed, toggleSidebar, togglePanelSwap, isPanelsSwapped, maxChatSessions } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, togglePanelSwap, isPanelsSwapped } = useUIStore();
+  
+  // 채팅 세션 상수 (chatStore에서 사용하는 동일한 값)
+  const MAX_CHAT_SESSIONS = 5;
 
   const { currentSession, sendMessage, isLoading } = useChatStore();
   const statusMessage = useChatStore((s) => s.statusMessage); // [복구] 상태 메시지 구독 (리렌더링 트리거용)
   const chatSessions = useChatStore((s) => s.sessions); // Hoisted selector
-  const shouldShowSummarySuggestion = useChatStore((s) => s.shouldShowSummarySuggestion());
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
+  
+  // selector 버그 수정: 함수 호출 대신 직접 상태 구독
+  const currentSessionId = useChatStore((s) => s.currentSessionId);
+  const messageCount = useChatStore((s) => s.currentSession?.messages.length ?? 0);
+  const dismissedMap = useChatStore((s) => s.summarySuggestionDismissedBySessionId);
+  const shouldShowSummarySuggestion = 
+    currentSessionId !== null &&
+    !dismissedMap[currentSessionId] &&
+    messageCount >= 30;
   const startNewSessionFromSuggestion = useChatStore((s) => s.startNewSessionFromSuggestion);
   const isSessionLimitReached = useChatStore((s) => s.isSessionLimitReached);
   const getOldestSession = useChatStore((s) => s.getOldestSession);
@@ -210,8 +221,8 @@ export function ChatPanel(): JSX.Element {
     const ok = await confirm(
       t('chat.sessionLimitReachedConfirm', {
         sessionName: oldest.name,
-        maxSessions: maxChatSessions,
-        defaultValue: `세션이 최대 개수(${maxChatSessions}개)에 도달했습니다. 가장 오래된 세션 "${oldest.name}"을(를) 삭제하고 새 세션을 시작할까요?`,
+        maxSessions: MAX_CHAT_SESSIONS,
+        defaultValue: `세션이 최대 개수(${MAX_CHAT_SESSIONS}개)에 도달했습니다. 가장 오래된 세션 "${oldest.name}"을(를) 삭제하고 새 세션을 시작할까요?`,
       }),
       { title: t('chat.sessionLimitReachedTitle', '세션 제한'), kind: 'warning' }
     );
@@ -220,7 +231,7 @@ export function ChatPanel(): JSX.Element {
       deleteSession(oldest.id);
       startNewSessionFromSuggestion();
     }
-  }, [isSessionLimitReached, getOldestSession, deleteSession, startNewSessionFromSuggestion, t, maxChatSessions]);
+  }, [isSessionLimitReached, getOldestSession, deleteSession, startNewSessionFromSuggestion, t]);
 
   // 프로젝트 전환 시: 채팅(현재 세션 1개) + ChatPanel 설정을 DB에서 복원 + 탭 초기화
   const lastHydratedId = useRef<string | null>(null);
@@ -630,7 +641,7 @@ export function ChatPanel(): JSX.Element {
             </div>
           ))}
 
-          {chatSessions.length < maxChatSessions && (
+          {chatSessions.length < MAX_CHAT_SESSIONS && (
             <button
               onClick={() => {
                 const id = useChatStore.getState().createSession();

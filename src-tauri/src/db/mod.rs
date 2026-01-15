@@ -263,8 +263,9 @@ impl Database {
         self.save_chat_sessions(project_id, std::slice::from_ref(session))
     }
 
-    /// 채팅 세션을 프로젝트에 저장 (최대 3개 유지)
-    /// - 정책: 최근 활동(마지막 메시지 timestamp) 기준으로 정렬 후 상위 3개만 저장
+    /// 채팅 세션을 프로젝트에 저장 (최대 5개 유지)
+    /// - 정책: 최근 활동(마지막 메시지 timestamp) 기준으로 정렬 후 상위 5개만 저장
+    /// - 세션당 메시지는 최근 30개만 저장 (스토리지 부담 방지)
     pub fn save_chat_sessions(
         &self,
         project_id: &str,
@@ -279,7 +280,7 @@ impl Database {
         )?;
         tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
 
-        // 최근 활동 기준으로 정렬 후 최대 3개만 저장
+        // 최근 활동 기준으로 정렬 후 최대 5개만 저장
         let mut sorted: Vec<&ChatSession> = sessions.iter().collect();
         sorted.sort_by(|a, b| {
             let a_last = a
@@ -297,7 +298,10 @@ impl Database {
             b_last.cmp(&a_last)
         });
 
-        for session in sorted.into_iter().take(3) {
+        const MAX_SESSIONS: usize = 5;
+        const MAX_MESSAGES_PER_SESSION: usize = 30;
+
+        for session in sorted.into_iter().take(MAX_SESSIONS) {
             tx.execute(
                 "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -310,7 +314,16 @@ impl Database {
                 ),
             )?;
 
-            for m in &session.messages {
+            // 메시지를 timestamp 기준으로 정렬 후 최근 30개만 저장
+            let mut messages: Vec<&crate::models::ChatMessage> = session.messages.iter().collect();
+            messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+            let messages_to_save = if messages.len() > MAX_MESSAGES_PER_SESSION {
+                &messages[messages.len() - MAX_MESSAGES_PER_SESSION..]
+            } else {
+                &messages[..]
+            };
+
+            for m in messages_to_save {
                 let meta_json: Option<String> = match &m.metadata {
                     Some(meta) => Some(serde_json::to_string(meta)?),
                     None => None,

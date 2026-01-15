@@ -24,9 +24,17 @@ export function ChatContent(): JSX.Element {
   const { currentSession, sendMessage, isLoading } = useChatStore();
   const statusMessage = useChatStore((s) => s.statusMessage);
   const chatSessions = useChatStore((s) => s.sessions);
-  const shouldShowSummarySuggestion = useChatStore((s) => s.shouldShowSummarySuggestion());
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
   const startNewSessionFromSuggestion = useChatStore((s) => s.startNewSessionFromSuggestion);
+  
+  // selector 버그 수정: 함수 호출 대신 직접 상태 구독
+  const currentSessionIdForSuggestion = useChatStore((s) => s.currentSessionId);
+  const messageCountForSuggestion = useChatStore((s) => s.currentSession?.messages.length ?? 0);
+  const dismissedMap = useChatStore((s) => s.summarySuggestionDismissedBySessionId);
+  const shouldShowSummarySuggestion = 
+    currentSessionIdForSuggestion !== null &&
+    !dismissedMap[currentSessionIdForSuggestion] &&
+    messageCountForSuggestion >= 30;
 
   const composerText = useChatStore((s) => s.composerText);
   const setComposerText = useChatStore((s) => s.setComposerText);
@@ -289,7 +297,7 @@ export function ChatContent(): JSX.Element {
             </div>
           ))}
 
-          {chatSessions.length < 3 && (
+          {chatSessions.length < 5 && (
             <button
               onClick={() => {
                 const id = useChatStore.getState().createSession();

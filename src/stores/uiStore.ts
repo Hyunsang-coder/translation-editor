@@ -29,10 +29,6 @@ interface UIState extends EditorUIState {
   sourceLineHeight: number; // ratio
   targetFontSize: number; // px
   targetLineHeight: number; // ratio
-
-  // Chat settings
-  maxChatSessions: number; // 1-5, default 3
-  chatLengthNotifyThreshold: number; // 10-50, default 20
 }
 
 interface UIActions {
@@ -97,10 +93,6 @@ interface UIActions {
   adjustTargetFontSize: (delta: number) => void;
   setTargetLineHeight: (height: number) => void;
   adjustTargetLineHeight: (delta: number) => void;
-
-  // Chat settings
-  setMaxChatSessions: (max: number) => void;
-  setChatLengthNotifyThreshold: (threshold: number) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -142,10 +134,6 @@ export const useUIStore = create<UIStore>()(
       sourceLineHeight: 1.4,
       targetFontSize: 14,
       targetLineHeight: 1.4,
-
-      // Chat settings defaults
-      maxChatSessions: 3,
-      chatLengthNotifyThreshold: 20,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -320,15 +308,6 @@ export const useUIStore = create<UIStore>()(
           targetLineHeight: Math.max(1.0, Math.min(2.5, Math.round((state.targetLineHeight + delta) * 10) / 10)),
         }));
       },
-
-      // Chat settings
-      setMaxChatSessions: (max: number): void => {
-        set({ maxChatSessions: Math.max(1, Math.min(5, max)) }); // 1-5
-      },
-
-      setChatLengthNotifyThreshold: (threshold: number): void => {
-        set({ chatLengthNotifyThreshold: Math.max(10, Math.min(50, threshold)) }); // 10-50
-      },
     }),
     {
       name: 'ite-ui-storage',
@@ -352,9 +331,6 @@ export const useUIStore = create<UIStore>()(
         sourceLineHeight: state.sourceLineHeight,
         targetFontSize: state.targetFontSize,
         targetLineHeight: state.targetLineHeight,
-        // Chat settings
-        maxChatSessions: state.maxChatSessions,
-        chatLengthNotifyThreshold: state.chatLengthNotifyThreshold,
       }),
     }
   )

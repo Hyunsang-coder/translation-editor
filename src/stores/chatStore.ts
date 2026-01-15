@@ -8,7 +8,6 @@ import { createChatModel } from '@/ai/client';
 import { detectRequestType } from '@/ai/prompt';
 import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { useProjectStore } from '@/stores/projectStore';
-import { useUIStore } from '@/stores/uiStore';
 import { searchGlossary } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import {
@@ -42,14 +41,9 @@ let scheduledPersistProjectId: string | null = null;
 
 const DEFAULT_TRANSLATOR_PERSONA = '';
 
-// 동적으로 uiStore에서 설정값 가져오기
-function getMaxChatSessions(): number {
-  return useUIStore.getState().maxChatSessions;
-}
-
-function getChatLengthNotifyThreshold(): number {
-  return useUIStore.getState().chatLengthNotifyThreshold;
-}
+// 채팅 세션 관련 상수
+const MAX_CHAT_SESSIONS = 5;
+const CHAT_LENGTH_THRESHOLD = 30;
 
 function tryExtractWebSearchQuery(raw: string): string | null {
   const t = (raw ?? '').trim();
@@ -281,9 +275,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
     const session = get().currentSession;
     const settings = buildChatSettings();
 
-    // 세션은 최대 3개만 저장(요구사항)
-    // - 저장은 전체 sessions를 대상으로 하되, 백엔드에서도 최종적으로 3개로 clamp됩니다.
-    const sessions = get().sessions.slice(0, getMaxChatSessions());
+    // 세션은 최대 5개만 저장
+    // - 저장은 전체 sessions를 대상으로 하되, 백엔드에서도 최종적으로 5개로 clamp됩니다.
+    const sessions = get().sessions.slice(0, MAX_CHAT_SESSIONS);
     if (sessions.length > 0) {
       await saveChatSessions({ projectId, sessions });
     } else if (session) {
@@ -470,7 +464,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
           loadedProjectId: projectId, // 로드 성공 후에만 ID 설정 (저장 허용)
-          sessions: (sessionsRes ?? []).slice(0, getMaxChatSessions()),
+          sessions: (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS),
           currentSessionId: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]!.id : null,
           currentSession: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]! : null,
           attachments: atts,
@@ -515,9 +509,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
     // 세션 생성
     createSession: (name?: string): string => {
-      // 최대 3개 제한: 초과 생성은 조용히 무시
+      // 최대 5개 제한: 초과 생성은 조용히 무시
       const existing = get().sessions;
-      if (existing.length >= getMaxChatSessions()) {
+      if (existing.length >= MAX_CHAT_SESSIONS) {
         // 현재 세션이 null이면 첫 번째 세션으로 전환
         const { currentSessionId, currentSession } = get();
         if (currentSessionId && currentSession) {
@@ -1034,12 +1028,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set((state) => ({ composerFocusNonce: state.composerFocusNonce + 1 }));
     },
 
-    // 대화 길이 알림: 20개 이상 + dismiss 안 됨
+    // 대화 길이 알림: 30개 이상 + dismiss 안 됨
     shouldShowSummarySuggestion: (): boolean => {
       const session = get().currentSession;
       if (!session) return false;
       if (get().summarySuggestionDismissedBySessionId[session.id]) return false;
-      return session.messages.length >= getChatLengthNotifyThreshold();
+      return session.messages.length >= CHAT_LENGTH_THRESHOLD;
     },
 
     dismissSummarySuggestion: (): void => {
@@ -1059,9 +1053,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
       get().createSession();
     },
 
-    // 세션 제한 헬퍼: 세션 개수가 maxChatSessions 이상인지 확인
+    // 세션 제한 헬퍼: 세션 개수가 MAX_CHAT_SESSIONS 이상인지 확인
     isSessionLimitReached: (): boolean => {
-      return get().sessions.length >= getMaxChatSessions();
+      return get().sessions.length >= MAX_CHAT_SESSIONS;
     },
 
     // 가장 오래된 세션 반환 (createdAt 기준)
