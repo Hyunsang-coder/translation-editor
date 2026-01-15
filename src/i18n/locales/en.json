@@ -10,7 +10,8 @@
     "confirm": "Confirm",
     "loading": "Loading...",
     "untitledProject": "Untitled Project",
-    "retry": "Retry"
+    "retry": "Retry",
+    "ignore": "Ignore"
   },
   "settings": {
     "title": "Project Settings",
@@ -226,6 +227,8 @@
     "removeAttachment": "Remove attachment",
     "summarizing": "Summarizing...",
     "summarize": "Summarize",
+    "longConversationNotice": "Conversation is getting long. Would you like to start a new session?",
+    "startNewSession": "Start New Session",
     "deleteSessionConfirm": "Delete this chat session?",
     "deleteSessionTitle": "Delete Session",
     "addFileOrImage": "Add file or image",

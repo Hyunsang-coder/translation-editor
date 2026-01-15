@@ -140,11 +140,8 @@ interface ChatState {
   statusMessage: string | null;
   // 최근 요청에서 주입된 글로서리(디버깅/가시화)
   lastInjectedGlossary: GlossaryEntry[];
-  // Smart Context Memory (4.3)
-  isSummarizing: boolean;
-  summarySuggestionOpen: boolean;
-  summarySuggestionReason: string;
-  lastSummaryAtMessageCountBySessionId: Record<string, number>;
+  // 대화 길이 알림: 세션별 dismiss 상태
+  summarySuggestionDismissedBySessionId: Record<string, boolean>;
   // Chat composer
   composerText: string;
   composerFocusNonce: number;
@@ -206,10 +203,10 @@ interface ChatActions {
   addContextBlock: (blockId: string) => void;
   removeContextBlock: (blockId: string) => void;
 
-  // Smart Context Memory (4.3)
-  checkAndSuggestProjectContext: () => void;
+  // 대화 길이 알림
+  shouldShowSummarySuggestion: () => boolean;
   dismissSummarySuggestion: () => void;
-  generateProjectContextSummary: () => Promise<void>;
+  startNewSessionFromSuggestion: () => void;
 
   // 유틸리티
   setLoading: (isLoading: boolean) => void;
@@ -332,12 +329,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
     error: null,
     statusMessage: null,
     lastInjectedGlossary: [],
-    isSummarizing: false,
     isHydrating: false,
     abortController: null,
-    summarySuggestionOpen: false,
-    summarySuggestionReason: '',
-    lastSummaryAtMessageCountBySessionId: {},
+    summarySuggestionDismissedBySessionId: {},
     composerText: '',
     composerFocusNonce: 0,
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
@@ -389,9 +383,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           currentSessionId: null,
           currentSession: null,
           lastInjectedGlossary: [],
-          summarySuggestionOpen: false,
-          summarySuggestionReason: '',
-          lastSummaryAtMessageCountBySessionId: {},
+          summarySuggestionDismissedBySessionId: {},
           isHydrating: false,
           isFinalizingStreaming: false,
           loadedProjectId: null,
@@ -416,9 +408,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         currentSessionId: null,
         currentSession: null,
         lastInjectedGlossary: [],
-        summarySuggestionOpen: false,
-        summarySuggestionReason: '',
-        lastSummaryAtMessageCountBySessionId: {},
+        summarySuggestionDismissedBySessionId: {},
         composerText: '',
         translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
         translationRules: '',
@@ -470,9 +460,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           sessions: (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS),
           currentSessionId: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]!.id : null,
           currentSession: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]! : null,
-          lastSummaryAtMessageCountBySessionId: (sessionsRes && sessionsRes.length > 0)
-            ? Object.fromEntries(sessionsRes.slice(0, MAX_CHAT_SESSIONS).map((s) => [s.id, 0]))
-            : {},
           attachments: atts,
           composerAttachments: [],
         };
@@ -548,10 +535,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         sessions: [...state.sessions, newSession],
         currentSessionId: sessionId,
         currentSession: newSession,
-        lastSummaryAtMessageCountBySessionId: {
-          ...state.lastSummaryAtMessageCountBySessionId,
-          [sessionId]: 0,
-        },
       }));
 
       schedulePersist();
@@ -583,13 +566,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
       }
 
       set((state) => {
-        const nextMap = { ...state.lastSummaryAtMessageCountBySessionId };
-        delete nextMap[sessionId];
+        const nextDismissMap = { ...state.summarySuggestionDismissedBySessionId };
+        delete nextDismissMap[sessionId];
         return {
           sessions: newSessions,
           currentSessionId: newCurrentSessionId,
           currentSession: newCurrentSession,
-          lastSummaryAtMessageCountBySessionId: nextMap,
+          summarySuggestionDismissedBySessionId: nextDismissMap,
         };
       });
 
@@ -972,7 +955,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         set({ abortController: null });
-        get().checkAndSuggestProjectContext();
       } catch (error) {
         // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
         if (error instanceof Error && error.name === 'AbortError') {
@@ -1039,102 +1021,29 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set((state) => ({ composerFocusNonce: state.composerFocusNonce + 1 }));
     },
 
-    checkAndSuggestProjectContext: (): void => {
+    // 대화 길이 알림: 20개 이상 + dismiss 안 됨
+    shouldShowSummarySuggestion: (): boolean => {
       const session = get().currentSession;
-      if (!session) return;
-
-      // “자동 생성”은 금지(Non-Intrusive AI) → 임계치 도달 시 ‘제안’만 띄움
-      // token은 정확히 계산하지 않고, 문자 길이 기반으로 근사합니다.
-      const msgCount = session.messages.length;
-      const lastCount = get().lastSummaryAtMessageCountBySessionId[session.id] ?? 0;
-      const newMessagesSinceLast = msgCount - lastCount;
-      if (newMessagesSinceLast < 12) return; // 너무 잦은 제안 방지
-
-      const totalChars = session.messages.reduce((acc, m) => acc + (m.content?.length ?? 0), 0);
-      const thresholdChars = 6000; // 대략 1.5k~2k tokens 근사
-
-      if (totalChars < thresholdChars) return;
-
-      if (!get().summarySuggestionOpen) {
-        set({
-          summarySuggestionOpen: true,
-          summarySuggestionReason: '대화가 길어져서 맥락 정보 요약(Project Context)을 생성하면 컨텍스트 비용을 줄일 수 있어요.',
-        });
-      }
+      if (!session) return false;
+      if (get().summarySuggestionDismissedBySessionId[session.id]) return false;
+      return session.messages.length >= 20;
     },
 
     dismissSummarySuggestion: (): void => {
-      set({ summarySuggestionOpen: false, summarySuggestionReason: '' });
-    },
-
-    generateProjectContextSummary: async (): Promise<void> => {
       const session = get().currentSession;
       if (!session) return;
-      if (get().isSummarizing) return;
+      set((state) => ({
+        summarySuggestionDismissedBySessionId: {
+          ...state.summarySuggestionDismissedBySessionId,
+          [session.id]: true,
+        },
+      }));
+    },
 
-      set({ isSummarizing: true, error: null });
-
-      try {
-        const cfg = getAiConfig();
-        const project = useProjectStore.getState().project;
-        const current = get().projectContext.trim();
-
-        // 최근 메시지만 요약(과도한 토큰 방지)
-        const maxN = Math.max(20, cfg.maxRecentMessages);
-        const history = session.messages.slice(Math.max(0, session.messages.length - maxN));
-
-        const transcript = history
-          .map((m) => {
-            const role = m.role === 'assistant' ? 'AI' : m.role === 'user' ? 'USER' : 'SYSTEM';
-            return `${role}: ${m.content}`;
-          })
-          .join('\n\n');
-
-        const userMessage = [
-          '너는 번역 프로젝트의 "Project Context(맥락 정보)"만 요약하는 에디터 보조 AI다.',
-          '',
-          '목표:',
-          '- 아래 대화에서 확정된 "맥락 정보(배경 지식, 프로젝트 컨텍스트 등)"만 추출해 짧게 요약한다.',
-          '- 번역 규칙(포맷, 서식, 문체)은 Translation Rules에 저장되므로 Project Context에 포함하지 않는다.',
-          '- 번역 내용 자체를 재작성/제안하지 않는다.',
-          '',
-          '출력 규칙:',
-          '- 출력은 한국어로.',
-          '- 최대 1200자.',
-          '- 불릿/번호/따옴표/마크다운 금지. (그냥 줄바꿈으로 규칙만 나열)',
-          '- 확정되지 않은 내용은 포함하지 않는다.',
-          '',
-          current ? `기존 Project Context(있으면 갱신/정리):\n${current}\n` : '',
-          '대화 기록:',
-          transcript,
-        ]
-          .filter(Boolean)
-          .join('\n');
-
-        const reply = await streamAssistantReply({
-          project,
-          contextBlocks: [],
-          recentMessages: [],
-          userMessage,
-          ...(current ? { projectContext: current } : {}),
-          webSearchEnabled: false,
-        });
-
-        const cleaned = reply.trim().slice(0, 1200);
-        set((state) => ({
-          projectContext: cleaned,
-          lastSummaryAtMessageCountBySessionId: {
-            ...state.lastSummaryAtMessageCountBySessionId,
-            [session.id]: session.messages.length,
-          },
-          summarySuggestionOpen: false,
-          summarySuggestionReason: '',
-        }));
-      } catch (e) {
-        set({ error: e instanceof Error ? e.message : '요약 생성 실패' });
-      } finally {
-        set({ isSummarizing: false });
-      }
+    startNewSessionFromSuggestion: (): void => {
+      // 현재 세션 dismiss 후 새 세션 생성
+      get().dismissSummarySuggestion();
+      get().createSession();
     },
 
     // 메시지 추가
@@ -1475,7 +1384,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         set({ abortController: null });
-        get().checkAndSuggestProjectContext();
         schedulePersist();
       } catch (error) {
         // AbortError는 정상적인 취소이므로 에러로 표시하지 않음

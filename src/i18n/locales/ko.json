@@ -10,7 +10,8 @@
     "confirm": "확인",
     "loading": "로딩 중...",
     "untitledProject": "제목 없음 프로젝트",
-    "retry": "다시 시도"
+    "retry": "다시 시도",
+    "ignore": "무시"
   },
   "settings": {
     "title": "프로젝트 설정",
@@ -226,6 +227,8 @@
     "removeAttachment": "첨부 제거",
     "summarizing": "요약 중...",
     "summarize": "요약",
+    "longConversationNotice": "대화가 길어졌습니다. 새 세션을 시작하시겠어요?",
+    "startNewSession": "새 세션 시작",
     "deleteSessionConfirm": "이 채팅 세션을 삭제하시겠습니까?",
     "deleteSessionTitle": "세션 삭제",
     "addFileOrImage": "파일 또는 이미지 추가",

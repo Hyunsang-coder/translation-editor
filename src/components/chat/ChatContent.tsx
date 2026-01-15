@@ -24,11 +24,9 @@ export function ChatContent(): JSX.Element {
   const { currentSession, sendMessage, isLoading } = useChatStore();
   const statusMessage = useChatStore((s) => s.statusMessage);
   const chatSessions = useChatStore((s) => s.sessions);
-  const isSummarizing = useChatStore((s) => s.isSummarizing);
-  const summarySuggestionOpen = useChatStore((s) => s.summarySuggestionOpen);
-  const summarySuggestionReason = useChatStore((s) => s.summarySuggestionReason);
+  const shouldShowSummarySuggestion = useChatStore((s) => s.shouldShowSummarySuggestion());
   const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
-  const generateProjectContextSummary = useChatStore((s) => s.generateProjectContextSummary);
+  const startNewSessionFromSuggestion = useChatStore((s) => s.startNewSessionFromSuggestion);
 
   const composerText = useChatStore((s) => s.composerText);
   const setComposerText = useChatStore((s) => s.setComposerText);
@@ -308,27 +306,26 @@ export function ChatContent(): JSX.Element {
         </div>
       </div>
 
-      {/* Smart Context Memory 제안 */}
-      {summarySuggestionOpen && (
+      {/* 대화 길이 알림 */}
+      {shouldShowSummarySuggestion && (
         <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2 shrink-0">
           <div className="text-[11px] text-editor-muted leading-relaxed">
-            {summarySuggestionReason}
+            {t('chat.longConversationNotice')}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
-              disabled={isSummarizing}
-              onClick={() => void generateProjectContextSummary()}
+              className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600"
+              onClick={startNewSessionFromSuggestion}
             >
-              {isSummarizing ? t('chat.summarizing') : t('chat.summarize')}
+              {t('chat.startNewSession')}
             </button>
             <button
               type="button"
               className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
               onClick={dismissSummarySuggestion}
             >
-              Close
+              {t('common.ignore')}
             </button>
           </div>
         </div>
