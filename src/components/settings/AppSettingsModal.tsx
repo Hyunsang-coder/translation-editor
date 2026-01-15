@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { ConnectorsSection } from './ConnectorsSection';
-import { migrateLegacySecrets, type MigrationResult } from '@/tauri/secrets';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -22,29 +21,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setOpenaiApiKey,
     setBraveApiKey,
   } = useAiConfigStore();
-
-  // 마이그레이션 상태
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
-
-  // 마이그레이션 핸들러
-  const handleMigrateLegacySecrets = async () => {
-    setIsMigrating(true);
-    setMigrationResult(null);
-    try {
-      const result = await migrateLegacySecrets();
-      setMigrationResult(result);
-    } catch (error) {
-      console.error('[Settings] Migration failed:', error);
-      setMigrationResult({
-        migrated: 0,
-        failed: 1,
-        details: [`오류: ${String(error)}`],
-      });
-    } finally {
-      setIsMigrating(false);
-    }
-  };
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -253,61 +229,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Connectors */}
             <ConnectorsSection />
 
-            {/* Security */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🔒</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.security', '보안')}</h3>
-                </div>
-                <div className="space-y-3">
-                    <p className="text-xs text-editor-muted">
-                        {t('appSettings.securityDescription', '이전 버전에서 저장된 로그인 정보를 새로운 보안 저장소로 가져옵니다.')}
-                    </p>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleMigrateLegacySecrets}
-                            disabled={isMigrating}
-                            className={`
-                                px-4 py-2 rounded-md text-sm font-medium transition-colors
-                                ${isMigrating 
-                                    ? 'bg-editor-border text-editor-muted cursor-not-allowed' 
-                                    : 'bg-primary-500 text-white hover:bg-primary-600'
-                                }
-                            `}
-                        >
-                            {isMigrating 
-                                ? t('appSettings.migrating', '마이그레이션 중...') 
-                                : t('appSettings.migrateLegacy', '기존 로그인 정보 가져오기')
-                            }
-                        </button>
-                    </div>
-                    {migrationResult && (
-                        <div className={`
-                            p-3 rounded-md text-sm
-                            ${migrationResult.failed > 0 
-                                ? 'bg-red-500/10 border border-red-500/20' 
-                                : 'bg-green-500/10 border border-green-500/20'
-                            }
-                        `}>
-                            <p className={migrationResult.failed > 0 ? 'text-red-400' : 'text-green-400'}>
-                                {migrationResult.migrated > 0 
-                                    ? t('appSettings.migrationSuccess', '{{count}}개 항목이 마이그레이션되었습니다.', { count: migrationResult.migrated })
-                                    : t('appSettings.migrationNone', '마이그레이션할 항목이 없습니다.')
-                                }
-                                {migrationResult.failed > 0 && ` (${migrationResult.failed}개 실패)`}
-                            </p>
-                            {migrationResult.details.length > 0 && (
-                                <ul className="mt-2 text-xs text-editor-muted space-y-1">
-                                    {migrationResult.details.map((detail, i) => (
-                                        <li key={i}>{detail}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </section>
-
             {/* Help & Info (Placeholder) */}
             <section className="space-y-3 opacity-60">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
@@ -316,7 +237,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <span className="text-xs px-2 py-0.5 rounded-full bg-editor-border text-editor-muted">{t('appSettings.helpInfoComingSoon')}</span>
                 </div>
                 <div className="text-sm text-editor-muted pl-1">
-                    {t('appSettings.helpInfoVersion')} <br/>
+                    {t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__} <br/>
                     {t('appSettings.helpInfoTutorials')}
                 </div>
             </section>

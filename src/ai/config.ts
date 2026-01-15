@@ -9,9 +9,9 @@ export type AiProvider = 'openai' | 'mock';
 
 export const MODEL_PRESETS = {
   openai: [
-    { value: 'gpt-5.2', label: 'GPT-5.2', description: '코딩 및 에이전트 작업에 최적화된 산업 전반 최고의 모델' },
-    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '명확한 작업을 위한 빠르고 비용 효율적인 GPT-5 버전' },
-    { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 빠르고 비용 효율적인 GPT-5 버전' },
+    { value: 'gpt-5.2', label: 'GPT-5.2', description: '가장 빠르고 강력한 모델' },
+    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '준수한 성능과 가성비' },
+    { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 경제적인 모델' },
   ],
 } as const;
 
@@ -54,7 +54,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   const store = useAiConfigStore.getState();
   // OpenAI 전용으로 단순화 (mock은 개발용, 내부적으로 openai 사용)
   const provider: AiProvider = store.provider === 'mock' ? 'mock' : 'openai';
-  
+
   // 2. 용도에 따른 모델 선택
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
   const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;

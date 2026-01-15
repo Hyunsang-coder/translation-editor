@@ -61,7 +61,7 @@
     "braveApiKeyPlaceholder": "Brave Search API 키를 입력하세요",
     "helpInfo": "도움말 및 정보",
     "helpInfoComingSoon": "곧 제공 예정",
-    "helpInfoVersion": "버전: 0.1.0-alpha",
+    "helpInfoVersionLabel": "버전",
     "helpInfoTutorials": "튜토리얼과 FAQ가 곧 추가될 예정입니다.",
     "footerAutoSave": "변경사항은 자동으로 저장됩니다.",
     "security": "보안",

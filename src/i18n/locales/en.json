@@ -61,7 +61,7 @@
     "braveApiKeyPlaceholder": "Enter your Brave Search API key",
     "helpInfo": "Help & Info",
     "helpInfoComingSoon": "Coming soon",
-    "helpInfoVersion": "Version: 0.1.0-alpha",
+    "helpInfoVersionLabel": "Version",
     "helpInfoTutorials": "Tutorials and FAQ will be added soon.",
     "footerAutoSave": "Changes are saved automatically.",
     "security": "Security",
