@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIntensity, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useUIStore } from '@/stores/uiStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildReviewPrompt, buildAlignedChunks } from '@/ai/tools/reviewTool';
@@ -198,6 +199,47 @@ ${segmentsText}
     finishReview();
   }, [abortController, finishReview]);
 
+  const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
+    const { targetDocument, setTargetDocument } = useProjectStore.getState();
+    const { addToast } = useUIStore.getState();
+
+    if (!issue.targetExcerpt || issue.suggestedFix === undefined) {
+      addToast({
+        type: 'error',
+        message: t('review.applyError.missingData'),
+      });
+      return;
+    }
+
+    // 빈 suggestedFix = 삭제 제안
+    if (issue.suggestedFix === '') {
+      if (!window.confirm(t('review.applyConfirm.delete'))) return;
+    }
+
+    const index = targetDocument.indexOf(issue.targetExcerpt);
+    if (index === -1) {
+      addToast({
+        type: 'error',
+        message: t('review.applyError.notFound'),
+      });
+      return;
+    }
+
+    const newDoc =
+      targetDocument.slice(0, index) +
+      issue.suggestedFix +
+      targetDocument.slice(index + issue.targetExcerpt.length);
+
+    setTargetDocument(newDoc);
+    addToast({
+      type: 'success',
+      message: t('review.applySuccess'),
+    });
+
+    // 적용 후 체크 상태 변경
+    toggleIssueCheck(issue.id);
+  }, [t, toggleIssueCheck]);
+
   const handleReset = useCallback(() => {
     if (isReviewing) {
       handleCancel();
@@ -319,6 +361,7 @@ ${segmentsText}
               issues={allIssues}
               onToggleCheck={toggleIssueCheck}
               onDelete={deleteIssue}
+              onApply={handleApplySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
             />

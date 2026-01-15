@@ -216,7 +216,16 @@
     "category.distortion": "Distortion",
     "category.distortion.desc": "Intensity/scope/conditions changed",
     "category.consistency": "Term Consistency",
-    "category.consistency.desc": "Same term translated differently"
+    "category.consistency.desc": "Same term translated differently",
+    "apply": "Apply",
+    "applySuccess": "Suggested fix applied.",
+    "applyError": {
+      "missingData": "No suggestion data available.",
+      "notFound": "Text not found in translation. The document may have changed."
+    },
+    "applyConfirm": {
+      "delete": "Suggested fix is empty. Delete the selected text?"
+    }
   },
   "chat": {
     "settings": "Project Settings",

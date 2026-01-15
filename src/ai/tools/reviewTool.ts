@@ -123,14 +123,24 @@ const OUTPUT_FORMAT = `## 출력 형식
       "segmentOrder": 1,
       "type": "오역|누락|왜곡|일관성",
       "sourceExcerpt": "원문 30자 이내",
-      "targetExcerpt": "번역문 30자 이내",
+      "targetExcerpt": "번역문 30자 이내 (수정 대상 텍스트)",
       "problem": "무엇이 문제인지 (1줄)",
       "reason": "왜 문제인지 - 원문과 대비 (1줄)",
       "impact": "독자가 받을 오해 (1줄)",
-      "suggestedFix": "수정 제안"
+      "suggestedFix": "targetExcerpt를 대체할 정확한 번역문만 (설명/지시문 없이)"
     }
   ]
 }
+
+## suggestedFix 작성 규칙 (중요!)
+- targetExcerpt를 직접 대체할 텍스트만 작성
+- 설명, 지시문, 따옴표, 마크다운 서식 없이 순수 번역문만
+- 예시:
+  - ✅ 좋음: targetExcerpt "사용자 인터페이스" → suggestedFix: "UI"
+  - ✅ 좋음: targetExcerpt "할 수 있습니다" → suggestedFix: "해야 합니다"
+  - ❌ 나쁨: "'사용자 인터페이스'를 'UI'로 바꾸세요"
+  - ❌ 나쁨: "**UI**로 변경 권장"
+  - ❌ 나쁨: "UI (약어 사용 권장)"
 
 문제 없음: { "issues": [] }`;
 

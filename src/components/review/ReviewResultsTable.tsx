@@ -6,6 +6,7 @@ interface ReviewResultsTableProps {
   onToggleCheck?: (issueId: string) => void;
   onToggleAll?: () => void;
   onDelete?: (issueId: string) => void;
+  onApply?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
 }
 
@@ -55,6 +56,7 @@ export function ReviewResultsTable({
   onToggleCheck,
   onToggleAll,
   onDelete,
+  onApply,
   allChecked = false,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
@@ -184,9 +186,21 @@ export function ReviewResultsTable({
                   </span>
                 </td>
                 <td className="px-3 py-2 text-editor-text text-xs">
-                  <span className="break-words">
-                    {issue.suggestedFix || '-'}
-                  </span>
+                  <div className="flex items-start gap-2">
+                    <span className="break-words flex-1">
+                      {issue.suggestedFix || '-'}
+                    </span>
+                    {issue.suggestedFix && onApply && (
+                      <button
+                        type="button"
+                        onClick={() => onApply(issue)}
+                        className="shrink-0 px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
+                        title={t('review.apply', '적용')}
+                      >
+                        {t('review.apply', '적용')}
+                      </button>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2 text-editor-text text-xs">
                   {issue.description ? (
