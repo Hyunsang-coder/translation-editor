@@ -126,7 +126,6 @@ const OUTPUT_FORMAT = `## 출력 형식
       "targetExcerpt": "번역문 30자 이내 (수정 대상 텍스트)",
       "problem": "무엇이 문제인지 (1줄)",
       "reason": "왜 문제인지 - 원문과 대비 (1줄)",
-      "impact": "독자가 받을 오해 (1줄)",
       "suggestedFix": "targetExcerpt를 대체할 정확한 번역문만 (설명/지시문 없이)"
     }
   ]

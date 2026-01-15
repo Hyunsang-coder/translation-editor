@@ -486,7 +486,19 @@ export async function translateWithStreaming(
 
     if (delta) {
       accumulated += delta;
-      params.onToken?.(accumulated);
+      // 마커 이후 텍스트만 콜백에 전달 (지침 반복 필터링)
+      const startMarker = '---TRANSLATION_START---';
+      const endMarker = '---TRANSLATION_END---';
+      const startIdx = accumulated.indexOf(startMarker);
+      if (startIdx !== -1) {
+        let filtered = accumulated.slice(startIdx + startMarker.length);
+        const endIdx = filtered.indexOf(endMarker);
+        if (endIdx !== -1) {
+          filtered = filtered.slice(0, endIdx);
+        }
+        params.onToken?.(filtered.trim());
+      }
+      // 마커가 아직 없으면 콜백 호출 안함 (로딩 상태 유지)
     }
   }
 

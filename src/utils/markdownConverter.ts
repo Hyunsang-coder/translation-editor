@@ -207,6 +207,29 @@ export function htmlToMarkdown(html: string): string {
 }
 
 /**
+ * Markdown 문자열 -> HTML 변환
+ *
+ * 검수 결과 적용 등에서 Markdown을 HTML로 변환할 때 사용합니다.
+ *
+ * @param markdown - Markdown 문자열
+ * @returns HTML 문자열
+ */
+export function markdownToHtml(markdown: string): string {
+  if (!markdown || !markdown.trim()) return '';
+
+  const json = markdownToTipTapJson(markdown);
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: json,
+  });
+
+  const html = editor.getHTML();
+  editor.destroy();
+
+  return html;
+}
+
+/**
  * HTML 문자열 -> TipTap JSON 변환
  *
  * 프로젝트 로드 시 HTML 문서를 TipTap JSON으로 변환하여 저장합니다.

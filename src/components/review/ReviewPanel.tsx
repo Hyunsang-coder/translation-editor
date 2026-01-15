@@ -8,6 +8,7 @@ import { streamAssistantReply } from '@/ai/chat';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildReviewPrompt, buildAlignedChunks } from '@/ai/tools/reviewTool';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
+import { getTargetEditor } from '@/editor/editorRegistry';
 
 /** 체크박스 아이템 컴포넌트 */
 function CheckboxItem({
@@ -86,6 +87,7 @@ export function ReviewPanel(): JSX.Element {
     setAllIssuesChecked,
     getCheckedIssues,
     disableHighlight,
+    setIsApplyingSuggestion,
   } = useReviewStore();
 
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -200,8 +202,8 @@ ${segmentsText}
   }, [abortController, finishReview]);
 
   const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
-    const { targetDocument, setTargetDocument } = useProjectStore.getState();
     const { addToast } = useUIStore.getState();
+    const editor = getTargetEditor();
 
     if (!issue.targetExcerpt || issue.suggestedFix === undefined) {
       addToast({
@@ -211,13 +213,7 @@ ${segmentsText}
       return;
     }
 
-    // 빈 suggestedFix = 삭제 제안
-    if (issue.suggestedFix === '') {
-      if (!window.confirm(t('review.applyConfirm.delete'))) return;
-    }
-
-    const index = targetDocument.indexOf(issue.targetExcerpt);
-    if (index === -1) {
+    if (!editor) {
       addToast({
         type: 'error',
         message: t('review.applyError.notFound'),
@@ -225,20 +221,62 @@ ${segmentsText}
       return;
     }
 
-    const newDoc =
-      targetDocument.slice(0, index) +
-      issue.suggestedFix +
-      targetDocument.slice(index + issue.targetExcerpt.length);
+    // 빈 suggestedFix = 삭제 제안
+    if (issue.suggestedFix === '') {
+      if (!window.confirm(t('review.applyConfirm.delete'))) return;
+    }
 
-    setTargetDocument(newDoc);
+    // Markdown 문법 제거하여 plain text로 검색 (에디터는 plain text 기반 검색)
+    const stripMarkdown = (text: string): string => {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '$1')  // bold
+        .replace(/\*(.+?)\*/g, '$1')      // italic
+        .replace(/__(.+?)__/g, '$1')      // bold alt
+        .replace(/_(.+?)_/g, '$1')        // italic alt
+        .replace(/~~(.+?)~~/g, '$1')      // strikethrough
+        .replace(/`(.+?)`/g, '$1')        // inline code
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1') // links
+        .trim();
+    };
+
+    const searchText = stripMarkdown(issue.targetExcerpt);
+    const replaceText = stripMarkdown(issue.suggestedFix);
+
+    // 에디터에서 검색
+    editor.commands.setSearchTerm(searchText);
+
+    // 매치가 있는지 확인
+    const matches = editor.storage.searchHighlight?.matches || [];
+    if (matches.length === 0) {
+      addToast({
+        type: 'error',
+        message: t('review.applyError.notFound'),
+      });
+      // 검색어 초기화
+      editor.commands.setSearchTerm('');
+      return;
+    }
+
+    // 적용 중 플래그 설정 (하이라이트 무효화 방지)
+    setIsApplyingSuggestion(true);
+
+    // 첫 번째 매치 교체
+    editor.commands.replaceMatch(replaceText);
+
+    // 검색어 초기화
+    editor.commands.setSearchTerm('');
+
+    deleteIssue(issue.id);
+
+    setTimeout(() => {
+      setIsApplyingSuggestion(false);
+    }, 500);
+
     addToast({
       type: 'success',
       message: t('review.applySuccess'),
     });
-
-    // 적용 후 체크 상태 변경
-    toggleIssueCheck(issue.id);
-  }, [t, toggleIssueCheck]);
+  }, [t, deleteIssue, setIsApplyingSuggestion]);
 
   const handleReset = useCallback(() => {
     if (isReviewing) {

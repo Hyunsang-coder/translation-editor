@@ -19,6 +19,7 @@ import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
+import { setTargetEditor as setTargetEditorRegistry } from '@/editor/editorRegistry';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -308,6 +309,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const handleTargetEditorReady = useCallback((editor: Editor) => {
     targetEditorRef.current = editor;
     setTargetEditor(editor);
+    // 글로벌 레지스트리에도 저장 (ReviewPanel 등에서 접근용)
+    setTargetEditorRegistry(editor);
   }, []);
 
   // 검색바 핸들러

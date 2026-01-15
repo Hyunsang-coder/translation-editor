@@ -217,7 +217,9 @@
     "category.distortion.desc": "Intensity/scope/conditions changed",
     "category.consistency": "Term Consistency",
     "category.consistency.desc": "Same term translated differently",
+    "highlight": "Highlight",
     "apply": "Apply",
+    "ignore": "Ignore",
     "applySuccess": "Suggested fix applied.",
     "applyError": {
       "missingData": "No suggestion data available.",

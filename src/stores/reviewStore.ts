@@ -95,6 +95,7 @@ interface ReviewState {
   highlightEnabled: boolean;  // 하이라이트 활성화 여부
   highlightNonce: number;     // 하이라이트 업데이트 트리거 (nonce 증가 시 재계산)
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
+  isApplyingSuggestion: boolean;  // 수정 제안 적용 중 (하이라이트 무효화 방지)
 }
 
 interface ReviewActions {
@@ -187,6 +188,11 @@ interface ReviewActions {
    * 설정 섹션 펼침/접기
    */
   setSettingsExpanded: (expanded: boolean) => void;
+
+  /**
+   * 수정 제안 적용 중 플래그 설정 (하이라이트 무효화 방지용)
+   */
+  setIsApplyingSuggestion: (value: boolean) => void;
 }
 
 type ReviewStore = ReviewState & ReviewActions;
@@ -210,13 +216,14 @@ const initialState: ReviewState = {
   highlightEnabled: false,
   highlightNonce: 0,
   initializedProjectId: null,
+  isApplyingSuggestion: false,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...initialState,
 
   initializeReview: (project: ITEProject) => {
-    const { initializedProjectId, results } = get();
+    const { initializedProjectId, results, highlightNonce } = get();
     // 이미 같은 프로젝트로 초기화되어 있고 검수 결과가 있으면 스킵 (탭 전환 시 상태 유지)
     // 검수 결과가 없으면 항상 재초기화 (resetReview 후 또는 첫 진입)
     if (initializedProjectId === project.id && results.length > 0) {
@@ -230,6 +237,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       isReviewing: false,
       progress: { completed: 0, total: chunks.length },
       initializedProjectId: project.id,
+      highlightEnabled: false,  // 초기화 시 기존 하이라이트 무효화
+      highlightNonce: highlightNonce + 1,  // 에디터에 변경 알림
     });
   },
 
@@ -367,6 +376,10 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   setSettingsExpanded: (expanded: boolean) => {
     set({ settingsExpanded: expanded });
   },
+
+  setIsApplyingSuggestion: (value: boolean) => {
+    set({ isApplyingSuggestion: value });
+  },
 }));
 
 // ============================================
@@ -383,11 +396,13 @@ useProjectStore.subscribe((state) => {
   const reviewState = useReviewStore.getState();
 
   // 문서가 실제로 변경되었고, 하이라이트가 활성화되어 있고, 검수 결과가 있을 때만 처리
+  // 단, 수정 제안 적용 중에는 하이라이트 무효화 스킵
   if (
     prevTargetDocJson !== null &&
     targetDocJson !== prevTargetDocJson &&
     reviewState.highlightEnabled &&
-    reviewState.results.length > 0
+    reviewState.results.length > 0 &&
+    !reviewState.isApplyingSuggestion
   ) {
     console.log('[reviewStore] Target document changed while highlight active, disabling highlight');
     useReviewStore.getState().disableHighlight();

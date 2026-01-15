@@ -217,7 +217,9 @@
     "category.distortion.desc": "강도/범위/조건이 변경된 경우",
     "category.consistency": "용어 일관성",
     "category.consistency.desc": "같은 용어가 다르게 번역된 경우",
+    "highlight": "표시",
     "apply": "적용",
+    "ignore": "무시",
     "applySuccess": "수정 제안이 적용되었습니다.",
     "applyError": {
       "missingData": "수정 제안 데이터가 없습니다.",
