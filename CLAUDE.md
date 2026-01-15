@@ -141,6 +141,7 @@ Critical stores in `src/stores/`:
 // Document builders: src/editor/sourceDocument.ts, targetDocument.ts
 // TipTap JSON ↔ SQLite: projectStore.ts → loadProject/saveProject
 // Review highlight: src/editor/extensions/ReviewHighlight.ts (Decoration-based, non-persistent)
+// Search/Replace: src/editor/extensions/SearchHighlight.ts + src/components/editor/SearchBar.tsx
 ```
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
@@ -264,6 +265,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 21. **Cross-Store Subscription for State Invalidation**: Use Zustand's `subscribe()` to monitor state changes in other stores. Example: `reviewStore` subscribes to `projectStore.targetDocJson` changes to invalidate highlights when the document is modified.
 22. **Fresh State in Callbacks**: When using callbacks that execute over time (like chunk processing loops), use `getState()` instead of closure-captured values to ensure fresh state. Example: `useChatStore.getState()` in `ReviewPanel` to get latest `translationRules`.
 23. **Tool Handler Null Safety**: Always check for null `project` in AI tool handlers before accessing project-related state. Return meaningful error messages like "프로젝트가 로드되지 않았습니다" instead of generic errors.
+24. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
+25. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
 
 ## Testing Patterns
 
@@ -318,6 +321,7 @@ cd src-tauri && cargo check
   - `components/editor/`: Editor-related UI
   - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (parsing), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
+- **Search/Replace Feature**: `src/editor/extensions/SearchHighlight.ts` (TipTap extension), `src/components/editor/SearchBar.tsx` (UI)
 
 ## When Adding New Features
 

@@ -35,6 +35,11 @@ What (권장 옵션):
 - 지원 포맷: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Table, Image, Placeholder, (선택) Code Block
 - 추가 포맷 (에디터 표시용): Underline, Highlight, Subscript, Superscript (Markdown 변환 시 손실)
 - Source/Target 붙여넣기: 웹페이지/Confluence HTML은 **붙여넣기 시점에만** 최소한의 정규화(허용 태그/속성 화이트리스트, 구조 단순화, 테이블 헤더 중복 제거)를 적용하여 표 파싱 안정성 확보
+- **검색/치환 기능**: TipTap 에디터 내 검색 및 치환 지원
+  - 검색: `Cmd+F` (Source/Target 모두)
+  - 치환: `Cmd+H` (Target 전용, 원문 보호)
+  - 기능: 대소문자 구분, 이전/다음 매치 탐색, 단일 치환, 전체 치환
+  - 구현: `SearchHighlight` TipTap Extension (Decoration 기반), `SearchBar` UI 컴포넌트
 
 3. AI 상호작용 및 Preview 워크플로우
 3.1 문서 전체 번역 (Preview → Apply)

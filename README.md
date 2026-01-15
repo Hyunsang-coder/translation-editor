@@ -16,6 +16,7 @@
 - **AI Chat**: LangChain.js 기반 멀티 탭 채팅
 - **문서 전체 번역**: Preview → Apply 워크플로우
 - **번역 검수**: 오역/누락/일관성 검출 + 에디터 하이라이트
+- **검색/치환**: 에디터 내 검색 (Cmd+F) 및 치환 (Cmd+H, Target 전용)
 - **외부 연동**: Confluence (MCP), Notion, 웹검색
 
 ## 기술 스택
