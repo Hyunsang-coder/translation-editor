@@ -92,8 +92,10 @@ cd src-tauri && cargo test
 - **Review Mode** (`ReviewPanel.tsx`):
   - AI-assisted translation review for error, omission, distortion, consistency issues
   - Document split into chunks → sequential AI review → JSON result parsing
-  - Results displayed in table with checkboxes
+  - Results displayed in table with checkboxes, action buttons (Apply/Copy/Ignore)
   - Checked issues highlighted in Target editor via TipTap Decoration
+  - **Apply Suggestion**: Click "적용" to replace targetExcerpt with suggestedFix in editor
+  - **Copy for Omission**: Omission type shows "복사" button (clipboard copy) instead of Apply
   - Non-intrusive: no automatic document modification
 
 #### 3. Tool Calling Architecture
@@ -267,6 +269,10 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 23. **Tool Handler Null Safety**: Always check for null `project` in AI tool handlers before accessing project-related state. Return meaningful error messages like "프로젝트가 로드되지 않았습니다" instead of generic errors.
 24. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
 25. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
+26. **Editor Registry for Cross-Component Access**: Use `editorRegistry.ts` (`getSourceEditor`, `getTargetEditor`) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions).
+27. **Markdown Normalization for Search**: Use `normalizeForSearch()` to strip markdown formatting (bold, italic, list markers) before searching in TipTap editor's plain text. AI responses often include markdown in excerpts.
+28. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
+29. **isApplyingSuggestion Guard**: Set `reviewStore.isApplyingSuggestion` to true during Apply operations to prevent highlight invalidation from cross-store subscription detecting document changes.
 
 ## Testing Patterns
 
@@ -312,6 +318,7 @@ cd src-tauri && cargo check
 - **Utilities**: `src/utils/` for shared helpers
   - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`, `htmlToTipTapJson`)
   - `imagePlaceholder.ts`: Image URL extraction/restoration for translation (`extractImages`, `restoreImages`)
+  - `normalizeForSearch.ts`: Markdown normalization for text search (`normalizeForSearch`, `stripMarkdownInline`)
   - `hash.ts`: Content hashing, `stripHtml`
   - `diff.ts`: Diff utilities
 - **UI Components**: Organized by layout hierarchy
@@ -322,6 +329,7 @@ cd src-tauri && cargo check
   - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (parsing), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 - **Search/Replace Feature**: `src/editor/extensions/SearchHighlight.ts` (TipTap extension), `src/components/editor/SearchBar.tsx` (UI)
+- **Editor Registry**: `src/editor/editorRegistry.ts` - Global access to TipTap editor instances for cross-component operations
 
 ## When Adding New Features
 

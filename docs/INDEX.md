@@ -18,8 +18,9 @@
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| 검수 적용 기능 | `/docs/review-apply-suggestion.md` | 추천 문장 클릭 시 번역문 반영 |
-| 진행 현황 | `/docs/review-apply-suggestion-progress.md` | 체크리스트 |
+| 검수 적용 기능 | `/docs/review-apply-suggestion.md` | 추천 문장 클릭 시 번역문 반영 ✅ |
+| 진행 현황 | `/docs/review-apply-suggestion-progress.md` | 체크리스트 (검색 정규화 완료) |
+| **적용 개선 분석** | `/docs/review-apply-improvement-analysis.md` | 누락/검색 실패 원인 분석 및 개선 방안 |
 
 ## 구현 태스크
 

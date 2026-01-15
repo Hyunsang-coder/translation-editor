@@ -381,8 +381,9 @@ What (UI 구성):
   - Settings 사이드바 내에서 탭 전환 형태로 관리
   - 검수 시작 시에만 Review 탭 표시, 닫으면 Settings 탭으로 복귀
 - **검수 시작**: 버튼 클릭으로 검수 시작, 취소 가능
-- **결과 테이블**: 체크박스 + 이슈 정보 (컬럼: 체크 | # | 유형 | 원문 | 현재 번역 | 수정 제안 | 설명)
+- **결과 테이블**: 체크박스 + 이슈 정보 (컬럼: 체크 | # | 유형 | 수정 제안 | 설명)
 - **하이라이트 토글**: 체크된 이슈만 Target 에디터에서 하이라이트
+- **수정 제안 적용**: 이슈별 액션 버튼 (적용/복사/무시)
 
 What (데이터 모델):
 ```typescript
@@ -435,6 +436,8 @@ What (구현 파일):
 | `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 + 체크박스 |
 | `src/ai/review/parseReviewResult.ts` | AI 응답 JSON/마크다운 파싱 |
 | `src/editor/extensions/ReviewHighlight.ts` | TipTap Decoration 하이라이트 |
+| `src/editor/editorRegistry.ts` | 에디터 인스턴스 글로벌 레지스트리 |
+| `src/utils/normalizeForSearch.ts` | 마크다운 정규화 유틸리티 |
 
 What (상태 관리 - reviewStore):
 - `initializeReview(project)`: 프로젝트를 청크로 분할, 상태 초기화
@@ -446,7 +449,8 @@ What (상태 관리 - reviewStore):
 - `getCheckedIssues()`: 체크된 이슈만 반환
 - `toggleHighlight()`: 하이라이트 활성화/비활성화
 - `disableHighlight()`: Review 탭 닫을 때 호출
-- **문서 변경 감지**: `projectStore.targetDocJson` 변경 시 `disableHighlight()` 자동 호출 (오프셋 불일치 방지)
+- `setIsApplyingSuggestion(value)`: 수정 적용 중 플래그 설정 (하이라이트 무효화 방지)
+- **문서 변경 감지**: `projectStore.targetDocJson` 변경 시 `disableHighlight()` 자동 호출 (오프셋 불일치 방지, `isApplyingSuggestion=true`일 때 스킵)
 
 What (요청 취소 및 리소스 관리):
 - **AbortController**: 검수 요청 시 `AbortController` 생성, 취소/닫기 시 `abort()` 호출
@@ -463,6 +467,40 @@ What (JSON 파싱 안정성):
 What (검수 항목 검증):
 - **hasEnabledCategories**: 검수 카테고리가 하나 이상 선택되어야 검수 실행 가능
 - **버튼 비활성화**: 카테고리 미선택 시 버튼 disabled 처리 및 툴팁 표시
+
+What (수정 제안 적용 - Apply Suggestion):
+- **적용 대상**: 오역(error), 왜곡(distortion), 일관성(consistency) 타입
+- **처리 흐름**:
+  1. `normalizeForSearch(targetExcerpt)`로 마크다운 서식 제거
+  2. `editorRegistry.getTargetEditor()`로 에디터 인스턴스 획득
+  3. `editor.commands.setSearchTerm(searchText)`로 검색
+  4. `editor.commands.replaceMatch(suggestedFix)`로 첫 번째 매치 교체
+  5. 이슈 삭제 및 성공 토스트 표시
+- **검색 실패 시**: 에러 토스트 표시 ("번역문에서 해당 텍스트를 찾을 수 없습니다")
+- **빈 suggestedFix**: 삭제 확인 다이얼로그 표시 후 진행
+
+What (누락 유형 복사 - Copy for Omission):
+- **대상**: 누락(omission) 타입 (번역문에 없는 텍스트이므로 자동 교체 불가)
+- **처리**: suggestedFix를 클립보드에 복사
+- **UX**: "복사" 버튼 표시, 복사 성공 시 안내 토스트 ("클립보드에 복사되었습니다. 적절한 위치에 붙여넣어 주세요.")
+
+What (마크다운 정규화 - normalizeForSearch):
+- **목적**: AI 응답의 excerpt에 포함된 마크다운 서식 제거
+- **구현**: `src/utils/normalizeForSearch.ts`
+- **처리 항목**:
+  - 인라인 서식: `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, `[text](url)` 제거
+  - 블록 마커: `# Heading`, `- item`, `1. item` 제거
+  - 공백 정규화: 연속 공백/줄바꿈 → 단일 공백
+
+What (하이라이트 무효화 방지):
+- **문제**: 수정 적용 시 문서 변경 → cross-store subscription이 하이라이트 비활성화
+- **해결**: `isApplyingSuggestion` 플래그로 적용 중에는 무효화 스킵
+- **패턴**:
+  ```typescript
+  setIsApplyingSuggestion(true);
+  editor.commands.replaceMatch(suggestedFix);
+  setTimeout(() => setIsApplyingSuggestion(false), 500);
+  ```
 
 3.10 Race Condition 방지 패턴 (Concurrency Safety)
 Why:
