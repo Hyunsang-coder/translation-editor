@@ -148,7 +148,8 @@ TipTap JSON
 
 ### Phase 3: HTML 정규화 (선택적)
 - [x] htmlNormalizer.ts 유틸리티 생성
-- [x] Source 에디터 붙여넣기 핸들러 연동 (필요 시)
+- [x] Source 에디터 붙여넣기 핸들러 연동
+- [x] Target 에디터 붙여넣기 핸들러 연동
 - [x] Confluence 테이블 헤더 중복 제거
 
 ---

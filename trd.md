@@ -34,7 +34,7 @@ What (권장 옵션):
 - 폰트/스타일: Pretendard, 16px, line-height 1.8, max-width 800px, padding 24px
 - 지원 포맷: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Table, Image, Placeholder, (선택) Code Block
 - 추가 포맷 (에디터 표시용): Underline, Highlight, Subscript, Superscript (Markdown 변환 시 손실)
-- Source 붙여넣기: 웹페이지/Confluence HTML은 **붙여넣기 시점에만** 최소한의 정규화(허용 태그/속성 화이트리스트, 구조 단순화, 테이블 헤더 중복 제거)를 적용하여 표 파싱 안정성 확보
+- Source/Target 붙여넣기: 웹페이지/Confluence HTML은 **붙여넣기 시점에만** 최소한의 정규화(허용 태그/속성 화이트리스트, 구조 단순화, 테이블 헤더 중복 제거)를 적용하여 표 파싱 안정성 확보
 
 3. AI 상호작용 및 Preview 워크플로우
 3.1 문서 전체 번역 (Preview → Apply)

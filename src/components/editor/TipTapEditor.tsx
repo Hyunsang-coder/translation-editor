@@ -360,6 +360,7 @@ export function TargetTipTapEditor({
       attributes: {
         class: 'tiptap-editor focus:outline-none',
       },
+      transformPastedHTML: (html) => normalizePastedHtml(html),
       handleKeyDown: (_view, event) => {
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
