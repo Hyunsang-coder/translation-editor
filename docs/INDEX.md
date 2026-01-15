@@ -14,6 +14,13 @@
 |------|------|------|
 | ENV | `/ENV.md` | Vite 환경변수 설정 |
 
+## 진행 중인 태스크
+
+| 문서 | 경로 | 설명 |
+|------|------|------|
+| 검수 적용 기능 | `/docs/review-apply-suggestion.md` | 추천 문장 클릭 시 번역문 반영 |
+| 진행 현황 | `/docs/review-apply-suggestion-progress.md` | 체크리스트 |
+
 ## 구현 태스크
 
 | 문서 | 경로 | 설명 |
