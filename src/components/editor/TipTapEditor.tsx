@@ -17,6 +17,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
+import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 
 export interface TipTapEditorProps {
   content: string;
@@ -220,6 +221,7 @@ export function SourceTipTapEditor({
       attributes: {
         class: 'tiptap-editor focus:outline-none',
       },
+      transformPastedHTML: (html) => normalizePastedHtml(html),
       handleKeyDown: (_view, event) => {
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');

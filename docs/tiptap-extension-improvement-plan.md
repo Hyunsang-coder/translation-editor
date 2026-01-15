@@ -147,8 +147,9 @@ TipTap JSON
 - [ ] translateDocument.ts에 이미지 플레이스홀더 로직 통합
 
 ### Phase 3: HTML 정규화 (선택적)
-- [ ] htmlNormalizer.ts 유틸리티 생성
-- [ ] Source 에디터 붙여넣기 핸들러 연동 (필요 시)
+- [x] htmlNormalizer.ts 유틸리티 생성
+- [x] Source 에디터 붙여넣기 핸들러 연동 (필요 시)
+- [x] Confluence 테이블 헤더 중복 제거
 
 ---
 
