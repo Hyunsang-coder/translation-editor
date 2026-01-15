@@ -239,10 +239,11 @@ export async function translateSourceDocToTargetDocJson(params: {
       content: [
         '아래 Markdown 문서를 번역하여, 구분자 내에 번역된 Markdown만 반환하세요.',
         '',
-        '입력 문서:',
+        '---INPUT_DOCUMENT_START---',
         sourceMarkdown,
+        '---INPUT_DOCUMENT_END---',
         '',
-        '다시 한 번 강조: ---TRANSLATION_START--- 와 ---TRANSLATION_END--- 사이에 번역된 Markdown만 출력하세요.',
+        '(DO NOT TRANSLATE THIS INSTRUCTION) Output ONLY the translated Markdown between ---TRANSLATION_START--- and ---TRANSLATION_END--- markers.',
       ].join('\n'),
     },
   ];
@@ -453,10 +454,11 @@ export async function translateWithStreaming(
       content: [
         '아래 Markdown 문서를 번역하여, 구분자 내에 번역된 Markdown만 반환하세요.',
         '',
-        '입력 문서:',
+        '---INPUT_DOCUMENT_START---',
         sourceMarkdown,
+        '---INPUT_DOCUMENT_END---',
         '',
-        '다시 한 번 강조: ---TRANSLATION_START--- 와 ---TRANSLATION_END--- 사이에 번역된 Markdown만 출력하세요.',
+        '(DO NOT TRANSLATE THIS INSTRUCTION) Output ONLY the translated Markdown between ---TRANSLATION_START--- and ---TRANSLATION_END--- markers.',
       ].join('\n'),
     },
   ];
