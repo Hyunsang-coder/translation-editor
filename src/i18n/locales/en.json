@@ -156,7 +156,18 @@
     "review": "Review",
     "reviewTitle": "Translation Review",
     "chunks": "sections",
-    "completedIn": "Completed in"
+    "completedIn": "Completed in",
+    "search": {
+      "placeholder": "Search...",
+      "replacePlaceholder": "Replace with...",
+      "caseSensitive": "Match case",
+      "prevMatch": "Previous (Shift+Enter)",
+      "nextMatch": "Next (Enter)",
+      "toggleReplace": "Replace mode",
+      "close": "Close (Esc)",
+      "replace": "Replace",
+      "replaceAll": "Replace All"
+    }
   },
   "review": {
     "title": "Review",

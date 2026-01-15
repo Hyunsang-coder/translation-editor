@@ -6,4 +6,6 @@
 export { TranslationBlockExtension } from './TranslationBlock';
 export { GhostChipExtension } from './GhostChip';
 export { DiffMarkExtension } from './DiffMark';
+export { SearchHighlight, getSearchState, searchHighlightPluginKey } from './SearchHighlight';
+export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
 

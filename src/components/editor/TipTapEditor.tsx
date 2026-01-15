@@ -17,6 +17,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
+import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 
 export interface TipTapEditorProps {
@@ -165,19 +166,24 @@ export function TipTapEditor({
  * Source 패널용 편집 가능 에디터
  * ReviewHighlight Extension이 포함되어 검수 이슈 하이라이트 지원 (sourceExcerpt 기반)
  */
+export interface SourceTargetEditorProps {
+  content: string;
+  onChange?: (content: string) => void;
+  onJsonChange?: (json: Record<string, unknown>) => void;
+  className?: string;
+  onEditorReady?: (editor: Editor) => void;
+  onSearchOpen?: () => void;
+  onSearchOpenWithReplace?: () => void;
+}
+
 export function SourceTipTapEditor({
   content,
   onChange,
   onJsonChange,
   className = '',
   onEditorReady,
-}: {
-  content: string;
-  onChange?: (content: string) => void;
-  onJsonChange?: (json: Record<string, unknown>) => void;
-  className?: string;
-  onEditorReady?: (editor: Editor) => void;
-}): JSX.Element {
+  onSearchOpen,
+}: SourceTargetEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
 
@@ -214,6 +220,10 @@ export function SourceTipTapEditor({
         highlightClass: 'review-highlight',
         excerptField: 'sourceExcerpt',
       }),
+      SearchHighlight.configure({
+        searchClass: 'search-match',
+        currentClass: 'search-current',
+      }),
     ],
     content,
     editable: true,
@@ -223,6 +233,14 @@ export function SourceTipTapEditor({
       },
       transformPastedHTML: (html) => normalizePastedHtml(html),
       handleKeyDown: (_view, event) => {
+        // Cmd+F: 검색 열기
+        const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
+        if (isSearchShortcut) {
+          event.preventDefault();
+          onSearchOpen?.();
+          return true;
+        }
+
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
 
@@ -310,13 +328,9 @@ export function TargetTipTapEditor({
   onJsonChange,
   className = '',
   onEditorReady,
-}: {
-  content: string;
-  onChange?: (content: string) => void;
-  onJsonChange?: (json: Record<string, unknown>) => void;
-  className?: string;
-  onEditorReady?: (editor: Editor) => void;
-}): JSX.Element {
+  onSearchOpen,
+  onSearchOpenWithReplace,
+}: SourceTargetEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
 
@@ -353,6 +367,10 @@ export function TargetTipTapEditor({
         highlightClass: 'review-highlight',
         excerptField: 'targetExcerpt',
       }),
+      SearchHighlight.configure({
+        searchClass: 'search-match',
+        currentClass: 'search-current',
+      }),
     ],
     content,
     editable: true,
@@ -362,6 +380,22 @@ export function TargetTipTapEditor({
       },
       transformPastedHTML: (html) => normalizePastedHtml(html),
       handleKeyDown: (_view, event) => {
+        // Cmd+F: 검색 열기
+        const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
+        if (isSearchShortcut) {
+          event.preventDefault();
+          onSearchOpen?.();
+          return true;
+        }
+
+        // Cmd+H: 검색+치환 열기 (target 패널 전용)
+        const isReplaceShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'h';
+        if (isReplaceShortcut) {
+          event.preventDefault();
+          onSearchOpenWithReplace?.();
+          return true;
+        }
+
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
 

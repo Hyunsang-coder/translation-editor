@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
+import { SearchBar } from './SearchBar';
 // ReviewModal은 더 이상 사용하지 않음 (ChatPanel의 Review 탭으로 대체)
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Editor } from '@tiptap/react';
@@ -75,6 +76,11 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
   // 추가: Flash 효과 상태
   const [targetFlash, setTargetFlash] = useState(false);
+
+  // 검색바 상태 (패널별 독립)
+  const [sourceSearchOpen, setSourceSearchOpen] = useState(false);
+  const [targetSearchOpen, setTargetSearchOpen] = useState(false);
+  const [targetSearchReplaceMode, setTargetSearchReplaceMode] = useState(false);
 
   const [translatePreviewOpen, setTranslatePreviewOpen] = useState(false);
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
@@ -304,6 +310,30 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     setTargetEditor(editor);
   }, []);
 
+  // 검색바 핸들러
+  const handleSourceSearchOpen = useCallback(() => {
+    setSourceSearchOpen(true);
+  }, []);
+
+  const handleSourceSearchClose = useCallback(() => {
+    setSourceSearchOpen(false);
+  }, []);
+
+  const handleTargetSearchOpen = useCallback(() => {
+    setTargetSearchReplaceMode(false);
+    setTargetSearchOpen(true);
+  }, []);
+
+  const handleTargetSearchOpenWithReplace = useCallback(() => {
+    setTargetSearchReplaceMode(true);
+    setTargetSearchOpen(true);
+  }, []);
+
+  const handleTargetSearchClose = useCallback(() => {
+    setTargetSearchOpen(false);
+    setTargetSearchReplaceMode(false);
+  }, []);
+
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
     const cleaners: Array<() => void> = [];
@@ -396,6 +426,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   </span>
                 </div>
                 <TipTapMenuBar editor={sourceEditor} panelType="source" />
+                <SearchBar
+                  editor={sourceEditor}
+                  panelType="source"
+                  isOpen={sourceSearchOpen}
+                  onClose={handleSourceSearchClose}
+                />
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <SourceTipTapEditor
                     content={sourceDocument || ''}
@@ -403,6 +439,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                     onJsonChange={setSourceDocJson}
                     className="h-full"
                     onEditorReady={handleSourceEditorReady}
+                    onSearchOpen={handleSourceSearchOpen}
                   />
                 </div>
               </div>
@@ -444,6 +481,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             </span>
           </div>
           <TipTapMenuBar editor={targetEditor} panelType="target" />
+          <SearchBar
+            editor={targetEditor}
+            panelType="target"
+            isOpen={targetSearchOpen}
+            onClose={handleTargetSearchClose}
+            initialReplaceMode={targetSearchReplaceMode}
+          />
           {/* 여기에 transition 효과 추가 */}
           <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 ${targetFlash ? 'bg-green-500/10' : ''}`}>
             <TargetTipTapEditor
@@ -452,6 +496,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               onJsonChange={setTargetDocJson}
               className="h-full"
               onEditorReady={handleTargetEditorReady}
+              onSearchOpen={handleTargetSearchOpen}
+              onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
             />
           </div>
           </div>

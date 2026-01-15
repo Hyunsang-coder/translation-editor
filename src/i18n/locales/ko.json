@@ -156,7 +156,18 @@
     "review": "검수",
     "reviewTitle": "번역 검수",
     "chunks": "섹션",
-    "completedIn": "완료"
+    "completedIn": "완료",
+    "search": {
+      "placeholder": "검색어 입력...",
+      "replacePlaceholder": "치환어 입력...",
+      "caseSensitive": "대소문자 구분",
+      "prevMatch": "이전 (Shift+Enter)",
+      "nextMatch": "다음 (Enter)",
+      "toggleReplace": "치환 모드",
+      "close": "닫기 (Esc)",
+      "replace": "치환",
+      "replaceAll": "모두 치환"
+    }
   },
   "review": {
     "title": "검수",
