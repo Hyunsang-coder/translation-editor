@@ -172,8 +172,8 @@ export async function translateInChunks(
 
     const chunk = chunks[i]!;
 
-    // 상태 업데이트: 번역 중
-    chunks = updateChunkStatus(chunks, i, 'translating');
+    // 상태 업데이트: 번역 중 (배열 인덱스가 아닌 chunk.index 사용)
+    chunks = updateChunkStatus(chunks, chunk.index, 'translating');
     onProgress?.({
       completed: i,
       total: totalChunks,
@@ -197,8 +197,8 @@ export async function translateInChunks(
         totalChunks,
       });
 
-      // 성공 결과 저장
-      chunks = updateChunkResult(chunks, i, result.doc);
+      // 성공 결과 저장 (배열 인덱스가 아닌 chunk.index 사용)
+      chunks = updateChunkResult(chunks, chunk.index, result.doc);
       onProgress?.({
         completed: i + 1,
         total: totalChunks,
@@ -208,8 +208,8 @@ export async function translateInChunks(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // 에러 결과 저장
-      chunks = updateChunkResult(chunks, i, undefined, errorMessage);
+      // 에러 결과 저장 (배열 인덱스가 아닌 chunk.index 사용)
+      chunks = updateChunkResult(chunks, chunk.index, undefined, errorMessage);
       onProgress?.({
         completed: i + 1,
         total: totalChunks,

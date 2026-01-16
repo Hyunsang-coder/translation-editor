@@ -144,9 +144,18 @@ export function splitMarkdownSafely(
       continue;
     }
 
-    // Blockquote 종료 (빈 줄)
-    if (inBlockquote && trimmedLine === '') {
-      inBlockquote = false;
+    // Blockquote 종료: 빈 줄이거나 다음 줄이 '>'로 시작하지 않으면 종료
+    if (inBlockquote) {
+      if (trimmedLine === '') {
+        // 빈 줄이면 다음 줄 확인
+        const nextLine = lines[i + 1];
+        if (nextLine === undefined || !nextLine.trim().startsWith('>')) {
+          inBlockquote = false;
+        }
+      } else {
+        // 현재 줄이 '>'로 시작하지 않으면 blockquote 종료
+        inBlockquote = false;
+      }
     }
 
     // 리스트 연속성 추적
@@ -260,25 +269,40 @@ export function splitDocIntoChunks(
   const markdownChunks = splitMarkdownSafely(markdown, cfg.targetChunkTokens);
 
   // Markdown 청크를 TipTap 노드 청크로 변환
-  const chunks: TranslationChunk[] = markdownChunks.map((mdChunk, index) => {
+  const chunks: TranslationChunk[] = [];
+  let hasConversionFailure = false;
+
+  for (let index = 0; index < markdownChunks.length; index++) {
+    const mdChunk = markdownChunks[index]!;
     try {
       const chunkDoc = markdownToTipTapJson(mdChunk.markdown);
-      return {
+      chunks.push({
         index,
         nodes: chunkDoc.content as TipTapNode[],
         estimatedTokens: mdChunk.estimatedTokens,
         status: 'pending' as const,
-      };
-    } catch {
-      // 변환 실패 시 원본 노드 사용 (fallback)
-      return {
-        index,
-        nodes: index === 0 ? [...nodes] : [],
-        estimatedTokens: mdChunk.estimatedTokens,
-        status: 'pending' as const,
-      };
+      });
+    } catch (error) {
+      // 변환 실패 로깅
+      console.warn(`청크 ${index} Markdown→TipTap 변환 실패:`, error);
+      hasConversionFailure = true;
+      break; // 변환 실패 시 청킹 중단
     }
-  });
+  }
+
+  // 변환 실패가 있으면 단일 청크로 폴백 (원본 노드 전체 사용)
+  if (hasConversionFailure) {
+    console.warn('청크 변환 실패로 인해 단일 청크로 폴백합니다.');
+    const totalTokens = Math.ceil(JSON.stringify({ type: 'doc', content: nodes }).length / 3);
+    return [
+      {
+        index: 0,
+        nodes: [...nodes],
+        estimatedTokens: totalTokens,
+        status: 'pending',
+      },
+    ];
+  }
 
   return chunks.filter((c) => c.nodes.length > 0);
 }

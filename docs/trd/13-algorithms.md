@@ -26,7 +26,7 @@ TipTap JSON → Markdown → [이미지 플레이스홀더] → LLM → Markdown
 | 단계 | 처리 내용 | 구현 파일 |
 |------|-----------|-----------|
 | 1. 입력 변환 | TipTap JSON → Markdown (`tiptap-markdown` extension) | `markdownConverter.ts` |
-| 2. 이미지 플레이스홀더 | Base64 이미지 URL → `[[IMAGE_PLACEHOLDER_N]]` (토큰 ~99.99% 절약) | `imagePlaceholder.ts` |
+| 2. 이미지 플레이스홀더 | Base64 이미지 URL → `IMAGE_PLACEHOLDER_N` (토큰 ~99.99% 절약) | `imagePlaceholder.ts` |
 | 3. 토큰 추정 | 입력 토큰 계산 → 동적 `max_tokens` 산출 | `translateDocument.ts` |
 | 4. 청킹 판단 | 8K 토큰 이상 → 청크 분할 | `chunking/splitter.ts` |
 | 5. LLM 호출 | SystemMessage + UserMessage (채팅 히스토리 없음) | `translateDocument.ts` |

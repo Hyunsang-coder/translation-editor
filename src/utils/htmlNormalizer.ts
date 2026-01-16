@@ -237,13 +237,13 @@ function removeDuplicateTableHeaders(root: ParentNode) {
 }
 
 function extractTableHeaderText(table: HTMLTableElement): string | null {
-  const theadRow = table.querySelector('thead tr');
+  const theadRow = table.querySelector('thead tr') as HTMLTableRowElement | null;
   if (theadRow) {
     const text = extractRowText(theadRow);
     return text.length > 0 ? text : null;
   }
 
-  const thRow = table.querySelector('tr th')?.closest('tr');
+  const thRow = table.querySelector('tr th')?.closest('tr') as HTMLTableRowElement | null;
   if (thRow) {
     const text = extractRowText(thRow);
     return text.length > 0 ? text : null;
