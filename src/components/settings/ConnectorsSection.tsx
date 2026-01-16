@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
-import { clearAllMcpServer, type McpServerId } from '@/tauri/mcpRegistry';
 
 interface NotionTokenDialogProps {
   isOpen: boolean;
@@ -336,9 +335,7 @@ export function ConnectorsSection(): JSX.Element {
   // Atlassian 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
   const handleAtlassianClearAll = useCallback(async () => {
     try {
-      await mcpClientManager.disconnect();
-      await clearAllMcpServer('atlassian' as McpServerId);
-      console.log('[Connectors] Atlassian cleared all credentials');
+      await mcpClientManager.clearAllAtlassian();
     } catch (error) {
       console.error('[Connectors] Atlassian clear all failed:', error);
     }
@@ -347,9 +344,7 @@ export function ConnectorsSection(): JSX.Element {
   // Notion 완전 초기화
   const handleNotionClearAll = useCallback(async () => {
     try {
-      await mcpClientManager.disconnectNotion();
-      await clearAllMcpServer('notion' as McpServerId);
-      console.log('[Connectors] Notion cleared all credentials');
+      await mcpClientManager.clearAllNotion();
     } catch (error) {
       console.error('[Connectors] Notion clear all failed:', error);
     }

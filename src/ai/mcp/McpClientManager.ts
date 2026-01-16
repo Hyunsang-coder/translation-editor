@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
+import { clearAllMcpServer } from "@/tauri/mcpRegistry";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -323,6 +324,21 @@ class McpClientManager {
   }
 
   /**
+   * Atlassian 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+   * Client ID mismatch 등 복구 불가능한 상태일 때 사용합니다.
+   */
+  async clearAllAtlassian(): Promise<void> {
+    try {
+      await this.disconnect();
+      await clearAllMcpServer("atlassian");
+      await this.syncStatus();
+      console.log("[McpClientManager] Atlassian cleared all credentials");
+    } catch (error) {
+      console.error("[McpClientManager] Clear all Atlassian failed:", error);
+    }
+  }
+
+  /**
    * 저장된 토큰이 있는지 확인
    */
   hasStoredToken(): boolean {
@@ -471,6 +487,27 @@ class McpClientManager {
       console.log("[McpClientManager] Notion logged out, token deleted from keychain");
     } catch (error) {
       console.error("[McpClientManager] Notion logout error:", error);
+    }
+  }
+
+  /**
+   * Notion 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
+   */
+  async clearAllNotion(): Promise<void> {
+    try {
+      await this.disconnectNotion();
+      await clearAllMcpServer("notion");
+      // Notion은 REST API 방식이므로 syncStatus 대신 직접 상태 업데이트
+      this.updateNotionStatus({
+        isConnected: false,
+        isConnecting: false,
+        hasStoredToken: false,
+        serverName: null,
+        error: null,
+      });
+      console.log("[McpClientManager] Notion cleared all credentials");
+    } catch (error) {
+      console.error("[McpClientManager] Clear all Notion failed:", error);
     }
   }
 
