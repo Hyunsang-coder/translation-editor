@@ -12,8 +12,15 @@
 ### What (권장 옵션)
 - **폰트/스타일**: Pretendard, 16px, line-height 1.8, max-width 800px, padding 24px
 - **지원 포맷**: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Table, Image, Placeholder, (선택) Code Block
-- **추가 포맷 (에디터 표시용)**: Underline, Highlight, Subscript, Superscript (Markdown 변환 시 손실)
+- **추가 포맷 (에디터 전용)**: Underline, Highlight, Subscript, Superscript
+  - 에디터에서 완전히 지원되는 TipTap Extension
+  - Markdown 변환 시 손실됨 (번역 파이프라인에서는 보존되지 않음)
 - **Source/Target 붙여넣기**: 웹페이지/Confluence HTML은 **붙여넣기 시점에만** 최소한의 정규화(허용 태그/속성 화이트리스트, 구조 단순화, 테이블 헤더 중복 제거)를 적용하여 표 파싱 안정성 확보
+
+### Extension 동기화 규칙
+- `TipTapEditor.tsx`의 extensions와 `markdownConverter.ts`의 `getExtensions()`는 반드시 동기화 필요
+- 불일치 시 "no mark type X in schema" 에러 발생
+- 새 Extension 추가 시 양쪽 모두 업데이트 필수
 
 ### 검색/치환 기능
 TipTap 에디터 내 검색 및 치환 지원:

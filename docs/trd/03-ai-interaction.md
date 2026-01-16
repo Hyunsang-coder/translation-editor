@@ -13,7 +13,7 @@
 
 ### What
 - **Trigger**: Translate(Preview) 버튼/단축키
-- **Input**: Source 문서를 **Markdown으로 변환** + project meta(sourceLanguage/targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
+- **Input**: Source 문서를 **Markdown으로 변환** + project meta(targetLanguage/domain), translationRules, projectContext, translatorPersona, glossary/attachments(있는 경우)
 - **Output**: **Markdown** (문서 전체) → TipTap JSON으로 변환 후 Preview 표시
 - **UX**: Preview 모달(Preview/Diff), Apply 시 전체 덮어쓰기. 자동 적용 없음. **에러 시 Retry 버튼 표시**.
 - **API 구조**: LangChain `BaseMessage[]` 배열
@@ -61,7 +61,7 @@
 - **Question 요청**: 질의/검수(모델 호출), 문서 자동 적용 없음
 
 ### What (Payload 구성 규칙: 우선순위)
-- **반드시 포함**: 프로젝트 메타(sourceLanguage/targetLanguage/domain), Translation Rules(번역 규칙), Project Context(맥락 정보)
+- **반드시 포함**: 프로젝트 메타(targetLanguage/domain), Translation Rules(번역 규칙), Project Context(맥락 정보)
 - **가능하면 포함(권장)**: 선택 텍스트(가능하면) + 주변 문맥(before/after) + 선택이 없으면 필요한 범위의 문서(부분/전체)
 - **Question(채팅) 모드**: 문서(Source/Target)는 "항상" 초기 payload에 포함하지 않아도 되며, 아래 원칙을 따른다.
   - 목표: 불필요한 토큰 소비를 줄이고, 문맥이 필요한 질문에만 문서를 제공한다.

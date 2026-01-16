@@ -4,7 +4,8 @@
 
 - **State Management**: Zustand (Global Store), Immer (Immutable Updates)
 - **Formatting/Linting**: Prettier, ESLint
-- **Testing**: Vitest (Unit), Playwright (E2E for Tauri)
+- **Testing**: Vitest (Unit), Rust 테스트 (`cargo test`)
+- **E2E Testing**: 미구현 (Playwright 도입 예정)
 
 ---
 
