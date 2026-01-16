@@ -7,7 +7,7 @@
 ## Source of Truth
 
 - **PRD**: `prd.md` - 제품 비전/UX 원칙
-- **TRD**: `trd.md` - 아키텍처/기술 명세
+- **TRD**: `docs/trd/` - 아키텍처/기술 명세 (README.md가 인덱스)
 - **Tasks**: `tasks/README.md` - 구현 현황
 
 ## 핵심 기능
@@ -55,7 +55,7 @@ npm run tauri:build  # 프로덕션 빌드
 ├── docs/                 # 문서
 ├── tasks/                # 구현 태스크
 ├── prd.md                # 제품 요구사항
-└── trd.md                # 기술 요구사항
+└── docs/trd/             # 기술 요구사항 (분리된 TRD)
 ```
 
 ## 보안

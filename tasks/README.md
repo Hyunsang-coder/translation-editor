@@ -4,7 +4,7 @@
 
 ## 문서 원칙
 
-- **Source of Truth**: `prd.md`, `trd.md`
+- **Source of Truth**: `prd.md`, `docs/trd/`
 - **완료([x])**: 간단히 기록
 - **진행중/미완료**: 상세 체크리스트 포함
 

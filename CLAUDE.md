@@ -10,7 +10,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Essential Documentation
 
-**Source of Truth**: `prd.md` (Product Requirements) and `trd.md` (Technical Requirements) are the authoritative documents. When conflicts arise between code and documentation, align with PRD/TRD.
+**Source of Truth**: `prd.md` (Product Requirements) and `docs/trd/` (Technical Requirements) are the authoritative documents. When conflicts arise between code and documentation, align with PRD/TRD.
+
+**TRD 문서 구조** (세부 스펙은 해당 파일 참조):
+- `docs/trd/README.md` - 개요 및 인덱스
+- `docs/trd/01-architecture.md` - 아키텍처
+- `docs/trd/02-editor.md` - 에디터 엔진
+- `docs/trd/03-ai-interaction.md` - AI 상호작용
+- `docs/trd/04-chat-ux.md` - Chat UX
+- `docs/trd/05-review.md` - 번역 검수
+- `docs/trd/06-attachments.md` - 첨부 파일
+- `docs/trd/07-concurrency.md` - 동시성 패턴
+- `docs/trd/08-storage.md` - 데이터 저장
+- `docs/trd/09-specialized.md` - 특화 기능
+- `docs/trd/10-dev-tools.md` - 개발 도구
+- `docs/trd/11-api-keys.md` - API Key 관리
+- `docs/trd/12-i18n.md` - 다국어 지원
 
 ## Development Commands
 

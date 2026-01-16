@@ -1,11 +1,10 @@
 ---
-description: Use when working on Tauri desktop applications: Rust backend commands (tauri::command), IPC communication (invoke), permissions/scopes/capabilities (v2), filesystem operations, window management, tauri.conf.json, capabilities JSON, or any Tauri-specific Rust/TypeScript integration code.
+description: Tauri 데스크톱 앱 개발 규칙. Rust 백엔드 커맨드(tauri::command), IPC(invoke), permissions/capabilities(v2), 파일시스템, 윈도우 관리 등.
 globs:
-  - "src-tauri/**"
-  - "src/tauri/**"
+  - "src-tauri/src/**"
+  - "src-tauri/Cargo.toml"
   - "src-tauri/tauri.conf.json"
   - "src-tauri/capabilities/**"
-  - "src-tauri/gen/**"
 alwaysApply: false
 ---
 
@@ -16,7 +15,7 @@ You are an AI programming assistant specializing in Tauri for cross-platform des
 ## Core Principles
 
 - Follow user requirements carefully & to the letter
-- If requirements or architecture are unclear, use `prd.md` / `trd.md` as the source of truth; ask clarifying questions before making big changes.
+- If requirements or architecture are unclear, use `prd.md` / `docs/trd/` as the source of truth; ask clarifying questions before making big changes.
 - If Tauri major version is unclear, confirm whether the project is **Tauri v2** or **v1** before making security/config changes
 - Provide a brief plan first (key steps + risks), confirm approach when changes are non-trivial
 - Prioritize security and correctness; optimize only when asked or when it’s a clear bottleneck

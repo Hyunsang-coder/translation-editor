@@ -177,7 +177,7 @@
 
 ## 6. 사용자 시나리오 / User Journey
 
-아래 시나리오는 최신 `trd.md`의 워크플로우(Preview → Apply, Non-Intrusive)와 일치하도록 작성합니다.
+아래 시나리오는 최신 `docs/trd/`의 워크플로우(Preview → Apply, Non-Intrusive)와 일치하도록 작성합니다.
 
 1) **프로젝트 시작**
 - ITE 앱을 켜고, 번역할 내용을 **Source 패널에 붙여넣고/정리/편집**합니다.

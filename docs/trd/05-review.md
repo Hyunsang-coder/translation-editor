@@ -1,0 +1,206 @@
+# 5. 번역 검수 (Translation Review)
+
+## 5.1 개요
+
+### Why
+- 번역 완료 후 오역, 누락, 왜곡, 일관성 문제를 AI가 자동으로 검출하여 번역사의 검토 시간을 단축합니다.
+- 검수 결과를 에디터에서 시각적으로 확인하며 수정할 수 있어야 합니다.
+
+### How
+- 문서를 청크로 분할하여 순차적으로 AI 검수 요청
+- 검수 결과는 JSON 형식으로 파싱하여 테이블로 표시
+- 체크된 이슈만 에디터에서 하이라이트 (TipTap Decoration)
+
+---
+
+## 5.2 핵심 원칙
+
+- **Non-Intrusive**: 문서 자동 변경 없음, Decoration은 비영속적
+- **전용 UI로만 실행**: 채팅에서 검수 요청 불가, Review 탭에서만 실행
+  - 채팅에서 검수 요청 시 "Review 탭을 사용해주세요" 안내
+- **2분할 레이아웃 유지**: 새 컬럼 추가 대신 SettingsSidebar에 Review 탭 추가
+- **JSON 출력 포맷**: TRD 3.2에서 "검수는 JSON 리포트 허용"으로 명시
+
+---
+
+## 5.3 UI 구성
+
+### Review 탭
+- SettingsSidebar의 기능 탭으로 추가 (Settings | Review)
+- Settings 사이드바 내에서 탭 전환 형태로 관리
+- 검수 시작 시에만 Review 탭 표시, 닫으면 Settings 탭으로 복귀
+
+### 검수 시작
+- 버튼 클릭으로 검수 시작, 취소 가능
+
+### 결과 테이블
+- 체크박스 + 이슈 정보 (컬럼: 체크 | # | 유형 | 수정 제안 | 설명)
+
+### 하이라이트 토글
+- 체크된 이슈만 Target 에디터에서 하이라이트
+
+### 수정 제안 적용
+- 이슈별 액션 버튼 (적용/복사/무시)
+
+---
+
+## 5.4 데이터 모델
+
+```typescript
+interface ReviewIssue {
+  id: string;                    // 결정적 ID (hashContent로 생성)
+  segmentOrder: number;
+  segmentGroupId?: string;       // 세그먼트 단위 하이라이트용
+  sourceExcerpt: string;         // 원문 구절 (35자 이내)
+  targetExcerpt: string;         // 현재 번역 (하이라이트 대상)
+  suggestedFix: string;          // 수정 제안
+  type: 'error' | 'omission' | 'distortion' | 'consistency';
+  description: string;
+  checked: boolean;              // 체크 상태
+}
+```
+
+---
+
+## 5.5 AI 출력 형식
+
+```json
+{
+  "issues": [
+    {
+      "segmentOrder": 0,
+      "segmentGroupId": "...",
+      "type": "오역|누락|왜곡|일관성",
+      "sourceExcerpt": "원문 35자 이내",
+      "targetExcerpt": "현재 번역 35자 이내",
+      "suggestedFix": "수정 제안",
+      "description": "간결한 설명"
+    }
+  ]
+}
+```
+
+---
+
+## 5.6 하이라이트 매칭 전략
+
+1. segmentGroupId가 있으면 해당 세그먼트의 target 텍스트에서 targetExcerpt 검색
+2. 1단계 실패 시 전체 문서에서 targetExcerpt substring 검색 (첫 매치)
+3. 2단계도 실패 시 하이라이트 없이 패널에 "매칭 실패" 표시 (무해)
+4. **노드 경계 처리**: `buildTextWithPositions()`로 전체 텍스트/위치 매핑을 구축하여 TipTap 노드 경계를 넘는 텍스트도 검색 가능
+
+---
+
+## 5.7 구현 파일
+
+| 파일 | 역할 |
+|------|------|
+| `src/stores/reviewStore.ts` | 검수 상태 관리 (체크, 하이라이트, 중복 제거) |
+| `src/stores/uiStore.ts` | UI 상태 관리 (패널 위치, 크기, 탭 상태 등) |
+| `src/components/panels/SettingsSidebar.tsx` | Settings/Review 사이드바 (탭 전환) |
+| `src/components/panels/FloatingChatPanel.tsx` | 플로팅 Chat 패널 (react-rnd) |
+| `src/components/chat/ChatContent.tsx` | Chat 기능 컨텐츠 |
+| `src/components/ui/FloatingChatButton.tsx` | 플로팅 Chat 버튼 (드래그 가능) |
+| `src/components/review/ReviewPanel.tsx` | Review 탭 콘텐츠 |
+| `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 + 체크박스 |
+| `src/ai/review/parseReviewResult.ts` | AI 응답 JSON/마크다운 파싱 |
+| `src/editor/extensions/ReviewHighlight.ts` | TipTap Decoration 하이라이트 |
+| `src/editor/editorRegistry.ts` | 에디터 인스턴스 글로벌 레지스트리 |
+| `src/utils/normalizeForSearch.ts` | 마크다운 정규화 유틸리티 |
+
+---
+
+## 5.8 상태 관리 (reviewStore)
+
+- `initializeReview(project)`: 프로젝트를 청크로 분할, 상태 초기화
+- `addResult(result)`: 청크별 검수 결과 추가
+- `toggleIssueCheck(issueId)`: 이슈 체크 상태 토글
+- `deleteIssue(issueId)`: 개별 이슈 삭제
+- `setAllIssuesChecked(checked)`: 전체 선택/해제
+- `getAllIssues()`: 중복 제거된 전체 이슈 목록
+- `getCheckedIssues()`: 체크된 이슈만 반환
+- `toggleHighlight()`: 하이라이트 활성화/비활성화
+- `disableHighlight()`: Review 탭 닫을 때 호출
+- `setIsApplyingSuggestion(value)`: 수정 적용 중 플래그 설정 (하이라이트 무효화 방지)
+- **문서 변경 감지**: `projectStore.targetDocJson` 변경 시 `disableHighlight()` 자동 호출 (오프셋 불일치 방지, `isApplyingSuggestion=true`일 때 스킵)
+
+---
+
+## 5.9 요청 취소 및 리소스 관리
+
+- **AbortController**: 검수 요청 시 `AbortController` 생성, 취소/닫기 시 `abort()` 호출
+- **AbortSignal 전달**: `streamAssistantReply` 호출 시 `abortSignal: controller.signal` 명시적 전달
+- **청크 크기 일관성**: `DEFAULT_REVIEW_CHUNK_SIZE` 상수(12000)로 초기화와 후속 청킹 기준 통일
+- **최신 상태 참조**: 청크 처리 루프 내에서 `useChatStore.getState()`로 최신 `translationRules`/`projectContext` 참조 (클로저 캡처된 값 대신)
+- **파싱 에러 복구**: `parseReviewResult()` try-catch 래핑으로 파싱 실패 시에도 다음 청크 계속 진행
+
+---
+
+## 5.10 JSON 파싱 안정성
+
+- **균형 중괄호 매칭**: greedy 정규식 대신 `extractJsonObject()`에서 중괄호 카운팅으로 정확한 JSON 범위 추출
+- **segmentOrder 타입 처리**: 문자열("1")도 `parseInt`로 변환하여 숫자로 처리
+- **마크다운 폴백**: JSON 파싱 실패 시 마크다운 테이블 형식으로 폴백
+
+---
+
+## 5.11 검수 항목 검증
+
+- **hasEnabledCategories**: 검수 카테고리가 하나 이상 선택되어야 검수 실행 가능
+- **버튼 비활성화**: 카테고리 미선택 시 버튼 disabled 처리 및 툴팁 표시
+
+---
+
+## 5.12 수정 제안 적용 (Apply Suggestion)
+
+### 적용 대상
+- 오역(error), 왜곡(distortion), 일관성(consistency) 타입
+
+### 처리 흐름
+1. `normalizeForSearch(targetExcerpt)`로 마크다운 서식 제거
+2. `editorRegistry.getTargetEditor()`로 에디터 인스턴스 획득
+3. `editor.commands.setSearchTerm(searchText)`로 검색
+4. `editor.commands.replaceMatch(suggestedFix)`로 첫 번째 매치 교체
+5. 이슈 삭제 및 성공 토스트 표시
+
+### 검색 실패 시
+- 에러 토스트 표시 ("번역문에서 해당 텍스트를 찾을 수 없습니다")
+
+### 빈 suggestedFix
+- 삭제 확인 다이얼로그 표시 후 진행
+
+---
+
+## 5.13 누락 유형 복사 (Copy for Omission)
+
+- **대상**: 누락(omission) 타입 (번역문에 없는 텍스트이므로 자동 교체 불가)
+- **처리**: suggestedFix를 클립보드에 복사
+- **UX**: "복사" 버튼 표시, 복사 성공 시 안내 토스트 ("클립보드에 복사되었습니다. 적절한 위치에 붙여넣어 주세요.")
+
+---
+
+## 5.14 마크다운 정규화 (normalizeForSearch)
+
+- **목적**: AI 응답의 excerpt에 포함된 마크다운 서식 제거
+- **구현**: `src/utils/normalizeForSearch.ts`
+- **처리 항목**:
+  - 인라인 서식: `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, `[text](url)` 제거
+  - 블록 마커: `# Heading`, `- item`, `1. item` 제거
+  - 공백 정규화: 연속 공백/줄바꿈 → 단일 공백
+
+---
+
+## 5.15 하이라이트 무효화 방지
+
+### 문제
+- 수정 적용 시 문서 변경 → cross-store subscription이 하이라이트 비활성화
+
+### 해결
+- `isApplyingSuggestion` 플래그로 적용 중에는 무효화 스킵
+
+### 패턴
+```typescript
+setIsApplyingSuggestion(true);
+editor.commands.replaceMatch(suggestedFix);
+setTimeout(() => setIsApplyingSuggestion(false), 500);
+```

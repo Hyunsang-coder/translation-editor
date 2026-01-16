@@ -2,6 +2,9 @@
 
 AI 프롬프트와 페이로드를 테스트합니다. Dry-run 모드로 실제 API 호출 없이 검증할 수 있습니다.
 
+> **TRD 기준**: 3.1, 3.2 | **최종 업데이트**: 2025-01
+> **모델**: GPT-5 (400k context window), 기본 gpt-5.2
+
 ## Usage
 
 ```
@@ -22,10 +25,27 @@ AI 프롬프트와 페이로드를 테스트합니다. Dry-run 모드로 실제 
 
 **검증 항목**:
 - System prompt 구성
-- Source document JSON 유효성
+- Source document → Markdown 변환 유효성
 - Translation rules 포함 여부
 - Project context 포함 여부
 - Glossary 매칭 항목
+- 이미지 플레이스홀더 변환
+
+**Markdown 파이프라인** (TRD 3.1):
+```
+Source TipTap JSON
+    ↓ tiptap-markdown extension
+Markdown 문자열
+    ↓ extractImages() - Base64 → 플레이스홀더
+Markdown (이미지 제거)
+    ↓ LLM (streaming)
+Markdown 응답
+    ↓ restoreImages() - 플레이스홀더 → Base64 복원
+    ↓ extractTranslationMarkdown() - 마커 추출
+Markdown (정제)
+    ↓ markdownToTipTapJson()
+Target TipTap JSON
+```
 
 **출력 예시**:
 ```
@@ -42,19 +62,28 @@ Messages: 2 (SystemMessage + HumanMessage)
 ├─ Translation rules: ✅ (1,200 chars)
 ├─ Project context: ✅ (800 chars)
 ├─ Glossary terms: 12 matched
-└─ Output format: TipTap JSON enforced
+└─ Output format: Markdown with markers
 
 [HumanMessage] (3,200 tokens est.)
-└─ Source document: 15 nodes, 2,800 chars
+└─ Source document: Markdown (2,800 chars)
+   └─ Images: 3 → placeholders (99%+ token savings)
 
 ───────────────────────────────────────────────────────────
 
-📊 TOKEN ESTIMATION
+📊 TOKEN ESTIMATION (GPT-5 400k context)
 ───────────────────────────────────────────────────────────
 Input tokens:   ~5,650
-Output tokens:  ~3,500 (estimated)
+Output tokens:  ~3,500 (estimated, max 65,536)
 Total:          ~9,150
-Cost (GPT-4o):  ~$0.027
+Context usage:  2.3% of 400k
+
+───────────────────────────────────────────────────────────
+
+📝 OUTPUT FORMAT
+───────────────────────────────────────────────────────────
+---TRANSLATION_START---
+[번역된 Markdown]
+---TRANSLATION_END---
 
 ───────────────────────────────────────────────────────────
 
@@ -77,10 +106,11 @@ Ready for translation. Use --live to execute.
 ```
 
 **검증 항목**:
-- Chat history 길이 (max 10)
+- Chat history 길이 (max 20, `VITE_AI_MAX_RECENT_MESSAGES`)
 - Tool definitions
 - Document 미포함 확인 (on-demand fetch)
 - System prompt 구성
+- Tool calling maxSteps (6, max 12)
 
 **출력 예시**:
 ```
@@ -90,7 +120,7 @@ Ready for translation. Use --live to execute.
 
 📋 PAYLOAD STRUCTURE
 ───────────────────────────────────────────────────────────
-Messages: 8 (System + 7 history)
+Messages: 12 (System + 11 history)
 
 [SystemMessage] (1,800 tokens est.)
 ├─ Role definition: ✅
@@ -98,33 +128,38 @@ Messages: 8 (System + 7 history)
 ├─ Project context: ✅
 └─ Available tools: 4
 
-[Chat History] (2,100 tokens est.)
-├─ Messages: 7 of 10 max
-├─ User messages: 4
-├─ Assistant messages: 3
-└─ Tool calls in history: 1
+[Chat History] (3,200 tokens est.)
+├─ Messages: 11 of 20 max
+├─ User messages: 6
+├─ Assistant messages: 5
+└─ Tool calls in history: 2
 
-[Tools Defined]
-├─ get_source_document
-├─ get_target_document
+[Tools Defined] (Markdown 반환)
+├─ get_source_document  → Source as Markdown
+├─ get_target_document  → Target as Markdown
 ├─ suggest_translation_rule
 └─ suggest_project_context
 
+[Tool Calling Config]
+├─ maxSteps: 6 (max 12)
+└─ Loop strategy: continue until no tool calls
+
 ───────────────────────────────────────────────────────────
 
-📊 TOKEN ESTIMATION
+📊 TOKEN ESTIMATION (GPT-5 400k context)
 ───────────────────────────────────────────────────────────
-Input tokens:   ~3,900
+Input tokens:   ~5,000
 Tool overhead:  ~400
 Output tokens:  ~500 (estimated)
-Total:          ~4,800
+Total:          ~5,900
+Context usage:  1.5% of 400k
 
 ───────────────────────────────────────────────────────────
 
 ✅ DOCUMENTS NOT INCLUDED (on-demand via tools)
 ───────────────────────────────────────────────────────────
-Source: 2,800 chars (will fetch if tool called)
-Target: 3,200 chars (will fetch if tool called)
+Source: 2,800 chars (Markdown if tool called)
+Target: 3,200 chars (Markdown if tool called)
 Savings: ~1,500 tokens
 
 ═══════════════════════════════════════════════════════════
@@ -177,21 +212,22 @@ Chat + Tools:      ~6,625 tokens (if docs fetched)
 
 ### System Prompt
 - [ ] Role definition 포함
-- [ ] Output format 명시
+- [ ] Output format 명시 (Markdown with markers for translate)
 - [ ] Translation rules 포함 (translate mode)
 - [ ] Tool usage 지침 (chat mode)
 
 ### Translation Mode
-- [ ] Source document valid JSON
-- [ ] Document node count < 500
-- [ ] No circular references
+- [ ] Source document → Markdown 변환 성공
+- [ ] 이미지 플레이스홀더 변환 완료
 - [ ] Glossary terms highlighted
+- [ ] Output markers: `---TRANSLATION_START/END---`
 
 ### Chat Mode
-- [ ] History ≤ 10 messages
-- [ ] Tools properly defined
+- [ ] History ≤ 20 messages
+- [ ] Tools properly defined (Markdown 반환)
 - [ ] Documents NOT in initial payload
 - [ ] Request type detection working
+- [ ] maxSteps: 6 (max 12)
 
 ## Live Execution (--live)
 
@@ -217,25 +253,32 @@ Chat + Tools:      ~6,625 tokens (if docs fetched)
 ───────────────────────────────────────────────────────────
 Status: 200 OK
 Latency: 2,340ms
-Model: gpt-4o-2024-08-06
+Model: gpt-5.2
 
 Token Usage (Actual):
 ├─ Input:  5,623
 ├─ Output: 3,412
 └─ Total:  9,035
+└─ Context: 2.3% of 400k
 
 ───────────────────────────────────────────────────────────
 
 📄 RESPONSE VALIDATION
 ───────────────────────────────────────────────────────────
-✅ Valid JSON structure
-✅ TipTap document format
-✅ Node count: 15 (matches source)
+✅ Markdown markers found (---TRANSLATION_START/END---)
+✅ Markdown → TipTap JSON 변환 성공
+✅ 이미지 플레이스홀더 복원 완료 (3개)
 ⚠️  1 paragraph merged (review recommended)
+
+📋 TRUNCATION CHECK
+───────────────────────────────────────────────────────────
+✅ finish_reason: stop (not 'length')
+✅ No unclosed code blocks
+✅ No incomplete links at document end
 
 ───────────────────────────────────────────────────────────
 
-Response saved to: /tmp/test-ai-response-{timestamp}.json
+Response saved to: /tmp/test-ai-response-{timestamp}.md
 Use this for debugging without re-running.
 
 ═══════════════════════════════════════════════════════════
@@ -259,18 +302,43 @@ Use this for debugging without re-running.
 
 ### 1. Token Limit Exceeded
 ```
-❌ Estimated tokens (45,000) exceed model limit (32,000)
+❌ Estimated tokens (450,000) exceed model limit (400,000)
 💡 Reduce: glossary (-5,000), context (-3,000), or split document
+💡 GPT-5 400k context - 대부분의 문서는 문제없음
 ```
 
-### 2. Invalid JSON Response
+### 2. Invalid Markdown Response
 ```
-❌ Response is not valid TipTap JSON
+❌ Response markers not found (---TRANSLATION_START/END---)
 💡 Check system prompt output format enforcement
+💡 extractTranslationMarkdown() fallback 확인
 ```
 
 ### 3. Tool Call Loop
 ```
-⚠️  Tool called 3+ times in sequence
+⚠️  Tool called 6+ times in sequence (maxSteps reached)
 💡 Review tool response format - may be triggering re-calls
+💡 maxSteps: 6 (max 12) - 복합 쿼리 시 충분한지 확인
+```
+
+### 4. Markdown Conversion Failed
+```
+❌ TipTap JSON → Markdown 변환 실패
+💡 Check tiptap-markdown extension configuration
+💡 markdownConverter.ts getExtensions() 확인
+```
+
+### 5. Image Placeholder Mismatch
+```
+⚠️  Placeholder count mismatch: 3 extracted, 2 restored
+💡 Check restoreImages() in imagePlaceholder.ts
+💡 AI가 플레이스홀더를 수정했을 수 있음
+```
+
+### 6. Translation Truncation
+```
+⚠️  Possible truncation detected
+💡 finish_reason: 'length' → max_tokens 증가 필요
+💡 Unclosed code block → 문서 끝 확인
+💡 Dynamic max_tokens 계산 로직 확인
 ```
