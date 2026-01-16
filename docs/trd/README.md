@@ -30,6 +30,7 @@
 | [10-dev-tools.md](./10-dev-tools.md) | 개발 도구 및 환경 |
 | [11-api-keys.md](./11-api-keys.md) | API Key 및 커넥터 관리 |
 | [12-i18n.md](./12-i18n.md) | 다국어 지원 |
+| [13-algorithms.md](./13-algorithms.md) | 알고리즘 명세 (번역/검수/적용) |
 
 ---
 
