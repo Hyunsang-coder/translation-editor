@@ -183,6 +183,7 @@
     "start": "Start Review",
     "restart": "Review Again",
     "noIssues": "No mistranslations or omissions found.",
+    "allResolved": "All issues have been resolved.",
     "totalIssues": "Total {{count}} issue(s)",
     "issue": "Issue",
     "segment": "Segment",

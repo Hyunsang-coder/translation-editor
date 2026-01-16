@@ -77,6 +77,7 @@ export function ReviewPanel(): JSX.Element {
     // 검수 실행 상태
     results,
     isReviewing,
+    totalIssuesFound,
     initializeReview,
     addResult,
     handleChunkError,
@@ -423,6 +424,7 @@ ${segmentsText}
               onCopy={handleCopySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
+              totalIssuesFound={totalIssuesFound}
             />
           </div>
         )}

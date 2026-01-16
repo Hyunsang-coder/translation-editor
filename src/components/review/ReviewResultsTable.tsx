@@ -11,6 +11,7 @@ interface ReviewResultsTableProps {
   onApply?: (issue: ReviewIssue) => void;
   onCopy?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
+  totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
 }
 
 function getIssueTypeLabel(type: IssueType): string {
@@ -51,10 +52,16 @@ export function ReviewResultsTable({
   onApply,
   onCopy,
   allChecked = false,
+  totalIssuesFound = 0,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
 
   if (issues.length === 0) {
+    // 원래 이슈가 있었지만 모두 해결된 경우 vs 처음부터 이슈가 없던 경우 구분
+    const message = totalIssuesFound > 0
+      ? t('review.allResolved', '모든 이슈가 해결되었습니다.')
+      : t('review.noIssues', '오역이나 누락이 발견되지 않았습니다.');
+
     return (
       <div className="text-center py-8">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-500/10 mb-3">
@@ -63,7 +70,7 @@ export function ReviewResultsTable({
           </svg>
         </div>
         <p className="text-green-600 dark:text-green-400 font-medium">
-          {t('review.noIssues', '오역이나 누락이 발견되지 않았습니다.')}
+          {message}
         </p>
       </div>
     );

@@ -96,6 +96,7 @@ interface ReviewState {
   highlightNonce: number;     // 하이라이트 업데이트 트리거 (nonce 증가 시 재계산)
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
   isApplyingSuggestion: boolean;  // 수정 제안 적용 중 (하이라이트 무효화 방지)
+  totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
 }
 
 interface ReviewActions {
@@ -217,6 +218,7 @@ const initialState: ReviewState = {
   highlightNonce: 0,
   initializedProjectId: null,
   isApplyingSuggestion: false,
+  totalIssuesFound: 0,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
@@ -277,11 +279,16 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       currentChunkIndex: 0,
       progress: { completed: 0, total: chunks.length },
       highlightNonce: highlightNonce + 1, // 즉시 이전 하이라이트 제거
+      totalIssuesFound: 0, // 새 검수 시작 시 리셋
     });
   },
 
   finishReview: () => {
-    set({ isReviewing: false });
+    const allIssues = get().getAllIssues();
+    set({
+      isReviewing: false,
+      totalIssuesFound: allIssues.length,
+    });
   },
 
   resetReview: () => {

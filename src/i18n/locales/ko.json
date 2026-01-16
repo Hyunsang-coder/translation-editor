@@ -183,6 +183,7 @@
     "start": "검수 시작",
     "restart": "다시 검수",
     "noIssues": "오역이나 누락이 발견되지 않았습니다.",
+    "allResolved": "모든 이슈가 해결되었습니다.",
     "totalIssues": "총 {{count}}건",
     "issue": "이슈",
     "segment": "세그먼트",
