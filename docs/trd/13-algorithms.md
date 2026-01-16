@@ -68,9 +68,12 @@ calculatedMaxTokens = max(minOutputTokens, min(availableOutputTokens, 65536))
 |------|----------------|
 | 코드블록 내부 (``` 사이) | ❌ 금지 |
 | 리스트 연속 구간 | ❌ 금지 |
-| Blockquote 내부 | ❌ 금지 |
+| Blockquote 내부 (`>`로 시작하는 연속 줄) | ❌ 금지 |
 | Heading 직전 | ✅ 안전 |
 | 블록 외부 빈 줄 | ✅ 안전 |
+
+> **Note**: Blockquote lazy continuation 미지원. 모든 인용 줄에 `>` 마커가 필요합니다.
+> (대부분의 에디터/변환기가 이 형식을 사용하므로 실제 영향 없음)
 
 ### 분할 알고리즘
 
