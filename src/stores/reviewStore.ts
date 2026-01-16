@@ -405,19 +405,22 @@ let prevTargetDocJson: unknown = null;
 
 useProjectStore.subscribe((state) => {
   const { targetDocJson } = state;
-  const reviewState = useReviewStore.getState();
 
-  // 문서가 실제로 변경되었고, 하이라이트가 활성화되어 있고, 검수 결과가 있을 때만 처리
-  // 단, 수정 제안 적용 중에는 하이라이트 무효화 스킵
-  if (
-    prevTargetDocJson !== null &&
-    targetDocJson !== prevTargetDocJson &&
-    reviewState.highlightEnabled &&
-    reviewState.results.length > 0 &&
-    !reviewState.isApplyingSuggestion
-  ) {
-    console.log('[reviewStore] Target document changed while highlight active, disabling highlight');
-    useReviewStore.getState().disableHighlight();
+  if (prevTargetDocJson !== null && targetDocJson !== prevTargetDocJson) {
+    // 다음 tick에서 체크 (isApplyingSuggestion 상태 반영 보장)
+    // Issue: setIsApplyingSuggestion(true) 호출 직후 replaceMatch()가 실행되면
+    // subscription이 트리거될 때 상태가 아직 반영되지 않아 레이스 컨디션 발생
+    setTimeout(() => {
+      const reviewState = useReviewStore.getState();
+      if (
+        reviewState.highlightEnabled &&
+        reviewState.results.length > 0 &&
+        !reviewState.isApplyingSuggestion
+      ) {
+        console.log('[reviewStore] Target document changed while highlight active, disabling highlight');
+        useReviewStore.getState().disableHighlight();
+      }
+    }, 0);
   }
 
   prevTargetDocJson = targetDocJson;
