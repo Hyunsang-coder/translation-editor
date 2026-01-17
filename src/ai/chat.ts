@@ -4,7 +4,6 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
-import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -459,11 +458,8 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     '- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)',
     '- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)',
     (webSearchEnabled && hasBuiltInWebSearch)
-      ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
-      : '- web_search_preview: (비활성화됨)',
-    webSearchEnabled
-      ? '- brave_search: (fallback) 웹 검색이 필요하지만 web_search_preview가 비활성/실패/제약일 때 사용.'
-      : '- brave_search: (비활성화됨)',
+      ? '- 내장 웹 검색: 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용 (OpenAI: web_search_preview, Anthropic: web_search)'
+      : '- 내장 웹 검색: (비활성화됨)',
     // Notion 도구 안내
     ...(notionEnabled
       ? [
@@ -488,9 +484,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     '   → get_source_document + get_target_document로 문서 조회 후 답변',
     '',
     webSearchEnabled
-      ? hasBuiltInWebSearch
-        ? '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → web_search_preview 우선 사용, 실패시 brave_search'
-        : '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → brave_search 사용'
+      ? '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → 내장 웹 검색 사용'
       : '3. 최신 정보/실시간 데이터 필요\n   → (검색 비활성화됨)',
     '',
     notionEnabled
@@ -648,13 +642,21 @@ export async function generateAssistantReply(input: GenerateReplyInput): Promise
   const toolSpecs: any[] = [
     suggestTranslationRule,
     suggestProjectContext,
-    ...(webSearchEnabled ? [braveSearchTool] : []),
   ];
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
-  // OpenAI provider에서는 built-in web search를 모델에 바인딩 (서버 측에서 실행됨)
-  const openAiBuiltInTools = (webSearchEnabled && cfg.provider === 'openai') ? [{ type: 'web_search_preview' }] : [];
+  // 내장 웹 검색 도구 (provider별 분기)
+  function getBuiltInWebSearchTool(provider: string): Record<string, unknown>[] {
+    if (provider === 'openai') {
+      return [{ type: 'web_search_preview' }];
+    }
+    if (provider === 'anthropic') {
+      return [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+    }
+    return [];
+  }
+  const openAiBuiltInTools = webSearchEnabled ? getBuiltInWebSearchTool(cfg.provider) : [];
   const bindTools = [...toolSpecs, ...openAiBuiltInTools];
 
   const messagesWithGuide: BaseMessage[] = [
@@ -764,7 +766,6 @@ export async function streamAssistantReply(
   const toolSpecs: any[] = [
     suggestTranslationRule,
     suggestProjectContext,
-    ...(webSearchEnabled ? [braveSearchTool] : []),
     ...mcpTools,
     ...notionTools,
   ];

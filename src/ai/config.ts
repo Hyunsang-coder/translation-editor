@@ -31,7 +31,6 @@ export interface AiConfig {
   temperature?: number;
   openaiApiKey?: string;
   anthropicApiKey?: string;
-  braveApiKey?: string;
   maxRecentMessages: number;
   judgeModel: string;
 }
@@ -75,7 +74,6 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   // 3. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
   const openaiApiKey = store.openaiApiKey;
   const anthropicApiKey = store.anthropicApiKey;
-  const braveApiKey = store.braveApiKey;
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 
@@ -86,7 +84,6 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
-    ...(braveApiKey ? { braveApiKey } : {}),
     maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 20))),
     judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',
   };

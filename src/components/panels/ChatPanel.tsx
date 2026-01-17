@@ -151,9 +151,8 @@ export function ChatPanel(): JSX.Element {
     // 2. Store 상태가 없는데(null) 도구 호출 정보가 남아있다면 추론 (하위 호환 및 엣지 케이스)
     if (!statusText && toolsInProgress && toolsInProgress.length > 0) {
       const t = toolsInProgress[0];
-      const name = 
+      const name =
           (t === 'web_search' || t === 'web_search_preview') ? '웹 검색'
-        : t === 'brave_search' ? '웹 검색(Brave)'
         : t === 'get_source_document' ? '원문 분석'
         : t === 'get_target_document' ? '번역문 분석'
         : t === 'suggest_translation_rule' ? '번역 규칙 확인'

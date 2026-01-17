@@ -20,10 +20,8 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setProvider,
     openaiApiKey,
     anthropicApiKey,
-    braveApiKey,
     setOpenaiApiKey,
     setAnthropicApiKey,
-    setBraveApiKey,
   } = useAiConfigStore();
 
   // 모달 외부 클릭 시 닫기
@@ -265,32 +263,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                 </div>
 
-                {/* Brave Search API Key (선택 - 웹검색 폴백용) */}
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-editor-text">
-                            {t('appSettings.braveApiKey')}
-                            <span className="ml-1 text-editor-muted font-normal">({t('appSettings.braveApiKeyOptional')})</span>
-                        </label>
-                        {braveApiKey && (
-                            <button
-                                onClick={() => setBraveApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-                            >
-                                {t('common.clear')}
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <input
-                            type="password"
-                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                            placeholder={t('appSettings.braveApiKeyPlaceholder')}
-                            value={braveApiKey || ''}
-                            onChange={(e) => setBraveApiKey(e.target.value)}
-                        />
-                    </div>
-                </div>
             </section>
 
             {/* Connectors */}

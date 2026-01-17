@@ -112,8 +112,6 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         case 'web_search':
         case 'web_search_preview':
           return '웹검색';
-        case 'brave_search':
-          return '웹검색(Brave)';
         case 'get_source_document':
           return '원문 조회';
         case 'get_target_document':
@@ -144,10 +142,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     if (tools.length === 0) return null;
     const humanize = (t: string): string => {
       switch (t) {
+        case 'web_search':
         case 'web_search_preview':
-          return '웹검색(OpenAI)';
-        case 'brave_search':
-          return '웹검색(Brave)';
+          return '웹검색';
         case 'get_source_document':
           return '원문 조회';
         case 'get_target_document':
@@ -179,7 +176,6 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       const toolName = toolsInProgress[0];
       const name =
           (toolName === 'web_search' || toolName === 'web_search_preview') ? '웹 검색'
-        : toolName === 'brave_search' ? '웹 검색(Brave)'
         : toolName === 'get_source_document' ? '원문 분석'
         : toolName === 'get_target_document' ? '번역문 분석'
         : toolName === 'suggest_translation_rule' ? '번역 규칙 확인'

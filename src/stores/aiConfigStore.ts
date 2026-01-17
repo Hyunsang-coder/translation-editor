@@ -9,12 +9,10 @@ const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
  * API Keys Bundle
  * - openai: OpenAI API Key
  * - anthropic: Anthropic API Key
- * - brave: 선택 (웹검색 폴백용)
  */
 interface ApiKeysBundle {
   openai: string | undefined;
   anthropic: string | undefined;
-  brave: string | undefined;
 }
 
 interface AiConfigState {
@@ -26,7 +24,6 @@ interface AiConfigState {
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
-  braveApiKey: string | undefined;
 }
 
 interface AiConfigActions {
@@ -36,7 +33,6 @@ interface AiConfigActions {
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
-  setBraveApiKey: (key: string | undefined) => void;
 }
 
 // 환경변수 읽기 헬퍼
@@ -79,7 +75,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
-        braveApiKey: undefined,
 
         loadSecureKeys: async () => {
           if (keysLoaded) return;
@@ -90,13 +85,12 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             const bundleJson = await getSecureSecret(API_KEYS_BUNDLE_ID);
             
             if (bundleJson) {
-              // 번들이 있으면 파싱해서 적용
+              // 번들이 있으면 파싱해서 적용 (brave 키는 무시 - 제거됨)
               try {
-                const bundle = JSON.parse(bundleJson) as ApiKeysBundle;
+                const bundle = JSON.parse(bundleJson) as ApiKeysBundle & { brave?: string };
                 set({
                   openaiApiKey: bundle.openai,
                   anthropicApiKey: bundle.anthropic,
-                  braveApiKey: bundle.brave,
                 });
                 return; // 로드 완료
               } catch (e) {
@@ -105,11 +99,11 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             }
 
             // 2. 번들이 없으면 마이그레이션 (개별 키 로드 -> 번들 저장)
-            const oldKinds: SecureKeyId[] = ['openai', 'anthropic', 'brave'];
+            // brave 키는 제거됨 - 레거시 호환성을 위해 로드는 하되 무시
+            const oldKinds: SecureKeyId[] = ['openai', 'anthropic'];
             const newBundle: ApiKeysBundle = {
               openai: undefined,
               anthropic: undefined,
-              brave: undefined
             };
             let hasLegacyKey = false;
 
@@ -120,7 +114,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                 hasLegacyKey = true;
                 if (kind === 'openai') newBundle.openai = val;
                 if (kind === 'anthropic') newBundle.anthropic = val;
-                if (kind === 'brave') newBundle.brave = val;
               }
             }
 
@@ -128,7 +121,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               set({
                 openaiApiKey: newBundle.openai,
                 anthropicApiKey: newBundle.anthropic,
-                braveApiKey: newBundle.brave,
               });
               await persistAllKeys(newBundle);
             }
@@ -173,7 +165,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           void persistAllKeys({
             openai: next,
             anthropic: state.anthropicApiKey,
-            brave: state.braveApiKey,
           });
         },
         setAnthropicApiKey: (key) => {
@@ -183,17 +174,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           void persistAllKeys({
             openai: state.openaiApiKey,
             anthropic: next,
-            brave: state.braveApiKey,
-          });
-        },
-        setBraveApiKey: (key) => {
-          const next = normalizeKey(key);
-          set({ braveApiKey: next });
-          const state = get();
-          void persistAllKeys({
-            openai: state.openaiApiKey,
-            anthropic: state.anthropicApiKey,
-            brave: next,
           });
         },
       };
@@ -212,7 +192,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           ...next,
           openaiApiKey: undefined,
           anthropicApiKey: undefined,
-          braveApiKey: undefined,
         };
       },
     }

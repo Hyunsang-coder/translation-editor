@@ -60,9 +60,6 @@
     "anthropicApiKeyPlaceholder": "Anthropic API 키를 입력하세요",
     "googleApiKey": "Google API 키",
     "googleApiKeyPlaceholder": "Google API 키를 입력하세요",
-    "braveApiKey": "Brave Search API 키",
-    "braveApiKeyOptional": "선택 - 웹검색 폴백",
-    "braveApiKeyPlaceholder": "Brave Search API 키를 입력하세요",
     "helpInfo": "도움말 및 정보",
     "helpInfoComingSoon": "곧 제공 예정",
     "helpInfoVersionLabel": "버전",
@@ -284,7 +281,6 @@
     "anthropicApiKeyMissing": "Anthropic API 키가 없습니다. 앱 설정에서 입력해주세요.",
     "googleApiKeyMissing": "Google API 키가 없습니다. 앱 설정에서 입력해주세요.",
     "unsupportedProvider": "지원하지 않는 AI 제공자입니다: {{provider}}. 앱 설정에서 유효한 제공자를 선택해주세요.",
-    "braveApiKeyMissing": "Brave Search API 키가 없습니다. 앱 설정에서 설정해주세요.",
     "translationPreviewError": "해결 방법: 설정에서 모델의 max_tokens 값을 높이거나, 더 짧은 문서로 나누어 번역해 보세요.",
     "aiResponseFailed": "AI 응답 생성 실패"
   }

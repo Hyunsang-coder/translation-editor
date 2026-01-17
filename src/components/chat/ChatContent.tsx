@@ -122,12 +122,11 @@ export function ChatContent(): JSX.Element {
       const tool = toolsInProgress[0];
       const name =
         (tool === 'web_search' || tool === 'web_search_preview') ? '웹 검색'
-          : tool === 'brave_search' ? '웹 검색(Brave)'
-            : tool === 'get_source_document' ? '원문 분석'
-              : tool === 'get_target_document' ? '번역문 분석'
-                : tool === 'suggest_translation_rule' ? '번역 규칙 확인'
-                  : tool === 'suggest_project_context' ? '프로젝트 맥락 확인'
-                    : tool;
+          : tool === 'get_source_document' ? '원문 분석'
+            : tool === 'get_target_document' ? '번역문 분석'
+              : tool === 'suggest_translation_rule' ? '번역 규칙 확인'
+                : tool === 'suggest_project_context' ? '프로젝트 맥락 확인'
+                  : tool;
       statusText = `${name} 진행 중...`;
     }
 

@@ -6,7 +6,6 @@ import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { detectRequestType } from '@/ai/prompt';
-import { braveSearchTool } from '@/ai/tools/braveSearchTool';
 import { useProjectStore } from '@/stores/projectStore';
 import { searchGlossary } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -671,7 +670,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      // 명시적 웹검색 트리거: LLM/Tool-calling과 무관하게 Brave Search만 바로 실행(테스트/디버깅에도 유용)
+      // 명시적 웹검색 트리거: /web 명령어로 내장 웹검색을 직접 실행
       const webQuery = tryExtractWebSearchQuery(content);
       if (webQuery) {
         // 기존 진행 중인 요청이 있으면 abort
@@ -694,7 +693,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
         set({ isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
         const cfg = getAiConfig();
-        const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['brave_search'];
+        // 모든 provider가 내장 웹검색 사용 (OpenAI: web_search_preview, Anthropic: web_search)
+        const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['web_search'];
 
         const assistantId = addMessage({
           role: 'assistant',
@@ -706,10 +706,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
           let text = '';
           const toolsUsed: string[] = [];
 
+          // 내장 웹검색 사용 (OpenAI: web_search_preview, Anthropic: web_search_20250305)
+          const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
+
           if (cfg.provider === 'openai') {
             set({ statusMessage: 'OpenAI 웹 검색 중...' });
-            // OpenAI 내장 web search (Responses API) 우선 사용
-            const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
             const modelWithSearch =
               typeof modelAny.bindTools === 'function'
                 ? modelAny.bindTools([{ type: 'web_search_preview' }])
@@ -727,17 +728,25 @@ export const useChatStore = create<ChatStore>((set, get) => {
             );
             text = extractTextFromAiMessage(ai);
             if (text.trim()) toolsUsed.push('web_search_preview');
-          }
+          } else if (cfg.provider === 'anthropic') {
+            set({ statusMessage: 'Anthropic 웹 검색 중...' });
+            const modelWithSearch =
+              typeof modelAny.bindTools === 'function'
+                ? modelAny.bindTools([{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }])
+                : modelAny;
 
-          // fallback: OpenAI가 아니거나, OpenAI 결과가 비어있으면 Brave Search
-          if (!text.trim()) {
-            set({ statusMessage: 'Brave 검색 중...' });
-            if (assistantId) {
-              updateMessage(assistantId, { metadata: { toolCallsInProgress: ['brave_search'] } });
-            }
-            const out = await (braveSearchTool as any).invoke({ query: webQuery });
-            text = typeof out === 'string' ? out : JSON.stringify(out);
-            toolsUsed.push('brave_search');
+            const ai = await modelWithSearch.invoke(
+              [
+                '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
+                '',
+                `- 질문: ${webQuery}`,
+                '- 출력:',
+                '  1) 요약(3~6줄)',
+                '  2) 근거 링크 3~8개 (가능하면 제목 + 링크)',
+              ].join('\n'),
+            );
+            text = extractTextFromAiMessage(ai);
+            if (text.trim()) toolsUsed.push('web_search');
           }
 
           if (assistantId) {
@@ -884,8 +893,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 const toolNameMap: Record<string, string> = {
                   'web_search': '웹 검색',
                   'web_search_preview': '웹 검색',
-                  'brave_search': '웹 검색(Brave)',
-                  'get_source_document': '원문 문서 조회',
+                                    'get_source_document': '원문 문서 조회',
                   'get_target_document': '번역문 문서 조회',
                   'suggest_translation_rule': '번역 규칙 생성',
                   'suggest_project_context': '프로젝트 맥락 분석',
@@ -1331,8 +1339,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 const toolNameMap: Record<string, string> = {
                   'web_search': '웹 검색',
                   'web_search_preview': '웹 검색',
-                  'brave_search': '웹 검색(Brave)',
-                  'get_source_document': '원문 문서 조회',
+                                    'get_source_document': '원문 문서 조회',
                   'get_target_document': '번역문 문서 조회',
                   'suggest_translation_rule': '번역 규칙 생성',
                   'suggest_project_context': '프로젝트 맥락 분석',

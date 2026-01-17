@@ -11,7 +11,7 @@ export interface ChatProjectSettings {
   composerText: string;
   /**
    * 웹검색 사용 여부 (tool availability gate)
-   * - true일 때만 Brave/OpenAI web search 사용 가능
+   * - true일 때만 내장 웹검색 사용 가능 (OpenAI: web_search_preview, Anthropic: web_search)
    */
   webSearchEnabled: boolean;
   /**
