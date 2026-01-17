@@ -15,9 +15,9 @@ export const MODEL_PRESETS = {
     { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 경제적인 모델' },
   ],
   anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', description: '최신 균형 모델' },
-    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', description: '빠르고 강력한 모델' },
-    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', description: '가장 빠른 모델' },
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', description: '성능/속도/비용 균형 (권장)' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', description: '가장 빠르고 저렴' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.5', description: '최고 성능' },
   ],
 } as const;
 

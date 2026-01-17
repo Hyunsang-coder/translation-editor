@@ -148,9 +148,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               { value: 'gpt-5-nano' },
             ],
             anthropic: [
-              { value: 'claude-sonnet-4-20250514' },
-              { value: 'claude-3-5-sonnet-20241022' },
-              { value: 'claude-3-5-haiku-20241022' },
+              { value: 'claude-sonnet-4-5' },
+              { value: 'claude-haiku-4-5' },
+              { value: 'claude-opus-4-5' },
             ],
           };
           const presetKey = provider === 'mock' ? 'openai' : provider;
