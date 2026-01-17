@@ -43,7 +43,9 @@ function extractChunkContent(chunk: AIMessageChunk): string {
  * @returns AI 응답 텍스트 (JSON 형식)
  */
 export async function runReview(params: RunReviewParams): Promise<string> {
-  const model = createChatModel(undefined, { useFor: 'chat' });
+  // useFor: 'translation'으로 설정하여 Responses API 비활성화 (성능 향상)
+  // 검수는 도구 호출 없이 단순 텍스트 생성이므로 Responses API 불필요
+  const model = createChatModel(undefined, { useFor: 'translation', maxTokens: 4096 });
 
   // 시스템 프롬프트: 검수 지침만
   const systemPrompt = buildReviewPrompt(params.intensity);
