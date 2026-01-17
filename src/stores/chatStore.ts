@@ -1175,6 +1175,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const idx = session.messages.findIndex((m) => m.id === messageId);
       const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - maxRecent), idx) : [];
 
+      // 재전송 시 해당 메시지 이후의 응답 삭제 (편집 후 저장과 동일한 동작)
+      const currentSessionId = get().currentSessionId;
+      if (currentSessionId && idx >= 0) {
+        const truncatedMessages = session.messages.slice(0, idx + 1);
+        const updatedSession: ChatSession = { ...session, messages: truncatedMessages };
+        set((state) => ({
+          sessions: state.sessions.map((s) => (s.id === currentSessionId ? updatedSession : s)),
+          currentSession: updatedSession,
+          streamingMessageId: null,
+        }));
+      }
+
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();
       const maskedUserContent = maskGhostChips(content, maskSession);
