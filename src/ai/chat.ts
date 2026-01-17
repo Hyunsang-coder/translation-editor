@@ -441,7 +441,8 @@ async function runToolCallingLoop(params: {
 
 function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: boolean; provider: string; webSearchEnabled?: boolean; notionEnabled?: boolean; confluenceEnabled?: boolean }): SystemMessage {
   const { includeSource, includeTarget, provider } = params;
-  const hasOpenAiWebSearch = provider === 'openai';
+  // OpenAI와 Anthropic 모두 내장 웹 검색 지원
+  const hasBuiltInWebSearch = provider === 'openai' || provider === 'anthropic';
   const webSearchEnabled = !!params.webSearchEnabled;
   const notionEnabled = !!params.notionEnabled;
   const confluenceEnabled = !!params.confluenceEnabled;
@@ -457,7 +458,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       : '- get_target_document: (비활성화됨)',
     '- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)',
     '- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)',
-    (webSearchEnabled && hasOpenAiWebSearch)
+    (webSearchEnabled && hasBuiltInWebSearch)
       ? '- web_search_preview: (OpenAI 내장) 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용. 가능한 경우 이 도구를 우선 사용.'
       : '- web_search_preview: (비활성화됨)',
     webSearchEnabled
@@ -487,7 +488,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     '   → get_source_document + get_target_document로 문서 조회 후 답변',
     '',
     webSearchEnabled
-      ? hasOpenAiWebSearch
+      ? hasBuiltInWebSearch
         ? '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → web_search_preview 우선 사용, 실패시 brave_search'
         : '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → brave_search 사용'
       : '3. 최신 정보/실시간 데이터 필요\n   → (검색 비활성화됨)',
@@ -770,15 +771,26 @@ export async function streamAssistantReply(
   if (includeSource) toolSpecs.push(getSourceDocumentTool);
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
-  // OpenAI 빌트인 도구 (web_search)
-  const openAiBuiltInTools = (webSearchEnabled && cfg.provider === 'openai') ? [{ type: 'web_search_preview' }] : [];
-  
-  // OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등)
-  const connectorTools = (input.connectorConfigs && input.getConnectorToken)
+  // 내장 웹 검색 도구 (provider별 분기)
+  function getBuiltInWebSearchTool(provider: string): Record<string, unknown>[] {
+    if (provider === 'openai') {
+      return [{ type: 'web_search_preview' }];
+    }
+    if (provider === 'anthropic') {
+      return [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+    }
+    return [];
+  }
+  const builtInWebSearchTools = webSearchEnabled
+    ? getBuiltInWebSearchTool(cfg.provider)
+    : [];
+
+  // OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등) - OpenAI 전용
+  const connectorTools = (cfg.provider === 'openai' && input.connectorConfigs && input.getConnectorToken)
     ? await buildConnectorTools(input.connectorConfigs, input.getConnectorToken)
     : [];
   
-  const bindTools = [...toolSpecs, ...openAiBuiltInTools, ...connectorTools];
+  const bindTools = [...toolSpecs, ...builtInWebSearchTools, ...connectorTools];
 
   const messagesWithGuide: BaseMessage[] = [
     // systemPrompt에 가이드를 병합하여 하나의 SystemMessage만 유지

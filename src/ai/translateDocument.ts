@@ -1,7 +1,7 @@
 import type { ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
+import { createChatModel } from '@/ai/client';
 import i18n from '@/i18n/config';
-import { ChatOpenAI } from '@langchain/openai';
 import {
   translateInChunks,
   type TranslationProgressCallback,
@@ -121,12 +121,18 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   // mock provider는 더 이상 지원하지 않음
   if (cfg.provider === 'mock') {
-    throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
+    throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
   }
 
-  // API 키 검증
-  if (!cfg.openaiApiKey) {
-    throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+  // API 키 검증 (provider별 분기)
+  if (cfg.provider === 'anthropic') {
+    if (!cfg.anthropicApiKey) {
+      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
+    }
+  } else {
+    if (!cfg.openaiApiKey) {
+      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+    }
   }
 
   // ============================================================
@@ -198,14 +204,16 @@ export async function translateSourceDocToTargetDocJson(params: {
   const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
 
-  // GPT-5 컨텍스트 윈도우: 400k, 안전 마진 10%
-  const MAX_CONTEXT = 400_000;
+  // 컨텍스트 윈도우: OpenAI 400k, Anthropic 200k
+  const MAX_CONTEXT = cfg.provider === 'anthropic' ? 200_000 : 400_000;
   const SAFETY_MARGIN = 0.9;
   const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
   // 최소 출력 토큰 보장 (입력보다 약간 많게 - 번역 시 텍스트가 늘어날 수 있음)
   const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, 65536));
+  // 최대 출력 토큰: OpenAI 65536, Anthropic 8192
+  const maxAllowedTokens = cfg.provider === 'anthropic' ? 8192 : 65536;
+  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   // 입력이 너무 큰 경우 사전 에러
   if (availableOutputTokens < minOutputTokens) {
@@ -216,20 +224,10 @@ export async function translateSourceDocToTargetDocJson(params: {
     );
   }
 
-  // Markdown은 JSON mode 불필요 - 자연스러운 텍스트 출력
-  const isGpt5 = cfg.model.startsWith('gpt-5');
-  const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
-
-  // 타임아웃: 3분
-  const TRANSLATION_TIMEOUT_MS = 180_000;
-
-  const model = new ChatOpenAI({
-    apiKey: cfg.openaiApiKey,
-    model: cfg.model,
-    ...temperatureOption,
+  // createChatModel()을 사용하여 provider별 모델 생성
+  const model = createChatModel(undefined, {
+    useFor: 'translation',
     maxTokens: calculatedMaxTokens,
-    timeout: TRANSLATION_TIMEOUT_MS,
-    // JSON mode 제거 - Markdown 출력에는 불필요
   });
 
   const messages = [
@@ -351,11 +349,18 @@ export async function translateWithStreaming(
   const cfg = getAiConfig({ useFor: 'translation' });
 
   if (cfg.provider === 'mock') {
-    throw new Error('Mock provider는 더 이상 지원되지 않습니다. OpenAI API 키를 설정해주세요.');
+    throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
   }
 
-  if (!cfg.openaiApiKey) {
-    throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+  // API 키 검증 (provider별 분기)
+  if (cfg.provider === 'anthropic') {
+    if (!cfg.anthropicApiKey) {
+      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
+    }
+  } else {
+    if (!cfg.openaiApiKey) {
+      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+    }
   }
 
   // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
@@ -421,12 +426,15 @@ export async function translateWithStreaming(
   const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
 
-  const MAX_CONTEXT = 400_000;
+  // 컨텍스트 윈도우: OpenAI 400k, Anthropic 200k
+  const MAX_CONTEXT = cfg.provider === 'anthropic' ? 200_000 : 400_000;
   const SAFETY_MARGIN = 0.9;
   const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
   const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, 65536));
+  // 최대 출력 토큰: OpenAI 65536, Anthropic 8192
+  const maxAllowedTokens = cfg.provider === 'anthropic' ? 8192 : 65536;
+  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   if (availableOutputTokens < minOutputTokens) {
     throw new Error(
@@ -436,15 +444,10 @@ export async function translateWithStreaming(
     );
   }
 
-  const isGpt5 = cfg.model.startsWith('gpt-5');
-  const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
-
-  const model = new ChatOpenAI({
-    apiKey: cfg.openaiApiKey,
-    model: cfg.model,
-    ...temperatureOption,
+  // createChatModel()을 사용하여 provider별 모델 생성
+  const model = createChatModel(undefined, {
+    useFor: 'translation',
     maxTokens: calculatedMaxTokens,
-    streaming: true,
   });
 
   const messages = [

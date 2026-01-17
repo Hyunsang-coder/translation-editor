@@ -6,12 +6,14 @@ import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secu
 const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
 
 /**
- * API Keys Bundle - OpenAI 전용으로 단순화
- * - openai: 필수
+ * API Keys Bundle
+ * - openai: OpenAI API Key
+ * - anthropic: Anthropic API Key
  * - brave: 선택 (웹검색 폴백용)
  */
 interface ApiKeysBundle {
   openai: string | undefined;
+  anthropic: string | undefined;
   brave: string | undefined;
 }
 
@@ -23,6 +25,7 @@ interface AiConfigState {
   chatModel: string;
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
+  anthropicApiKey: string | undefined;
   braveApiKey: string | undefined;
 }
 
@@ -32,6 +35,7 @@ interface AiConfigActions {
   setTranslationModel: (model: string) => void;
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
+  setAnthropicApiKey: (key: string | undefined) => void;
   setBraveApiKey: (key: string | undefined) => void;
 }
 
@@ -74,6 +78,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         translationModel: defaultTranslationModel,
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
+        anthropicApiKey: undefined,
         braveApiKey: undefined,
 
         loadSecureKeys: async () => {
@@ -90,6 +95,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                 const bundle = JSON.parse(bundleJson) as ApiKeysBundle;
                 set({
                   openaiApiKey: bundle.openai,
+                  anthropicApiKey: bundle.anthropic,
                   braveApiKey: bundle.brave,
                 });
                 return; // 로드 완료
@@ -99,9 +105,10 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             }
 
             // 2. 번들이 없으면 마이그레이션 (개별 키 로드 -> 번들 저장)
-            const oldKinds: SecureKeyId[] = ['openai', 'brave'];
+            const oldKinds: SecureKeyId[] = ['openai', 'anthropic', 'brave'];
             const newBundle: ApiKeysBundle = {
               openai: undefined,
+              anthropic: undefined,
               brave: undefined
             };
             let hasLegacyKey = false;
@@ -112,6 +119,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               if (val) {
                 hasLegacyKey = true;
                 if (kind === 'openai') newBundle.openai = val;
+                if (kind === 'anthropic') newBundle.anthropic = val;
                 if (kind === 'brave') newBundle.brave = val;
               }
             }
@@ -119,6 +127,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             if (hasLegacyKey) {
               set({
                 openaiApiKey: newBundle.openai,
+                anthropicApiKey: newBundle.anthropic,
                 braveApiKey: newBundle.brave,
               });
               await persistAllKeys(newBundle);
@@ -130,18 +139,50 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         },
 
         setProvider: (provider) => {
-          set({ provider });
+          // Provider 전환 시 모델을 해당 provider의 기본값으로 변경
+          // MODEL_PRESETS를 직접 정의하여 순환 참조 회피
+          const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
+            openai: [
+              { value: 'gpt-5.2' },
+              { value: 'gpt-5-mini' },
+              { value: 'gpt-5-nano' },
+            ],
+            anthropic: [
+              { value: 'claude-sonnet-4-20250514' },
+              { value: 'claude-3-5-sonnet-20241022' },
+              { value: 'claude-3-5-haiku-20241022' },
+            ],
+          };
+          const presetKey = provider === 'mock' ? 'openai' : provider;
+          const presets = MODEL_PRESETS[presetKey] ?? MODEL_PRESETS.openai;
+          const defaultModel = presets?.[0]?.value ?? 'gpt-5.2';
+          set({
+            provider,
+            translationModel: defaultModel,
+            chatModel: defaultModel,
+          });
           void get().loadSecureKeys();
         },
         setTranslationModel: (model) => set({ translationModel: model }),
         setChatModel: (model) => set({ chatModel: model }),
-        
+
         setOpenaiApiKey: (key) => {
           const next = normalizeKey(key);
           set({ openaiApiKey: next });
           const state = get();
           void persistAllKeys({
             openai: next,
+            anthropic: state.anthropicApiKey,
+            brave: state.braveApiKey,
+          });
+        },
+        setAnthropicApiKey: (key) => {
+          const next = normalizeKey(key);
+          set({ anthropicApiKey: next });
+          const state = get();
+          void persistAllKeys({
+            openai: state.openaiApiKey,
+            anthropic: next,
             brave: state.braveApiKey,
           });
         },
@@ -151,6 +192,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           const state = get();
           void persistAllKeys({
             openai: state.openaiApiKey,
+            anthropic: state.anthropicApiKey,
             brave: next,
           });
         },
@@ -158,7 +200,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 3, // 버전 업: Anthropic/Google 제거로 인한 스키마 변경
+      version: 4, // 버전 업: Anthropic 지원 추가
       partialize: (state) => ({
         provider: state.provider,
         translationModel: state.translationModel,
@@ -169,6 +211,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         return {
           ...next,
           openaiApiKey: undefined,
+          anthropicApiKey: undefined,
           braveApiKey: undefined,
         };
       },

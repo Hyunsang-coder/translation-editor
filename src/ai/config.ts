@@ -2,16 +2,22 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 
 /**
  * AI Provider 타입
- * - openai: 유일한 프로덕션 Provider
+ * - openai: OpenAI (GPT-5 시리즈)
+ * - anthropic: Anthropic (Claude 시리즈)
  * - mock: 개발/테스트용 (내부적으로 OpenAI 사용)
  */
-export type AiProvider = 'openai' | 'mock';
+export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
 export const MODEL_PRESETS = {
   openai: [
     { value: 'gpt-5.2', label: 'GPT-5.2', description: '가장 빠르고 강력한 모델' },
     { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '준수한 성능과 가성비' },
     { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 경제적인 모델' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', description: '최신 균형 모델' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', description: '빠르고 강력한 모델' },
+    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', description: '가장 빠른 모델' },
   ],
 } as const;
 
@@ -24,6 +30,7 @@ export interface AiConfig {
    */
   temperature?: number;
   openaiApiKey?: string;
+  anthropicApiKey?: string;
   braveApiKey?: string;
   maxRecentMessages: number;
   judgeModel: string;
@@ -52,17 +59,22 @@ function getEnvOptionalNumber(key: string): number | undefined {
 export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
-  // OpenAI 전용으로 단순화 (mock은 개발용, 내부적으로 openai 사용)
-  const provider: AiProvider = store.provider === 'mock' ? 'mock' : 'openai';
+  // Provider 유효성 검사: openai, anthropic, mock만 허용
+  const rawProvider = store.provider;
+  const provider: AiProvider =
+    rawProvider === 'anthropic' ? 'anthropic' :
+    rawProvider === 'mock' ? 'mock' : 'openai';
 
-  // 2. 용도에 따른 모델 선택
+  // 2. 용도에 따른 모델 선택 (provider별 프리셋 사용)
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
   const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
-  const presets = MODEL_PRESETS.openai;
+  const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
+  const presets = MODEL_PRESETS[presetKey];
   const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
 
   // 3. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
   const openaiApiKey = store.openaiApiKey;
+  const anthropicApiKey = store.anthropicApiKey;
   const braveApiKey = store.braveApiKey;
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
@@ -73,6 +85,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     model,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
+    ...(anthropicApiKey ? { anthropicApiKey } : {}),
     ...(braveApiKey ? { braveApiKey } : {}),
     maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 20))),
     judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',

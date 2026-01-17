@@ -15,10 +15,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     language, setLanguage, 
     theme, setTheme,
   } = useUIStore();
-  const { 
+  const {
+    provider,
+    setProvider,
     openaiApiKey,
+    anthropicApiKey,
     braveApiKey,
     setOpenaiApiKey,
+    setAnthropicApiKey,
     setBraveApiKey,
   } = useAiConfigStore();
 
@@ -161,6 +165,42 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
+            {/* AI Provider */}
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">🤖</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.aiProvider')}</h3>
+                </div>
+                <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                            type="radio"
+                            name="provider"
+                            value="openai"
+                            checked={provider === 'openai'}
+                            onChange={() => setProvider('openai')}
+                            className="accent-primary-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span className={`text-sm font-medium transition-colors ${provider === 'openai' ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
+                            OpenAI
+                        </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                            type="radio"
+                            name="provider"
+                            value="anthropic"
+                            checked={provider === 'anthropic'}
+                            onChange={() => setProvider('anthropic')}
+                            className="accent-primary-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span className={`text-sm font-medium transition-colors ${provider === 'anthropic' ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
+                            Anthropic (Claude)
+                        </span>
+                    </label>
+                </div>
+            </section>
+
             {/* API Keys */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
@@ -171,12 +211,12 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     {t('appSettings.apiKeysDescription')}
                 </p>
 
-                {/* OpenAI API Key (필수) */}
+                {/* OpenAI API Key */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-editor-text">
                             {t('appSettings.openaiApiKey')}
-                            <span className="ml-1 text-red-400">*</span>
+                            {provider === 'openai' && <span className="ml-1 text-red-400">*</span>}
                         </label>
                         {openaiApiKey && (
                             <button
@@ -194,6 +234,33 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             placeholder={t('appSettings.openaiApiKeyPlaceholder')}
                             value={openaiApiKey || ''}
                             onChange={(e) => setOpenaiApiKey(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                {/* Anthropic API Key */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-editor-text">
+                            {t('appSettings.anthropicApiKey')}
+                            {provider === 'anthropic' && <span className="ml-1 text-red-400">*</span>}
+                        </label>
+                        {anthropicApiKey && (
+                            <button
+                                onClick={() => setAnthropicApiKey(undefined)}
+                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                {t('common.clear')}
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={t('appSettings.anthropicApiKeyPlaceholder')}
+                            value={anthropicApiKey || ''}
+                            onChange={(e) => setAnthropicApiKey(e.target.value)}
                         />
                     </div>
                 </div>
