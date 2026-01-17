@@ -3,13 +3,14 @@
 ## 11.1 Provider 지원 현황
 
 ### Why
-- 구조 단순화 및 OpenAI 내장 도구(web_search_preview 등) 활용을 위해 단일 Provider로 통일합니다.
-- Anthropic/Google 등 멀티 Provider 지원은 코드 복잡도를 높이고, 각 Provider별 도구 호환성 문제를 야기합니다.
+- 다양한 LLM 옵션을 제공하여 사용자가 선호하는 모델을 선택할 수 있도록 합니다.
+- OpenAI는 내장 웹검색 도구(web_search_preview)를, Anthropic은 강력한 추론 능력을 제공합니다.
 
 ### What
-- **OpenAI**: 유일한 활성 Provider (Responses API 사용)
-- **Anthropic/Google**: 코드에서 제거 (향후 필요 시 재도입 가능)
-- **Mock**: 번역 모드에서 제거됨. mock 설정 시 에러 발생하며 OpenAI API 키 설정 안내
+- **OpenAI**: GPT-5 시리즈 (gpt-5.2, gpt-5-mini, gpt-5-nano)
+- **Anthropic**: Claude 시리즈 (claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-5)
+- **Mock**: 번역 모드에서 제거됨. mock 설정 시 에러 발생하며 API 키 설정 안내
+- **웹검색**: OpenAI Provider에서만 사용 가능 (내장 web_search_preview 도구 사용)
 
 ---
 
@@ -74,11 +75,14 @@
 
 | 필드 | 필수 여부 | 용도 |
 |------|-----------|------|
-| OpenAI API Key | **필수** | 모든 AI 기능 (번역, 채팅, 웹검색) |
-| Brave Search API Key | 선택 (Optional) | 웹검색 폴백용 (OpenAI web_search_preview 실패 시) |
+| OpenAI API Key | 조건부 필수* | GPT-5 시리즈 사용 시 필수, 웹검색 기능 포함 |
+| Anthropic API Key | 조건부 필수* | Claude 시리즈 사용 시 필수 |
 
-- Brave API Key가 없어도 기본 웹검색(OpenAI 내장)은 정상 동작합니다.
-- Brave API Key가 입력된 경우, OpenAI 웹검색 실패 시 Brave Search로 폴백합니다.
+*선택한 Provider에 해당하는 API Key만 필수입니다.
+
+- OpenAI Provider 선택 시: OpenAI API Key 필수
+- Anthropic Provider 선택 시: Anthropic API Key 필수
+- 웹검색은 OpenAI Provider에서만 지원됩니다 (내장 web_search_preview 도구)
 
 ---
 
@@ -161,9 +165,10 @@
 
 ```
 App Settings
+├── AI Provider 선택 (OpenAI / Anthropic)
 ├── API Keys
-│   ├── OpenAI API Key (필수)
-│   └── Brave Search API Key (선택)
+│   ├── OpenAI API Key (OpenAI Provider 선택 시 필수)
+│   └── Anthropic API Key (Anthropic Provider 선택 시 필수)
 │
 ├── Connectors (구현됨: ConnectorsSection.tsx)
 │   ├── Atlassian Confluence (MCP)

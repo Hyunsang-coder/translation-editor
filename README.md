@@ -26,7 +26,7 @@
 | Frontend | React 18 + TypeScript + Vite + TailwindCSS |
 | Editor | TipTap (ProseMirror) |
 | State | Zustand |
-| AI | LangChain.js (OpenAI) |
+| AI | LangChain.js (OpenAI, Anthropic) |
 | Backend | Tauri 2 + Rust |
 | Storage | SQLite (.ite 파일) |
 

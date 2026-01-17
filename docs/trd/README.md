@@ -42,7 +42,7 @@
 - **State**: Zustand
 - **Backend**: Tauri 2 + Rust
 - **Storage**: SQLite (.ite 파일)
-- **AI**: LangChain.js (OpenAI only)
+- **AI**: LangChain.js (OpenAI, Anthropic)
 
 ### 주요 워크플로우
 1. **번역**: Source → Markdown → LLM → Markdown → TipTap JSON → Preview → Apply
