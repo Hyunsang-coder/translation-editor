@@ -10,7 +10,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
-import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
+import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
@@ -62,17 +62,34 @@ export function ChatPanel(): JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const provider = useAiConfigStore((s) => s.provider);
+  const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
+  const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
   const chatModel = useAiConfigStore((s) => s.chatModel);
   const setChatModel = useAiConfigStore((s) => s.setChatModel);
-  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
-  const chatPresets = MODEL_PRESETS[providerKey];
 
-  useEffect(() => {
-    if (!chatPresets.some((p) => p.value === chatModel)) {
-      setChatModel(chatPresets[0].value);
+  // 활성화된 프로바이더의 모델만 표시
+  type ModelPreset = { value: string; label: string; description: string };
+  const enabledChatPresets = useMemo(() => {
+    const presets: Array<{ group: string; items: readonly ModelPreset[] }> = [];
+    if (openaiEnabled) {
+      presets.push({ group: 'OpenAI', items: MODEL_PRESETS.openai });
     }
-  }, [chatModel, provider, setChatModel]);
+    if (anthropicEnabled) {
+      presets.push({ group: 'Anthropic', items: MODEL_PRESETS.anthropic });
+    }
+    return presets;
+  }, [openaiEnabled, anthropicEnabled]);
+
+  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
+  useEffect(() => {
+    if (enabledChatPresets.length === 0) return;
+    const allModels = enabledChatPresets.flatMap((p) => p.items);
+    const firstModel = allModels[0];
+    if (!firstModel) return;
+    if (!allModels.some((m) => m.value === chatModel)) {
+      setChatModel(firstModel.value);
+    }
+  }, [chatModel, enabledChatPresets, setChatModel]);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
@@ -1009,10 +1026,14 @@ export function ChatPanel(): JSX.Element {
                     title={t('chat.chatModelTitle')}
                     disabled={isLoading}
                   >
-                    {chatPresets.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
+                    {enabledChatPresets.map((group) => (
+                      <optgroup key={group.group} label={group.group}>
+                        {group.items.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   <button

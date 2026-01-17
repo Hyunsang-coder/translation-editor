@@ -66,7 +66,7 @@ cd src-tauri && cargo test
 - **Frontend**: React 18 + TypeScript + Vite + TailwindCSS
 - **Editor**: TipTap (ProseMirror) - dual instances for Source/Target documents
 - **State Management**: Zustand with persistence
-- **AI Integration**: LangChain.js (OpenAI only)
+- **AI Integration**: LangChain.js (OpenAI + Anthropic multi-provider)
 - **UI Layout**: Hybrid Panel Layout (Settings sidebar + Floating Chat with react-rnd)
 - **Backend**: Tauri 2 + Rust
 - **Storage**: SQLite (`.ite` project files)
@@ -138,7 +138,7 @@ Critical stores in `src/stores/`:
 - `projectStore.ts`: Project metadata, Source/Target documents, glossary, attachments
   - **`sourceDocJson` / `targetDocJson`**: TipTap JSON cache for AI tools (initialized on project load)
 - `chatStore.ts`: Multi-tab chat sessions, messages, tool call tracking
-- `aiConfigStore.ts`: AI provider settings, model selection, system prompts
+- `aiConfigStore.ts`: AI provider enable flags (`openaiEnabled`/`anthropicEnabled`), model selection, system prompts
 - `connectorStore.ts`: MCP connector states (Confluence, Notion, web search)
 - `uiStore.ts`: Layout state, Focus Mode, panel positions/sizes, sidebar width, floating button position
 - `reviewStore.ts`: Translation review state (chunks, results, check states, highlight)
@@ -288,6 +288,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 27. **Markdown Normalization for Search**: Use `normalizeForSearch()` to strip markdown formatting (bold, italic, list markers) before searching in TipTap editor's plain text. AI responses often include markdown in excerpts.
 28. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 29. **isApplyingSuggestion Guard**: Set `reviewStore.isApplyingSuggestion` to true during Apply operations to prevent highlight invalidation from cross-store subscription detecting document changes.
+30. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes in App Settings. At least one provider must be enabled.
+31. **Model Dropdown with optgroup**: Translation/Chat model selectors use `<optgroup>` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
 
 ## Testing Patterns
 

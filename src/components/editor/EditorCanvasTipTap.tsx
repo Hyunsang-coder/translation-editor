@@ -15,7 +15,7 @@ import {
 } from '@/ai/translateDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
-import { MODEL_PRESETS, type AiProvider } from '@/ai/config';
+import { MODEL_PRESETS } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
@@ -60,20 +60,34 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const targetFontSize = useUIStore((s) => s.targetFontSize);
   const targetLineHeight = useUIStore((s) => s.targetLineHeight);
 
-  const provider = useAiConfigStore((s) => s.provider);
+  const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
+  const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
   const translationModel = useAiConfigStore((s) => s.translationModel);
   const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
-  const providerKey: Exclude<AiProvider, 'mock'> = provider === 'mock' ? 'openai' : provider;
-  const translationPresets = MODEL_PRESETS[providerKey];
 
-  useEffect(() => {
-    // translationPresets가 비어있는 경우(예: mock)나 로딩 중일 때 처리
-    if (!translationPresets || (translationPresets as unknown as any[]).length === 0) return;
-    
-    if (!translationPresets.some((p) => p.value === translationModel)) {
-      setTranslationModel(translationPresets[0].value);
+  // 활성화된 프로바이더의 모델만 표시
+  type ModelPreset = { value: string; label: string; description: string };
+  const enabledPresets = useMemo(() => {
+    const presets: Array<{ group: string; items: readonly ModelPreset[] }> = [];
+    if (openaiEnabled) {
+      presets.push({ group: 'OpenAI', items: MODEL_PRESETS.openai });
     }
-  }, [translationModel, translationPresets, setTranslationModel]);
+    if (anthropicEnabled) {
+      presets.push({ group: 'Anthropic', items: MODEL_PRESETS.anthropic });
+    }
+    return presets;
+  }, [openaiEnabled, anthropicEnabled]);
+
+  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
+  useEffect(() => {
+    if (enabledPresets.length === 0) return;
+    const allModels = enabledPresets.flatMap((p) => p.items);
+    const firstModel = allModels[0];
+    if (!firstModel) return;
+    if (!allModels.some((m) => m.value === translationModel)) {
+      setTranslationModel(firstModel.value);
+    }
+  }, [translationModel, enabledPresets, setTranslationModel]);
 
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
@@ -405,10 +419,14 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             aria-label={t('editor.translationModelAriaLabel')}
             title={t('editor.translationModel')}
           >
-            {translationPresets.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
+            {enabledPresets.map((group) => (
+              <optgroup key={group.group} label={group.group}>
+                {group.items.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <button

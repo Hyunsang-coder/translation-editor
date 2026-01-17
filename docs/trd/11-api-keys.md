@@ -9,8 +9,16 @@
 ### What
 - **OpenAI**: GPT-5 시리즈 (gpt-5.2, gpt-5-mini, gpt-5-nano)
 - **Anthropic**: Claude 시리즈 (claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-5)
+- **Multi-Provider**: 두 프로바이더를 동시에 활성화하고 모델별로 선택 가능
 - **Mock**: 번역 모드에서 제거됨. mock 설정 시 에러 발생하며 API 키 설정 안내
 - **웹검색**: OpenAI Provider에서만 사용 가능 (내장 web_search_preview 도구 사용)
+
+### Provider 선택 방식 (v5)
+- **체크박스 기반**: `provider` 라디오 버튼 대신 `openaiEnabled`/`anthropicEnabled` 체크박스
+- **모델 기반 자동 결정**: 선택한 모델명으로 provider 자동 결정 (`claude-*` → Anthropic, 그 외 → OpenAI)
+- **최소 1개 필수**: 적어도 하나의 프로바이더가 활성화되어 있어야 함
+- **API Key 없으면 비활성화**: API Key가 없는 프로바이더는 체크박스 disabled
+- **optgroup 드롭다운**: 번역/채팅 모델 선택기에서 프로바이더별로 그룹화 표시
 
 ---
 
@@ -78,11 +86,12 @@
 | OpenAI API Key | 조건부 필수* | GPT-5 시리즈 사용 시 필수, 웹검색 기능 포함 |
 | Anthropic API Key | 조건부 필수* | Claude 시리즈 사용 시 필수 |
 
-*선택한 Provider에 해당하는 API Key만 필수입니다.
+*해당 프로바이더를 사용하려면 API Key가 필요합니다.
 
-- OpenAI Provider 선택 시: OpenAI API Key 필수
-- Anthropic Provider 선택 시: Anthropic API Key 필수
-- 웹검색은 OpenAI Provider에서만 지원됩니다 (내장 web_search_preview 도구)
+- OpenAI 체크박스 활성화 시: OpenAI API Key 필수
+- Anthropic 체크박스 활성화 시: Anthropic API Key 필수
+- 두 프로바이더를 동시에 활성화 가능 (번역과 채팅에서 각각 다른 모델 선택 가능)
+- 웹검색은 OpenAI 모델 선택 시에만 지원됩니다 (내장 web_search_preview 도구)
 
 ---
 
@@ -165,10 +174,11 @@
 
 ```
 App Settings
-├── AI Provider 선택 (OpenAI / Anthropic)
-├── API Keys
-│   ├── OpenAI API Key (OpenAI Provider 선택 시 필수)
-│   └── Anthropic API Key (Anthropic Provider 선택 시 필수)
+├── API Keys (체크박스 + 입력 필드)
+│   ├── [✓] OpenAI 사용 + API Key 입력
+│   │   └── (API Key 없으면 체크박스 disabled)
+│   └── [✓] Anthropic 사용 + API Key 입력
+│       └── (API Key 없으면 체크박스 disabled)
 │
 ├── Connectors (구현됨: ConnectorsSection.tsx)
 │   ├── Atlassian Confluence (MCP)

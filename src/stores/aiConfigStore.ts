@@ -16,7 +16,6 @@ interface ApiKeysBundle {
 }
 
 interface AiConfigState {
-  provider: AiProvider;
   // 번역용 모델 (예: gpt-5.2)
   translationModel: string;
   // 채팅/질문용 모델 (예: gpt-5-mini)
@@ -24,15 +23,22 @@ interface AiConfigState {
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
+  // NEW: 프로바이더 사용 여부 체크박스
+  openaiEnabled: boolean;
+  anthropicEnabled: boolean;
 }
 
 interface AiConfigActions {
   loadSecureKeys: () => Promise<void>;
+  /** @deprecated Use setTranslationModel/setChatModel instead */
   setProvider: (provider: AiProvider) => void;
   setTranslationModel: (model: string) => void;
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
+  // NEW: 프로바이더 enabled 설정
+  setOpenaiEnabled: (enabled: boolean) => void;
+  setAnthropicEnabled: (enabled: boolean) => void;
 }
 
 // 환경변수 읽기 헬퍼
@@ -57,24 +63,36 @@ async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
 
 let keysLoaded = false;
 
+// MODEL_PRESETS 정의 (순환 참조 회피)
+const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
+  openai: [
+    { value: 'gpt-5.2' },
+    { value: 'gpt-5-mini' },
+    { value: 'gpt-5-nano' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-5' },
+    { value: 'claude-haiku-4-5' },
+    { value: 'claude-opus-4-5' },
+  ],
+};
+
 export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
   persist(
     (set, get) => {
-      // 초기값 결정 로직 - OpenAI 전용으로 단순화
-      const envProvider = (getEnv('VITE_AI_PROVIDER', 'openai') as string).toLowerCase();
-      const validProvider: AiProvider = envProvider === 'mock' ? 'mock' : 'openai';
-
       // 환경변수 VITE_AI_MODEL이 있으면 사용, 없으면 기본값
       const envModel = getEnv('VITE_AI_MODEL', '');
       const defaultTranslationModel = envModel || 'gpt-5.2';
       const defaultChatModel = envModel || 'gpt-5.2';
 
       return {
-        provider: validProvider,
         translationModel: defaultTranslationModel,
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
+        // 기본값: OpenAI만 활성화
+        openaiEnabled: true,
+        anthropicEnabled: false,
 
         loadSecureKeys: async () => {
           if (keysLoaded) return;
@@ -130,30 +148,15 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           }
         },
 
+        /** @deprecated Use setTranslationModel/setChatModel instead */
         setProvider: (provider) => {
-          // Provider 전환 시 모델을 해당 provider의 기본값으로 변경
-          // MODEL_PRESETS를 직접 정의하여 순환 참조 회피
-          const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
-            openai: [
-              { value: 'gpt-5.2' },
-              { value: 'gpt-5-mini' },
-              { value: 'gpt-5-nano' },
-            ],
-            anthropic: [
-              { value: 'claude-sonnet-4-5' },
-              { value: 'claude-haiku-4-5' },
-              { value: 'claude-opus-4-5' },
-            ],
-          };
-          const presetKey = provider === 'mock' ? 'openai' : provider;
-          const presets = MODEL_PRESETS[presetKey] ?? MODEL_PRESETS.openai;
-          const defaultModel = presets?.[0]?.value ?? 'gpt-5.2';
-          set({
-            provider,
-            translationModel: defaultModel,
-            chatModel: defaultModel,
-          });
-          void get().loadSecureKeys();
+          console.warn('[aiConfigStore] setProvider is deprecated. Use setTranslationModel/setChatModel instead.');
+          // 호환성을 위해 해당 provider 활성화만 수행
+          if (provider === 'anthropic') {
+            set({ anthropicEnabled: true });
+          } else {
+            set({ openaiEnabled: true });
+          }
         },
         setTranslationModel: (model) => set({ translationModel: model }),
         setChatModel: (model) => set({ chatModel: model }),
@@ -175,16 +178,78 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             openai: state.openaiApiKey,
             anthropic: next,
           });
+          // API Key 삭제 시 해당 provider 비활성화
+          if (!next && state.anthropicEnabled && state.openaiEnabled) {
+            set({ anthropicEnabled: false });
+          }
+        },
+
+        setOpenaiEnabled: (enabled) => {
+          const state = get();
+          // 최소 하나는 활성화 필수
+          if (!enabled && !state.anthropicEnabled) {
+            console.warn('[aiConfigStore] At least one provider must be enabled');
+            return;
+          }
+          set({ openaiEnabled: enabled });
+          // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
+          if (!enabled) {
+            const anthropicPresets = MODEL_PRESETS.anthropic;
+            const firstAnthropicModel = anthropicPresets?.[0]?.value ?? 'claude-sonnet-4-5';
+            if (!state.translationModel.startsWith('claude')) {
+              set({ translationModel: firstAnthropicModel });
+            }
+            if (!state.chatModel.startsWith('claude')) {
+              set({ chatModel: firstAnthropicModel });
+            }
+          }
+        },
+
+        setAnthropicEnabled: (enabled) => {
+          const state = get();
+          // 최소 하나는 활성화 필수
+          if (!enabled && !state.openaiEnabled) {
+            console.warn('[aiConfigStore] At least one provider must be enabled');
+            return;
+          }
+          set({ anthropicEnabled: enabled });
+          // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
+          if (!enabled) {
+            const openaiPresets = MODEL_PRESETS.openai;
+            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.2';
+            if (state.translationModel.startsWith('claude')) {
+              set({ translationModel: firstOpenaiModel });
+            }
+            if (state.chatModel.startsWith('claude')) {
+              set({ chatModel: firstOpenaiModel });
+            }
+          }
         },
       };
     },
     {
       name: 'ite-ai-config',
-      version: 4, // 버전 업: Anthropic 지원 추가
+      version: 5, // 버전 업: Multi-provider 지원 (provider 필드 제거)
+      migrate: (persisted: unknown, version: number) => {
+        const data = persisted as Record<string, unknown>;
+        if (version < 5) {
+          // v4 → v5 마이그레이션: provider 기반으로 enabled 설정
+          const oldProvider = (data.provider as string) || 'openai';
+          return {
+            translationModel: (data.translationModel as string) || 'gpt-5.2',
+            chatModel: (data.chatModel as string) || 'gpt-5.2',
+            // 기존 provider 기반으로 enabled 설정
+            openaiEnabled: oldProvider !== 'anthropic',  // anthropic이 아니면 true
+            anthropicEnabled: oldProvider === 'anthropic',
+          };
+        }
+        return data;
+      },
       partialize: (state) => ({
-        provider: state.provider,
         translationModel: state.translationModel,
         chatModel: state.chatModel,
+        openaiEnabled: state.openaiEnabled,
+        anthropicEnabled: state.anthropicEnabled,
       }),
       merge: (persisted, current) => {
         const next = { ...current, ...(persisted as Partial<AiConfigState>) };

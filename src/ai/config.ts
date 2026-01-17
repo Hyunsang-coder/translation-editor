@@ -58,20 +58,20 @@ function getEnvOptionalNumber(key: string): number | undefined {
 export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
-  // Provider 유효성 검사: openai, anthropic, mock만 허용
-  const rawProvider = store.provider;
-  const provider: AiProvider =
-    rawProvider === 'anthropic' ? 'anthropic' :
-    rawProvider === 'mock' ? 'mock' : 'openai';
 
-  // 2. 용도에 따른 모델 선택 (provider별 프리셋 사용)
+  // 2. 용도에 따른 모델 선택
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
   const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
+
+  // 3. 모델명에서 provider 자동 결정
+  const provider: AiProvider = rawModel.startsWith('claude') ? 'anthropic' : 'openai';
+
+  // 4. 해당 provider의 프리셋에서 모델 검증
   const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
   const presets = MODEL_PRESETS[presetKey];
   const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
 
-  // 3. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
+  // 5. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
   const openaiApiKey = store.openaiApiKey;
   const anthropicApiKey = store.anthropicApiKey;
 

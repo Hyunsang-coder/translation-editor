@@ -14,6 +14,7 @@
 
 - **Document-First Editor**: Notion 스타일 TipTap 에디터 (Source/Target)
 - **AI Chat**: LangChain.js 기반 멀티 탭 채팅
+- **Multi-Provider AI**: OpenAI/Anthropic 동시 사용, 모델별 자동 프로바이더 선택
 - **문서 전체 번역**: Preview → Apply 워크플로우
 - **번역 검수**: 오역/누락/일관성 검출 + 에디터 하이라이트 + 수정 제안 적용
 - **검색/치환**: 에디터 내 검색 (Cmd+F) 및 치환 (Cmd+H, Target 전용)
