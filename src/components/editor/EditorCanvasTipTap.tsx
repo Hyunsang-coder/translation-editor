@@ -48,6 +48,11 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
   const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
+  const addToast = useUIStore((s) => s.addToast);
+
+  // 복사용 JSON 상태
+  const sourceDocJson = useProjectStore((s) => s.sourceDocJson);
+  const targetDocJson = useProjectStore((s) => s.targetDocJson);
 
   // Source/Target 패널별 폰트 설정
   const sourceFontSize = useUIStore((s) => s.sourceFontSize);
@@ -337,6 +342,35 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     setTargetSearchReplaceMode(false);
   }, []);
 
+  // 패널 복사 핸들러
+  const handleCopySource = useCallback(async () => {
+    if (!sourceDocJson) {
+      addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
+      return;
+    }
+    try {
+      const markdown = tipTapJsonToMarkdown(sourceDocJson as Record<string, unknown>);
+      await navigator.clipboard.writeText(markdown);
+      addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
+    } catch {
+      addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
+    }
+  }, [sourceDocJson, addToast, t]);
+
+  const handleCopyTarget = useCallback(async () => {
+    if (!targetDocJson) {
+      addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
+      return;
+    }
+    try {
+      const markdown = tipTapJsonToMarkdown(targetDocJson as Record<string, unknown>);
+      await navigator.clipboard.writeText(markdown);
+      addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
+    } catch {
+      addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
+    }
+  }, [targetDocJson, addToast, t]);
+
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
     const cleaners: Array<() => void> = [];
@@ -435,7 +469,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   isOpen={sourceSearchOpen}
                   onClose={handleSourceSearchClose}
                 />
-                <div className="min-h-0 flex-1 overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-hidden relative group/source">
                   <SourceTipTapEditor
                     content={sourceDocument || ''}
                     onChange={setSourceDocument}
@@ -444,6 +478,18 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                     onEditorReady={handleSourceEditorReady}
                     onSearchOpen={handleSourceSearchOpen}
                   />
+                  {/* 호버 복사 버튼 */}
+                  <button
+                    type="button"
+                    onClick={() => void handleCopySource()}
+                    className="absolute bottom-4 right-4 opacity-0 group-hover/source:opacity-100 transition-opacity px-2.5 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg shadow-sm flex items-center gap-1.5 text-editor-text"
+                    title={t('common.copyToClipboard', '복사')}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    {t('common.copy', '복사')}
+                  </button>
                 </div>
               </div>
             </Panel>
@@ -492,7 +538,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             initialReplaceMode={targetSearchReplaceMode}
           />
           {/* 여기에 transition 효과 추가 */}
-          <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 ${targetFlash ? 'bg-green-500/10' : ''}`}>
+          <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 relative group/target ${targetFlash ? 'bg-green-500/10' : ''}`}>
             <TargetTipTapEditor
               content={targetDocument || ''}
               onChange={setTargetDocument}
@@ -502,6 +548,18 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               onSearchOpen={handleTargetSearchOpen}
               onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
             />
+            {/* 호버 복사 버튼 */}
+            <button
+              type="button"
+              onClick={() => void handleCopyTarget()}
+              className="absolute bottom-4 right-4 opacity-0 group-hover/target:opacity-100 transition-opacity px-2.5 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg shadow-sm flex items-center gap-1.5 text-editor-text"
+              title={t('common.copyToClipboard', '복사')}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              {t('common.copy', '복사')}
+            </button>
           </div>
           </div>
         </Panel>

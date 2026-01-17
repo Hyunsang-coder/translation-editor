@@ -11,7 +11,11 @@
     "loading": "로딩 중...",
     "untitledProject": "제목 없음 프로젝트",
     "retry": "다시 시도",
-    "ignore": "무시"
+    "ignore": "무시",
+    "copy": "복사",
+    "copied": "클립보드에 복사되었습니다.",
+    "copyError": "복사에 실패했습니다.",
+    "copyToClipboard": "복사"
   },
   "settings": {
     "title": "프로젝트 설정",
@@ -244,6 +248,7 @@
     "editMessagePlaceholder": "메시지 편집...",
     "saveAfterEdit": "저장 (이후 대화는 삭제됩니다)",
     "editAfterEdit": "편집 (이후 대화는 삭제됩니다)",
+    "replay": "재전송",
     "deleteAfterEdit": "삭제 (이후 대화는 삭제됩니다)",
     "addToRules": "이 내용을 번역 규칙에 추가",
     "addToContext": "이 내용을 프로젝트 컨텍스트에 추가",

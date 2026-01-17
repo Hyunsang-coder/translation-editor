@@ -11,7 +11,11 @@
     "loading": "Loading...",
     "untitledProject": "Untitled Project",
     "retry": "Retry",
-    "ignore": "Ignore"
+    "ignore": "Ignore",
+    "copy": "Copy",
+    "copied": "Copied to clipboard.",
+    "copyError": "Failed to copy.",
+    "copyToClipboard": "Copy"
   },
   "settings": {
     "title": "Project Settings",
@@ -244,6 +248,7 @@
     "editMessagePlaceholder": "Edit message...",
     "saveAfterEdit": "Save (subsequent conversation will be deleted)",
     "editAfterEdit": "Edit (subsequent conversation will be deleted)",
+    "replay": "Resend",
     "deleteAfterEdit": "Delete (subsequent conversation will be deleted)",
     "addToRules": "Add this content to Translation Rules",
     "addToContext": "Add this content to Project Context",
