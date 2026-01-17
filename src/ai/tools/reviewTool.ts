@@ -2,7 +2,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useReviewStore, type ReviewIntensity, type ReviewCategories } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { htmlToMarkdown } from '@/utils/markdownConverter';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
@@ -76,76 +76,133 @@ export function buildAlignedChunks(
 // Kept for reference but removed to avoid unused variable warnings
 
 // ============================================
-// 검수 강도별 프롬프트
+// 검수자 역할 정의 (Phase 3: 과잉 검출 방지)
+// ============================================
+
+const REVIEWER_ROLE = `당신은 10년 경력의 전문 번역 검수자입니다.
+
+## 검수 철학
+- 번역자의 의도적 선택을 존중
+- 과잉 검출보다 정확한 검출을 우선
+- 의역과 오역을 명확히 구분
+- 확신 없으면 문제 아님`;
+
+// ============================================
+// 검수 강도별 프롬프트 (강화됨: 카테고리 통합)
 // ============================================
 
 const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
   minimal: `## 검출 기준: 명백한 오류만
-- 의미가 정반대인 오역
-- 금액/날짜/수량 등 팩트 누락
-- 애매하면 검출하지 않음
-- 의역/스타일 차이는 모두 허용`,
 
-  balanced: `## 검출 기준: 중요한 오류
-- 의미가 크게 달라진 오역
-- 중요 정보(조건, 예외, 주의사항) 누락
-- 확실한 경우만 검출
-- 자연스러운 의역은 허용`,
+검출:
+- 의미가 정반대인 오역 (긍정↔부정, 허용↔금지)
+- 금액, 날짜, 수량 등 팩트 오류
+- 핵심 정보(조건, 경고) 완전 누락
+
+허용 (검출 안 함):
+- 어순 변경, 의역, 문체 차이
+- 부가 설명 생략
+- 뉘앙스 차이`,
+
+  balanced: `## 검출 기준: 의미 전달 오류
+
+검출:
+- 오역 (의미가 달라진 경우)
+- 정보 누락 (문장/절 단위)
+- 의미 왜곡 (강도, 범위, 조건 변경)
+
+허용 (검출 안 함):
+- 자연스러운 의역
+- 어순, 문체 차이
+- 사소한 뉘앙스 차이`,
 
   thorough: `## 검출 기준: 세밀한 검토
-- 의미 차이가 있는 모든 오역
-- 정보 누락 (사소한 것 포함)
-- 강도/범위 변경 (must→can 등)
-- 미세한 뉘앙스 차이도 검출`,
+
+검출:
+- 모든 오역 (미세한 의미 차이 포함)
+- 모든 누락 (사소한 정보 포함)
+- 의미 왜곡 (강도, 범위, 조건)
+- 용어 일관성 (같은 원어가 다르게 번역)
+- 뉘앙스 변화
+
+허용 (검출 안 함):
+- 명백히 의도된 로컬라이제이션`,
 };
 
 // ============================================
-// 검수 항목별 지침
+// 과잉 검출 방지 가이드 (Phase 3)
 // ============================================
 
-const CATEGORY_PROMPTS: Record<keyof ReviewCategories, string> = {
-  mistranslation: `**오역**: 원문과 번역문의 의미가 다른 경우 (단어/구문 누락 포함 - 번역문에 대응 텍스트가 있으면 오역)`,
-  omission: `**누락**: 원문의 문장/절이 번역문에 **완전히 빠진** 경우 (번역문에 대응하는 텍스트 자체가 없음)`,
-  distortion: `**왜곡**: 강도(must→can), 범위(전체→부분), 조건 등이 변경된 경우`,
-  consistency: `**일관성**: 같은 용어가 다르게 번역된 경우 (Glossary 기준)`,
-};
+const HALLUCINATION_GUARD = `## 과잉 검출 방지 (필수!)
+
+검출 전 자문: "이것이 번역 오류인가, 번역자의 선택인가?"
+
+문제 아닌 것:
+- 어순 변경 (자연스러운 문장 구성)
+- 존칭/경어 수준 조정
+- 문화적 로컬라이제이션
+- 명시적 주어 추가/생략
+- 자연스러운 의역
+
+확신 없음 = 문제 없음`;
 
 // ============================================
-// 개선된 출력 형식
+// Few-shot 예시 (Phase 3: 과잉 검출 방지)
 // ============================================
 
-const OUTPUT_FORMAT = `## 출력 형식
+const FEW_SHOT_EXAMPLES = `## 예시
 
-문제 발견 시 JSON으로 출력:
+### 오역 (검출 O)
+Source: "You must restart"
+Target: "재시작할 수 있습니다"
+→ must→can 의미 변경
+{
+  "issues": [{
+    "segmentOrder": 1,
+    "type": "오역",
+    "sourceExcerpt": "You must restart",
+    "targetExcerpt": "재시작할 수 있습니다",
+    "problem": "의무(must)가 가능(can)으로 변경",
+    "reason": "원문은 필수, 번역은 선택으로 의미 전달",
+    "suggestedFix": "재시작해야 합니다"
+  }]
+}
+
+### 의역 (검출 X)
+Source: "It goes without saying"
+Target: "두말할 나위 없이"
+→ 자연스러운 의역, 의미 완전 전달
+{ "issues": [] }`;
+
+// ============================================
+// 개선된 출력 형식 (Phase 3: 마커 기반)
+// ============================================
+
+const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
+
+---REVIEW_START---
 {
   "issues": [
     {
       "segmentOrder": 1,
       "type": "오역|누락|왜곡|일관성",
       "sourceExcerpt": "원문 30자 이내",
-      "targetExcerpt": "번역문 30자 이내 (수정 대상 텍스트)",
+      "targetExcerpt": "번역문 30자 이내",
       "problem": "무엇이 문제인지 (1줄)",
-      "reason": "왜 문제인지 - 원문과 대비 (1줄)",
-      "suggestedFix": "targetExcerpt를 대체할 정확한 번역문만 (설명/지시문 없이)"
+      "reason": "왜 문제인지 (1줄)",
+      "suggestedFix": "대체 텍스트만"
     }
   ]
 }
+---REVIEW_END---
 
 ## suggestedFix 작성 규칙 (필수!)
 - suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
 - 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
 - 범위가 다르면 문장이 깨짐!
 
-올바른 예시:
-  - targetExcerpt: "할 수 있습니다" → suggestedFix: "해야 합니다" ✅
-  - targetExcerpt: "알파채널로" → suggestedFix: "알파채널(DXT5)로" ✅
-  - targetExcerpt: "UI" → suggestedFix: "사용자 인터페이스" ✅
-
-잘못된 예시:
-  - targetExcerpt: "알파채널로" → suggestedFix: "전체 문장 반복..." ❌ (범위 불일치)
-  - suggestedFix에 설명/지시문/따옴표/마크다운 포함 ❌
-
-문제 없음: { "issues": [] }`;
+금지: 마커 외부 텍스트, 설명문, 마크다운
+문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;
 
 // ============================================
 // 프롬프트 생성 함수
@@ -153,48 +210,20 @@ const OUTPUT_FORMAT = `## 출력 형식
 
 /**
  * 검수 설정에 따른 동적 프롬프트 생성
+ * 강도(intensity)만으로 검출 범위 결정 (카테고리 제거)
  */
-export function buildReviewPrompt(
-  intensity: ReviewIntensity,
-  categories: ReviewCategories,
-): string {
-  // 활성화된 검수 항목만 포함
-  const enabledCategories = Object.entries(categories)
-    .filter(([, enabled]) => enabled)
-    .map(([key]) => CATEGORY_PROMPTS[key as keyof ReviewCategories])
-    .join('\n');
-
-  // 활성화된 항목이 없으면 경고
-  if (!enabledCategories) {
-    return `검수할 항목이 선택되지 않았습니다. 검수 설정에서 하나 이상의 항목을 활성화해주세요.`;
-  }
-
-  return `당신은 번역 품질 검수자입니다.
-
-${INTENSITY_PROMPTS[intensity]}
-
-## 검수 항목 (이것만 검출)
-${enabledCategories}
-
-## 검출하지 않는 것
-- 어순, 문체, 표현 방식 차이
-- 자연스러운 의역
-- 위에서 지정하지 않은 항목
-
-## 누락 vs 오역 구분 (중요!)
-- **오역**: 번역문에 대응 텍스트가 있지만 틀림/부족함 → targetExcerpt에 교체 대상 지정
-- **누락**: 번역문에 대응 텍스트 자체가 없음 → targetExcerpt 비워둠
-
-판단 기준: "번역문의 어느 부분을 수정하면 되는가?"
-- 수정할 부분이 있다 → 오역 (targetExcerpt 지정)
-- 수정할 부분이 없다 (통째로 빠짐) → 누락
-
-예시:
-- 원문 "빨간 사과" / 번역 "사과" → **오역** (targetExcerpt: "사과", suggestedFix: "빨간 사과")
-- 원문 "A 그리고 B" / 번역 "A" → **오역** (targetExcerpt: "A", suggestedFix: "A 그리고 B")
-- 원문 "1. 첫째 2. 둘째" / 번역 "1. 첫째" (2번 항목 통째로 없음) → **누락**
-
-${OUTPUT_FORMAT}`;
+export function buildReviewPrompt(intensity: ReviewIntensity): string {
+  return [
+    REVIEWER_ROLE,
+    '',
+    INTENSITY_PROMPTS[intensity],
+    '',
+    HALLUCINATION_GUARD,
+    '',
+    FEW_SHOT_EXAMPLES,
+    '',
+    OUTPUT_FORMAT,
+  ].join('\n');
 }
 
 const ReviewToolArgsSchema = z.object({
@@ -229,7 +258,7 @@ export const reviewTranslationTool = tool(
     const { translationRules, projectContext, attachments } = useChatStore.getState();
 
     // 검수 설정 가져오기
-    const { intensity, categories } = useReviewStore.getState();
+    const { intensity } = useReviewStore.getState();
 
     // Glossary 검색 (첫 번째 청크 기반)
     let glossaryText = '';
@@ -264,7 +293,7 @@ export const reviewTranslationTool = tool(
       .join('\n\n') || '';
 
     // 검수 설정 기반 동적 프롬프트 생성
-    const dynamicInstructions = buildReviewPrompt(intensity, categories);
+    const dynamicInstructions = buildReviewPrompt(intensity);
 
     return {
       instructions: dynamicInstructions,

@@ -38,6 +38,22 @@ function extractSegmentOrder(text: string): number {
 }
 
 /**
+ * 마커 기반 JSON 추출 (Phase 3)
+ * ---REVIEW_START--- 와 ---REVIEW_END--- 사이의 JSON 추출
+ */
+function extractMarkedJson(text: string): string | null {
+  const startMarker = '---REVIEW_START---';
+  const endMarker = '---REVIEW_END---';
+  const startIdx = text.indexOf(startMarker);
+  const endIdx = text.indexOf(endMarker);
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return text.slice(startIdx + startMarker.length, endIdx).trim();
+  }
+  return null;
+}
+
+/**
  * 균형 잡힌 중괄호로 JSON 객체 추출
  * greedy 정규식 대신 중괄호 카운팅으로 정확한 JSON 범위 찾기
  */
@@ -202,29 +218,35 @@ function parseMarkdownTable(aiResponse: string): ReviewIssue[] {
 
 /**
  * AI 응답을 파싱하여 ReviewIssue 배열로 변환
- * 1. JSON 파싱 시도
- * 2. 실패 시 마크다운 테이블 파싱 (폴백)
+ * Phase 3: 마커 기반 추출 우선
+ * 1. 마커 기반 JSON 추출 (---REVIEW_START/END---)
+ * 2. brace counting 기반 JSON 추출 (기존)
+ * 3. 마크다운 테이블 파싱 (fallback)
  */
 export function parseReviewResult(aiResponse: string): ReviewIssue[] {
   if (!aiResponse || typeof aiResponse !== 'string') {
     return [];
   }
 
-  // "오역이나 누락이 발견되지 않았습니다" 체크
-  if (aiResponse.includes('오역이나 누락이 발견되지 않았습니다') ||
-      aiResponse.includes('발견되지 않았습니다') ||
-      aiResponse.includes('"issues": []') ||
-      aiResponse.includes('"issues":[]')) {
+  // "문제 없음" 체크
+  if (aiResponse.includes('"issues": []') || aiResponse.includes('"issues":[]')) {
     return [];
   }
 
-  // 1. JSON 파싱 시도
+  // 1차: 마커 기반 추출 (Phase 3 신규)
+  const markedJson = extractMarkedJson(aiResponse);
+  if (markedJson) {
+    const issues = parseJsonResponse(markedJson);
+    if (issues !== null) return issues;
+  }
+
+  // 2차: brace counting (기존)
   const jsonIssues = parseJsonResponse(aiResponse);
   if (jsonIssues !== null) {
     return jsonIssues;
   }
 
-  // 2. 마크다운 테이블 파싱 (폴백)
+  // 3차: 마크다운 테이블 (fallback)
   return parseMarkdownTable(aiResponse);
 }
 
