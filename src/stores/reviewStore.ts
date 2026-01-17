@@ -79,6 +79,7 @@ interface ReviewState {
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
   isApplyingSuggestion: boolean;  // 수정 제안 적용 중 (하이라이트 무효화 방지)
   totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
+  streamingText: string;  // 현재 청크의 AI 스트리밍 응답 텍스트
 }
 
 interface ReviewActions {
@@ -166,6 +167,11 @@ interface ReviewActions {
    * 수정 제안 적용 중 플래그 설정 (하이라이트 무효화 방지용)
    */
   setIsApplyingSuggestion: (value: boolean) => void;
+
+  /**
+   * 스트리밍 텍스트 업데이트
+   */
+  setStreamingText: (text: string) => void;
 }
 
 type ReviewStore = ReviewState & ReviewActions;
@@ -189,6 +195,7 @@ const initialState: ReviewState = {
   initializedProjectId: null,
   isApplyingSuggestion: false,
   totalIssuesFound: 0,
+  streamingText: '',
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
@@ -250,6 +257,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       progress: { completed: 0, total: chunks.length },
       highlightNonce: highlightNonce + 1, // 즉시 이전 하이라이트 제거
       totalIssuesFound: 0, // 새 검수 시작 시 리셋
+      streamingText: '', // 스트리밍 텍스트 초기화
     });
   },
 
@@ -258,6 +266,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set({
       isReviewing: false,
       totalIssuesFound: allIssues.length,
+      // Note: streamingText는 초기화하지 않음 - 검수 완료 후에도 마지막 응답 확인 가능
     });
   },
 
@@ -347,6 +356,10 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
 
   setIsApplyingSuggestion: (value: boolean) => {
     set({ isApplyingSuggestion: value });
+  },
+
+  setStreamingText: (text: string) => {
+    set({ streamingText: text });
   },
 }));
 

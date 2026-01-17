@@ -44,6 +44,17 @@ function IntensitySelect({
   );
 }
 
+/** 로딩 도트 애니메이션 */
+function LoadingDots() {
+  return (
+    <span className="inline-flex gap-1">
+      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce [animation-delay:-0.3s]" />
+      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce [animation-delay:-0.15s]" />
+      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce" />
+    </span>
+  );
+}
+
 /**
  * Review Panel 컴포넌트
  * ChatPanel의 Review 탭에서 렌더링됩니다.
@@ -62,6 +73,8 @@ export function ReviewPanel(): JSX.Element {
     results,
     isReviewing,
     totalIssuesFound,
+    progress,
+    streamingText,
     initializeReview,
     addResult,
     handleChunkError,
@@ -74,9 +87,25 @@ export function ReviewPanel(): JSX.Element {
     setAllIssuesChecked,
     getCheckedIssues,
     setIsApplyingSuggestion,
+    setStreamingText,
   } = useReviewStore();
 
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // 경과 시간 타이머
+  useEffect(() => {
+    if (!isReviewing) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedSeconds((s) => s + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isReviewing]);
 
   // 패널이 열릴 때 초기화 (스토어에서 프로젝트 ID 체크하여 중복 초기화 방지)
   useEffect(() => {
@@ -139,6 +168,7 @@ export function ReviewPanel(): JSX.Element {
             translationRules: currentRules,
             glossary: glossaryText,
             abortSignal: controller.signal,
+            onToken: (text) => setStreamingText(text),
           });
 
           // Issue #8 Fix: parseReviewResult try-catch 래핑
@@ -173,6 +203,7 @@ export function ReviewPanel(): JSX.Element {
     finishReview,
     addResult,
     handleChunkError,
+    setStreamingText,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -318,17 +349,78 @@ export function ReviewPanel(): JSX.Element {
               />
             </div>
           </div>
-        ) : results.length === 0 && isReviewing ? (
-          // 검수 진행 중이지만 아직 결과가 없는 상태
-          <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary-500/10 mb-4 animate-pulse">
-              <svg className="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
+        ) : isReviewing ? (
+          // 검수 진행 중 (결과 유무와 관계없이)
+          <div className="space-y-4">
+            {/* 검수 강도 (비활성) */}
+            <div className="w-48">
+              <IntensitySelect value={intensity} onChange={setIntensity} disabled={true} />
             </div>
-            <p className="text-editor-muted">
-              {t('review.analyzing', '번역을 분석하고 있습니다...')}
-            </p>
+
+            {/* 상태 표시 영역 */}
+            <div className="p-4 bg-editor-surface rounded-lg border border-editor-border space-y-3">
+              {/* 헤더: 도트 애니메이션 + 텍스트 + 경과 시간 */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LoadingDots />
+                  <span className="text-sm font-medium text-editor-text">
+                    {t('review.analyzing', '번역을 분석하고 있습니다...')}
+                  </span>
+                </div>
+                <span className="text-sm text-editor-muted tabular-nums">
+                  {t('review.elapsed', { seconds: elapsedSeconds })}
+                </span>
+              </div>
+
+              {/* 진행률 바 */}
+              {progress.total > 0 && (
+                <div>
+                  <div className="flex justify-between text-xs text-editor-muted mb-1">
+                    <span>{progress.completed}/{progress.total} {t('review.chunks', '청크')}</span>
+                    <span>{Math.round((progress.completed / progress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-editor-border rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary-500 transition-all duration-300"
+                      style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 스트리밍 텍스트 (접이식) */}
+              {streamingText && (
+                <details className="group">
+                  <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text select-none">
+                    {t('review.showResponse', 'AI 응답 보기')}
+                  </summary>
+                  <pre className="mt-2 p-2 bg-editor-bg rounded text-xs text-editor-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-all">
+                    {streamingText}
+                  </pre>
+                </details>
+              )}
+            </div>
+
+            {/* 실시간 결과 테이블 */}
+            {results.length > 0 && (
+              <>
+                {hasErrors && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-500">
+                    {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
+                  </div>
+                )}
+                <ReviewResultsTable
+                  issues={allIssues}
+                  onToggleCheck={toggleIssueCheck}
+                  onDelete={deleteIssue}
+                  onApply={handleApplySuggestion}
+                  onCopy={handleCopySuggestion}
+                  onToggleAll={() => setAllIssuesChecked(!allChecked)}
+                  allChecked={allChecked}
+                  totalIssuesFound={totalIssuesFound}
+                />
+              </>
+            )}
           </div>
         ) : (
           // 검수 결과 표시
@@ -349,6 +441,19 @@ export function ReviewPanel(): JSX.Element {
                 {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
               </div>
             )}
+
+            {/* 마지막 AI 응답 (접이식) - 검수 완료 후에도 확인 가능 */}
+            {streamingText && (
+              <details className="group">
+                <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text select-none">
+                  {t('review.showResponse', 'AI 응답 보기')}
+                </summary>
+                <pre className="mt-2 p-2 bg-editor-surface rounded text-xs text-editor-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-all border border-editor-border">
+                  {streamingText}
+                </pre>
+              </details>
+            )}
+
             <ReviewResultsTable
               issues={allIssues}
               onToggleCheck={toggleIssueCheck}
