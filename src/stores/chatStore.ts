@@ -23,6 +23,7 @@ import {
   listAttachments,
   type AttachmentDto,
   previewAttachment,
+  readImageAsDataUrl,
 } from '@/tauri/attachments';
 import {
   createGhostMaskSession,
@@ -1640,6 +1641,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set({ isLoading: true });
       try {
         const tmp = await previewAttachment(path);
+
+        // 이미지 파일인 경우 썸네일 data URL 생성
+        const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        if (imageExtensions.includes(tmp.fileType.toLowerCase()) && tmp.filePath) {
+          const dataUrl = await readImageAsDataUrl(tmp.filePath, tmp.fileType);
+          if (dataUrl) {
+            tmp.thumbnailDataUrl = dataUrl;
+          }
+        }
 
         set((state) => ({
           composerAttachments: [...state.composerAttachments, tmp],

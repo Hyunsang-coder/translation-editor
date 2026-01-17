@@ -74,6 +74,7 @@ export function ChatContent(): JSX.Element {
   const confluenceSearchEnabled = useChatStore((s) => s.currentSession?.confluenceSearchEnabled ?? false);
   const setConfluenceSearchEnabled = useChatStore((s) => s.setConfluenceSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
 
@@ -173,6 +174,65 @@ export function ChatContent(): JSX.Element {
   const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
     updateMessage(messageId, { metadata });
   }, [updateMessage]);
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    const related = e.relatedTarget as HTMLElement | null;
+    if (related && target.contains(related)) return;
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!isTauriRuntime()) return;
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      // Tauri v2에서는 드롭된 파일의 경로를 직접 얻을 수 없으므로
+      // 파일 다이얼로그를 통해 파일을 선택하도록 안내
+      const path = await pickChatAttachmentFile();
+      if (path) {
+        await addComposerAttachment(path);
+      }
+    }
+  }, [addComposerAttachment]);
+
+  // 클립보드 붙여넣기 핸들러 (이미지)
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const path = await pickChatAttachmentFile();
+        if (path) {
+          await addComposerAttachment(path);
+        }
+        return;
+      }
+    }
+  }, [addComposerAttachment]);
+
+  // 파일 첨부 버튼 클릭 핸들러
+  const handleAttachClick = useCallback(async () => {
+    if (!isTauriRuntime()) return;
+    const path = await pickChatAttachmentFile();
+    if (path) {
+      await addComposerAttachment(path);
+    }
+  }, [addComposerAttachment]);
 
   // 프로젝트 전환 시 채팅 세션 복원
   const lastHydratedId = useRef<string | null>(null);
@@ -368,13 +428,71 @@ export function ChatContent(): JSX.Element {
       </div>
 
       {/* 입력창 */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-editor-border bg-editor-bg shrink-0">
-        <div className="relative rounded-2xl border border-editor-border bg-editor-surface shadow-sm">
+      <form
+        onSubmit={handleSubmit}
+        className="p-3 border-t border-editor-border bg-editor-bg shrink-0"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <div className={`relative rounded-2xl border bg-editor-surface shadow-sm transition-colors ${
+          isDragging ? 'border-primary-500 bg-primary-50' : 'border-editor-border'
+        }`}>
+          {/* 첨부 파일 미리보기 - textarea 위에 표시 */}
+          {composerAttachments.length > 0 && (
+            <div className="px-4 pt-4 pb-2 flex flex-wrap gap-3">
+              {composerAttachments.map((a) => {
+                const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(a.fileType.toLowerCase());
+
+                return (
+                  <div
+                    key={a.id}
+                    className="relative group"
+                  >
+                    {/* 닫기 버튼 - 왼쪽 상단 */}
+                    <button
+                      type="button"
+                      className="absolute -left-2 -top-2 z-10 w-5 h-5 rounded-full bg-editor-bg border border-editor-border
+                                 text-editor-muted hover:text-red-600 hover:border-red-300
+                                 flex items-center justify-center text-xs shadow-sm"
+                      aria-label={t('chat.removeAttachment')}
+                      onClick={() => removeComposerAttachment(a.id)}
+                      disabled={isLoading}
+                    >
+                      ✕
+                    </button>
+
+                    {isImage && a.thumbnailDataUrl ? (
+                      <img
+                        src={a.thumbnailDataUrl}
+                        alt={a.filename}
+                        className="w-20 h-20 object-cover rounded-lg border border-editor-border"
+                      />
+                    ) : (
+                      <div
+                        className="w-20 h-20 rounded-lg border border-editor-border bg-editor-bg
+                                   flex flex-col items-center justify-center gap-1 p-2"
+                        title={a.filename}
+                      >
+                        <span className="text-2xl">
+                          {a.fileType === 'pdf' ? '📄' : a.fileType === 'docx' ? '📝' : a.fileType === 'pptx' ? '📊' : '📎'}
+                        </span>
+                        <span className="text-[10px] text-editor-muted truncate w-full text-center">
+                          {a.filename}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <textarea
             ref={inputRef}
             value={composerText}
             onChange={(e) => setComposerText(e.target.value)}
-            placeholder={t('chat.composerPlaceholder')}
+            placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
             className="w-full min-h-[80px] px-4 pt-3 pb-10 rounded-2xl bg-transparent
                        text-editor-text placeholder-editor-muted text-sm
                        focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
@@ -387,45 +505,30 @@ export function ChatContent(): JSX.Element {
                 void sendCurrent();
               }
             }}
+            onPaste={handlePaste}
           />
 
           {/* 하단 컨트롤 바 */}
           <div className="absolute inset-x-0 bottom-0 px-2 pb-2 flex items-end justify-between pointer-events-none">
-            <div className="pointer-events-auto relative" data-ite-composer-menu-root>
-              <button
-                type="button"
-                className="w-8 h-8 rounded-full border border-editor-border bg-editor-bg text-editor-muted text-sm
-                           hover:bg-editor-border hover:text-editor-text transition-colors"
-                title={t('chat.composerAttach')}
-                aria-label={t('chat.composerAttachAriaLabel')}
-                onClick={() => setComposerMenuOpen((v) => !v)}
-                disabled={isLoading}
-              >
-                +
-              </button>
-              {composerMenuOpen && (
-                <div
-                  data-ite-composer-menu
-                  className="absolute bottom-10 left-0 w-52 rounded-xl border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50"
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              <div className="relative" data-ite-composer-menu-root>
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-full border border-editor-border bg-editor-bg text-editor-muted text-sm
+                             hover:bg-editor-border hover:text-editor-text transition-colors"
+                  title={t('chat.composerOptions')}
+                  aria-label={t('chat.composerOptionsAriaLabel')}
+                  onClick={() => setComposerMenuOpen((v) => !v)}
+                  disabled={isLoading}
                 >
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors"
-                    onClick={() => {
-                      setComposerMenuOpen(false);
-                      void (async () => {
-                        if (!isTauriRuntime()) return;
-                        const path = await pickChatAttachmentFile();
-                        if (path) {
-                          await addComposerAttachment(path);
-                        }
-                      })();
-                    }}
+                  +
+                </button>
+                {composerMenuOpen && (
+                  <div
+                    data-ite-composer-menu
+                    className="absolute bottom-10 left-0 w-52 rounded-xl border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50"
                   >
-                    {t('chat.addFileOrImage')}
-                  </button>
-                  <div className="h-px bg-editor-border" />
-                  <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                    <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
                     <input
                       type="checkbox"
                       className="accent-primary-500"
@@ -491,6 +594,33 @@ export function ChatContent(): JSX.Element {
                   )}
                 </div>
               )}
+              </div>
+
+              {/* 파일 첨부 버튼 */}
+              <button
+                type="button"
+                className="w-8 h-8 rounded-full border border-editor-border bg-editor-bg text-editor-muted
+                           hover:bg-editor-border hover:text-editor-text transition-colors flex items-center justify-center"
+                title={t('chat.attachFile')}
+                aria-label={t('chat.attachFileAriaLabel')}
+                onClick={() => void handleAttachClick()}
+                disabled={isLoading}
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                  />
+                </svg>
+              </button>
             </div>
 
             <div className="pointer-events-auto flex items-center gap-2">
@@ -521,29 +651,6 @@ export function ChatContent(): JSX.Element {
               </button>
             </div>
           </div>
-
-          {composerAttachments.length > 0 && (
-            <div className="px-3 pb-3 -mt-2 flex flex-wrap gap-2">
-              {composerAttachments.map((a) => (
-                <div
-                  key={a.id}
-                  className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-text max-w-full"
-                  title={a.filename}
-                >
-                  <span className="truncate max-w-[180px]">{a.filename}</span>
-                  <button
-                    type="button"
-                    className="text-editor-muted hover:text-red-600"
-                    aria-label={t('chat.removeAttachment')}
-                    onClick={() => removeComposerAttachment(a.id)}
-                    disabled={isLoading}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </form>
     </div>
