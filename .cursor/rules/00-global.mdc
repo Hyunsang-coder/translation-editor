@@ -77,7 +77,29 @@ alwaysApply: true
 
 ---
 
-## 7. 터미널 실행 정책
+## 7. 버전 관리 (Versioning)
+
+**주요 업데이트 시 버전 수정 제안** — 다음 조건에서 버전 업데이트를 권장:
+- 새로운 주요 기능 추가 (`feat:` 커밋)
+- 사용자 경험에 영향을 주는 변경
+- 릴리즈/배포 준비 시
+
+**버전 동기화 대상 파일** (3곳 모두 동일 버전 유지):
+- `package.json` → `version` 필드 (Single Source of Truth, UI에 표시됨)
+- `src-tauri/Cargo.toml` → `version` 필드 (Rust 백엔드)
+- `src-tauri/tauri.conf.json` → `version` 필드 (최종 앱 패키징)
+
+**버전 규칙** (Semantic Versioning):
+- `MAJOR.MINOR.PATCH` 형식 (예: 1.0.0)
+- MAJOR: 호환성 깨지는 변경
+- MINOR: 기능 추가 (하위 호환)
+- PATCH: 버그 수정
+
+**제안 방식**: 버전 변경이 필요해 보이면 사용자에게 확인 후 3개 파일 동시 수정
+
+---
+
+## 8. 터미널 실행 정책
 
 - **Watch 모드 명령어 금지**: `npm run dev`, `npm start`, `jest --watch`, `nodemon` 등
 - 서버 시작 전 **포트 사용 여부 확인** 및 사용자 확인
@@ -86,7 +108,7 @@ alwaysApply: true
 
 ---
 
-## 8. Context7 MCP 사용
+## 9. Context7 MCP 사용
 
 - 라이브러리 문서 조회 필요 시 **Context7 도구 자동 사용**
 - 순서: `resolve-library-id` → `get-library-docs`
@@ -95,7 +117,7 @@ alwaysApply: true
 
 ---
 
-## 9. i18n (국제화)
+## 10. i18n (국제화)
 
 - UI 문자열은 `src/i18n/locales/ko.json`, `en.json`에 키 추가
 - 두 파일 모두 동기화 필수

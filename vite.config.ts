@@ -2,16 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import monacoEditorPlugin from 'vite-plugin-monaco-editor';
-import { execSync } from 'child_process';
+import pkg from './package.json';
 
-// 빌드 시점에 git branch 이름을 가져옴
-function getGitBranch(): string {
-  try {
-    return execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
-  } catch {
-    return 'unknown';
-  }
-}
+// package.json에서 버전 정보를 가져옴
+const appVersion = pkg.version;
 
 const host = process.env.TAURI_DEV_HOST;
 const monacoPlugin =
@@ -45,7 +39,7 @@ export default defineConfig(({ command }) => {
       'process.platform': JSON.stringify(process.platform),
       'process.version': JSON.stringify(process.version),
       global: 'window',
-      __APP_VERSION__: JSON.stringify(getGitBranch()),
+      __APP_VERSION__: JSON.stringify(appVersion),
     },
 
     plugins: [

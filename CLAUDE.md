@@ -367,6 +367,29 @@ cd src-tauri && cargo check
 6. Test with real AI API calls (not mocked)
 7. Verify SQLite persistence across sessions
 
+## Version Management
+
+### Version Files (Must Stay in Sync)
+- `package.json` → `"version": "x.y.z"`
+- `src-tauri/Cargo.toml` → `version = "x.y.z"`
+- `src-tauri/tauri.conf.json` → `"version": "x.y.z"`
+
+### When to Update Version
+주요 기능 추가, 버그 수정, 또는 릴리즈 준비 시 버전 업데이트를 제안할 것. 작업 완료 후 변경 규모에 따라 `/bump-version` 실행을 권장.
+
+### SemVer Guidelines
+| Type | When | Example |
+|------|------|---------|
+| **major** | Breaking changes, DB schema changes | 1.0.0 → 2.0.0 |
+| **minor** | New features, UI improvements | 1.0.0 → 1.1.0 |
+| **patch** | Bug fixes, docs, refactoring | 1.0.0 → 1.0.1 |
+
+### Version Update Command
+```
+/bump-version          # 변경사항 분석 후 버전 타입 제안
+/bump-version minor    # minor 버전으로 업데이트
+```
+
 ## Version Control
 
 - **Branch Strategy**: `main` (stable), `alpha-1.0` (active development)
