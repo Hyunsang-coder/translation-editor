@@ -103,6 +103,7 @@ interface ReviewIssue {
 | `src/components/ui/FloatingChatButton.tsx` | 플로팅 Chat 버튼 (드래그 가능) |
 | `src/components/review/ReviewPanel.tsx` | Review 탭 콘텐츠 |
 | `src/components/review/ReviewResultsTable.tsx` | 결과 테이블 + 체크박스 |
+| `src/ai/review/runReview.ts` | 검수 전용 API 호출 함수 (도구 없이 단순 1회 호출) |
 | `src/ai/review/parseReviewResult.ts` | AI 응답 JSON/마크다운 파싱 |
 | `src/editor/extensions/ReviewHighlight.ts` | TipTap Decoration 하이라이트 |
 | `src/editor/editorRegistry.ts` | 에디터 인스턴스 글로벌 레지스트리 |
@@ -190,7 +191,40 @@ interface ReviewIssue {
 
 ---
 
-## 5.15 하이라이트 무효화 방지
+## 5.15 검수 전용 API (runReview)
+
+### Why
+- 기존 채팅 인프라(Tool Calling, Responses API)는 검수에 불필요한 오버헤드를 발생시킵니다.
+- 검수는 단순 JSON 응답만 필요하므로, 도구 호출 없이 직접 API 호출이 효율적입니다.
+
+### How
+- `src/ai/review/runReview.ts`에서 전용 함수 제공
+- `createChatModel({ useFor: 'translation' })`로 Responses API 비활성화
+- 도구(Tool) 바인딩 없이 단순 스트리밍 호출
+
+### What
+
+```typescript
+interface RunReviewParams {
+  segments: AlignedSegment[];
+  intensity: ReviewIntensity;
+  translationRules?: string;
+  glossary?: string;
+  abortSignal?: AbortSignal;
+  onToken?: (accumulated: string) => void;
+}
+
+async function runReview(params: RunReviewParams): Promise<string>
+```
+
+### 성능 개선
+- Tool Calling 루프 제거 → 응답 시간 단축
+- Responses API 비활성화 → 불필요한 후처리 생략
+- 청크당 단일 API 호출 → 예측 가능한 latency
+
+---
+
+## 5.16 하이라이트 무효화 방지
 
 ### 문제
 - 수정 적용 시 문서 변경 → cross-store subscription이 하이라이트 비활성화

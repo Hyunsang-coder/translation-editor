@@ -104,7 +104,7 @@ cd src-tauri && cargo test
 
 - **Request Type Detection**: `prompt.ts` → `detectRequestType()` analyzes user message to determine `translate` | `question` | `general`
 
-- **Review Mode** (`ReviewPanel.tsx`):
+- **Review Mode** (`ReviewPanel.tsx` + `runReview.ts`):
   - AI-assisted translation review for error, omission, distortion, consistency issues
   - Document split into chunks → sequential AI review → JSON result parsing
   - Results displayed in table with checkboxes, action buttons (Apply/Copy/Ignore)
@@ -112,6 +112,10 @@ cd src-tauri && cargo test
   - **Apply Suggestion**: Click "적용" to replace targetExcerpt with suggestedFix in editor
   - **Copy for Omission**: Omission type shows "복사" button (clipboard copy) instead of Apply
   - Non-intrusive: no automatic document modification
+  - **Dedicated Review API** (`src/ai/review/runReview.ts`): Bypasses chat infrastructure for faster response
+    - No tool calling overhead (single API call per chunk)
+    - Uses `useFor: 'translation'` to disable Responses API
+    - Streaming with `onToken` callback for real-time progress
 
 #### 3. Tool Calling Architecture
 Implemented in `src/ai/chat.ts` with LangChain tools:
@@ -290,6 +294,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 29. **isApplyingSuggestion Guard**: Set `reviewStore.isApplyingSuggestion` to true during Apply operations to prevent highlight invalidation from cross-store subscription detecting document changes.
 30. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes in App Settings. At least one provider must be enabled.
 31. **Model Dropdown with optgroup**: Translation/Chat model selectors use `<optgroup>` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
+32. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
+33. **Fresh Chunks on Review Start**: Always regenerate chunks with `buildAlignedChunks(project)` at review start time, not from cached store state. This ensures the review uses the latest document content.
 
 ## Testing Patterns
 
@@ -344,7 +350,7 @@ cd src-tauri && cargo check
   - `components/ui/`: FloatingChatButton, common UI components
   - `components/editor/`: Editor-related UI
   - `components/review/`: ReviewPanel, ReviewResultsTable
-- **Review Feature**: `src/ai/review/` (parsing), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
+- **Review Feature**: `src/ai/review/` (runReview.ts, parseReviewResult.ts), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 - **Search/Replace Feature**: `src/editor/extensions/SearchHighlight.ts` (TipTap extension), `src/components/editor/SearchBar.tsx` (UI)
 - **Editor Registry**: `src/editor/editorRegistry.ts` - Global access to TipTap editor instances for cross-component operations
 
