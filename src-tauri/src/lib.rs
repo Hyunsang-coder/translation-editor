@@ -13,6 +13,7 @@ pub mod secrets;
 pub mod utils;
 
 use std::path::{Path, PathBuf};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
 
 fn is_valid_env_key(key: &str) -> bool {
@@ -158,6 +159,64 @@ pub fn run() {
             // 동기 실행: 프론트엔드의 initializeSecrets()보다 먼저 완료되어야 함
             tauri::async_runtime::block_on(async {
                 secrets::SECRETS.set_app_data_dir(app_data_dir.clone()).await;
+            });
+
+            // 커스텀 메뉴 생성
+            let app_menu = SubmenuBuilder::new(app, "OddEyes")
+                .about(None)
+                .separator()
+                .services()
+                .separator()
+                .hide()
+                .hide_others()
+                .show_all()
+                .separator()
+                .quit()
+                .build()?;
+
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
+
+            let reload_item = MenuItemBuilder::with_id("reload", "Reload This Page")
+                .accelerator("CmdOrCtrl+R")
+                .build(app)?;
+
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .item(&reload_item)
+                .build()?;
+
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .minimize()
+                .maximize()
+                .close_window()
+                .separator()
+                .fullscreen()
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&app_menu)
+                .item(&edit_menu)
+                .item(&view_menu)
+                .item(&window_menu)
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            // 메뉴 이벤트 핸들러
+            app.on_menu_event(move |app_handle, event| {
+                if event.id().as_ref() == "reload" {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let url = window.url().unwrap_or_else(|_| "http://localhost:1420".parse().unwrap());
+                        let _ = window.navigate(url);
+                    }
+                }
             });
 
             Ok(())

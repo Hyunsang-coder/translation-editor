@@ -216,10 +216,26 @@ function extractJsonObject(text: string): string | null {
 }
 ```
 
-### 폴백 전략
+### 폴백 전략 (3단계)
 
-1. JSON 파싱 시도
-2. 실패 시 마크다운 테이블 파싱
+1. 마커 기반 추출 (`---REVIEW_START/END---`)
+2. brace counting 기반 추출
+3. 마크다운 테이블 파싱
+
+### 마커 기반 추출 (Phase 3)
+```typescript
+function extractMarkedJson(text: string): string | null {
+  const startMarker = '---REVIEW_START---';
+  const endMarker = '---REVIEW_END---';
+  const startIdx = text.indexOf(startMarker);
+  const endIdx = text.indexOf(endMarker);
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return text.slice(startIdx + startMarker.length, endIdx).trim();
+  }
+  return null;
+}
+```
 
 ### 구현 파일
 - `src/ai/review/parseReviewResult.ts`
@@ -327,7 +343,43 @@ buildTextWithPositions(doc) → { text: string, positions: number[] }
 
 ---
 
-## 13.9 파일 매핑 요약
+## 13.9 검수 전용 API (runReview)
+
+### Why
+- 채팅 인프라(Tool Calling, Responses API)는 검수에 불필요한 오버헤드 발생
+- 검수는 단순 JSON 응답만 필요 → 직접 API 호출이 효율적
+
+### 특징
+- Tool binding 없이 단순 스트리밍 호출
+- `useFor: 'translation'`으로 Responses API 비활성화
+- 청크당 단일 API 호출 → 예측 가능한 latency
+
+### 인터페이스
+```typescript
+interface RunReviewParams {
+  segments: AlignedSegment[];
+  intensity: ReviewIntensity;
+  translationRules?: string;
+  glossary?: string;
+  abortSignal?: AbortSignal;
+  onToken?: (accumulated: string) => void;  // 스트리밍 콜백
+}
+
+async function runReview(params: RunReviewParams): Promise<string>
+```
+
+### 메시지 구성
+```
+SystemMessage: 검수 지침 (intensity별 프롬프트)
+HumanMessage: 번역 규칙 + 용어집 + 검수 대상 세그먼트
+```
+
+### 구현 파일
+- `src/ai/review/runReview.ts`
+
+---
+
+## 13.10 파일 매핑 요약
 
 | 기능 | 파일 |
 |------|------|
@@ -336,6 +388,7 @@ buildTextWithPositions(doc) → { text: string, positions: number[] }
 | 청크 병합 | `src/ai/chunking/merger.ts` |
 | 청크 오케스트레이션 | `src/ai/chunking/orchestrator.ts` |
 | 검수 도구/프롬프트 | `src/ai/tools/reviewTool.ts` |
+| 검수 전용 API | `src/ai/review/runReview.ts` |
 | 검수 결과 파싱 | `src/ai/review/parseReviewResult.ts` |
 | 검수 상태 관리 | `src/stores/reviewStore.ts` |
 | Markdown 변환 | `src/utils/markdownConverter.ts` |

@@ -238,3 +238,53 @@ setIsApplyingSuggestion(true);
 editor.commands.replaceMatch(suggestedFix);
 setTimeout(() => setIsApplyingSuggestion(false), 500);
 ```
+
+---
+
+## 5.17 검수 진행 UX
+
+### 진행 상태 표시
+- **로딩 애니메이션**: 도트 3개 bounce 애니메이션
+- **경과 시간**: 초 단위 표시 (`elapsedSeconds`)
+- **진행률 바**: 청크 기준 (완료/전체) + 퍼센트
+- **스트리밍 텍스트**: AI 응답 실시간 확인 가능 (접이식 `<details>`)
+
+### 스트리밍 텍스트 표시
+```typescript
+// reviewStore
+streamingText: string  // 현재 청크의 AI 스트리밍 응답 텍스트
+
+// runReview 호출 시
+runReview({
+  ...params,
+  onToken: (text) => setStreamingText(text),
+});
+```
+
+- 검수 진행 중: 접이식으로 실시간 응답 확인
+- 검수 완료 후: 마지막 청크 응답 유지 (디버깅용)
+
+---
+
+## 5.18 마커 기반 JSON 추출 (Phase 3)
+
+### Why
+- AI 응답에 JSON 외 텍스트가 포함되어 파싱 실패하는 케이스 방지
+- 명확한 경계 마커로 안정적인 추출
+
+### 출력 형식
+```
+---REVIEW_START---
+{
+  "issues": [...]
+}
+---REVIEW_END---
+```
+
+### 추출 우선순위
+1. `---REVIEW_START/END---` 마커 기반 추출
+2. brace counting 기반 추출 (기존)
+3. 마크다운 테이블 파싱 (fallback)
+
+### 구현 파일
+- `src/ai/review/parseReviewResult.ts` - `extractMarkedJson()`
