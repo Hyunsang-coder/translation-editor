@@ -129,16 +129,10 @@ export function ChatContent(): JSX.Element {
             const paths = event.payload.paths;
 
             for (const path of paths) {
-              // 이미지 파일인지 확장자로 확인
-              const ext = path.split('.').pop()?.toLowerCase() ?? '';
-              const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-
-              if (imageExtensions.includes(ext)) {
-                try {
-                  await addComposerAttachment(path);
-                } catch (error) {
-                  console.error('Failed to add dropped image:', error);
-                }
+              try {
+                await addComposerAttachment(path);
+              } catch (error) {
+                console.error('Failed to add dropped file:', error);
               }
             }
           } else {
