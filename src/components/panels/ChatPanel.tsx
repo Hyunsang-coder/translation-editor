@@ -596,16 +596,16 @@ export function ChatPanel(): JSX.Element {
 
       {/* Section 5: Attachments (4.2) */}
       <section className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
             <h3 className="text-xs font-semibold text-editor-text">5. {t('settings.attachments')}</h3>
-            <span className="text-[10px] text-editor-muted">
+            <span className="text-[10px] text-editor-muted whitespace-pre-line">
               {t('settings.attachmentsDescription')}
             </span>
           </div>
           <button
             type="button"
-            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1"
+            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 flex-shrink-0"
             onClick={() => {
               void (async () => {
                 if (!isTauriRuntime() || !project) return;

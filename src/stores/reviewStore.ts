@@ -80,6 +80,7 @@ interface ReviewState {
   isApplyingSuggestion: boolean;  // 수정 제안 적용 중 (하이라이트 무효화 방지)
   totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
   streamingText: string;  // 현재 청크의 AI 스트리밍 응답 텍스트
+  reviewTrigger: number;  // 외부에서 검수 시작 요청 트리거 (nonce 증가 시 ReviewPanel에서 검수 시작)
 }
 
 interface ReviewActions {
@@ -112,6 +113,11 @@ interface ReviewActions {
    * 검수 상태 초기화
    */
   resetReview: () => void;
+
+  /**
+   * 외부에서 검수 시작 요청 (ReviewPanel이 감지하여 실행)
+   */
+  triggerReview: () => void;
 
   /**
    * 특정 청크 가져오기
@@ -196,6 +202,7 @@ const initialState: ReviewState = {
   isApplyingSuggestion: false,
   totalIssuesFound: 0,
   streamingText: '',
+  reviewTrigger: 0,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
@@ -276,6 +283,13 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       ...initialState,
       highlightNonce: highlightNonce + 1, // 에디터에 refresh 신호 전송
     });
+  },
+
+  triggerReview: () => {
+    const { isReviewing, reviewTrigger } = get();
+    // 이미 검수 중이면 무시
+    if (isReviewing) return;
+    set({ reviewTrigger: reviewTrigger + 1 });
   },
 
   getChunk: (chunkIndex: number) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useReviewStore, type ReviewIntensity, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -75,6 +75,7 @@ export function ReviewPanel(): JSX.Element {
     totalIssuesFound,
     progress,
     streamingText,
+    reviewTrigger,
     initializeReview,
     addResult,
     handleChunkError,
@@ -113,6 +114,19 @@ export function ReviewPanel(): JSX.Element {
       initializeReview(project);
     }
   }, [project, initializeReview]);
+
+  // 외부에서 검수 트리거 시 handleRunReview 실행을 위한 ref
+  const handleRunReviewRef = useRef<(() => Promise<void>) | null>(null);
+  // 이전 trigger 값 추적 (마운트 시 실행 방지)
+  const prevTriggerRef = useRef(reviewTrigger);
+
+  // reviewTrigger 증가 감지하여 검수 시작 (마운트 시에는 실행 안됨)
+  useEffect(() => {
+    if (reviewTrigger > prevTriggerRef.current && handleRunReviewRef.current) {
+      handleRunReviewRef.current();
+    }
+    prevTriggerRef.current = reviewTrigger;
+  }, [reviewTrigger]);
 
   const handleRunReview = useCallback(async () => {
     if (!project) return;
@@ -205,6 +219,11 @@ export function ReviewPanel(): JSX.Element {
     handleChunkError,
     setStreamingText,
   ]);
+
+  // ref에 최신 handleRunReview 할당
+  useEffect(() => {
+    handleRunReviewRef.current = handleRunReview;
+  }, [handleRunReview]);
 
   const handleCancel = useCallback(() => {
     if (abortController) {

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { EditorUIState, Toast } from '@/types';
+import { useReviewStore } from '@/stores/reviewStore';
 
 // ============================================
 // Store State Interface
@@ -224,8 +225,15 @@ export const useUIStore = create<UIStore>()(
 
       // Review Panel
       openReviewPanel: (): void => {
+        const { sidebarCollapsed, sidebarActiveTab } = get();
+
+        // 이미 Review 탭이 열려있으면 검수 시작 트리거
+        if (!sidebarCollapsed && sidebarActiveTab === 'review') {
+          useReviewStore.getState().triggerReview();
+          return;
+        }
+
         // 사이드바가 닫혀있으면 열기 + Review 탭으로 전환
-        const { sidebarCollapsed } = get();
         if (sidebarCollapsed) {
           set({ sidebarCollapsed: false });
         }

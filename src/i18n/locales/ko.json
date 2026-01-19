@@ -39,9 +39,9 @@
     "glossaryDeleteConfirm": "\"{{filename}}\" 용어집을 삭제하시겠습니까?",
     "glossaryDeleteTitle": "용어집 삭제",
     "attachments": "참고 자료",
-    "attachmentsDescription": "AI가 참조할 문서를 첨부하세요 (PDF, Word, PPTX, Markdown)",
+    "attachmentsDescription": "PDF, Word, PPTX, Markdown",
     "attachmentsAttach": "첨부",
-    "attachmentsNoFiles": "이 프로젝트에 첨부된 참고 자료가 없습니다.",
+    "attachmentsNoFiles": "첨부된 참고 자료가 없습니다.",
     "attachmentsDeleteConfirm": "\"{{filename}}\"을(를) 삭제하시겠습니까?",
     "attachmentsDeleteTitle": "참고 자료 삭제"
   },
@@ -114,6 +114,7 @@
     "focusModeNormal": "일반",
     "focusModeFocus": "포커스",
     "themeCurrent": "현재: {{theme}}",
+    "tools": "도구",
     "settings": "설정",
     "projectSettings": "프로젝트 설정",
     "review": "검수"

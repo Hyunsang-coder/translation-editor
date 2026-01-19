@@ -39,9 +39,9 @@
     "glossaryDeleteConfirm": "Delete glossary \"{{filename}}\"?",
     "glossaryDeleteTitle": "Delete Glossary",
     "attachments": "Reference Materials",
-    "attachmentsDescription": "Attach documents for AI to reference (PDF, Word, PPTX, Markdown)",
+    "attachmentsDescription": "PDF, Word, PPTX, Markdown",
     "attachmentsAttach": "Attach",
-    "attachmentsNoFiles": "No reference materials attached to this project.",
+    "attachmentsNoFiles": "No reference materials attached.",
     "attachmentsDeleteConfirm": "Delete \"{{filename}}\"?",
     "attachmentsDeleteTitle": "Delete Reference Material"
   },
@@ -114,6 +114,7 @@
     "focusModeNormal": "Normal",
     "focusModeFocus": "Focus",
     "themeCurrent": "Current: {{theme}}",
+    "tools": "Tools",
     "settings": "Settings",
     "projectSettings": "Project Settings",
     "review": "Review"

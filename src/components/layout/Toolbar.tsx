@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Wrench, Settings, Search } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 
@@ -67,20 +68,19 @@ export function Toolbar(): JSX.Element {
           {focusMode ? '👁️' : '👀'}
         </button>
 
-        {/* Settings 드롭다운 */}
+        {/* Tools 드롭다운 */}
         <div ref={dropdownRef} className="relative">
           <button
             type="button"
             onClick={() => setDropdownOpen((v) => !v)}
             className={`
-              px-3 py-2 rounded-md flex items-center gap-1.5
+              p-2 rounded-md flex items-center gap-1
               hover:bg-editor-border transition-colors
               ${dropdownOpen ? 'bg-editor-border' : ''}
             `}
-            title={t('toolbar.settings')}
+            title={t('toolbar.tools')}
           >
-            <span>⚙️</span>
-            <span className="text-sm text-editor-text">{t('toolbar.settings')}</span>
+            <Wrench size={18} className="text-editor-text" />
             <span className="text-xs text-editor-muted">▼</span>
           </button>
 
@@ -91,7 +91,7 @@ export function Toolbar(): JSX.Element {
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleProjectSettings}
               >
-                <span>⚙️</span>
+                <Settings size={16} />
                 <span>{t('toolbar.projectSettings')}</span>
               </button>
               <div className="h-px bg-editor-border" />
@@ -100,7 +100,7 @@ export function Toolbar(): JSX.Element {
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleReview}
               >
-                <span>🔍</span>
+                <Search size={16} />
                 <span>{t('toolbar.review')}</span>
               </button>
             </div>
