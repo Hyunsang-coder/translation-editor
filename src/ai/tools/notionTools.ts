@@ -8,6 +8,47 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { invoke } from "@tauri-apps/api/core";
 
+// Notion API 응답 스키마 정의
+const NotionRichTextSchema = z.object({
+  plain_text: z.string(),
+}).passthrough();
+
+const NotionTitlePropertySchema = z.object({
+  type: z.literal("title"),
+  title: z.array(NotionRichTextSchema),
+}).passthrough();
+
+const NotionSearchResultItemSchema = z.object({
+  id: z.string(),
+  object: z.enum(["page", "database"]),
+  url: z.string().optional(),
+  properties: z.record(z.unknown()).optional(),
+  title: z.array(NotionRichTextSchema).optional(),
+}).passthrough();
+
+const NotionSearchResponseSchema = z.object({
+  results: z.array(NotionSearchResultItemSchema),
+}).passthrough();
+
+/**
+ * 에러 메시지에서 민감한 정보 제거
+ * @param error 원본 에러
+ * @returns 살균된 에러 메시지
+ */
+function sanitizeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // 토큰, 키, 시크릿 관련 정보 제거
+    return error.message
+      .replace(/token[=:]\s*['"]?[^\s'"]+['"]?/gi, 'token=[REDACTED]')
+      .replace(/key[=:]\s*['"]?[^\s'"]+['"]?/gi, 'key=[REDACTED]')
+      .replace(/secret[=:]\s*['"]?[^\s'"]+['"]?/gi, 'secret=[REDACTED]')
+      .replace(/bearer\s+[^\s]+/gi, 'Bearer [REDACTED]')
+      .replace(/ntn_[a-zA-Z0-9_]+/g, '[REDACTED_TOKEN]')
+      .replace(/secret_[a-zA-Z0-9_]+/g, '[REDACTED_TOKEN]');
+  }
+  return "알 수 없는 오류가 발생했습니다.";
+}
+
 /**
  * Notion 검색 도구 생성
  */
@@ -33,13 +74,21 @@ export function createNotionSearchTool(): DynamicStructuredTool {
           pageSize: 10,
         });
 
-        // 결과를 파싱하여 읽기 쉬운 형태로 변환
-        const parsed = JSON.parse(result);
+        // 결과를 파싱하고 스키마 검증
+        const rawParsed = JSON.parse(result);
+        const parseResult = NotionSearchResponseSchema.safeParse(rawParsed);
+
+        if (!parseResult.success) {
+          console.warn("Notion API 응답 스키마 불일치:", parseResult.error.message);
+          return "Notion 응답을 처리할 수 없습니다. 응답 형식이 예상과 다릅니다.";
+        }
+
+        const parsed = parseResult.data;
         if (!parsed.results || parsed.results.length === 0) {
           return "No results found in Notion for the given query.";
         }
 
-        const formatted = parsed.results.map((item: any, index: number) => {
+        const formatted = parsed.results.map((item, index: number) => {
           const title = extractTitle(item);
           const type = item.object === "database" ? "📊 Database" : "📄 Page";
           return `${index + 1}. ${type}: ${title}\n   ID: ${item.id}\n   URL: ${item.url || "N/A"}`;
@@ -47,7 +96,7 @@ export function createNotionSearchTool(): DynamicStructuredTool {
 
         return `Found ${parsed.results.length} result(s) in Notion:\n\n${formatted.join("\n\n")}`;
       } catch (error) {
-        throw new Error(`Notion 검색 실패: ${error}`);
+        throw new Error(`Notion 검색 실패: ${sanitizeErrorMessage(error)}`);
       }
     },
   });
@@ -79,7 +128,7 @@ export function createNotionGetPageTool(): DynamicStructuredTool {
 
         return `Notion Page Content:\n\n${content}`;
       } catch (error) {
-        throw new Error(`Notion 페이지 조회 실패: ${error}`);
+        throw new Error(`Notion 페이지 조회 실패: ${sanitizeErrorMessage(error)}`);
       }
     },
   });
@@ -106,19 +155,28 @@ export function createNotionQueryDatabaseTool(): DynamicStructuredTool {
           pageSize: 20,
         });
 
-        const parsed = JSON.parse(result);
+        // 결과를 파싱하고 스키마 검증
+        const rawParsed = JSON.parse(result);
+        const parseResult = NotionSearchResponseSchema.safeParse(rawParsed);
+
+        if (!parseResult.success) {
+          console.warn("Notion API 응답 스키마 불일치:", parseResult.error.message);
+          return "Notion 응답을 처리할 수 없습니다. 응답 형식이 예상과 다릅니다.";
+        }
+
+        const parsed = parseResult.data;
         if (!parsed.results || parsed.results.length === 0) {
           return "The database is empty or no entries match the query.";
         }
 
-        const formatted = parsed.results.map((item: any, index: number) => {
+        const formatted = parsed.results.map((item, index: number) => {
           const title = extractTitle(item);
           return `${index + 1}. ${title}\n   ID: ${item.id}`;
         });
 
         return `Database entries (${parsed.results.length} items):\n\n${formatted.join("\n\n")}`;
       } catch (error) {
-        throw new Error(`Notion 데이터베이스 쿼리 실패: ${error}`);
+        throw new Error(`Notion 데이터베이스 쿼리 실패: ${sanitizeErrorMessage(error)}`);
       }
     },
   });
@@ -127,20 +185,21 @@ export function createNotionQueryDatabaseTool(): DynamicStructuredTool {
 /**
  * Notion 검색 결과에서 제목 추출
  */
-function extractTitle(item: any): string {
+function extractTitle(item: z.infer<typeof NotionSearchResultItemSchema>): string {
   // 페이지 properties에서 Title 타입 속성 찾기
   if (item.properties) {
     for (const [, value] of Object.entries(item.properties)) {
-      const prop = value as any;
-      if (prop.type === "title" && prop.title && prop.title.length > 0) {
-        return prop.title.map((t: any) => t.plain_text).join("");
+      // 안전한 타입 검증
+      const propResult = NotionTitlePropertySchema.safeParse(value);
+      if (propResult.success && propResult.data.title.length > 0) {
+        return propResult.data.title.map((t) => t.plain_text).join("");
       }
     }
   }
 
   // 데이터베이스의 경우 title 필드 확인
-  if (item.title && Array.isArray(item.title) && item.title.length > 0) {
-    return item.title.map((t: any) => t.plain_text).join("");
+  if (item.title && item.title.length > 0) {
+    return item.title.map((t) => t.plain_text).join("");
   }
 
   return "(Untitled)";

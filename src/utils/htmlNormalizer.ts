@@ -72,6 +72,57 @@ const BLOCK_TAGS = new Set([
   'hr',
 ]);
 
+// 허용된 URL 프로토콜 (보안: javascript:, data:, vbscript: 등 차단)
+const ALLOWED_URL_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:'];
+
+/**
+ * URL이 안전한 프로토콜을 사용하는지 검증
+ * @param url 검증할 URL
+ * @returns 안전하면 true, 위험하면 false
+ */
+function isUrlSafe(url: string | null): boolean {
+  if (!url) return true; // 빈 URL은 허용
+
+  const trimmed = url.trim().toLowerCase();
+  if (trimmed === '') return true;
+
+  // 상대 경로는 허용
+  if (trimmed.startsWith('/') || trimmed.startsWith('#') || trimmed.startsWith('.')) {
+    return true;
+  }
+
+  // 프로토콜이 없는 경우 허용 (상대 경로로 처리됨)
+  if (!trimmed.includes(':')) {
+    return true;
+  }
+
+  // 허용된 프로토콜인지 확인
+  return ALLOWED_URL_PROTOCOLS.some(protocol => trimmed.startsWith(protocol));
+}
+
+/**
+ * DOM 내 위험한 URL 속성 제거 (href, src)
+ */
+function sanitizeUrls(root: ParentNode): void {
+  // href 속성 검증
+  const linksWithHref = Array.from(root.querySelectorAll('[href]'));
+  for (const el of linksWithHref) {
+    const href = el.getAttribute('href');
+    if (!isUrlSafe(href)) {
+      el.removeAttribute('href');
+    }
+  }
+
+  // src 속성 검증
+  const elementsWithSrc = Array.from(root.querySelectorAll('[src]'));
+  for (const el of elementsWithSrc) {
+    const src = el.getAttribute('src');
+    if (!isUrlSafe(src)) {
+      el.removeAttribute('src');
+    }
+  }
+}
+
 export function shouldNormalizePastedHtml(html: string): boolean {
   if (!html) return false;
   const lower = html.toLowerCase();
@@ -103,6 +154,7 @@ export function normalizePastedHtml(html: string): string {
     normalizeDivs(doc.body);
     removeEmptyParagraphs(doc.body);
     removeDuplicateTableHeaders(doc.body);
+    sanitizeUrls(doc.body); // 보안: 위험한 URL 프로토콜 제거
 
     return doc.body.innerHTML;
   } catch (error) {

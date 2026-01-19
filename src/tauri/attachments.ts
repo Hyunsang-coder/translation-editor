@@ -1,5 +1,15 @@
 import { invoke } from './invoke';
 
+// 이미지 Base64 변환 최대 크기 (10MB)
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+export class ImageSizeExceededError extends Error {
+    constructor(actualSize: number, maxSize: number) {
+        super(`이미지 크기(${(actualSize / 1024 / 1024).toFixed(2)}MB)가 최대 허용 크기(${(maxSize / 1024 / 1024).toFixed(0)}MB)를 초과합니다.`);
+        this.name = 'ImageSizeExceededError';
+    }
+}
+
 export interface AttachmentDto {
     id: string;
     filename: string;
@@ -48,11 +58,23 @@ export async function saveTempImage(bytes: number[], filename: string): Promise<
  * 이미지 파일을 읽어서 base64 data URL로 변환
  * @param path 파일 경로
  * @param fileType 파일 확장자 (png, jpg, jpeg, gif, webp)
+ * @param maxSizeBytes 최대 허용 크기 (바이트, 기본값: 10MB)
  * @returns base64 data URL 또는 null (읽기 실패 시)
+ * @throws ImageSizeExceededError 파일 크기가 최대 허용 크기 초과 시
  */
-export async function readImageAsDataUrl(path: string, fileType: string): Promise<string | null> {
+export async function readImageAsDataUrl(
+    path: string,
+    fileType: string,
+    maxSizeBytes: number = MAX_IMAGE_SIZE_BYTES
+): Promise<string | null> {
     try {
         const bytes = await readFileBytes(path);
+
+        // 보안: 파일 크기 검증 (메모리 고갈 방지)
+        if (bytes.length > maxSizeBytes) {
+            throw new ImageSizeExceededError(bytes.length, maxSizeBytes);
+        }
+
         const uint8Array = new Uint8Array(bytes);
 
         // Uint8Array를 base64로 변환
@@ -71,6 +93,10 @@ export async function readImageAsDataUrl(path: string, fileType: string): Promis
 
         return `data:${mimeType};base64,${base64}`;
     } catch (error) {
+        // ImageSizeExceededError는 다시 throw
+        if (error instanceof ImageSizeExceededError) {
+            throw error;
+        }
         console.error('Failed to read image as data URL:', error);
         return null;
     }
