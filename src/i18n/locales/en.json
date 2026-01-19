@@ -38,12 +38,12 @@
     "glossaryNoFiles": "No glossary files linked.",
     "glossaryDeleteConfirm": "Delete glossary \"{{filename}}\"?",
     "glossaryDeleteTitle": "Delete Glossary",
-    "attachments": "Attachments",
-    "attachmentsDescription": "PDF, Word, PPTX, Markdown (Max 30,000 chars each)",
+    "attachments": "Reference Materials",
+    "attachmentsDescription": "Attach documents for AI to reference (PDF, Word, PPTX, Markdown)",
     "attachmentsAttach": "Attach",
-    "attachmentsNoFiles": "No files attached to this project.",
+    "attachmentsNoFiles": "No reference materials attached to this project.",
     "attachmentsDeleteConfirm": "Delete \"{{filename}}\"?",
-    "attachmentsDeleteTitle": "Delete Attachment"
+    "attachmentsDeleteTitle": "Delete Reference Material"
   },
   "appSettings": {
     "title": "App Settings",

@@ -38,12 +38,12 @@
     "glossaryNoFiles": "연결된 용어집 파일이 없습니다.",
     "glossaryDeleteConfirm": "\"{{filename}}\" 용어집을 삭제하시겠습니까?",
     "glossaryDeleteTitle": "용어집 삭제",
-    "attachments": "첨부 파일",
-    "attachmentsDescription": "PDF, Word, PPTX, Markdown (각 파일 최대 30,000자)",
+    "attachments": "참고 자료",
+    "attachmentsDescription": "AI가 참조할 문서를 첨부하세요 (PDF, Word, PPTX, Markdown)",
     "attachmentsAttach": "첨부",
-    "attachmentsNoFiles": "이 프로젝트에 첨부된 파일이 없습니다.",
+    "attachmentsNoFiles": "이 프로젝트에 첨부된 참고 자료가 없습니다.",
     "attachmentsDeleteConfirm": "\"{{filename}}\"을(를) 삭제하시겠습니까?",
-    "attachmentsDeleteTitle": "첨부 파일 삭제"
+    "attachmentsDeleteTitle": "참고 자료 삭제"
   },
   "appSettings": {
     "title": "앱 설정",
