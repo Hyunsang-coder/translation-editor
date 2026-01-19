@@ -170,34 +170,6 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         "
       </button>
 
-      {/* 링크 */}
-      <button
-        type="button"
-        onClick={() => {
-          const url = window.prompt('URL을 입력하세요:');
-          if (url) {
-            editor.chain().focus().setLink({ href: url }).run();
-          }
-        }}
-        className={`
-          px-2 py-1 text-xs rounded hover:bg-editor-surface transition-colors
-          ${isActive('link') ? 'bg-editor-surface' : ''}
-        `}
-        title="링크 추가"
-      >
-        🔗
-      </button>
-      {isActive('link') && (
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().unsetLink().run()}
-          className="px-2 py-1 text-xs rounded hover:bg-editor-surface transition-colors"
-          title="링크 제거"
-        >
-          ✕
-        </button>
-      )}
-
       {/* 구분선 */}
       <div className="w-px h-4 bg-editor-border mx-1" />
 
@@ -221,6 +193,9 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           A+
         </button>
       </div>
+
+      {/* 구분선 */}
+      <div className="w-px h-4 bg-editor-border mx-1" />
 
       {/* 줄 높이 조정 */}
       <div className="flex items-center gap-0.5">
