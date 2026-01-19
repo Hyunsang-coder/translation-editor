@@ -7,6 +7,7 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile, pickChatAttachmentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { saveTempImage } from '@/tauri/attachments';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
@@ -15,6 +16,7 @@ import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
+import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
 import type { ChatMessageMetadata } from '@/types';
 
 
@@ -248,12 +250,26 @@ export function ChatPanel(): JSX.Element {
     if (!isTauriRuntime()) return;
 
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      // Tauri v2에서는 드롭된 파일의 경로를 직접 얻을 수 없으므로
-      // 파일 다이얼로그를 통해 파일을 선택하도록 안내
-      const path = await pickChatAttachmentFile();
-      if (path) {
-        await addComposerAttachment(path);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file) continue;
+
+      // 이미지 파일인 경우 직접 처리 (MIME 타입 + 확장자 모두 체크)
+      if (isImageFile(file)) {
+        try {
+          const bytes = await fileToBytes(file);
+          const path = await saveTempImage(bytes, file.name);
+          await addComposerAttachment(path);
+        } catch (error) {
+          console.error('Failed to process dropped image:', error);
+        }
+      } else {
+        // 이미지가 아닌 파일은 파일 다이얼로그로 안내
+        const path = await pickChatAttachmentFile();
+        if (path) {
+          await addComposerAttachment(path);
+        }
+        break; // 다이얼로그는 한 번만 열기
       }
     }
   }, [addComposerAttachment]);
@@ -263,13 +279,22 @@ export function ChatPanel(): JSX.Element {
     const items = e.clipboardData.items;
 
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (isImageMimeType(item.type)) {
         e.preventDefault();
-        // 이미지 붙여넣기는 파일 다이얼로그를 열어 안내
-        // Tauri에서 클립보드 이미지를 직접 파일로 저장하려면 별도 백엔드 작업 필요
-        const path = await pickChatAttachmentFile();
-        if (path) {
+
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        // 파일명 생성 (클립보드 이미지는 이름이 없음)
+        const ext = item.type.split('/')[1] || 'png';
+        const filename = `clipboard-${Date.now()}.${ext}`;
+
+        try {
+          const bytes = await fileToBytes(blob);
+          const path = await saveTempImage(bytes, filename);
           await addComposerAttachment(path);
+        } catch (error) {
+          console.error('Failed to process pasted image:', error);
         }
         return;
       }

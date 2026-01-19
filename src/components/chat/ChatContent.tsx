@@ -6,12 +6,14 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { pickChatAttachmentFile } from '@/tauri/dialog';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { saveTempImage } from '@/tauri/attachments';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
+import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
 import type { ChatMessageMetadata } from '@/types';
 
 /**
@@ -215,12 +217,26 @@ export function ChatContent(): JSX.Element {
     if (!isTauriRuntime()) return;
 
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      // Tauri v2에서는 드롭된 파일의 경로를 직접 얻을 수 없으므로
-      // 파일 다이얼로그를 통해 파일을 선택하도록 안내
-      const path = await pickChatAttachmentFile();
-      if (path) {
-        await addComposerAttachment(path);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file) continue;
+
+      // 이미지 파일인 경우 직접 처리 (MIME 타입 + 확장자 모두 체크)
+      if (isImageFile(file)) {
+        try {
+          const bytes = await fileToBytes(file);
+          const path = await saveTempImage(bytes, file.name);
+          await addComposerAttachment(path);
+        } catch (error) {
+          console.error('Failed to process dropped image:', error);
+        }
+      } else {
+        // 이미지가 아닌 파일은 파일 다이얼로그로 안내
+        const path = await pickChatAttachmentFile();
+        if (path) {
+          await addComposerAttachment(path);
+        }
+        break; // 다이얼로그는 한 번만 열기
       }
     }
   }, [addComposerAttachment]);
@@ -230,15 +246,27 @@ export function ChatContent(): JSX.Element {
     const items = e.clipboardData.items;
 
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (isImageMimeType(item.type)) {
         e.preventDefault();
-        const path = await pickChatAttachmentFile();
-        if (path) {
+
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        // 파일명 생성 (클립보드 이미지는 이름이 없음)
+        const ext = item.type.split('/')[1] || 'png';
+        const filename = `clipboard-${Date.now()}.${ext}`;
+
+        try {
+          const bytes = await fileToBytes(blob);
+          const path = await saveTempImage(bytes, filename);
           await addComposerAttachment(path);
+        } catch (error) {
+          console.error('Failed to process pasted image:', error);
         }
         return;
       }
     }
+    // 텍스트 붙여넣기는 기본 동작 유지
   }, [addComposerAttachment]);
 
   // 파일 첨부 버튼 클릭 핸들러

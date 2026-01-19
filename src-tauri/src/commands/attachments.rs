@@ -282,3 +282,45 @@ fn extract_pptx_text(path: &Path) -> Result<String, String> {
         Ok(all_text)
     }
 }
+
+/// 이미지 바이트를 임시 파일로 저장하고 경로를 반환합니다.
+/// - 드래그앤드롭 또는 클립보드에서 이미지를 붙여넣을 때 사용합니다.
+/// - 프론트엔드에서 File/Blob을 바이트 배열로 변환하여 전송합니다.
+#[tauri::command]
+pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<String> {
+    // 파일 확장자 검증 (이미지만 허용)
+    let extension = std::path::Path::new(&filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    if !is_image_extension(&extension) {
+        return Err(CommandError {
+            code: "INVALID_TYPE".to_string(),
+            message: format!("지원하지 않는 이미지 형식입니다: {}", extension),
+            details: None,
+        });
+    }
+
+    // 임시 디렉토리 생성
+    let temp_dir = std::env::temp_dir().join("oddeyes-uploads");
+    fs::create_dir_all(&temp_dir).map_err(|e| CommandError {
+        code: "DIR_CREATE_ERROR".to_string(),
+        message: format!("임시 디렉토리 생성 실패: {}", e),
+        details: None,
+    })?;
+
+    // 고유한 파일명 생성
+    let unique_name = format!("{}_{}", Uuid::new_v4(), filename);
+    let path = temp_dir.join(&unique_name);
+
+    // 파일 저장
+    fs::write(&path, bytes).map_err(|e| CommandError {
+        code: "WRITE_ERROR".to_string(),
+        message: format!("파일 저장 실패: {}", e),
+        details: None,
+    })?;
+
+    Ok(path.to_string_lossy().to_string())
+}

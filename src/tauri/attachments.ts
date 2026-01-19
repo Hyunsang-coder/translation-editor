@@ -34,6 +34,17 @@ export async function readFileBytes(path: string): Promise<number[]> {
 }
 
 /**
+ * 이미지 바이트를 임시 파일로 저장하고 경로를 반환
+ * - 드래그앤드롭 또는 클립보드에서 이미지를 붙여넣을 때 사용
+ * @param bytes 이미지 바이트 배열
+ * @param filename 원본 파일명 (확장자 포함)
+ * @returns 저장된 임시 파일 경로
+ */
+export async function saveTempImage(bytes: number[], filename: string): Promise<string> {
+    return await invoke<string>('save_temp_image', { bytes, filename });
+}
+
+/**
  * 이미지 파일을 읽어서 base64 data URL로 변환
  * @param path 파일 경로
  * @param fileType 파일 확장자 (png, jpg, jpeg, gif, webp)
