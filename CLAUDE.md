@@ -186,7 +186,8 @@ Critical stores in `src/stores/`:
 - Glossary: 30,000 chars
 - Documents: 100,000 chars (chat mode uses on-demand fetch)
 - Attachments (per file): 30,000 chars
-- Attachments (total): 50,000 chars
+- Attachments (total): 100,000 chars
+- Chat images: max 10 images, 10MB each
 
 ### Tauri Commands Pattern
 ```rust

@@ -536,8 +536,8 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
   if (images.length === 0) return { messages: params.messages, usedImages: false };
   if (!isTauriRuntime()) return { messages: params.messages, usedImages: false };
 
-  const MAX_IMAGES = 3;
-  const MAX_IMAGE_BYTES = 2_000_000; // 2MB
+  const MAX_IMAGES = 10;
+  const MAX_IMAGE_BYTES = 10_000_000; // 10MB
 
   const blocks: any[] = [{ type: 'text', text: params.userText }];
   const warnings: string[] = [];
@@ -548,7 +548,8 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
       const raw = await readFileBytes(img.filePath);
       const bytes = new Uint8Array(raw);
       if (bytes.length > MAX_IMAGE_BYTES) {
-        warnings.push(`- ${img.filename}: 파일이 너무 커서(${Math.round(bytes.length / 1024)}KB) 제외됨`);
+        const sizeMB = (bytes.length / 1024 / 1024).toFixed(1);
+        warnings.push(`- ${img.filename}: 파일이 너무 커서(${sizeMB}MB, 최대 10MB) 제외됨`);
         continue;
       }
       const base64 = bytesToBase64(bytes);

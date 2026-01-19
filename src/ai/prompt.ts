@@ -17,7 +17,7 @@ const LIMITS = {
   glossaryChars: 30000,
   documentChars: 100000,
   attachmentCharsPerFile: 30000,
-  attachmentCharsTotal: 50000,
+  attachmentCharsTotal: 100000,
   blockContextMaxBlocks: 20,
   blockContextCharsPerBlock: 500,
 } as const;
