@@ -40,6 +40,16 @@ export async function pickGlossaryExcelFile(): Promise<string | null> {
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
 
+export async function pickGlossaryFile(): Promise<string | null> {
+  const file = await open({
+    title: '용어집 파일 선택',
+    multiple: false,
+    filters: [{ name: 'Glossary', extensions: ['csv', 'xlsx', 'xls'] }],
+  });
+  if (!file) return null;
+  return Array.isArray(file) ? (file[0] ?? null) : file;
+}
+
 export async function pickDocumentFile(): Promise<string | null> {
   const file = await open({
     title: '첨부할 문서 선택',

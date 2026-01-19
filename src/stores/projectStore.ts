@@ -135,6 +135,7 @@ interface ProjectActions {
   switchProjectById: (projectId: string) => Promise<void>;
   updateGlossaryPaths: (paths: string[]) => void;
   addGlossaryPath: (path: string) => void;
+  removeGlossaryPath: (path: string) => void;
   startAutoSave: () => void;
   stopAutoSave: () => void;
 
@@ -481,6 +482,26 @@ export const useProjectStore = create<ProjectStore>()(
         if (!project) return;
         const prev = project.metadata.glossaryPaths ?? [];
         const next = Array.from(new Set([...prev, p]));
+        set({
+          project: {
+            ...project,
+            metadata: {
+              ...project.metadata,
+              glossaryPaths: next,
+              updatedAt: Date.now(),
+            },
+          },
+          isDirty: true,
+          lastChangeAt: Date.now(),
+        });
+        scheduleWriteThroughSave(set, get);
+      },
+
+      removeGlossaryPath: (path: string): void => {
+        const { project } = get();
+        if (!project) return;
+        const prev = project.metadata.glossaryPaths ?? [];
+        const next = prev.filter((p) => p !== path);
         set({
           project: {
             ...project,

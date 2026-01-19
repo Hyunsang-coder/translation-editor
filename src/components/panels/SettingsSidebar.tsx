@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { pickGlossaryCsvFile, pickGlossaryExcelFile, pickDocumentFile } from '@/tauri/dialog';
+import { pickGlossaryFile, pickDocumentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
@@ -30,6 +30,7 @@ export function SettingsSidebar(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const settingsKey = project?.id ?? 'none';
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
+  const removeGlossaryPath = useProjectStore((s) => s.removeGlossaryPath);
 
   // 사이드바 축소 상태
   if (sidebarCollapsed) {
@@ -143,56 +144,77 @@ export function SettingsSidebar(): JSX.Element {
           <div className="flex flex-col gap-1">
             <h3 className="text-xs font-semibold text-editor-text">4. {t('settings.glossary')}</h3>
             <span className="text-[10px] text-editor-muted">
-              {t('settings.glossaryColumns')}
+              {t('settings.glossaryDescription')}
             </span>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
-              onClick={() => {
-                void (async () => {
-                  if (!isTauriRuntime() || !project) return;
-                  const path = await pickGlossaryCsvFile();
-                  if (path) {
+          <button
+            type="button"
+            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1"
+            onClick={() => {
+              void (async () => {
+                if (!isTauriRuntime() || !project) return;
+                const path = await pickGlossaryFile();
+                if (path) {
+                  const ext = path.split('.').pop()?.toLowerCase();
+                  if (ext === 'csv') {
                     await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false });
-                    addGlossaryPath(path);
-                  }
-                })();
-              }}
-            >
-              {t('settings.glossaryImportCsv')}
-            </button>
-            <button
-              type="button"
-              className="px-2 py-1 rounded text-xs bg-editor-surface border border-editor-border hover:bg-editor-border"
-              onClick={() => {
-                void (async () => {
-                  if (!isTauriRuntime() || !project) return;
-                  const path = await pickGlossaryExcelFile();
-                  if (path) {
+                  } else {
                     await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
-                    addGlossaryPath(path);
                   }
-                })();
-              }}
-            >
-              {t('settings.glossaryImportExcel')}
-            </button>
-          </div>
+                  addGlossaryPath(path);
+                }
+              })();
+            }}
+          >
+            <span>+</span>
+            <span>{t('settings.glossaryAttach')}</span>
+          </button>
         </div>
 
         {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
-          <div className="p-2 rounded bg-editor-surface border border-editor-border">
-            <div className="text-xs text-editor-muted">{t('settings.glossaryLinkedGlossaries')}</div>
-            <ul className="mt-1 space-y-1">
-              {project.metadata.glossaryPaths.map((p) => (
-                <li key={p} className="text-xs text-editor-text truncate" title={p}>• {p}</li>
-              ))}
-            </ul>
+          <div className="space-y-1.5">
+            {project.metadata.glossaryPaths.map((p) => {
+              const filename = p.split('/').pop() || p.split('\\').pop() || p;
+              const ext = filename.split('.').pop()?.toLowerCase();
+              return (
+                <div
+                  key={p}
+                  className="group flex items-center justify-between p-2 rounded bg-editor-surface border border-editor-border hover:border-editor-text transition-colors"
+                  title={p}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs">
+                      {ext === 'csv' ? '📋' : '📊'}
+                    </span>
+                    <span className="text-[11px] text-editor-text font-medium truncate">
+                      {filename}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-editor-muted hover:text-red-500 transition-opacity"
+                    onClick={() => {
+                      void (async () => {
+                        const ok = await confirm(t('settings.glossaryDeleteConfirm', { filename }), {
+                          title: t('settings.glossaryDeleteTitle'),
+                          kind: 'warning',
+                        });
+                        if (ok) {
+                          removeGlossaryPath(p);
+                        }
+                      })();
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="text-xs text-editor-muted italic p-2">{t('settings.glossaryNoFiles')}</div>
+          <div className="text-xs text-editor-muted italic p-2 border border-dashed border-editor-border rounded">
+            {t('settings.glossaryNoFiles')}
+          </div>
         )}
       </section>
 
