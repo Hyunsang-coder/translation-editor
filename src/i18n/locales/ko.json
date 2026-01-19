@@ -39,7 +39,7 @@
     "glossaryDeleteConfirm": "\"{{filename}}\" 용어집을 삭제하시겠습니까?",
     "glossaryDeleteTitle": "용어집 삭제",
     "attachments": "첨부 파일",
-    "attachmentsDescription": "PDF, Word, PPTX, Markdown (각 파일 최대 4,000자)",
+    "attachmentsDescription": "PDF, Word, PPTX, Markdown (각 파일 최대 30,000자)",
     "attachmentsAttach": "첨부",
     "attachmentsNoFiles": "이 프로젝트에 첨부된 파일이 없습니다.",
     "attachmentsDeleteConfirm": "\"{{filename}}\"을(를) 삭제하시겠습니까?",

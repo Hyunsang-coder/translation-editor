@@ -39,7 +39,7 @@
     "glossaryDeleteConfirm": "Delete glossary \"{{filename}}\"?",
     "glossaryDeleteTitle": "Delete Glossary",
     "attachments": "Attachments",
-    "attachmentsDescription": "PDF, Word, PPTX, Markdown (Max 4,000 chars each)",
+    "attachmentsDescription": "PDF, Word, PPTX, Markdown (Max 30,000 chars each)",
     "attachmentsAttach": "Attach",
     "attachmentsNoFiles": "No files attached to this project.",
     "attachmentsDeleteConfirm": "Delete \"{{filename}}\"?",
