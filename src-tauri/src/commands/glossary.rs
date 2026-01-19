@@ -7,6 +7,7 @@ use tauri::State;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use crate::utils::validate_path;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,6 +43,9 @@ pub fn import_glossary_csv(
     args: ImportGlossaryCsvArgs,
     db_state: State<DbState>,
 ) -> CommandResult<ImportGlossaryResult> {
+    // 경로 검증 (시스템 디렉토리 접근 차단)
+    let validated_path = validate_path(&args.path)?;
+
     let mut db = db_state.0.lock().map_err(|e| CommandError {
         code: "LOCK_ERROR".to_string(),
         message: format!("Failed to acquire database lock: {}", e),
@@ -50,7 +54,7 @@ pub fn import_glossary_csv(
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
-        .import_glossary_csv(&args.project_id, &args.path, replace)
+        .import_glossary_csv(&args.project_id, validated_path.to_string_lossy().as_ref(), replace)
         .map_err(CommandError::from)?;
 
     Ok(ImportGlossaryResult {
@@ -66,6 +70,9 @@ pub fn import_glossary_excel(
     args: ImportGlossaryExcelArgs,
     db_state: State<DbState>,
 ) -> CommandResult<ImportGlossaryResult> {
+    // 경로 검증 (시스템 디렉토리 접근 차단)
+    let validated_path = validate_path(&args.path)?;
+
     let mut db = db_state.0.lock().map_err(|e| CommandError {
         code: "LOCK_ERROR".to_string(),
         message: format!("Failed to acquire database lock: {}", e),
@@ -74,7 +81,7 @@ pub fn import_glossary_excel(
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
-        .import_glossary_excel(&args.project_id, &args.path, replace)
+        .import_glossary_excel(&args.project_id, validated_path.to_string_lossy().as_ref(), replace)
         .map_err(CommandError::from)?;
 
     Ok(ImportGlossaryResult {
