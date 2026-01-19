@@ -8,6 +8,7 @@ import { pickChatAttachmentFile } from '@/tauri/dialog';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { saveTempImage } from '@/tauri/attachments';
 import { confirm } from '@tauri-apps/plugin-dialog';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
@@ -108,6 +109,65 @@ export function ChatContent(): JSX.Element {
     return unsubscribe;
   }, []);
 
+  // Tauri 드래그 앤 드롭 이벤트 리스너
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    const setupListener = async () => {
+      try {
+        const webview = getCurrentWebview();
+        const unlistenFn = await webview.onDragDropEvent(async (event) => {
+          if (cancelled) return;
+
+          if (event.payload.type === 'over') {
+            setIsDragging(true);
+          } else if (event.payload.type === 'drop') {
+            setIsDragging(false);
+            const paths = event.payload.paths;
+
+            for (const path of paths) {
+              // 이미지 파일인지 확장자로 확인
+              const ext = path.split('.').pop()?.toLowerCase() ?? '';
+              const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+
+              if (imageExtensions.includes(ext)) {
+                try {
+                  await addComposerAttachment(path);
+                } catch (error) {
+                  console.error('Failed to add dropped image:', error);
+                }
+              }
+            }
+          } else {
+            // cancelled
+            setIsDragging(false);
+          }
+        });
+
+        // cleanup이 이미 호출된 경우 즉시 unlisten
+        if (cancelled) {
+          unlistenFn();
+        } else {
+          unlisten = unlistenFn;
+        }
+      } catch (error) {
+        console.error('Failed to setup drag drop listener:', error);
+      }
+    };
+
+    void setupListener();
+
+    return () => {
+      cancelled = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [addComposerAttachment]);
+
   const notionEnabled = useConnectorStore((s) => s.enabledMap['notion'] ?? false);
   const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
   const setNotionEnabled = useConnectorStore((s) => s.setEnabled);
@@ -193,7 +253,7 @@ export function ChatContent(): JSX.Element {
     updateMessage(messageId, { metadata });
   }, [updateMessage]);
 
-  // 드래그 앤 드롭 핸들러
+  // 드래그 앤 드롭 핸들러 (HTML5 fallback - Tauri에서는 onDragDropEvent 사용)
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -214,7 +274,10 @@ export function ChatContent(): JSX.Element {
     e.stopPropagation();
     setIsDragging(false);
 
-    if (!isTauriRuntime()) return;
+    // Tauri에서는 onDragDropEvent를 사용하므로 여기서는 처리하지 않음
+    if (isTauriRuntime()) return;
+
+    // 브라우저 환경 fallback (개발 모드 등)
 
     const files = e.dataTransfer.files;
     for (let i = 0; i < files.length; i++) {

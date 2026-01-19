@@ -247,8 +247,10 @@ export function ChatPanel(): JSX.Element {
     e.stopPropagation();
     setIsDragging(false);
 
-    if (!isTauriRuntime()) return;
+    // Tauri에서는 onDragDropEvent를 사용하므로 여기서는 처리하지 않음
+    if (isTauriRuntime()) return;
 
+    // 브라우저 환경 fallback (개발 모드 등)
     const files = e.dataTransfer.files;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
