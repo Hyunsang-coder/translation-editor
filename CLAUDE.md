@@ -107,7 +107,7 @@ cd src-tauri && cargo test
   - Uses Tool Calling to fetch Source/Target when needed
   - Prevents unnecessary token consumption
 
-- **Request Type Detection**: `prompt.ts` → `detectRequestType()` analyzes user message to determine `translate` | `question` | `general`
+- **Request Type Detection**: `prompt.ts` → `detectRequestType()` analyzes user message (used for analytics, not for blocking)
 
 - **Review Mode** (`ReviewPanel.tsx` + `runReview.ts`):
   - AI-assisted translation review for error, omission, distortion, consistency issues
@@ -279,7 +279,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 ## Common Gotchas
 
 1. **TipTap JSON Format**: Always validate JSON structure before storing. Fallback to plain text on parse errors.
-2. **Chat History**: `question` mode includes last 20 messages (configurable); `translate` mode excludes all history.
+2. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.
 3. **Tool Calling**: AI proactively calls document tools for relevant questions. Web search enabled by default for new sessions.
 4. **Keychain Access**: First run requires OS authentication prompt for keychain access.
 5. **Sidecar Lifecycle**: MCP sidecar processes must be cleaned up on app exit.

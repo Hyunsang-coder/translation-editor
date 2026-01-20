@@ -5,7 +5,6 @@ import { streamAssistantReply } from '@/ai/chat';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
-import { detectRequestType } from '@/ai/prompt';
 import { useProjectStore } from '@/stores/projectStore';
 import { searchGlossary } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -622,13 +621,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createSession();
       }
 
-      // question 모드에서만 최근 채팅 히스토리를 모델 컨텍스트에 포함
-      // - translate 모드는 채팅에서 처리하지 않음(Translate Preview→Apply로 유도)
+      // 최근 채팅 히스토리를 모델 컨텍스트에 포함
       const maxRecent = getAiConfig().maxRecentMessages;
       const priorMessages = (get().currentSession?.messages ?? []).slice(-maxRecent);
-
-      // 채팅은 "질문 전용"으로 운영: 번역/리라이트 요청은 Translate(Preview) 워크플로우로 유도
-      const req = detectRequestType(content);
 
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();
@@ -643,31 +638,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // 간단한 규칙: 첫 20자 + ...
         const newTitle = content.trim().slice(0, 20) + (content.length > 20 ? '...' : '');
         get().renameSession(updatedSession.id, newTitle);
-      }
-
-      // 번역 요청은 모델 호출 없이 즉시 안내(번역 결과를 채팅으로 출력하지 않음)
-      if (req === 'translate') {
-        // 기존 진행 중인 요청이 있으면 abort
-        const prevAbortController = get().abortController;
-        if (prevAbortController) {
-          prevAbortController.abort();
-          set({ abortController: null });
-        }
-        const translationRulesRaw = get().translationRules?.trim();
-        const projectContextRaw = get().projectContext?.trim();
-
-        const needsOneQuestion = !translationRulesRaw && !projectContextRaw;
-        const msg = needsOneQuestion
-          ? [
-            '이 요청은 채팅에서 번역하지 않습니다.',
-            '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
-          ].join(' ')
-          : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
-
-        addMessage({ role: 'assistant', content: msg });
-        set({ isLoading: false, streamingMessageId: null, error: null });
-        schedulePersist();
-        return;
       }
 
       // 명시적 웹검색 트리거: /web 명령어로 내장 웹검색을 직접 실행
@@ -1176,9 +1146,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const content = targetMessage.content?.trim();
       if (!content) return;
 
-      const req = detectRequestType(content);
-
-      // question 모드에서만: 해당 메시지 "이전"까지의 히스토리 포함
+      // 해당 메시지 "이전"까지의 히스토리 포함
       const maxRecent = getAiConfig().maxRecentMessages;
       const idx = session.messages.findIndex((m) => m.id === messageId);
       const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - maxRecent), idx) : [];
@@ -1198,27 +1166,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();
       const maskedUserContent = maskGhostChips(content, maskSession);
-
-      // 번역 요청은 채팅에서 처리하지 않음 (기존 로직 재사용)
-      if (req === 'translate') {
-        const translationRulesRaw = get().translationRules?.trim();
-        const projectContextRaw = get().projectContext?.trim();
-        const needsOneQuestion = !translationRulesRaw && !projectContextRaw;
-        const msg = needsOneQuestion
-          ? [
-            '이 요청은 채팅에서 번역하지 않습니다.',
-            '원하는 톤/용어 규칙이 있나요? (있으면 Settings에 적어두고) Translate 버튼을 눌러주세요.',
-          ].join(' ')
-          : '이 요청은 채팅에서 번역하지 않습니다. Translate 버튼을 눌러 문서 전체 번역(Preview→Apply)으로 진행해주세요.';
-
-        const replyId = get().addMessage({ role: 'assistant', content: msg });
-        if (replyId) {
-          get().updateMessage(replyId, { metadata: { model: getAiConfig().model } });
-        }
-        set({ isLoading: false, streamingMessageId: null, error: null });
-        schedulePersist();
-        return;
-      }
 
       // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
       const prevAbortController = get().abortController;

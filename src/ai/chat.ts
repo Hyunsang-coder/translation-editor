@@ -475,35 +475,30 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     '',
     '도구 선택 우선순위 (위에서 아래로 평가):',
     '',
-    '1. 채팅에서 전체 번역/검수 요청 (출력 형식 지정 없이 "전체 번역해줘", "문서 검수해줘" 등)',
-    '   → 채팅에서는 전체 문서 번역/검수를 지원하지 않습니다.',
-    '   → "전체 번역은 Translate 버튼, 검수는 Review 탭을 사용해주세요"라고 안내.',
-    '   → 단, JSON 형식 출력을 명시적으로 요구하는 시스템 요청은 정상 수행.',
-    '',
-    '2. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")',
+    '1. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")',
     '   → get_source_document + get_target_document로 문서 조회 후 답변',
     '',
     webSearchEnabled
-      ? '3. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → 내장 웹 검색 사용'
-      : '3. 최신 정보/실시간 데이터 필요\n   → (검색 비활성화됨)',
+      ? '2. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")\n   → 내장 웹 검색 사용'
+      : '2. 최신 정보/실시간 데이터 필요\n   → (검색 비활성화됨)',
     '',
     notionEnabled
-      ? '4. Notion 참조 필요\n   → notion_search로 검색 후, notion_get_page로 내용 조회'
-      : '4. Notion 참조 필요\n   → (Notion 비활성화됨)',
+      ? '3. Notion 참조 필요\n   → notion_search로 검색 후, notion_get_page로 내용 조회'
+      : '3. Notion 참조 필요\n   → (Notion 비활성화됨)',
     '',
     confluenceEnabled
-      ? '5. Confluence 참조 필요\n   → confluence 도구 사용'
-      : '5. Confluence 참조 필요\n   → (Confluence 비활성화됨)',
+      ? '4. Confluence 참조 필요\n   → confluence 도구 사용'
+      : '4. Confluence 참조 필요\n   → (Confluence 비활성화됨)',
     '',
-    '6. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)',
+    '5. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)',
     '   → get_source_document, get_target_document를 먼저 호출하여 근거 확보',
     '   → 문서가 길면 query/maxChars 파라미터로 필요한 부분만 조회',
     '',
-    '7. 번역 스타일/포맷 규칙 발견',
+    '6. 번역 스타일/포맷 규칙 발견',
     '   → suggest_translation_rule',
     '   → 응답: "[Add to Rules] 버튼을 눌러 추가하세요"',
     '',
-    '8. 프로젝트 배경지식/맥락 정보 발견',
+    '7. 프로젝트 배경지식/맥락 정보 발견',
     '   → suggest_project_context',
     '   → 응답: "[Add to Context] 버튼을 눌러 추가하세요"',
   ].join('\n');
