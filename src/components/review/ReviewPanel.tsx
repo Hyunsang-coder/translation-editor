@@ -227,6 +227,7 @@ export function ReviewPanel(): JSX.Element {
   const handleCancel = useCallback(() => {
     if (abortController) {
       abortController.abort();
+      setAbortController(null); // 메모리 누수 방지: abort 후 즉시 참조 해제
     }
     finishReview();
   }, [abortController, finishReview]);

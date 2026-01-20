@@ -135,7 +135,8 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
         checked: true,
       };
     });
-  } catch {
+  } catch (e) {
+    console.warn('[parseReviewResult] JSON parsing failed:', e, 'input:', jsonStr.slice(0, 200));
     return null; // JSON 파싱 실패 → 마크다운 폴백
   }
 }
@@ -217,11 +218,30 @@ function parseMarkdownTable(aiResponse: string): ReviewIssue[] {
 }
 
 /**
+ * AI 오류 메시지 패턴 감지
+ * AI가 실제 검수 대신 오류 메시지만 반환하는 경우 감지
+ */
+function detectAiErrorResponse(text: string): boolean {
+  const errorPatterns = [
+    /cannot\s+(review|analyze|process)/i,
+    /unable\s+to\s+(review|analyze|process)/i,
+    /error\s*:\s*/i,
+    /api\s+(limit|error|quota)/i,
+    /rate\s+limit/i,
+    /token\s+limit/i,
+    /context\s+(length|limit)/i,
+  ];
+  return errorPatterns.some((pattern) => pattern.test(text));
+}
+
+/**
  * AI 응답을 파싱하여 ReviewIssue 배열로 변환
  * Phase 3: 마커 기반 추출 우선
  * 1. 마커 기반 JSON 추출 (---REVIEW_START/END---)
  * 2. brace counting 기반 JSON 추출 (기존)
  * 3. 마크다운 테이블 파싱 (fallback)
+ *
+ * @throws Error AI 오류 메시지가 감지되거나 파싱 완전 실패 시
  */
 export function parseReviewResult(aiResponse: string): ReviewIssue[] {
   if (!aiResponse || typeof aiResponse !== 'string') {
@@ -231,6 +251,12 @@ export function parseReviewResult(aiResponse: string): ReviewIssue[] {
   // "문제 없음" 체크
   if (aiResponse.includes('"issues": []') || aiResponse.includes('"issues":[]')) {
     return [];
+  }
+
+  // AI 오류 메시지 감지 (false positive 방지)
+  if (detectAiErrorResponse(aiResponse)) {
+    console.error('[parseReviewResult] AI error response detected:', aiResponse.slice(0, 300));
+    throw new Error('AI 응답에서 오류가 감지되었습니다. 다시 시도해주세요.');
   }
 
   // 1차: 마커 기반 추출 (Phase 3 신규)
@@ -247,7 +273,18 @@ export function parseReviewResult(aiResponse: string): ReviewIssue[] {
   }
 
   // 3차: 마크다운 테이블 (fallback)
-  return parseMarkdownTable(aiResponse);
+  const markdownIssues = parseMarkdownTable(aiResponse);
+
+  // 파싱 완전 실패: JSON도 마크다운도 찾지 못했고, 응답이 의미있는 길이인 경우
+  // (짧은 응답은 "문제 없음" 또는 빈 결과일 수 있음)
+  if (markdownIssues.length === 0 && aiResponse.trim().length > 100) {
+    console.warn(
+      '[parseReviewResult] Complete parsing failure, response may be malformed:',
+      aiResponse.slice(0, 300),
+    );
+  }
+
+  return markdownIssues;
 }
 
 /**
