@@ -16,6 +16,7 @@ interface UIState extends EditorUIState {
   // Floating Chat Panel state
   sidebarActiveTab: 'settings' | 'review';
   chatPanelOpen: boolean;
+  chatPanelPinned: boolean; // 고정 시 외부 클릭으로 최소화되지 않음
   chatPanelPosition: { x: number; y: number };
   chatPanelSize: { width: number; height: number };
 
@@ -76,6 +77,8 @@ interface UIActions {
   setSidebarActiveTab: (tab: 'settings' | 'review') => void;
   setChatPanelOpen: (open: boolean) => void;
   toggleChatPanel: () => void;
+  setChatPanelPinned: (pinned: boolean) => void;
+  toggleChatPanelPinned: () => void;
   setChatPanelPosition: (position: { x: number; y: number }) => void;
   setChatPanelSize: (size: { width: number; height: number }) => void;
 
@@ -121,6 +124,7 @@ export const useUIStore = create<UIStore>()(
       // Floating Chat Panel - 기본값
       sidebarActiveTab: 'settings',
       chatPanelOpen: false,
+      chatPanelPinned: false, // 기본값: 고정 안함 (외부 클릭 시 최소화)
       chatPanelPosition: { x: 0, y: 100 }, // 실제 위치는 컴포넌트에서 계산
       chatPanelSize: { width: 420, height: 600 },
 
@@ -258,6 +262,14 @@ export const useUIStore = create<UIStore>()(
         set((state) => ({ chatPanelOpen: !state.chatPanelOpen }));
       },
 
+      setChatPanelPinned: (pinned: boolean): void => {
+        set({ chatPanelPinned: pinned });
+      },
+
+      toggleChatPanelPinned: (): void => {
+        set((state) => ({ chatPanelPinned: !state.chatPanelPinned }));
+      },
+
       setChatPanelPosition: (position: { x: number; y: number }): void => {
         set({ chatPanelPosition: position });
       },
@@ -329,6 +341,7 @@ export const useUIStore = create<UIStore>()(
         // Floating Chat Panel persist
         sidebarActiveTab: state.sidebarActiveTab,
         chatPanelOpen: state.chatPanelOpen,
+        chatPanelPinned: state.chatPanelPinned,
         chatPanelPosition: state.chatPanelPosition,
         chatPanelSize: state.chatPanelSize,
         // Settings sidebar & floating button

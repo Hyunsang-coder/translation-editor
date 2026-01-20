@@ -18,6 +18,8 @@ export function FloatingChatPanel(): JSX.Element | null {
   const { t } = useTranslation();
   const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
   const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
+  const chatPanelPinned = useUIStore((s) => s.chatPanelPinned);
+  const toggleChatPanelPinned = useUIStore((s) => s.toggleChatPanelPinned);
   const chatPanelPosition = useUIStore((s) => s.chatPanelPosition);
   const setChatPanelPosition = useUIStore((s) => s.setChatPanelPosition);
   const chatPanelSize = useUIStore((s) => s.chatPanelSize);
@@ -65,9 +67,9 @@ export function FloatingChatPanel(): JSX.Element | null {
     }
   }, [chatPanelOpen]);
 
-  // 외부 클릭 시 패널 최소화
+  // 외부 클릭 시 패널 최소화 (고정 상태가 아닐 때만)
   useEffect(() => {
-    if (!chatPanelOpen) return;
+    if (!chatPanelOpen || chatPanelPinned) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -81,7 +83,7 @@ export function FloatingChatPanel(): JSX.Element | null {
     // mousedown 사용 (click보다 먼저 발생, 에디터 클릭과 충돌 방지)
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [chatPanelOpen, setChatPanelOpen]);
+  }, [chatPanelOpen, chatPanelPinned, setChatPanelOpen]);
 
   const handleClose = useCallback(() => {
     setChatPanelOpen(false);
@@ -134,14 +136,42 @@ export function FloatingChatPanel(): JSX.Element | null {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-editor-text">Chat</span>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-            title={t('chat.minimizePanel')}
-          >
-            <span className="text-lg leading-none">−</span>
-          </button>
+          <div className="flex items-center gap-1">
+            {/* 고정 핀 버튼 */}
+            <button
+              type="button"
+              onClick={toggleChatPanelPinned}
+              className={`p-1.5 rounded transition-colors ${
+                chatPanelPinned
+                  ? 'text-accent-primary hover:bg-editor-border'
+                  : 'text-editor-muted hover:bg-editor-border hover:text-editor-text'
+              }`}
+              title={chatPanelPinned ? t('chat.unpinPanel') : t('chat.pinPanel')}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill={chatPanelPinned ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="17" x2="12" y2="22" />
+                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+              </svg>
+            </button>
+            {/* 최소화 버튼 */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+              title={t('chat.minimizePanel')}
+            >
+              <span className="text-lg leading-none">−</span>
+            </button>
+          </div>
         </div>
 
         {/* 채팅 콘텐츠 */}
