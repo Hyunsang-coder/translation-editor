@@ -257,6 +257,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
   - Settings/Review sidebar: Fixed right sidebar with draggable width (280-600px)
   - Floating Chat panel: Draggable/resizable via react-rnd (min 320×400px)
   - Floating Chat button: Draggable FAB, double-click to reset position
+  - **Chat Pin Feature**: Pin button in header prevents auto-minimize on outside click (minimize button always works)
 - **Chat Composer**:
   - `+` button (bottom-left) for attachments/web search toggle
   - Send button (bottom-right) as arrow icon
@@ -316,6 +317,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 37. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
 38. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
 39. **Git Hooks with Husky**: `.husky/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). `.husky/post-merge` auto-runs `npm install` when `package-lock.json` changes. Ensures type safety and dependency consistency.
+40. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` uses `buildNormalizedTextWithMapping()` to normalize both editor text and search text. This handles Unicode special spaces (`\u00A0`, `\u2000-\u200A`), CRLF, and consecutive whitespace differences between AI excerpts and editor content.
+41. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
 
 ## Testing Patterns
 

@@ -184,9 +184,49 @@ interface ReviewIssue {
 - **목적**: AI 응답의 excerpt에 포함된 마크다운 서식 제거
 - **구현**: `src/utils/normalizeForSearch.ts`
 - **처리 항목**:
+  - HTML 엔티티: `&nbsp;`, `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#39;` 변환
   - 인라인 서식: `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, `[text](url)` 제거
   - 블록 마커: `# Heading`, `- item`, `1. item` 제거
-  - 공백 정규화: 연속 공백/줄바꿈 → 단일 공백
+  - Unicode 특수 공백: `\u00A0` (non-breaking space), `\u2000-\u200A` (다양한 너비 공백), `\u3000` (전각 공백) 정규화
+  - 줄바꿈 통일: CRLF, CR → 공백
+  - 공백 정규화: 연속 공백 → 단일 공백
+
+---
+
+## 5.14.1 양방향 정규화 (Bidirectional Normalization)
+
+### Why
+- AI의 `targetExcerpt`와 에디터 텍스트 사이에 공백/특수문자 차이가 있으면 하이라이트 실패
+- 한쪽만 정규화하면 여전히 불일치 발생
+
+### How
+- 에디터 텍스트도 정규화하되, 원본 위치 매핑을 유지
+- `buildNormalizedTextWithMapping()`: 정규화된 텍스트의 각 인덱스가 원본 텍스트의 어느 인덱스에 해당하는지 추적
+
+### What
+```typescript
+// ReviewHighlight.ts
+function buildNormalizedTextWithMapping(originalText: string): {
+  normalizedText: string;  // 정규화된 텍스트
+  indexMap: number[];      // normalizedText[i] → originalText index
+}
+```
+
+### 동작 흐름
+```
+에디터 텍스트: "번역된  텍스트입니다."  (공백 2개)
+     ↓ buildNormalizedTextWithMapping()
+정규화 텍스트: "번역된 텍스트입니다."   (공백 1개)
+인덱스 매핑:   [0,1,2,3,5,6,7,8,9,10,11,12]  (인덱스 4 스킵)
+
+AI excerpt: "번역된 텍스트입니다."
+     ↓ normalizeForSearch()
+검색 텍스트: "번역된 텍스트입니다."
+
+정규화 텍스트에서 검색 → index=0 찾음
+인덱스 매핑으로 원본 위치 복원 → from=0, to=12
+Decoration 생성
+```
 
 ---
 
