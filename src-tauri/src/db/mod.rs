@@ -553,6 +553,9 @@ impl Database {
 
     /// CSV 글로서리 임포트(project scope)
     /// - replace=true면 해당 프로젝트 scope 엔트리를 전부 지우고 다시 넣음
+    ///
+    /// # Safety
+    /// `path`는 호출자(commands/glossary.rs)에서 `validate_path()`로 검증된 경로여야 함.
     pub fn import_glossary_csv(
         &mut self,
         project_id: &str,
@@ -786,6 +789,9 @@ impl Database {
     /// Excel(.xlsx/.xls) 글로서리 임포트(project scope)
     /// - 첫 번째 시트(또는 첫 sheet_names())를 읽습니다.
     /// - 첫 행이 source/target 헤더로 보이면 헤더로 취급합니다.
+    ///
+    /// # Safety
+    /// `path`는 호출자(commands/glossary.rs)에서 `validate_path()`로 검증된 경로여야 함.
     pub fn import_glossary_excel(
         &mut self,
         project_id: &str,

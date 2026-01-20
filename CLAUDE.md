@@ -60,6 +60,10 @@ npm run build:sidecar
 cd src-tauri && cargo test
 ```
 
+### Git Hooks (Husky)
+- **post-merge**: Auto-runs `npm install` when `package-lock.json` changes after `git pull`
+- Setup: `npm install -D husky && npx husky init`
+
 ## Architecture Overview
 
 ### Tech Stack
@@ -147,12 +151,20 @@ Critical stores in `src/stores/`:
 - `uiStore.ts`: Layout state, Focus Mode, panel positions/sizes, sidebar width, floating button position
 - `reviewStore.ts`: Translation review state (chunks, results, check states, highlight)
 
-#### 6. Security: API Key Management
-- **Primary Storage**: OS keychain (macOS Keychain, Windows Credential Manager, Linux keyring)
-- **Unified JSON Bundle**: All API keys stored as single encrypted JSON
-- **User Input**: App Settings → API Key entry → keychain storage
-- **No Fallbacks**: Environment variables (`VITE_*`) not used for security
-- **Commands**: `src-tauri/src/commands/secure_store.rs`
+#### 6. Security
+- **API Key Storage**: OS keychain (macOS Keychain, Windows Credential Manager, Linux keyring)
+  - Unified JSON bundle, no environment variable fallbacks
+  - Commands: `src-tauri/src/commands/secure_store.rs`
+- **XSS Prevention**: DOMPurify sanitization for pasted HTML content
+  - URL protocol validation (blocks `javascript:`, `data:`, `vbscript:`)
+  - Allowlist-based tag/attribute filtering
+  - Implementation: `src/utils/htmlNormalizer.ts`
+- **Path Traversal Prevention**: Rust-side path validation for file imports
+  - Blocks system directories (`/etc`, `/System`, `C:\Windows`, etc.)
+  - Applied to CSV/Excel glossary imports
+  - Implementation: `src-tauri/src/utils/mod.rs` → `validate_path()`
+- **DoS Prevention**: Input length limits enforced in UI and backend
+  - Translation Rules: 10,000 chars, Context: 30,000 chars, Glossary: 30,000 chars
 
 ## Critical Implementation Patterns
 
@@ -300,6 +312,9 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 34. **Marker-based JSON Extraction**: Review responses use `---REVIEW_START/END---` markers. `extractMarkedJson()` tries marker extraction first, then falls back to brace counting. This prevents parsing failures when AI includes extra text outside JSON.
 35. **Review Streaming Text State**: `reviewStore.streamingText` stores current chunk's AI response for real-time display. Updated via `onToken` callback in `runReview()`. Preserved after completion for debugging.
 36. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
+37. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
+38. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
+39. **Git Hooks with Husky**: `.husky/post-merge` automatically runs `npm install` when `package-lock.json` changes after `git pull`/`git merge`. Ensures dependency consistency across team members.
 
 ## Testing Patterns
 
@@ -346,6 +361,7 @@ cd src-tauri && cargo check
   - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`, `htmlToTipTapJson`)
   - `imagePlaceholder.ts`: Image URL extraction/restoration for translation (`extractImages`, `restoreImages`)
   - `normalizeForSearch.ts`: Markdown normalization for text search (`normalizeForSearch`, `stripMarkdownInline`)
+  - `htmlNormalizer.ts`: HTML sanitization for pasted content (DOMPurify + URL protocol validation)
   - `hash.ts`: Content hashing, `stripHtml`
   - `diff.ts`: Diff utilities
 - **UI Components**: Organized by layout hierarchy

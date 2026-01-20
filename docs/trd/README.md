@@ -53,3 +53,5 @@
 - API Key는 OS Keychain + Vault 암호화
 - `.ite` 파일에 시크릿 미포함
 - 문서 자동 수정 없음 (Non-Intrusive)
+- XSS 방지: DOMPurify + URL 프로토콜 검증
+- 경로 검증: 시스템 디렉토리 접근 차단 (Rust)

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# package-lock.json이 변경된 경우에만 npm install 실행
+if git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD | grep -q "package-lock.json"; then
+  echo "📦 Dependencies changed, running npm install..."
+  npm install --prefer-offline
+fi

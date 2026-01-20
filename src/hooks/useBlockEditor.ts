@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { ReviewHighlight } from '@/editor/extensions/ReviewHighlight';
+import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useReviewStore } from '@/stores/reviewStore';
 
 interface UseBlockEditorOptions {
   content: string;
@@ -34,6 +35,7 @@ export function useBlockEditor({
   const acceptDiff = useProjectStore((s) => s.acceptDiff);
   const rejectDiff = useProjectStore((s) => s.rejectDiff);
   const setSelectedBlockId = useUIStore((s) => s.setSelectedBlockId);
+  const highlightNonce = useReviewStore((s) => s.highlightNonce);
 
   const stableContent = useMemo(() => content, [content]);
 
@@ -154,6 +156,13 @@ export function useBlockEditor({
       editor.commands.setContent(content);
     }
   }, [content, editor]);
+
+  // highlightNonce 변경 시 decoration 새로고침
+  useEffect(() => {
+    if (editor && highlightNonce > 0) {
+      refreshEditorHighlight(editor);
+    }
+  }, [editor, highlightNonce]);
 
   return {
     editor,

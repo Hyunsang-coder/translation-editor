@@ -27,6 +27,8 @@ Claude Code에서 작업 시 해당 도메인의 agent 파일을 참조하여 �
 | **Editor** | `editor.md` | 2.1, 2.2, 3.9 | TipTap, SearchHighlight, ReviewHighlight, Markdown 변환 |
 | **Store Sync** | `store-sync.md` | 3.9, 3.10, 4.1, 7.2 | Zustand, Race Condition, reviewStore, SecretManager Vault |
 | **Review** | `review.md` | 3.9 | 번역 검수, 청크 기반 AI, 하이라이트, 제안 적용 |
+| **Issue Tracker** | `issue-tracker.md` | - | 대규모 이슈 문서화, 세션 간 컨텍스트 지속 |
+| **Issue Analyzer** | `issue-analyzer.md` | - | PR/Issue 분석, 관련 리소스 자동 추천 |
 
 ## 자동 활성화 트리거
 
@@ -56,6 +58,15 @@ Claude Code에서 작업 시 해당 도메인의 agent 파일을 참조하여 �
 - 키워드: "검수", "review", "오역", "누락", "하이라이트"
 - 경로: `src/ai/review/`, `src/components/review/`, `ReviewHighlight.ts`
 
+### issue-tracker
+- 키워드: "대규모", "리팩토링", "마이그레이션", "여러 세션", "이슈 정리"
+- 조건: 예상 작업 ≥7단계, 관련 파일 ≥10개, 도메인 ≥3개
+- 경로: `docs/issues/`
+
+### issue-analyzer
+- 키워드: "분석해줘", "관련 agent?", "어떤 문서?"
+- 조건: PR 생성, Issue 분석, 복잡한 변경사항 리뷰
+
 ## 복합 작업
 
 여러 도메인에 걸친 작업의 경우:
@@ -80,6 +91,14 @@ Claude Code에서 작업 시 해당 도메인의 agent 파일을 참조하여 �
 @.claude/agents/ai-chain.md
 @.claude/agents/editor.md
 @.claude/agents/store-sync.md
+
+# 대규모 이슈 작업 (issue-tracker + issue-analyzer + 도메인별 agent)
+@.claude/agents/issue-tracker.md
+@.claude/agents/issue-analyzer.md
+# + 관련 도메인 agent (ai-chain, editor 등)
+
+# 이전 이슈 이어서 작업
+@docs/issues/ISSUE-001-제목.md
 ```
 
 ## Agent 확장

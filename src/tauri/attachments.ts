@@ -55,6 +55,15 @@ export async function saveTempImage(bytes: number[], filename: string): Promise<
 }
 
 /**
+ * 오래된 임시 이미지 파일 정리 (24시간 이상 된 파일 삭제)
+ * - 앱 시작 시 호출하여 디스크 공간 확보
+ * @returns 삭제된 파일 수
+ */
+export async function cleanupTempImages(): Promise<number> {
+    return await invoke<number>('cleanup_temp_images', {});
+}
+
+/**
  * 이미지 파일을 읽어서 base64 data URL로 변환
  * @param path 파일 경로
  * @param fileType 파일 확장자 (png, jpg, jpeg, gif, webp)

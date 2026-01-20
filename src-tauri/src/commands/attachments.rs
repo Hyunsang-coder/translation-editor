@@ -9,8 +9,41 @@ use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
 use crate::utils::validate_path;
 
+/// 첨부 파일 최대 크기 (100MB)
+const MAX_ATTACHMENT_SIZE: u64 = 100 * 1024 * 1024;
+
+/// 임시 이미지 최대 크기 (10MB)
+const MAX_TEMP_IMAGE_SIZE: usize = 10 * 1024 * 1024;
+
+/// 임시 파일 만료 시간 (24시간)
+const TEMP_FILE_MAX_AGE_SECS: u64 = 24 * 60 * 60;
+
 fn is_image_extension(ext: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif")
+}
+
+/// 파일 크기 검증
+fn validate_file_size(path: &Path, max_size: u64) -> CommandResult<u64> {
+    let metadata = fs::metadata(path).map_err(|e| CommandError {
+        code: "FILE_ERROR".to_string(),
+        message: format!("파일 정보를 읽을 수 없습니다: {}", e),
+        details: None,
+    })?;
+
+    let size = metadata.len();
+    if size > max_size {
+        return Err(CommandError {
+            code: "FILE_TOO_LARGE".to_string(),
+            message: format!(
+                "파일 크기가 너무 큽니다: {}MB (최대 {}MB)",
+                size / (1024 * 1024),
+                max_size / (1024 * 1024)
+            ),
+            details: None,
+        });
+    }
+
+    Ok(size)
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,17 +61,18 @@ pub async fn attach_file(
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
+    // 파일 크기 검증 (100MB 제한)
+    let file_size = validate_file_size(&path, MAX_ATTACHMENT_SIZE)? as i64;
+
     let filename = path.file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown")
         .to_string();
-    
+
     let extension = path.extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
-
-    let file_size = fs::metadata(&path).map(|m| m.len() as i64).ok();
 
     // Extract text based on file type (images are stored without extracted text)
     let extracted_text: Option<String> = if is_image_extension(&extension) {
@@ -61,7 +95,7 @@ pub async fn attach_file(
         file_type: extension.clone(),
         file_path: Some(path.to_string_lossy().to_string()),
         extracted_text,
-        file_size,
+        file_size: Some(file_size),
         created_at: now,
         updated_at: now,
     };
@@ -106,6 +140,9 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
+    // 파일 크기 검증 (100MB 제한)
+    let file_size = validate_file_size(&path, MAX_ATTACHMENT_SIZE)? as i64;
+
     let filename = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -118,7 +155,6 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    let file_size = fs::metadata(&path).map(|m| m.len() as i64).ok();
     let extracted_text = extract_file_text(&path, &extension).ok();
 
     let now = chrono::Utc::now().timestamp_millis();
@@ -126,7 +162,7 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         id: Uuid::new_v4().to_string(),
         filename,
         file_type: extension,
-        file_size,
+        file_size: Some(file_size),
         extracted_text,
         file_path: Some(path.to_string_lossy().to_string()),
         created_at: now,
@@ -141,6 +177,9 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
 pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> {
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
+
+    // 파일 크기 검증 (100MB 제한)
+    validate_file_size(&path, MAX_ATTACHMENT_SIZE)?;
 
     fs::read(&path).map_err(|e| CommandError {
         code: "READ_ERROR".to_string(),
@@ -288,6 +327,18 @@ fn extract_pptx_text(path: &Path) -> Result<String, String> {
 /// - 프론트엔드에서 File/Blob을 바이트 배열로 변환하여 전송합니다.
 #[tauri::command]
 pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<String> {
+    // 이미지 크기 검증 (10MB 제한)
+    if bytes.len() > MAX_TEMP_IMAGE_SIZE {
+        return Err(CommandError {
+            code: "FILE_TOO_LARGE".to_string(),
+            message: format!(
+                "이미지 크기가 너무 큽니다: {}MB (최대 10MB)",
+                bytes.len() / (1024 * 1024)
+            ),
+            details: None,
+        });
+    }
+
     // 파일 확장자 검증 (이미지만 허용)
     let extension = std::path::Path::new(&filename)
         .extension()
@@ -323,4 +374,48 @@ pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<
     })?;
 
     Ok(path.to_string_lossy().to_string())
+}
+
+/// 오래된 임시 이미지 파일을 정리합니다.
+/// - 앱 시작 시 호출하여 24시간 이상 된 임시 파일을 삭제합니다.
+#[tauri::command]
+pub fn cleanup_temp_images() -> CommandResult<u32> {
+    let temp_dir = std::env::temp_dir().join("oddeyes-uploads");
+
+    if !temp_dir.exists() {
+        return Ok(0);
+    }
+
+    let now = std::time::SystemTime::now();
+    let mut deleted_count: u32 = 0;
+
+    let entries = fs::read_dir(&temp_dir).map_err(|e| CommandError {
+        code: "READ_DIR_ERROR".to_string(),
+        message: format!("임시 디렉토리 읽기 실패: {}", e),
+        details: None,
+    })?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        // 파일만 처리
+        if !path.is_file() {
+            continue;
+        }
+
+        // 파일 수정 시간 확인
+        if let Ok(metadata) = fs::metadata(&path) {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(age) = now.duration_since(modified) {
+                    if age.as_secs() > TEMP_FILE_MAX_AGE_SECS {
+                        if fs::remove_file(&path).is_ok() {
+                            deleted_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(deleted_count)
 }

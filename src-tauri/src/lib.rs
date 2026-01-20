@@ -254,6 +254,7 @@ pub fn run() {
             commands::attachments::preview_attachment,
             commands::attachments::read_file_bytes,
             commands::attachments::save_temp_image,
+            commands::attachments::cleanup_temp_images,
             commands::secure_store::set_secure_secret,
             commands::secure_store::get_secure_secret,
             commands::secure_store::delete_secure_secret,
