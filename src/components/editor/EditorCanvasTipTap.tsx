@@ -202,12 +202,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const openTranslatePreview = useCallback(async (): Promise<void> => {
     if (!project) return;
     if (!sourceEditorRef.current) {
-      window.alert('Source 에디터가 아직 준비되지 않았습니다.');
+      addToast({ type: 'error', message: t('editor.sourceEditorNotReady', 'Source 에디터가 아직 준비되지 않았습니다.') });
       return;
     }
 
     if (!project.metadata.targetLanguage) {
-      window.alert('타겟 언어를 선택하세요.');
+      addToast({ type: 'warning', message: t('editor.selectTargetLanguage', '타겟 언어를 선택하세요.') });
       return;
     }
 
@@ -279,6 +279,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     translationRules,
     projectContext,
     translatorPersona,
+    addToast,
+    t,
   ]);
 
   // 번역 취소 핸들러
@@ -294,7 +296,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const applyTranslatePreview = useCallback((): void => {
     if (!translatePreviewDoc) return;
     if (!targetEditorRef.current) {
-      window.alert('Translation 에디터가 아직 준비되지 않았습니다.');
+      addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
       return;
     }
 
@@ -310,7 +312,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     // Flash 효과 트리거 (1초 동안 지속)
     setTargetFlash(true);
     setTimeout(() => setTargetFlash(false), 1000);
-  }, [translatePreviewDoc, setTargetDocument]);
+  }, [translatePreviewDoc, setTargetDocument, addToast, t]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {

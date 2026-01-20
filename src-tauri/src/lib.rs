@@ -213,8 +213,10 @@ pub fn run() {
             app.on_menu_event(move |app_handle, event| {
                 if event.id().as_ref() == "reload" {
                     if let Some(window) = app_handle.get_webview_window("main") {
-                        let url = window.url().unwrap_or_else(|_| "http://localhost:1420".parse().unwrap());
-                        let _ = window.navigate(url);
+                        // 현재 URL을 가져오고, 실패 시 reload 스킵 (패닉 방지)
+                        if let Ok(url) = window.url() {
+                            let _ = window.navigate(url);
+                        }
                     }
                 }
             });

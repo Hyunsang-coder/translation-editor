@@ -282,7 +282,7 @@ impl McpClient {
             },
         };
 
-        let response = self.send_request("initialize", Some(serde_json::to_value(params).unwrap())).await?;
+        let response = self.send_request("initialize", Some(serde_json::to_value(params).map_err(|e| e.to_string())?)).await?;
         
         if let Some(result) = response.result {
             if let Ok(init_result) = serde_json::from_value::<InitializeResult>(result) {
@@ -420,7 +420,7 @@ impl McpClient {
             arguments,
         };
 
-        let response = self.send_request("tools/call", Some(serde_json::to_value(params).unwrap())).await?;
+        let response = self.send_request("tools/call", Some(serde_json::to_value(params).map_err(|e| e.to_string())?)).await?;
 
         if let Some(result) = response.result {
             return serde_json::from_value(result)
