@@ -317,8 +317,9 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 37. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
 38. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
 39. **Git Hooks with Husky**: `.husky/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). `.husky/post-merge` auto-runs `npm install` when `package-lock.json` changes. Ensures type safety and dependency consistency.
-40. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` uses `buildNormalizedTextWithMapping()` to normalize both editor text and search text. This handles Unicode special spaces (`\u00A0`, `\u2000-\u200A`), CRLF, and consecutive whitespace differences between AI excerpts and editor content.
+40. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()` from `normalizeForSearch.ts`. This handles Unicode special spaces, CRLF, consecutive whitespace, and **quote normalization** (curly quotes `""`→`"`, CJK brackets `「」『』`→`"`, fullwidth quotes).
 41. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
+42. **GPT-4.1 Temperature Handling**: GPT-4.1 requires explicit temperature parameter (unlike GPT-5 which doesn't support it). In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to include temperature. GPT-4.1 automatically receives temperature since it doesn't match the `gpt-5` prefix.
 
 ## Testing Patterns
 

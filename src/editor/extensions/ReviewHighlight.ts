@@ -4,7 +4,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
-import { normalizeForSearch } from '@/utils/normalizeForSearch';
+import { normalizeForSearch, applyUnicodeNormalization } from '@/utils/normalizeForSearch';
 
 export interface ReviewHighlightOptions {
   highlightClass: string;
@@ -46,9 +46,8 @@ function buildNormalizedTextWithMapping(originalText: string): {
   normalizedText: string;
   indexMap: number[];
 } {
-  // 특수 공백 문자를 일반 공백으로 변환 (1:1 매핑 유지)
-  const specialSpaceRegex = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
-  let processed = originalText.replace(specialSpaceRegex, ' ');
+  // 유니코드 문자 정규화 (1:1 매핑 유지) - 공통 함수 사용
+  const processed = applyUnicodeNormalization(originalText);
 
   // CRLF, CR → 일반 공백 (1:1 또는 2:1 매핑)
   // 먼저 \r\n을 단일 문자로 처리하기 위해 인덱스 매핑 구축

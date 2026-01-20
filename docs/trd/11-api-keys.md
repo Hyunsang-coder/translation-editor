@@ -7,7 +7,7 @@
 - OpenAI는 내장 웹검색 도구(web_search_preview)를, Anthropic은 강력한 추론 능력을 제공합니다.
 
 ### What
-- **OpenAI**: GPT-5 시리즈 (gpt-5.2, gpt-5-mini, gpt-5-nano)
+- **OpenAI**: GPT-5 시리즈 (gpt-5.2, gpt-5-mini) 및 GPT-4.1
 - **Anthropic**: Claude 시리즈 (claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-5)
 - **Multi-Provider**: 두 프로바이더를 동시에 활성화하고 모델별로 선택 가능
 - **Mock**: 번역 모드에서 제거됨. mock 설정 시 에러 발생하며 API 키 설정 안내

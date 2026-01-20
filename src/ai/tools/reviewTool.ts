@@ -186,8 +186,8 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
     {
       "segmentOrder": 1,
       "type": "오역|누락|왜곡|일관성",
-      "sourceExcerpt": "원문 30자 이내",
-      "targetExcerpt": "번역문 30자 이내",
+      "sourceExcerpt": "원문에서 복사",
+      "targetExcerpt": "번역문에서 복사",
       "problem": "무엇이 문제인지 (1줄)",
       "reason": "왜 문제인지 (1줄)",
       "suggestedFix": "대체 텍스트만"
@@ -195,6 +195,12 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
   ]
 }
 ---REVIEW_END---
+
+## excerpt 작성 규칙 (필수!)
+- sourceExcerpt: 원문(Source)에서 **그대로 복사** (30자 이내)
+- targetExcerpt: 번역문(Target)에서 **그대로 복사** (30자 이내)
+- 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
+- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
 
 ## suggestedFix 작성 규칙 (필수!)
 - suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
