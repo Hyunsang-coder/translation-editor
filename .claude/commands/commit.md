@@ -6,56 +6,48 @@ allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git a
 
 # Git Commit & Push
 
-You are a git commit message specialist. Your task is to:
-
-1. **Review the changes** - Examine current git status and diffs
-2. **Write a clear commit message** - Follow the project's style
-3. **Create the commit** - Stage all changes and commit
-4. **Push to remote** - Push the commit to the remote branch
+You are a git commit message specialist. Your task is to create commits quickly and efficiently.
 
 ## Process
 
-### Step 1: Gather Information
-Run these commands to understand what will be committed:
+### Step 1: Gather Information (parallel)
+Run these commands in parallel:
 - `git status` - See all changes
-- `git diff HEAD` - See unstaged changes
-- `git log -1 --format='%an %ae'` - See recent commit author format
+- `git diff HEAD --stat` - See changed files summary
+- `git log --oneline -3` - See recent commit style
 
-### Step 2: Analyze Changes
-Review the changes and identify:
-- What was changed (files modified, added, deleted)
-- Why it was changed (feature, bug fix, refactor, docs, etc)
-- Impact scope (single file, module, system-wide)
+### Step 2: Quick Analysis
+Identify:
+- Type: feature, fix, refactor, docs, chore
+- Scope: which module/component
+- Summary: one-line description in Korean
 
-### Step 3: Write Commit Message
-Create a concise, clear commit message following these rules:
-- **Format**: Use imperative mood (e.g., "Add feature", not "Added feature")
-- **Language**: Korean preferred based on project history
-- **Length**: 1-2 sentences focusing on the "why" rather than the "what"
-- **Co-author**: Include co-authored-by footer
-- **Emoji**: Add appropriate emoji at the end
+### Step 3: Execute Commit & Push
 
-Example format:
-```
-기능 추가: 새로운 번역 규칙 시스템
+**IMPORTANT**: Use simple `-m` flag for commit messages. Do NOT use HEREDOC or temp files.
 
-- 번역 규칙 추가 기능 구현
-- UI 개선 및 성능 최적화
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+For single-line commits:
+```bash
+git add -A && git commit -m "fix: 버그 수정 내용" && git push
 ```
 
-### Step 4: Execute Commit & Push
-1. Add all relevant changes: `git add <files>`
-2. Create commit with the message (use HEREDOC to preserve formatting)
-3. Verify success with `git status`
-4. Push to remote: `git push`
+For multi-line commits, use multiple `-m` flags:
+```bash
+git add -A && git commit -m "fix: 제목" -m "상세 설명" -m "Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>" && git push
+```
 
-## Important Notes
-- ✅ Read the diff carefully before committing
-- ✅ Ask questions if changes seem unrelated or concerning
-- ✅ Always verify the commit succeeded before pushing
-- ⚠️ Never force push unless explicitly requested
-- ⚠️ Check that commit wasn't rejected by pre-commit hooks
+### Commit Message Format
+- **Title**: `type: 한글 설명` (50자 이내)
+- **Types**: feat, fix, refactor, docs, chore, style, test
+- **Co-author**: Always include as last `-m` flag
+
+Example:
+```bash
+git add -A && git commit -m "feat: 채팅에서 전체 번역 지원" -m "Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>" && git push
+```
+
+## Rules
+- ✅ Use `-m` flags only, never HEREDOC
+- ✅ Chain commands with `&&` for speed
+- ✅ Korean commit messages preferred
+- ⚠️ Never force push
