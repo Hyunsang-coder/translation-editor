@@ -1,8 +1,8 @@
 # Review Highlight 버그 분석 및 수정 방안
 
 > 작성일: 2025-01-20
-> 상태: **재검증 완료**, 수정 대기
-> 마지막 업데이트: 2025-01-20
+> 상태: **모든 이슈 수정 완료**
+> 마지막 업데이트: 2026-01-20
 
 ## 증상
 
@@ -213,16 +213,11 @@ useEffect(() => {
 
 ---
 
-### Issue #5: 텍스트 검색 불일치로 하이라이트 실패 ⚠️ 장기 과제
+### Issue #5: 텍스트 검색 불일치로 하이라이트 실패 ✅ 수정 완료
 
-**심각도**: 🟡 Medium (장기)
+**심각도**: 🟡 Medium
 
-**위치**: `src/editor/extensions/ReviewHighlight.ts:69`
-
-**현재 코드**:
-```typescript
-const index = fullText.indexOf(searchText);  // 첫 번째 매치만
-```
+**위치**: `src/editor/extensions/ReviewHighlight.ts`, `src/utils/normalizeForSearch.ts`
 
 **문제점**:
 1. AI의 `targetExcerpt`와 에디터 텍스트가 정확히 일치하지 않으면 하이라이트 안됨
@@ -232,10 +227,37 @@ const index = fullText.indexOf(searchText);  // 첫 번째 매치만
 **영향**:
 - 일부 이슈가 하이라이트되지 않음
 
-**수정 방안** (장기):
-- 공백 정규화 강화
-- fuzzy matching 도입 고려
-- 세그먼트 기반 검색으로 검색 범위 제한
+**수정 완료** (2026-01-20):
+
+1. **`normalizeForSearch()` 함수 강화**:
+   - HTML 엔티티 변환 (`&nbsp;`, `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#39;`)
+   - Unicode 특수 공백 정규화 (`\u00A0`, `\u2000-\u200A`, `\u202F`, `\u205F`, `\u3000`)
+   - CRLF/CR 줄바꿈 통일
+
+2. **양방향 정규화 + 위치 매핑** (`ReviewHighlight.ts`):
+   - `buildNormalizedTextWithMapping()`: 에디터 텍스트를 정규화하면서 원본 인덱스 매핑 구축
+   - `createDecorations()`: 에디터 텍스트와 검색 텍스트 모두 정규화하여 비교
+   - 인덱스 매핑을 통해 정규화된 위치를 원본 문서 위치로 역변환
+
+```typescript
+// 동작 흐름
+에디터 텍스트: "번역된  텍스트입니다."  (공백 2개)
+     ↓ buildNormalizedTextWithMapping()
+정규화 텍스트: "번역된 텍스트입니다."   (공백 1개)
+인덱스 매핑:   [0,1,2,3,5,6,7,8,9,10,11,12]  (인덱스 4 스킵)
+
+AI excerpt: "번역된 텍스트입니다."
+     ↓ normalizeForSearch()
+검색 텍스트: "번역된 텍스트입니다."
+
+정규화 텍스트에서 검색 → index=0 찾음
+인덱스 매핑으로 원본 위치 복원 → from=0, to=12
+Decoration 생성 → 정확한 위치에 하이라이트
+```
+
+**미해결 (장기 과제)**:
+- Fuzzy matching 도입 (완전히 다른 텍스트는 여전히 매칭 실패)
+- 동일 텍스트 다중 매치 시 컨텍스트 기반 선택
 
 ---
 
@@ -266,7 +288,7 @@ Issue #2 (subscription race)    ─┬─→ 같은 파일 (#1과), 순차 권�
                                  │
 Issue #3 (flag timing)          ─┘─→ #2와 연관, 함께 테스트 필요
 
-Issue #5 (텍스트 검색)           ─→ 독립적, 별도 진행 가능 (장기 과제)
+Issue #5 (텍스트 검색)           ─→ 독립적, 별도 진행 가능 ✅ 완료
 ```
 
 ### 병렬 작업 그룹
@@ -290,8 +312,8 @@ Issue #5 (텍스트 검색)           ─→ 독립적, 별도 진행 가능 (�
    - Issue #3: `isApplyingSuggestion` 타이밍 수정 (`ReviewPanel.tsx`)
    - **#2와 #3은 함께 테스트해야 효과 확인 가능**
 
-3. **Phase 3** (장기 과제):
-   - Issue #5: 텍스트 검색 개선
+3. **Phase 3** (완료):
+   - Issue #5: 텍스트 검색 개선 ✅
 
 ### 실제 병렬 진행 가능 조합
 
@@ -360,3 +382,4 @@ Issue #5 (텍스트 검색)           ─→ 독립적, 별도 진행 가능 (�
 - `src/editor/extensions/ReviewHighlight.ts`
 - `src/hooks/useBlockEditor.ts`
 - `src/components/editor/TipTapEditor.tsx`
+- `src/utils/normalizeForSearch.ts`

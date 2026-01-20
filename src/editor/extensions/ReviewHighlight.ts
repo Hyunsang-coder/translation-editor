@@ -34,8 +34,99 @@ function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions
 }
 
 /**
+ * 정규화된 텍스트와 원본 위치 매핑 구축
+ *
+ * 정규화 과정에서 문자가 제거/변환되므로, 정규화된 텍스트의 각 인덱스가
+ * 원본 텍스트의 어느 인덱스에 해당하는지 추적합니다.
+ *
+ * @param originalText - 원본 텍스트
+ * @returns normalizedText: 정규화된 텍스트, indexMap: normalizedText[i] → originalText index
+ */
+function buildNormalizedTextWithMapping(originalText: string): {
+  normalizedText: string;
+  indexMap: number[];
+} {
+  // 특수 공백 문자를 일반 공백으로 변환 (1:1 매핑 유지)
+  const specialSpaceRegex = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+  let processed = originalText.replace(specialSpaceRegex, ' ');
+
+  // CRLF, CR → 일반 공백 (1:1 또는 2:1 매핑)
+  // 먼저 \r\n을 단일 문자로 처리하기 위해 인덱스 매핑 구축
+  const indexMap: number[] = [];
+  let normalizedText = '';
+
+  let i = 0;
+  while (i < processed.length) {
+    const char = processed[i];
+    const nextChar = processed[i + 1];
+
+    // CRLF 처리 (2문자 → 1공백)
+    if (char === '\r' && nextChar === '\n') {
+      normalizedText += ' ';
+      indexMap.push(i);
+      i += 2;
+      continue;
+    }
+
+    // CR만 있는 경우 (1문자 → 1공백)
+    if (char === '\r') {
+      normalizedText += ' ';
+      indexMap.push(i);
+      i++;
+      continue;
+    }
+
+    // 일반 문자
+    normalizedText += char;
+    indexMap.push(i);
+    i++;
+  }
+
+  // 연속 공백 축소 (여러 공백 → 1공백)
+  const finalText: string[] = [];
+  const finalIndexMap: number[] = [];
+  let prevWasSpace = false;
+
+  for (let j = 0; j < normalizedText.length; j++) {
+    const char = normalizedText[j]!;
+    const originalIdx = indexMap[j]!;
+    const isSpace = /\s/.test(char);
+
+    if (isSpace) {
+      if (!prevWasSpace) {
+        finalText.push(' ');
+        finalIndexMap.push(originalIdx);
+      }
+      // 연속 공백은 스킵 (매핑에서 제외)
+      prevWasSpace = true;
+    } else {
+      finalText.push(char);
+      finalIndexMap.push(originalIdx);
+      prevWasSpace = false;
+    }
+  }
+
+  // 앞뒤 공백 제거
+  let startTrim = 0;
+  let endTrim = finalText.length;
+
+  while (startTrim < finalText.length && /\s/.test(finalText[startTrim]!)) {
+    startTrim++;
+  }
+  while (endTrim > startTrim && /\s/.test(finalText[endTrim - 1]!)) {
+    endTrim--;
+  }
+
+  return {
+    normalizedText: finalText.slice(startTrim, endTrim).join(''),
+    indexMap: finalIndexMap.slice(startTrim, endTrim),
+  };
+}
+
+/**
  * 문서에서 텍스트를 찾아 Decoration 생성
  * - 노드 경계를 넘는 텍스트도 검색 가능
+ * - 양방향 정규화: 에디터 텍스트와 검색 텍스트 모두 정규화하여 비교
  * - 이슈당 첫 번째 매치만 사용 (동일 텍스트 다중 매치 시 혼란 방지)
  */
 function createDecorations(
@@ -47,8 +138,16 @@ function createDecorations(
   const decorations: Decoration[] = [];
   const { text: fullText, positions } = buildTextWithPositions(doc);
 
+  // 에디터 텍스트도 정규화하고 원본 인덱스 매핑 구축
+  const { normalizedText: normalizedFullText, indexMap: fullTextIndexMap } =
+    buildNormalizedTextWithMapping(fullText);
+
   // 디버깅: 에디터에서 추출한 전체 텍스트 (처음 500자)
   console.log(`[ReviewHighlight:${excerptField}] fullText (first 500):`, fullText.slice(0, 500));
+  console.log(
+    `[ReviewHighlight:${excerptField}] normalizedFullText (first 500):`,
+    normalizedFullText.slice(0, 500),
+  );
   console.log(`[ReviewHighlight:${excerptField}] issues count:`, issues.length);
 
   issues.forEach((issue, idx) => {
@@ -58,35 +157,49 @@ function createDecorations(
       return;
     }
 
-    // 마크다운 서식/리스트 마커 제거 후 검색 (AI가 **bold** 등을 포함할 수 있음)
+    // 검색 텍스트 정규화 (마크다운 서식 + 공백 정규화)
     const searchText = normalizeForSearch(rawSearchText);
     if (searchText.length === 0) {
-      console.log(`[ReviewHighlight:${excerptField}] issue #${idx}: empty after normalizeForSearch, skipping`);
+      console.log(
+        `[ReviewHighlight:${excerptField}] issue #${idx}: empty after normalizeForSearch, skipping`,
+      );
       return;
     }
 
-    // 전체 텍스트에서 검색 (노드 경계 무시)
-    const index = fullText.indexOf(searchText);
+    // 정규화된 텍스트에서 검색
+    const normalizedIndex = normalizedFullText.indexOf(searchText);
 
     // 디버깅: 검색 결과
     console.log(`[ReviewHighlight:${excerptField}] issue #${idx}:`, {
       raw: rawSearchText,
       stripped: searchText,
-      found: index !== -1,
-      index,
+      found: normalizedIndex !== -1,
+      normalizedIndex,
       type: issue.type,
     });
 
-    if (index !== -1 && index < positions.length) {
-      const from = positions[index];
-      if (from === undefined) return;
-      const endIndex = index + searchText.length - 1;
-      // endIndex가 positions 범위 내인지 확인
-      const to = endIndex < positions.length ? positions[endIndex]! + 1 : from + searchText.length;
+    if (normalizedIndex !== -1 && normalizedIndex < fullTextIndexMap.length) {
+      // 정규화된 인덱스 → 원본 텍스트 인덱스 → 문서 위치
+      const originalStartIndex = fullTextIndexMap[normalizedIndex];
+      if (originalStartIndex === undefined) return;
 
-      if (to > from) {
+      const normalizedEndIndex = normalizedIndex + searchText.length - 1;
+      const originalEndIndex =
+        normalizedEndIndex < fullTextIndexMap.length
+          ? fullTextIndexMap[normalizedEndIndex]
+          : undefined;
+
+      if (originalEndIndex === undefined) return;
+
+      // 원본 텍스트 인덱스 → 문서 위치
+      const from = positions[originalStartIndex];
+      const to = positions[originalEndIndex];
+
+      if (from === undefined || to === undefined) return;
+
+      if (to + 1 > from) {
         decorations.push(
-          Decoration.inline(from, to, {
+          Decoration.inline(from, to + 1, {
             class: highlightClass,
             'data-issue-id': issue.id,
             'data-issue-type': issue.type,
