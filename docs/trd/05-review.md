@@ -116,14 +116,13 @@ interface ReviewIssue {
 - `initializeReview(project)`: 프로젝트를 청크로 분할, 상태 초기화
 - `addResult(result)`: 청크별 검수 결과 추가
 - `toggleIssueCheck(issueId)`: 이슈 체크 상태 토글
-- `deleteIssue(issueId)`: 개별 이슈 삭제
+- `deleteIssue(issueId)`: 개별 이슈 삭제 (Apply 시 자동 호출)
 - `setAllIssuesChecked(checked)`: 전체 선택/해제
 - `getAllIssues()`: 중복 제거된 전체 이슈 목록
 - `getCheckedIssues()`: 체크된 이슈만 반환
 - `toggleHighlight()`: 하이라이트 활성화/비활성화
-- `disableHighlight()`: Review 탭 닫을 때 호출
-- `setIsApplyingSuggestion(value)`: 수정 적용 중 플래그 설정 (하이라이트 무효화 방지)
-- **문서 변경 감지**: `projectStore.targetDocJson` 변경 시 `disableHighlight()` 자동 호출 (오프셋 불일치 방지, `isApplyingSuggestion=true`일 때 스킵)
+- `disableHighlight()`: Review 탭 닫을 때 호출 (highlightNonce 증가로 에디터 새로고침)
+- **하이라이트 자동 재계산**: ProseMirror plugin이 `tr.docChanged` 감지 시 자동으로 decoration 재계산 (cross-store subscription 불필요)
 
 ---
 
@@ -224,20 +223,17 @@ async function runReview(params: RunReviewParams): Promise<string>
 
 ---
 
-## 5.16 하이라이트 무효화 방지
+## 5.16 하이라이트 자동 재계산
 
-### 문제
-- 수정 적용 시 문서 변경 → cross-store subscription이 하이라이트 비활성화
+### 동작 원리
+- `ReviewHighlight.ts`의 ProseMirror plugin이 `tr.docChanged` 감지 시 자동으로 decoration 재계산
+- 수정 적용 후 해당 이슈는 `deleteIssue()`로 삭제되어 다음 재계산 시 하이라이트에서 제외
+- 수동 편집 시에도 찾을 수 있는 이슈는 계속 하이라이트, 텍스트가 변경되어 못 찾으면 자연스럽게 제거
 
-### 해결
-- `isApplyingSuggestion` 플래그로 적용 중에는 무효화 스킵
-
-### 패턴
-```typescript
-setIsApplyingSuggestion(true);
-editor.commands.replaceMatch(suggestedFix);
-setTimeout(() => setIsApplyingSuggestion(false), 500);
-```
+### 장점
+- Cross-store subscription 불필요 (코드 단순화)
+- 수동 편집 후에도 다른 이슈 하이라이트 유지
+- `isApplyingSuggestion` 플래그 불필요
 
 ---
 
