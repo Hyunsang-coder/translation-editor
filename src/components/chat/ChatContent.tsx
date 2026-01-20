@@ -363,8 +363,8 @@ export function ChatContent(): JSX.Element {
     if (!project?.id) return;
     if (isHydrating) return;
     if (chatSessions.length > 0) return;
-    createSession('Chat');
-  }, [project?.id, isHydrating, chatSessions.length, createSession]);
+    createSession(t('chat.title'));
+  }, [project?.id, isHydrating, chatSessions.length, createSession, t]);
 
   const sendCurrent = useCallback(async (): Promise<void> => {
     if (!composerText.trim() || isLoading) return;

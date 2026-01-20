@@ -134,7 +134,7 @@ export function FloatingChatPanel(): JSX.Element | null {
         {/* 드래그 핸들 (헤더) */}
         <div className="floating-chat-handle h-10 flex items-center justify-between px-3 border-b border-editor-border bg-editor-surface cursor-move select-none">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-editor-text">Chat</span>
+            <span className="text-sm font-medium text-editor-text">{t('chat.title')}</span>
           </div>
           <div className="flex items-center gap-1">
             {/* 고정 핀 버튼 */}

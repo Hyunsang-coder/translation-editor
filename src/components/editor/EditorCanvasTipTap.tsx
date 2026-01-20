@@ -474,10 +474,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               >
                 <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
                   <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                    SOURCE
+                    {t('editor.source').toUpperCase()}
                   </span>
                   <span className="text-[10px] text-editor-muted">
-                    {sourceWordCount.toLocaleString()} words
+                    {sourceWordCount.toLocaleString()} {t('editor.words')}
                   </span>
                 </div>
                 <TipTapMenuBar editor={sourceEditor} panelType="source" />
@@ -527,7 +527,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
             <div className="flex items-center gap-3">
               <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                TRANSLATION
+                {t('editor.target').toUpperCase()}
               </span>
               <select
                 className="text-[10px] bg-editor-surface border border-editor-border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary-500 text-editor-text"
@@ -544,7 +544,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               </select>
             </div>
             <span className="text-[10px] text-editor-muted">
-              {targetWordCount.toLocaleString()} words
+              {targetWordCount.toLocaleString()} {t('editor.words')}
             </span>
           </div>
           <TipTapMenuBar editor={targetEditor} panelType="target" />

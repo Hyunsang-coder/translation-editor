@@ -247,6 +247,7 @@
     }
   },
   "chat": {
+    "title": "Chat",
     "settings": "Project Settings",
     "openChat": "Open Chat",
     "newChat": "New Chat",
