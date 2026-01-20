@@ -12,7 +12,7 @@ export const MODEL_PRESETS = {
   openai: [
     { value: 'gpt-5.2', label: 'GPT-5.2', description: '가장 빠르고 강력한 모델' },
     { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '준수한 성능과 가성비' },
-    { value: 'gpt-5-nano', label: 'GPT-5 nano', description: '가장 경제적인 모델' },
+    { value: 'gpt-4.1', label: 'GPT-4.1', description: '가장 경제적인 모델' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', description: '성능/속도/비용 균형 (권장)' },

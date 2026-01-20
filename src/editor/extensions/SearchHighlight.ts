@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { normalizeForSearch, applyUnicodeNormalization } from '@/utils/normalizeForSearch';
 
 // ============================================
 // Types
@@ -63,7 +64,76 @@ function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions
 }
 
 /**
+ * 정규화된 텍스트와 원본 위치 매핑 구축
+ * (ReviewHighlight.ts와 동일한 패턴)
+ */
+function buildNormalizedTextWithMapping(originalText: string): {
+  normalizedText: string;
+  indexMap: number[];
+} {
+  // 유니코드 문자 정규화 (1:1 매핑 유지) - 공통 함수 사용
+  const processed = applyUnicodeNormalization(originalText);
+
+  // CRLF, CR → 일반 공백
+  const indexMap: number[] = [];
+  let normalizedText = '';
+
+  let i = 0;
+  while (i < processed.length) {
+    const char = processed[i];
+    const nextChar = processed[i + 1];
+
+    if (char === '\r' && nextChar === '\n') {
+      normalizedText += ' ';
+      indexMap.push(i);
+      i += 2;
+      continue;
+    }
+
+    if (char === '\r') {
+      normalizedText += ' ';
+      indexMap.push(i);
+      i++;
+      continue;
+    }
+
+    normalizedText += char;
+    indexMap.push(i);
+    i++;
+  }
+
+  // 연속 공백 축소
+  const finalText: string[] = [];
+  const finalIndexMap: number[] = [];
+  let prevWasSpace = false;
+
+  for (let j = 0; j < normalizedText.length; j++) {
+    const char = normalizedText[j]!;
+    const originalIdx = indexMap[j]!;
+    const isSpace = /\s/.test(char);
+
+    if (isSpace) {
+      if (!prevWasSpace) {
+        finalText.push(' ');
+        finalIndexMap.push(originalIdx);
+      }
+      prevWasSpace = true;
+    } else {
+      finalText.push(char);
+      finalIndexMap.push(originalIdx);
+      prevWasSpace = false;
+    }
+  }
+
+  return {
+    normalizedText: finalText.join(''),
+    indexMap: finalIndexMap,
+  };
+}
+
+/**
  * 검색어에 대한 모든 매치 찾기
+ * 양방향 정규화: 에디터 텍스트와 검색어 모두 정규화하여 비교
  */
 function findMatches(
   doc: ProseMirrorNode,
@@ -80,24 +150,40 @@ function findMatches(
     return [];
   }
 
-  const searchIn = caseSensitive ? text : text.toLowerCase();
-  const searchFor = caseSensitive ? searchTerm : searchTerm.toLowerCase();
+  // 에디터 텍스트 정규화
+  const { normalizedText, indexMap } = buildNormalizedTextWithMapping(text);
+
+  // 검색어 정규화
+  const normalizedSearchTerm = normalizeForSearch(searchTerm);
+
+  if (normalizedSearchTerm.length === 0) {
+    return [];
+  }
+
+  const searchIn = caseSensitive ? normalizedText : normalizedText.toLowerCase();
+  const searchFor = caseSensitive ? normalizedSearchTerm : normalizedSearchTerm.toLowerCase();
 
   const matches: SearchMatch[] = [];
   let index = 0;
 
   while ((index = searchIn.indexOf(searchFor, index)) !== -1) {
-    const fromPos = positions[index];
-    const endIndex = index + searchFor.length - 1;
+    // 정규화된 인덱스 → 원본 텍스트 인덱스 → 문서 위치
+    const originalStartIndex = indexMap[index];
+    const normalizedEndIndex = index + searchFor.length - 1;
+    const originalEndIndex = normalizedEndIndex < indexMap.length
+      ? indexMap[normalizedEndIndex]
+      : undefined;
 
-    if (fromPos !== undefined && endIndex < positions.length) {
-      const toPos = positions[endIndex];
-      if (toPos !== undefined) {
+    if (originalStartIndex !== undefined && originalEndIndex !== undefined) {
+      const fromPos = positions[originalStartIndex];
+      const toPos = positions[originalEndIndex];
+
+      if (fromPos !== undefined && toPos !== undefined) {
         matches.push({ from: fromPos, to: toPos + 1 });
       }
     }
 
-    index += 1; // 다음 위치부터 검색 (오버랩 허용)
+    index += 1;
   }
 
   return matches;
@@ -198,6 +284,14 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 매치 재계산
           storage.matches = findMatches(editor.state.doc, term, storage.caseSensitive);
           storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
+
+          // 디버깅: 검색 결과 로그
+          console.log('[SearchHighlight:setSearchTerm]', {
+            term,
+            normalizedTerm: normalizeForSearch(term),
+            matchCount: storage.matches.length,
+            caseSensitive: storage.caseSensitive,
+          });
 
           if (dispatch) {
             // 트랜잭션에 메타 정보 추가하여 decoration 갱신

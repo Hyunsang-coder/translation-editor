@@ -1,4 +1,37 @@
 /**
+ * 유니코드 문자 정규화 패턴
+ * ReviewHighlight, SearchHighlight에서도 사용하므로 export
+ */
+export const UNICODE_NORMALIZE_PATTERNS = {
+  // 곡선/전각 큰따옴표 → 직선 "
+  doubleQuotes: /[\u201C\u201D\u201E\u201F\u2033\u2036\uFF02]/g,
+  // 곡선/전각 작은따옴표 → 직선 '
+  singleQuotes: /[\u2018\u2019\u201A\u201B\u2032\u2035\uFF07]/g,
+  // CJK 꺾쇠 따옴표「」→ 직선 "
+  cjkCornerBrackets: /[\u300C\u300D]/g,
+  // CJK 겹꺾쇠 따옴표『』→ 직선 "
+  cjkDoubleCornerBrackets: /[\u300E\u300F]/g,
+  // en-dash, em-dash, 전각 하이픈 → hyphen
+  dashes: /[\u2013\u2014\u2015\uFF0D]/g,
+  // 특수 공백 문자 (non-breaking space, various width spaces, ideographic space)
+  specialSpaces: /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g,
+} as const;
+
+/**
+ * 유니코드 따옴표/대시/공백 정규화 적용 (1:1 치환)
+ * 문자열 길이가 변하지 않으므로 인덱스 매핑에 안전
+ */
+export function applyUnicodeNormalization(text: string): string {
+  return text
+    .replace(UNICODE_NORMALIZE_PATTERNS.specialSpaces, ' ')
+    .replace(UNICODE_NORMALIZE_PATTERNS.doubleQuotes, '"')
+    .replace(UNICODE_NORMALIZE_PATTERNS.singleQuotes, "'")
+    .replace(UNICODE_NORMALIZE_PATTERNS.cjkCornerBrackets, '"')
+    .replace(UNICODE_NORMALIZE_PATTERNS.cjkDoubleCornerBrackets, '"')
+    .replace(UNICODE_NORMALIZE_PATTERNS.dashes, '-');
+}
+
+/**
  * 검색을 위한 텍스트 정규화 함수
  *
  * AI가 반환하는 excerpt에 마크다운 서식이 포함되어 있고,
@@ -6,9 +39,9 @@
  *
  * 이 함수는:
  * 1. HTML 엔티티 변환 (&nbsp; 등)
- * 2. 마크다운 서식 제거 (bold, italic, code, strikethrough, links 등)
- * 3. 리스트/헤딩 마커 제거
- * 4. 특수 공백 문자 정규화 (Unicode non-breaking spaces 등)
+ * 2. 유니코드 문자 정규화 (따옴표, 대시, 공백)
+ * 3. 마크다운 서식 제거 (bold, italic, code, strikethrough, links 등)
+ * 4. 리스트/헤딩 마커 제거
  * 5. 공백 정규화 (연속 공백 → 단일 공백)
  *
  * @param text - 정규화할 텍스트 (AI 응답의 excerpt 등)
@@ -24,7 +57,13 @@ export function normalizeForSearch(text: string): string {
       .replace(/&gt;/gi, '>')
       .replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'")
-      // 2. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
+      // 2. 유니코드 문자 정규화 (applyUnicodeNormalization과 동일)
+      .replace(UNICODE_NORMALIZE_PATTERNS.doubleQuotes, '"')
+      .replace(UNICODE_NORMALIZE_PATTERNS.singleQuotes, "'")
+      .replace(UNICODE_NORMALIZE_PATTERNS.cjkCornerBrackets, '"')
+      .replace(UNICODE_NORMALIZE_PATTERNS.cjkDoubleCornerBrackets, '"')
+      .replace(UNICODE_NORMALIZE_PATTERNS.dashes, '-')
+      // 3. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
       .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
       .replace(/\*(.+?)\*/g, '$1') // *italic* → italic
       .replace(/__(.+?)__/g, '$1') // __bold__ → bold
@@ -32,15 +71,13 @@ export function normalizeForSearch(text: string): string {
       .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
       .replace(/`(.+?)`/g, '$1') // `code` → code
       .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [text](url) → text
-      // 3. 리스트/헤딩 마커 제거
+      // 4. 리스트/헤딩 마커 제거
       .replace(/^#{1,6}\s+/gm, '') // # Heading → Heading
       .replace(/^\s*[-*+]\s+/gm, '') // - item → item
       .replace(/^\s*\d+\.\s+/gm, '') // 1. item → item
-      // 4. 특수 공백 문자 정규화 (Unicode)
-      // \u00A0: non-breaking space, \u2000-\u200A: various width spaces
-      // \u202F: narrow no-break space, \u205F: medium mathematical space, \u3000: ideographic space
-      .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
-      // 5. 줄바꿈 통일 및 공백 정규화
+      // 5. 특수 공백 문자 정규화 (Unicode)
+      .replace(UNICODE_NORMALIZE_PATTERNS.specialSpaces, ' ')
+      // 6. 줄바꿈 통일 및 공백 정규화
       .replace(/\r\n|\r/g, ' ') // CRLF, CR → 공백
       .replace(/\s+/g, ' ') // 연속 공백/줄바꿈 → 단일 공백
       .trim()
