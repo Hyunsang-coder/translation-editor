@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { ITEProject } from '@/types';
 import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
-import { useProjectStore } from '@/stores/projectStore';
 
 // ============================================
 // Review Settings Types
@@ -77,7 +76,6 @@ interface ReviewState {
   highlightEnabled: boolean;  // 하이라이트 활성화 여부
   highlightNonce: number;     // 하이라이트 업데이트 트리거 (nonce 증가 시 재계산)
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
-  isApplyingSuggestion: boolean;  // 수정 제안 적용 중 (하이라이트 무효화 방지)
   totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
   streamingText: string;  // 현재 청크의 AI 스트리밍 응답 텍스트
   reviewTrigger: number;  // 외부에서 검수 시작 요청 트리거 (nonce 증가 시 ReviewPanel에서 검수 시작)
@@ -170,11 +168,6 @@ interface ReviewActions {
   setIntensity: (intensity: ReviewIntensity) => void;
 
   /**
-   * 수정 제안 적용 중 플래그 설정 (하이라이트 무효화 방지용)
-   */
-  setIsApplyingSuggestion: (value: boolean) => void;
-
-  /**
    * 스트리밍 텍스트 업데이트
    */
   setStreamingText: (text: string) => void;
@@ -199,7 +192,6 @@ const initialState: ReviewState = {
   highlightEnabled: false,
   highlightNonce: 0,
   initializedProjectId: null,
-  isApplyingSuggestion: false,
   totalIssuesFound: 0,
   streamingText: '',
   reviewTrigger: 0,
@@ -356,7 +348,11 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   disableHighlight: () => {
-    set({ highlightEnabled: false });
+    const { highlightNonce } = get();
+    set({
+      highlightEnabled: false,
+      highlightNonce: highlightNonce + 1,  // 에디터 새로고침 트리거
+    });
   },
 
   refreshHighlight: () => {
@@ -368,43 +364,15 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set({ intensity });
   },
 
-  setIsApplyingSuggestion: (value: boolean) => {
-    set({ isApplyingSuggestion: value });
-  },
-
   setStreamingText: (text: string) => {
     set({ streamingText: text });
   },
 }));
 
 // ============================================
-// Issue #6 Fix: 문서 변경 시 하이라이트 무효화
+// 문서 변경 시 하이라이트 처리
 // ============================================
-// projectStore의 targetDocJson 변경을 구독하여
-// 검수 결과가 있고 하이라이트가 활성화된 상태에서 문서가 변경되면
-// 하이라이트를 비활성화합니다 (오프셋 불일치 방지)
-
-let prevTargetDocJson: unknown = null;
-
-useProjectStore.subscribe((state) => {
-  const { targetDocJson } = state;
-
-  if (prevTargetDocJson !== null && targetDocJson !== prevTargetDocJson) {
-    // 다음 tick에서 체크 (isApplyingSuggestion 상태 반영 보장)
-    // Issue: setIsApplyingSuggestion(true) 호출 직후 replaceMatch()가 실행되면
-    // subscription이 트리거될 때 상태가 아직 반영되지 않아 레이스 컨디션 발생
-    setTimeout(() => {
-      const reviewState = useReviewStore.getState();
-      if (
-        reviewState.highlightEnabled &&
-        reviewState.results.length > 0 &&
-        !reviewState.isApplyingSuggestion
-      ) {
-        console.log('[reviewStore] Target document changed while highlight active, disabling highlight');
-        useReviewStore.getState().disableHighlight();
-      }
-    }, 0);
-  }
-
-  prevTargetDocJson = targetDocJson;
-});
+// ReviewHighlight.ts의 ProseMirror plugin이 tr.docChanged 감지 시 자동으로 재계산
+// - 찾을 수 있는 이슈는 계속 하이라이트 유지
+// - 편집으로 텍스트가 변경되어 못 찾으면 자연스럽게 제거됨
+// - 이전에는 cross-store subscription으로 전체 무효화했으나 제거됨

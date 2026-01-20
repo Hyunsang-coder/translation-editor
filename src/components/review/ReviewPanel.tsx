@@ -87,7 +87,6 @@ export function ReviewPanel(): JSX.Element {
     deleteIssue,
     setAllIssuesChecked,
     getCheckedIssues,
-    setIsApplyingSuggestion,
     setStreamingText,
   } = useReviewStore();
 
@@ -277,9 +276,6 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
-    // 적용 중 플래그 설정 (하이라이트 무효화 방지)
-    setIsApplyingSuggestion(true);
-
     // 첫 번째 매치 교체
     editor.commands.replaceMatch(replaceText);
 
@@ -287,16 +283,14 @@ export function ReviewPanel(): JSX.Element {
     editor.commands.setSearchTerm('');
 
     deleteIssue(issue.id);
-
-    setTimeout(() => {
-      setIsApplyingSuggestion(false);
-    }, 500);
+    // Note: 하이라이트는 ReviewHighlight plugin이 tr.docChanged 감지 시 자동 재계산
+    // 수정된 이슈는 results에서 삭제되어 더 이상 하이라이트 안됨
 
     addToast({
       type: 'success',
       message: t('review.applySuccess'),
     });
-  }, [t, deleteIssue, setIsApplyingSuggestion]);
+  }, [t, deleteIssue]);
 
   /**
    * 누락 유형: suggestedFix를 클립보드에 복사
