@@ -10,12 +10,14 @@ import { saveTempImage } from '@/tauri/attachments';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
+import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
 import type { ChatMessageMetadata } from '@/types';
+import type { Editor } from '@tiptap/react';
 
 /**
  * 채팅 콘텐츠 컴포넌트
@@ -43,7 +45,7 @@ export function ChatContent(): JSX.Element {
   const setComposerText = useChatStore((s) => s.setComposerText);
   const focusNonce = useChatStore((s) => s.composerFocusNonce);
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<Editor | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
@@ -354,7 +356,7 @@ export function ChatContent(): JSX.Element {
     if (!chatPanelOpen) setChatPanelOpen(true);
 
     setTimeout(() => {
-      inputRef.current?.focus();
+      editorRef.current?.commands.focus('end');
     }, 100);
   }, [focusNonce]);
 
@@ -371,17 +373,16 @@ export function ChatContent(): JSX.Element {
 
     const message = composerText.trim();
     setComposerText('');
-    // textarea 높이 초기화
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-    }
+    // TipTap 에디터 초기화
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (editorRef.current as any)?.clearComposerContent?.();
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
     if (!chatPanelOpen) return;
-    inputRef.current?.focus();
+    editorRef.current?.commands.focus('end');
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -593,31 +594,22 @@ export function ChatContent(): JSX.Element {
             </div>
           )}
 
-          <textarea
-            ref={inputRef}
-            value={composerText}
-            onChange={(e) => {
-              setComposerText(e.target.value);
-              // 높이 자동 조절
-              const textarea = e.target;
-              textarea.style.height = 'auto';
-              textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-            }}
-            placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
-            className="w-full min-h-[80px] max-h-[200px] px-4 pt-3 pb-12 rounded-2xl bg-transparent
-                       text-editor-text placeholder-editor-muted text-sm
-                       focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none overflow-y-auto"
-            disabled={isLoading}
+          <div
+            className="w-full min-h-[80px] max-h-[200px] px-4 pt-3 pb-12 rounded-2xl bg-transparent overflow-y-auto"
             data-ite-chat-composer
-            rows={2}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                void sendCurrent();
-              }
-            }}
             onPaste={handlePaste}
-          />
+          >
+            <ChatComposerEditor
+              content={composerText}
+              onChange={setComposerText}
+              onSubmit={() => void sendCurrent()}
+              disabled={isLoading}
+              placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
+              onEditorReady={(editor) => {
+                editorRef.current = editor;
+              }}
+            />
+          </div>
 
           {/* 하단 컨트롤 바 */}
           <div className="absolute inset-x-0 bottom-0 px-2 pb-2 flex items-end justify-between pointer-events-none">

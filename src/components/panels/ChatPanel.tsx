@@ -10,6 +10,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { saveTempImage } from '@/tauri/attachments';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
+import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
@@ -18,6 +19,7 @@ import { useConnectorStore } from '@/stores/connectorStore';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
 import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
 import type { ChatMessageMetadata } from '@/types';
+import type { Editor } from '@tiptap/react';
 
 
 /**
@@ -61,7 +63,7 @@ export function ChatPanel(): JSX.Element {
   const projectContext = useChatStore((s) => s.projectContext);
   const setProjectContext = useChatStore((s) => s.setProjectContext);
   const [activeTab, setActiveTab] = useState<'settings' | 'chat' | 'review'>('settings');
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<Editor | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
@@ -363,7 +365,7 @@ export function ChatPanel(): JSX.Element {
     setActiveTab('chat');
     // 사이드바가 열리는 시간을 고려하여 약간의 지연 후 포커스
     setTimeout(() => {
-      inputRef.current?.focus();
+      editorRef.current?.commands.focus('end');
     }, 100);
   }, [focusNonce]);
 
@@ -382,13 +384,16 @@ export function ChatPanel(): JSX.Element {
 
     const message = composerText.trim();
     setComposerText('');
+    // TipTap 에디터 초기화
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (editorRef.current as any)?.clearComposerContent?.();
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
 
   useEffect(() => {
     if (activeTab !== 'chat') return;
     if (sidebarCollapsed) return;
-    inputRef.current?.focus();
+    editorRef.current?.commands.focus('end');
     // 탭 전환 시 스크롤 하단 이동
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -906,25 +911,22 @@ export function ChatPanel(): JSX.Element {
                 </div>
               )}
 
-              <textarea
-                ref={inputRef}
-                value={composerText}
-                onChange={(e) => setComposerText(e.target.value)}
-                placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
-                className="w-full min-h-[96px] px-4 pt-4 pb-12 rounded-2xl bg-transparent
-                           text-editor-text placeholder-editor-muted
-                           focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-                disabled={isLoading}
+              <div
+                className="w-full min-h-[96px] max-h-[200px] px-4 pt-4 pb-12 rounded-2xl bg-transparent overflow-y-auto"
                 data-ite-chat-composer
-                rows={3}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void sendCurrent();
-                  }
-                }}
                 onPaste={handlePaste}
-              />
+              >
+                <ChatComposerEditor
+                  content={composerText}
+                  onChange={setComposerText}
+                  onSubmit={() => void sendCurrent()}
+                  disabled={isLoading}
+                  placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
+                  onEditorReady={(editor) => {
+                    editorRef.current = editor;
+                  }}
+                />
+              </div>
 
               {/* 하단 컨트롤 바: 좌측 +, 📎 / 우측 Send(화살표) */}
               <div className="absolute inset-x-0 bottom-0 px-3 pb-3 flex items-end justify-between pointer-events-none">

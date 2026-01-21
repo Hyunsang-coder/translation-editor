@@ -798,3 +798,107 @@
   background-color: rgba(255, 152, 0, 0.5);
   box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.7);
 }
+
+/* ============================================
+   Chat Composer TipTap Editor
+   ============================================ */
+
+/* 채팅 컴포저 에디터 래퍼 */
+.chat-composer-editor-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+/* 채팅 컴포저 TipTap 에디터 */
+.chat-composer-tiptap {
+  @apply outline-none;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--editor-text);
+  min-height: 60px;
+  max-height: 100%;
+}
+
+/* Placeholder 스타일 */
+.chat-composer-tiptap.is-editor-empty::before {
+  @apply text-editor-muted;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 채팅 컴포저 내 기본 요소 스타일 */
+.chat-composer-tiptap p {
+  @apply my-1;
+}
+
+.chat-composer-tiptap p:first-child {
+  @apply mt-0;
+}
+
+.chat-composer-tiptap p:last-child {
+  @apply mb-0;
+}
+
+/* 인라인 서식 */
+.chat-composer-tiptap strong {
+  @apply font-semibold;
+}
+
+.chat-composer-tiptap em {
+  @apply italic;
+}
+
+.chat-composer-tiptap u {
+  @apply underline;
+}
+
+.chat-composer-tiptap s {
+  @apply line-through text-editor-muted;
+}
+
+.chat-composer-tiptap mark {
+  @apply bg-yellow-200 dark:bg-yellow-700;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* 링크 */
+.chat-composer-tiptap a {
+  @apply text-primary-500 underline decoration-primary-300;
+}
+
+/* 인라인 코드 */
+.chat-composer-tiptap code {
+  @apply px-1 py-0.5 rounded text-sm;
+  @apply bg-editor-surface;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 리스트 */
+.chat-composer-tiptap ul {
+  @apply list-disc pl-5 my-1;
+}
+
+.chat-composer-tiptap ol {
+  @apply list-decimal pl-5 my-1;
+}
+
+.chat-composer-tiptap li {
+  @apply my-0.5;
+}
+
+.chat-composer-tiptap li p {
+  @apply my-0;
+}
+
+/* Selection */
+.chat-composer-tiptap ::selection {
+  @apply bg-primary-200;
+}
+
+.dark .chat-composer-tiptap ::selection {
+  @apply bg-primary-800;
+}
