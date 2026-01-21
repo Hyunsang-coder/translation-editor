@@ -6,7 +6,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildAlignedChunks } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync } from '@/ai/tools/reviewTool';
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
@@ -149,7 +149,8 @@ export function ReviewPanel(): JSX.Element {
     if (!project) return;
 
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
-    const freshChunks = buildAlignedChunks(project);
+    // 비동기로 처리하여 UI 블로킹 방지
+    const freshChunks = await buildAlignedChunksAsync(project);
     if (freshChunks.length === 0) return;
 
     const controller = new AbortController();

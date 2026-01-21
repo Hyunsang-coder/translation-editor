@@ -1,6 +1,14 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
+import {
+  useChatComposerState,
+  useChatSessionState,
+  useChatStreamingState,
+  useChatSearchState,
+  useChatMessageActions,
+  useSummarySuggestionState,
+} from '@/stores/chatStore.selectors';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
@@ -27,25 +35,40 @@ import type { Editor } from '@tiptap/react';
 export function ChatContent(): JSX.Element {
   const { t } = useTranslation();
 
-  const { currentSession, sendMessage, isLoading } = useChatStore();
-  const statusMessage = useChatStore((s) => s.statusMessage);
-  const chatSessions = useChatStore((s) => s.sessions);
-  const dismissSummarySuggestion = useChatStore((s) => s.dismissSummarySuggestion);
-  const startNewSessionFromSuggestion = useChatStore((s) => s.startNewSessionFromSuggestion);
-  
-  // selector 버그 수정: 함수 호출 대신 직접 상태 구독
-  const currentSessionIdForSuggestion = useChatStore((s) => s.currentSessionId);
-  const messageCountForSuggestion = useChatStore((s) => s.currentSession?.messages.length ?? 0);
-  const dismissedMap = useChatStore((s) => s.summarySuggestionDismissedBySessionId);
-  const shouldShowSummarySuggestion = 
-    currentSessionIdForSuggestion !== null &&
-    !dismissedMap[currentSessionIdForSuggestion] &&
-    messageCountForSuggestion >= 30;
+  // 그룹화된 선택자로 리렌더링 최적화
+  const { currentSession, sessions: chatSessions, isHydrating, hydrateForProject } = useChatSessionState();
+  const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = useChatStreamingState();
+  const {
+    composerText,
+    setComposerText,
+    composerAttachments,
+    addComposerAttachment,
+    removeComposerAttachment,
+    focusNonce,
+  } = useChatComposerState();
+  const {
+    webSearchEnabled,
+    setWebSearchEnabled,
+    confluenceSearchEnabled,
+    setConfluenceSearchEnabled,
+  } = useChatSearchState();
+  const {
+    sendMessage,
+    editMessage,
+    replayMessage,
+    deleteMessageFrom,
+    updateMessage,
+    appendToTranslationRules,
+    appendToProjectContext,
+  } = useChatMessageActions();
+  const {
+    shouldShow: shouldShowSummarySuggestion,
+    dismiss: dismissSummarySuggestion,
+    startNewSession: startNewSessionFromSuggestion,
+  } = useSummarySuggestionState();
 
-  const composerText = useChatStore((s) => s.composerText);
-  const setComposerText = useChatStore((s) => s.setComposerText);
-  const focusNonce = useChatStore((s) => s.composerFocusNonce);
-  const streamingMessageId = useChatStore((s) => s.streamingMessageId);
+  // 개별 선택자 (그룹에 포함되지 않는 것들)
+  const createSession = useChatStore((s) => s.createSession);
   const editorRef = useRef<Editor | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,24 +110,8 @@ export function ChatContent(): JSX.Element {
     }
   }, [chatModel, allChatModels, setChatModel]);
 
-  const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
-  const hydrateForProject = useChatStore((s) => s.hydrateForProject);
 
-  const editMessage = useChatStore((s) => s.editMessage);
-  const replayMessage = useChatStore((s) => s.replayMessage);
-  const appendToTranslationRules = useChatStore((s) => s.appendToTranslationRules);
-  const appendToProjectContext = useChatStore((s) => s.appendToProjectContext);
-  const deleteMessageFrom = useChatStore((s) => s.deleteMessageFrom);
-  const createSession = useChatStore((s) => s.createSession);
-  const updateMessage = useChatStore((s) => s.updateMessage);
-  const composerAttachments = useChatStore((s) => s.composerAttachments);
-  const addComposerAttachment = useChatStore((s) => s.addComposerAttachment);
-  const removeComposerAttachment = useChatStore((s) => s.removeComposerAttachment);
-  const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
-  const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
-  const confluenceSearchEnabled = useChatStore((s) => s.currentSession?.confluenceSearchEnabled ?? false);
-  const setConfluenceSearchEnabled = useChatStore((s) => s.setConfluenceSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -191,9 +198,6 @@ export function ChatContent(): JSX.Element {
     const timer = window.setTimeout(() => setShowStreamingSkeleton(true), 200);
     return () => window.clearTimeout(timer);
   }, [isLoading]);
-
-  const streamingContent = useChatStore((s) => s.streamingContent);
-  const streamingMetadata = useChatStore((s) => s.streamingMetadata);
 
   const streamingMessage = useMemo(() => {
     if (!streamingMessageId) return null;

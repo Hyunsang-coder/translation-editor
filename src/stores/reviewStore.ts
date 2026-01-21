@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ITEProject } from '@/types';
-import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
 
 // ============================================
 // Review Settings Types
@@ -94,8 +94,9 @@ interface ReviewState {
 interface ReviewActions {
   /**
    * 검수 초기화: 프로젝트를 청크로 분할하고 상태 초기화
+   * 비동기 처리로 메인 스레드 블로킹 방지
    */
-  initializeReview: (project: ITEProject) => void;
+  initializeReview: (project: ITEProject) => Promise<void>;
 
   /**
    * 검수 결과 추가
@@ -217,14 +218,15 @@ const initialState: ReviewState = {
 export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...initialState,
 
-  initializeReview: (project: ITEProject) => {
+  initializeReview: async (project: ITEProject) => {
     const { initializedProjectId, results, highlightNonce } = get();
     // 이미 같은 프로젝트로 초기화되어 있고 검수 결과가 있으면 스킵 (탭 전환 시 상태 유지)
     // 검수 결과가 없으면 항상 재초기화 (resetReview 후 또는 첫 진입)
     if (initializedProjectId === project.id && results.length > 0) {
       return;
     }
-    const chunks = buildAlignedChunks(project);
+    // 비동기 청킹으로 메인 스레드 블로킹 방지
+    const chunks = await buildAlignedChunksAsync(project);
     set({
       chunks,
       currentChunkIndex: 0,

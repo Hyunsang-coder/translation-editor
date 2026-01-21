@@ -12,7 +12,7 @@
 | 영역 | 상태 | 주요 발견 |
 |------|------|----------|
 | **보안** | ✅ 양호 | XSS, 경로 탐색, API 키 관리 모두 안전 |
-| **성능** | 🟡 개선 필요 | 리렌더링 최적화, 동기 연산 개선 기회 |
+| **성능** | ✅ 개선됨 | buildAlignedChunks 비동기화, Zustand 선택자 최적화 완료 |
 | **메모리** | ✅ 해결됨 | TipTap destroy, 메시지 제한, 타이머 cleanup 완료 |
 
 ---
@@ -60,19 +60,24 @@
 
 ## 2. 성능 이슈
 
-### 2.1 High Priority Issues
+### ~~2.1 High Priority Issues~~ ✅ 완료
 
-#### buildAlignedChunks 동기 작업
-- **파일**: `src/ai/review/reviewTool.ts`
+#### ~~buildAlignedChunks 동기 작업~~ ✅ 해결됨
+- **파일**: `src/ai/tools/reviewTool.ts`
 - **문제**: 검수 시작 시 모든 세그먼트의 HTML→Markdown 동기 변환
-- **영향**: 큰 문서에서 메인 스레드 블로킹 (수 초)
-- **해결 방향**: 웹 워커 또는 청크 단위 비동기 처리
+- **해결**: `buildAlignedChunksAsync()` 비동기 함수 추가 (10개 세그먼트마다 yield, AbortSignal 지원)
+- **적용**: `reviewStore.ts`, `ReviewPanel.tsx`에서 비동기 버전 사용
 
-#### Zustand 과다 구독
+#### ~~Zustand 과다 구독~~ ✅ 해결됨
 - **파일**: `src/components/chat/ChatContent.tsx`
 - **문제**: 14개 이상의 분리된 선택자 구독
-- **영향**: store의 작은 변경도 모든 구독자 재평가
-- **해결 방향**: 관련 상태를 단일 선택자로 통합
+- **해결**: `chatStore.selectors.ts`에 그룹화된 선택자 추가
+  - `useChatComposerState`: composer 관련 6개 상태 통합
+  - `useChatSessionState`: 세션 관련 상태 통합
+  - `useChatStreamingState`: 스트리밍 관련 상태 통합
+  - `useChatSearchState`: 검색 관련 상태 통합
+  - `useChatMessageActions`: 메시지 액션 통합
+  - `useSummarySuggestionState`: 요약 제안 상태 통합
 
 ### 2.2 Medium Priority Issues
 
@@ -175,13 +180,13 @@
 4. ~~**Auto-save 타이머 정리**~~ ✅
    - `stopAutoSave()`에 `writeThroughTimer` cleanup 추가
 
-5. **buildAlignedChunks 비동기화** (미완료)
-   - 웹 워커 또는 청크 단위 처리로 메인 스레드 블로킹 방지
+5. ~~**buildAlignedChunks 비동기화**~~ ✅
+   - `buildAlignedChunksAsync()` 함수 추가 (10개 세그먼트마다 yield, AbortSignal 지원)
 
-### 중기 개선 (Medium)
+### ~~중기 개선 (Medium)~~ ✅ 완료
 
-6. **Zustand 선택자 최적화**
-   - ChatContent의 14+ 선택자를 관련 그룹으로 통합
+6. ~~**Zustand 선택자 최적화**~~ ✅
+   - `chatStore.selectors.ts`에 6개 그룹화된 선택자 추가, ChatContent 리팩토링
 
 7. ~~**콘솔 로깅 프로덕션 필터링**~~ ✅
    - 민감 정보 로깅에 DEV 조건 추가 완료
@@ -213,13 +218,13 @@
 - **성능**: 개선 기회 있음 - 리렌더링 최적화, 동기 연산 개선 권장
 - **메모리**: 주의 필요 - TipTap 에디터 lifecycle 관리가 핵심 개선점
 
-### 다음 스프린트 권장 작업
+### ~~다음 스프린트 권장 작업~~ ✅ 모두 완료
 
 1. ~~TipTap 에디터 destroy 로직 추가~~ ✅
 2. ~~에디터 레지스트리 정리 로직 구현~~ ✅
 3. ~~Chat 메시지 제한 적용~~ ✅
-4. buildAlignedChunks 비동기 처리
-5. Zustand 선택자 최적화
+4. ~~buildAlignedChunks 비동기 처리~~ ✅
+5. ~~Zustand 선택자 최적화~~ ✅
 
 ---
 
@@ -229,6 +234,7 @@
 |------|----------|
 | 2026-01-21 | 1차 수정: Critical 이슈 3건 + 보안 로깅 2건 해결 |
 | 2026-01-21 | 2차 수정: High 이슈 4건 + Medium 이슈 2건 해결 (chatStore 메시지 제한, projectStore 타이머 cleanup, reviewStore 캐싱, aiConfigStore/McpClientManager 로깅, lib.rs temp cleanup) |
+| 2026-01-21 | 3차 수정: 성능 최적화 완료 (buildAlignedChunksAsync 비동기화 + chatStore.selectors.ts 그룹화된 선택자) |
 
 ---
 

@@ -71,6 +71,70 @@ export function buildAlignedChunks(
   return chunks;
 }
 
+/**
+ * 비동기 버전의 buildAlignedChunks
+ * - 메인 스레드 블로킹 방지를 위해 청크 단위로 yield
+ * - AbortSignal 지원으로 취소 가능
+ * - 대량 문서에서 UI 응답성 유지
+ */
+export async function buildAlignedChunksAsync(
+  project: ITEProject,
+  maxCharsPerChunk: number = DEFAULT_REVIEW_CHUNK_SIZE,
+  signal?: AbortSignal
+): Promise<AlignedChunk[]> {
+  // 즉시 취소 확인
+  if (signal?.aborted) {
+    throw new Error('Aborted');
+  }
+
+  const orderedSegments = [...project.segments].sort((a, b) => a.order - b.order);
+  const chunks: AlignedChunk[] = [];
+  let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
+
+  // 배치 크기: 10개 세그먼트마다 yield
+  const BATCH_SIZE = 10;
+
+  for (let i = 0; i < orderedSegments.length; i++) {
+    // 취소 확인
+    if (signal?.aborted) {
+      throw new Error('Aborted');
+    }
+
+    const seg = orderedSegments[i]!;
+
+    // HTML → Markdown 변환
+    const sourceText = seg.sourceIds
+      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .join('\n');
+    const targetText = seg.targetIds
+      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .join('\n');
+    const segmentSize = sourceText.length + targetText.length;
+
+    // 청크 크기 초과 시 새 청크 시작
+    if (currentChunk.totalChars + segmentSize > maxCharsPerChunk && currentChunk.segments.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = { chunkIndex: chunks.length, segments: [], totalChars: 0 };
+    }
+
+    currentChunk.segments.push({
+      groupId: seg.groupId,
+      order: seg.order,
+      sourceText,
+      targetText,
+    });
+    currentChunk.totalChars += segmentSize;
+
+    // 배치마다 이벤트 루프에 제어권 양보 (UI 블로킹 방지)
+    if ((i + 1) % BATCH_SIZE === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+
+  if (currentChunk.segments.length > 0) chunks.push(currentChunk);
+  return chunks;
+}
+
 // Note: resolveSourceDocumentText, resolveTargetDocumentText, autoSliceLargeDocument
 // are no longer used after switching to segment-based chunking (Phase 2)
 // Kept for reference but removed to avoid unused variable warnings
