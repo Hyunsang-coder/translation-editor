@@ -2,7 +2,8 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useTranslation } from 'react-i18next';
 
-const BUTTON_SIZE = 56; // w-14 h-14 = 56px
+const BUTTON_SIZE = 48; // 기본 크기
+const BUTTON_SIZE_HOVER = 52; // hover 시 크기
 const MARGIN = 24; // bottom-6 right-6 = 24px
 
 /**
@@ -24,6 +25,8 @@ export function FloatingChatButton(): JSX.Element {
 
   // 현재 위치 계산 (null이면 기본 우측 하단)
   const [currentPos, setCurrentPos] = useState<{ x: number; y: number } | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDraggingState, setIsDraggingState] = useState(false);
 
   useEffect(() => {
     if (floatingButtonPosition) {
@@ -65,6 +68,7 @@ export function FloatingChatButton(): JSX.Element {
     if (e.button !== 0) return; // 좌클릭만
     isDragging.current = true;
     hasMoved.current = false;
+    setIsDraggingState(true);
     startPos.current = { x: e.clientX, y: e.clientY };
     startButtonPos.current = currentPos || { x: 0, y: 0 };
     document.body.style.userSelect = 'none';
@@ -82,6 +86,7 @@ export function FloatingChatButton(): JSX.Element {
         hasMoved.current = true;
       }
 
+      // 버튼이 화면 안에 완전히 보이도록 경계 설정
       const newX = Math.max(0, Math.min(window.innerWidth - BUTTON_SIZE, startButtonPos.current.x + deltaX));
       const newY = Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE, startButtonPos.current.y + deltaY));
 
@@ -91,6 +96,7 @@ export function FloatingChatButton(): JSX.Element {
     const handleMouseUp = () => {
       if (isDragging.current) {
         isDragging.current = false;
+        setIsDraggingState(false);
         document.body.style.userSelect = '';
 
         // 이동했으면 위치 저장
@@ -128,38 +134,76 @@ export function FloatingChatButton(): JSX.Element {
   // 채팅 패널이 열려있으면 버튼 숨김
   if (!currentPos || chatPanelOpen) return <></>;
 
+  const currentSize = isHovered ? BUTTON_SIZE_HOVER : BUTTON_SIZE;
+  // hover 시 크기 변화에 따른 위치 보정 (중심 유지)
+  const sizeOffset = isHovered ? (BUTTON_SIZE_HOVER - BUTTON_SIZE) / 2 : 0;
+
+  // 툴팁 위치 결정: 버튼이 화면 왼쪽 절반에 있으면 툴팁을 오른쪽에, 아니면 왼쪽에
+  const tooltipOnRight = currentPos.x < window.innerWidth / 2;
+
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onMouseDown={handleMouseDown}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      style={{
-        position: 'fixed',
-        left: currentPos.x,
-        top: currentPos.y,
-        width: BUTTON_SIZE,
-        height: BUTTON_SIZE,
-        zIndex: 9999,
-      }}
-      className={`
-        rounded-full
-        flex items-center justify-center
-        shadow-lg hover:shadow-xl
-        transition-shadow duration-200
-        cursor-grab active:cursor-grabbing
-        ${chatPanelOpen
-          ? 'bg-editor-surface border border-editor-border text-editor-muted hover:bg-editor-border'
-          : 'bg-primary-500 text-white hover:bg-primary-600'
-        }
-      `}
-      title={`${chatPanelOpen ? t('chat.closePanel') : t('chat.openChat')} (더블클릭: 위치 초기화)`}
-      aria-label={chatPanelOpen ? t('chat.closePanel') : t('chat.openChat')}
-    >
-      <span className="text-xl">
-        {chatPanelOpen ? '✕' : '💬'}
-      </span>
-    </button>
+    <>
+      {/* 메인 버튼 - 독립적으로 위치 */}
+      <button
+        ref={buttonRef}
+        type="button"
+        onMouseDown={handleMouseDown}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          position: 'fixed',
+          left: currentPos.x - sizeOffset,
+          top: currentPos.y - sizeOffset,
+          width: currentSize,
+          height: currentSize,
+          zIndex: 9999,
+        }}
+        className={`
+          rounded-full overflow-hidden
+          flex items-center justify-center
+          shadow-lg hover:shadow-xl
+          transition-all duration-200 ease-out
+          cursor-grab active:cursor-grabbing
+        `}
+        title={t('chat.openChat')}
+        aria-label={t('chat.openChat')}
+      >
+        <img
+          src="/app-icon-64.png"
+          alt="OddEyes.ai"
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+      </button>
+
+      {/* 툴팁 라벨 - 버튼 위치에 따라 좌/우에 표시 (드래그 중에는 숨김) */}
+      <div
+        style={{
+          position: 'fixed',
+          top: currentPos.y + (BUTTON_SIZE - 32) / 2, // 버튼 중앙에 맞춤
+          ...(tooltipOnRight
+            ? { left: currentPos.x + BUTTON_SIZE + 8 }
+            : { right: window.innerWidth - currentPos.x + 8 }),
+          zIndex: 9998,
+        }}
+        className={`
+          flex items-center px-3 py-1.5
+          bg-editor-bg border border-editor-border rounded-full
+          shadow-md whitespace-nowrap
+          transition-all duration-200 ease-out
+          ${isHovered && !isDraggingState ? 'opacity-100' : 'opacity-0 pointer-events-none'}
+          ${tooltipOnRight
+            ? (isHovered && !isDraggingState ? 'translate-x-0' : '-translate-x-2')
+            : (isHovered && !isDraggingState ? 'translate-x-0' : 'translate-x-2')
+          }
+        `}
+      >
+        <span className="text-sm text-editor-text font-medium">
+          {t('chat.askAnything', 'Ask anything')}
+        </span>
+      </div>
+    </>
   );
 }
