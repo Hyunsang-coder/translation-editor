@@ -45,25 +45,9 @@ export interface ConnectorConfig {
 
 /**
  * 지원되는 빌트인 커넥터 목록
+ * 현재 Google Drive, Gmail은 OAuth 구현 전이므로 비활성화
  */
-export const BUILTIN_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[] = [
-  {
-    id: 'googledrive',
-    type: 'builtin',
-    builtinId: 'googledrive',
-    label: 'Google Drive',
-    description: 'Google Drive 파일 검색 및 접근',
-    icon: '/assets/images/googledrive-logo.png',
-  },
-  {
-    id: 'gmail',
-    type: 'builtin',
-    builtinId: 'gmail',
-    label: 'Gmail',
-    description: 'Gmail 이메일 검색 및 읽기',
-    icon: '/assets/images/gmail-logo.png',
-  },
-];
+export const BUILTIN_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[] = [];
 
 /**
  * MCP 커넥터 목록 (Rust 네이티브)

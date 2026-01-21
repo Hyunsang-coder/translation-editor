@@ -259,16 +259,25 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Connectors */}
             <ConnectorsSection />
 
-            {/* Help & Info (Placeholder) */}
-            <section className="space-y-3 opacity-60">
+            {/* Help & Info */}
+            <section className="space-y-3">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">ℹ️</span>
                     <h3 className="font-semibold text-editor-text">{t('appSettings.helpInfo')}</h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-editor-border text-editor-muted">{t('appSettings.helpInfoComingSoon')}</span>
                 </div>
-                <div className="text-sm text-editor-muted pl-1">
-                    {t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__} <br/>
-                    {t('appSettings.helpInfoTutorials')}
+                <div className="text-sm text-editor-muted pl-1 space-y-1">
+                    <p>{t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__}</p>
+                    <p>
+                      {t('appSettings.helpInfoHomepage', '홈페이지')}:{' '}
+                      <a
+                        href="https://oddeyes-web.vercel.app/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-500 hover:text-primary-600 hover:underline"
+                      >
+                        oddeyes-web.vercel.app
+                      </a>
+                    </p>
                 </div>
             </section>
 
