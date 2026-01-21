@@ -10,7 +10,6 @@
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "node scripts/tauri-build.mjs",
-    "build:sidecar": "node scripts/build-sidecar.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -72,7 +71,6 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "husky": "^9.1.7",
-    "mcp-remote": "^0.1.37",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",

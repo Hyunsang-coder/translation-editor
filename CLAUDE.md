@@ -50,9 +50,6 @@ npm run build
 ```bash
 # Build release app
 npm run tauri:build
-
-# Build sidecar binary (MCP connector)
-npm run build:sidecar
 ```
 
 ### Project Structure
@@ -141,12 +138,12 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 
 User confirms before suggestions are added (no automatic application).
 
-#### 4. MCP Integration (Sidecar Pattern)
-- **Confluence Search**: `mcp-rovo-confluence-server` runs as sidecar binary (Node.js packaged with `pkg`)
-- **Notion Integration**: Direct API calls via Integration Token
+#### 4. MCP Integration (Rust Native)
+- **Confluence Search**: Rust SSE client with OAuth 2.1 PKCE (`src-tauri/src/mcp/client.rs`)
+- **Notion Integration**: Rust HTTP client with Integration Token (`src-tauri/src/mcp/notion_client.rs`)
 - **Web Search**: Brave Search API + OpenAI Web Search
 - **OAuth Flow**: Lazy authentication - toggle enables tool, "Connect" button initiates OAuth
-- No external Node.js dependency; all bundled as binaries
+- No external Node.js dependency; all implemented in Rust
 
 #### 5. State Management (Zustand Stores)
 Critical stores in `src/stores/`:
@@ -242,9 +239,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 ### Adding MCP Servers
 1. Server config in `src-tauri/src/mcp/` (Rust)
 2. Frontend store in `connectorStore.ts`
-3. Sidecar build script in `scripts/build-sidecar.mjs` (if Node.js based)
-4. UI toggle in Settings panel
-5. Tool integration in chat composer (`+` menu)
+3. UI toggle in Settings panel
+4. Tool integration in chat composer (`+` menu)
 
 ### Modifying Editor Behavior
 1. TipTap extensions: `src/editor/` directory
@@ -290,50 +286,51 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 2. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.
 3. **Tool Calling**: AI proactively calls document tools for relevant questions. Web search enabled by default for new sessions.
 4. **Keychain Access**: First run requires OS authentication prompt for keychain access.
-5. **Sidecar Lifecycle**: MCP sidecar processes must be cleaned up on app exit.
-6. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.
-7. **Mock Provider**: Mock mode is not supported for translation. Setting `mock` provider throws an error with guidance to configure OpenAI API key.
-8. **Translation Truncation**: Large documents may cause response truncation. Dynamic max_tokens calculation and truncation detection handle this automatically.
-9. **Markdown Translation Pipeline**: Translation uses Markdown as intermediate format (NOT TipTap JSON directly). TipTap ↔ Markdown conversion via `tiptap-markdown` extension. Output uses `---TRANSLATION_START/END---` markers.
-10. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.
-11. **JSON Parsing with Brace Counting**: Avoid greedy regex for JSON extraction. Use brace counting (`extractJsonObject` in `parseReviewResult.ts`) to handle nested objects and extra brackets in AI responses.
-12. **TipTap Decoration Cross-Node Search**: Use `buildTextWithPositions()` to build full text/position mapping before searching. Simple `indexOf` on individual nodes fails for text spanning node boundaries.
-13. **Abort Existing Requests**: In `chatStore.ts`, always abort existing `abortController` before starting new translate or web search requests to prevent response mixing.
-14. **Session Null Handling**: When creating sessions at max limit, ensure `currentSession` is updated to prevent null reference errors in subsequent operations.
-15. **Review Chunk Size Consistency**: Use `DEFAULT_REVIEW_CHUNK_SIZE` constant (12000) from `reviewTool.ts` for both initial chunking and subsequent operations to maintain segment alignment.
-16. **TipTap JSON Initialization on Project Load**: `sourceDocJson`/`targetDocJson` must be initialized in `projectStore` at project load time (via `htmlToTipTapJson`), not just on editor mount. This ensures AI tools work in Focus Mode (Source panel hidden).
-17. **Extension Sync Between Editor and Converter**: `markdownConverter.ts`'s `getExtensions()` must include all extensions used by `TipTapEditor.tsx` (including Underline, Highlight, Subscript, Superscript) to prevent JSON parsing errors like "no mark type underline in schema".
-18. **Streaming Finalization Guard**: Use `isFinalizingStreaming` flag in `chatStore.ts` to prevent race conditions when streaming completes while a new message is being sent. Wait for finalization to complete before starting new requests.
-19. **AbortController Immediate Cleanup**: After calling `abort()` on an AbortController, immediately set `abortController: null` in state to prevent stale references during the race window before creating a new controller.
-20. **Debounce Timer Project ID Verification**: When using debounced persist operations (like `schedulePersist`), capture the project ID at schedule time and verify it hasn't changed before executing the persist. This prevents saving chat data to the wrong project.
-21. **Review Highlight Auto-Recalculation**: `ReviewHighlight.ts` ProseMirror plugin automatically recalculates decorations on `tr.docChanged`. No cross-store subscription needed - highlights persist through manual edits, removing only when the target text is no longer found.
-22. **Fresh State in Callbacks**: When using callbacks that execute over time (like chunk processing loops), use `getState()` instead of closure-captured values to ensure fresh state. Example: `useChatStore.getState()` in `ReviewPanel` to get latest `translationRules`.
-23. **Tool Handler Null Safety**: Always check for null `project` in AI tool handlers before accessing project-related state. Return meaningful error messages like "프로젝트가 로드되지 않았습니다" instead of generic errors.
-24. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
-25. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
-26. **Editor Registry for Cross-Component Access**: Use `editorRegistry.ts` (`getSourceEditor`, `getTargetEditor`) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions).
-27. **Markdown Normalization for Search**: Use `normalizeForSearch()` to strip markdown formatting (bold, italic, list markers) before searching in TipTap editor's plain text. AI responses often include markdown in excerpts.
-28. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
-29. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation since the issue no longer exists in `getCheckedIssues()`.
-30. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes in App Settings. At least one provider must be enabled.
-31. **Model Dropdown with Grouped Options**: Translation/Chat model selectors use custom `Select` component with `SelectOptionGroup[]` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
-32. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
-33. **Fresh Chunks on Review Start**: Always regenerate chunks with `buildAlignedChunks(project)` at review start time, not from cached store state. This ensures the review uses the latest document content.
-34. **Marker-based JSON Extraction**: Review responses use `---REVIEW_START/END---` markers. `extractMarkedJson()` tries marker extraction first, then falls back to brace counting. This prevents parsing failures when AI includes extra text outside JSON.
-35. **Review Streaming Text State**: `reviewStore.streamingText` stores current chunk's AI response for real-time display. Updated via `onToken` callback in `runReview()`. Preserved after completion for debugging.
-36. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
-37. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
-38. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
-39. **Git Hooks with Husky**: `.husky/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). `.husky/post-merge` auto-runs `npm install` when `package-lock.json` changes. Ensures type safety and dependency consistency.
-40. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()` from `normalizeForSearch.ts`. This handles Unicode special spaces, CRLF, consecutive whitespace, and **quote normalization** (curly quotes `""`→`"`, CJK brackets `「」『』`→`"`, fullwidth quotes).
-41. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
-42. **GPT-4.1 Temperature Handling**: GPT-4.1 requires explicit temperature parameter (unlike GPT-5 which doesn't support it). In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to include temperature. GPT-4.1 automatically receives temperature since it doesn't match the `gpt-5` prefix.
-43. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese, etc.). The `event.isComposing` check alone is not reliable across all browsers.
-44. **ChatComposerEditor Markdown Sync**: `ChatComposerEditor` uses `tiptap-markdown` extension to sync with `composerText` (Markdown string). Use `lastSetContentRef` to prevent infinite loops when syncing between editor and state. The editor stores Markdown, not HTML.
-45. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
-46. **Select Component Portal Positioning**: `Select.tsx` uses Headless UI `Portal` to render dropdown outside parent overflow constraints. Use `anchor="top"` for bottom-positioned controls (like chat composer) where dropdown needs to open upward. The component calculates position via `getBoundingClientRect()` with `fixed` positioning.
-47. **Select with optgroup Replacement**: Native `<select>` with `<optgroup>` replaced by custom `Select` component. Use `SelectOptionGroup[]` for grouped options (e.g., model selector grouped by provider).
-48. **Review Polishing Mode**: Use `isPolishingMode(intensity)` from `reviewStore.ts` to check if current mode is grammar/fluency (polishing) vs minimal/balanced/thorough (comparison). Polishing mode sends only `targetText` without `sourceText` to AI.
+5. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.
+6. **Mock Provider**: Mock mode is not supported for translation. Setting `mock` provider throws an error with guidance to configure OpenAI API key.
+7. **Translation Truncation**: Large documents may cause response truncation. Dynamic max_tokens calculation and truncation detection handle this automatically.
+8. **Markdown Translation Pipeline**: Translation uses Markdown as intermediate format (NOT TipTap JSON directly). TipTap ↔ Markdown conversion via `tiptap-markdown` extension. Output uses `---TRANSLATION_START/END---` markers.
+9. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.
+10. **JSON Parsing with Brace Counting**: Avoid greedy regex for JSON extraction. Use brace counting (`extractJsonObject` in `parseReviewResult.ts`) to handle nested objects and extra brackets in AI responses.
+11. **TipTap Decoration Cross-Node Search**: Use `buildTextWithPositions()` to build full text/position mapping before searching. Simple `indexOf` on individual nodes fails for text spanning node boundaries.
+12. **Abort Existing Requests**: In `chatStore.ts`, always abort existing `abortController` before starting new translate or web search requests to prevent response mixing.
+13. **Session Null Handling**: When creating sessions at max limit, ensure `currentSession` is updated to prevent null reference errors in subsequent operations.
+14. **Review Chunk Size Consistency**: Use `DEFAULT_REVIEW_CHUNK_SIZE` constant (12000) from `reviewTool.ts` for both initial chunking and subsequent operations to maintain segment alignment.
+15. **TipTap JSON Initialization on Project Load**: `sourceDocJson`/`targetDocJson` must be initialized in `projectStore` at project load time (via `htmlToTipTapJson`), not just on editor mount. This ensures AI tools work in Focus Mode (Source panel hidden).
+16. **Extension Sync Between Editor and Converter**: `markdownConverter.ts`'s `getExtensions()` must include all extensions used by `TipTapEditor.tsx` (including Underline, Highlight, Subscript, Superscript) to prevent JSON parsing errors like "no mark type underline in schema".
+17. **Streaming Finalization Guard**: Use `isFinalizingStreaming` flag in `chatStore.ts` to prevent race conditions when streaming completes while a new message is being sent. Wait for finalization to complete before starting new requests.
+18. **AbortController Immediate Cleanup**: After calling `abort()` on an AbortController, immediately set `abortController: null` in state to prevent stale references during the race window before creating a new controller.
+19. **Debounce Timer Project ID Verification**: When using debounced persist operations (like `schedulePersist`), capture the project ID at schedule time and verify it hasn't changed before executing the persist. This prevents saving chat data to the wrong project.
+20. **Review Highlight Auto-Recalculation**: `ReviewHighlight.ts` ProseMirror plugin automatically recalculates decorations on `tr.docChanged`. No cross-store subscription needed - highlights persist through manual edits, removing only when the target text is no longer found.
+21. **Fresh State in Callbacks**: When using callbacks that execute over time (like chunk processing loops), use `getState()` instead of closure-captured values to ensure fresh state. Example: `useChatStore.getState()` in `ReviewPanel` to get latest `translationRules`.
+22. **Tool Handler Null Safety**: Always check for null `project` in AI tool handlers before accessing project-related state. Return meaningful error messages like "프로젝트가 로드되지 않았습니다" instead of generic errors.
+23. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
+24. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
+25. **Editor Registry for Cross-Component Access**: Use `editorRegistry.ts` (`getSourceEditor`, `getTargetEditor`) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions).
+26. **Markdown Normalization for Search**: Use `normalizeForSearch()` to strip markdown formatting (bold, italic, list markers) before searching in TipTap editor's plain text. AI responses often include markdown in excerpts.
+27. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
+28. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation since the issue no longer exists in `getCheckedIssues()`.
+29. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes in App Settings. At least one provider must be enabled.
+30. **Model Dropdown with Grouped Options**: Translation/Chat model selectors use custom `Select` component with `SelectOptionGroup[]` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
+31. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
+32. **Fresh Chunks on Review Start**: Always regenerate chunks with `buildAlignedChunks(project)` at review start time, not from cached store state. This ensures the review uses the latest document content.
+33. **Marker-based JSON Extraction**: Review responses use `---REVIEW_START/END---` markers. `extractMarkedJson()` tries marker extraction first, then falls back to brace counting. This prevents parsing failures when AI includes extra text outside JSON.
+34. **Review Streaming Text State**: `reviewStore.streamingText` stores current chunk's AI response for real-time display. Updated via `onToken` callback in `runReview()`. Preserved after completion for debugging.
+35. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
+36. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
+37. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
+38. **Git Hooks with Husky**: `.husky/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). `.husky/post-merge` auto-runs `npm install` when `package-lock.json` changes. Ensures type safety and dependency consistency.
+39. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()` from `normalizeForSearch.ts`. This handles Unicode special spaces, CRLF, consecutive whitespace, and **quote normalization** (curly quotes `""`→`"`, CJK brackets `「」『』`→`"`, fullwidth quotes).
+40. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
+41. **GPT-4.1 Temperature Handling**: GPT-4.1 requires explicit temperature parameter (unlike GPT-5 which doesn't support it). In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to include temperature. GPT-4.1 automatically receives temperature since it doesn't match the `gpt-5` prefix.
+42. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese, etc.). The `event.isComposing` check alone is not reliable across all browsers.
+43. **ChatComposerEditor Markdown Sync**: `ChatComposerEditor` uses `tiptap-markdown` extension to sync with `composerText` (Markdown string). Use `lastSetContentRef` to prevent infinite loops when syncing between editor and state. The editor stores Markdown, not HTML.
+44. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
+45. **Select Component Portal Positioning**: `Select.tsx` uses Headless UI `Portal` to render dropdown outside parent overflow constraints. Use `anchor="top"` for bottom-positioned controls (like chat composer) where dropdown needs to open upward. The component calculates position via `getBoundingClientRect()` with `fixed` positioning.
+46. **Select with optgroup Replacement**: Native `<select>` with `<optgroup>` replaced by custom `Select` component. Use `SelectOptionGroup[]` for grouped options (e.g., model selector grouped by provider).
+47. **Review Polishing Mode**: Use `isPolishingMode(intensity)` from `reviewStore.ts` to check if current mode is grammar/fluency (polishing) vs minimal/balanced/thorough (comparison). Polishing mode sends only `targetText` without `sourceText` to AI.
+48. **FloatingChatButton Drag vs Click**: Use `hasMoved` ref to distinguish drag from click. If mouse moves during mousedown, it's a drag - don't toggle panel on mouseup. Double-click resets position to default (bottom-right).
+49. **FloatingChatButton Tooltip Delay**: Track `mouseMoveCount` to prevent tooltip showing when button appears under static cursor. Only enable tooltip after actual mouse movement over the button.
 
 ## Testing Patterns
 
@@ -367,7 +364,6 @@ cd src-tauri && cargo check
 - **Token Limit**: Reduce context size (glossary, context blocks, attachments)
 
 ### MCP Connection Issues
-- **Sidecar Not Starting**: Check `scripts/build-sidecar.mjs` output
 - **OAuth Failures**: Verify redirect URIs in MCP server config
 - **SSE Connection Drops**: Check network logs for event stream errors
 
