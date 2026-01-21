@@ -173,7 +173,7 @@
   }
 
   .chat-message-ai {
-    @apply bg-editor-surface;
+    @apply bg-editor-bg;
     @apply mr-auto max-w-[80%];
   }
 
@@ -816,8 +816,21 @@
   font-size: 14px;
   line-height: 1.6;
   color: var(--editor-text);
-  min-height: 60px;
+  min-height: 24px;
   max-height: 100%;
+}
+
+/* 포커스 링 제거 */
+.chat-composer-tiptap:focus,
+.chat-composer-tiptap:focus-visible,
+.chat-composer-editor-wrapper:focus-within,
+.chat-composer-editor-wrapper *:focus,
+.chat-composer-editor-wrapper *:focus-visible,
+[data-ite-chat-composer]:focus-within,
+[data-ite-chat-composer] *:focus,
+[data-ite-chat-composer] *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Placeholder 스타일 */

@@ -278,6 +278,7 @@
     "chatModelTitle": "채팅 모델",
     "send": "전송",
     "sendAriaLabel": "전송",
+    "scrollToBottom": "최신 메시지로 이동",
     "removeAttachment": "첨부 제거",
     "summarizing": "요약 중...",
     "summarize": "요약",

@@ -278,6 +278,7 @@
     "chatModelTitle": "Chat Model",
     "send": "Send",
     "sendAriaLabel": "Send",
+    "scrollToBottom": "Scroll to latest",
     "removeAttachment": "Remove attachment",
     "summarizing": "Summarizing...",
     "summarize": "Summarize",

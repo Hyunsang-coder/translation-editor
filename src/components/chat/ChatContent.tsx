@@ -97,6 +97,8 @@ export function ChatContent(): JSX.Element {
   const setConfluenceSearchEnabled = useChatStore((s) => s.setConfluenceSearchEnabled);
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
 
@@ -395,6 +397,21 @@ export function ChatContent(): JSX.Element {
     }
   }, [currentSession?.messages.length, chatPanelOpen]);
 
+  // 스크롤 위치 감지 (맨 아래가 아니면 버튼 표시)
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setShowScrollToBottom(!isAtBottom);
+  }, []);
+
+  // 최신 메시지로 스크롤
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     await sendCurrent();
@@ -506,7 +523,12 @@ export function ChatContent(): JSX.Element {
       )}
 
       {/* 메시지 목록 */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={messagesContainerRef}
+          className="h-full overflow-y-auto p-4 space-y-4"
+          onScroll={handleMessagesScroll}
+        >
         {currentSession?.messages.map((message) => (
           <ChatMessageItem
             key={message.id}
@@ -531,17 +553,37 @@ export function ChatContent(): JSX.Element {
           </div>
         )}
         <div ref={messagesEndRef} />
+        </div>
+
+        {/* 최신 메시지로 스크롤 버튼 */}
+        {showScrollToBottom && (
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10
+                       w-8 h-8 rounded-full bg-editor-bg border border-editor-border shadow-md
+                       flex items-center justify-center
+                       text-editor-muted hover:text-editor-text hover:bg-editor-surface
+                       transition-all duration-200"
+            title={t('chat.scrollToBottom')}
+            aria-label={t('chat.scrollToBottom')}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* 입력창 */}
       <form
         onSubmit={handleSubmit}
-        className="p-3 border-t border-editor-border bg-editor-bg shrink-0"
+        className="px-2 py-1.5 bg-editor-bg shrink-0"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className={`relative rounded-2xl border bg-editor-surface shadow-sm transition-colors ${
+        <div className={`relative rounded-2xl border bg-editor-bg shadow-sm transition-colors ${
           isDragging ? 'border-primary-500 bg-primary-50' : 'border-editor-border'
         }`}>
           {/* 첨부 파일 미리보기 - textarea 위에 표시 */}
@@ -595,7 +637,7 @@ export function ChatContent(): JSX.Element {
           )}
 
           <div
-            className="w-full min-h-[80px] max-h-[200px] px-4 pt-3 pb-12 rounded-2xl bg-transparent overflow-y-auto"
+            className="w-full min-h-[40px] max-h-[200px] px-1 py-1 pb-8 bg-transparent overflow-y-auto"
             data-ite-chat-composer
             onPaste={handlePaste}
           >
@@ -612,7 +654,7 @@ export function ChatContent(): JSX.Element {
           </div>
 
           {/* 하단 컨트롤 바 */}
-          <div className="absolute inset-x-0 bottom-0 px-2 pb-2 flex items-end justify-between pointer-events-none">
+          <div className="absolute inset-x-0 bottom-0 px-1 pb-1 flex items-end justify-between pointer-events-none">
             <div className="pointer-events-auto flex items-center gap-1.5">
               <div className="relative" data-ite-composer-menu-root>
                 <button
