@@ -262,6 +262,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
   - `+` button (bottom-left) for attachments/web search toggle
   - Send button (bottom-right) as arrow icon
   - Enter to send, Shift+Enter for newline
+  - **Rich Text Editor**: TipTap-based editor with bold, italic, underline, links, code, lists
+  - IME-aware Enter handling (Korean input completion before send)
 
 ### Translation Workflow
 1. User writes Source document
@@ -320,6 +322,9 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 40. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()` from `normalizeForSearch.ts`. This handles Unicode special spaces, CRLF, consecutive whitespace, and **quote normalization** (curly quotes `""`→`"`, CJK brackets `「」『』`→`"`, fullwidth quotes).
 41. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
 42. **GPT-4.1 Temperature Handling**: GPT-4.1 requires explicit temperature parameter (unlike GPT-5 which doesn't support it). In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to include temperature. GPT-4.1 automatically receives temperature since it doesn't match the `gpt-5` prefix.
+43. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese, etc.). The `event.isComposing` check alone is not reliable across all browsers.
+44. **ChatComposerEditor Markdown Sync**: `ChatComposerEditor` uses `tiptap-markdown` extension to sync with `composerText` (Markdown string). Use `lastSetContentRef` to prevent infinite loops when syncing between editor and state. The editor stores Markdown, not HTML.
+45. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
 
 ## Testing Patterns
 
@@ -371,9 +376,9 @@ cd src-tauri && cargo check
   - `diff.ts`: Diff utilities
 - **UI Components**: Organized by layout hierarchy
   - `components/panels/`: SettingsSidebar, FloatingChatPanel, SourcePanel, TargetPanel
-  - `components/chat/`: ChatContent (extracted from ChatPanel)
+  - `components/chat/`: ChatContent, ChatComposerEditor (rich text input)
   - `components/ui/`: FloatingChatButton, common UI components
-  - `components/editor/`: Editor-related UI
+  - `components/editor/`: Editor-related UI, TipTapMenuBar
   - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (runReview.ts, parseReviewResult.ts), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 - **Search/Replace Feature**: `src/editor/extensions/SearchHighlight.ts` (TipTap extension), `src/components/editor/SearchBar.tsx` (UI)
