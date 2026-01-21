@@ -1,6 +1,6 @@
 # OddEyes.ai
 
-> "AI를 동료로, 번역을 예술로"
+> "인간 번역사를 위한 AI 번역 에디터"
 
 전문 번역가를 위한 AI 기반 번역 워크스테이션
 
@@ -50,8 +50,8 @@
 ## 문의
 
 - Issues: [GitHub Issues](https://github.com/USER/oddeyes-release/issues)
-- Email: contact@oddeyes.ai
+- Email: hyunsangcoder@gmail.com
 
 ## 라이선스
 
-© 2024-2025 OddEyes.ai. All rights reserved.
+© 2026 OddEyes.ai. All rights reserved.

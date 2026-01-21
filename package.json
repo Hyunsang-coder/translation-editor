@@ -15,7 +15,9 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "release:copy": "cp -r release/* ../oddeyes-release/ && cp src-tauri/target/release/bundle/dmg/*.dmg ../oddeyes-release/ && echo '✅ Copied to oddeyes-release'",
+    "release:docs": "cp release/README.md release/CHANGELOG.md ../oddeyes-release/ && echo '✅ Docs copied'"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

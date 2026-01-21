@@ -47,6 +47,16 @@ npm run test:run      # Single run
 npm run test:coverage # Coverage report
 ```
 
+## 빌드 및 배포
+
+```bash
+npm run tauri:build   # 프로덕션 빌드
+```
+
+빌드 출력: `src-tauri/target/release/bundle/dmg/OddEyes.ai_x.x.x_aarch64.dmg`
+
+배포용 문서 복사: `/release-docs` (Claude Code 스킬)
+
 ## 프로젝트 구조
 
 ```
@@ -62,6 +72,7 @@ npm run test:coverage # Coverage report
 │   ├── src/notion/       # Notion API
 │   └── src/secrets/      # Secret Manager
 ├── docs/                 # 문서
+├── release/              # 배포용 문서 (README, CHANGELOG)
 ├── tasks/                # 구현 태스크
 ├── prd.md                # 제품 요구사항
 └── docs/trd/             # 기술 요구사항 (분리된 TRD)
