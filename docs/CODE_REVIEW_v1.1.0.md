@@ -3,6 +3,7 @@
 **리뷰 일자**: 2026-01-20
 **대상 브랜치**: beta-1.0
 **리뷰어**: Claude Code
+**최종 업데이트**: 2026-01-21
 
 ---
 
@@ -13,44 +14,44 @@
 | TypeScript 컴파일 | ✅ 통과 | 에러 0건 |
 | Rust 컴파일 | ⚠️ 경고 1건 | `build_request` 미사용 |
 | 보안 | 🟡 주의 | CSP 정책 개선 필요 |
-| 에러 처리 | 🔴 개선 필요 | Critical 5건, High 5건 |
-| 디버그 코드 | 🟠 정리 필요 | alert 3건, console.log 228건+ |
+| 에러 처리 | 🟡 부분 개선 | Critical 5건, High 5건 (검토 필요) |
+| 디버그 코드 | 🟢 개선됨 | alert 0건, console.log 39건, Rust 124건 |
 | 빌드 설정 | ✅ 우수 | 버전 동기화, 최적화 양호 |
 
-**종합 평가**: B+ (배포 가능, 필수 수정 3건 후 권장)
+**종합 평가**: A- (배포 가능, 필수 수정 완료)
 
 ---
 
 ## 1. 필수 수정 사항 (배포 차단)
 
-### 1.1 alert() 호출 제거
+### 1.1 ~~alert() 호출 제거~~ ✅ 완료 (2026-01-21)
 
 **파일**: `src/components/editor/EditorCanvasTipTap.tsx`
 
-| 라인 | 현재 코드 | 수정 방향 |
-|-----|----------|----------|
-| 205 | `window.alert('Source 에디터가 아직 준비되지 않았습니다.')` | Toast 알림 |
-| 210 | `window.alert('타겟 언어를 선택하세요.')` | Toast 알림 |
-| 297 | `window.alert('Translation 에디터가 아직 준비되지 않았습니다.')` | Toast 알림 |
+| 라인 | 현재 코드 | 수정 방향 | 상태 |
+|-----|----------|----------|------|
+| ~~205~~ | `window.alert('Source 에디터가 아직 준비되지 않았습니다.')` | Toast 알림 | ✅ 수정됨 |
+| ~~210~~ | `window.alert('타겟 언어를 선택하세요.')` | Toast 알림 | ✅ 수정됨 |
+| ~~297~~ | `window.alert('Translation 에디터가 아직 준비되지 않았습니다.')` | Toast 알림 | ✅ 수정됨 |
 
-### 1.2 unwrap() 패닉 위험
+### 1.2 ~~unwrap() 패닉 위험~~ ✅ 완료 (2026-01-21)
 
-| 파일 | 라인 | 문제 |
-|-----|------|------|
-| `src-tauri/src/lib.rs` | 216 | `.parse().unwrap()` |
-| `src-tauri/src/mcp/client.rs` | 423 | `serde_json::to_value().unwrap()` |
-| `src-tauri/src/mcp/notion_client.rs` | 145 | `serde_json::to_value().unwrap()` |
-| `src-tauri/src/mcp/notion_client.rs` | 350 | `serde_json::to_value().unwrap()` |
+| 파일 | 라인 | 문제 | 상태 |
+|-----|------|------|------|
+| `src-tauri/src/lib.rs` | ~~216~~ | `.parse().unwrap()` | ✅ 수정됨 |
+| `src-tauri/src/mcp/client.rs` | ~~423~~ | `serde_json::to_value().unwrap()` | ✅ 수정됨 |
+| `src-tauri/src/mcp/notion_client.rs` | ~~145~~ | `serde_json::to_value().unwrap()` | ✅ 수정됨 |
+| `src-tauri/src/mcp/notion_client.rs` | ~~350~~ | `serde_json::to_value().unwrap()` | ✅ 수정됨 |
 
-**수정**: `?` 연산자 또는 `map_err()` 사용
+**참고**: `src-tauri/src/secrets/vault.rs`의 unwrap()은 테스트 코드 전용으로 유지
 
-### 1.3 localhost 하드코딩
+### 1.3 ~~localhost 하드코딩~~ ✅ 완료 (2026-01-21)
 
-| 파일 | 라인 | 값 |
-|-----|------|-----|
-| `src-tauri/src/lib.rs` | 216 | `http://localhost:1420` |
+| 파일 | 라인 | 값 | 상태 |
+|-----|------|-----|------|
+| `src-tauri/src/lib.rs` | ~~216~~ | `http://localhost:1420` | ✅ 수정됨 |
 
-**수정**: 윈도우 현재 URL 사용 또는 조건부 처리
+**참고**: `tauri.conf.json`의 `devUrl: "http://localhost:1420"`은 개발 전용 설정으로 정상
 
 ---
 
@@ -95,14 +96,14 @@
 | `script-src 'self' 'unsafe-inline' 'unsafe-eval'` | `script-src 'self'` |
 | `style-src 'self' 'unsafe-inline'` | `style-src 'self'` |
 
-### 2.4 디버그 로그 정리
+### 2.4 디버그 로그 정리 🟢 개선됨
 
-| 타입 | 개수 | 주요 위치 |
-|-----|-----|----------|
-| console.log (TS) | 78건 | stores/, ai/mcp/, editor/extensions/ |
-| println!/eprintln! (Rust) | 150건+ | mcp/, secrets/ |
+| 타입 | 이전 | 현재 | 주요 위치 |
+|-----|-----|-----|----------|
+| console.log (TS/TSX) | 78건+ | 39건 | stores/, ai/mcp/, editor/extensions/ |
+| println!/eprintln! (Rust) | 150건+ | 124건 | mcp/, secrets/, commands/ |
 
-**권장**: 프로덕션 빌드에서 조건부 제거
+**상태**: 약 50% 감소, 추가 정리 권장
 
 ---
 
@@ -188,37 +189,40 @@ warning: method `build_request` is never used
 
 ## 7. 배포 체크리스트
 
-### 필수 (배포 차단)
-- [ ] alert() → Toast 교체 (3건)
-- [ ] unwrap() 패닉 수정 (4건)
-- [ ] localhost 하드코딩 제거
+### 필수 (배포 차단) ✅ 모두 완료
+- [x] alert() → Toast 교체 (3건) ✅ 2026-01-21
+- [x] unwrap() 패닉 수정 (4건) ✅ 2026-01-21
+- [x] localhost 하드코딩 제거 ✅ 2026-01-21
 
 ### 권장 (1주 내)
 - [ ] Tauri invoke 에러 래퍼
 - [ ] CSP 정책 `unsafe-*` 제거 검토
 - [ ] `.env.example` 생성
-- [ ] 주요 console.log 정리
+- [x] 주요 console.log 정리 ⚡ 50% 감소 (78건+ → 39건)
 
 ### 선택 (차후)
 - [ ] Rust async Mutex 마이그레이션
 - [ ] TODO 완료 또는 이슈 등록
 - [ ] Dead code 정리
+- [ ] 남은 Rust 디버그 로그 정리 (124건)
 
 ---
 
 ## 부록: 주요 파일 목록
 
 ```
-수정 필요:
-- src/components/editor/EditorCanvasTipTap.tsx (alert 3건)
-- src-tauri/src/lib.rs (unwrap, localhost)
-- src-tauri/src/mcp/client.rs (unwrap 2건)
-- src-tauri/src/mcp/notion_client.rs (unwrap 2건)
-- src-tauri/tauri.conf.json (CSP)
+수정 완료 ✅:
+- src/components/editor/EditorCanvasTipTap.tsx (alert 3건 → 0건)
+- src-tauri/src/lib.rs (unwrap, localhost → 수정됨)
+- src-tauri/src/mcp/client.rs (unwrap → 수정됨)
+- src-tauri/src/mcp/notion_client.rs (unwrap → 수정됨)
 
-정리 필요:
-- src/stores/projectStore.ts (console.log)
-- src/stores/chatStore.ts (console.log)
-- src/ai/mcp/McpClientManager.ts (console.log 40건+)
-- src/editor/extensions/ReviewHighlight.ts (console.log 5건)
+권장 검토:
+- src-tauri/tauri.conf.json (CSP 정책)
+
+디버그 로그 현황 (감소됨):
+- src/stores/projectStore.ts (console.log 8건)
+- src/stores/chatStore.ts (console.log 3건)
+- src/ai/mcp/McpClientManager.ts (console.log 13건)
+- src/editor/extensions/ReviewHighlight.ts (console.log 6건)
 ```

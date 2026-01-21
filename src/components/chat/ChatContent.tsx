@@ -371,6 +371,10 @@ export function ChatContent(): JSX.Element {
 
     const message = composerText.trim();
     setComposerText('');
+    // textarea 높이 초기화
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
     await sendMessage(message);
   }, [composerText, isLoading, sendMessage, setComposerText]);
 
@@ -592,11 +596,17 @@ export function ChatContent(): JSX.Element {
           <textarea
             ref={inputRef}
             value={composerText}
-            onChange={(e) => setComposerText(e.target.value)}
+            onChange={(e) => {
+              setComposerText(e.target.value);
+              // 높이 자동 조절
+              const textarea = e.target;
+              textarea.style.height = 'auto';
+              textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+            }}
             placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
-            className="w-full min-h-[80px] px-4 pt-3 pb-10 rounded-2xl bg-transparent
+            className="w-full min-h-[80px] max-h-[200px] px-4 pt-3 pb-12 rounded-2xl bg-transparent
                        text-editor-text placeholder-editor-muted text-sm
-                       focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                       focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none overflow-y-auto"
             disabled={isLoading}
             data-ite-chat-composer
             rows={2}
