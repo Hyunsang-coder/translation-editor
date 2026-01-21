@@ -6,6 +6,7 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Code,
   List,
   ListOrdered,
   Quote,
@@ -135,6 +136,15 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         aria-label="취소선"
       >
         <Strikethrough size={ICON_SIZE} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleCode().run()}
+        className={`${btnBase} ${isActive('code') ? btnActive : ''}`}
+        title="인라인 코드 (Cmd+E)"
+        aria-label="인라인 코드"
+      >
+        <Code size={ICON_SIZE} />
       </button>
 
       {/* 구분선 */}
