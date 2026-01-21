@@ -181,7 +181,9 @@ export async function initializeConnectors(): Promise<void> {
     
     console.log('[ConnectorStore] Initialized, synced', builtinStatuses.length, 'connector statuses');
   } catch (error) {
-    console.error('[ConnectorStore] Initialization failed:', error);
+    // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[ConnectorStore] Initialization failed:', message);
   }
 }
 

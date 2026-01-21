@@ -42,6 +42,7 @@ const DEFAULT_TRANSLATOR_PERSONA = '';
 
 // 채팅 세션 관련 상수
 const MAX_CHAT_SESSIONS = 5;
+const MAX_MESSAGES_PER_SESSION = 1000;
 const CHAT_LENGTH_THRESHOLD = 30;
 
 function tryExtractWebSearchQuery(raw: string): string | null {
@@ -378,7 +379,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         try {
           await persistNow();
         } catch (e) {
-          console.warn('[chatStore] persistNow failed during project switch:', e);
+          // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+          const message = e instanceof Error ? e.message : String(e);
+          console.warn('[chatStore] persistNow failed during project switch:', message);
         }
       }
 
@@ -1057,9 +1060,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
         timestamp: Date.now(),
       } as ChatMessage;
 
+      // 메시지 제한 초과 시 오래된 메시지 삭제
+      let existingMessages = currentSession.messages;
+      if (existingMessages.length >= MAX_MESSAGES_PER_SESSION) {
+        // 오래된 메시지 1개 삭제 (FIFO)
+        existingMessages = existingMessages.slice(1);
+      }
+
       const updatedSession: ChatSession = {
         ...currentSession,
-        messages: [...currentSession.messages, newMessage],
+        messages: [...existingMessages, newMessage],
       };
 
       set((state) => ({
@@ -1647,7 +1657,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         const atts = await listAttachments(projectId);
         set({ attachments: atts });
       } catch (e) {
-        console.error('Failed to load attachments:', e);
+        // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('Failed to load attachments:', message);
       }
     },
 

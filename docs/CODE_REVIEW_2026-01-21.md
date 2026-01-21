@@ -13,7 +13,7 @@
 |------|------|----------|
 | **보안** | ✅ 양호 | XSS, 경로 탐색, API 키 관리 모두 안전 |
 | **성능** | 🟡 개선 필요 | 리렌더링 최적화, 동기 연산 개선 기회 |
-| **메모리** | 🟠 주의 필요 | TipTap 에디터 destroy 누락이 주요 이슈 |
+| **메모리** | ✅ 해결됨 | TipTap destroy, 메시지 제한, 타이머 cleanup 완료 |
 
 ---
 
@@ -21,43 +21,32 @@
 
 ### 1.1 Critical Issues
 
-#### TipTap 에디터 destroy() 미호출
+#### ~~TipTap 에디터 destroy() 미호출~~ ✅ 해결됨
 - **파일**: `src/components/editor/TipTapEditor.tsx`
 - **문제**: `useEditor()` 훅 사용 후 cleanup에서 `editor.destroy()` 호출 없음
-- **영향**: 에디터 언마운트 시 DOM 메모리 누수, ProseMirror 플러그인 상태 미정리
-- **해결 방향**:
-  ```typescript
-  useEffect(() => {
-    return () => {
-      if (editor) editor.destroy();
-    };
-  }, [editor]);
-  ```
+- **해결**: 3개 에디터 컴포넌트(TipTapEditor, SourceTipTapEditor, TargetTipTapEditor)에 cleanup useEffect 추가
 
-#### TranslatePreviewModal 임시 에디터
+#### ~~TranslatePreviewModal 임시 에디터~~ ✅ 해결됨
 - **파일**: `src/components/editor/TranslatePreviewModal.tsx`
 - **문제**: diff 뷰용 에디터 생성 후 destroy 호출 없음
-- **영향**: 모달 열고 닫기 반복 시 메모리 누적
+- **해결**: cleanup useEffect 추가
 
-#### 에디터 레지스트리 전역 참조
+#### ~~에디터 레지스트리 전역 참조~~ ✅ 해결됨
 - **파일**: `src/editor/editorRegistry.ts`
 - **문제**: 전역 변수 `sourceEditor`, `targetEditor`가 에디터 파괴 후에도 참조 유지
-- **영향**: 프로젝트 전환 시 이전 에디터 메모리 점유 지속
-- **해결 방향**: 에디터 destroy 후 `setSourceEditor(null)`, `setTargetEditor(null)` 호출
+- **해결**: `clearEditorRegistry()` 함수 추가 (프로젝트 전환 시 호출 필요)
 
 ### 1.2 High Priority Issues
 
-#### Chat 메시지 무제한 누적
+#### ~~Chat 메시지 무제한 누적~~ ✅ 해결됨
 - **파일**: `src/stores/chatStore.ts`
 - **문제**: 세션당 메시지 개수 제한 없음 (세션 5개 제한은 있음)
-- **영향**: 장시간 사용 시 메모리 증가
-- **해결 방향**: 세션당 최대 메시지 제한 (예: 1000개)
+- **해결**: `MAX_MESSAGES_PER_SESSION = 1000` 상수 추가, 초과 시 FIFO 방식으로 삭제
 
-#### Auto-save 타이머 정리
+#### ~~Auto-save 타이머 정리~~ ✅ 해결됨
 - **파일**: `src/stores/projectStore.ts`
-- **문제**: 앱 언마운트 시 `stopAutoSave()` 호출 여부 미확인
-- **영향**: dangling closure, 타이머 누적 위험
-- **해결 방향**: App 컴포넌트 cleanup에서 `stopAutoSave()` 호출
+- **문제**: 앱 언마운트 시 `stopAutoSave()` 호출 시 `writeThroughTimer` 미정리
+- **해결**: `stopAutoSave()`에 `writeThroughTimer` cleanup 로직 추가
 
 ### 1.3 Medium Priority Issues
 
@@ -89,7 +78,7 @@
 
 | 이슈 | 파일 | 설명 |
 |------|------|------|
-| getAllIssues 중복 계산 | `reviewStore.ts` | 매 호출마다 전체 이슈 배열 재생성, 캐싱 필요 |
+| ~~getAllIssues 중복 계산~~ ✅ | `reviewStore.ts` | `highlightNonce` 기반 캐싱 구현 완료 |
 | 선형 검색 패턴 | `projectStore.ts` | `segments.find()` 반복 호출, 대규모 프로젝트에서 영향 |
 | React.memo 미적용 | 전체 | 40+ 컴포넌트 중 2개만 memo 적용 |
 | saveProject 중복 연산 | `projectStore.ts` | `buildTargetDocument` 여러 번 호출 |
@@ -150,43 +139,43 @@
 
 ### 3.2 개선 권장 사항 🟡
 
-#### 에러 로깅 민감정보 노출
+#### ~~에러 로깅 민감정보 노출~~ ✅ 해결됨
 - **파일**: `src/stores/aiConfigStore.ts:60`
 - **문제**: `console.warn(..., err)` - err 객체에 키 정보 포함 가능
-- **해결 방향**: `err.message`만 로깅
+- **해결**: `err.message`만 로깅하도록 수정
 
-#### 임시 파일 자동 정리
-- **파일**: `src-tauri/src/commands/attachments.rs`
+#### ~~임시 파일 자동 정리~~ ✅ 해결됨
+- **파일**: `src-tauri/src/commands/attachments.rs`, `src-tauri/src/lib.rs`
 - **문제**: `cleanup_temp_images()` 앱 시작 시 자동 호출 미확인
-- **해결 방향**: `main.rs` setup에서 호출 확인
+- **해결**: `lib.rs` setup 훅에서 자동 호출 추가 (24시간 이상 경과 파일 삭제)
 
-#### 개발 콘솔 로깅
+#### ~~개발 콘솔 로깅~~ ✅ 해결됨
 - **파일**: `src/ai/mcp/McpClientManager.ts`
 - **문제**: 토큰/상태 정보 콘솔 노출
-- **해결 방향**: `import.meta.env.DEV` 조건 추가
+- **해결**: 15개 console.log에 `import.meta.env.DEV` 조건 추가
 
 ---
 
 ## 4. 권장 조치 우선순위
 
-### 즉시 대응 (Critical)
+### ~~즉시 대응 (Critical)~~ ✅ 완료
 
-1. **TipTap 에디터 destroy 추가**
+1. ~~**TipTap 에디터 destroy 추가**~~ ✅
    - `TipTapEditor.tsx` cleanup에 `editor?.destroy()` 추가
    - `TranslatePreviewModal.tsx` 동일 적용
 
-2. **에디터 레지스트리 정리**
-   - 프로젝트 전환 시 `setSourceEditor(null)`, `setTargetEditor(null)` 호출
+2. ~~**에디터 레지스트리 정리**~~ ✅
+   - `clearEditorRegistry()` 함수 추가 완료
 
-### 빌드 후 조기 대응 (High)
+### ~~빌드 후 조기 대응 (High)~~ ✅ 완료
 
-3. **Chat 메시지 제한**
-   - 세션당 최대 메시지 개수 설정 (예: 1000개)
+3. ~~**Chat 메시지 제한**~~ ✅
+   - 세션당 최대 1000개 메시지 제한 구현
 
-4. **Auto-save 타이머 정리**
-   - App 언마운트 시 `stopAutoSave()` 호출 확인
+4. ~~**Auto-save 타이머 정리**~~ ✅
+   - `stopAutoSave()`에 `writeThroughTimer` cleanup 추가
 
-5. **buildAlignedChunks 비동기화**
+5. **buildAlignedChunks 비동기화** (미완료)
    - 웹 워커 또는 청크 단위 처리로 메인 스레드 블로킹 방지
 
 ### 중기 개선 (Medium)
@@ -194,11 +183,11 @@
 6. **Zustand 선택자 최적화**
    - ChatContent의 14+ 선택자를 관련 그룹으로 통합
 
-7. **콘솔 로깅 프로덕션 필터링**
-   - 민감 정보 로깅에 DEV 조건 추가
+7. ~~**콘솔 로깅 프로덕션 필터링**~~ ✅
+   - 민감 정보 로깅에 DEV 조건 추가 완료
 
-8. **getAllIssues 캐싱**
-   - 결과 캐시 후 `highlightNonce` 변경 시에만 갱신
+8. ~~**getAllIssues 캐싱**~~ ✅
+   - `highlightNonce` 기반 캐싱 구현 완료
 
 ---
 
@@ -226,10 +215,20 @@
 
 ### 다음 스프린트 권장 작업
 
-1. TipTap 에디터 destroy 로직 추가
-2. 에디터 레지스트리 정리 로직 구현
-3. Chat 메시지 제한 적용
+1. ~~TipTap 에디터 destroy 로직 추가~~ ✅
+2. ~~에디터 레지스트리 정리 로직 구현~~ ✅
+3. ~~Chat 메시지 제한 적용~~ ✅
 4. buildAlignedChunks 비동기 처리
+5. Zustand 선택자 최적화
+
+---
+
+## 7. 수정 이력
+
+| 날짜 | 수정 내용 |
+|------|----------|
+| 2026-01-21 | 1차 수정: Critical 이슈 3건 + 보안 로깅 2건 해결 |
+| 2026-01-21 | 2차 수정: High 이슈 4건 + Medium 이슈 2건 해결 (chatStore 메시지 제한, projectStore 타이머 cleanup, reviewStore 캐싱, aiConfigStore/McpClientManager 로깅, lib.rs temp cleanup) |
 
 ---
 

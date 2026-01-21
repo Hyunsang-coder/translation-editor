@@ -429,7 +429,9 @@ export const useProjectStore = create<ProjectStore>()(
               .saveProject()
               .catch((err: unknown) => {
                 // autosave 실패 시 콘솔에 로그 + 상태 업데이트 (UI는 방해하지 않음)
-                console.warn('[AutoSave] Failed:', err);
+                // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+                const message = err instanceof Error ? err.message : String(err);
+                console.warn('[AutoSave] Failed:', message);
                 set({
                   saveStatus: 'error',
                   lastSaveError: err instanceof Error ? err.message : 'AutoSave failed',
@@ -452,6 +454,11 @@ export const useProjectStore = create<ProjectStore>()(
         if (autoSaveTimer !== null) {
           window.clearTimeout(autoSaveTimer);
           autoSaveTimer = null;
+        }
+        // writeThroughTimer도 함께 정리 (dangling closure 방지)
+        if (writeThroughTimer !== null) {
+          window.clearTimeout(writeThroughTimer);
+          writeThroughTimer = null;
         }
         autoSaveInFlight = false;
       },
@@ -557,7 +564,9 @@ export const useProjectStore = create<ProjectStore>()(
             try {
               await get().saveProject();
             } catch (e) {
-              console.warn('[createNewProject] Failed to save previous project:', e);
+              // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+              const message = e instanceof Error ? e.message : String(e);
+              console.warn('[createNewProject] Failed to save previous project:', message);
             }
             // 저장 후 새 프로젝트 생성 진행
             createAndSetNewProject();
@@ -778,9 +787,11 @@ export const useProjectStore = create<ProjectStore>()(
             lastProjectId: projectToSave.id,
           });
         } catch (error) {
-          console.error('[saveProject] FAILED:', error);
+          // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+          const errorMessage = error instanceof Error ? error.message : 'Failed to save project';
+          console.error('[saveProject] FAILED:', errorMessage);
           set({
-            error: error instanceof Error ? error.message : 'Failed to save project',
+            error: errorMessage,
             isLoading: false,
             saveStatus: 'error',
             lastSaveError: error instanceof Error ? error.message : 'Failed to save project',
@@ -1503,9 +1514,11 @@ function scheduleWriteThroughSave(
         // 직접 tauriSaveProject(project)를 호출하지 말고 store.saveProject()를 사용합니다.
         await get().saveProject();
       } catch (e) {
-        console.warn('[WriteThroughSave] Failed:', e);
+        // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+        const message = e instanceof Error ? e.message : 'Write-thru save failed';
+        console.warn('[WriteThroughSave] Failed:', message);
         set({
-          error: e instanceof Error ? e.message : 'Write-thru save failed',
+          error: message,
           saveStatus: 'error',
           lastSaveError: e instanceof Error ? e.message : 'Write-thru save failed',
         });

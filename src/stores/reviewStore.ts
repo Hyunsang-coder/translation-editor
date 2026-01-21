@@ -186,6 +186,13 @@ interface ReviewActions {
 type ReviewStore = ReviewState & ReviewActions;
 
 // ============================================
+// getAllIssues Cache (store 외부에서 관리)
+// ============================================
+
+let cachedAllIssues: ReviewIssue[] = [];
+let cachedNonce: number = -1;
+
+// ============================================
 // Store Implementation
 // ============================================
 
@@ -301,7 +308,14 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   getAllIssues: () => {
-    const { results } = get();
+    const { results, highlightNonce } = get();
+
+    // 캐시 히트: nonce가 변경되지 않았으면 캐시된 값 반환
+    if (cachedNonce === highlightNonce) {
+      return cachedAllIssues;
+    }
+
+    // 캐시 미스: 전체 이슈 재계산
     const allIssues = results.flatMap((r) => r.issues);
 
     // 중복 제거: id 기반 (결정적 ID)
@@ -312,7 +326,11 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       }
     }
 
-    return Array.from(seen.values());
+    // 캐시 업데이트
+    cachedAllIssues = Array.from(seen.values());
+    cachedNonce = highlightNonce;
+
+    return cachedAllIssues;
   },
 
   toggleIssueCheck: (issueId: string) => {

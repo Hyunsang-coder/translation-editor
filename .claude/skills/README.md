@@ -12,6 +12,7 @@
 | `/sync-types` | Rust struct ↔ TS interface 동기화 검증 |
 | `/dev` | Tauri 개발 서버 실행 + 로그 모니터링 |
 | `/test-ai` | AI 프롬프트/페이로드 dry-run 테스트 |
+| `/tdd` | TDD 워크플로우 (Red-Green-Refactor) |
 
 ## 디렉토리 구조
 
@@ -21,6 +22,7 @@
 ├── sync-types/SKILL.md   # /sync-types
 ├── dev/SKILL.md          # /dev
 ├── test-ai/SKILL.md      # /test-ai
+├── tdd/SKILL.md          # /tdd
 └── README.md
 ```
 
@@ -33,6 +35,7 @@ Claude Code에서 슬래시 명령어로 실행:
 /sync-types          # Rust ↔ TS 타입 동기화
 /dev                 # 개발 서버 실행
 /test-ai             # AI 페이로드 테스트
+/tdd                 # TDD 워크플로우
 ```
 
 ## 권장 워크플로우

@@ -21,3 +21,12 @@ export const setTargetEditor = (editor: Editor | null): void => {
 };
 
 export const getTargetEditor = (): Editor | null => targetEditor;
+
+/**
+ * 에디터 레지스트리 정리
+ * 프로젝트 전환 시 이전 에디터 참조를 제거하여 메모리 누수를 방지합니다.
+ */
+export const clearEditorRegistry = (): void => {
+  sourceEditor = null;
+  targetEditor = null;
+};

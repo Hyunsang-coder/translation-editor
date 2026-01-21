@@ -10,7 +10,12 @@
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "node scripts/tauri-build.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

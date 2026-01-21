@@ -267,6 +267,15 @@ export function TranslatePreviewModal(props: {
     editor.commands.setContent(docJson);
   }, [editor, open, docJson]);
 
+  // 에디터 cleanup (메모리 누수 방지)
+  useEffect(() => {
+    return () => {
+      if (editor) {
+        editor.destroy();
+      }
+    };
+  }, [editor]);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent): void => {

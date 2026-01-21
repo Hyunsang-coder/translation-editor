@@ -172,20 +172,26 @@ class McpClientManager {
       const status = await invoke<McpConnectionStatus>("mcp_check_auth");
       this.updateStatus(status);
 
-      console.log("[McpClientManager] Auth check:", {
-        hasStoredToken: status.hasStoredToken,
-        tokenExpiresIn: status.tokenExpiresIn,
-      });
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Auth check:", {
+          hasStoredToken: status.hasStoredToken,
+          tokenExpiresIn: status.tokenExpiresIn,
+        });
+      }
 
       // 유효한 토큰이 있으면 자동 연결
       if (status.hasStoredToken && !status.isConnected) {
-        console.log("[McpClientManager] Found stored token, auto-connecting...");
+        if (import.meta.env.DEV) {
+          console.log("[McpClientManager] Found stored token, auto-connecting...");
+        }
         await this.connectAtlassian();
       }
 
       // Notion: 토큰 존재 여부 확인 및 자동 연결
       const notionHasToken = await hasNotionToken();
-      console.log("[McpClientManager] Notion token check:", { hasStoredToken: notionHasToken });
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Notion token check:", { hasStoredToken: notionHasToken });
+      }
 
       if (notionHasToken) {
         // Notion은 REST API이므로 토큰이 있으면 바로 사용 가능
@@ -197,13 +203,17 @@ class McpClientManager {
           hasStoredToken: true,
           serverName: "Notion",
         });
-        console.log("[McpClientManager] Notion auto-connected (token found in vault)");
+        if (import.meta.env.DEV) {
+          console.log("[McpClientManager] Notion auto-connected (token found in vault)");
+        }
       } else {
         this.updateNotionStatus({ hasStoredToken: false });
       }
 
     } catch (error) {
-      console.error("[McpClientManager] Initialize failed:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Initialize failed:", error);
+      }
       // 초기화 실패해도 앱은 계속 동작
     }
   }
@@ -216,7 +226,9 @@ class McpClientManager {
       const status = await invoke<McpConnectionStatus>("mcp_get_status");
       this.updateStatus(status);
     } catch (error) {
-      console.error("[McpClientManager] Failed to sync status:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Failed to sync status:", error);
+      }
     }
   }
 
@@ -255,7 +267,9 @@ class McpClientManager {
   async connectAtlassian(): Promise<void> {
     await this.syncStatus();
     if (this._status.isConnected) {
-      console.warn("[McpClientManager] Already connected");
+      if (import.meta.env.DEV) {
+        console.warn("[McpClientManager] Already connected");
+      }
       return;
     }
     if (this._status.isConnecting) {
@@ -264,7 +278,9 @@ class McpClientManager {
         void this.pollAtlassianStatusUntilSettled();
         return;
       }
-      // Stale connecting state; allow a fresh attempt.
+      if (import.meta.env.DEV) {
+        console.warn("[McpClientManager] Stale connecting state, retrying...");
+      }
       this.updateStatus({ isConnecting: false });
     }
 
@@ -281,10 +297,14 @@ class McpClientManager {
       if (this._status.isConnecting) {
         void this.pollAtlassianStatusUntilSettled();
       }
-      console.log("[McpClientManager] Connected to Atlassian MCP (Rust native)");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Connected to Atlassian MCP (Rust native)");
+      }
 
     } catch (error) {
-      console.error("[McpClientManager] Connection failed:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Connection failed:", error);
+      }
       this.updateStatus({
         isConnected: false,
         isConnecting: false,
@@ -304,7 +324,9 @@ class McpClientManager {
       this.lastAtlassianConnectAttemptAt = null;
       await this.syncStatus();
     } catch (error) {
-      console.error("[McpClientManager] Disconnect error:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Disconnect error:", error);
+      }
     }
   }
 
@@ -317,9 +339,13 @@ class McpClientManager {
       await invoke("mcp_logout");
       this.toolsCache = [];
       await this.syncStatus();
-      console.log("[McpClientManager] Logged out, token deleted from keychain");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Logged out, token deleted from keychain");
+      }
     } catch (error) {
-      console.error("[McpClientManager] Logout error:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Logout error:", error);
+      }
     }
   }
 
@@ -332,9 +358,13 @@ class McpClientManager {
       await this.disconnect();
       await clearAllMcpServer("atlassian");
       await this.syncStatus();
-      console.log("[McpClientManager] Atlassian cleared all credentials");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Atlassian cleared all credentials");
+      }
     } catch (error) {
-      console.error("[McpClientManager] Clear all Atlassian failed:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Clear all Atlassian failed:", error);
+      }
     }
   }
 
@@ -359,9 +389,13 @@ class McpClientManager {
     try {
       const mcpTools = await invoke<McpTool[]>("mcp_get_tools");
       this.toolsCache = mcpTools.map(tool => createLangChainTool(tool));
-      console.log(`[McpClientManager] Loaded ${this.toolsCache.length} tools`);
+      if (import.meta.env.DEV) {
+        console.log(`[McpClientManager] Loaded ${this.toolsCache.length} tools`);
+      }
     } catch (error) {
-      console.error("[McpClientManager] Failed to load tools:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Failed to load tools:", error);
+      }
       this.toolsCache = [];
     }
   }
@@ -410,9 +444,13 @@ class McpClientManager {
     try {
       await setNotionToken(token);
       this.updateNotionStatus({ hasStoredToken: true, error: null });
-      console.log("[McpClientManager] Notion token saved");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Notion token saved");
+      }
     } catch (error) {
-      console.error("[McpClientManager] Failed to set Notion token:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Failed to set Notion token:", error);
+      }
       throw error;
     }
   }
@@ -423,7 +461,9 @@ class McpClientManager {
    */
   async connectNotion(): Promise<void> {
     if (this._notionStatus.isConnected || this._notionStatus.isConnecting) {
-      console.warn("[McpClientManager] Notion already connected or connecting");
+      if (import.meta.env.DEV) {
+        console.warn("[McpClientManager] Notion already connected or connecting");
+      }
       return;
     }
 
@@ -445,10 +485,14 @@ class McpClientManager {
         hasStoredToken: true,
         serverName: "Notion",
       });
-      console.log("[McpClientManager] Notion connected (REST API mode)");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Notion connected (REST API mode)");
+      }
 
     } catch (error) {
-      console.error("[McpClientManager] Notion connection failed:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Notion connection failed:", error);
+      }
       this.updateNotionStatus({
         isConnected: false,
         isConnecting: false,
@@ -468,7 +512,9 @@ class McpClientManager {
       isConnecting: false,
       serverName: null,
     });
-    console.log("[McpClientManager] Notion disconnected");
+    if (import.meta.env.DEV) {
+      console.log("[McpClientManager] Notion disconnected");
+    }
   }
 
   /**
@@ -484,9 +530,13 @@ class McpClientManager {
         hasStoredToken: false,
         serverName: null,
       });
-      console.log("[McpClientManager] Notion logged out, token deleted from keychain");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Notion logged out, token deleted from keychain");
+      }
     } catch (error) {
-      console.error("[McpClientManager] Notion logout error:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Notion logout error:", error);
+      }
     }
   }
 
@@ -505,9 +555,13 @@ class McpClientManager {
         serverName: null,
         error: null,
       });
-      console.log("[McpClientManager] Notion cleared all credentials");
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Notion cleared all credentials");
+      }
     } catch (error) {
-      console.error("[McpClientManager] Clear all Notion failed:", error);
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Clear all Notion failed:", error);
+      }
     }
   }
 

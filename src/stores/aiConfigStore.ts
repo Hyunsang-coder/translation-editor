@@ -57,7 +57,9 @@ async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
     const json = JSON.stringify(keys);
     await setSecureSecret(API_KEYS_BUNDLE_ID, json);
   } catch (err) {
-    console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, err);
+    // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
   }
 }
 
@@ -112,7 +114,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                 });
                 return; // 로드 완료
               } catch (e) {
-                console.error('[aiConfigStore] Failed to parse API keys bundle', e);
+                // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+                const message = e instanceof Error ? e.message : String(e);
+                console.error('[aiConfigStore] Failed to parse API keys bundle:', message);
               }
             }
 
@@ -144,7 +148,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             }
 
           } catch (err) {
-            console.warn(`[aiConfigStore] Failed to load secure keys:`, err);
+            // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
           }
         },
 

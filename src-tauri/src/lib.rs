@@ -161,6 +161,13 @@ pub fn run() {
                 secrets::SECRETS.set_app_data_dir(app_data_dir.clone()).await;
             });
 
+            // 앱 시작 시 오래된 임시 이미지 파일 정리 (24시간 이상 경과된 파일)
+            if let Ok(deleted) = commands::attachments::cleanup_temp_images() {
+                if deleted > 0 {
+                    eprintln!("[startup] Cleaned up {} old temp image(s)", deleted);
+                }
+            }
+
             // 커스텀 메뉴 생성
             let app_menu = SubmenuBuilder::new(app, "OddEyes")
                 .about(None)
