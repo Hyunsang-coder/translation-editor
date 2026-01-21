@@ -13,6 +13,7 @@ import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
+import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
@@ -54,28 +55,37 @@ export function ChatContent(): JSX.Element {
   const setChatModel = useAiConfigStore((s) => s.setChatModel);
 
   // 활성화된 프로바이더의 모델만 표시
-  type ModelPreset = { value: string; label: string; description: string };
-  const enabledChatPresets = useMemo(() => {
-    const presets: Array<{ group: string; items: readonly ModelPreset[] }> = [];
+  const enabledChatPresets = useMemo((): SelectOptionGroup[] => {
+    const presets: SelectOptionGroup[] = [];
     if (openaiEnabled) {
-      presets.push({ group: 'OpenAI', items: MODEL_PRESETS.openai });
+      presets.push({
+        label: 'OpenAI',
+        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
+      });
     }
     if (anthropicEnabled) {
-      presets.push({ group: 'Anthropic', items: MODEL_PRESETS.anthropic });
+      presets.push({
+        label: 'Anthropic',
+        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
+      });
     }
     return presets;
   }, [openaiEnabled, anthropicEnabled]);
 
+  // 모든 모델 플랫 리스트 (유효성 검사용)
+  const allChatModels = useMemo(() => {
+    return enabledChatPresets.flatMap((g) => g.options);
+  }, [enabledChatPresets]);
+
   // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
   useEffect(() => {
-    if (enabledChatPresets.length === 0) return;
-    const allModels = enabledChatPresets.flatMap((p) => p.items);
-    const firstModel = allModels[0];
+    if (allChatModels.length === 0) return;
+    const firstModel = allChatModels[0];
     if (!firstModel) return;
-    if (!allModels.some((m) => m.value === chatModel)) {
+    if (!allChatModels.some((m) => m.value === chatModel)) {
       setChatModel(firstModel.value);
     }
-  }, [chatModel, enabledChatPresets, setChatModel]);
+  }, [chatModel, allChatModels, setChatModel]);
 
   const isHydrating = useChatStore((s) => s.isHydrating);
   const project = useProjectStore((s) => s.project);
@@ -769,24 +779,16 @@ export function ChatContent(): JSX.Element {
             </div>
 
             <div className="pointer-events-auto flex items-center gap-2">
-              <select
-                className="h-8 px-2 text-[11px] rounded-full border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+              <Select
                 value={chatModel}
-                onChange={(e) => setChatModel(e.target.value)}
+                onChange={setChatModel}
+                options={enabledChatPresets}
+                disabled={isLoading}
                 aria-label={t('chat.chatModelAriaLabel')}
                 title={t('chat.chatModelTitle')}
-                disabled={isLoading}
-              >
-                {enabledChatPresets.map((group) => (
-                  <optgroup key={group.group} label={group.group}>
-                    {group.items.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                className="min-w-[130px]"
+                anchor="top"
+              />
               <button
                 type="submit"
                 disabled={isLoading || !composerText.trim()}

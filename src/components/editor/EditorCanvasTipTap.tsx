@@ -16,6 +16,7 @@ import {
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS } from '@/ai/config';
+import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
@@ -66,28 +67,37 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
 
   // 활성화된 프로바이더의 모델만 표시
-  type ModelPreset = { value: string; label: string; description: string };
-  const enabledPresets = useMemo(() => {
-    const presets: Array<{ group: string; items: readonly ModelPreset[] }> = [];
+  const enabledPresets = useMemo((): SelectOptionGroup[] => {
+    const presets: SelectOptionGroup[] = [];
     if (openaiEnabled) {
-      presets.push({ group: 'OpenAI', items: MODEL_PRESETS.openai });
+      presets.push({
+        label: 'OpenAI',
+        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
+      });
     }
     if (anthropicEnabled) {
-      presets.push({ group: 'Anthropic', items: MODEL_PRESETS.anthropic });
+      presets.push({
+        label: 'Anthropic',
+        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
+      });
     }
     return presets;
   }, [openaiEnabled, anthropicEnabled]);
 
+  // 모든 모델 플랫 리스트 (유효성 검사용)
+  const allTranslationModels = useMemo(() => {
+    return enabledPresets.flatMap((g) => g.options);
+  }, [enabledPresets]);
+
   // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
   useEffect(() => {
-    if (enabledPresets.length === 0) return;
-    const allModels = enabledPresets.flatMap((p) => p.items);
-    const firstModel = allModels[0];
+    if (allTranslationModels.length === 0) return;
+    const firstModel = allTranslationModels[0];
     if (!firstModel) return;
-    if (!allModels.some((m) => m.value === translationModel)) {
+    if (!allTranslationModels.some((m) => m.value === translationModel)) {
       setTranslationModel(firstModel.value);
     }
-  }, [translationModel, enabledPresets, setTranslationModel]);
+  }, [translationModel, allTranslationModels, setTranslationModel]);
 
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
@@ -414,23 +424,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            className="h-7 px-2 text-[11px] rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+          <Select
             value={translationModel}
-            onChange={(e) => setTranslationModel(e.target.value)}
+            onChange={setTranslationModel}
+            options={enabledPresets}
             aria-label={t('editor.translationModelAriaLabel')}
             title={t('editor.translationModel')}
-          >
-            {enabledPresets.map((group) => (
-              <optgroup key={group.group} label={group.group}>
-                {group.items.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            size="sm"
+            className="min-w-[130px]"
+          />
           <button
             type="button"
             onClick={() => void openTranslatePreview()}
@@ -531,19 +533,21 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                 {t('editor.target').toUpperCase()}
               </span>
-              <select
-                className="text-[10px] bg-editor-surface border border-editor-border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary-500 text-editor-text"
+              <Select
                 value={project.metadata.targetLanguage || ''}
-                onChange={(e) => setTargetLanguage(e.target.value)}
-              >
-                <option value="" disabled>{t('editor.selectLanguage')}</option>
-                <option value="한국어">{t('editor.languages.korean')}</option>
-                <option value="영어">{t('editor.languages.english')}</option>
-                <option value="일본어">{t('editor.languages.japanese')}</option>
-                <option value="중국어">{t('editor.languages.chinese')}</option>
-                <option value="스페인어">{t('editor.languages.spanish')}</option>
-                <option value="러시아어">{t('editor.languages.russian')}</option>
-              </select>
+                onChange={setTargetLanguage}
+                options={[
+                  { value: '한국어', label: t('editor.languages.korean') },
+                  { value: '영어', label: t('editor.languages.english') },
+                  { value: '일본어', label: t('editor.languages.japanese') },
+                  { value: '중국어', label: t('editor.languages.chinese') },
+                  { value: '스페인어', label: t('editor.languages.spanish') },
+                  { value: '러시아어', label: t('editor.languages.russian') },
+                ]}
+                placeholder={t('editor.selectLanguage')}
+                size="sm"
+                className="min-w-[80px]"
+              />
             </div>
             <span className="text-[10px] text-editor-muted">
               {targetWordCount.toLocaleString()} {t('editor.words')}

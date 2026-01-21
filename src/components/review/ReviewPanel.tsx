@@ -12,6 +12,7 @@ import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
 import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
+import { Select } from '@/components/ui/Select';
 
 /** 검수 강도 선택 드롭다운 */
 function IntensitySelect({
@@ -30,16 +31,18 @@ function IntensitySelect({
       <label className="text-xs text-editor-muted whitespace-nowrap">
         {t('review.intensity', '검수 강도')}
       </label>
-      <select
+      <Select
         value={value}
-        onChange={(e) => onChange(e.target.value as ReviewIntensity)}
-        disabled={disabled}
-        className="flex-1 px-2 py-1 text-xs rounded border border-editor-border bg-editor-bg focus:outline-none focus:ring-1 focus:ring-primary-500/50 disabled:opacity-50"
-      >
-        <option value="minimal">{t('review.intensity.minimal', '가볍게')}</option>
-        <option value="balanced">{t('review.intensity.balanced', '기본')}</option>
-        <option value="thorough">{t('review.intensity.thorough', '꼼꼼히')}</option>
-      </select>
+        onChange={(v) => onChange(v as ReviewIntensity)}
+        disabled={disabled ?? false}
+        options={[
+          { value: 'minimal', label: t('review.intensity.minimal', '가볍게') },
+          { value: 'balanced', label: t('review.intensity.balanced', '기본') },
+          { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히') },
+        ]}
+        size="sm"
+        className="flex-1 min-w-[80px]"
+      />
     </div>
   );
 }

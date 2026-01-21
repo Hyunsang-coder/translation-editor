@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `docs/trd/10-dev-tools.md` - 개발 도구
 - `docs/trd/11-api-keys.md` - API Key 관리
 - `docs/trd/12-i18n.md` - 다국어 지원
+- `docs/trd/13-algorithms.md` - 알고리즘 명세
+- `docs/trd/14-prompt-structure.md` - AI 프롬프트 구조
 
 ## Development Commands
 
@@ -310,7 +312,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 28. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 29. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation since the issue no longer exists in `getCheckedIssues()`.
 30. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes in App Settings. At least one provider must be enabled.
-31. **Model Dropdown with optgroup**: Translation/Chat model selectors use `<optgroup>` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
+31. **Model Dropdown with Grouped Options**: Translation/Chat model selectors use custom `Select` component with `SelectOptionGroup[]` to group models by provider (OpenAI/Anthropic). Only enabled providers' models are shown.
 32. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
 33. **Fresh Chunks on Review Start**: Always regenerate chunks with `buildAlignedChunks(project)` at review start time, not from cached store state. This ensures the review uses the latest document content.
 34. **Marker-based JSON Extraction**: Review responses use `---REVIEW_START/END---` markers. `extractMarkedJson()` tries marker extraction first, then falls back to brace counting. This prevents parsing failures when AI includes extra text outside JSON.
@@ -325,6 +327,8 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 43. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese, etc.). The `event.isComposing` check alone is not reliable across all browsers.
 44. **ChatComposerEditor Markdown Sync**: `ChatComposerEditor` uses `tiptap-markdown` extension to sync with `composerText` (Markdown string). Use `lastSetContentRef` to prevent infinite loops when syncing between editor and state. The editor stores Markdown, not HTML.
 45. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
+46. **Select Component Portal Positioning**: `Select.tsx` uses Headless UI `Portal` to render dropdown outside parent overflow constraints. Use `anchor="top"` for bottom-positioned controls (like chat composer) where dropdown needs to open upward. The component calculates position via `getBoundingClientRect()` with `fixed` positioning.
+47. **Select with optgroup Replacement**: Native `<select>` with `<optgroup>` replaced by custom `Select` component. Use `SelectOptionGroup[]` for grouped options (e.g., model selector grouped by provider).
 
 ## Testing Patterns
 
@@ -377,7 +381,7 @@ cd src-tauri && cargo check
 - **UI Components**: Organized by layout hierarchy
   - `components/panels/`: SettingsSidebar, FloatingChatPanel, SourcePanel, TargetPanel
   - `components/chat/`: ChatContent, ChatComposerEditor (rich text input)
-  - `components/ui/`: FloatingChatButton, common UI components
+  - `components/ui/`: FloatingChatButton, Select (Headless UI dropdown), common UI components
   - `components/editor/`: Editor-related UI, TipTapMenuBar
   - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (runReview.ts, parseReviewResult.ts), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
