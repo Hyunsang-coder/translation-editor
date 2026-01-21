@@ -52,10 +52,15 @@ npm run build
 npm run tauri:build
 ```
 
-### Project Structure
+### Testing
 ```bash
-# Frontend testing - no test suite configured yet
-# Backend testing
+# Frontend testing (Vitest)
+npm test              # Watch mode
+npm run test:run      # Single run
+npm run test:ui       # Browser UI
+npm run test:coverage # Coverage report
+
+# Backend testing (Rust)
 cd src-tauri && cargo test
 ```
 
@@ -334,9 +339,25 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 
 ## Testing Patterns
 
-- **Frontend**: No test framework configured (use manual testing)
-- **Backend**: Rust unit tests in `src-tauri/src/` with `cargo test`
-- **Integration**: Test full workflows (load project → edit → save → AI chat)
+### Frontend (Vitest + Testing Library)
+- **Framework**: Vitest with jsdom environment
+- **Location**: Test files co-located with source (`*.test.ts`, `*.spec.ts`)
+- **Setup**: `src/test/setup.ts` (Tauri mocking, DOM APIs)
+- **Config**: `vitest.config.ts`
+- **Commands**:
+  - `npm test` - Watch mode (development)
+  - `npm run test:run` - Single run (CI)
+  - `npm run test:ui` - Browser UI
+  - `npm run test:coverage` - Coverage report
+- **TDD Skill**: `/tdd` for Red-Green-Refactor workflow
+
+### Backend (Rust)
+- **Location**: `src-tauri/src/` with `#[cfg(test)]` modules
+- **Command**: `cd src-tauri && cargo test`
+
+### Integration Testing
+- Test full workflows: load project → edit → save → AI chat
+- Manual testing recommended for complex UI interactions
 
 ## Debugging Tips
 
