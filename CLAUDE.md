@@ -340,6 +340,9 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 51. **Grouped Zustand Selectors**: Use selectors from `chatStore.selectors.ts` instead of individual `useChatStore()` calls. Grouped selectors (`useChatComposerState`, `useChatSessionState`, etc.) use `useShallow` to minimize re-renders.
 52. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `clearEditorRegistry()` when switching projects to prevent memory leaks from stale editor references.
 53. **Chat Session Message Limit**: `MAX_MESSAGES_PER_SESSION = 1000` enforces FIFO deletion of old messages to prevent memory growth in long sessions.
+54. **Select Component setTimeout**: Avoid using `setTimeout(() => setIsOpen(open), 0)` pattern inside components. Use `useEffect` with proper dependencies instead to prevent memory warnings on rapid mount/unmount.
+55. **Async Operation Project Validation**: After any `await` in ReviewPanel or similar components, validate that `project.id` still matches `useProjectStore.getState().project?.id` to handle project switching during async operations.
+56. **Conditional Event Listeners**: For global event listeners (like `mousemove` on FloatingChatButton), only register when the component is actually visible/needed. Use dependencies in `useEffect` to conditionally attach/detach listeners.
 
 ## Testing Patterns
 
