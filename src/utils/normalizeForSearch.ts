@@ -50,20 +50,22 @@ export function applyUnicodeNormalization(text: string): string {
 export function normalizeForSearch(text: string): string {
   return (
     text
-      // 1. HTML 엔티티 변환
+      // 1. HTML 태그 제거 (AI 응답에 <code>, <strong> 등 포함될 수 있음)
+      .replace(/<[^>]+>/g, '')
+      // 2. HTML 엔티티 변환
       .replace(/&nbsp;/gi, ' ')
       .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
       .replace(/&gt;/gi, '>')
       .replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'")
-      // 2. 유니코드 문자 정규화 (applyUnicodeNormalization과 동일)
+      // 3. 유니코드 문자 정규화 (applyUnicodeNormalization과 동일)
       .replace(UNICODE_NORMALIZE_PATTERNS.doubleQuotes, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.singleQuotes, "'")
       .replace(UNICODE_NORMALIZE_PATTERNS.cjkCornerBrackets, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.cjkDoubleCornerBrackets, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.dashes, '-')
-      // 3. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
+      // 4. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
       .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
       .replace(/\*(.+?)\*/g, '$1') // *italic* → italic
       .replace(/__(.+?)__/g, '$1') // __bold__ → bold
@@ -71,13 +73,13 @@ export function normalizeForSearch(text: string): string {
       .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
       .replace(/`(.+?)`/g, '$1') // `code` → code
       .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [text](url) → text
-      // 4. 리스트/헤딩 마커 제거
+      // 5. 리스트/헤딩 마커 제거
       .replace(/^#{1,6}\s+/gm, '') // # Heading → Heading
       .replace(/^\s*[-*+]\s+/gm, '') // - item → item
       .replace(/^\s*\d+\.\s+/gm, '') // 1. item → item
-      // 5. 특수 공백 문자 정규화 (Unicode)
+      // 6. 특수 공백 문자 정규화 (Unicode)
       .replace(UNICODE_NORMALIZE_PATTERNS.specialSpaces, ' ')
-      // 6. 줄바꿈 통일 및 공백 정규화
+      // 7. 줄바꿈 통일 및 공백 정규화
       .replace(/\r\n|\r/g, ' ') // CRLF, CR → 공백
       .replace(/\s+/g, ' ') // 연속 공백/줄바꿈 → 단일 공백
       .trim()
