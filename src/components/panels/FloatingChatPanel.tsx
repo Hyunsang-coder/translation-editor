@@ -77,6 +77,10 @@ export function FloatingChatPanel(): JSX.Element | null {
       // 패널 내부 클릭이면 무시
       if (panelRef.current?.contains(target)) return;
 
+      // Headless UI Portal (드롭다운, 모달 등) 클릭이면 무시
+      // Portal은 #headlessui-portal-root 또는 [data-headlessui-portal] 하위에 렌더링됨
+      if (target.closest('[data-headlessui-portal]') || target.closest('#headlessui-portal-root')) return;
+
       setChatPanelOpen(false);
     };
 

@@ -8,7 +8,8 @@
 |------|----------|----------|--------------|---------|---------|
 | **번역** | Markdown | `TRANSLATION_START/END` | ✗ | ✗ | ✓ |
 | **채팅** | 자연어 | 없음 | ✓ (6 steps) | ✓ (20개) | ✓ |
-| **검수** | 세그먼트 쌍 | `REVIEW_START/END` | ✗ | ✗ | ✓ |
+| **검수 (대조)** | 원문+번역문 | `REVIEW_START/END` | ✗ | ✗ | ✓ |
+| **검수 (폴리싱)** | 번역문만 | `REVIEW_START/END` | ✗ | ✗ | ✓ |
 
 ### 전체 흐름도
 
@@ -543,7 +544,27 @@ function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 강도별 검출 기준
+### 3.3 검수 모드 분류
+
+검수 기능은 두 가지 카테고리로 분류됩니다:
+
+| 카테고리 | 모드 | 입력 | 목적 |
+|---------|------|------|------|
+| **대조 검수** | minimal, balanced, thorough | 원문 + 번역문 | 번역 정확성 검증 |
+| **폴리싱** | grammar, fluency | 번역문만 | 문장 품질 개선 |
+
+```
+검수 강도: [드롭다운]
+├── 대조 검수 (원문 ↔ 번역문)
+│   ├── minimal - 명백한 오류만
+│   ├── balanced - 의미 전달 오류 (기본값)
+│   └── thorough - 세밀한 검토
+└── 폴리싱 (번역문만)
+    ├── grammar - 문법/오탈자
+    └── fluency - 어색한 문장
+```
+
+### 3.4 대조 검수 강도별 기준
 
 #### minimal (명백한 오류만)
 
@@ -587,7 +608,123 @@ function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[
 - 명백히 의도된 로컬라이제이션
 ```
 
-### 3.4 출력 형식 (JSON)
+### 3.5 폴리싱 모드 (번역문만 검사)
+
+폴리싱 모드는 원문과의 대조 없이 번역문 자체의 품질만 검사합니다.
+번역 완료 후 최종 검토 단계에서 사용합니다.
+
+#### grammar (문법/오탈자)
+
+```
+당신은 10년 경력의 전문 교정자입니다.
+
+## 검출 기준: 문법/오탈자
+
+검출:
+- 맞춤법 오류 (띄어쓰기, 철자)
+- 문법 오류 (조사, 어미, 시제 불일치)
+- 오타/탈자
+- 구두점 오류 (마침표, 쉼표, 따옴표)
+- 숫자/단위 표기 오류
+
+허용 (검출 안 함):
+- 문체/어투 선택
+- 의역 표현
+- 문장 구조 선택
+- 번역투 표현 (fluency에서 검출)
+```
+
+#### fluency (어색한 문장)
+
+```
+당신은 10년 경력의 전문 에디터입니다.
+
+## 검출 기준: 어색한 문장
+
+검출:
+- 부자연스러운 어순
+- 번역투 표현 (직역체, "~되어지다", "~에 대해서")
+- 어색한 조사/접속사 사용
+- 중복 표현 ("가장 최고", "미리 예약")
+- 주어-술어 호응 불일치
+- 불필요한 피동/사동 표현
+- 장황한 표현 (간결하게 줄일 수 있는 경우)
+
+허용 (검출 안 함):
+- 문법적으로 정확한 표현
+- 의도적인 문체 선택
+- 원문 의미 보존을 위한 표현
+```
+
+### 3.6 폴리싱 모드 시스템 프롬프트
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. POLISHER_ROLE (교정자/에디터 역할)                         │
+│    grammar: "당신은 10년 경력의 전문 교정자입니다."            │
+│    fluency: "당신은 10년 경력의 전문 에디터입니다."            │
+├─────────────────────────────────────────────────────────────┤
+│ 2. 검출 기준 (모드별)                                         │
+│    - grammar: 문법, 맞춤법, 오탈자                            │
+│    - fluency: 어색한 문장, 번역투                             │
+├─────────────────────────────────────────────────────────────┤
+│ 3. HALLUCINATION_GUARD (과잉 검출 방지)                      │
+│    "수정 전 자문: 이것이 오류인가, 작성자의 선택인가?"         │
+│                                                              │
+│    확신 없음 = 문제 없음                                      │
+├─────────────────────────────────────────────────────────────┤
+│ 4. OUTPUT_FORMAT (출력 형식)                                 │
+│    ---REVIEW_START---                                        │
+│    { "issues": [...] }                                       │
+│    ---REVIEW_END---                                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.7 폴리싱 모드 사용자 메시지 구조
+
+대조 검수와 달리 **번역문(Target)만** 포함:
+
+```
+## 검사 대상
+[#1]
+Text: {targetText}
+
+[#2]
+Text: {targetText}
+...
+
+반드시 위 출력 형식의 JSON만 출력하세요.
+설명이나 마크다운 없이 JSON만 출력합니다.
+문제가 없으면: { "issues": [] }
+```
+
+### 3.8 폴리싱 모드 출력 형식
+
+대조 검수와 동일한 JSON 구조를 사용하되, `sourceExcerpt`는 생략:
+
+```json
+{
+  "issues": [
+    {
+      "segmentOrder": 1,
+      "type": "문법|오탈자|어색|번역투|중복",
+      "targetExcerpt": "검사 대상에서 그대로 복사 (30자 이내)",
+      "problem": "무엇이 문제인지 (1줄)",
+      "reason": "왜 문제인지 (1줄)",
+      "suggestedFix": "대체 텍스트만"
+    }
+  ]
+}
+```
+
+**폴리싱 모드 issue type:**
+- `문법`: 문법 오류 (조사, 어미, 시제)
+- `오탈자`: 맞춤법, 철자, 띄어쓰기
+- `어색`: 부자연스러운 문장
+- `번역투`: 직역체 표현
+- `중복`: 중복/장황한 표현
+
+### 3.9 대조 검수 출력 형식 (JSON)
 
 ```json
 {
@@ -610,7 +747,7 @@ function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[
 - `targetExcerpt`: 번역문에서 **그대로 복사** (시스템이 위치 검색에 사용)
 - `suggestedFix`: targetExcerpt와 **정확히 같은 범위** (1:1 교체용)
 
-### 3.5 사용자 메시지 구조
+### 3.10 대조 검수 사용자 메시지 구조
 
 ```
 ## 번역 규칙
@@ -634,7 +771,7 @@ Target: {targetText}
 문제가 없으면: { "issues": [] }
 ```
 
-### 3.6 청크 분할 알고리즘
+### 3.11 청크 분할 알고리즘
 
 ```typescript
 // 기본 청크 크기: 12,000자
@@ -672,7 +809,7 @@ function buildAlignedChunks(
 - 컨텍스트 여유: 시스템 프롬프트 + 용어집 + 규칙 공간 확보
 - 응답 품질: 청크가 너무 크면 검수 정확도 저하
 
-### 3.7 JSON 파싱 전략
+### 3.12 JSON 파싱 전략
 
 ```typescript
 // parseReviewResult.ts
@@ -838,11 +975,15 @@ src/ai/
 │       └── extractJsonObject()  # Brace counting
 │
 └── tools/
-    └── reviewTool.ts         # 검수 프롬프트 정의
+    └── reviewTool.ts         # 검수/폴리싱 프롬프트 정의
         ├── buildReviewPrompt()   # 강도별 프롬프트 생성
+        ├── buildPolishPrompt()   # 폴리싱 프롬프트 생성 (신규)
         ├── buildAlignedChunks()  # 세그먼트 청킹
+        ├── isPolishingMode()     # 폴리싱 모드 판별 (신규)
         ├── REVIEWER_ROLE         # 검수자 역할
-        ├── INTENSITY_PROMPTS     # 강도별 기준
+        ├── POLISHER_ROLE         # 교정자/에디터 역할 (신규)
+        ├── INTENSITY_PROMPTS     # 대조 검수 기준
+        ├── POLISH_PROMPTS        # 폴리싱 기준 (신규)
         ├── HALLUCINATION_GUARD   # 과잉 검출 방지
         ├── FEW_SHOT_EXAMPLES     # 예시
         ├── OUTPUT_FORMAT         # 출력 형식
@@ -853,23 +994,57 @@ src/ai/
 
 ## 7. 확장 포인트
 
-### 새로운 검수 강도 추가
+### 새로운 검수/폴리싱 모드 추가
 
-`reviewTool.ts`의 `INTENSITY_PROMPTS`에 새 강도 추가:
+`reviewTool.ts`의 `INTENSITY_PROMPTS`에 새 모드 추가:
 
 ```typescript
 // 1. 타입 확장 (reviewStore.ts)
-export type ReviewIntensity = 'minimal' | 'balanced' | 'thorough' | 'custom';
+export type ReviewIntensity =
+  | 'minimal' | 'balanced' | 'thorough'  // 대조 검수
+  | 'grammar' | 'fluency'                 // 폴리싱
+  | 'custom';                             // 사용자 정의
 
-// 2. 프롬프트 추가 (reviewTool.ts)
+// 2. 폴리싱 모드 판별 헬퍼
+export function isPolishingMode(intensity: ReviewIntensity): boolean {
+  return intensity === 'grammar' || intensity === 'fluency';
+}
+
+// 3. 프롬프트 추가 (reviewTool.ts)
 const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
-  // 기존...
+  // 대조 검수 (기존)
+  minimal: `...`,
+  balanced: `...`,
+  thorough: `...`,
+
+  // 폴리싱 (신규)
+  grammar: `당신은 10년 경력의 전문 교정자입니다.
+## 검출 기준: 문법/오탈자
+검출:
+- 맞춤법 오류 (띄어쓰기, 철자)
+- 문법 오류 (조사, 어미, 시제 불일치)
+...`,
+
+  fluency: `당신은 10년 경력의 전문 에디터입니다.
+## 검출 기준: 어색한 문장
+검출:
+- 부자연스러운 어순
+- 번역투 표현
+...`,
+
   custom: `## 검출 기준: 커스텀
 검출:
-- 사용자 정의 기준...
-허용 (검출 안 함):
-- ...`,
+- 사용자 정의 기준...`,
 };
+
+// 4. 청크 빌더 분기 (폴리싱 모드는 원문 제외)
+export function buildAlignedChunks(
+  project: ITEProject,
+  maxCharsPerChunk: number = DEFAULT_REVIEW_CHUNK_SIZE,
+  isPolishing: boolean = false
+): AlignedChunk[] {
+  // isPolishing=true면 targetText만 포함
+}
 ```
 
 ### 새로운 요청 유형 추가
@@ -949,12 +1124,19 @@ const tools = [
 - [ ] 히스토리가 올바르게 포함되는가?
 - [ ] 컨텍스트 제한이 적용되는가?
 
-#### 검수 모드
+#### 검수 모드 (대조)
 - [ ] 청크 분할이 세그먼트 경계를 유지하는가?
 - [ ] JSON 파싱이 마커/brace counting 모두 처리하는가?
-- [ ] 강도별 검출 기준이 다르게 적용되는가?
+- [ ] 강도별(minimal/balanced/thorough) 검출 기준이 다르게 적용되는가?
 - [ ] excerpt가 원문에서 정확히 찾아지는가?
 - [ ] 스트리밍 진행률이 실시간으로 표시되는가?
+
+#### 폴리싱 모드
+- [ ] 원문 없이 번역문만 전송되는가?
+- [ ] grammar 모드에서 문법/오탈자만 검출하는가?
+- [ ] fluency 모드에서 어색/번역투만 검출하는가?
+- [ ] sourceExcerpt가 응답에서 생략되는가?
+- [ ] 기존 적용 버튼이 정상 작동하는가?
 
 ### 예상 입출력 샘플
 
@@ -998,6 +1180,50 @@ Target: 애플리케이션을 재시작할 수 있습니다.
 ---REVIEW_END---
 ```
 
+#### 폴리싱 입력 (grammar)
+```
+[#1]
+Text: 애플리케이션을 재시작 해야합니다.
+```
+
+#### 폴리싱 출력 (grammar - 정상)
+```
+---REVIEW_START---
+{
+  "issues": [{
+    "segmentOrder": 1,
+    "type": "오탈자",
+    "targetExcerpt": "재시작 해야합니다",
+    "problem": "띄어쓰기 오류",
+    "reason": "'재시작해야' 또는 '재시작하여야'가 올바른 표기",
+    "suggestedFix": "재시작해야 합니다"
+  }]
+}
+---REVIEW_END---
+```
+
+#### 폴리싱 입력 (fluency)
+```
+[#1]
+Text: 이 기능은 사용자에 의해서 활성화되어질 수 있습니다.
+```
+
+#### 폴리싱 출력 (fluency - 정상)
+```
+---REVIEW_START---
+{
+  "issues": [{
+    "segmentOrder": 1,
+    "type": "번역투",
+    "targetExcerpt": "활성화되어질 수 있습니다",
+    "problem": "이중 피동 + 번역투 표현",
+    "reason": "'되어지다'는 불필요한 이중 피동, '~에 의해서'는 번역투",
+    "suggestedFix": "활성화할 수 있습니다"
+  }]
+}
+---REVIEW_END---
+```
+
 ---
 
 ## 버전 히스토리
@@ -1006,3 +1232,4 @@ Target: 애플리케이션을 재시작할 수 있습니다.
 |-----|------|---------|
 | 1.0 | 2024-01 | 초기 문서 작성 |
 | 1.1 | 2024-01 | Quick Reference, 공통 구성요소, 보안, 트러블슈팅 추가 |
+| 1.2 | 2025-01 | 폴리싱 모드 추가 (grammar, fluency) - 번역문만 검사하는 문법/어색 검출 |

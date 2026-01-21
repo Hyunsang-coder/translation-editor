@@ -48,7 +48,8 @@
 ### 주요 워크플로우
 1. **번역**: Source → Markdown → LLM → Markdown → TipTap JSON → Preview → Apply
 2. **채팅**: Tool Calling으로 문서 on-demand 접근
-3. **검수**: 청크 분할 → AI 검수 → JSON 파싱 → 하이라이트
+3. **검수 (대조)**: 원문↔번역문 비교 → 오역/누락/왜곡/일관성 검출
+4. **검수 (폴리싱)**: 번역문만 검사 → 문법/오탈자/어색한 문장 검출
 
 ### 보안 원칙
 - API Key는 OS Keychain + Vault 암호화

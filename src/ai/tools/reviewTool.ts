@@ -2,7 +2,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIntensity, isPolishingMode } from '@/stores/reviewStore';
 import { htmlToMarkdown } from '@/utils/markdownConverter';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
@@ -91,7 +91,8 @@ const REVIEWER_ROLE = `당신은 10년 경력의 전문 번역 검수자입니�
 // 검수 강도별 프롬프트 (강화됨: 카테고리 통합)
 // ============================================
 
-const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
+// 대조 검수용 프롬프트 (원문 ↔ 번역문)
+const REVIEW_INTENSITY_PROMPTS: Record<'minimal' | 'balanced' | 'thorough', string> = {
   minimal: `## 검출 기준: 명백한 오류만
 
 검출:
@@ -128,6 +129,100 @@ const INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
 허용 (검출 안 함):
 - 명백히 의도된 로컬라이제이션`,
 };
+
+// ============================================
+// 폴리싱 모드 (번역문만 검사)
+// ============================================
+
+const POLISHER_ROLE_GRAMMAR = `당신은 10년 경력의 전문 교정자입니다.
+
+## 교정 철학
+- 문법과 맞춤법 오류만 검출
+- 문체 선택은 존중
+- 확신 없으면 문제 아님`;
+
+const POLISHER_ROLE_FLUENCY = `당신은 10년 경력의 전문 에디터입니다.
+
+## 편집 철학
+- 어색하고 부자연스러운 표현만 검출
+- 의도적인 문체 선택은 존중
+- 원문 의미 보존을 위한 표현은 허용
+- 확신 없으면 문제 아님`;
+
+const POLISH_PROMPTS: Record<'grammar' | 'fluency', string> = {
+  grammar: `## 검출 기준: 문법/오탈자
+
+검출:
+- 맞춤법 오류 (띄어쓰기, 철자)
+- 문법 오류 (조사, 어미, 시제 불일치)
+- 오타/탈자
+- 구두점 오류 (마침표, 쉼표, 따옴표)
+- 숫자/단위 표기 오류
+
+허용 (검출 안 함):
+- 문체/어투 선택
+- 의역 표현
+- 문장 구조 선택
+- 번역투 표현 (fluency에서 검출)`,
+
+  fluency: `## 검출 기준: 어색한 문장
+
+검출:
+- 부자연스러운 어순
+- 번역투 표현 (직역체, "~되어지다", "~에 대해서")
+- 어색한 조사/접속사 사용
+- 중복 표현 ("가장 최고", "미리 예약")
+- 주어-술어 호응 불일치
+- 불필요한 피동/사동 표현
+- 장황한 표현 (간결하게 줄일 수 있는 경우)
+
+허용 (검출 안 함):
+- 문법적으로 정확한 표현
+- 의도적인 문체 선택
+- 원문 의미 보존을 위한 표현`,
+};
+
+const POLISH_HALLUCINATION_GUARD = `## 과잉 검출 방지 (필수!)
+
+수정 전 자문: "이것이 오류인가, 작성자의 선택인가?"
+
+문제 아닌 것:
+- 의도적인 문체 선택
+- 강조를 위한 반복
+- 특정 독자층을 위한 표현
+- 전문 용어 사용
+
+확신 없음 = 문제 없음`;
+
+const POLISH_OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
+
+---REVIEW_START---
+{
+  "issues": [
+    {
+      "segmentOrder": 1,
+      "type": "문법|오탈자|어색|번역투|중복",
+      "targetExcerpt": "검사 대상에서 복사",
+      "problem": "무엇이 문제인지 (1줄)",
+      "reason": "왜 문제인지 (1줄)",
+      "suggestedFix": "대체 텍스트만"
+    }
+  ]
+}
+---REVIEW_END---
+
+## excerpt 작성 규칙 (필수!)
+- targetExcerpt: 검사 대상에서 **그대로 복사** (30자 이내)
+- 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
+- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
+
+## suggestedFix 작성 규칙 (필수!)
+- suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
+- 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
+- 범위가 다르면 문장이 깨짐!
+
+금지: 마커 외부 텍스트, 설명문, 마크다운
+문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;
 
 // ============================================
 // 과잉 검출 방지 가이드 (Phase 3)
@@ -216,13 +311,31 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 
 /**
  * 검수 설정에 따른 동적 프롬프트 생성
- * 강도(intensity)만으로 검출 범위 결정 (카테고리 제거)
+ * - 대조 검수 (minimal/balanced/thorough): 원문 ↔ 번역문 비교
+ * - 폴리싱 (grammar/fluency): 번역문만 검사
  */
 export function buildReviewPrompt(intensity: ReviewIntensity): string {
+  // 폴리싱 모드
+  if (isPolishingMode(intensity)) {
+    const polishIntensity = intensity as 'grammar' | 'fluency';
+    const role = polishIntensity === 'grammar' ? POLISHER_ROLE_GRAMMAR : POLISHER_ROLE_FLUENCY;
+    return [
+      role,
+      '',
+      POLISH_PROMPTS[polishIntensity],
+      '',
+      POLISH_HALLUCINATION_GUARD,
+      '',
+      POLISH_OUTPUT_FORMAT,
+    ].join('\n');
+  }
+
+  // 대조 검수 모드
+  const reviewIntensity = intensity as 'minimal' | 'balanced' | 'thorough';
   return [
     REVIEWER_ROLE,
     '',
-    INTENSITY_PROMPTS[intensity],
+    REVIEW_INTENSITY_PROMPTS[reviewIntensity],
     '',
     HALLUCINATION_GUARD,
     '',

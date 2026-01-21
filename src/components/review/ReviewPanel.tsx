@@ -12,9 +12,9 @@ import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
 import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
-import { Select } from '@/components/ui/Select';
+import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 
-/** 검수 강도 선택 드롭다운 */
+/** 검수 모드 선택 드롭다운 (대조 검수 + 폴리싱) */
 function IntensitySelect({
   value,
   onChange,
@@ -26,22 +26,37 @@ function IntensitySelect({
 }) {
   const { t } = useTranslation();
 
+  const options: SelectOptionGroup[] = [
+    {
+      label: t('review.category.comparison', '대조 검수 (원문↔번역문)'),
+      options: [
+        { value: 'minimal', label: t('review.intensity.minimal', '가볍게') },
+        { value: 'balanced', label: t('review.intensity.balanced', '기본') },
+        { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히') },
+      ],
+    },
+    {
+      label: t('review.category.polishing', '폴리싱 (번역문만)'),
+      options: [
+        { value: 'grammar', label: t('review.intensity.grammar', '문법/오탈자') },
+        { value: 'fluency', label: t('review.intensity.fluency', '어색한 문장') },
+      ],
+    },
+  ];
+
   return (
     <div className="flex items-center gap-2">
       <label className="text-xs text-editor-muted whitespace-nowrap">
-        {t('review.intensity', '검수 강도')}
+        {t('review.mode', '검수 모드')}
       </label>
       <Select
         value={value}
         onChange={(v) => onChange(v as ReviewIntensity)}
+        options={options}
         disabled={disabled ?? false}
-        options={[
-          { value: 'minimal', label: t('review.intensity.minimal', '가볍게') },
-          { value: 'balanced', label: t('review.intensity.balanced', '기본') },
-          { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히') },
-        ]}
         size="sm"
-        className="flex-1 min-w-[80px]"
+        className="flex-1 min-w-[120px]"
+        aria-label={t('review.mode', '검수 모드')}
       />
     </div>
   );

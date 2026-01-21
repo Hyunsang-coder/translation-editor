@@ -6,8 +6,18 @@ import { buildAlignedChunks, type AlignedChunk } from '@/ai/tools/reviewTool';
 // Review Settings Types
 // ============================================
 
-/** 검수 강도 */
-export type ReviewIntensity = 'minimal' | 'balanced' | 'thorough';
+/** 검수 강도 (대조 검수 + 폴리싱) */
+export type ReviewIntensity =
+  | 'minimal' | 'balanced' | 'thorough'  // 대조 검수: 원문 ↔ 번역문
+  | 'grammar' | 'fluency';                // 폴리싱: 번역문만
+
+/**
+ * 폴리싱 모드인지 판별
+ * 폴리싱 모드는 원문 없이 번역문만 검사
+ */
+export function isPolishingMode(intensity: ReviewIntensity): boolean {
+  return intensity === 'grammar' || intensity === 'fluency';
+}
 
 // ============================================
 // Review Result Types

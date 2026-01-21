@@ -8,7 +8,7 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
-import type { ReviewIntensity } from '@/stores/reviewStore';
+import { type ReviewIntensity, isPolishingMode } from '@/stores/reviewStore';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
@@ -61,10 +61,15 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   }
 
   // 검수 대상 세그먼트
+  // 폴리싱 모드는 번역문(Target)만, 대조 검수는 원문+번역문
+  const isPolishing = isPolishingMode(params.intensity);
   const segmentsText = params.segments
-    .map((s) => `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`)
+    .map((s) => isPolishing
+      ? `[#${s.order}]\nText: ${s.targetText}`
+      : `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`
+    )
     .join('\n\n');
-  userContentParts.push(`## 검수 대상\n${segmentsText}`);
+  userContentParts.push(`## ${isPolishing ? '검사 대상' : '검수 대상'}\n${segmentsText}`);
 
   // 출력 지시
   userContentParts.push('반드시 위 출력 형식의 JSON만 출력하세요. 설명이나 마크다운 없이 JSON만 출력합니다.\n문제가 없으면: { "issues": [] }');

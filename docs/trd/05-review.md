@@ -324,3 +324,82 @@ runReview({
 
 ### 구현 파일
 - `src/ai/review/parseReviewResult.ts` - `extractMarkedJson()`
+
+---
+
+## 5.19 폴리싱 모드 (Polishing Mode)
+
+### Why
+- 원문 없이 번역문만 검토하는 "폴리싱" 작업 지원
+- 문법/오탈자 검사, 어색한 문장 감지 등 번역문 품질 개선에 집중
+
+### How
+- 검수 모드를 두 카테고리로 분류:
+  - **대조 검수** (원문↔번역문): minimal, balanced, thorough
+  - **폴리싱** (번역문만): grammar, fluency
+- `isPolishingMode()` 헬퍼로 모드 구분
+- 폴리싱 모드는 `sourceText` 없이 `targetText`만 전송
+
+### What
+
+#### ReviewIntensity 타입
+```typescript
+type ReviewIntensity =
+  | 'minimal' | 'balanced' | 'thorough'  // 대조 검수
+  | 'grammar' | 'fluency';                // 폴리싱
+```
+
+#### 모드 판별 헬퍼
+```typescript
+function isPolishingMode(intensity: ReviewIntensity): boolean {
+  return intensity === 'grammar' || intensity === 'fluency';
+}
+```
+
+#### 폴리싱 프롬프트
+- **grammar**: 문법/오탈자 검사 (맞춤법, 띄어쓰기, 문법 오류, 오탈자)
+- **fluency**: 어색한 문장 감지 (어색한 표현, 번역투, 어순 문제, 중복 표현)
+
+#### 메시지 형식 차이
+```
+# 대조 검수
+[#1]
+Source: 원문 텍스트
+Target: 번역문 텍스트
+
+# 폴리싱
+[#1]
+Text: 번역문 텍스트
+```
+
+#### 출력 형식
+폴리싱 모드의 이슈 타입:
+- `문법`: 문법 오류
+- `오탈자`: 맞춤법/철자 오류
+- `어색`: 부자연스러운 표현
+- `번역투`: 외국어 번역체
+- `중복`: 불필요한 반복
+
+```json
+{
+  "issues": [
+    {
+      "segmentOrder": 1,
+      "type": "문법",
+      "targetExcerpt": "문제 있는 부분",
+      "suggestedFix": "수정 제안",
+      "description": "설명"
+    }
+  ]
+}
+```
+
+### UI 변경
+- 드롭다운에 optgroup으로 카테고리 구분
+- Headless UI Select 컴포넌트 사용
+
+### 구현 파일
+- `src/stores/reviewStore.ts` - `ReviewIntensity` 타입, `isPolishingMode()` 헬퍼
+- `src/ai/tools/reviewTool.ts` - 폴리싱 프롬프트 (POLISHER_ROLE_*, POLISH_PROMPTS)
+- `src/ai/review/runReview.ts` - 폴리싱 모드 분기 처리
+- `src/components/review/ReviewPanel.tsx` - IntensitySelect optgroup UI

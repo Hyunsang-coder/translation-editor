@@ -123,6 +123,10 @@ cd src-tauri && cargo test
     - No tool calling overhead (single API call per chunk)
     - Uses `useFor: 'translation'` to disable Responses API
     - Streaming with `onToken` callback for real-time progress
+  - **Two Review Categories**:
+    - **Comparison Review** (대조 검수): Source↔Target comparison (minimal/balanced/thorough)
+    - **Polishing** (폴리싱): Target-only inspection (grammar/fluency)
+  - **Polishing Mode**: Uses `isPolishingMode()` helper, sends only `targetText` without `sourceText`
 
 #### 3. Tool Calling Architecture
 Implemented in `src/ai/chat.ts` with LangChain tools:
@@ -329,6 +333,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 45. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
 46. **Select Component Portal Positioning**: `Select.tsx` uses Headless UI `Portal` to render dropdown outside parent overflow constraints. Use `anchor="top"` for bottom-positioned controls (like chat composer) where dropdown needs to open upward. The component calculates position via `getBoundingClientRect()` with `fixed` positioning.
 47. **Select with optgroup Replacement**: Native `<select>` with `<optgroup>` replaced by custom `Select` component. Use `SelectOptionGroup[]` for grouped options (e.g., model selector grouped by provider).
+48. **Review Polishing Mode**: Use `isPolishingMode(intensity)` from `reviewStore.ts` to check if current mode is grammar/fluency (polishing) vs minimal/balanced/thorough (comparison). Polishing mode sends only `targetText` without `sourceText` to AI.
 
 ## Testing Patterns
 
