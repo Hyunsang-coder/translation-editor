@@ -211,8 +211,8 @@ export async function translateSourceDocToTargetDocJson(params: {
 
   // 최소 출력 토큰 보장 (입력보다 약간 많게 - 번역 시 텍스트가 늘어날 수 있음)
   const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-  // 최대 출력 토큰: OpenAI 65536, Anthropic 8192
-  const maxAllowedTokens = cfg.provider === 'anthropic' ? 8192 : 65536;
+  // 최대 출력 토큰: Provider와 무관하게 64k로 통일
+  const maxAllowedTokens = 65536;
   const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   // 입력이 너무 큰 경우 사전 에러
@@ -432,8 +432,8 @@ export async function translateWithStreaming(
   const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
   const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-  // 최대 출력 토큰: OpenAI 65536, Anthropic 8192
-  const maxAllowedTokens = cfg.provider === 'anthropic' ? 8192 : 65536;
+  // 최대 출력 토큰: Provider와 무관하게 64k로 통일
+  const maxAllowedTokens = 65536;
   const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   if (availableOutputTokens < minOutputTokens) {
