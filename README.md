@@ -39,6 +39,14 @@ npm run tauri:dev    # 개발 서버
 npm run tauri:build  # 프로덕션 빌드
 ```
 
+## 테스트
+
+```bash
+npm test              # Watch mode
+npm run test:run      # Single run
+npm run test:coverage # Coverage report
+```
+
 ## 프로젝트 구조
 
 ```

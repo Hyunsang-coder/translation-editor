@@ -336,6 +336,10 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 47. **Review Polishing Mode**: Use `isPolishingMode(intensity)` from `reviewStore.ts` to check if current mode is grammar/fluency (polishing) vs minimal/balanced/thorough (comparison). Polishing mode sends only `targetText` without `sourceText` to AI.
 48. **FloatingChatButton Drag vs Click**: Use `hasMoved` ref to distinguish drag from click. If mouse moves during mousedown, it's a drag - don't toggle panel on mouseup. Double-click resets position to default (bottom-right).
 49. **FloatingChatButton Tooltip Delay**: Track `mouseMoveCount` to prevent tooltip showing when button appears under static cursor. Only enable tooltip after actual mouse movement over the button.
+50. **buildAlignedChunksAsync for Large Documents**: Use `buildAlignedChunksAsync()` instead of `buildAlignedChunks()` for review operations to prevent UI blocking. The async version yields every 10 segments and supports AbortSignal for cancellation.
+51. **Grouped Zustand Selectors**: Use selectors from `chatStore.selectors.ts` instead of individual `useChatStore()` calls. Grouped selectors (`useChatComposerState`, `useChatSessionState`, etc.) use `useShallow` to minimize re-renders.
+52. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `clearEditorRegistry()` when switching projects to prevent memory leaks from stale editor references.
+53. **Chat Session Message Limit**: `MAX_MESSAGES_PER_SESSION = 1000` enforces FIFO deletion of old messages to prevent memory growth in long sessions.
 
 ## Testing Patterns
 
@@ -409,6 +413,7 @@ cd src-tauri && cargo check
 - **Review Feature**: `src/ai/review/` (runReview.ts, parseReviewResult.ts), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
 - **Search/Replace Feature**: `src/editor/extensions/SearchHighlight.ts` (TipTap extension), `src/components/editor/SearchBar.tsx` (UI)
 - **Editor Registry**: `src/editor/editorRegistry.ts` - Global access to TipTap editor instances for cross-component operations
+- **Zustand Selectors**: `src/stores/chatStore.selectors.ts` - Grouped selectors for optimized re-renders
 
 ## When Adding New Features
 
