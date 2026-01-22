@@ -548,20 +548,13 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
         continue;
       }
       const base64 = bytesToBase64(bytes);
-      if (params.provider === 'openai') {
-        const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
-        const dataUrl = `data:image/${ext};base64,${base64}`;
-        blocks.push({
-          type: 'image_url',
-          image_url: { url: dataUrl },
-        });
-      } else {
-        blocks.push({
-          type: 'image',
-          source_type: 'base64',
-          data: base64,
-        });
-      }
+      // LangChain은 OpenAI/Anthropic 모두 image_url 형식을 받아서 내부적으로 변환함
+      const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
+      const dataUrl = `data:image/${ext};base64,${base64}`;
+      blocks.push({
+        type: 'image_url',
+        image_url: { url: dataUrl },
+      });
       usedImages = true;
     } catch {
       warnings.push(`- ${img.filename}: 파일을 읽을 수 없어 제외됨`);
