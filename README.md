@@ -50,10 +50,39 @@ npm run test:coverage # Coverage report
 ## 빌드 및 배포
 
 ```bash
-npm run tauri:build   # 프로덕션 빌드
+npm run tauri:build   # 프로덕션 빌드 (현재 OS에 맞는 번들 자동 생성)
 ```
 
-빌드 출력: `src-tauri/target/release/bundle/dmg/OddEyes.ai_x.x.x_aarch64.dmg`
+### 빌드 출력 경로
+
+| 플랫폼 | 번들 타입 | 경로 |
+|--------|----------|------|
+| macOS | `.dmg` | `src-tauri/target/release/bundle/dmg/` |
+| macOS | `.app` | `src-tauri/target/release/bundle/macos/` |
+| Windows | `.exe` (NSIS) | `src-tauri/target/release/bundle/nsis/` |
+| Windows | `.msi` | `src-tauri/target/release/bundle/msi/` |
+
+### 특정 번들만 빌드
+
+```bash
+npx tauri build --bundles dmg    # macOS DMG만
+npx tauri build --bundles nsis   # Windows NSIS만
+```
+
+### macOS Universal 빌드 (Intel + Apple Silicon)
+
+```bash
+# 사전 준비: 두 아키텍처 타겟 설치
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-apple-darwin
+
+# Universal 빌드
+npx tauri build --target universal-apple-darwin
+```
+
+출력: `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`
+
+`tauri.conf.json`의 `bundle.targets`는 `"all"`로 설정되어 있어 현재 OS에 맞는 번들이 자동 선택됩니다.
 
 배포용 문서 복사: `/release-docs` (Claude Code 스킬)
 
