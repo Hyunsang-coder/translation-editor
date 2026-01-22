@@ -99,7 +99,10 @@ cd src-tauri && cargo test
   - **Markdown Pipeline**: Uses `tiptap-markdown` for TipTap ↔ Markdown conversion
     - Token-efficient: No JSON structure overhead
     - Simplified chunking: Context-aware text splitting (respects code blocks, lists)
-  - **Dynamic max_tokens**: Calculated based on input document size (GPT-5 400k context)
+  - **Dynamic max_tokens**: Calculated based on input document size, with provider/model-specific limits:
+    - Claude: 64000 (Haiku 4.5 limit)
+    - GPT-5 series: 65536
+    - GPT-4.1/4o: 16384
   - **Image Placeholder**: Base64 images replaced with placeholders before translation, restored after (saves 99%+ tokens)
   - **Truncation Detection**: Detects unclosed code blocks, incomplete links at document end (conservative to avoid false positives)
   - **Retry on Error**: Preview modal shows retry button for recoverable errors
@@ -343,6 +346,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 55. **Async Operation Project Validation**: After any `await` in ReviewPanel or similar components, validate that `project.id` still matches `useProjectStore.getState().project?.id` to handle project switching during async operations.
 56. **Conditional Event Listeners**: For global event listeners (like `mousemove` on FloatingChatButton), only register when the component is actually visible/needed. Use dependencies in `useEffect` to conditionally attach/detach listeners.
 57. **Windows Tauri Build**: `scripts/tauri-build.mjs` uses `shell: process.platform === 'win32'` for `spawn()` because Windows cannot directly execute `.cmd` files without shell. Mac/Linux unaffected.
+58. **Translation max_tokens by Model**: `translateDocument.ts` dynamically sets `maxAllowedTokens` based on provider/model: Claude 64000, GPT-5 65536, GPT-4.1/4o 16384. Exceeding limits causes API errors that may appear as "번역이 취소되었습니다".
 
 ## Testing Patterns
 

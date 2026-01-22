@@ -248,9 +248,14 @@ const MAX_CONTEXT = provider === 'anthropic' ? 200_000 : 400_000;
 const SAFETY_MARGIN = 0.9;
 const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
-// 최소/최대 제한 적용
+// 최소/최대 제한 적용 (Provider/모델별 상이)
 const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-const maxAllowedTokens = provider === 'anthropic' ? 8192 : 65536;
+// - Claude 계열: 64000 (Haiku 4.5 기준)
+// - GPT-5 시리즈: 65536
+// - GPT-4.1/4o 등 이전 모델: 16384
+const maxAllowedTokens = provider === 'anthropic'
+  ? 64000
+  : (model?.startsWith('gpt-5') ? 65536 : 16384);
 const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 ```
 
