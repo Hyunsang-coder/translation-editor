@@ -12,6 +12,7 @@ const child = spawn(
   ['build', '--config', configPath],
   {
     stdio: 'inherit',
+    shell: process.platform === 'win32',
     env: {
       ...process.env,
       CARGO_TARGET_DIR: targetDir,
