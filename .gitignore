@@ -58,3 +58,5 @@ src-tauri/target/
 *.so
 *.dylib
 *.dll
+# Tauri generated schemas
+src-tauri/gen/schemas/
