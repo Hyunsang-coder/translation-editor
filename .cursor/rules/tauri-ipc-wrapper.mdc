@@ -1,0 +1,58 @@
+---
+description: Tauri IPC TypeScript 래퍼 규칙. Rust 커맨드와 TypeScript invoke 래퍼 간의 타입 일치 및 패턴을 정의한다.
+globs:
+  - "src/tauri/**"
+alwaysApply: false
+---
+
+# Tauri IPC TypeScript 래퍼 규칙
+
+`src/tauri/*.ts` 파일은 Rust 백엔드 커맨드(`src-tauri/src/commands/*.rs`)의 TypeScript 래퍼입니다.
+
+---
+
+## 1. 핵심 원칙
+
+- **1:1 매핑**: Rust 커맨드 ↔ TypeScript 래퍼 함수
+- **타입 안전성**: Rust 시그니처와 TypeScript 인터페이스 일치
+- **네이밍**: Rust `snake_case` → TypeScript `camelCase`
+- **Tauri v2**: `@tauri-apps/api/core`의 `invoke` 사용
+
+---
+
+## 2. 패턴
+
+```typescript
+// src/tauri/project.ts
+import { invoke } from '@tauri-apps/api/core';
+import type { Project } from '@/types';
+
+// Rust: #[tauri::command] async fn load_project(path: String) -> Result<Project, String>
+export async function loadProject(path: string): Promise<Project> {
+  return invoke('load_project', { path });
+}
+```
+
+---
+
+## 3. 에러 처리
+
+```typescript
+// invoke 결과는 Rust의 Result<T, E>를 자동 변환
+// Err 시 Promise reject
+try {
+  const result = await loadProject(path);
+} catch (error) {
+  // error는 Rust에서 반환한 에러 문자열
+  console.error('Failed to load project:', error);
+}
+```
+
+---
+
+## 4. 체크리스트
+
+- [ ] Rust 커맨드 추가/변경 시 TypeScript 래퍼 동기화
+- [ ] 파라미터 이름 일치 (Rust struct field와 동일)
+- [ ] 반환 타입 `src/types/index.ts`에 정의
+- [ ] async 함수는 `Promise<T>` 반환

@@ -1,0 +1,278 @@
+/**
+ * TipTap JSON <-> Markdown 변환 유틸리티
+ *
+ * tiptap-markdown 패키지를 사용하여 헤드리스 에디터 인스턴스로 변환을 수행합니다.
+ * 번역 파이프라인에서 토큰 효율성을 위해 Markdown을 중간 형식으로 사용합니다.
+ */
+
+import { Editor, type Content } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
+import Underline from '@tiptap/extension-underline';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
+import { Markdown } from 'tiptap-markdown';
+
+/**
+ * TipTap 문서 JSON 타입
+ * Record<string, unknown>과의 호환성을 위해 제네릭하게 정의
+ * 런타임에서 type: 'doc'과 content 배열 존재 여부로 검증
+ */
+export type TipTapDocJson = Record<string, unknown>;
+
+/**
+ * 헤드리스 에디터용 공통 extension 구성
+ * 에디터 UI(TipTapEditor.tsx)와 동일한 extension을 사용하여 변환 일관성 보장
+ *
+ * 주의: TipTapEditor.tsx의 extension 목록과 동기화 필요
+ */
+
+// Extension 캐시 (성능 최적화: 매번 새로 생성하지 않음)
+let cachedExtensions: ReturnType<typeof createExtensions> | null = null;
+
+function createExtensions() {
+  return [
+    StarterKit.configure({
+      heading: {
+        levels: [1, 2, 3, 4, 5, 6],
+      },
+    }),
+    Link.configure({
+      openOnClick: false,
+    }),
+    Table.configure({ resizable: false }), // 헤드리스에서는 리사이즈 불필요
+    TableRow,
+    TableHeader,
+    TableCell,
+    Image.configure({
+      inline: false,
+      allowBase64: true,
+    }),
+    // TipTapEditor.tsx와 동일한 mark extensions (Markdown 변환 시 손실되지만 JSON 파싱에 필요)
+    Underline,
+    Highlight.configure({ multicolor: false }),
+    Subscript,
+    Superscript,
+    Markdown.configure({
+      html: false,                  // HTML 태그 비활성화
+      tightLists: true,             // 리스트 항목 사이 빈 줄 제거
+      tightListClass: 'tight',      // 타이트 리스트 클래스
+      bulletListMarker: '-',        // 불릿 리스트 마커
+      linkify: false,               // URL 자동 링크 비활성화
+      breaks: false,                // 줄바꿈 처리
+      transformPastedText: false,   // 붙여넣기 시 변환 비활성화
+      transformCopiedText: false,   // 복사 시 변환 비활성화
+    }),
+  ];
+}
+
+function getExtensions() {
+  if (!cachedExtensions) {
+    cachedExtensions = createExtensions();
+  }
+  return cachedExtensions;
+}
+
+/**
+ * TipTap JSON -> Markdown 변환
+ *
+ * @param json - TipTap document JSON
+ * @returns Markdown 문자열
+ */
+export function tipTapJsonToMarkdown(json: TipTapDocJson): string {
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: json as Content,
+  });
+
+  const markdown = editor.storage.markdown.getMarkdown();
+  editor.destroy();
+
+  return markdown;
+}
+
+/**
+ * Markdown -> TipTap JSON 변환
+ *
+ * setContent를 사용하여 명시적 Markdown 파싱을 보장합니다.
+ *
+ * @param markdown - Markdown 문자열
+ * @returns TipTap document JSON
+ */
+export function markdownToTipTapJson(markdown: string): TipTapDocJson {
+  const editor = new Editor({
+    extensions: getExtensions(),
+  });
+
+  // 명시적 Markdown 파싱
+  editor.commands.setContent(markdown);
+
+  const json = editor.getJSON() as TipTapDocJson;
+  editor.destroy();
+
+  return json;
+}
+
+/**
+ * TipTap JSON이 유효한지 검증
+ */
+export function isValidTipTapDocJson(v: unknown): v is TipTapDocJson {
+  if (!v || typeof v !== 'object') return false;
+  const obj = v as Record<string, unknown>;
+  return obj.type === 'doc' && Array.isArray(obj.content);
+}
+
+/**
+ * Markdown 텍스트의 토큰 수 추정
+ * JSON 구조 오버헤드가 없으므로 순수 텍스트 기준으로 계산
+ *
+ * @param text - Markdown 텍스트
+ * @returns 추정 토큰 수
+ */
+export function estimateMarkdownTokens(text: string): number {
+  const chars = text.length;
+  // 평균적으로 3자당 1토큰으로 추정 (한영 혼용 고려)
+  // Markdown은 JSON 오버헤드가 없으므로 추가 계수 없음
+  return Math.ceil(chars / 3);
+}
+
+/**
+ * Markdown 응답의 truncation 감지
+ *
+ * 주의: 이 함수는 실제로 응답이 잘린 경우만 감지해야 합니다.
+ * 정상적인 Markdown에서 오탐(false positive)이 발생하지 않도록 보수적으로 판단합니다.
+ *
+ * @param markdown - Markdown 텍스트
+ * @returns truncation 감지 결과
+ */
+export function detectMarkdownTruncation(markdown: string): { isTruncated: boolean; reason?: string } {
+  // 빈 응답은 truncation이 아님 (별도 검증에서 처리)
+  if (!markdown || markdown.trim().length === 0) {
+    return { isTruncated: false };
+  }
+
+  // 열린 코드 블록 체크 (```가 홀수개)
+  // 코드 블록이 열려있으면 명확한 truncation
+  const codeBlockCount = (markdown.match(/```/g) || []).length;
+  if (codeBlockCount % 2 !== 0) {
+    return { isTruncated: true, reason: `Unclosed code block: ${codeBlockCount} markers` };
+  }
+
+  // 문서 끝이 불완전한 경우만 체크 (마지막 50자 검사)
+  const tail = markdown.slice(-50);
+
+  // 미완성 링크/이미지 체크: 문서 끝에 열린 bracket이 있는 경우만
+  // 예: "자세한 내용은 [여기" 또는 "![이미지"
+  if (/\[[^\]]*$/.test(tail)) {
+    return { isTruncated: true, reason: 'Incomplete link/image at end' };
+  }
+
+  // 미완성 링크 URL 체크: ](까지 있지만 )가 없는 경우
+  // 예: "[링크](https://exam"
+  if (/\]\([^)]*$/.test(tail)) {
+    return { isTruncated: true, reason: 'Incomplete link URL at end' };
+  }
+
+  return { isTruncated: false };
+}
+
+/**
+ * HTML 문자열 -> Markdown 변환
+ *
+ * 세그먼트 검수 등에서 블록의 HTML content를 Markdown으로 변환할 때 사용합니다.
+ * TipTap 에디터의 HTML 출력을 Markdown으로 변환합니다.
+ *
+ * @param html - HTML 문자열
+ * @returns Markdown 문자열
+ */
+export function htmlToMarkdown(html: string): string {
+  if (!html || !html.trim()) return '';
+
+  // HTML을 TipTap 에디터로 로드 후 Markdown으로 변환
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: html, // HTML string을 직접 content로 전달
+  });
+
+  const markdown = editor.storage.markdown.getMarkdown();
+  editor.destroy();
+
+  return markdown;
+}
+
+/**
+ * Markdown 문자열 -> HTML 변환
+ *
+ * 검수 결과 적용 등에서 Markdown을 HTML로 변환할 때 사용합니다.
+ *
+ * @param markdown - Markdown 문자열
+ * @returns HTML 문자열
+ */
+export function markdownToHtml(markdown: string): string {
+  if (!markdown || !markdown.trim()) return '';
+
+  const json = markdownToTipTapJson(markdown);
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: json,
+  });
+
+  const html = editor.getHTML();
+  editor.destroy();
+
+  return html;
+}
+
+/**
+ * HTML 문자열 -> TipTap JSON 변환
+ *
+ * 프로젝트 로드 시 HTML 문서를 TipTap JSON으로 변환하여 저장합니다.
+ * 이를 통해 에디터 마운트 여부와 관계없이 AI 도구가 문서에 접근할 수 있습니다.
+ *
+ * @param html - HTML 문자열
+ * @returns TipTap document JSON (빈 문서일 경우 기본 doc 구조 반환)
+ */
+export function htmlToTipTapJson(html: string): TipTapDocJson {
+  // 빈 HTML이면 기본 빈 문서 구조 반환
+  if (!html || !html.trim()) {
+    return { type: 'doc', content: [] };
+  }
+
+  const editor = new Editor({
+    extensions: getExtensions(),
+    content: html, // HTML string을 직접 content로 전달
+  });
+
+  const json = editor.getJSON() as TipTapDocJson;
+  editor.destroy();
+
+  return json;
+}
+
+/**
+ * 번역 응답에서 Markdown 추출 (구분자 사용)
+ *
+ * @param response - LLM 응답 텍스트
+ * @returns 추출된 Markdown
+ */
+export function extractTranslationMarkdown(response: string): string {
+  const startMarker = '---TRANSLATION_START---';
+  const endMarker = '---TRANSLATION_END---';
+
+  const startIdx = response.indexOf(startMarker);
+  const endIdx = response.indexOf(endMarker);
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return response.slice(startIdx + startMarker.length, endIdx).trim();
+  }
+
+  // Fallback: 구분자 없으면 전체 응답 사용 (경고 로그)
+  console.warn('[Translation] No markers found, using raw response');
+  return response.trim();
+}

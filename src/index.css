@@ -1,0 +1,917 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Variables - Light Theme */
+:root {
+  --editor-bg: #ffffff;
+  --editor-surface: #f8fafc;
+  --editor-border: #e2e8f0;
+  --editor-text: #1e293b;
+  --editor-muted: #64748b;
+
+  /* Primary 컬러 - 라이트 모드: 더 진한 톤으로 대비 향상 */
+  --primary-500: #0284c7;
+  /* sky-600 */
+  --primary-600: #0369a1;
+  /* sky-700 */
+  --primary-400: #0ea5e9;
+  /* sky-500 (아이콘/강조용) */
+
+  /* Diff: 변경(삽입/삭제)만 강하게, 나머지는 최대한 조용하게 */
+  --diff-insertion: #16a34a;
+  /* green-600 */
+  --diff-deletion: #dc2626;
+  /* red-600 */
+  --diff-insertion-bg: rgba(22, 163, 74, 0.22);
+  --diff-deletion-bg: rgba(220, 38, 38, 0.22);
+
+  --chat-bg: #f1f5f9;
+  --chat-user: #3b82f6;
+  --chat-ai: #6366f1;
+}
+
+/* CSS Variables - Dark Theme */
+.dark {
+  --editor-bg: #0f172a;
+  --editor-surface: #1e293b;
+  --editor-border: #334155;
+  --editor-text: #f1f5f9;
+  --editor-muted: #94a3b8;
+
+  /* Primary 컬러 - 다크 모드: 더 밝은 톤으로 가시성 향상 */
+  --primary-500: #38bdf8;
+  /* sky-400 */
+  --primary-600: #0ea5e9;
+  /* sky-500 */
+  --primary-400: #7dd3fc;
+  /* sky-300 (아이콘/강조용) */
+
+  --diff-insertion: #4ade80;
+  --diff-deletion: #f87171;
+  --diff-insertion-bg: rgba(74, 222, 128, 0.28);
+  --diff-deletion-bg: rgba(248, 113, 113, 0.28);
+
+  --chat-bg: #1e293b;
+  --chat-user: #60a5fa;
+  --chat-ai: #818cf8;
+}
+
+/* Base Styles */
+@layer base {
+  html {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-editor-bg text-editor-text;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-editor-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-editor-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-editor-muted;
+  }
+}
+
+/* Component Styles */
+@layer components {
+
+  /* Ghost Chips (변수 보호) */
+  .ghost-chip {
+    @apply inline-flex items-center px-2 py-0.5 mx-0.5;
+    @apply bg-primary-100 dark:bg-primary-900;
+    @apply text-primary-700 dark:text-primary-300;
+    @apply text-sm font-mono rounded-md;
+    @apply select-none cursor-default;
+  }
+
+  /* Diff Marks */
+  .diff-insertion {
+    @apply bg-diff-insertion-bg;
+    text-decoration: none;
+    border-bottom: 2px solid var(--diff-insertion);
+  }
+
+  .diff-deletion {
+    @apply bg-diff-deletion-bg line-through;
+    text-decoration-color: var(--diff-deletion);
+  }
+
+  /* Editor Block */
+  .editor-block {
+    @apply py-2 px-4;
+    @apply border-l-2 border-transparent;
+    @apply transition-all duration-200;
+  }
+
+  .editor-block:hover {
+    @apply bg-editor-surface;
+  }
+
+  .editor-block:focus-within {
+    @apply border-l-primary-500;
+  }
+
+  /* Shimmer Text Effect */
+  @keyframes shimmer-text {
+    0% {
+      background-position: -200% center;
+    }
+
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .shimmer-text {
+    background: linear-gradient(to right,
+        var(--editor-muted) 20%,
+        var(--editor-text) 50%,
+        var(--editor-muted) 80%);
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-text 2s linear infinite;
+  }
+
+  /* Segment Group Container */
+  .segment-group {
+    @apply grid grid-cols-2 gap-4;
+    @apply border-b border-editor-border;
+    @apply py-3;
+  }
+
+  /* Chat Message */
+  .chat-message {
+    @apply p-4 rounded-lg;
+    @apply animate-fade-in;
+  }
+
+  .chat-message-user {
+    @apply bg-primary-100 dark:bg-primary-900;
+    @apply ml-auto max-w-[80%];
+  }
+
+  .chat-message-ai {
+    @apply bg-editor-bg;
+    @apply mr-auto max-w-[80%];
+  }
+
+  /* Chat Markdown */
+  .chat-markdown {
+    @apply break-words max-w-full;
+  }
+
+  .chat-markdown p {
+    @apply my-2;
+  }
+
+  .chat-markdown ul {
+    @apply list-disc pl-6 my-2;
+  }
+
+  .chat-markdown ol {
+    @apply list-decimal pl-6 my-2;
+  }
+
+  .chat-markdown li {
+    @apply my-1;
+  }
+
+  .chat-markdown blockquote {
+    @apply border-l-2 border-editor-border pl-3 my-2 text-editor-muted;
+  }
+
+  .chat-markdown pre {
+    @apply bg-editor-surface p-3 rounded-md overflow-x-auto max-w-full my-2 border border-editor-border;
+  }
+
+  .chat-markdown code {
+    @apply bg-editor-surface px-1.5 py-0.5 rounded text-xs font-mono break-all;
+  }
+
+  .chat-markdown pre code {
+    @apply bg-transparent p-0 text-sm break-normal;
+  }
+
+  .chat-markdown img {
+    @apply max-w-full h-auto rounded my-2 border border-editor-border;
+  }
+
+  .chat-markdown table {
+    @apply block overflow-x-auto max-w-full my-2 border-collapse;
+  }
+
+  .chat-markdown th,
+  .chat-markdown td {
+    @apply border border-editor-border px-3 py-1.5 text-sm;
+  }
+
+  .chat-markdown th {
+    @apply bg-editor-surface font-semibold;
+  }
+}
+
+/* Utility Styles */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ============================================
+   TipTap Editor Styles - Notion Style
+   ============================================ */
+
+/* TipTap Wrapper */
+.tiptap-wrapper {
+  @apply h-full w-full rounded-md border border-editor-border bg-editor-bg;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tiptap-wrapper.source-editor {
+  @apply bg-editor-bg;
+}
+
+/* ProseMirror Core */
+.ProseMirror {
+  @apply outline-none;
+  @apply min-h-[200px];
+  @apply px-6 py-4;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: var(--editor-font-size, 14px);
+  line-height: var(--editor-line-height, 1.4);
+  color: var(--editor-text);
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Paragraphs */
+.ProseMirror p {
+  @apply my-3;
+}
+
+/* Headings - 기본 폰트 크기 기반 상대 크기 */
+.ProseMirror h1 {
+  @apply font-bold mt-8 mb-4;
+  font-size: calc(var(--editor-font-size, 14px) * 2.15);
+  line-height: 1.3;
+}
+
+.ProseMirror h2 {
+  @apply font-semibold mt-6 mb-3;
+  font-size: calc(var(--editor-font-size, 14px) * 1.7);
+  line-height: 1.35;
+}
+
+.ProseMirror h3 {
+  @apply font-semibold mt-5 mb-2;
+  font-size: calc(var(--editor-font-size, 14px) * 1.4);
+  line-height: 1.4;
+}
+
+.ProseMirror h4 {
+  @apply font-medium mt-4 mb-2;
+  font-size: calc(var(--editor-font-size, 14px) * 1.2);
+}
+
+.ProseMirror h5 {
+  @apply font-medium mt-3 mb-1;
+  font-size: var(--editor-font-size, 14px);
+}
+
+.ProseMirror h6 {
+  @apply font-medium mt-3 mb-1 text-editor-muted;
+  font-size: calc(var(--editor-font-size, 14px) * 0.9);
+}
+
+/* Lists */
+.ProseMirror ul {
+  @apply list-disc pl-6 my-3;
+}
+
+.ProseMirror ol {
+  @apply list-decimal pl-6 my-3;
+}
+
+.ProseMirror li {
+  @apply my-1;
+}
+
+.ProseMirror li p {
+  @apply my-0;
+}
+
+/* Blockquote - Notion Style */
+.ProseMirror blockquote {
+  @apply border-l-4 border-editor-border pl-4 my-4;
+  @apply text-editor-muted italic;
+}
+
+/* Code - Inline */
+.ProseMirror code {
+  @apply px-1.5 py-0.5 rounded;
+  @apply bg-editor-surface text-sm;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Code Block */
+.ProseMirror pre {
+  @apply p-4 rounded-lg my-4;
+  @apply bg-editor-surface overflow-x-auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ProseMirror pre code {
+  @apply p-0 bg-transparent;
+}
+
+/* Links */
+.ProseMirror a,
+.tiptap-link {
+  @apply text-primary-500 underline decoration-primary-300;
+  @apply hover:text-primary-600 hover:decoration-primary-400;
+  @apply transition-colors;
+}
+
+/* Bold, Italic, Strike */
+.ProseMirror strong {
+  @apply font-semibold;
+}
+
+.ProseMirror em {
+  @apply italic;
+}
+
+.ProseMirror s {
+  @apply line-through text-editor-muted;
+}
+
+/* Horizontal Rule */
+.ProseMirror hr {
+  @apply my-8 border-t border-editor-border;
+}
+
+/* Tables */
+.ProseMirror table {
+  @apply w-full my-4 border-collapse;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  @apply border border-editor-border px-3 py-2 text-left align-top;
+  min-width: 100px;
+}
+
+.ProseMirror th {
+  @apply bg-editor-surface font-semibold;
+}
+
+.ProseMirror tr:first-child th,
+.ProseMirror tr:first-child td {
+  @apply border-t;
+}
+
+/* 선택된 셀 하이라이트 */
+.ProseMirror .selectedCell {
+  @apply bg-primary-100;
+}
+
+.dark .ProseMirror .selectedCell {
+  @apply bg-primary-900/30;
+}
+
+/* Placeholder */
+.ProseMirror p.is-empty::before,
+.ProseMirror.tiptap-empty::before {
+  @apply text-editor-muted;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Selection */
+.ProseMirror ::selection {
+  @apply bg-primary-200;
+}
+
+.dark .ProseMirror ::selection {
+  @apply bg-primary-800;
+}
+
+/* Focus visible for accessibility */
+.ProseMirror:focus-visible {
+  @apply ring-2 ring-primary-500 ring-offset-2 ring-offset-editor-bg;
+}
+
+/* Source Editor (Read-only) specific */
+.source-editor .ProseMirror {
+  @apply bg-editor-bg cursor-default;
+}
+
+/* Target Editor specific */
+.target-editor .ProseMirror {
+  @apply bg-editor-bg;
+}
+
+/* Monaco Ghost Chips (태그/변수 보호) */
+.monaco-ghost-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.12);
+  /* primary-500 계열 */
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.dark .monaco-ghost-chip {
+  background: rgba(99, 102, 241, 0.22);
+  /* indigo 계열 */
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+/* Monaco Pending Diff (In-place Preview) */
+.monaco-pending-diff {
+  background: rgba(16, 185, 129, 0.24);
+  /* emerald-500 */
+  border-bottom: 1px dashed rgba(16, 185, 129, 0.95);
+}
+
+.dark .monaco-pending-diff {
+  background: rgba(16, 185, 129, 0.34);
+  border-bottom: 1px dashed rgba(52, 211, 153, 0.95);
+}
+
+/* Monaco Pending Diff - deletion-like highlight (range to be replaced) */
+.monaco-pending-delete {
+  background: rgba(239, 68, 68, 0.20);
+  /* red-500 */
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.95);
+  border-bottom: 1px dashed rgba(239, 68, 68, 0.92);
+}
+
+.dark .monaco-pending-delete {
+  background: rgba(248, 113, 113, 0.30);
+  /* red-400 */
+  text-decoration-color: rgba(248, 113, 113, 0.95);
+  border-bottom: 1px dashed rgba(248, 113, 113, 0.92);
+}
+
+/* Monaco Pending Diff - insertion preview widget */
+.monaco-pending-insert-widget {
+  max-width: min(680px, 90vw);
+  border-radius: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  /* green-500 */
+  background: rgba(34, 197, 94, 0.10);
+  backdrop-filter: blur(6px);
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dark .monaco-pending-insert-widget {
+  border: 1px solid rgba(74, 222, 128, 0.55);
+  /* green-400 */
+  background: rgba(74, 222, 128, 0.12);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.monaco-pending-insert-widget__header {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--editor-muted);
+  margin-bottom: 6px;
+}
+
+.monaco-pending-insert-widget__body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--editor-text);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Keep/Discard 버튼 영역 */
+.monaco-pending-insert-widget__footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.monaco-pending-insert-widget__btn {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.monaco-pending-insert-widget__btn--keep {
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+}
+
+.monaco-pending-insert-widget__btn--keep:hover {
+  background: rgba(34, 197, 94, 1);
+}
+
+.monaco-pending-insert-widget__btn--discard {
+  background: rgba(239, 68, 68, 0.15);
+  color: rgba(239, 68, 68, 0.95);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.monaco-pending-insert-widget__btn--discard:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.dark .monaco-pending-insert-widget__btn--keep {
+  background: rgba(74, 222, 128, 0.85);
+  color: #0f172a;
+}
+
+.dark .monaco-pending-insert-widget__btn--keep:hover {
+  background: rgba(74, 222, 128, 1);
+}
+
+.dark .monaco-pending-insert-widget__btn--discard {
+  background: rgba(248, 113, 113, 0.15);
+  color: rgba(248, 113, 113, 0.95);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.dark .monaco-pending-insert-widget__btn--discard:hover {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+/* ============================================
+   Monaco DiffEditor - Custom Colors
+   첨부 이미지 스타일: 선명한 빨간/초록 + 취소선
+   ============================================ */
+
+/* 삭제된 줄 배경 (왼쪽 패널) */
+.monaco-diff-editor .editor.original .view-overlays .line-delete,
+.monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
+  background: rgba(254, 202, 202, 0.65) !important;
+  /* red-200 */
+}
+
+/* 추가된 줄 배경 (오른쪽 패널) */
+.monaco-diff-editor .editor.modified .view-overlays .line-insert,
+.monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
+  background: rgba(187, 247, 208, 0.65) !important;
+  /* green-200 */
+}
+
+/* 삭제된 문자 하이라이트 - 빨간색 배경 + 취소선 */
+.monaco-diff-editor .editor.original .view-overlays .char-delete {
+  background: rgba(254, 202, 202, 0.92) !important;
+  /* red-200 */
+  text-decoration: line-through !important;
+  text-decoration-color: #dc2626 !important;
+  /* red-600 */
+}
+
+/* 추가된 문자 하이라이트 - 초록색 배경 */
+.monaco-diff-editor .editor.modified .view-overlays .char-insert {
+  background: rgba(134, 239, 172, 0.82) !important;
+  /* green-300 */
+}
+
+/* 삭제된 텍스트에 취소선 적용 (Monaco 텍스트 레이어) */
+.monaco-diff-editor .editor.original .view-lines .view-line span {
+  position: relative;
+}
+
+/* Gutter (줄 번호 옆) 색상 */
+.monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
+  background: rgba(254, 202, 202, 0.75) !important;
+}
+
+.monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
+  background: rgba(187, 247, 208, 0.75) !important;
+}
+
+/* Dark 테마 */
+.dark .monaco-diff-editor .editor.original .view-overlays .line-delete,
+.dark .monaco-diff-editor .editor.original .margin-view-overlays .line-delete {
+  background: rgba(127, 29, 29, 0.55) !important;
+  /* red-900 */
+}
+
+.dark .monaco-diff-editor .editor.modified .view-overlays .line-insert,
+.dark .monaco-diff-editor .editor.modified .margin-view-overlays .line-insert {
+  background: rgba(20, 83, 45, 0.55) !important;
+  /* green-900 */
+}
+
+.dark .monaco-diff-editor .editor.original .view-overlays .char-delete {
+  background: rgba(185, 28, 28, 0.72) !important;
+  /* red-700 */
+  text-decoration: line-through !important;
+  text-decoration-color: #fca5a5 !important;
+  /* red-300 */
+}
+
+.dark .monaco-diff-editor .editor.modified .view-overlays .char-insert {
+  background: rgba(22, 163, 74, 0.62) !important;
+  /* green-600 */
+}
+
+.dark .monaco-diff-editor .editor.original .margin-view-overlays .cgmr.delete {
+  background: rgba(127, 29, 29, 0.65) !important;
+}
+
+.dark .monaco-diff-editor .editor.modified .margin-view-overlays .cgmr.insert {
+  background: rgba(20, 83, 45, 0.65) !important;
+}
+
+/* Inline diff 모드용 (renderSideBySide: false 시) */
+.monaco-diff-editor .inline-deleted-margin-view-zone {
+  background: rgba(254, 202, 202, 0.32) !important;
+}
+
+.monaco-diff-editor .view-overlays .diagonal-fill {
+  opacity: 0.03;
+}
+
+/* ============================================
+   Review Highlight - 검수 이슈 하이라이트
+   ============================================ */
+
+.review-highlight {
+  background: rgba(251, 191, 36, 0.35);
+  /* amber-400 */
+  border-bottom: 2px solid rgba(245, 158, 11, 0.85);
+  /* amber-500 */
+  border-radius: 2px;
+  padding: 1px 0;
+  transition: background 0.2s ease;
+}
+
+.review-highlight:hover {
+  background: rgba(251, 191, 36, 0.55);
+}
+
+/* 이슈 유형별 색상 */
+.review-highlight[data-issue-type="error"] {
+  background: rgba(239, 68, 68, 0.25);
+  /* red-500 */
+  border-bottom-color: rgba(220, 38, 38, 0.85);
+  /* red-600 */
+}
+
+.review-highlight[data-issue-type="omission"] {
+  background: rgba(249, 115, 22, 0.25);
+  /* orange-500 */
+  border-bottom-color: rgba(234, 88, 12, 0.85);
+  /* orange-600 */
+}
+
+.review-highlight[data-issue-type="distortion"] {
+  background: rgba(234, 179, 8, 0.25);
+  /* yellow-500 */
+  border-bottom-color: rgba(202, 138, 4, 0.85);
+  /* yellow-600 */
+}
+
+.review-highlight[data-issue-type="consistency"] {
+  background: rgba(59, 130, 246, 0.25);
+  /* blue-500 */
+  border-bottom-color: rgba(37, 99, 235, 0.85);
+  /* blue-600 */
+}
+
+/* Dark 테마 */
+.dark .review-highlight {
+  background: rgba(251, 191, 36, 0.25);
+  border-bottom-color: rgba(251, 191, 36, 0.75);
+}
+
+.dark .review-highlight:hover {
+  background: rgba(251, 191, 36, 0.4);
+}
+
+.dark .review-highlight[data-issue-type="error"] {
+  background: rgba(248, 113, 113, 0.25);
+  /* red-400 */
+  border-bottom-color: rgba(248, 113, 113, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="omission"] {
+  background: rgba(251, 146, 60, 0.25);
+  /* orange-400 */
+  border-bottom-color: rgba(251, 146, 60, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="distortion"] {
+  background: rgba(250, 204, 21, 0.25);
+  /* yellow-400 */
+  border-bottom-color: rgba(250, 204, 21, 0.75);
+}
+
+.dark .review-highlight[data-issue-type="consistency"] {
+  background: rgba(96, 165, 250, 0.25);
+  /* blue-400 */
+  border-bottom-color: rgba(96, 165, 250, 0.75);
+}
+
+/* ============================================
+   Search Highlight - 검색 매치 하이라이트
+   ============================================ */
+
+/* 검색 매치 하이라이트 */
+.search-match {
+  background-color: rgba(255, 235, 59, 0.4);
+  /* yellow-400 */
+  border-radius: 2px;
+  padding: 1px 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* 현재 매치 (더 강조) */
+.search-current {
+  background-color: rgba(255, 152, 0, 0.6);
+  /* orange-500 */
+  border-radius: 2px;
+  padding: 1px 0;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.8);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* 다크 모드 */
+.dark .search-match {
+  background-color: rgba(255, 235, 59, 0.3);
+}
+
+.dark .search-current {
+  background-color: rgba(255, 152, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.7);
+}
+
+/* ============================================
+   Chat Composer TipTap Editor
+   ============================================ */
+
+/* 채팅 컴포저 에디터 래퍼 */
+.chat-composer-editor-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+/* 채팅 컴포저 TipTap 에디터 */
+.chat-composer-tiptap {
+  @apply outline-none;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--editor-text);
+  min-height: 24px;
+  max-height: 100%;
+}
+
+/* 포커스 링 제거 */
+.chat-composer-tiptap:focus,
+.chat-composer-tiptap:focus-visible,
+.chat-composer-editor-wrapper:focus-within,
+.chat-composer-editor-wrapper *:focus,
+.chat-composer-editor-wrapper *:focus-visible,
+[data-ite-chat-composer]:focus-within,
+[data-ite-chat-composer] *:focus,
+[data-ite-chat-composer] *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Placeholder 스타일 */
+.chat-composer-tiptap.is-editor-empty::before {
+  @apply text-editor-muted;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 채팅 컴포저 내 기본 요소 스타일 */
+.chat-composer-tiptap p {
+  @apply my-1;
+}
+
+.chat-composer-tiptap p:first-child {
+  @apply mt-0;
+}
+
+.chat-composer-tiptap p:last-child {
+  @apply mb-0;
+}
+
+/* 인라인 서식 */
+.chat-composer-tiptap strong {
+  @apply font-semibold;
+}
+
+.chat-composer-tiptap em {
+  @apply italic;
+}
+
+.chat-composer-tiptap u {
+  @apply underline;
+}
+
+.chat-composer-tiptap s {
+  @apply line-through text-editor-muted;
+}
+
+.chat-composer-tiptap mark {
+  @apply bg-yellow-200 dark:bg-yellow-700;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* 링크 */
+.chat-composer-tiptap a {
+  @apply text-primary-500 underline decoration-primary-300;
+}
+
+/* 인라인 코드 */
+.chat-composer-tiptap code {
+  @apply px-1 py-0.5 rounded text-sm;
+  @apply bg-editor-surface;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 리스트 */
+.chat-composer-tiptap ul {
+  @apply list-disc pl-5 my-1;
+}
+
+.chat-composer-tiptap ol {
+  @apply list-decimal pl-5 my-1;
+}
+
+.chat-composer-tiptap li {
+  @apply my-0.5;
+}
+
+.chat-composer-tiptap li p {
+  @apply my-0;
+}
+
+/* Selection */
+.chat-composer-tiptap ::selection {
+  @apply bg-primary-200;
+}
+
+.dark .chat-composer-tiptap ::selection {
+  @apply bg-primary-800;
+}
