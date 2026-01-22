@@ -24,7 +24,7 @@ LangChain 및 AI 통합 작업 시 적용되는 규칙.
 
 ### Chat Mode (`chat.ts`)
 - **문서 접근**: Tool Calling으로 on-demand fetch (초기 페이로드에 미포함)
-- **채팅 히스토리**: 최근 20개 (`VITE_AI_MAX_RECENT_MESSAGES`)
+- **채팅 히스토리**: 최근 20개 (고정)
 - **Tool loop**: 기본 6 steps, 최대 12
 
 ## Token Limits

@@ -20,6 +20,7 @@ TipTap(ProseMirror) 기반 에디터 관련 기능 개발 시 적용되는 규�
 - JSON 구조 검증 후 저장, 파싱 실패 시 plain text fallback
 - **Dual Editor**: Source (좌측) + Target (우측), 둘 다 편집 가능
 - Focus Mode: Source 패널 숨김 가능 (3패널 → 2패널)
+- **붙여넣기 정규화**: 웹/Confluence HTML은 **붙여넣기 시점에만** 최소한의 정규화 적용
 
 ---
 
@@ -90,7 +91,7 @@ const matchIndex = text.indexOf(searchTerm);
 ### SearchHighlight (검색/치환)
 - CSS 기반, 비영구적
 - 매치 결과 recalculate: 치환 후 위치 shift 반영
-- 단축키: `Cmd+F` (Source), `Cmd+H` (Target)
+- 단축키: `Cmd+F` (Source/Target 검색), `Cmd+H` (Target 치환)
 
 ### ReviewHighlight (리뷰)
 - Decoration 기반, 체크박스 연동
@@ -152,7 +153,7 @@ targetDocJson = htmlToTipTapJson(targetHtml);
 
 1. **Extension 스키마 불일치**: 에디터 ↔ 변환기 extensions 동기화 필수
 2. **Cross-node 검색 실패**: `buildTextWithPositions()` 사용
-3. **검색 shortcut 범위**: Source 패널 포커스 시 `Cmd+F`, Target 시 `Cmd+H`
+3. **검색/치환 shortcut**: Source/Target `Cmd+F`, Target `Cmd+H`
 4. **Review Apply vs Copy**: 오역/왜곡/일관성 → Apply(치환), 누락 → Copy(클립보드)
 5. **Markdown 정규화**: AI excerpt ↔ 에디터 plain text 매칭 전 `normalizeForSearch()` 사용
 

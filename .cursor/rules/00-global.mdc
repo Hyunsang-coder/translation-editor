@@ -43,7 +43,8 @@ alwaysApply: true
 - "Add to chat"은 **선택 텍스트를 채팅 입력으로 옮기는 보조 UX**이며, 단독으로 모델 호출 발생 금지
 - 출력 포맷 (상세는 PRD/TRD 준수):
   - 번역(문서 전체): Markdown (`---TRANSLATION_START/END---` 마커)
-  - 질문/검수: 간결한 답변 또는 JSON 리포트
+  - 검수(Review): JSON (`---REVIEW_START/END---` 마커)
+  - 질문: 간결한 답변 또는 JSON 리포트
 
 ---
 

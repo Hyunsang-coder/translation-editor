@@ -41,13 +41,6 @@ function getEnvString(key: string): string | undefined {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
 }
 
-function getEnvNumber(key: string, fallback: number): number {
-  const raw = getEnvString(key);
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : fallback;
-}
-
 function getEnvOptionalNumber(key: string): number | undefined {
   const raw = getEnvString(key);
   if (!raw) return undefined;
@@ -84,7 +77,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
-    maxRecentMessages: Math.max(4, Math.floor(getEnvNumber('VITE_AI_MAX_RECENT_MESSAGES', 20))),
+    maxRecentMessages: 20,
     judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',
   };
 }

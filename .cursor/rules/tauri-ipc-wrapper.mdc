@@ -16,6 +16,7 @@ alwaysApply: false
 - **1:1 매핑**: Rust 커맨드 ↔ TypeScript 래퍼 함수
 - **타입 안전성**: Rust 시그니처와 TypeScript 인터페이스 일치
 - **네이밍**: Rust `snake_case` → TypeScript `camelCase`
+- **Tauri v2**: `@tauri-apps/api/core`의 `invoke` 사용
 
 ---
 

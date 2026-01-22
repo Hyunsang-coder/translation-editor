@@ -60,3 +60,8 @@ src-tauri/target/
 *.dll
 # Tauri generated schemas
 src-tauri/gen/schemas/
+
+.tmp/
+.npm-cache/
+release/
+tasks/

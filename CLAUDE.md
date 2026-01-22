@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Essential Documentation
 
-**Source of Truth**: `prd.md` (Product Requirements) and `docs/trd/` (Technical Requirements) are the authoritative documents. When conflicts arise between code and documentation, align with PRD/TRD.
+**Source of Truth**: `docs/trd/` (Technical Requirements) are the authoritative documents. When conflicts arise between code and documentation, align with TRD.
 
 **TRD 문서 구조** (세부 스펙은 해당 파일 참조):
 - `docs/trd/README.md` - 개요 및 인덱스
@@ -127,7 +127,7 @@ npx tauri build --bundles nsis   # Windows
   - **Retry on Error**: Preview modal shows retry button for recoverable errors
 
 - **Chat/Question Mode** (`chat.ts`):
-  - User-initiated Q&A with chat history (max 20 messages, configurable via `VITE_AI_MAX_RECENT_MESSAGES`)
+  - User-initiated Q&A with chat history (max 20 messages)
   - **On-demand document access**: Documents NOT included in initial payload
   - Uses Tool Calling to fetch Source/Target when needed
   - Prevents unnecessary token consumption
@@ -445,7 +445,7 @@ cd src-tauri && cargo check
 
 ## When Adding New Features
 
-1. Check PRD/TRD for requirements alignment
+1. Check TRD for requirements alignment
 2. Update relevant Zustand store(s)
 3. Add Tauri command if backend logic needed
 4. Create/update UI components

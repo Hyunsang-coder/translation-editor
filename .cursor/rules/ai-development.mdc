@@ -21,19 +21,23 @@ AI 관련 기능(Chat, Translation, Review) 개발 시 적용되는 규칙입니
 ### Chat 모드 (`src/ai/chat.ts`)
 - **On-demand 문서 접근**: 초기 payload에 문서 미포함
 - **Tool Calling**으로 필요 시 Source/Target 문서 fetch
-- Chat history 최대 20개 메시지 (설정 가능: `VITE_AI_MAX_RECENT_MESSAGES`)
-- 최대 6 steps (12 tool calls)까지 허용
+- Chat history 최대 20개 메시지 (고정)
+- 최대 6 steps (최대 12까지 확장) 허용
+- 웹검색: `webSearchEnabled=true`일 때만 OpenAI 내장 `web_search_preview` 바인딩
+- Confluence/Notion 등 커넥터: 토글 ON일 때만 MCP 도구 바인딩
 
 ### Translation 모드 (`src/ai/translateDocument.ts`)
 - **Markdown 파이프라인**: TipTap JSON → Markdown → LLM → Markdown → TipTap JSON
 - Chat history 미포함 (단일 요청)
 - 출력 마커: `---TRANSLATION_START---` / `---TRANSLATION_END---`
 - Dynamic `max_tokens`: 입력 문서 크기 기반 계산
+- 스트리밍 번역 지원 (`translateWithStreaming`)
 
 ### Review 모드 (`src/ai/review/`)
 - 문서를 청크로 분할 → 순차 AI 리뷰 → JSON 결과 파싱
 - 청크 크기: `DEFAULT_REVIEW_CHUNK_SIZE` (12000자)
 - 결과: 테이블 + 체크박스 + 액션 버튼 (Apply/Copy/Ignore)
+- 출력 마커: `---REVIEW_START---` / `---REVIEW_END---`
 
 ---
 
@@ -46,15 +50,15 @@ AI 관련 기능(Chat, Translation, Review) 개발 시 적용되는 규칙입니
 | Glossary | 30,000자 |
 | Documents (chat mode) | 100,000자 |
 | Attachments (파일당) | 30,000자 |
-| Attachments (총합) | 50,000자 |
+| Attachments (총합) | 100,000자 |
+| Context Blocks | 최대 20개, 블록당 500자 |
 
 ---
 
 ## 3. Tool Calling 구현
 
 ```typescript
-// 도구 정의 위치: src/ai/chat.ts
-// LangChain DynamicStructuredTool 사용
+// 도구 정의 위치: src/ai/chat.ts (LangChain Tool)
 
 // 필수 도구:
 // - get_source_document: Source 문서 Markdown 반환
@@ -64,6 +68,7 @@ AI 관련 기능(Chat, Translation, Review) 개발 시 적용되는 규칙입니
 ```
 
 **문서 도구는 Markdown 반환**: TipTap JSON → Markdown 변환 후 반환 (토큰 효율)
+**저장 제안 도구**: suggest_*는 제안 생성 בלבד, 실제 저장은 UI 버튼으로만 수행
 
 ---
 
@@ -102,6 +107,7 @@ AI 관련 기능(Chat, Translation, Review) 개발 시 적용되는 규칙입니
 - Translation 전 이미지 플레이스홀더 치환 (`imagePlaceholder.ts`)
 - `extractImages`: Base64 → 플레이스홀더 (토큰 99%+ 절약)
 - `restoreImages`: 번역 후 플레이스홀더 → 원본 복원
+- Chat 첨부 이미지는 멀티모달 입력으로 전달 (로컬 파일 → base64)
 
 ---
 
@@ -113,13 +119,12 @@ AI 관련 기능(Chat, Translation, Review) 개발 시 적용되는 규칙입니
 
 ---
 
-## 7. MCP 통합 (Sidecar Pattern)
+## 7. MCP/커넥터 통합 (Gate 원칙)
 
-- **Confluence**: `mcp-rovo-confluence-server` (Node.js → pkg 바이너리)
-- **Notion**: Direct API (Integration Token)
-- **Web Search**: Brave Search API + OpenAI Web Search
-- OAuth: Lazy authentication (토글 활성화 → "Connect" 버튼)
-- 앱 종료 시 sidecar 프로세스 cleanup 필수
+- **Web Search**: OpenAI 내장 `web_search_preview` 사용, `webSearchEnabled=true`일 때만 도구 바인딩
+- **Confluence (Rovo MCP)**: Rust 네이티브 SSE 클라이언트 + OAuth 2.1 PKCE (lazy auth)
+- **Notion (MCP)**: App Settings에서 연결/해제, 토큰은 SecretManager Vault 저장
+- **커넥터 토글**: 채팅 탭 단위로 ON/OFF (OFF면 도구 바인딩 금지)
 
 ---
 

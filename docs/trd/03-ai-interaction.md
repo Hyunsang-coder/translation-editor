@@ -68,7 +68,7 @@
   - 방법: 모델이 필요하다고 판단하면 문서 조회 Tool을 호출하여 원문/번역문을 on-demand로 가져온다.
   - 보호(단순화): 현재는 Source/Target 접근 토글을 제공하지 않으며, 문서 조회는 on-demand Tool 호출로만 수행한다.
 - **조건부 포함**: Glossary/첨부, before/after 문맥
-- **질문(Question) 모드에서만 포함**: 최근 메시지 (기본 20개, `VITE_AI_MAX_RECENT_MESSAGES` 환경변수로 조정 가능)
+- **질문(Question) 모드에서만 포함**: 최근 메시지 (기본 20개)
 - **출력 포맷 강제**:
   - Translate: **Markdown 전체만 출력**(설명 금지, `---TRANSLATION_START/END---` 구분자 사용)
   - Question/검수: 간결한 답변 또는 JSON 리포트(필요 시)
