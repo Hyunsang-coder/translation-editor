@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**OddEyes.ai** (internal codename: Integrated Translation Editor / ITE) is a professional translation workstation built with Tauri (Rust) and React (TypeScript). It features a Notion-style document editor powered by TipTap, integrated AI chat with LangChain, and MCP (Model Context Protocol) server integration for external knowledge sources.
+**OddEyes.ai** is a professional translation workstation built with Tauri (Rust) and React (TypeScript). It features a Notion-style document editor powered by TipTap, integrated AI chat with LangChain, and MCP (Model Context Protocol) server integration for external knowledge sources.
 
-**Core Philosophy**: "AI를 동료로, 번역을 예술로" - Translator-led workflow where AI assists only when requested. The translator maintains full control over the translation process.
+**Core Philosophy**: Translator-led workflow where AI assists only when requested. The translator maintains full control over the translation process.
 
 ## Essential Documentation
 
