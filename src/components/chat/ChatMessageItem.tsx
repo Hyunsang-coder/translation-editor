@@ -246,6 +246,20 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             </div>
           ) : (
             <>
+              {/* 사용자 메시지에 첨부된 이미지 표시 */}
+              {message.role === 'user' && message.metadata?.imageAttachments && message.metadata.imageAttachments.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {message.metadata.imageAttachments.map((img, idx) => (
+                    <img
+                      key={`${message.id}-img-${idx}`}
+                      src={img.thumbnailDataUrl}
+                      alt={img.filename}
+                      className="max-w-[200px] max-h-[200px] object-contain rounded-lg border border-editor-border"
+                    />
+                  ))}
+                </div>
+              )}
+
               {/* 스트리밍 중이고 콘텐츠가 비어있으면 스켈레톤 표시 */}
               {isStreaming && (!displayContent || displayContent.trim().length === 0) ? (
                 <div className="text-sm leading-relaxed">
@@ -295,8 +309,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         {/* Action icons - 호버 시에만 표시 */}
         {!isEditing && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* 재전송 (user only) */}
-            {message.role === 'user' && (
+            {/* 재전송 (user only, 이미지 첨부 메시지는 불변) */}
+            {message.role === 'user' && !message.metadata?.imageAttachments?.length && (
               <button
                 type="button"
                 onClick={handleReplayMessage}
@@ -308,8 +322,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 </svg>
               </button>
             )}
-            {/* 편집 (user only) */}
-            {message.role === 'user' && (
+            {/* 편집 (user only, 이미지 첨부 메시지는 불변) */}
+            {message.role === 'user' && !message.metadata?.imageAttachments?.length && (
               <button
                 type="button"
                 onClick={handleStartEdit}

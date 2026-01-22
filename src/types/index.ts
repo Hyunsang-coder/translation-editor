@@ -209,6 +209,16 @@ export interface ChatMessageMetadata {
     type: 'rule' | 'context' | 'both';
     content: string;
   };
+
+  /**
+   * 사용자 메시지에 첨부된 이미지 (채팅 UI 표시용)
+   * - 전송 시점에 캡처되어 메시지에 저장됨
+   * - thumbnailDataUrl은 base64 data URL로 저장되어 세션 간 유지됨
+   */
+  imageAttachments?: {
+    filename: string;
+    thumbnailDataUrl: string;
+  }[];
 }
 
 // ============================================

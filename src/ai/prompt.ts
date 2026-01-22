@@ -291,12 +291,43 @@ export function buildSystemPrompt(project: ITEProject | null, opts?: PromptOptio
 // 메시지 히스토리 변환
 // ============================================
 
+/** 최근 N개 메시지까지 이미지 포함 (토큰 비용 제한) */
+const MAX_HISTORY_IMAGES_MESSAGES = 3;
+
 function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[] {
   const history: BaseMessage[] = [];
-  for (const m of recentMessages) {
-    if (m.role === 'user') history.push(new HumanMessage(m.content));
-    if (m.role === 'assistant') history.push(new AIMessage(m.content));
-  }
+  const totalMessages = recentMessages.length;
+
+  recentMessages.forEach((m, i) => {
+    const isRecent = i >= totalMessages - MAX_HISTORY_IMAGES_MESSAGES;
+
+    if (m.role === 'user') {
+      const images = isRecent ? (m.metadata?.imageAttachments ?? []) : [];
+
+      if (images.length > 0 && images.some((img) => img.thumbnailDataUrl)) {
+        // 멀티모달 HumanMessage: 텍스트 + 이미지
+        const blocks: Array<
+          | { type: 'text'; text: string }
+          | { type: 'image_url'; image_url: { url: string } }
+        > = [{ type: 'text', text: m.content }];
+
+        for (const img of images) {
+          if (img.thumbnailDataUrl) {
+            blocks.push({
+              type: 'image_url',
+              image_url: { url: img.thumbnailDataUrl },
+            });
+          }
+        }
+        history.push(new HumanMessage({ content: blocks }));
+      } else {
+        history.push(new HumanMessage(m.content));
+      }
+    } else if (m.role === 'assistant') {
+      history.push(new AIMessage(m.content));
+    }
+  });
+
   return history;
 }
 

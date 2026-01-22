@@ -229,7 +229,7 @@ Critical stores in `src/stores/`:
 - Documents: 100,000 chars (chat mode uses on-demand fetch)
 - Attachments (per file): 30,000 chars
 - Attachments (total): 100,000 chars
-- Chat images: max 10 images, 10MB each
+- Chat images: max 10 images, auto-resized to API limits (Anthropic 5MB, OpenAI 20MB)
 
 ### Tauri Commands Pattern
 ```rust
@@ -368,6 +368,12 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 58. **Translation max_tokens by Model**: `translateDocument.ts` dynamically sets `maxAllowedTokens` based on provider/model: Claude 64000, GPT-5 65536, GPT-4.1/4o 16384. Exceeding limits causes API errors that may appear as "번역이 취소되었습니다".
 59. **macOS Universal Build**: Requires both Rust targets installed (`rustup target add x86_64-apple-darwin aarch64-apple-darwin`). Use `npx tauri build --target universal-apple-darwin`. Output goes to `src-tauri/target/universal-apple-darwin/release/bundle/`.
 60. **Bundle Targets Configuration**: `tauri.conf.json` uses `"targets": "all"` to auto-select bundles for current OS. Override with `--bundles` flag (e.g., `--bundles dmg`).
+61. **LangChain Image Format Unification**: LangChain handles both OpenAI and Anthropic vision with the same `image_url` format (`{ type: 'image_url', image_url: { url: 'data:image/...;base64,...' } }`). LangChain `@langchain/anthropic` internally converts this to Anthropic's native `source` format. Do NOT use provider-specific image formats in `chat.ts` - use unified `image_url` for all providers.
+62. **Chat Image Auto-Resize**: `src/utils/imageResize.ts` provides Canvas API-based image resizing. `resizeImageForApi()` progressively reduces resolution (2048→1536→1024→768px) and quality (85%→70%) until image fits within API limits. Applied automatically in `chatStore.ts` → `addComposerAttachment()`.
+63. **Chat Image Context Retention**: `prompt.ts` → `mapRecentMessagesToHistory()` includes images from the last 3 user messages (`MAX_HISTORY_IMAGES_MESSAGES = 3`) in chat history. Uses `thumbnailDataUrl` (base64) stored in `ChatMessageMetadata.imageAttachments`. Older messages retain text only to control token costs.
+64. **Image Message Immutability**: Messages with `imageAttachments` are treated as immutable inputs. Edit and Replay buttons are hidden for these messages in `ChatMessageItem.tsx` to preserve input snapshot integrity (text + image form atomic unit).
+65. **Provider-Specific Image Limits**: `chat.ts` → `maybeReplaceLastHumanMessageWithImages()` enforces different size limits: Anthropic 5MB, OpenAI 20MB. Error messages include provider name for clarity (e.g., "파일이 너무 커서(7.2MB, Claude 최대 5MB) 제외됨").
+66. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear in empty chat.
 
 ## Testing Patterns
 
@@ -428,6 +434,7 @@ cd src-tauri && cargo check
 - **Utilities**: `src/utils/` for shared helpers
   - `markdownConverter.ts`: TipTap JSON ↔ Markdown conversion (`tipTapJsonToMarkdown`, `markdownToTipTapJson`, `htmlToTipTapJson`)
   - `imagePlaceholder.ts`: Image URL extraction/restoration for translation (`extractImages`, `restoreImages`)
+  - `imageResize.ts`: Canvas API image resizing for API limits (`resizeImageForApi`, `resizeImageDataUrl`)
   - `normalizeForSearch.ts`: Markdown normalization for text search (`normalizeForSearch`, `stripMarkdownInline`)
   - `htmlNormalizer.ts`: HTML sanitization for pasted content (DOMPurify + URL protocol validation)
   - `hash.ts`: Content hashing, `stripHtml`

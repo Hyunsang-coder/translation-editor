@@ -28,6 +28,7 @@ import {
   maskGhostChips,
   restoreGhostChips,
 } from '@/utils/ghostMask';
+import { resizeImageForApi, IMAGE_SIZE_LIMITS } from '@/utils/imageResize';
 import { stripHtml } from '@/utils/hash';
 
 const CHAT_PERSIST_DEBOUNCE_MS = 800;
@@ -632,8 +633,22 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const maskSession = createGhostMaskSession();
       const maskedUserContent = maskGhostChips(content, maskSession);
 
-      // 사용자 메시지 추가
-      addMessage({ role: 'user', content });
+      // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
+      const capturedAttachments = get().composerAttachments;
+      set({ composerAttachments: [] });
+
+      // 사용자 메시지에 이미지 정보 포함 (채팅 UI 표시용)
+      const imageAttachmentsForMessage = capturedAttachments
+        .filter((a) => ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(a.fileType.toLowerCase()) && a.thumbnailDataUrl)
+        .map((a) => ({ filename: a.filename, thumbnailDataUrl: a.thumbnailDataUrl! }));
+
+      addMessage({
+        role: 'user',
+        content,
+        ...(imageAttachmentsForMessage.length > 0
+          ? { metadata: { imageAttachments: imageAttachmentsForMessage } }
+          : {}),
+      });
 
       // [Auto-Title] 첫 메시지인 경우 세션 이름 자동 변경
       const updatedSession = get().currentSession;
@@ -834,11 +849,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
             requestType: 'question',
             abortSignal: abortController.signal,
-            // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
-            attachments: get().composerAttachments
+            // 채팅 컴포저 전용 첨부만 payload에 포함 (캡처된 값 사용)
+            attachments: capturedAttachments
               .filter((a) => a.extractedText)
               .map((a) => ({ filename: a.filename, text: a.extractedText! })),
-            imageAttachments: get().composerAttachments
+            imageAttachments: capturedAttachments
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled,
@@ -923,8 +938,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             },
           },
         );
-        // 성공적으로 응답을 받았으면, 컴포저 첨부는 일회성이므로 초기화
-        set({ composerAttachments: [] });
+        // composerAttachments는 sendMessage 시작 시 이미 초기화됨
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
@@ -972,6 +986,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
         // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
+        // composerAttachments는 sendMessage 시작 시 이미 초기화됨
         set({
           error: errText,
           isLoading: false,
@@ -981,8 +996,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           statusMessage: null,
           abortController: null,
           isFinalizingStreaming: false,
-          // 에러 발생 시에도 composerAttachments 정리 (재시도 시 중복 방지)
-          composerAttachments: [],
         });
       }
     },
@@ -1177,6 +1190,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const maskSession = createGhostMaskSession();
       const maskedUserContent = maskGhostChips(content, maskSession);
 
+      // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
+      const capturedAttachments = get().composerAttachments;
+      set({ composerAttachments: [] });
+
       // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
       const prevAbortController = get().abortController;
       if (prevAbortController) {
@@ -1264,11 +1281,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
             projectContext,
             requestType: 'question',
             abortSignal: abortController.signal,
-            // 채팅 컴포저 전용 첨부만 payload에 포함 (Settings/프로젝트 첨부와 분리)
-            attachments: get().composerAttachments
+            // 채팅 컴포저 전용 첨부만 payload에 포함 (캡처된 값 사용)
+            attachments: capturedAttachments
               .filter((a) => a.extractedText)
               .map((a) => ({ filename: a.filename, text: a.extractedText! })),
-            imageAttachments: get().composerAttachments
+            imageAttachments: capturedAttachments
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled: get().webSearchEnabled,
@@ -1359,8 +1376,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
             },
           },
         );
-        // 성공적으로 응답을 받았으면, 컴포저 첨부는 일회성이므로 초기화
-        set({ composerAttachments: [] });
+        // composerAttachments는 replayMessage 시작 시 이미 초기화됨
 
         if (assistantId) {
           const restored = restoreGhostChips(replyMasked, maskSession);
@@ -1407,6 +1423,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
         }
         // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
+        // composerAttachments는 replayMessage 시작 시 이미 초기화됨
         set({
           error: errText,
           isLoading: false,
@@ -1416,8 +1433,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           statusMessage: null,
           abortController: null,
           isFinalizingStreaming: false,
-          // 에러 발생 시에도 composerAttachments 정리 (재시도 시 중복 방지)
-          composerAttachments: [],
         });
       }
     },
@@ -1614,26 +1629,26 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // 채팅 컴포저 첨부는 프로젝트(Settings) 첨부와 분리: DB에 저장하지 않고, 모델 호출 payload에만 사용
       if (!get().loadedProjectId) return;
 
-      set({ isLoading: true });
+      // Note: isLoading을 사용하지 않음 - AI 응답 생성용 플래그이므로 첨부 시 스켈레톤이 표시되는 문제 방지
       try {
         const tmp = await previewAttachment(path);
 
-        // 이미지 파일인 경우 썸네일 data URL 생성
+        // 이미지 파일인 경우 썸네일 data URL 생성 + API 제한에 맞게 리사이즈
         const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         if (imageExtensions.includes(tmp.fileType.toLowerCase()) && tmp.filePath) {
-          const dataUrl = await readImageAsDataUrl(tmp.filePath, tmp.fileType);
-          if (dataUrl) {
-            tmp.thumbnailDataUrl = dataUrl;
+          const rawDataUrl = await readImageAsDataUrl(tmp.filePath, tmp.fileType);
+          if (rawDataUrl) {
+            // API 제한(Anthropic 5MB)에 맞게 자동 리사이즈
+            const resizedDataUrl = await resizeImageForApi(rawDataUrl, IMAGE_SIZE_LIMITS.anthropic);
+            tmp.thumbnailDataUrl = resizedDataUrl;
           }
         }
 
         set((state) => ({
           composerAttachments: [...state.composerAttachments, tmp],
-          isLoading: false,
         }));
       } catch (e) {
         set({
-          isLoading: false,
           error: e instanceof Error ? e.message : '첨부 파일 추가 실패',
         });
       }

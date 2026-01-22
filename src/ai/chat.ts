@@ -524,15 +524,19 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function maybeReplaceLastHumanMessageWithImages(params: {
   messages: BaseMessage[];
   userText: string;
-  imageAttachments?: { filename: string; fileType: string; filePath: string }[];
+  imageAttachments?: { filename: string; fileType: string; filePath: string; thumbnailDataUrl?: string }[];
   provider: string;
 }): Promise<{ messages: BaseMessage[]; usedImages: boolean }> {
-  const images = (params.imageAttachments ?? []).filter((x) => x && isImageExt(x.fileType) && !!x.filePath);
+  const images = (params.imageAttachments ?? []).filter(
+    (x) => x && isImageExt(x.fileType) && (!!x.thumbnailDataUrl || !!x.filePath)
+  );
   if (images.length === 0) return { messages: params.messages, usedImages: false };
-  if (!isTauriRuntime()) return { messages: params.messages, usedImages: false };
 
   const MAX_IMAGES = 10;
-  const MAX_IMAGE_BYTES = 10_000_000; // 10MB
+  // 프로바이더별 크기 제한 (base64 인코딩 전 기준)
+  const isAnthropic = params.provider === 'anthropic';
+  const MAX_IMAGE_BYTES = isAnthropic ? 5_000_000 : 20_000_000; // Anthropic: 5MB, OpenAI: 20MB
+  const providerName = isAnthropic ? 'Claude' : 'OpenAI';
 
   const blocks: any[] = [{ type: 'text', text: params.userText }];
   const warnings: string[] = [];
@@ -540,17 +544,39 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
 
   for (const img of images.slice(0, MAX_IMAGES)) {
     try {
-      const raw = await readFileBytes(img.filePath);
-      const bytes = new Uint8Array(raw);
-      if (bytes.length > MAX_IMAGE_BYTES) {
-        const sizeMB = (bytes.length / 1024 / 1024).toFixed(1);
-        warnings.push(`- ${img.filename}: 파일이 너무 커서(${sizeMB}MB, 최대 10MB) 제외됨`);
+      let dataUrl: string;
+
+      // thumbnailDataUrl이 있으면 사용 (이미 리사이즈됨)
+      if (img.thumbnailDataUrl) {
+        dataUrl = img.thumbnailDataUrl;
+      } else if (img.filePath && isTauriRuntime()) {
+        // 없으면 원본 파일을 읽어서 base64 변환
+        const raw = await readFileBytes(img.filePath);
+        const bytes = new Uint8Array(raw);
+        if (bytes.length > MAX_IMAGE_BYTES) {
+          const sizeMB = (bytes.length / 1024 / 1024).toFixed(1);
+          const limitMB = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
+          warnings.push(`- ${img.filename}: 파일이 너무 커서(${sizeMB}MB, ${providerName} 최대 ${limitMB}MB) 제외됨`);
+          continue;
+        }
+        const base64 = bytesToBase64(bytes);
+        const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
+        dataUrl = `data:image/${ext};base64,${base64}`;
+      } else {
+        warnings.push(`- ${img.filename}: 이미지를 읽을 수 없어 제외됨`);
         continue;
       }
-      const base64 = bytesToBase64(bytes);
-      // LangChain은 OpenAI/Anthropic 모두 image_url 형식을 받아서 내부적으로 변환함
-      const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
-      const dataUrl = `data:image/${ext};base64,${base64}`;
+
+      // data URL 크기 검증 (base64는 원본의 약 4/3)
+      const base64Part = dataUrl.split(',')[1];
+      const estimatedBytes = base64Part ? Math.ceil((base64Part.length * 3) / 4) : 0;
+      if (estimatedBytes > MAX_IMAGE_BYTES) {
+        const sizeMB = (estimatedBytes / 1024 / 1024).toFixed(1);
+        const limitMB = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
+        warnings.push(`- ${img.filename}: 이미지가 너무 커서(${sizeMB}MB, ${providerName} 최대 ${limitMB}MB) 제외됨`);
+        continue;
+      }
+
       blocks.push({
         type: 'image_url',
         image_url: { url: dataUrl },

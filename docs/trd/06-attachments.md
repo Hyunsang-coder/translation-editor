@@ -22,6 +22,8 @@
 **현재 구현(Phase 1):**
 - 문서(pdf/docx/pptx/md/txt)는 로컬에서 텍스트를 추출하여 system context로 주입한다(길이 제한 적용).
 - 이미지(png/jpg/jpeg/webp/gif)는 **멀티모달(vision) 입력**으로, 로컬 파일을 base64로 읽어 표준 content blocks로 모델 입력에 포함한다(파일 크기/개수 제한 적용).
+  - **LangChain 통합 형식**: OpenAI/Anthropic 모두 동일한 `image_url` 형식 사용 (`{ type: 'image_url', image_url: { url: 'data:image/...;base64,...' } }`)
+  - LangChain `@langchain/anthropic`이 내부적으로 Anthropic native 형식(`source: { type: 'base64', media_type, data }`)으로 변환
 
 **향후(확장):**
 - Provider가 제공하는 "파일 업로드/첨부(file_id 등)" 메커니즘을 사용해 원형 전달을 지원할 수 있다.
