@@ -6,7 +6,7 @@
 - **Formatting/Linting**: Prettier, ESLint
 - **Testing**: Vitest (Unit), Rust 테스트 (`cargo test`)
 - **E2E Testing**: 미구현 (Playwright 도입 예정)
-- **Git Hooks**: Husky (pre-commit TypeScript 타입 체크, post-merge 자동 npm install)
+- **Git Hooks**: Husky (pre-commit TypeScript 타입 체크)
 
 ---
 
