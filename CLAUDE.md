@@ -64,9 +64,10 @@ npm run test:coverage # Coverage report
 cd src-tauri && cargo test
 ```
 
-### Git Hooks (Husky)
+### Git Hooks (Native)
 - **pre-commit**: Runs `npx tsc --noEmit` for type checking before commit
-- Setup: `npm install -D husky && npx husky init`
+- Location: `.git/hooks/pre-commit` (not version-controlled)
+- No external dependency (husky removed)
 
 ### Build Commands
 ```bash
@@ -98,6 +99,7 @@ npx tauri build --bundles nsis   # Windows
 - **Backend**: Tauri 2 + Rust
 - **Storage**: SQLite (`.ite` project files)
 - **i18n**: i18next (Korean/English UI)
+- **Auto Update**: Tauri updater plugin with GitHub Releases
 
 ### Key Design Decisions
 
@@ -345,7 +347,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 35. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
 36. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols (blocks `javascript:`, `data:`, `vbscript:`), strips dangerous attributes, and normalizes inline styles to semantic tags.
 37. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories (`/etc`, `/System`, `C:\Windows`, etc.) to prevent path traversal attacks.
-38. **Git Hooks with Husky**: `.husky/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). Ensures type safety before commits. Note: `post-merge` hook was removed due to cross-platform compatibility issues.
+38. **Git Hooks (Native)**: `.git/hooks/pre-commit` runs TypeScript type check (`npx tsc --noEmit`). Uses native Git hooks instead of Husky for simplicity. The `/commit` skill also runs type check before committing.
 39. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()` from `normalizeForSearch.ts`. This handles Unicode special spaces, CRLF, consecutive whitespace, and **quote normalization** (curly quotes `""`→`"`, CJK brackets `「」『』`→`"`, fullwidth quotes).
 40. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
 41. **GPT-4.1 Temperature Handling**: GPT-4.1 requires explicit temperature parameter (unlike GPT-5 which doesn't support it). In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to include temperature. GPT-4.1 automatically receives temperature since it doesn't match the `gpt-5` prefix.
@@ -374,6 +376,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 64. **Image Message Immutability**: Messages with `imageAttachments` are treated as immutable inputs. Edit and Replay buttons are hidden for these messages in `ChatMessageItem.tsx` to preserve input snapshot integrity (text + image form atomic unit).
 65. **Provider-Specific Image Limits**: `chat.ts` → `maybeReplaceLastHumanMessageWithImages()` enforces different size limits: Anthropic 5MB, OpenAI 20MB. Error messages include provider name for clarity (e.g., "파일이 너무 커서(7.2MB, Claude 최대 5MB) 제외됨").
 66. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear in empty chat.
+67. **Auto Update System**: `useAutoUpdate.ts` hook uses `@tauri-apps/plugin-updater` to check GitHub Releases for updates. Features: automatic check on app start (production only, 3s delay), download progress tracking, skip version (localStorage), cancel download (AbortController). `UpdateModal.tsx` displays update UI with i18n support.
 
 ## Testing Patterns
 
@@ -439,10 +442,12 @@ cd src-tauri && cargo check
   - `htmlNormalizer.ts`: HTML sanitization for pasted content (DOMPurify + URL protocol validation)
   - `hash.ts`: Content hashing, `stripHtml`
   - `diff.ts`: Diff utilities
+- **Hooks**: `src/hooks/`
+  - `useAutoUpdate.ts`: Auto update check and download logic
 - **UI Components**: Organized by layout hierarchy
   - `components/panels/`: SettingsSidebar, FloatingChatPanel, SourcePanel, TargetPanel
   - `components/chat/`: ChatContent, ChatComposerEditor (rich text input)
-  - `components/ui/`: FloatingChatButton, Select (Headless UI dropdown), common UI components
+  - `components/ui/`: FloatingChatButton, Select (Headless UI dropdown), UpdateModal, common UI components
   - `components/editor/`: Editor-related UI, TipTapMenuBar
   - `components/review/`: ReviewPanel, ReviewResultsTable
 - **Review Feature**: `src/ai/review/` (runReview.ts, parseReviewResult.ts), `src/components/review/` (UI), `src/editor/extensions/ReviewHighlight.ts`
