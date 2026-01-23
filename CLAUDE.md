@@ -485,8 +485,11 @@ cd src-tauri && cargo check
 ### Version Update Command
 ```
 /bump-version          # 변경사항 분석 후 버전 타입 제안
-/bump-version minor    # minor 버전으로 업데이트
+/bump-version patch    # patch 버전으로 업데이트
 ```
+
+실행 시 버전 파일 수정 → 커밋 → 태그 → 푸시를 한 번에 처리.
+"커밋 + 태그 + 푸시" 선택 시 GitHub Actions 빌드 자동 시작.
 
 ## Version Control
 
