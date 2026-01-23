@@ -31,6 +31,9 @@ pnpm-debug.log*
 .env
 .env.local
 
+# Tauri signing keys
+*.key
+
 # Test coverage
 coverage/
 

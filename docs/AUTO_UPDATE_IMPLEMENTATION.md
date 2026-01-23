@@ -1,50 +1,46 @@
-# OddEyes.ai 자동 업데이트 기능 구현 계획
+# OddEyes.ai 자동 업데이트 기능 구현 계획 (최소 버전)
 
 ## 개요
 
-Tauri 2의 `tauri-plugin-updater`를 사용하여 앱 자동 업데이트 기능을 구현합니다.
-Claude Desktop 앱처럼 새 버전이 감지되면 사용자에게 알림을 표시하고, 확인 시 자동으로 다운로드 및 설치합니다.
+Tauri 2의 `tauri-plugin-updater`를 사용하여 자동 업데이트 기능을 구현합니다.
+GitHub Releases를 업데이트 서버로 사용하므로 **별도 서버 불필요**.
 
-## 목표
+## 사용자 시나리오
 
-- 앱 시작 시 자동으로 새 버전 확인
-- 업데이트 발견 시 모달로 사용자에게 안내
-- 사용자 확인 후 백그라운드 다운로드 및 설치
-- 설치 완료 후 앱 자동 재시작
+```
+앱 시작 → 3초 후 버전 확인 → 새 버전 있으면 모달 표시
+                                    ↓
+                    [나중에] → 모달 닫힘, 다음에 다시 확인
+                    [이 버전 건너뛰기] → 해당 버전 스킵, localStorage 저장
+                    [지금 업데이트] → 다운로드 → 설치 → 자동 재시작
+                                        ↓
+                              [취소] → 다운로드 중단
+```
 
 ---
 
-## 1단계: 사전 준비 - 서명 키 생성
+## 구현 단계
 
-### 1.1 키 페어 생성
-
-업데이트 파일의 무결성 검증을 위한 Ed25519 키 페어를 생성합니다.
+### 1단계: 서명 키 생성 (1회)
 
 ```bash
-# Tauri CLI로 키 생성
+# 키 생성
 npx tauri signer generate -w ~/.tauri/oddeyes.key
 ```
 
-**출력:**
-- `~/.tauri/oddeyes.key` - 비밀키 (빌드 시 사용, **절대 커밋 금지**)
-- `~/.tauri/oddeyes.key.pub` - 공개키 (tauri.conf.json에 설정)
+**결과물:**
+- `~/.tauri/oddeyes.key` - 비밀키 (**절대 커밋 금지**)
+- `~/.tauri/oddeyes.key.pub` - 공개키 (tauri.conf.json에 복사)
 
-### 1.2 키 관리
-
-| 키 종류 | 용도 | 저장 위치 |
-|---------|------|-----------|
-| 비밀키 (.key) | 빌드 시 바이너리 서명 | 로컬 또는 CI/CD 시크릿 |
-| 공개키 (.key.pub) | 앱에서 업데이트 검증 | tauri.conf.json |
-
-**보안 주의사항:**
-- 비밀키는 `.gitignore`에 추가
-- CI/CD 환경에서는 환경변수로 주입
+**보안:**
+- `.gitignore`에 `*.key` 추가
+- CI/CD에서는 GitHub Secrets로 주입:
+  - `TAURI_SIGNING_PRIVATE_KEY`: 비밀키 전체 내용
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: 키 생성 시 입력한 비밀번호 (없으면 빈 문자열)
 
 ---
 
-## 2단계: Rust 백엔드 설정
-
-### 2.1 의존성 추가
+### 2단계: Rust 설정
 
 **파일:** `src-tauri/Cargo.toml`
 
@@ -52,179 +48,77 @@ npx tauri signer generate -w ~/.tauri/oddeyes.key
 [dependencies]
 # 기존 의존성...
 tauri-plugin-updater = "2"
-tauri-plugin-process = "2"  # 앱 재시작용
+tauri-plugin-process = "2"
 ```
-
-### 2.2 플러그인 등록
 
 **파일:** `src-tauri/src/lib.rs`
 
 ```rust
-use tauri::Manager;
-use std::sync::Mutex;
-
-// 업데이트 상태 관리 구조체
-pub struct PendingUpdate(pub Mutex<Option<tauri_plugin_updater::Update>>);
-
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::init())      // 추가
-        .plugin(tauri_plugin_process::init())      // 추가
-        .setup(|app| {
-            // 기존 setup 코드...
-
-            // 업데이트 상태 관리자 등록 (데스크톱만)
-            #[cfg(desktop)]
-            app.manage(PendingUpdate(Mutex::new(None)));
-
-            Ok(())
-        })
-        // 기존 invoke_handler...
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // 기존 플러그인...
+        .plugin(tauri_plugin_updater::init())   // 추가
+        .plugin(tauri_plugin_process::init())   // 추가
+        // 나머지 설정...
 }
 ```
 
-### 2.3 업데이트 관련 Tauri Command 추가 (선택사항)
-
-Rust에서 업데이트 로직을 처리하려면 별도 command 파일 생성:
-
-**파일:** `src-tauri/src/commands/updater.rs`
-
-```rust
-use tauri::{AppHandle, State};
-use tauri_plugin_updater::UpdaterExt;
-use std::sync::Mutex;
-
-pub struct PendingUpdate(pub Mutex<Option<tauri_plugin_updater::Update>>);
-
-#[derive(serde::Serialize)]
-pub struct UpdateInfo {
-    pub version: String,
-    pub body: Option<String>,
-    pub date: Option<String>,
-}
-
-/// 업데이트 확인
-#[tauri::command]
-pub async fn check_for_update(
-    app: AppHandle,
-    pending: State<'_, PendingUpdate>,
-) -> Result<Option<UpdateInfo>, String> {
-    let update = app
-        .updater()
-        .map_err(|e| e.to_string())?
-        .check()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if let Some(update) = update {
-        let info = UpdateInfo {
-            version: update.version.clone(),
-            body: update.body.clone(),
-            date: update.date.map(|d| d.to_string()),
-        };
-
-        // 나중에 설치할 수 있도록 저장
-        *pending.0.lock().unwrap() = Some(update);
-
-        Ok(Some(info))
-    } else {
-        Ok(None)
-    }
-}
-
-/// 업데이트 다운로드 및 설치
-#[tauri::command]
-pub async fn install_update(
-    app: AppHandle,
-    pending: State<'_, PendingUpdate>,
-) -> Result<(), String> {
-    let update = pending
-        .0
-        .lock()
-        .unwrap()
-        .take()
-        .ok_or("No pending update")?;
-
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 앱 재시작
-    app.restart();
-}
-```
+> **참고**: Rust Command 추가는 불필요. 프론트엔드 JS API만으로 충분.
 
 ---
 
-## 3단계: Tauri 설정
+### 3단계: Tauri 설정
 
 **파일:** `src-tauri/tauri.conf.json`
 
 ```json
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OddEyes.ai",
-  "version": "1.1.0",
-  "identifier": "com.ite.app",
-  "build": {
-    // 기존 설정...
-  },
   "bundle": {
-    "active": true,
-    "targets": "all",
-    "createUpdaterArtifacts": true,  // 추가: 업데이트 아티팩트 생성
-    "icon": [...]
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6...(공개키 내용)",
+      "pubkey": "공개키 내용 (oddeyes.key.pub)",
       "endpoints": [
-        "https://github.com/user/oddeyes-release/releases/latest/download/latest.json"
+        "https://github.com/joo/oddeyes-release/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
       }
     }
-  },
-  "app": {
-    // 기존 설정...
   }
 }
 ```
 
-### 3.1 CSP 업데이트
+**CSP 수정** (기존 `connect-src`에 추가):
 
-업데이트 서버 연결을 위해 CSP에 도메인 추가:
+현재:
+```
+connect-src 'self' ipc: https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com;
+```
 
-```json
-"security": {
-  "csp": "... connect-src 'self' ipc: https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://github.com https://objects.githubusercontent.com; ..."
-}
+수정 후:
+```
+connect-src 'self' ipc: https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://github.com https://*.githubusercontent.com https://objects.githubusercontent.com;
 ```
 
 ---
 
-## 4단계: 프론트엔드 구현
+### 4단계: 프론트엔드 구현
 
-### 4.1 패키지 설치
-
+**패키지 설치:**
 ```bash
 npm install @tauri-apps/plugin-updater @tauri-apps/plugin-process
 ```
 
-### 4.2 업데이트 체크 훅 생성
-
 **파일:** `src/hooks/useAutoUpdate.ts`
 
 ```typescript
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+
+const SKIPPED_VERSION_KEY = 'oddeyes_skipped_update_version';
 
 interface UpdateState {
   checking: boolean;
@@ -245,6 +139,8 @@ export function useAutoUpdate() {
     update: null,
   });
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const checkForUpdate = useCallback(async () => {
     setState(prev => ({ ...prev, checking: true, error: null }));
 
@@ -252,6 +148,13 @@ export function useAutoUpdate() {
       const update = await check();
 
       if (update) {
+        // 스킵된 버전인지 확인
+        const skippedVersion = localStorage.getItem(SKIPPED_VERSION_KEY);
+        if (skippedVersion === update.version) {
+          setState(prev => ({ ...prev, checking: false, available: false }));
+          return null;
+        }
+
         setState(prev => ({
           ...prev,
           checking: false,
@@ -276,13 +179,21 @@ export function useAutoUpdate() {
   const downloadAndInstall = useCallback(async () => {
     if (!state.update) return;
 
-    setState(prev => ({ ...prev, downloading: true, progress: 0 }));
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setState(prev => ({ ...prev, downloading: true, progress: 0, error: null }));
 
     try {
       let contentLength = 0;
       let downloaded = 0;
 
       await state.update.downloadAndInstall((event) => {
+        // 취소 확인
+        if (controller.signal.aborted) {
+          throw new Error('Download cancelled');
+        }
+
         switch (event.event) {
           case 'Started':
             contentLength = event.data.contentLength ?? 0;
@@ -300,23 +211,46 @@ export function useAutoUpdate() {
         }
       });
 
-      // 설치 완료 후 재시작
       await relaunch();
     } catch (error) {
-      setState(prev => ({
-        ...prev,
-        downloading: false,
-        error: error instanceof Error ? error.message : 'Update failed',
-      }));
+      if (controller.signal.aborted) {
+        setState(prev => ({
+          ...prev,
+          downloading: false,
+          progress: 0,
+          error: null,
+        }));
+      } else {
+        setState(prev => ({
+          ...prev,
+          downloading: false,
+          error: error instanceof Error ? error.message : 'Update failed',
+        }));
+      }
+    } finally {
+      abortControllerRef.current = null;
     }
   }, [state.update]);
 
-  // 앱 시작 시 자동 체크
+  const cancelDownload = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setState(prev => ({ ...prev, downloading: false, progress: 0 }));
+  }, []);
+
+  const skipVersion = useCallback((version: string) => {
+    localStorage.setItem(SKIPPED_VERSION_KEY, version);
+    setState(prev => ({ ...prev, available: false, update: null }));
+  }, []);
+
+  const dismissUpdate = useCallback(() => {
+    setState(prev => ({ ...prev, available: false }));
+  }, []);
+
+  // 앱 시작 시 자동 체크 (프로덕션만)
   useEffect(() => {
-    // 개발 모드에서는 스킵
     if (import.meta.env.DEV) return;
 
-    // 시작 후 3초 뒤 체크 (앱 로딩 완료 후)
     const timer = setTimeout(() => {
       checkForUpdate();
     }, 3000);
@@ -328,16 +262,16 @@ export function useAutoUpdate() {
     ...state,
     checkForUpdate,
     downloadAndInstall,
+    cancelDownload,
+    skipVersion,
+    dismissUpdate,
   };
 }
 ```
 
-### 4.3 업데이트 모달 컴포넌트
-
 **파일:** `src/components/ui/UpdateModal.tsx`
 
 ```typescript
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface UpdateModalProps {
@@ -346,8 +280,11 @@ interface UpdateModalProps {
   releaseNotes?: string;
   downloading: boolean;
   progress: number;
+  error: string | null;
   onUpdate: () => void;
-  onSkip: () => void;
+  onCancel: () => void;
+  onSkipVersion: () => void;
+  onDismiss: () => void;
 }
 
 export function UpdateModal({
@@ -356,8 +293,11 @@ export function UpdateModal({
   releaseNotes,
   downloading,
   progress,
+  error,
   onUpdate,
-  onSkip,
+  onCancel,
+  onSkipVersion,
+  onDismiss,
 }: UpdateModalProps) {
   const { t } = useTranslation();
 
@@ -380,33 +320,55 @@ export function UpdateModal({
           </div>
         )}
 
+        {error && (
+          <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded p-3 mb-4 text-sm">
+            {t('update.downloadFailed', '다운로드에 실패했습니다. 나중에 다시 시도해주세요.')}
+          </div>
+        )}
+
         {downloading ? (
           <div className="mb-4">
             <div className="flex justify-between text-sm mb-1">
               <span>{t('update.downloading', '다운로드 중...')}</span>
               <span>{progress}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
+            <div className="flex justify-end">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                {t('update.cancel', '취소')}
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-between">
             <button
-              onClick={onSkip}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              onClick={onSkipVersion}
+              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
             >
-              {t('update.later', '나중에')}
+              {t('update.skipVersion', '이 버전 건너뛰기')}
             </button>
-            <button
-              onClick={onUpdate}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              {t('update.updateNow', '지금 업데이트')}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={onDismiss}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                {t('update.later', '나중에')}
+              </button>
+              <button
+                onClick={onUpdate}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                {t('update.updateNow', '지금 업데이트')}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -415,23 +377,28 @@ export function UpdateModal({
 }
 ```
 
-### 4.4 App.tsx에 통합
-
-**파일:** `src/App.tsx`
+**파일:** `src/App.tsx` (통합)
 
 ```typescript
+// 기존 import 유지...
+import { useState, useEffect } from 'react';
 import { useAutoUpdate } from './hooks/useAutoUpdate';
 import { UpdateModal } from './components/ui/UpdateModal';
 
 function App() {
+  // 기존 코드 유지...
+
   const {
     available,
     downloading,
     progress,
+    error,
     update,
-    downloadAndInstall
+    downloadAndInstall,
+    cancelDownload,
+    skipVersion,
+    dismissUpdate,
   } = useAutoUpdate();
-
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   useEffect(() => {
@@ -441,8 +408,8 @@ function App() {
   }, [available, update]);
 
   return (
-    <>
-      {/* 기존 앱 컴포넌트 */}
+    <div className="min-h-screen bg-editor-bg text-editor-text">
+      <MainLayout />
 
       <UpdateModal
         isOpen={showUpdateModal}
@@ -450,171 +417,112 @@ function App() {
         releaseNotes={update?.body ?? undefined}
         downloading={downloading}
         progress={progress}
+        error={error}
         onUpdate={downloadAndInstall}
-        onSkip={() => setShowUpdateModal(false)}
+        onCancel={cancelDownload}
+        onSkipVersion={() => {
+          if (update?.version) {
+            skipVersion(update.version);
+          }
+          setShowUpdateModal(false);
+        }}
+        onDismiss={() => {
+          dismissUpdate();
+          setShowUpdateModal(false);
+        }}
       />
-    </>
+    </div>
   );
 }
+
+export default App;
 ```
 
 ---
 
-## 5단계: 업데이트 서버 설정 (GitHub Releases)
+### 5단계: i18n 키 추가
 
-### 5.1 GitHub Releases 사용 (권장)
-
-별도 서버 없이 GitHub Releases를 업데이트 서버로 사용합니다.
-
-**저장소 구조:**
-```
-oddeyes-release/
-├── releases/
-│   └── latest/
-│       └── download/
-│           ├── latest.json           # 버전 정보
-│           ├── OddEyes.ai_1.2.0_x64.dmg
-│           ├── OddEyes.ai_1.2.0_x64.dmg.sig
-│           ├── OddEyes.ai_1.2.0_x64-setup.exe
-│           └── OddEyes.ai_1.2.0_x64-setup.exe.sig
-```
-
-### 5.2 latest.json 형식
-
-Tauri가 읽을 수 있는 버전 정보 파일:
-
+**파일:** `src/i18n/locales/ko.json`
 ```json
 {
-  "version": "1.2.0",
-  "notes": "- 버그 수정\n- 성능 개선\n- 새로운 기능 추가",
-  "pub_date": "2024-01-23T10:00:00Z",
-  "platforms": {
-    "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6...",
-      "url": "https://github.com/user/oddeyes-release/releases/download/v1.2.0/OddEyes.ai_1.2.0_x64.app.tar.gz"
-    },
-    "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6...",
-      "url": "https://github.com/user/oddeyes-release/releases/download/v1.2.0/OddEyes.ai_1.2.0_aarch64.app.tar.gz"
-    },
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6...",
-      "url": "https://github.com/user/oddeyes-release/releases/download/v1.2.0/OddEyes.ai_1.2.0_x64-setup.nsis.zip"
-    }
+  "update": {
+    "newVersionAvailable": "새로운 버전이 있습니다",
+    "versionInfo": "OddEyes.ai {{version}} 버전을 사용할 수 있습니다.",
+    "downloading": "다운로드 중...",
+    "later": "나중에",
+    "updateNow": "지금 업데이트",
+    "skipVersion": "이 버전 건너뛰기",
+    "cancel": "취소",
+    "downloadFailed": "다운로드에 실패했습니다. 나중에 다시 시도해주세요."
   }
 }
 ```
 
-### 5.3 플랫폼 키 참고
-
-| OS | 아키텍처 | 키 |
-|----|----------|-----|
-| macOS | Intel | `darwin-x86_64` |
-| macOS | Apple Silicon | `darwin-aarch64` |
-| Windows | 64bit | `windows-x86_64` |
-| Linux | 64bit | `linux-x86_64` |
-
----
-
-## 6단계: 빌드 및 배포
-
-### 6.1 서명된 빌드 생성
-
-```bash
-# 환경변수로 비밀키 설정
-export TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/oddeyes.key)
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""  # 키에 암호가 있으면 설정
-
-# 빌드
-npm run tauri:build
-```
-
-### 6.2 생성되는 아티팩트
-
-`createUpdaterArtifacts: true` 설정 시 추가 생성:
-
-**macOS:**
-- `OddEyes.ai.app.tar.gz` - 업데이트용 압축 파일
-- `OddEyes.ai.app.tar.gz.sig` - 서명 파일
-
-**Windows:**
-- `OddEyes.ai_1.2.0_x64-setup.nsis.zip` - 업데이트용 압축 파일
-- `OddEyes.ai_1.2.0_x64-setup.nsis.zip.sig` - 서명 파일
-
-### 6.3 릴리즈 배포 스크립트
-
-**파일:** `scripts/release.sh`
-
-```bash
-#!/bin/bash
-set -e
-
-VERSION=$(node -p "require('./package.json').version")
-
-echo "Building OddEyes.ai v$VERSION..."
-
-# 서명 키 확인
-if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-  export TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/oddeyes.key)
-fi
-
-# 빌드
-npm run tauri:build
-
-# latest.json 생성 (macOS example)
-cat > latest.json << EOF
+**파일:** `src/i18n/locales/en.json`
+```json
 {
-  "version": "$VERSION",
-  "notes": "$(git log -1 --pretty=%B)",
-  "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "platforms": {
-    "darwin-aarch64": {
-      "signature": "$(cat src-tauri/target/release/bundle/macos/OddEyes.ai.app.tar.gz.sig)",
-      "url": "https://github.com/user/oddeyes-release/releases/download/v$VERSION/OddEyes.ai.app.tar.gz"
-    }
+  "update": {
+    "newVersionAvailable": "New Version Available",
+    "versionInfo": "OddEyes.ai {{version}} is available.",
+    "downloading": "Downloading...",
+    "later": "Later",
+    "updateNow": "Update Now",
+    "skipVersion": "Skip This Version",
+    "cancel": "Cancel",
+    "downloadFailed": "Download failed. Please try again later."
   }
 }
-EOF
-
-echo "Done! Upload artifacts to GitHub Release."
 ```
 
 ---
 
-## 7단계: CI/CD 설정 (GitHub Actions)
+### 6단계: GitHub Actions 수정
 
-**파일:** `.github/workflows/release.yml`
+**파일:** `.github/workflows/build.yml`
 
 ```yaml
-name: Release
+name: Build
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
+    permissions:
+      contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - platform: macos-latest
             target: universal-apple-darwin
-          - os: windows-latest
+            bundles: dmg
+          - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            bundles: nsis
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: 'npm'
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS universal targets
+        if: matrix.platform == 'macos-latest'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
 
       - name: Install dependencies
         run: npm ci
@@ -624,100 +532,140 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: 'OddEyes.ai v__VERSION__'
-          releaseBody: 'See the changelog for details.'
+          releaseName: 'OddEyes v__VERSION__'
+          releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 ```
 
 ---
 
-## 8단계: i18n 키 추가
+### 7단계: 빌드 및 배포
 
-**파일:** `src/i18n/locales/ko.json`
+**로컬 서명 빌드:**
+```bash
+export TAURI_SIGNING_PRIVATE_KEY=$(cat ~/.tauri/oddeyes.key)
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="your-password"  # 없으면 생략
+npm run tauri:build
+```
 
+**생성되는 파일:**
+```
+macOS: OddEyes.ai.app.tar.gz + OddEyes.ai.app.tar.gz.sig
+Windows: OddEyes.ai_x.x.x_x64-setup.nsis.zip + OddEyes.ai_x.x.x_x64-setup.nsis.zip.sig
+```
+
+**GitHub Release에 업로드:**
+1. `latest.json` (아래 형식)
+2. 앱 파일 (`.tar.gz` 또는 `.nsis.zip`)
+3. 서명 파일 (`.sig`)
+
+**latest.json 형식:**
 ```json
 {
-  "update": {
-    "newVersionAvailable": "새로운 버전이 있습니다",
-    "versionInfo": "OddEyes.ai {{version}} 버전을 사용할 수 있습니다.",
-    "downloading": "다운로드 중...",
-    "later": "나중에",
-    "updateNow": "지금 업데이트",
-    "updateFailed": "업데이트 실패",
-    "checkingForUpdates": "업데이트 확인 중..."
+  "version": "1.2.0",
+  "notes": "- 버그 수정\n- 성능 개선",
+  "pub_date": "2025-01-23T10:00:00Z",
+  "platforms": {
+    "darwin-x86_64": {
+      "signature": "서명 파일(.sig) 내용 전체",
+      "url": "https://github.com/joo/oddeyes-release/releases/download/v1.2.0/OddEyes.ai.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "서명 파일(.sig) 내용 전체",
+      "url": "https://github.com/joo/oddeyes-release/releases/download/v1.2.0/OddEyes.ai.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "서명 파일(.sig) 내용 전체",
+      "url": "https://github.com/joo/oddeyes-release/releases/download/v1.2.0/OddEyes.ai_1.2.0_x64-setup.nsis.zip"
+    }
   }
 }
 ```
 
-**파일:** `src/i18n/locales/en.json`
-
-```json
-{
-  "update": {
-    "newVersionAvailable": "New Version Available",
-    "versionInfo": "OddEyes.ai {{version}} is available.",
-    "downloading": "Downloading...",
-    "later": "Later",
-    "updateNow": "Update Now",
-    "updateFailed": "Update Failed",
-    "checkingForUpdates": "Checking for updates..."
-  }
-}
-```
+> **참고**: macOS Universal Binary는 `darwin-x86_64`와 `darwin-aarch64` 모두 같은 URL 사용 가능.
 
 ---
 
-## 구현 체크리스트
+## 테스트
 
-### 1단계: 준비
-- [ ] 서명 키 페어 생성 (`npx tauri signer generate`)
-- [ ] 비밀키 안전한 곳에 보관
-- [ ] `.gitignore`에 키 파일 추가
+### 로컬 테스트 (UI 확인용)
 
-### 2단계: Rust 백엔드
-- [ ] `Cargo.toml`에 `tauri-plugin-updater`, `tauri-plugin-process` 추가
-- [ ] `lib.rs`에 플러그인 등록
+1. **Mock 서버 설정:**
+```bash
+mkdir -p /tmp/update-test
+cat > /tmp/update-test/latest.json << 'EOF'
+{
+  "version": "99.0.0",
+  "notes": "테스트 업데이트",
+  "pub_date": "2025-01-23T10:00:00Z",
+  "platforms": {
+    "darwin-aarch64": { "signature": "test", "url": "http://localhost:8080/fake.tar.gz" },
+    "darwin-x86_64": { "signature": "test", "url": "http://localhost:8080/fake.tar.gz" }
+  }
+}
+EOF
+cd /tmp/update-test && python3 -m http.server 8080
+```
 
-### 3단계: Tauri 설정
-- [ ] `tauri.conf.json`에 `createUpdaterArtifacts: true` 추가
-- [ ] `plugins.updater` 섹션 추가 (pubkey, endpoints)
-- [ ] CSP에 업데이트 서버 도메인 추가
+2. **tauri.conf.json 임시 수정:**
+```json
+"endpoints": ["http://localhost:8080/latest.json"]
+```
 
-### 4단계: 프론트엔드
-- [ ] npm 패키지 설치
-- [ ] `useAutoUpdate` 훅 생성
-- [ ] `UpdateModal` 컴포넌트 생성
-- [ ] App.tsx에 통합
-- [ ] i18n 키 추가
+3. **useAutoUpdate.ts에서 DEV 체크 임시 비활성화:**
+```typescript
+// if (import.meta.env.DEV) return;  // 주석 처리
+```
 
-### 5단계: 배포
-- [ ] GitHub Release 저장소 생성 (또는 기존 저장소 사용)
-- [ ] 릴리즈 스크립트 작성
-- [ ] CI/CD 워크플로우 설정
+4. **테스트 후 원복 필수**
 
-### 6단계: 테스트
-- [ ] 로컬 빌드 후 서명 파일 생성 확인
-- [ ] latest.json 수동 생성 및 테스트
-- [ ] 실제 업데이트 흐름 E2E 테스트
+### E2E 테스트 (릴리즈 전 1회)
+
+1. v1.1.0으로 서명 빌드 후 설치
+2. 코드에서 v1.1.1로 버전 업
+3. v1.1.1로 서명 빌드
+4. GitHub Release에 latest.json + 빌드 파일 업로드
+5. v1.1.0 앱 실행 → 업데이트 모달 확인 → 다운로드 → 재시작 확인
+
+---
+
+## 체크리스트
+
+| 단계 | 작업 | 필수 |
+|------|------|------|
+| 1 | 서명 키 생성 | ✅ |
+| 1 | GitHub Secrets 등록 (TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD) | ✅ |
+| 2 | Cargo.toml 의존성 추가 | ✅ |
+| 2 | lib.rs 플러그인 등록 | ✅ |
+| 3 | tauri.conf.json updater 설정 | ✅ |
+| 3 | tauri.conf.json CSP 도메인 추가 | ✅ |
+| 4 | npm 패키지 설치 | ✅ |
+| 4 | useAutoUpdate 훅 | ✅ |
+| 4 | UpdateModal 컴포넌트 | ✅ |
+| 4 | App.tsx 통합 | ✅ |
+| 5 | i18n 키 추가 (ko.json, en.json) | ✅ |
+| 6 | GitHub Actions 서명 환경변수 추가 | ✅ |
+| 7 | GitHub Release에 latest.json 업로드 | ✅ |
 
 ---
 
 ## 주의사항
 
-1. **개발 모드에서는 업데이트 체크 비활성화** - `import.meta.env.DEV` 체크
-2. **비밀키 절대 커밋 금지** - CI/CD 시크릿으로만 관리
-3. **버전 동기화 필수** - package.json, Cargo.toml, tauri.conf.json 버전 일치
-4. **HTTPS 필수** - 프로덕션에서는 반드시 HTTPS 엔드포인트 사용
-5. **서명 검증** - 모든 업데이트 파일은 서명 필수
+1. **비밀키 절대 커밋 금지** - `.gitignore`에 `*.key` 추가 확인
+2. **버전 동기화** - package.json, Cargo.toml, tauri.conf.json 일치 필수
+3. **개발 모드** - 업데이트 체크 자동 비활성화 (`import.meta.env.DEV`)
+4. **Universal Binary** - macOS는 `darwin-x86_64`, `darwin-aarch64` 둘 다 같은 파일 가리킴
+5. **CSP 오류** - 업데이트 실패 시 DevTools Network 탭에서 차단된 요청 확인
+6. **서명 불일치** - `.sig` 파일 내용과 latest.json의 signature가 정확히 일치해야 함
 
 ---
 
 ## 참고 자료
 
-- [Tauri 2 Updater Plugin 공식 문서](https://v2.tauri.app/plugin/updater/)
-- [Tauri Signer 문서](https://v2.tauri.app/distribute/sign/)
-- [GitHub Releases API](https://docs.github.com/en/rest/releases)
+- [Tauri 2 Updater Plugin](https://v2.tauri.app/plugin/updater/)
+- [Tauri Signer](https://v2.tauri.app/distribute/sign/)

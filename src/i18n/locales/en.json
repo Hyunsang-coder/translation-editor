@@ -300,5 +300,15 @@
     "unsupportedProvider": "Unsupported AI provider: {{provider}}. Please select a valid provider in App Settings.",
     "translationPreviewError": "Solution: Increase the model's max_tokens value in Settings, or try translating a shorter document.",
     "aiResponseFailed": "Failed to generate AI response"
+  },
+  "update": {
+    "newVersionAvailable": "New Version Available",
+    "versionInfo": "OddEyes.ai {{version}} is available.",
+    "downloading": "Downloading...",
+    "later": "Later",
+    "updateNow": "Update Now",
+    "skipVersion": "Skip This Version",
+    "cancel": "Cancel",
+    "downloadFailed": "Download failed. Please try again later."
   }
 }

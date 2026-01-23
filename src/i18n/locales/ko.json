@@ -300,5 +300,15 @@
     "unsupportedProvider": "지원하지 않는 AI 제공자입니다: {{provider}}. 앱 설정에서 유효한 제공자를 선택해주세요.",
     "translationPreviewError": "해결 방법: 설정에서 모델의 max_tokens 값을 높이거나, 더 짧은 문서로 나누어 번역해 보세요.",
     "aiResponseFailed": "AI 응답 생성 실패"
+  },
+  "update": {
+    "newVersionAvailable": "새로운 버전이 있습니다",
+    "versionInfo": "OddEyes.ai {{version}} 버전을 사용할 수 있습니다.",
+    "downloading": "다운로드 중...",
+    "later": "나중에",
+    "updateNow": "지금 업데이트",
+    "skipVersion": "이 버전 건너뛰기",
+    "cancel": "취소",
+    "downloadFailed": "다운로드에 실패했습니다. 나중에 다시 시도해주세요."
   }
 }

@@ -126,6 +126,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::init())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Dev 환경에서 .env.local 을 로드 (Brave Search API 등 비밀키는 프론트에 노출하지 않고 백엔드에서 사용)
             // - .env.local이 markdown(코드펜스 등)을 포함하면 dotenvy(strict)가 실패할 수 있어,

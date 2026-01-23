@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -7,11 +7,33 @@ import { mcpClientManager } from '@/ai/mcp/McpClientManager';
 import { initializeSecrets } from '@/tauri/secrets';
 import { initializeConnectors } from '@/stores/connectorStore';
 import { cleanupTempImages } from '@/tauri/attachments';
+import { useAutoUpdate } from '@/hooks/useAutoUpdate';
+import { UpdateModal } from '@/components/ui/UpdateModal';
 
 function App(): JSX.Element {
   const { theme } = useUIStore();
   const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore();
   const { loadSecureKeys } = useAiConfigStore();
+
+  // 자동 업데이트
+  const {
+    available,
+    downloading,
+    progress,
+    error,
+    update,
+    downloadAndInstall,
+    cancelDownload,
+    skipVersion,
+    dismissUpdate,
+  } = useAutoUpdate();
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  useEffect(() => {
+    if (available && update) {
+      setShowUpdateModal(true);
+    }
+  }, [available, update]);
 
   // 테마 적용
   useEffect(() => {
@@ -111,6 +133,27 @@ function App(): JSX.Element {
   return (
     <div className="min-h-screen bg-editor-bg text-editor-text">
       <MainLayout />
+
+      <UpdateModal
+        isOpen={showUpdateModal}
+        version={update?.version ?? ''}
+        releaseNotes={update?.body ?? undefined}
+        downloading={downloading}
+        progress={progress}
+        error={error}
+        onUpdate={downloadAndInstall}
+        onCancel={cancelDownload}
+        onSkipVersion={() => {
+          if (update?.version) {
+            skipVersion(update.version);
+          }
+          setShowUpdateModal(false);
+        }}
+        onDismiss={() => {
+          dismissUpdate();
+          setShowUpdateModal(false);
+        }}
+      />
     </div>
   );
 }
