@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface UpdateModalProps {
   isOpen: boolean;
@@ -41,14 +43,15 @@ export function UpdateModal({
         </p>
 
         {releaseNotes && (
-          <div className="bg-gray-100 dark:bg-gray-700 rounded p-3 mb-4 max-h-32 overflow-y-auto text-sm">
-            <p className="whitespace-pre-wrap">{releaseNotes}</p>
+          <div className="bg-gray-100 dark:bg-gray-700 rounded p-3 mb-4 max-h-32 overflow-y-auto text-sm prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{releaseNotes}</ReactMarkdown>
           </div>
         )}
 
         {error && (
           <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded p-3 mb-4 text-sm">
-            {t('update.downloadFailed', '다운로드에 실패했습니다. 나중에 다시 시도해주세요.')}
+            <p>{t('update.downloadFailed', '다운로드에 실패했습니다. 나중에 다시 시도해주세요.')}</p>
+            <p className="mt-1 text-xs opacity-75 font-mono">{error}</p>
           </div>
         )}
 
