@@ -133,7 +133,7 @@ export function useAutoUpdate() {
 
   // 앱 시작 시 자동 체크 (프로덕션만)
   useEffect(() => {
-    if (import.meta.env.DEV) return;
+if (import.meta.env.DEV) return;
 
     const timer = setTimeout(() => {
       checkForUpdate();
