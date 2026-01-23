@@ -66,5 +66,4 @@ src-tauri/gen/schemas/
 
 .tmp/
 .npm-cache/
-release/
 tasks/

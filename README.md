@@ -17,6 +17,7 @@
 - **번역 검수**: 오역/누락/일관성 검출 + 에디터 하이라이트 + 수정 제안 적용
 - **검색/치환**: 에디터 내 검색 (Cmd+F) 및 치환 (Cmd+H, Target 전용)
 - **외부 연동**: Confluence (MCP), Notion, 웹검색
+- **자동 업데이트**: GitHub Releases 기반 인앱 업데이트 (macOS/Windows)
 
 ## 기술 스택
 
@@ -82,7 +83,13 @@ npx tauri build --target universal-apple-darwin
 
 `tauri.conf.json`의 `bundle.targets`는 `"all"`로 설정되어 있어 현재 OS에 맞는 번들이 자동 선택됩니다.
 
-배포용 문서 복사: `/release-docs` (Claude Code 스킬)
+### CI/CD
+
+GitHub Actions로 자동 빌드 (`v*` 태그 push 시):
+- macOS Universal (Intel + Apple Silicon)
+- Windows x64 (NSIS)
+
+릴리즈 노트는 커밋 히스토리 기반 자동 생성됩니다.
 
 ## 프로젝트 구조
 
@@ -99,7 +106,6 @@ npx tauri build --target universal-apple-darwin
 │   ├── src/notion/       # Notion API
 │   └── src/secrets/      # Secret Manager
 ├── docs/                 # 문서
-├── release/              # 배포용 문서 (README, CHANGELOG)
 ├── tasks/                # 구현 태스크
 ├── prd.md                # 제품 요구사항
 └── docs/trd/             # 기술 요구사항 (분리된 TRD)

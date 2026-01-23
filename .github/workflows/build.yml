@@ -53,7 +53,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'OddEyes v__VERSION__'
-          releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
+          generateReleaseNotes: true
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}

@@ -6,7 +6,7 @@
 - **Formatting/Linting**: Prettier, ESLint
 - **Testing**: Vitest (Unit), Rust 테스트 (`cargo test`)
 - **E2E Testing**: 미구현 (Playwright 도입 예정)
-- **Git Hooks**: Husky (pre-commit TypeScript 타입 체크)
+- **Git Hooks**: Native Git Hooks (pre-commit TypeScript 타입 체크)
 
 ---
 
@@ -52,3 +52,33 @@ cd src-tauri && cargo test
 
 ### Diff Accuracy
 - 한글 특유의 조사 변화나 어미 변화 시 Diff 알고리즘이 자연스럽게 하이라이트를 생성하는지 검증
+
+---
+
+## 10.4 빌드 및 배포
+
+### CI/CD (GitHub Actions)
+
+`v*` 태그 push 시 자동 빌드:
+- **macOS**: Universal binary (Intel + Apple Silicon)
+- **Windows**: x64 NSIS 설치 파일
+
+워크플로우: `.github/workflows/build.yml`
+
+### 자동 업데이트
+
+#### Why
+- 사용자가 수동으로 GitHub Releases를 확인하지 않아도 최신 버전 유지 가능
+- 보안 패치 및 버그 수정의 빠른 배포
+
+#### How
+- Tauri Updater Plugin (`@tauri-apps/plugin-updater`)
+- GitHub Releases의 `latest.json` 참조
+- 서명 파일(`.sig`)로 무결성 검증
+
+#### What
+- 앱 시작 시 자동 버전 확인 (프로덕션 빌드만, 3초 딜레이)
+- 다운로드 진행률 표시
+- "이 버전 건너뛰기" 옵션 (localStorage)
+- 다운로드 중 취소 가능 (AbortController)
+- UI: `UpdateModal.tsx`, Hook: `useAutoUpdate.ts`
