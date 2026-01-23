@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 interface UpdateModalProps {
   isOpen: boolean;
   version: string;
-  releaseNotes?: string;
+  releaseNotes: string | undefined;
   downloading: boolean;
   progress: number;
   error: string | null;
-  onUpdate: () => void;
+  onUpdate: () => void | Promise<void>;
   onCancel: () => void;
   onSkipVersion: () => void;
   onDismiss: () => void;
