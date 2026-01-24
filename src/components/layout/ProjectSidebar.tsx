@@ -360,7 +360,7 @@ export function ProjectSidebar(): JSX.Element {
       <div className="p-3 border-t border-editor-border bg-editor-surface shrink-0">
         <button
             type="button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-editor-bg border border-editor-border text-editor-text hover:bg-editor-border transition-colors text-xs font-medium"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-editor-bg border border-editor-border text-editor-text hover:bg-editor-border transition-colors text-xs font-semibold"
             onClick={() => setShowAppSettings(true)}
         >
             <span className="text-sm">⚙️</span>

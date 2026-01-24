@@ -21,7 +21,7 @@
     "title": "프로젝트 설정",
     "translatorPersona": "번역가 페르소나",
     "translatorPersonaDescription": "번역 시 AI가 연기할 페르소나를 정의합니다.\n(채팅 답변 말투에는 영향을 주지 않고, 오직 번역 결과물에만 반영됩니다.)",
-    "translatorPersonaPlaceholder": "예: 당신은 웹소설 전문 번역가입니다. 생동감 있는 표현을 사용하세요...",
+    "translatorPersonaPlaceholder": "예: 당신은 10년차 인하우스 번역가입니다.",
     "translationRules": "번역 규칙",
     "translationRulesDescription": "포맷, 서식, 문체 등 번역에 적용되는 규칙입니다. (예: \"해요체 사용\", \"따옴표 유지\", \"고유명사는 음차\")",
     "translationRulesPlaceholder": "번역 규칙을 입력하세요...",

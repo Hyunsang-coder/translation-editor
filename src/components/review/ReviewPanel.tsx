@@ -525,7 +525,7 @@ export function ReviewPanel(): JSX.Element {
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="px-3 py-1.5 text-xs rounded border border-editor-border hover:bg-editor-bg transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold rounded border border-editor-border hover:bg-editor-bg transition-colors"
                 >
                   {t('review.reset', '초기화')}
                 </button>
@@ -534,7 +534,7 @@ export function ReviewPanel(): JSX.Element {
                 type="button"
                 onClick={handleRunReview}
                 disabled={!project}
-                className="px-3 py-1.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
               >
                 {results.length > 0
                   ? t('review.restart', '다시 검수')

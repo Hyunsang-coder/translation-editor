@@ -436,7 +436,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <button
             type="button"
             onClick={() => void openTranslatePreview()}
-            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
+            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
             disabled={translateLoading}
             title={t('editor.translateTitle')}
           >
@@ -452,12 +452,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <button
             type="button"
             onClick={() => openReviewPanel()}
-            className="px-2 py-1 rounded text-xs border border-editor-border text-editor-text hover:bg-editor-bg flex items-center gap-1 transition-colors"
+            className="px-2 py-1 rounded text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
             title={t('editor.reviewTitle', '번역 검수')}
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
             {t('editor.review', '검수')}
           </button>
         </div>

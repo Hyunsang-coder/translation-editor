@@ -72,6 +72,23 @@ function extractTextFromAiMessage(ai: unknown): string {
   return content ? String(content) : '';
 }
 
+/**
+ * 제안 내용에서 마크다운 포맷팅 및 불필요한 문구 제거
+ */
+function cleanSuggestionContent(raw: string): string {
+  let cleaned = (raw ?? '').trim();
+  if (!cleaned) return '';
+
+  // 마크다운 포맷팅 제거
+  cleaned = cleaned
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
+    .replace(/`([^`]+)`/g, '$1')         // `code` → code
+    .trim();
+
+  return cleaned;
+}
+
 function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context' | 'both'; content: string } | null {
   const t = (text ?? '').trim();
   if (!t) return null;
@@ -114,7 +131,36 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
 
   if (!type) return null;
 
-  const core = (cutIdx >= 0 ? t.slice(0, cutIdx) : t).trim();
+  let core = (cutIdx >= 0 ? t.slice(0, cutIdx) : t).trim();
+  if (!core) return null;
+
+  // AI가 붙이는 서두 문구 제거 (예: "프로젝트 컨텍스트 저장 제안을 올려두었습니다:")
+  const preamblePatterns = [
+    /^(?:프로젝트\s*)?컨텍스트\s*저장\s*제안을?\s*올려\s*두었습니다[:\s]*/i,
+    /^번역\s*규칙\s*저장\s*제안을?\s*올려\s*두었습니다[:\s]*/i,
+    /^(?:다음|아래)(?:와 같은|의)?\s*(?:번역\s*규칙|컨텍스트|맥락).*?(?:제안합니다|올려두었습니다)[:\s]*/i,
+    /^(?:번역\s*규칙|컨텍스트|맥락)\s*제안[:\s]*/i,
+  ];
+  for (const pattern of preamblePatterns) {
+    core = core.replace(pattern, '').trim();
+  }
+
+  // 뒷부분 안내 문구 제거 (예: "원하시면 **", "필요하시면...")
+  const suffixPatterns = [
+    /(?:원하시면|필요하시면|저장하려면|추가하려면)\s*\**\s*$/i,
+    /\s*\*+\s*$/,  // 잘린 마크다운 볼드
+  ];
+  for (const pattern of suffixPatterns) {
+    core = core.replace(pattern, '').trim();
+  }
+
+  // 마크다운 포맷팅 제거 (**, *, `)
+  core = core
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
+    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
+    .replace(/`([^`]+)`/g, '$1')         // `code` → code
+    .trim();
+
   if (!core) return null;
 
   // 저장 필드 폭주 방지 (rules/context에 append될 수 있으니 적당히 제한)
@@ -910,13 +956,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'rule', content: evt.args.rule },
+                    suggestion: { type: 'rule', content: cleanSuggestionContent(evt.args.rule) },
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
-                  const content = evt.args.context;
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'context', content },
+                    suggestion: { type: 'context', content: cleanSuggestionContent(evt.args.context) },
                   };
                 }
               }
@@ -1340,12 +1385,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'rule', content: evt.args.rule },
+                    suggestion: { type: 'rule', content: cleanSuggestionContent(evt.args.rule) },
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'context', content: evt.args.context },
+                    suggestion: { type: 'context', content: cleanSuggestionContent(evt.args.context) },
                   };
                 }
               }

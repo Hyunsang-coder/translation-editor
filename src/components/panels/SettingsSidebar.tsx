@@ -229,7 +229,7 @@ export function SettingsSidebar(): JSX.Element {
           </div>
           <button
             type="button"
-            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 flex-shrink-0"
+            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 flex-shrink-0"
             onClick={() => {
               void (async () => {
                 if (!isTauriRuntime() || !project) return;

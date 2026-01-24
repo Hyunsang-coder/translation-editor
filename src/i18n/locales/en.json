@@ -21,7 +21,7 @@
     "title": "Project Settings",
     "translatorPersona": "Translator Persona",
     "translatorPersonaDescription": "Define the persona that AI will play when translating.\n(This only affects translation results, not chat response tone.)",
-    "translatorPersonaPlaceholder": "e.g., You are a professional web novel translator. Use vivid expressions...",
+    "translatorPersonaPlaceholder": "e.g., You are a 10-year in-house translator.",
     "translationRules": "Translation Rules",
     "translationRulesDescription": "Rules applied to translation such as format, style, and tone. (e.g., \"Use 해요체\", \"Preserve quotes\", \"Transliterate proper nouns\")",
     "translationRulesPlaceholder": "Enter translation rules...",
