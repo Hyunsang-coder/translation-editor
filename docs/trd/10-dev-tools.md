@@ -26,6 +26,17 @@ npm run test:coverage # Coverage report
 - **Config**: `vitest.config.ts`
 - **Location**: 소스와 동일 디렉토리 (`*.test.ts`, `*.spec.ts`)
 
+### 테스트 파일 목록
+
+| 파일 | 테스트 대상 | 테스트 수 |
+|------|-------------|-----------|
+| `src/ai/prompt.test.ts` | 요청 유형 감지, 블록 컨텍스트 빌더 | 19 |
+| `src/ai/review/parseReviewResult.test.ts` | 리뷰 결과 JSON 파싱, 중복 제거 | 25 |
+| `src/ai/tools/buildAlignedChunks.test.ts` | 청킹 알고리즘 (동기/비동기) | 8 |
+| `src/stores/chatStore.selectors.test.ts` | Zustand 그룹 셀렉터 | 7 |
+| `src/utils/normalizeForSearch.test.ts` | 텍스트 정규화, 유니코드 처리 | 22 |
+| `src/utils/imagePlaceholder.test.ts` | 이미지 추출/복원, 토큰 절약 계산 | 21 |
+
 ### Backend (Rust)
 
 ```bash

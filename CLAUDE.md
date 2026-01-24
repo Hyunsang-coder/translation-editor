@@ -392,6 +392,16 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
   - `npm run test:coverage` - Coverage report
 - **TDD Skill**: `/tdd` for Red-Green-Refactor workflow
 
+### Test Files
+| 파일 | 테스트 대상 |
+|------|-------------|
+| `src/ai/prompt.test.ts` | `detectRequestType`, `buildBlockContextText` |
+| `src/ai/review/parseReviewResult.test.ts` | `parseReviewResult`, `deduplicateIssues` |
+| `src/ai/tools/buildAlignedChunks.test.ts` | `buildAlignedChunks`, `buildAlignedChunksAsync` |
+| `src/stores/chatStore.selectors.test.ts` | Grouped Zustand selectors |
+| `src/utils/normalizeForSearch.test.ts` | `normalizeForSearch`, Unicode normalization |
+| `src/utils/imagePlaceholder.test.ts` | `extractImages`, `restoreImages`, token savings |
+
 ### Backend (Rust)
 - **Location**: `src-tauri/src/` with `#[cfg(test)]` modules
 - **Command**: `cd src-tauri && cargo test`

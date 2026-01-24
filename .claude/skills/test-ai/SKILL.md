@@ -1,7 +1,7 @@
 ---
 name: test-ai
-description: AI 프롬프트와 페이로드 테스트. Dry-run으로 실제 API 호출 없이 토큰 사용량과 구조를 검증합니다.
-user-invocable: true
+description: AI 프롬프트와 페이로드 테스트. Dry-run으로 실제 API 호출 없이 토큰 사용량과 구조를 검증합니다. 프롬프트 수정 후 또는 토큰 최적화 시 사용.
+argument-hint: "[--mode translate|chat] [--tokens] [--live]"
 allowed-tools:
   - Bash
   - Read

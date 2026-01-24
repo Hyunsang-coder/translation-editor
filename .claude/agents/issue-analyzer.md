@@ -1,3 +1,11 @@
+---
+name: issue-analyzer
+description: PR/Issue 분석 및 관련 리소스 자동 추천
+skills:
+  - typecheck
+  - sync-types
+---
+
 # Issue Analyzer Agent
 
 PR/Issue 분석 및 관련 리소스 자동 추천 subagent for OddEyes.ai

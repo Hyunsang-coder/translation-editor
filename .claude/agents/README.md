@@ -21,11 +21,27 @@
 
 특수 목적 agent만 유지:
 
-| Agent | 용도 |
-|-------|------|
-| `langchain-agent-auditor.md` | LangChain agent 도구 사용 패턴 감사 (Task tool 연동) |
-| `issue-tracker.md` | 대규모 이슈 문서화, 세션 간 컨텍스트 지속 |
-| `issue-analyzer.md` | PR/Issue 분석, 관련 리소스 자동 추천 |
+| Agent | 용도 | 주입된 Skills |
+|-------|------|---------------|
+| `langchain-agent-auditor.md` | LangChain agent 도구 사용 패턴 감사 | test-ai, typecheck |
+| `issue-tracker.md` | 대규모 이슈 문서화, 세션 간 컨텍스트 지속 | typecheck, sync-types, tdd |
+| `issue-analyzer.md` | PR/Issue 분석, 관련 리소스 자동 추천 | typecheck, sync-types |
+
+### Skills 주입 원리
+
+Agent의 `skills:` frontmatter에 명시된 skill들의 전체 내용이 agent context에 자동 로드됩니다:
+
+```yaml
+# .claude/agents/issue-tracker.md
+---
+skills:
+  - typecheck      # /typecheck skill 지식 주입
+  - sync-types     # /sync-types skill 지식 주입
+  - tdd            # /tdd skill 지식 주입
+---
+```
+
+→ Agent 실행 시 해당 skills의 워크플로우와 명령어를 알고 있음
 
 ## 사용법
 

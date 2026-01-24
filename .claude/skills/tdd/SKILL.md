@@ -1,7 +1,7 @@
 ---
 name: tdd
-description: TDD 워크플로우 실행. 테스트 먼저 작성 → 실패 확인 → 구현 → 통과 확인 순서를 자동화합니다.
-user-invocable: true
+description: TDD 워크플로우 실행. 테스트 먼저 작성 → 실패 확인 → 구현 → 통과 확인 순서를 자동화합니다. 새 기능 구현 또는 버그 수정 시 사용.
+argument-hint: "[run|watch|coverage|new <name>|<file>]"
 allowed-tools:
   - Bash
   - Read
@@ -9,7 +9,6 @@ allowed-tools:
   - Edit
   - Grep
   - Glob
-  - TodoWrite
 ---
 
 # /tdd

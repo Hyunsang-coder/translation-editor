@@ -1,7 +1,7 @@
 ---
 name: typecheck
-description: Rust + TypeScript 동시 타입 체크. Tauri 프로젝트의 양쪽 타입 오류를 한번에 확인합니다.
-user-invocable: true
+description: Rust + TypeScript 동시 타입 체크. Tauri 프로젝트의 양쪽 타입 오류를 한번에 확인합니다. 코드 수정 후, 커밋 전, 또는 빌드 오류 발생 시 사용.
+argument-hint: "[--rust|--ts|--fix]"
 allowed-tools:
   - Bash
   - Read

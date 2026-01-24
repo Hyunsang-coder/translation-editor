@@ -1,7 +1,7 @@
 ---
 name: sync-types
-description: Rust struct와 TypeScript interface 간 타입 동기화 검증. 불일치 감지 및 자동 생성 지원.
-user-invocable: true
+description: Rust struct와 TypeScript interface 간 타입 동기화 검증. 불일치 감지 및 자동 생성 지원. Tauri command 수정 후 또는 타입 오류 발생 시 사용.
+argument-hint: "[--check|--generate|--diff]"
 allowed-tools:
   - Bash
   - Read

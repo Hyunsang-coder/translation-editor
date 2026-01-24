@@ -1,7 +1,8 @@
 ---
 name: dev
-description: Tauri 개발 서버 실행 및 로그 모니터링. 프론트엔드(Vite) + 백엔드(Rust) 동시 실행.
-user-invocable: true
+description: Tauri 개발 서버 실행 및 로그 모니터링. 프론트엔드(Vite) + 백엔드(Rust) 동시 실행. 개발 시작 시 또는 HMR 테스트 시 사용.
+disable-model-invocation: true
+argument-hint: "[--frontend|--check-first|--clean]"
 allowed-tools:
   - Bash
   - Read

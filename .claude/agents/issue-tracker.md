@@ -1,3 +1,12 @@
+---
+name: issue-tracker
+description: 대규모 이슈/구현 사항을 구조화된 마크다운 문서로 정리하여 세션 간 지속성 확보
+skills:
+  - typecheck
+  - sync-types
+  - tdd
+---
+
 # Issue Tracker Agent
 
 대규모 이슈/구현 사항을 구조화된 `.md` 문서로 정리하여 세션 간 지속성을 확보하는 subagent.
