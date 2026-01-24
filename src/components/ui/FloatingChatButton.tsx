@@ -2,8 +2,8 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useTranslation } from 'react-i18next';
 
-const BUTTON_SIZE = 48; // 기본 크기
-const BUTTON_SIZE_HOVER = 52; // hover 시 크기
+const BUTTON_SIZE = 54; // 기본 크기
+const BUTTON_SIZE_HOVER = 58; // hover 시 크기
 const MARGIN = 24; // bottom-6 right-6 = 24px
 
 /**
@@ -199,6 +199,7 @@ export function FloatingChatButton(): JSX.Element {
           shadow-lg hover:shadow-xl
           transition-all duration-200 ease-out
           cursor-grab active:cursor-grabbing
+          bg-white dark:bg-black p-1
         `}
         title={t('chat.openChat')}
         aria-label={t('chat.openChat')}

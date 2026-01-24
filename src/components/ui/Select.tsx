@@ -80,7 +80,7 @@ export function Select({
   };
 
   const sizeClasses = size === 'sm'
-    ? 'h-7 text-[10px] px-2'
+    ? 'h-7 text-[11px] px-2'
     : 'h-8 text-[11px] px-3';
 
   // 드롭다운 위치 스타일 계산
