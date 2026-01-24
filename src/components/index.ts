@@ -10,7 +10,6 @@ export { ProjectSidebar } from './layout/ProjectSidebar';
 // Panels
 export { SourcePanel } from './panels/SourcePanel';
 export { TargetPanel } from './panels/TargetPanel';
-export { ChatPanel } from './panels/ChatPanel';
 
 // Editor (Legacy - Monaco)
 export { TranslationBlock } from './editor/TranslationBlock';
