@@ -28,6 +28,7 @@ import {
   maskGhostChips,
   restoreGhostChips,
 } from '@/utils/ghostMask';
+import { cleanSuggestionContent } from '@/utils/cleanSuggestionContent';
 import { resizeImageForApi, IMAGE_SIZE_LIMITS } from '@/utils/imageResize';
 import { stripHtml } from '@/utils/hash';
 
@@ -72,22 +73,6 @@ function extractTextFromAiMessage(ai: unknown): string {
   return content ? String(content) : '';
 }
 
-/**
- * 제안 내용에서 마크다운 포맷팅 및 불필요한 문구 제거
- */
-function cleanSuggestionContent(raw: string): string {
-  let cleaned = (raw ?? '').trim();
-  if (!cleaned) return '';
-
-  // 마크다운 포맷팅 제거
-  cleaned = cleaned
-    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
-    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
-    .replace(/`([^`]+)`/g, '$1')         // `code` → code
-    .trim();
-
-  return cleaned;
-}
 
 function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context' | 'both'; content: string } | null {
   const t = (text ?? '').trim();
