@@ -592,7 +592,7 @@ export function ChatContent(): JSX.Element {
       {/* 입력창 */}
       <form
         onSubmit={handleSubmit}
-        className="px-2 py-1.5 bg-editor-bg shrink-0"
+        className="px-2 py-1 bg-editor-bg shrink-0"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -651,7 +651,7 @@ export function ChatContent(): JSX.Element {
           )}
 
           <div
-            className="w-full min-h-[40px] max-h-[200px] px-1 py-1 pb-8 bg-transparent overflow-y-auto"
+            className="w-full max-h-[200px] px-3 pt-2.5 pb-10 bg-transparent overflow-y-auto"
             data-ite-chat-composer
             onPaste={handlePaste}
           >
@@ -668,12 +668,12 @@ export function ChatContent(): JSX.Element {
           </div>
 
           {/* 하단 컨트롤 바 */}
-          <div className="absolute inset-x-0 bottom-0 px-1 pb-1 flex items-end justify-between pointer-events-none">
+          <div className="absolute inset-x-0 bottom-0 px-3 pb-1.5 flex items-end justify-between pointer-events-none">
             <div className="pointer-events-auto flex items-center gap-1.5">
               <div className="relative" data-ite-composer-menu-root>
                 <button
                   type="button"
-                  className="w-8 h-8 rounded-full border border-editor-border bg-editor-bg text-editor-muted text-sm
+                  className="w-7 h-7 rounded-full border border-editor-border bg-editor-bg text-editor-muted text-xs
                              hover:bg-editor-border hover:text-editor-text transition-colors"
                   title={t('chat.composerOptions')}
                   aria-label={t('chat.composerOptionsAriaLabel')}
@@ -758,7 +758,7 @@ export function ChatContent(): JSX.Element {
               {/* 파일 첨부 버튼 */}
               <button
                 type="button"
-                className="w-8 h-8 rounded-full border border-editor-border bg-editor-bg text-editor-muted
+                className="w-7 h-7 rounded-full border border-editor-border bg-editor-bg text-editor-muted
                            hover:bg-editor-border hover:text-editor-text transition-colors flex items-center justify-center"
                 title={t('chat.attachFile')}
                 aria-label={t('chat.attachFileAriaLabel')}
@@ -766,7 +766,7 @@ export function ChatContent(): JSX.Element {
                 disabled={isLoading}
               >
                 <svg
-                  className="w-4 h-4"
+                  className="w-3.5 h-3.5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -796,13 +796,13 @@ export function ChatContent(): JSX.Element {
               <button
                 type="submit"
                 disabled={isLoading || !composerText.trim()}
-                className="w-8 h-8 rounded-full bg-primary-500 text-white
+                className="w-7 h-7 rounded-full bg-primary-500 text-white
                            hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                            transition-colors flex items-center justify-center"
                 title={t('chat.send')}
                 aria-label={t('chat.sendAriaLabel')}
               >
-                <span className="text-sm leading-none">↑</span>
+                <span className="text-xs leading-none">↑</span>
               </button>
             </div>
           </div>

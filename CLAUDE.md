@@ -377,6 +377,7 @@ All async Tauri commands use `async fn`. State is passed via Tauri's State manag
 65. **Provider-Specific Image Limits**: `chat.ts` → `maybeReplaceLastHumanMessageWithImages()` enforces different size limits: Anthropic 5MB, OpenAI 20MB. Error messages include provider name for clarity (e.g., "파일이 너무 커서(7.2MB, Claude 최대 5MB) 제외됨").
 66. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear in empty chat.
 67. **Auto Update System**: `useAutoUpdate.ts` hook uses `@tauri-apps/plugin-updater` to check GitHub Releases for updates. Features: automatic check on app start (production only, 3s delay), download progress tracking, skip version (localStorage), cancel download (AbortController). `UpdateModal.tsx` displays update UI with i18n support.
+68. **ProseMirror Base Style Override**: `.ProseMirror` 기본 스타일(`px-6 py-4`, `min-h-[200px]`)이 모든 TipTap 에디터에 적용됨. 채팅 컴포저처럼 다른 스타일이 필요한 경우 `.chat-composer-tiptap`에서 명시적으로 `@apply px-0 py-0 min-h-0`로 오버라이드 필요. UI 수정 시 인라인 클래스만 보지 말고 CSS 상속 체인 전체를 확인할 것.
 
 ## Testing Patterns
 

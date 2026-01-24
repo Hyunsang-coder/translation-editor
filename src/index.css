@@ -812,6 +812,7 @@
 /* 채팅 컴포저 TipTap 에디터 */
 .chat-composer-tiptap {
   @apply outline-none;
+  @apply px-0 py-0 min-h-0;  /* ProseMirror 기본 스타일(px-6 py-4) 오버라이드 */
   font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.6;
