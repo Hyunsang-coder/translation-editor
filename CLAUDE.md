@@ -108,7 +108,10 @@ npx tauri build --bundles nsis   # Windows
 - **Storage Format**: TipTap JSON stored in SQLite `documents` table
 - **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, tables, images
 - **Editor-only Formats**: Underline, Highlight, Subscript, Superscript (lost during Markdown conversion)
-- **Notion-Style UX**: Pretendard font, 16px, line-height 1.8, max-width 800px
+- **Notion-Style UX**: 기본 Pretendard font, 16px, line-height 1.8, max-width 800px
+- **폰트 설정**: 에디터 폰트(TipTapMenuBar에서 Source/Target 각각 설정), UI 폰트(AppSettingsModal에서 전역 설정)
+  - 옵션: Pretendard, Noto Sans KR, 시스템 기본
+  - CSS 변수: `--editor-font-family`, `--ui-font-family`
 - Both editors are editable; Focus Mode can hide Source panel
 
 #### 2. AI Interaction Model

@@ -28,3 +28,43 @@ TipTap 에디터 내 검색 및 치환 지원:
 - **치환**: `Cmd+H` (Target 전용, 원문 보호)
 - **기능**: 대소문자 구분, 이전/다음 매치 탐색, 단일 치환, 전체 치환
 - **구현**: `SearchHighlight` TipTap Extension (Decoration 기반), `SearchBar` UI 컴포넌트
+
+## 2.2 폰트 설정 (Font Settings)
+
+### Why
+- 번역가마다 선호하는 폰트가 다르며, 긴 문서 작업 시 가독성이 중요합니다.
+- Source/Target 에디터의 폰트를 독립적으로 설정하여 원문/번역문 구분 가독성을 높일 수 있습니다.
+
+### How
+- **에디터 폰트**: TipTapMenuBar에서 Source/Target 각각 독립적으로 설정
+- **UI 폰트**: AppSettingsModal에서 앱 전체 인터페이스 폰트 설정
+- CSS 변수(`--editor-font-family`, `--ui-font-family`)를 통해 동적 적용
+- 설정값은 uiStore에 저장되며 localStorage에 영속화
+
+### What
+
+#### 폰트 옵션
+| 옵션 | 설명 | CSS 값 |
+|------|------|--------|
+| Pretendard | 기본값, 한/영 최적화 | `'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif` |
+| Noto Sans KR | Google 오픈소스 한글 폰트 | `'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif` |
+| 시스템 기본 | OS 기본 폰트 사용 | `-apple-system, BlinkMacSystemFont, system-ui, sans-serif` |
+
+#### 설정 위치
+- **에디터 폰트**: TipTapMenuBar 드롭다운 (폰트 크기/줄 높이 조정 옆)
+- **UI 폰트**: AppSettingsModal > "UI 폰트" 섹션
+
+#### 저장 구조 (uiStore)
+```typescript
+sourceFontFamily: 'Pretendard' | 'Noto Sans KR' | 'system';  // Source 에디터
+targetFontFamily: 'Pretendard' | 'Noto Sans KR' | 'system';  // Target 에디터
+uiFontFamily: 'Pretendard' | 'Noto Sans KR' | 'system';      // 앱 UI 전체
+```
+
+#### 적용 범위
+- **에디터 폰트**: Source/Target TipTap 에디터 본문
+- **UI 폰트**: 사이드바, 채팅 패널, 모달, 버튼, 메뉴 등 전체 인터페이스
+
+### Implementation
+
+상세 구현 계획은 [`docs/plans/font-settings.md`](../plans/font-settings.md) 참조.
