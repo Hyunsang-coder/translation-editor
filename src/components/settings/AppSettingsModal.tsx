@@ -30,11 +30,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     contextLimit,
     maxOutputTokens,
     customModelName,
+    localLlmSupportsTools,
     availableLocalModels,
     setOpenaiBaseUrl,
     setContextLimit,
     setMaxOutputTokens,
     setCustomModelName,
+    setLocalLlmSupportsTools,
     setAvailableLocalModels,
   } = useAiConfigStore();
 
@@ -65,9 +67,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
   const handleClearLocalLlm = () => {
     setOpenaiBaseUrl(undefined);
-    setContextLimit(undefined);
-    setMaxOutputTokens(undefined);
+    setContextLimit(4096);
+    setMaxOutputTokens(512);
     setCustomModelName(undefined);
+    setLocalLlmSupportsTools(false);
     setAvailableLocalModels([]);
     setConnectionError(null);
   };
@@ -385,32 +388,68 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                 )}
 
+                {/* Tool Calling 지원 */}
+                {openaiBaseUrl && (
+                    <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                id="local-llm-tools"
+                                checked={localLlmSupportsTools}
+                                onChange={(e) => setLocalLlmSupportsTools(e.target.checked)}
+                                className="accent-primary-500 w-4 h-4 cursor-pointer"
+                            />
+                            <label
+                                htmlFor="local-llm-tools"
+                                className={`text-sm font-semibold cursor-pointer ${localLlmSupportsTools ? 'text-editor-text' : 'text-editor-muted'}`}
+                            >
+                                {t('appSettings.localLlm.supportsTools')}
+                            </label>
+                        </div>
+                        <p className="text-[10px] text-editor-muted">
+                            {t('appSettings.localLlm.supportsToolsHelp')}
+                        </p>
+                    </div>
+                )}
+
                 {/* 컨텍스트 제한 */}
                 {openaiBaseUrl && (
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
-                                {t('appSettings.localLlm.contextLimit')}
+                                {t('appSettings.localLlm.contextLimit')} ({contextLimit ?? 4096})
                             </label>
                             <input
-                                type="number"
-                                className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                                placeholder={t('appSettings.localLlm.contextLimitPlaceholder')}
-                                value={contextLimit || ''}
-                                onChange={(e) => setContextLimit(e.target.value ? Number(e.target.value) : undefined)}
+                                type="range"
+                                className="w-full h-2 rounded bg-editor-border accent-primary-500 cursor-pointer"
+                                min={2048}
+                                max={8192}
+                                step={512}
+                                value={contextLimit ?? 4096}
+                                onChange={(e) => setContextLimit(Number(e.target.value))}
                             />
+                            <div className="flex justify-between text-[10px] text-editor-muted">
+                                <span>2k</span>
+                                <span>8k</span>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
-                                {t('appSettings.localLlm.maxOutput')}
+                                {t('appSettings.localLlm.maxOutput')} ({maxOutputTokens ?? 512})
                             </label>
                             <input
-                                type="number"
-                                className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                                placeholder={t('appSettings.localLlm.maxOutputPlaceholder')}
-                                value={maxOutputTokens || ''}
-                                onChange={(e) => setMaxOutputTokens(e.target.value ? Number(e.target.value) : undefined)}
+                                type="range"
+                                className="w-full h-2 rounded bg-editor-border accent-primary-500 cursor-pointer"
+                                min={128}
+                                max={1024}
+                                step={64}
+                                value={maxOutputTokens ?? 512}
+                                onChange={(e) => setMaxOutputTokens(Number(e.target.value))}
                             />
+                            <div className="flex justify-between text-[10px] text-editor-muted">
+                                <span>128</span>
+                                <span>1024</span>
+                            </div>
                         </div>
                     </div>
                 )}

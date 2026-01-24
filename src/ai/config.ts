@@ -37,6 +37,7 @@ export interface AiConfig {
   openaiBaseUrl?: string;      // 커스텀 엔드포인트 (예: http://localhost:11434/v1)
   contextLimit?: number;       // 컨텍스트 크기 (토큰)
   maxOutputTokens?: number;    // 출력 토큰 제한
+  localLlmSupportsTools?: boolean; // 로컬 LLM이 Tool Calling 지원하는지 여부
 }
 
 /**
@@ -126,5 +127,6 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(store.openaiBaseUrl ? { openaiBaseUrl: store.openaiBaseUrl } : {}),
     contextLimit,
     ...(store.maxOutputTokens ? { maxOutputTokens: store.maxOutputTokens } : {}),
+    localLlmSupportsTools: store.localLlmSupportsTools,
   };
 }

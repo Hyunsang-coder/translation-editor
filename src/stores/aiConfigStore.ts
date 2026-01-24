@@ -28,9 +28,10 @@ interface AiConfigState {
   anthropicEnabled: boolean;
   // Local LLM 설정 (Ollama, LM Studio 등)
   openaiBaseUrl: string | undefined;       // 커스텀 엔드포인트 (예: http://localhost:11434/v1)
-  contextLimit: number | undefined;        // 컨텍스트 크기 (토큰), 기본값: 자동
-  maxOutputTokens: number | undefined;     // 출력 토큰 제한, 기본값: 4096 (로컬)
+  contextLimit: number | undefined;        // 컨텍스트 크기 (토큰), 기본값: 4096
+  maxOutputTokens: number | undefined;     // 출력 토큰 제한, 기본값: 512
   customModelName: string | undefined;     // 커스텀 모델명 (프리셋 외)
+  localLlmSupportsTools: boolean;          // 로컬 LLM이 Tool Calling 지원하는지 여부
   availableLocalModels: string[];          // 연결된 로컬 서버의 모델 목록
 }
 
@@ -50,6 +51,7 @@ interface AiConfigActions {
   setContextLimit: (limit: number | undefined) => void;
   setMaxOutputTokens: (tokens: number | undefined) => void;
   setCustomModelName: (name: string | undefined) => void;
+  setLocalLlmSupportsTools: (supports: boolean) => void;
   setAvailableLocalModels: (models: string[]) => void;
 }
 
@@ -107,11 +109,12 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         // 기본값: OpenAI만 활성화
         openaiEnabled: true,
         anthropicEnabled: false,
-        // Local LLM 기본값
+        // Local LLM 기본값 (openaiBaseUrl은 undefined가 기본 - 설정되어야만 로컬 LLM 사용)
         openaiBaseUrl: undefined,
-        contextLimit: undefined,
-        maxOutputTokens: undefined,
+        contextLimit: 4096,
+        maxOutputTokens: 512,
         customModelName: undefined,
+        localLlmSupportsTools: false,
         availableLocalModels: [],
 
         loadSecureKeys: async () => {
@@ -265,6 +268,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           const trimmed = name?.trim();
           set({ customModelName: trimmed || undefined });
         },
+        setLocalLlmSupportsTools: (supports) => {
+          set({ localLlmSupportsTools: supports });
+        },
         setAvailableLocalModels: (models) => {
           set({ availableLocalModels: models });
         },
@@ -272,7 +278,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 6, // 버전 업: Local LLM 지원 추가
+      version: 8, // 버전 업: openaiBaseUrl 기본값 undefined로 수정
       migrate: (persisted: unknown, version: number) => {
         const data = persisted as Record<string, unknown>;
         if (version < 5) {
@@ -301,6 +307,26 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             customModelName: undefined,
           };
         }
+        if (version < 7) {
+          // v6 → v7 마이그레이션: localLlmSupportsTools 추가, 기본값 변경
+          // openaiBaseUrl은 undefined 유지 (설정되어야만 로컬 LLM 사용)
+          return {
+            ...data,
+            contextLimit: data.contextLimit ?? 4096,
+            maxOutputTokens: data.maxOutputTokens ?? 512,
+            localLlmSupportsTools: false,
+          };
+        }
+        if (version < 8) {
+          // v7 → v8 마이그레이션: openaiBaseUrl 기본값 버그 수정
+          // 기본 Ollama URL이 설정되어 있으면 undefined로 리셋 (클라우드 API 호출 복구)
+          const baseUrl = data.openaiBaseUrl as string | undefined;
+          const isDefaultOllamaUrl = baseUrl === 'http://localhost:11434/v1';
+          return {
+            ...data,
+            openaiBaseUrl: isDefaultOllamaUrl ? undefined : baseUrl,
+          };
+        }
         return data;
       },
       partialize: (state) => ({
@@ -312,6 +338,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         contextLimit: state.contextLimit,
         maxOutputTokens: state.maxOutputTokens,
         customModelName: state.customModelName,
+        localLlmSupportsTools: state.localLlmSupportsTools,
       }),
       merge: (persisted, current) => {
         const next = { ...current, ...(persisted as Partial<AiConfigState>) };

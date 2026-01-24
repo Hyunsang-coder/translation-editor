@@ -837,69 +837,106 @@ export async function streamAssistantReply(
 
   let finalText: string;
   let toolsUsed: string[];
-  try {
-    ({ finalText, toolsUsed } = await runToolCallingLoop({
-      model,
-      tools: toolSpecs as any,
-      bindTools,
-      messages: finalMessages,
-      ...(cb ? { cb } : {}),
-      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
-    }));
-  } catch (e) {
-    // Tool Calling 미지원 에러 시 단순 채팅 모드로 폴백
-    if (isToolCallingNotSupported(e)) {
-      console.warn('[AI] Tool calling not supported, falling back to simple chat mode');
 
-      // 문서가 있으면 컨텍스트에 직접 포함 (sourceDocument/targetDocument는 input에서 가져옴)
-      const sourceDoc = input.sourceDocument?.slice(0, 10000) ?? '';
-      const targetDoc = input.targetDocument?.slice(0, 10000) ?? '';
+  // 로컬 LLM에서 Tool Calling 미지원 시 바로 단순 채팅 모드 사용
+  const skipToolCalling = isLocal && !cfg.localLlmSupportsTools;
 
-      const contextNote = sourceDoc || targetDoc
-        ? `\n\n[문서 컨텍스트]\n원문: ${sourceDoc ? '(포함됨)' : '(없음)'}\n번역문: ${targetDoc ? '(포함됨)' : '(없음)'}`
-        : '';
+  if (skipToolCalling) {
+    console.info('[AI] Local LLM without tool calling support, using simple chat mode');
 
-      const fallbackMessages = replaceLastHumanMessageText(
-        messagesWithGuide,
-        [
-          input.userMessage,
-          contextNote,
-          '',
-          '[안내] 현재 모델은 도구 호출을 지원하지 않아 일부 기능이 제한됩니다.',
-        ].join('\n'),
-      );
+    // 문서가 있으면 컨텍스트에 직접 포함
+    const sourceDoc = input.sourceDocument?.slice(0, 10000) ?? '';
+    const targetDoc = input.targetDocument?.slice(0, 10000) ?? '';
 
-      // 도구 없이 단순 invoke
-      const invokeOptions = input.abortSignal ? { signal: input.abortSignal } : {};
-      const result = await model.invoke(fallbackMessages, invokeOptions);
+    const contextNote = sourceDoc || targetDoc
+      ? `\n\n[문서 컨텍스트]\n원문: ${sourceDoc ? '(포함됨)' : '(없음)'}\n번역문: ${targetDoc ? '(포함됨)' : '(없음)'}`
+      : '';
 
-      const content = result.content;
-      finalText = typeof content === 'string'
-        ? content
-        : Array.isArray(content)
-          ? content.map((c) => (typeof c === 'string' ? c : (c as { text?: string }).text || '')).join('')
-          : String(content);
-      toolsUsed = [];
-    } else if (usedImages) {
-      const fallback = replaceLastHumanMessageText(
-        messagesWithGuide,
-        [
-          input.userMessage,
-          '',
-          '[첨부 이미지 안내]',
-          '현재 선택된 모델/Provider에서 이미지 입력이 지원되지 않아, 이미지는 제외하고 진행합니다.',
-          '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
-        ].join('\n'),
-      );
+    const simpleChatMessages = replaceLastHumanMessageText(
+      finalMessages,
+      [
+        input.userMessage,
+        contextNote,
+      ].join('\n'),
+    );
+
+    // 도구 없이 단순 invoke
+    const invokeOptions = input.abortSignal ? { signal: input.abortSignal } : {};
+    const result = await model.invoke(simpleChatMessages, invokeOptions);
+
+    const content = result.content;
+    finalText = typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content.map((c) => (typeof c === 'string' ? c : (c as { text?: string }).text || '')).join('')
+        : String(content);
+    toolsUsed = [];
+    cb?.onToken?.(finalText, finalText);
+  } else {
+    try {
       ({ finalText, toolsUsed } = await runToolCallingLoop({
         model,
         tools: toolSpecs as any,
         bindTools,
-        messages: fallback,
+        messages: finalMessages,
         ...(cb ? { cb } : {}),
+        ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       }));
-    } else {
-      throw e;
+    } catch (e) {
+      // Tool Calling 미지원 에러 시 단순 채팅 모드로 폴백
+      if (isToolCallingNotSupported(e)) {
+        console.warn('[AI] Tool calling not supported, falling back to simple chat mode');
+
+        // 문서가 있으면 컨텍스트에 직접 포함 (sourceDocument/targetDocument는 input에서 가져옴)
+        const sourceDoc = input.sourceDocument?.slice(0, 10000) ?? '';
+        const targetDoc = input.targetDocument?.slice(0, 10000) ?? '';
+
+        const contextNote = sourceDoc || targetDoc
+          ? `\n\n[문서 컨텍스트]\n원문: ${sourceDoc ? '(포함됨)' : '(없음)'}\n번역문: ${targetDoc ? '(포함됨)' : '(없음)'}`
+          : '';
+
+        const fallbackMessages = replaceLastHumanMessageText(
+          messagesWithGuide,
+          [
+            input.userMessage,
+            contextNote,
+            '',
+            '[안내] 현재 모델은 도구 호출을 지원하지 않아 일부 기능이 제한됩니다.',
+          ].join('\n'),
+        );
+
+        // 도구 없이 단순 invoke
+        const invokeOptions = input.abortSignal ? { signal: input.abortSignal } : {};
+        const result = await model.invoke(fallbackMessages, invokeOptions);
+
+        const content = result.content;
+        finalText = typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? content.map((c) => (typeof c === 'string' ? c : (c as { text?: string }).text || '')).join('')
+            : String(content);
+        toolsUsed = [];
+      } else if (usedImages) {
+        const fallback = replaceLastHumanMessageText(
+          messagesWithGuide,
+          [
+            input.userMessage,
+            '',
+            '[첨부 이미지 안내]',
+            '현재 선택된 모델/Provider에서 이미지 입력이 지원되지 않아, 이미지는 제외하고 진행합니다.',
+            '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
+          ].join('\n'),
+        );
+        ({ finalText, toolsUsed } = await runToolCallingLoop({
+          model,
+          tools: toolSpecs as any,
+          bindTools,
+          messages: fallback,
+          ...(cb ? { cb } : {}),
+        }));
+      } else {
+        throw e;
+      }
     }
   }
 

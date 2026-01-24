@@ -73,7 +73,23 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
     const presets: SelectOptionGroup[] = [];
 
-    // Local LLM 모델 (최상단에 표시)
+    // OpenAI 먼저
+    if (openaiEnabled) {
+      presets.push({
+        label: 'OpenAI',
+        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
+      });
+    }
+
+    // Anthropic 두 번째
+    if (anthropicEnabled) {
+      presets.push({
+        label: 'Anthropic',
+        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
+      });
+    }
+
+    // Local LLM 모델 (맨 아래에 표시)
     if (openaiBaseUrl && availableLocalModels.length > 0) {
       presets.push({
         label: 'Local LLM',
@@ -87,18 +103,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       });
     }
 
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
     return presets;
   }, [openaiEnabled, anthropicEnabled, openaiBaseUrl, availableLocalModels, customModelName]);
 
