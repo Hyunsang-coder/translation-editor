@@ -66,7 +66,7 @@ AskUserQuestion으로 확인:
 다음 작업을 수행할까요?
 - [ ] 커밋만 (git commit)
 - [ ] 커밋 + 태그 (git commit + git tag v1.1.0)
-- [ ] 커밋 + 태그 + 푸시 (권장) ← 이것 선택 시 빌드 자동 시작
+- [ ] 커밋 + 태그 + 푸시 (권장) ← GitHub Actions가 릴리스 생성 + 빌드 자동 시작
 - [ ] 아무것도 안 함 (수동 처리)
 ```
 
@@ -86,34 +86,7 @@ git tag v1.1.0
 git push && git push origin v1.1.0
 ```
 
-### Step 7: Draft Release 생성 (푸시 선택 시)
-
-푸시를 선택한 경우, `gh` CLI로 draft release를 자동 생성:
-
-1. 커밋 메시지에서 변경사항 추출하여 release notes 작성
-2. `gh release create` 실행
-
-```bash
-gh release create v1.1.0 --draft --title "v1.1.0" --notes "release notes..."
-```
-
-Release notes 형식:
-```markdown
-## What's Changed
-
-### ✨ Improvements
-- 새 기능 설명
-
-### 🐛 Bug Fixes
-- 버그 수정 설명
-
-### 📝 Documentation
-- 문서 변경 설명
-
-**Full Changelog**: https://github.com/<owner>/<repo>/compare/v1.0.0...v1.1.0
-```
-
-### Step 8: 결과 표시
+### Step 7: 결과 표시
 
 ```
 ✅ Version Release Complete: 1.0.0 → 1.1.0
@@ -124,12 +97,15 @@ Release notes 형식:
    ✓ Committed: "chore: bump version to 1.1.0"
    ✓ Tagged: v1.1.0
    ✓ Pushed to origin
-   ✓ Draft release created
 
-   🚀 GitHub Actions 빌드가 자동으로 시작됩니다.
+   🚀 GitHub Actions가 자동으로:
+      1. Draft release 생성
+      2. macOS/Windows 빌드
+      3. 아티팩트 업로드
+
       확인: https://github.com/<owner>/<repo>/actions
 
-   📝 Draft release (빌드 완료 후 publish):
+   📝 빌드 완료 후 Draft release publish:
       https://github.com/<owner>/<repo>/releases
 ```
 
@@ -155,7 +131,6 @@ Release notes 형식:
 ### 주의사항
 
 - 릴리즈 전에만 실행 (개발 중 빈번한 업데이트 지양)
-- 태그 푸시 시 GitHub Actions 빌드가 자동 시작됨
+- 태그 푸시 시 GitHub Actions가 자동으로 릴리스 생성 + 빌드 시작
 - 이미 존재하는 태그는 덮어쓸 수 없음 (버전 충돌 주의)
-- Draft release 생성에는 `gh` CLI 필요 (`brew install gh && gh auth login`)
-- `gh` CLI 없으면 draft release 단계 생략
+- 릴리스 생성은 GitHub Actions가 담당 (race condition 방지)
