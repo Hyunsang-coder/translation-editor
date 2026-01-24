@@ -1,5 +1,5 @@
 import type { ITEProject } from '@/types';
-import { getAiConfig } from '@/ai/config';
+import { getAiConfig, isLocalEndpoint } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import i18n from '@/i18n/config';
 import {
@@ -204,20 +204,25 @@ export async function translateSourceDocToTargetDocJson(params: {
   const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
 
-  // 컨텍스트 윈도우: OpenAI 400k, Anthropic 200k
-  const MAX_CONTEXT = cfg.provider === 'anthropic' ? 200_000 : 400_000;
+  // 컨텍스트 윈도우: 설정값 또는 기본값 사용
+  // 로컬 LLM은 cfg.contextLimit에서 가져옴
+  const isLocal = isLocalEndpoint(cfg.openaiBaseUrl);
+  const MAX_CONTEXT = cfg.contextLimit ?? (cfg.provider === 'anthropic' ? 200_000 : 400_000);
   const SAFETY_MARGIN = 0.9;
   const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
   // 최소 출력 토큰 보장 (입력보다 약간 많게 - 번역 시 텍스트가 늘어날 수 있음)
-  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
+  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, isLocal ? 2048 : 8192);
   // 최대 출력 토큰: Provider/모델별 제한 고려
+  // - 로컬 LLM: cfg.maxOutputTokens 또는 4096
   // - Claude 계열: 64000 (Haiku 4.5 기준)
   // - GPT-5 시리즈: 65536
   // - GPT-4.1/4o 등 이전 모델: 16384
-  const maxAllowedTokens = cfg.provider === 'anthropic'
-    ? 64000
-    : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);
+  const maxAllowedTokens = isLocal
+    ? (cfg.maxOutputTokens ?? 4096)
+    : cfg.provider === 'anthropic'
+      ? 64000
+      : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);
   const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   // 입력이 너무 큰 경우 사전 에러
@@ -431,19 +436,23 @@ export async function translateWithStreaming(
   const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
 
-  // 컨텍스트 윈도우: OpenAI 400k, Anthropic 200k
-  const MAX_CONTEXT = cfg.provider === 'anthropic' ? 200_000 : 400_000;
+  // 컨텍스트 윈도우: 설정값 또는 기본값 사용
+  const isLocal = isLocalEndpoint(cfg.openaiBaseUrl);
+  const MAX_CONTEXT = cfg.contextLimit ?? (cfg.provider === 'anthropic' ? 200_000 : 400_000);
   const SAFETY_MARGIN = 0.9;
   const availableOutputTokens = Math.floor((MAX_CONTEXT * SAFETY_MARGIN) - totalInputTokens);
 
-  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
+  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, isLocal ? 2048 : 8192);
   // 최대 출력 토큰: Provider/모델별 제한 고려
+  // - 로컬 LLM: cfg.maxOutputTokens 또는 4096
   // - Claude 계열: 64000 (Haiku 4.5 기준)
   // - GPT-5 시리즈: 65536
   // - GPT-4.1/4o 등 이전 모델: 16384
-  const maxAllowedTokens = cfg.provider === 'anthropic'
-    ? 64000
-    : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);
+  const maxAllowedTokens = isLocal
+    ? (cfg.maxOutputTokens ?? 4096)
+    : cfg.provider === 'anthropic'
+      ? 64000
+      : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);
   const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   if (availableOutputTokens < minOutputTokens) {

@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { ConnectorsSection } from './ConnectorsSection';
+import { testOllamaConnection } from '@/ai/ollamaUtils';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -24,7 +25,52 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     anthropicEnabled,
     setOpenaiEnabled,
     setAnthropicEnabled,
+    // Local LLM
+    openaiBaseUrl,
+    contextLimit,
+    maxOutputTokens,
+    customModelName,
+    availableLocalModels,
+    setOpenaiBaseUrl,
+    setContextLimit,
+    setMaxOutputTokens,
+    setCustomModelName,
+    setAvailableLocalModels,
   } = useAiConfigStore();
+
+  // Local LLM 연결 테스트 상태
+  const [testing, setTesting] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  const handleTestConnection = async () => {
+    if (!openaiBaseUrl) return;
+
+    setTesting(true);
+    setConnectionError(null);
+    try {
+      const result = await testOllamaConnection(openaiBaseUrl);
+      if (result.success) {
+        setAvailableLocalModels(result.models ?? []);
+      } else {
+        setConnectionError(result.error ?? 'Connection failed');
+        setAvailableLocalModels([]);
+      }
+    } catch (e) {
+      setConnectionError(e instanceof Error ? e.message : 'Unknown error');
+      setAvailableLocalModels([]);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleClearLocalLlm = () => {
+    setOpenaiBaseUrl(undefined);
+    setContextLimit(undefined);
+    setMaxOutputTokens(undefined);
+    setCustomModelName(undefined);
+    setAvailableLocalModels([]);
+    setConnectionError(null);
+  };
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -254,6 +300,151 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
                     )}
                 </div>
+            </section>
+
+            {/* Local LLM Settings */}
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">🖥️</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.localLlm.title')}</h3>
+                </div>
+                <p className="text-xs text-editor-muted">
+                    {t('appSettings.localLlm.description')}
+                </p>
+
+                {/* 엔드포인트 입력 */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
+                        {t('appSettings.localLlm.endpoint')}
+                    </label>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            className="flex-1 h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={t('appSettings.localLlm.endpointPlaceholder')}
+                            value={openaiBaseUrl || ''}
+                            onChange={(e) => setOpenaiBaseUrl(e.target.value)}
+                        />
+                        <button
+                            onClick={handleTestConnection}
+                            disabled={!openaiBaseUrl || testing}
+                            className="px-3 py-1.5 text-sm font-medium rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                        >
+                            {testing ? t('appSettings.localLlm.testing') : t('appSettings.localLlm.testConnection')}
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-editor-muted">
+                        {t('appSettings.localLlm.endpointHelp')}
+                    </p>
+
+                    {/* 연결 결과 표시 */}
+                    {availableLocalModels.length > 0 && (
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                            ✓ {t('appSettings.localLlm.connectionSuccess', { count: availableLocalModels.length })}
+                        </p>
+                    )}
+                    {connectionError && (
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                            ✕ {t('appSettings.localLlm.connectionFailed', { error: connectionError })}
+                        </p>
+                    )}
+                </div>
+
+                {/* 모델 선택 (연결 성공 시 표시) */}
+                {availableLocalModels.length > 0 && (
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
+                            {t('appSettings.localLlm.model')}
+                        </label>
+                        <select
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            value={customModelName || ''}
+                            onChange={(e) => setCustomModelName(e.target.value)}
+                        >
+                            <option value="">{t('appSettings.localLlm.modelPlaceholder')}</option>
+                            {availableLocalModels.map((model) => (
+                                <option key={model} value={model}>{model}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                {/* 커스텀 모델명 (연결 안됐을 때 직접 입력) */}
+                {availableLocalModels.length === 0 && openaiBaseUrl && (
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
+                            {t('appSettings.localLlm.model')}
+                        </label>
+                        <input
+                            type="text"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={t('appSettings.localLlm.modelPlaceholder')}
+                            value={customModelName || ''}
+                            onChange={(e) => setCustomModelName(e.target.value)}
+                        />
+                    </div>
+                )}
+
+                {/* 컨텍스트 제한 */}
+                {openaiBaseUrl && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
+                                {t('appSettings.localLlm.contextLimit')}
+                            </label>
+                            <input
+                                type="number"
+                                className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                                placeholder={t('appSettings.localLlm.contextLimitPlaceholder')}
+                                value={contextLimit || ''}
+                                onChange={(e) => setContextLimit(e.target.value ? Number(e.target.value) : undefined)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
+                                {t('appSettings.localLlm.maxOutput')}
+                            </label>
+                            <input
+                                type="number"
+                                className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                                placeholder={t('appSettings.localLlm.maxOutputPlaceholder')}
+                                value={maxOutputTokens || ''}
+                                onChange={(e) => setMaxOutputTokens(e.target.value ? Number(e.target.value) : undefined)}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* 컨텍스트 경고 */}
+                {openaiBaseUrl && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        ⚠️ {t('appSettings.localLlm.contextLimitHelp')}
+                    </p>
+                )}
+
+                {/* 초기화 버튼 */}
+                {openaiBaseUrl && (
+                    <button
+                        onClick={handleClearLocalLlm}
+                        className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                    >
+                        {t('appSettings.localLlm.clearEndpoint')}
+                    </button>
+                )}
+
+                {/* Ollama 설정 팁 */}
+                {openaiBaseUrl && (
+                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 space-y-1">
+                        <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">
+                            💡 {t('appSettings.localLlm.ollamaTips')}
+                        </p>
+                        <ul className="text-[10px] text-blue-700 dark:text-blue-300 list-disc list-inside space-y-0.5">
+                            <li>{t('appSettings.localLlm.ollamaTip1')}</li>
+                            <li>{t('appSettings.localLlm.ollamaTip2')}</li>
+                            <li>{t('appSettings.localLlm.ollamaTip3')}</li>
+                        </ul>
+                    </div>
+                )}
             </section>
 
             {/* Connectors */}

@@ -1,6 +1,7 @@
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
-import { getAiConfig } from '@/ai/config';
+import { getAiConfig, isLocalEndpoint } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { isToolCallingNotSupported } from '@/ai/ollamaUtils';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
@@ -788,7 +789,10 @@ export async function streamAssistantReply(
   if (includeTarget) toolSpecs.push(getTargetDocumentTool);
 
   // 내장 웹 검색 도구 (provider별 분기)
+  // 로컬 엔드포인트에서는 내장 웹 검색 사용 불가
+  const isLocal = isLocalEndpoint(cfg.openaiBaseUrl);
   function getBuiltInWebSearchTool(provider: string): Record<string, unknown>[] {
+    if (isLocal) return []; // 로컬 LLM은 내장 웹 검색 미지원
     if (provider === 'openai') {
       return [{ type: 'web_search_preview' }];
     }
@@ -843,7 +847,40 @@ export async function streamAssistantReply(
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
     }));
   } catch (e) {
-    if (usedImages) {
+    // Tool Calling 미지원 에러 시 단순 채팅 모드로 폴백
+    if (isToolCallingNotSupported(e)) {
+      console.warn('[AI] Tool calling not supported, falling back to simple chat mode');
+
+      // 문서가 있으면 컨텍스트에 직접 포함 (sourceDocument/targetDocument는 input에서 가져옴)
+      const sourceDoc = input.sourceDocument?.slice(0, 10000) ?? '';
+      const targetDoc = input.targetDocument?.slice(0, 10000) ?? '';
+
+      const contextNote = sourceDoc || targetDoc
+        ? `\n\n[문서 컨텍스트]\n원문: ${sourceDoc ? '(포함됨)' : '(없음)'}\n번역문: ${targetDoc ? '(포함됨)' : '(없음)'}`
+        : '';
+
+      const fallbackMessages = replaceLastHumanMessageText(
+        messagesWithGuide,
+        [
+          input.userMessage,
+          contextNote,
+          '',
+          '[안내] 현재 모델은 도구 호출을 지원하지 않아 일부 기능이 제한됩니다.',
+        ].join('\n'),
+      );
+
+      // 도구 없이 단순 invoke
+      const invokeOptions = input.abortSignal ? { signal: input.abortSignal } : {};
+      const result = await model.invoke(fallbackMessages, invokeOptions);
+
+      const content = result.content;
+      finalText = typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content.map((c) => (typeof c === 'string' ? c : (c as { text?: string }).text || '')).join('')
+          : String(content);
+      toolsUsed = [];
+    } else if (usedImages) {
       const fallback = replaceLastHumanMessageText(
         messagesWithGuide,
         [

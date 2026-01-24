@@ -33,6 +33,32 @@ export interface AiConfig {
   anthropicApiKey?: string;
   maxRecentMessages: number;
   judgeModel: string;
+  // Local LLM 설정
+  openaiBaseUrl?: string;      // 커스텀 엔드포인트 (예: http://localhost:11434/v1)
+  contextLimit?: number;       // 컨텍스트 크기 (토큰)
+  maxOutputTokens?: number;    // 출력 토큰 제한
+}
+
+/**
+ * 로컬 엔드포인트인지 확인
+ * localhost, 127.0.0.1, 0.0.0.0, 사설 IP 대역 등을 감지
+ */
+export function isLocalEndpoint(baseUrl?: string): boolean {
+  if (!baseUrl) return false;
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\.\d+\./.test(baseUrl);
+}
+
+/**
+ * 컨텍스트 제한 기본값 계산
+ * - 로컬: 16000 (Ollama 기본 2048보다 높지만 안전한 값)
+ * - OpenAI: 400000
+ * - Anthropic: 200000
+ */
+export function getDefaultContextLimit(baseUrl?: string, provider?: AiProvider): number {
+  if (isLocalEndpoint(baseUrl)) {
+    return 16_000; // 로컬 LLM 보수적 기본값
+  }
+  return provider === 'anthropic' ? 200_000 : 400_000;
 }
 
 function getEnvString(key: string): string | undefined {
@@ -54,21 +80,38 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
 
   // 2. 용도에 따른 모델 선택
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
-  const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
+  let rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
 
-  // 3. 모델명에서 provider 자동 결정
-  const provider: AiProvider = rawModel.startsWith('claude') ? 'anthropic' : 'openai';
+  // 3. 커스텀 모델명이 있으면 사용 (Local LLM)
+  if (store.customModelName) {
+    rawModel = store.customModelName;
+  }
 
-  // 4. 해당 provider의 프리셋에서 모델 검증
-  const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
-  const presets = MODEL_PRESETS[presetKey];
-  const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
+  // 4. 모델명에서 provider 자동 결정
+  // 로컬 엔드포인트가 설정되어 있으면 OpenAI 호환 API 사용
+  const isLocal = isLocalEndpoint(store.openaiBaseUrl);
+  const provider: AiProvider = isLocal
+    ? 'openai' // 로컬은 OpenAI 호환 API 사용
+    : rawModel.startsWith('claude')
+      ? 'anthropic'
+      : 'openai';
 
-  // 5. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
+  // 5. 해당 provider의 프리셋에서 모델 검증 (로컬이면 검증 스킵)
+  let model = rawModel;
+  if (!isLocal && !store.customModelName) {
+    const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
+    const presets = MODEL_PRESETS[presetKey];
+    model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
+  }
+
+  // 6. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
   const openaiApiKey = store.openaiApiKey;
   const anthropicApiKey = store.anthropicApiKey;
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
+
+  // 7. 컨텍스트 제한 계산
+  const contextLimit = store.contextLimit ?? getDefaultContextLimit(store.openaiBaseUrl, provider);
 
   // exactOptionalPropertyTypes 대응: undefined 값은 프로퍼티 자체를 생략
   return {
@@ -79,5 +122,9 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: 20,
     judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',
+    // Local LLM 설정
+    ...(store.openaiBaseUrl ? { openaiBaseUrl: store.openaiBaseUrl } : {}),
+    contextLimit,
+    ...(store.maxOutputTokens ? { maxOutputTokens: store.maxOutputTokens } : {}),
   };
 }

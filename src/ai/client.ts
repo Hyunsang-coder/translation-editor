@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { getAiConfig } from '@/ai/config';
+import { getAiConfig, isLocalEndpoint } from '@/ai/config';
 import i18n from '@/i18n/config';
 
 /**
@@ -43,7 +43,10 @@ export function createChatModel(
 
   // OpenAI (또는 mock → OpenAI fallback)
   if (cfg.provider === 'openai' || cfg.provider === 'mock') {
-    if (!cfg.openaiApiKey) {
+    const isLocal = isLocalEndpoint(cfg.openaiBaseUrl);
+
+    // 로컬 엔드포인트면 API 키 없이도 허용 (Ollama는 아무 값이나 가능)
+    if (!isLocal && !cfg.openaiApiKey) {
       throw new Error(i18n.t('errors.openaiApiKeyMissing'));
     }
 
@@ -52,19 +55,38 @@ export function createChatModel(
     const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
 
     // 번역 모드에서는 max_tokens를 높게 설정하여 긴 문서도 완전히 번역되도록 함
-    // GPT-5 시리즈는 400k 컨텍스트 윈도우 지원, 출력 토큰도 충분히 확보
+    // 로컬 LLM은 보수적인 기본값 사용
     // options.maxTokens가 명시적으로 전달되면 해당 값 사용
+    let defaultMaxTokens: number | undefined;
+    if (useFor === 'translation') {
+      if (isLocal) {
+        defaultMaxTokens = cfg.maxOutputTokens ?? 4096;
+      } else if (isGpt5) {
+        defaultMaxTokens = 65536;
+      } else {
+        defaultMaxTokens = 16384;
+      }
+    } else if (isLocal) {
+      defaultMaxTokens = cfg.maxOutputTokens ?? 4096;
+    }
+
     const maxTokensOption = options?.maxTokens
       ? { maxTokens: options.maxTokens }
-      : (useFor === 'translation' ? { maxTokens: 65536 } : {});
+      : (defaultMaxTokens ? { maxTokens: defaultMaxTokens } : {});
+
+    // Responses API는 로컬 엔드포인트에서 지원하지 않음
+    const useResponsesApi = useFor === 'chat' && !isLocal;
 
     return new ChatOpenAI({
-      apiKey: cfg.openaiApiKey,
+      apiKey: isLocal ? (cfg.openaiApiKey || 'ollama') : cfg.openaiApiKey,
       model,
+      // 로컬 엔드포인트 설정
+      ...(cfg.openaiBaseUrl ? { configuration: { baseURL: cfg.openaiBaseUrl } } : {}),
       ...temperatureOption,
       ...maxTokensOption,
       // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
-      ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
+      // 로컬 엔드포인트는 Responses API 미지원
+      ...(useResponsesApi ? { useResponsesApi: true } : {}),
     });
   }
 

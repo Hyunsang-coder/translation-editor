@@ -65,10 +65,28 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
   const translationModel = useAiConfigStore((s) => s.translationModel);
   const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
+  const customModelName = useAiConfigStore((s) => s.customModelName);
+  const availableLocalModels = useAiConfigStore((s) => s.availableLocalModels);
+  const openaiBaseUrl = useAiConfigStore((s) => s.openaiBaseUrl);
 
   // 활성화된 프로바이더의 모델만 표시
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
     const presets: SelectOptionGroup[] = [];
+
+    // Local LLM 모델 (최상단에 표시)
+    if (openaiBaseUrl && availableLocalModels.length > 0) {
+      presets.push({
+        label: 'Local LLM',
+        options: availableLocalModels.map((m) => ({ value: m, label: m })),
+      });
+    } else if (openaiBaseUrl && customModelName) {
+      // 모델 목록이 없지만 커스텀 모델명이 있는 경우
+      presets.push({
+        label: 'Local LLM',
+        options: [{ value: customModelName, label: customModelName }],
+      });
+    }
+
     if (openaiEnabled) {
       presets.push({
         label: 'OpenAI',
@@ -82,7 +100,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       });
     }
     return presets;
-  }, [openaiEnabled, anthropicEnabled]);
+  }, [openaiEnabled, anthropicEnabled, openaiBaseUrl, availableLocalModels, customModelName]);
 
   // 모든 모델 플랫 리스트 (유효성 검사용)
   const allTranslationModels = useMemo(() => {

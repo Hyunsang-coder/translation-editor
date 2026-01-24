@@ -26,6 +26,12 @@ interface AiConfigState {
   // NEW: 프로바이더 사용 여부 체크박스
   openaiEnabled: boolean;
   anthropicEnabled: boolean;
+  // Local LLM 설정 (Ollama, LM Studio 등)
+  openaiBaseUrl: string | undefined;       // 커스텀 엔드포인트 (예: http://localhost:11434/v1)
+  contextLimit: number | undefined;        // 컨텍스트 크기 (토큰), 기본값: 자동
+  maxOutputTokens: number | undefined;     // 출력 토큰 제한, 기본값: 4096 (로컬)
+  customModelName: string | undefined;     // 커스텀 모델명 (프리셋 외)
+  availableLocalModels: string[];          // 연결된 로컬 서버의 모델 목록
 }
 
 interface AiConfigActions {
@@ -39,6 +45,12 @@ interface AiConfigActions {
   // NEW: 프로바이더 enabled 설정
   setOpenaiEnabled: (enabled: boolean) => void;
   setAnthropicEnabled: (enabled: boolean) => void;
+  // Local LLM 설정
+  setOpenaiBaseUrl: (url: string | undefined) => void;
+  setContextLimit: (limit: number | undefined) => void;
+  setMaxOutputTokens: (tokens: number | undefined) => void;
+  setCustomModelName: (name: string | undefined) => void;
+  setAvailableLocalModels: (models: string[]) => void;
 }
 
 // 환경변수 읽기 헬퍼
@@ -95,6 +107,12 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         // 기본값: OpenAI만 활성화
         openaiEnabled: true,
         anthropicEnabled: false,
+        // Local LLM 기본값
+        openaiBaseUrl: undefined,
+        contextLimit: undefined,
+        maxOutputTokens: undefined,
+        customModelName: undefined,
+        availableLocalModels: [],
 
         loadSecureKeys: async () => {
           if (keysLoaded) return;
@@ -231,11 +249,30 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             }
           }
         },
+
+        // Local LLM 설정
+        setOpenaiBaseUrl: (url) => {
+          const trimmed = url?.trim();
+          set({ openaiBaseUrl: trimmed || undefined });
+        },
+        setContextLimit: (limit) => {
+          set({ contextLimit: limit });
+        },
+        setMaxOutputTokens: (tokens) => {
+          set({ maxOutputTokens: tokens });
+        },
+        setCustomModelName: (name) => {
+          const trimmed = name?.trim();
+          set({ customModelName: trimmed || undefined });
+        },
+        setAvailableLocalModels: (models) => {
+          set({ availableLocalModels: models });
+        },
       };
     },
     {
       name: 'ite-ai-config',
-      version: 5, // 버전 업: Multi-provider 지원 (provider 필드 제거)
+      version: 6, // 버전 업: Local LLM 지원 추가
       migrate: (persisted: unknown, version: number) => {
         const data = persisted as Record<string, unknown>;
         if (version < 5) {
@@ -247,6 +284,21 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             // 기존 provider 기반으로 enabled 설정
             openaiEnabled: oldProvider !== 'anthropic',  // anthropic이 아니면 true
             anthropicEnabled: oldProvider === 'anthropic',
+            // Local LLM 기본값
+            openaiBaseUrl: undefined,
+            contextLimit: undefined,
+            maxOutputTokens: undefined,
+            customModelName: undefined,
+          };
+        }
+        if (version < 6) {
+          // v5 → v6 마이그레이션: Local LLM 필드 추가
+          return {
+            ...data,
+            openaiBaseUrl: undefined,
+            contextLimit: undefined,
+            maxOutputTokens: undefined,
+            customModelName: undefined,
           };
         }
         return data;
@@ -256,6 +308,10 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         chatModel: state.chatModel,
         openaiEnabled: state.openaiEnabled,
         anthropicEnabled: state.anthropicEnabled,
+        openaiBaseUrl: state.openaiBaseUrl,
+        contextLimit: state.contextLimit,
+        maxOutputTokens: state.maxOutputTokens,
+        customModelName: state.customModelName,
       }),
       merge: (persisted, current) => {
         const next = { ...current, ...(persisted as Partial<AiConfigState>) };

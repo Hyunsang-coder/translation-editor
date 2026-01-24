@@ -82,6 +82,29 @@
     "maxChatSessionsDescription": "Maximum number of chat tabs that can be open at once. (1-5)",
     "chatLengthNotifyThreshold": "Conversation Length Notify Threshold",
     "chatLengthNotifyThresholdDescription": "Recommend starting a new session when this many messages accumulate. (10-50)",
+    "localLlm": {
+      "title": "Local LLM Settings",
+      "description": "Connect to local LLM servers that provide OpenAI-compatible APIs like Ollama and LM Studio.",
+      "endpoint": "API Endpoint",
+      "endpointPlaceholder": "http://localhost:11434/v1",
+      "endpointHelp": "Ollama: :11434/v1 | LM Studio: :1234/v1",
+      "testConnection": "Test Connection",
+      "testing": "Testing...",
+      "connectionSuccess": "Connected! Found {{count}} model(s)",
+      "connectionFailed": "Connection failed: {{error}}",
+      "model": "Model",
+      "modelPlaceholder": "e.g., llama3.1:8b",
+      "contextLimit": "Context Limit (tokens)",
+      "contextLimitPlaceholder": "16000",
+      "contextLimitHelp": "Ollama default is 2048. Set OLLAMA_CONTEXT_LENGTH on server.",
+      "maxOutput": "Max Output Tokens",
+      "maxOutputPlaceholder": "4096",
+      "ollamaTips": "Ollama Tips",
+      "ollamaTip1": "Longer docs: OLLAMA_CONTEXT_LENGTH=32768 ollama serve",
+      "ollamaTip2": "Tool Calling models: llama3.1, qwen2.5, mistral",
+      "ollamaTip3": "Recommended: ollama pull llama3.1:8b",
+      "clearEndpoint": "Clear endpoint settings"
+    },
     "connectors": {
       "title": "Connectors",
       "description": "Connect to external services so AI can search and utilize your data.",
@@ -299,7 +322,9 @@
     "googleApiKeyMissing": "Google API key is missing. Please enter it in App Settings.",
     "unsupportedProvider": "Unsupported AI provider: {{provider}}. Please select a valid provider in App Settings.",
     "translationPreviewError": "Solution: Increase the model's max_tokens value in Settings, or try translating a shorter document.",
-    "aiResponseFailed": "Failed to generate AI response"
+    "aiResponseFailed": "Failed to generate AI response",
+    "contextLimitExceeded": "Context limit exceeded: {{actual}} > {{limit}} tokens",
+    "toolCallingNotSupported": "This model does not support tool calling. Some features will be limited."
   },
   "update": {
     "newVersionAvailable": "New Version Available",
