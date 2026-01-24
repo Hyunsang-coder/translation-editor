@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4NUZDODUyNzY5NDUxQjkKUldTNVVaUjJVc2hmT0YzZFVybVoxSU41L29LYUNaQVZWT2JjRWVLcFpzbW9RZThXc2g2U0xxLzgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUzN0FFQzA3QTQ2MDZCQjkKUldTNWEyQ2tCK3g2NC8xRUE1em9PMzNNOFVjYnJlbG9kK3A0S25INlQvZGVRUHRGelhNWHpMSm0K",
       "endpoints": [
         "https://github.com/Hyunsang-coder/translation-editor/releases/latest/download/latest.json"
       ],

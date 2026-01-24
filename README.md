@@ -93,6 +93,25 @@ GitHub Actions로 자동 빌드 (`v*` 태그 push 시):
 
 릴리즈 노트는 커밋 히스토리 기반 자동 생성됩니다.
 
+## 설치
+
+### macOS
+
+[Releases](https://github.com/Hyunsang-coder/translation-editor/releases)에서 `.dmg` 파일을 다운로드하여 설치합니다.
+
+> **"앱이 손상되었습니다" 오류 발생 시**
+>
+> 현재 Apple Developer 계정으로 공증되지 않아 macOS Gatekeeper 경고가 발생할 수 있습니다.
+> 터미널에서 다음 명령어를 실행하세요:
+> ```bash
+> xattr -cr /Applications/OddEyes.ai.app
+> ```
+> 또는 앱을 **우클릭 → 열기**로 실행하면 됩니다.
+
+### Windows
+
+[Releases](https://github.com/Hyunsang-coder/translation-editor/releases)에서 `.exe` 설치 파일을 다운로드하여 설치합니다.
+
 ## 프로젝트 구조
 
 ```
