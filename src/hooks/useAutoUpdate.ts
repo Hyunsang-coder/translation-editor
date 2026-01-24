@@ -82,13 +82,14 @@ export function useAutoUpdate() {
           case 'Started':
             contentLength = event.data.contentLength ?? 0;
             break;
-          case 'Progress':
+          case 'Progress': {
             downloaded += event.data.chunkLength;
             const progress = contentLength > 0
               ? Math.round((downloaded / contentLength) * 100)
               : 0;
             setState(prev => ({ ...prev, progress }));
             break;
+          }
           case 'Finished':
             setState(prev => ({ ...prev, progress: 100 }));
             break;

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { open } from '@tauri-apps/plugin-shell';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { ConnectorsSection } from './ConnectorsSection';
@@ -269,14 +270,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <p>{t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__}</p>
                     <p>
                       {t('appSettings.helpInfoHomepage', '홈페이지')}:{' '}
-                      <a
-                        href="https://oddeyes-web.vercel.app/"
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => open('https://oddeyes-web.vercel.app/')}
                         className="text-primary-500 hover:text-primary-600 hover:underline"
                       >
                         oddeyes-web.vercel.app
-                      </a>
+                      </button>
                     </p>
                 </div>
             </section>

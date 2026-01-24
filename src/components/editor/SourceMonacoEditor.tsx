@@ -25,7 +25,7 @@ export function SourceMonacoEditor({ value, onChange }: SourceMonacoEditorProps)
   const options: MonacoEditorNS.IStandaloneEditorConstructionOptions = useMemo(
     () => ({
       fontFamily:
-        "'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
       fontSize: 16,
       lineHeight: 28,
       lineNumbers: 'off',

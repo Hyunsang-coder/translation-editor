@@ -60,7 +60,7 @@
 /* Base Styles */
 @layer base {
   html {
-    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -271,7 +271,7 @@
   @apply outline-none;
   @apply min-h-[200px];
   @apply px-6 py-4;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: var(--editor-font-size, 14px);
   line-height: var(--editor-line-height, 1.4);
   color: var(--editor-text);
@@ -526,7 +526,7 @@
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.55;
   color: var(--editor-text);
@@ -813,7 +813,7 @@
 .chat-composer-tiptap {
   @apply outline-none;
   @apply px-0 py-0 min-h-0;  /* ProseMirror 기본 스타일(px-6 py-4) 오버라이드 */
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   color: var(--editor-text);

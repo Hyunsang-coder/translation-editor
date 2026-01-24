@@ -12,6 +12,7 @@
     "dialog:allow-confirm",
     "dialog:allow-ask",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "shell:allow-open"
   ]
 }

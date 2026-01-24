@@ -38,9 +38,11 @@ npm run tauri:dev    # 개발 서버
 npm run tauri:build  # 프로덕션 빌드
 ```
 
-## 테스트
+## 린트 & 테스트
 
 ```bash
+npm run lint          # ESLint 검사
+npm run lint:fix      # 자동 수정
 npm test              # Watch mode
 npm run test:run      # Single run
 npm run test:coverage # Coverage report

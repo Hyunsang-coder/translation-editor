@@ -3,10 +3,19 @@
 ## 10.1 기술 스택
 
 - **State Management**: Zustand (Global Store), Immer (Immutable Updates)
-- **Formatting/Linting**: Prettier, ESLint
+- **Linting**: ESLint 9 (flat config), TypeScript-ESLint, React Hooks 플러그인
 - **Testing**: Vitest (Unit), Rust 테스트 (`cargo test`)
 - **E2E Testing**: 미구현 (Playwright 도입 예정)
 - **Git Hooks**: Native Git Hooks (pre-commit TypeScript 타입 체크)
+
+### 린트 명령어
+
+```bash
+npm run lint          # ESLint 검사
+npm run lint:fix      # 자동 수정 가능한 이슈 수정
+```
+
+설정 파일: `eslint.config.js` (ESLint 9 flat config)
 
 ---
 
@@ -36,6 +45,7 @@ npm run test:coverage # Coverage report
 | `src/stores/chatStore.selectors.test.ts` | Zustand 그룹 셀렉터 | 7 |
 | `src/utils/normalizeForSearch.test.ts` | 텍스트 정규화, 유니코드 처리 | 22 |
 | `src/utils/imagePlaceholder.test.ts` | 이미지 추출/복원, 토큰 절약 계산 | 21 |
+| `src/utils/cleanSuggestionContent.test.ts` | AI 제안 콘텐츠 정리 | 12 |
 
 ### Backend (Rust)
 

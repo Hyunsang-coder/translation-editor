@@ -244,7 +244,7 @@ export function ProjectSidebar(): JSX.Element {
               <line x1="9" y1="3" x2="9" y2="21" />
             </svg>
           </button>
-          <div className="text-xs font-semibold text-editor-text">Projects</div>
+          <div className="text-xs font-semibold text-editor-text">{t('projectSidebar.projects')}</div>
         </div>
 
         {/* Actions */}

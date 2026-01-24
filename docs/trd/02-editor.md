@@ -10,7 +10,7 @@
 - Source/Target 모두 편집 가능 상태로 두되, Focus Mode에서 Source를 숨길 수 있습니다.
 
 ### What (권장 옵션)
-- **폰트/스타일**: Pretendard, 16px, line-height 1.8, max-width 800px, padding 24px
+- **폰트/스타일**: Noto Sans KR (로컬 번들, @fontsource), 16px, line-height 1.8, max-width 800px, padding 24px
 - **지원 포맷**: Heading(H1-H6), Bullet/Ordered List, Bold, Italic, Strike, Blockquote, Link, Table, Image, Placeholder, (선택) Code Block
 - **추가 포맷 (에디터 전용)**: Underline, Highlight, Subscript, Superscript
   - 에디터에서 완전히 지원되는 TipTap Extension

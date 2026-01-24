@@ -52,6 +52,12 @@ npm run build
 npm run tauri:build
 ```
 
+### Linting
+```bash
+npm run lint          # ESLint check
+npm run lint:fix      # Auto-fix
+```
+
 ### Testing
 ```bash
 # Frontend testing (Vitest)
@@ -108,7 +114,7 @@ npx tauri build --bundles nsis   # Windows
 - **Storage Format**: TipTap JSON stored in SQLite `documents` table
 - **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, tables, images
 - **Editor-only Formats**: Underline, Highlight, Subscript, Superscript (lost during Markdown conversion)
-- **Notion-Style UX**: Pretendard font, 16px, line-height 1.8, max-width 800px
+- **Notion-Style UX**: Noto Sans KR font (locally bundled via @fontsource), 16px, line-height 1.8, max-width 800px
 - Both editors are editable; Focus Mode can hide Source panel
 
 #### 2. AI Interaction Model

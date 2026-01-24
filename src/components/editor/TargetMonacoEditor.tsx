@@ -246,7 +246,7 @@ export function TargetMonacoEditor({
     () => ({
       // Document Mode options (TRD)
       fontFamily:
-        "'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
       fontSize: 16,
       lineHeight: 28, // 16px * 1.75 ~= 28 (TRD 1.8에 근접)
       lineNumbers: 'off',
