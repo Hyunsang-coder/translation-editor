@@ -91,7 +91,7 @@ jobs:
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
   update-release-notes:
-    needs: build
+    needs: create-release  # 빌드와 병렬 실행
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
