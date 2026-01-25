@@ -41,8 +41,7 @@ RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"gpt-5-nano\",
-    \"messages\": [{\"role\": \"user\", \"content\": $PROMPT_ESCAPED}],
-    \"temperature\": 0.7
+    \"messages\": [{\"role\": \"user\", \"content\": $PROMPT_ESCAPED}]
   }")
 
 NOTES=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
