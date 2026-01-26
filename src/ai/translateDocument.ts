@@ -8,8 +8,8 @@ import {
   type ChunkedTranslationResult,
 } from './chunking';
 import {
-  tipTapJsonToMarkdown,
-  markdownToTipTapJson,
+  tipTapJsonToMarkdownForTranslation,
+  markdownToTipTapJsonForTranslation,
   estimateMarkdownTokens,
   detectMarkdownTruncation,
   extractTranslationMarkdown,
@@ -138,7 +138,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   // ============================================================
   // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
   // ============================================================
-  const rawSourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+  const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
 
   // 이미지 URL(특히 Base64)을 플레이스홀더로 대체하여 토큰 절약
   const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
@@ -174,7 +174,8 @@ export async function translateSourceDocToTargetDocJson(params: {
     '- 오직 구분자 내부에 번역된 Markdown만 출력',
     '',
     '=== 번역 규칙 ===',
-    '- 문서 구조/서식(heading, list, bold, italic, link 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
+    '- 문서 구조/서식(heading, list, bold, italic, link, table 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
+    '- HTML 테이블(<table>...</table>)이 있으면 테이블 구조와 속성은 그대로 유지하고, 셀 안의 텍스트만 번역하세요.',
     '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
     '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
     '',
@@ -305,7 +306,7 @@ export async function translateSourceDocToTargetDocJson(params: {
     ? restoreImages(translatedMarkdownRaw, imageMap)
     : translatedMarkdownRaw;
 
-  const translatedDoc = markdownToTipTapJson(translatedMarkdown);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
@@ -369,7 +370,7 @@ export async function translateWithStreaming(
   }
 
   // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
-  const rawSourceMarkdown = tipTapJsonToMarkdown(params.sourceDocJson);
+  const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
   const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
 
   // 이미지 토큰 절약량 로깅 (디버그용)
@@ -403,7 +404,8 @@ export async function translateWithStreaming(
     '- 오직 구분자 내부에 번역된 Markdown만 출력',
     '',
     '=== 번역 규칙 ===',
-    '- 문서 구조/서식(heading, list, bold, italic, link 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
+    '- 문서 구조/서식(heading, list, bold, italic, link, table 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
+    '- HTML 테이블(<table>...</table>)이 있으면 테이블 구조와 속성은 그대로 유지하고, 셀 안의 텍스트만 번역하세요.',
     '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
     '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
     '',
@@ -539,7 +541,7 @@ export async function translateWithStreaming(
     ? restoreImages(translatedMarkdownRaw, imageMap)
     : translatedMarkdownRaw;
 
-  const translatedDoc = markdownToTipTapJson(translatedMarkdown);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
