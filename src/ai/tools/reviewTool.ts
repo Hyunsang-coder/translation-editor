@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useReviewStore, type ReviewIntensity, isPolishingMode } from '@/stores/reviewStore';
-import { htmlToMarkdown } from '@/utils/markdownConverter';
+import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
 
@@ -43,12 +43,23 @@ export function buildAlignedChunks(
   let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
 
   for (const seg of orderedSegments) {
-    // HTML → Markdown 변환으로 포맷 정보 유지 (제목, 리스트, 볼드 등)
+    // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블도 HTML로 보존)
+    // 번역용 함수 사용: 셀 내 리스트/다중 paragraph가 있는 테이블도 완전 보존
     const sourceText = seg.sourceIds
-      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .map(id => {
+        const html = project.blocks[id]?.content || '';
+        if (!html.trim()) return '';
+        const json = htmlToTipTapJson(html);
+        return tipTapJsonToMarkdownForTranslation(json);
+      })
       .join('\n');
     const targetText = seg.targetIds
-      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .map(id => {
+        const html = project.blocks[id]?.content || '';
+        if (!html.trim()) return '';
+        const json = htmlToTipTapJson(html);
+        return tipTapJsonToMarkdownForTranslation(json);
+      })
       .join('\n');
     const segmentSize = sourceText.length + targetText.length;
 
@@ -102,12 +113,22 @@ export async function buildAlignedChunksAsync(
 
     const seg = orderedSegments[i]!;
 
-    // HTML → Markdown 변환
+    // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블도 HTML로 보존)
     const sourceText = seg.sourceIds
-      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .map(id => {
+        const html = project.blocks[id]?.content || '';
+        if (!html.trim()) return '';
+        const json = htmlToTipTapJson(html);
+        return tipTapJsonToMarkdownForTranslation(json);
+      })
       .join('\n');
     const targetText = seg.targetIds
-      .map(id => htmlToMarkdown(project.blocks[id]?.content || ''))
+      .map(id => {
+        const html = project.blocks[id]?.content || '';
+        if (!html.trim()) return '';
+        const json = htmlToTipTapJson(html);
+        return tipTapJsonToMarkdownForTranslation(json);
+      })
       .join('\n');
     const segmentSize = sourceText.length + targetText.length;
 
@@ -280,10 +301,17 @@ const POLISH_OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 - 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
 - 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
 
+## HTML 테이블 처리 규칙
+- 테이블이 <table> HTML 형식으로 전달될 수 있음
+- 테이블 **내용**(셀 안의 텍스트)만 검수 대상, HTML 태그 자체는 무시
+- excerpt 작성 시: 셀 내 텍스트만 발췌 (예: "작업 항목", "1850 md")
+- **금지**: HTML 태그를 excerpt에 포함 (예: "<td>텍스트</td>")
+
 ## suggestedFix 작성 규칙 (필수!)
 - suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
 - 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
 - 범위가 다르면 문장이 깨짐!
+- 테이블 셀 내용 수정 시: 셀 텍스트만 제안 (HTML 태그 없이)
 
 금지: 마커 외부 텍스트, 설명문, 마크다운
 문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;
@@ -361,10 +389,18 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 - 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
 - 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
 
+## HTML 테이블 처리 규칙
+- 테이블이 <table> HTML 형식으로 전달될 수 있음
+- 테이블 **내용**(셀 안의 텍스트)만 검수 대상, HTML 태그 자체는 무시
+- excerpt 작성 시: 셀 내 텍스트만 발췌 (예: "작업 항목", "1850 md")
+- **금지**: 전체 테이블 HTML을 excerpt로 복사 (예: "<table>...</table>")
+- **금지**: HTML 태그를 excerpt에 포함 (예: "<td>텍스트</td>")
+
 ## suggestedFix 작성 규칙 (필수!)
 - suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
 - 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
 - 범위가 다르면 문장이 깨짐!
+- 테이블 셀 내용 수정 시: 셀 텍스트만 제안 (HTML 태그 없이)
 
 금지: 마커 외부 텍스트, 설명문, 마크다운
 문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;

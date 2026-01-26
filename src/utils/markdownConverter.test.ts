@@ -12,6 +12,7 @@ import {
   tipTapJsonToMarkdown,
   tipTapJsonToMarkdownForTranslation,
   markdownToTipTapJsonForTranslation,
+  htmlToTipTapJson,
 } from './markdownConverter';
 
 describe('markdownConverter - 기존 함수 (html: false)', () => {
@@ -325,5 +326,102 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     // 기존 함수는 [table]로 변환 (기존 동작 유지)
     const markdown = tipTapJsonToMarkdown(complexTableJson);
     expect(markdown).toContain('[table]');
+  });
+});
+
+describe('markdownConverter - 검수(Review) 파이프라인 시나리오', () => {
+  it('htmlToTipTapJson + tipTapJsonToMarkdownForTranslation: 복잡한 테이블 HTML이 검수에서 보존되어야 함', () => {
+    // 검수 청킹에서 사용하는 변환 체인 테스트
+    // HTML → TipTap JSON → Markdown (with HTML tables)
+    const htmlWithComplexTable = `
+      <table>
+        <tr>
+          <th><p>작업 항목</p></th>
+          <th><p>예상 공수</p></th>
+        </tr>
+        <tr>
+          <td>
+            <p>LA-Building 구현</p>
+            <ul><li>서버 설정</li><li>클라이언트 구현</li></ul>
+          </td>
+          <td><p>1850 md</p></td>
+        </tr>
+      </table>
+    `;
+
+    // Step 1: HTML → TipTap JSON
+    const json = htmlToTipTapJson(htmlWithComplexTable);
+    expect(json.type).toBe('doc');
+
+    // Step 2: TipTap JSON → Markdown (번역용, HTML 테이블 보존)
+    const markdown = tipTapJsonToMarkdownForTranslation(json);
+
+    console.log('Review pipeline - Markdown output:', markdown);
+
+    // 테이블이 HTML로 보존되어야 함 (NOT [table])
+    expect(markdown).toContain('<table');
+    expect(markdown).not.toContain('[table]');
+
+    // 모든 텍스트 내용이 보존되어야 함
+    expect(markdown).toContain('작업 항목');
+    expect(markdown).toContain('예상 공수');
+    expect(markdown).toContain('LA-Building');
+    expect(markdown).toContain('서버 설정');
+    expect(markdown).toContain('클라이언트 구현');
+    expect(markdown).toContain('1850 md');
+  });
+
+  it('셀 내 리스트가 있는 테이블도 검수용 변환에서 내용이 보존되어야 함', () => {
+    const tableWithList = {
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                {
+                  type: 'tableCell',
+                  content: [
+                    { type: 'paragraph', content: [{ type: 'text', text: '할 일' }] },
+                    {
+                      type: 'bulletList',
+                      content: [
+                        {
+                          type: 'listItem',
+                          content: [
+                            { type: 'paragraph', content: [{ type: 'text', text: '항목 A' }] },
+                          ],
+                        },
+                        {
+                          type: 'listItem',
+                          content: [
+                            { type: 'paragraph', content: [{ type: 'text', text: '항목 B' }] },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const markdown = tipTapJsonToMarkdownForTranslation(tableWithList);
+
+    console.log('Table with list - Markdown output:', markdown);
+
+    // HTML 테이블로 변환되어야 함
+    expect(markdown).toContain('<table');
+    expect(markdown).not.toContain('[table]');
+
+    // 모든 내용 보존
+    expect(markdown).toContain('할 일');
+    expect(markdown).toContain('항목 A');
+    expect(markdown).toContain('항목 B');
   });
 });
