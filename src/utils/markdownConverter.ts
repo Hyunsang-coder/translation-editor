@@ -5,7 +5,8 @@
  * 번역 파이프라인에서 토큰 효율성을 위해 Markdown을 중간 형식으로 사용합니다.
  */
 
-import { Editor, type Content } from '@tiptap/core';
+import { Editor, type Content, getHTMLFromFragment } from '@tiptap/core';
+import { Fragment } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Table from '@tiptap/extension-table';
@@ -35,7 +36,12 @@ export type TipTapDocJson = Record<string, unknown>;
 
 // Extension 캐시 (성능 최적화: 매번 새로 생성하지 않음)
 let cachedExtensions: ReturnType<typeof createExtensions> | null = null;
+let cachedExtensionsForTranslation: ReturnType<typeof createExtensionsForTranslation> | null = null;
 
+/**
+ * 기본 Extension 생성 (html: false)
+ * Chat, Review, 에디터 등 일반적인 용도
+ */
 function createExtensions() {
   return [
     StarterKit.configure({
@@ -72,11 +78,99 @@ function createExtensions() {
   ];
 }
 
+/**
+ * 테이블을 항상 HTML로 변환하는 커스텀 Table Extension
+ *
+ * tiptap-markdown의 기본 Table은 isMarkdownSerializable() 조건을 만족하면
+ * Markdown 테이블로 변환하지만, 셀 내 리스트가 있으면 줄바꿈 텍스트로 평탄화되어
+ * Markdown 테이블 구문이 깨집니다.
+ *
+ * 이 확장은 모든 테이블을 HTML로 변환하여 구조를 완벽하게 보존합니다.
+ */
+const TableForTranslation = Table.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: {
+          write: (s: string) => void;
+          closeBlock: (node: unknown) => void;
+        }, node: unknown) {
+          // 항상 HTML로 변환 (isMarkdownSerializable 체크 건너뜀)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const typedNode = node as any;
+          const html = getHTMLFromFragment(
+            Fragment.from(typedNode),
+            typedNode.type.schema
+          );
+          state.write(html);
+          if (typedNode.isBlock) {
+            state.closeBlock(node);
+          }
+        },
+        parse: {
+          // handled by markdown-it
+        },
+      },
+    };
+  },
+});
+
+/**
+ * 번역 전용 Extension 생성 (html: true + 테이블 항상 HTML)
+ *
+ * 복잡한 테이블(셀 내 리스트, 다중 paragraph 등)을 HTML로 변환/파싱하기 위해
+ * html: true 옵션과 커스텀 Table extension을 사용합니다.
+ *
+ * 주의: 이 Extension은 번역 파이프라인(translateDocument.ts)에서만 사용해야 합니다.
+ * 다른 곳에서 사용하면 의도치 않은 HTML 출력이 발생할 수 있습니다.
+ */
+function createExtensionsForTranslation() {
+  return [
+    StarterKit.configure({
+      heading: {
+        levels: [1, 2, 3, 4, 5, 6],
+      },
+    }),
+    Link.configure({
+      openOnClick: false,
+    }),
+    TableForTranslation.configure({ resizable: false }), // 항상 HTML로 변환하는 커스텀 Table
+    TableRow,
+    TableHeader,
+    TableCell,
+    Image.configure({
+      inline: false,
+      allowBase64: true,
+    }),
+    Underline,
+    Highlight.configure({ multicolor: false }),
+    Subscript,
+    Superscript,
+    Markdown.configure({
+      html: true,                   // HTML 태그 활성화 (테이블 지원)
+      tightLists: true,
+      tightListClass: 'tight',
+      bulletListMarker: '-',
+      linkify: false,
+      breaks: false,
+      transformPastedText: false,
+      transformCopiedText: false,
+    }),
+  ];
+}
+
 function getExtensions() {
   if (!cachedExtensions) {
     cachedExtensions = createExtensions();
   }
   return cachedExtensions;
+}
+
+function getExtensionsForTranslation() {
+  if (!cachedExtensionsForTranslation) {
+    cachedExtensionsForTranslation = createExtensionsForTranslation();
+  }
+  return cachedExtensionsForTranslation;
 }
 
 /**
@@ -111,6 +205,58 @@ export function markdownToTipTapJson(markdown: string): TipTapDocJson {
   });
 
   // 명시적 Markdown 파싱
+  editor.commands.setContent(markdown);
+
+  const json = editor.getJSON() as TipTapDocJson;
+  editor.destroy();
+
+  return json;
+}
+
+// ============================================================
+// 번역 전용 함수 (html: true - 복잡한 테이블 지원)
+// ============================================================
+
+/**
+ * TipTap JSON -> Markdown 변환 (번역 전용)
+ *
+ * 복잡한 테이블(셀 내 리스트, 다중 paragraph)을 HTML로 변환합니다.
+ * tiptap-markdown의 isMarkdownSerializable() 조건을 만족하지 않는 테이블도
+ * HTML 형식으로 출력되어 LLM이 번역할 수 있습니다.
+ *
+ * 주의: translateDocument.ts에서만 사용. 다른 곳에서는 tipTapJsonToMarkdown() 사용.
+ *
+ * @param json - TipTap document JSON
+ * @returns Markdown + HTML 혼합 문자열
+ */
+export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string {
+  const editor = new Editor({
+    extensions: getExtensionsForTranslation(),
+    content: json as Content,
+  });
+
+  const markdown = editor.storage.markdown.getMarkdown();
+  editor.destroy();
+
+  return markdown;
+}
+
+/**
+ * Markdown (+ HTML) -> TipTap JSON 변환 (번역 전용)
+ *
+ * LLM이 반환한 HTML 테이블을 TipTap JSON으로 파싱합니다.
+ * html: true 설정으로 HTML 테이블이 올바르게 파싱됩니다.
+ *
+ * 주의: translateDocument.ts에서만 사용. 다른 곳에서는 markdownToTipTapJson() 사용.
+ *
+ * @param markdown - Markdown + HTML 혼합 문자열
+ * @returns TipTap document JSON
+ */
+export function markdownToTipTapJsonForTranslation(markdown: string): TipTapDocJson {
+  const editor = new Editor({
+    extensions: getExtensionsForTranslation(),
+  });
+
   editor.commands.setContent(markdown);
 
   const json = editor.getJSON() as TipTapDocJson;
