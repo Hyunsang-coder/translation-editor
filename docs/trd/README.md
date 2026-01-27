@@ -32,6 +32,7 @@
 | [12-i18n.md](./12-i18n.md) | 다국어 지원 |
 | [13-algorithms.md](./13-algorithms.md) | 알고리즘 명세 (번역/검수/적용) |
 | [14-prompt-structure.md](./14-prompt-structure.md) | AI 프롬프트 구조 |
+| [15-web-version.md](./15-web-version.md) | 웹 시연용 버전 (계획) |
 
 ---
 
