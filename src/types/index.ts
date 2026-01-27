@@ -197,18 +197,16 @@ export interface ChatMessageMetadata {
   originalContent?: string;
 
   /**
-   * AI가 제안한 규칙/메모리 (Tool Call 결과)
-   * - 이 필드가 존재하면 UI에 [Add to Rules] 또는 [Add to Context] 버튼이 표시됩니다.
+   * AI가 제안한 번역 규칙 (suggest_translation_rule Tool Call 결과)
+   * - 이 필드가 존재하면 UI에 [Add to Rules] 버튼이 표시됩니다.
    */
-  suggestion?: {
-    /**
-     * - rule: Translation Rules에 추가
-     * - context: Project Context에 추가
-     * - both: 둘 다 제안 (사용자가 선택)
-     */
-    type: 'rule' | 'context' | 'both';
-    content: string;
-  };
+  suggestedRule?: string;
+
+  /**
+   * AI가 제안한 프로젝트 컨텍스트 (suggest_project_context Tool Call 결과)
+   * - 이 필드가 존재하면 UI에 [Add to Context] 버튼이 표시됩니다.
+   */
+  suggestedContext?: string;
 
   /**
    * 사용자 메시지에 첨부된 이미지 (채팅 UI 표시용)

@@ -361,63 +361,70 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         )}
       </div>
 
-      {/* Add to Rules / Context buttons */}
-      {message.role === 'assistant' &&
-        !isStreaming &&
-        message.metadata?.suggestion && (
-          <div className="mt-2">
-            {/* 제안 내용 미리보기 */}
-            {!message.metadata.rulesAdded && !message.metadata.contextAdded && (
+      {/* Add to Rules / Context buttons - 분리된 필드로 각각 표시 */}
+      {message.role === 'assistant' && !isStreaming && (
+        <>
+          {/* Suggested Rule 카드 */}
+          {message.metadata?.suggestedRule && !message.metadata.rulesAdded && (
+            <div className="mt-2">
               <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-1 h-3 bg-primary-500 rounded-full" />
                   <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                    {message.metadata.suggestion.type === 'rule' ? 'Suggested Rule' :
-                     message.metadata.suggestion.type === 'context' ? 'Suggested Context' :
-                     'Suggested Rule / Context'}
+                    Suggested Rule
                   </span>
                 </div>
                 <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
-                  {message.metadata.suggestion.content}
+                  {message.metadata.suggestedRule}
                 </div>
               </div>
-            )}
-
-            <div className="flex gap-2">
-              {(message.metadata.suggestion.type === 'rule' || message.metadata.suggestion.type === 'both') && !message.metadata.rulesAdded && (
-                <button
-                  type="button"
-                  className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
-                  onClick={() => {
-                    if (message.metadata?.suggestion?.content) {
-                      onAppendToRules(message.metadata.suggestion.content);
-                      onUpdateMessageMetadata(message.id, { rulesAdded: true });
-                    }
-                  }}
-                  title={t('chat.addToRules')}
-                >
-                  Add to Rules
-                </button>
-              )}
-              {(message.metadata.suggestion.type === 'context' || message.metadata.suggestion.type === 'both') &&
-                !message.metadata.contextAdded && (
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                    onClick={() => {
-                      if (message.metadata?.suggestion?.content) {
-                        onAppendToContext(message.metadata.suggestion.content);
-                        onUpdateMessageMetadata(message.id, { contextAdded: true });
-                      }
-                    }}
-                    title={t('chat.addToContext')}
-                  >
-                    Add to Context
-                  </button>
-                )}
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-primary-500"
+                onClick={() => {
+                  if (message.metadata?.suggestedRule) {
+                    onAppendToRules(message.metadata.suggestedRule);
+                    onUpdateMessageMetadata(message.id, { rulesAdded: true });
+                  }
+                }}
+                title={t('chat.addToRules')}
+              >
+                Add to Rules
+              </button>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Suggested Context 카드 */}
+          {message.metadata?.suggestedContext && !message.metadata.contextAdded && (
+            <div className="mt-2">
+              <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-1 h-3 bg-primary-500 rounded-full" />
+                  <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
+                    Suggested Context
+                  </span>
+                </div>
+                <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
+                  {message.metadata.suggestedContext}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                onClick={() => {
+                  if (message.metadata?.suggestedContext) {
+                    onAppendToContext(message.metadata.suggestedContext);
+                    onUpdateMessageMetadata(message.id, { contextAdded: true });
+                  }
+                }}
+                title={t('chat.addToContext')}
+              >
+                Add to Context
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }, (prev, next) => {
@@ -434,7 +441,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prev.message.content !== next.message.content) return false;
   if (prev.message.metadata?.toolCallsInProgress !== next.message.metadata?.toolCallsInProgress) return false;
   if (prev.message.metadata?.toolsUsed !== next.message.metadata?.toolsUsed) return false;
-  if (prev.message.metadata?.suggestion !== next.message.metadata?.suggestion) return false;
+  if (prev.message.metadata?.suggestedRule !== next.message.metadata?.suggestedRule) return false;
+  if (prev.message.metadata?.suggestedContext !== next.message.metadata?.suggestedContext) return false;
   if (prev.message.metadata?.rulesAdded !== next.message.metadata?.rulesAdded) return false;
   if (prev.message.metadata?.contextAdded !== next.message.metadata?.contextAdded) return false;
   return true;

@@ -74,7 +74,7 @@ function extractTextFromAiMessage(ai: unknown): string {
 }
 
 
-function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'context' | 'both'; content: string } | null {
+function inferSuggestionFromAssistantText(text: string): { suggestedRule?: string; suggestedContext?: string } | null {
   const t = (text ?? '').trim();
   if (!t) return null;
 
@@ -84,40 +84,10 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
   const ruleTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Rules\]).*번역\s*규칙/i;
   const contextTrigger = /(?:원하시면|필요하시면|저장하려면)\s*.*(?:버튼을|\[Add to Context\]).*(?:project\s*context|컨텍스트|맥락)/i;
 
-  const hasRule = ruleTrigger.test(t);
-  const hasContext = contextTrigger.test(t);
-  let ruleIdx = hasRule ? t.search(ruleTrigger) : -1;
-  let contextIdx = hasContext ? t.search(contextTrigger) : -1;
+  const hasRule = ruleTrigger.test(t) || t.includes('[Add to Rules]');
+  const hasContext = contextTrigger.test(t) || t.includes('[Add to Context]');
 
-  // Fallback: 아주 명시적인 버튼 이름만 있는 경우도 체크
-  if (!hasRule && t.includes('[Add to Rules]')) {
-    ruleIdx = t.indexOf('[Add to Rules]');
-  }
-  if (!hasContext && t.includes('[Add to Context]')) {
-    contextIdx = t.indexOf('[Add to Context]');
-  }
-
-  const foundRule = ruleIdx >= 0;
-  const foundContext = contextIdx >= 0;
-
-  let type: 'rule' | 'context' | 'both' | null = null;
-  let cutIdx = -1;
-
-  if (foundRule && foundContext) {
-    type = 'both';
-    cutIdx = Math.min(ruleIdx, contextIdx);
-  } else if (foundRule) {
-    type = 'rule';
-    cutIdx = ruleIdx;
-  } else if (foundContext) {
-    type = 'context';
-    cutIdx = contextIdx;
-  }
-
-  if (!type) return null;
-
-  let core = (cutIdx >= 0 ? t.slice(0, cutIdx) : t).trim();
-  if (!core) return null;
+  if (!hasRule && !hasContext) return null;
 
   // AI가 붙이는 서두 문구 제거 (예: "프로젝트 컨텍스트 저장 제안을 올려두었습니다:")
   const preamblePatterns = [
@@ -126,32 +96,40 @@ function inferSuggestionFromAssistantText(text: string): { type: 'rule' | 'conte
     /^(?:다음|아래)(?:와 같은|의)?\s*(?:번역\s*규칙|컨텍스트|맥락).*?(?:제안합니다|올려두었습니다)[:\s]*/i,
     /^(?:번역\s*규칙|컨텍스트|맥락)\s*제안[:\s]*/i,
   ];
-  for (const pattern of preamblePatterns) {
-    core = core.replace(pattern, '').trim();
-  }
 
   // 뒷부분 안내 문구 제거 (예: "원하시면 **", "필요하시면...")
   const suffixPatterns = [
     /(?:원하시면|필요하시면|저장하려면|추가하려면)\s*\**\s*$/i,
     /\s*\*+\s*$/,  // 잘린 마크다운 볼드
   ];
-  for (const pattern of suffixPatterns) {
-    core = core.replace(pattern, '').trim();
-  }
 
-  // 마크다운 포맷팅 제거 (**, *, `)
-  core = core
-    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
-    .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
-    .replace(/`([^`]+)`/g, '$1')         // `code` → code
-    .trim();
+  const cleanContent = (raw: string): string => {
+    let core = raw.trim();
+    for (const pattern of preamblePatterns) {
+      core = core.replace(pattern, '').trim();
+    }
+    for (const pattern of suffixPatterns) {
+      core = core.replace(pattern, '').trim();
+    }
+    // 마크다운 포맷팅 제거 (**, *, `)
+    core = core
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .trim();
+    // 저장 필드 폭주 방지
+    const maxLen = 3000;
+    return core.length > maxLen ? `${core.slice(0, maxLen)}...` : core;
+  };
 
-  if (!core) return null;
+  const content = cleanContent(t);
+  if (!content) return null;
 
-  // 저장 필드 폭주 방지 (rules/context에 append될 수 있으니 적당히 제한)
-  const maxLen = 3000;
-  const clipped = core.length > maxLen ? `${core.slice(0, maxLen)}...` : core;
-  return { type, content: clipped };
+  const result: { suggestedRule?: string; suggestedContext?: string } = {};
+  if (hasRule) result.suggestedRule = content;
+  if (hasContext) result.suggestedContext = content;
+
+  return result;
 }
 
 // ============================================
@@ -432,7 +410,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
           translationRules: '',
           projectContext: '',
-          webSearchEnabled: false,
+          webSearchEnabled: true,
           translationContextSessionId: null,
           composerAttachments: [],
           attachments: [],
@@ -454,7 +432,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
         translationRules: '',
         projectContext: '',
-        webSearchEnabled: false,
+        webSearchEnabled: true,
         translationContextSessionId: null,
         attachments: [],
         composerAttachments: [],
@@ -495,12 +473,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
           return;
         }
 
+        // Migration: confluenceSearchEnabled 기본값 true로 설정 (기존 세션 호환)
+        const migratedSessions = (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS).map((session) => ({
+          ...session,
+          confluenceSearchEnabled: session.confluenceSearchEnabled ?? true,
+        }));
+
         const nextState: Partial<ChatStore> = {
           isHydrating: false,
           loadedProjectId: projectId, // 로드 성공 후에만 ID 설정 (저장 허용)
-          sessions: (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS),
-          currentSessionId: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]!.id : null,
-          currentSession: (sessionsRes && sessionsRes.length > 0) ? sessionsRes[0]! : null,
+          sessions: migratedSessions,
+          currentSessionId: migratedSessions.length > 0 ? migratedSessions[0]!.id : null,
+          currentSession: migratedSessions.length > 0 ? migratedSessions[0]! : null,
           attachments: atts,
           composerAttachments: [],
         };
@@ -525,7 +509,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           nextState.translationRules = '';
           nextState.projectContext = '';
           nextState.composerText = '';
-          nextState.webSearchEnabled = false;
+          nextState.webSearchEnabled = true;
           nextState.translationContextSessionId = null;
         }
 
@@ -569,7 +553,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         createdAt: now,
         messages: [],
         contextBlockIds: [],
-        confluenceSearchEnabled: false,
+        confluenceSearchEnabled: true,
       };
 
       set((state) => ({
@@ -936,17 +920,21 @@ export const useChatStore = create<ChatStore>((set, get) => {
               // 2. Suggestion Handling (Smart Buttons)
               let nextMetadata = { ...currentMetadata };
 
-              // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록
+              // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록 (분리 필드로 누적)
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+                  const prev = nextMetadata.suggestedRule ?? '';
+                  const cleaned = cleanSuggestionContent(evt.args.rule);
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'rule', content: cleanSuggestionContent(evt.args.rule) },
+                    suggestedRule: prev ? `${prev}; ${cleaned}` : cleaned,
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
+                  const prev = nextMetadata.suggestedContext ?? '';
+                  const cleaned = cleanSuggestionContent(evt.args.context);
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'context', content: cleanSuggestionContent(evt.args.context) },
+                    suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
                   };
                 }
               }
@@ -975,10 +963,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
           // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
           const currentMetadata = get().streamingMetadata ?? {};
-          if (!currentMetadata.suggestion) {
+          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
+          if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
             const inferred = inferSuggestionFromAssistantText(restored);
             if (inferred) {
-              set({ streamingMetadata: { ...currentMetadata, suggestion: inferred } });
+              set({ streamingMetadata: { ...currentMetadata, ...inferred } });
             }
           }
 
@@ -1368,14 +1357,18 @@ export const useChatStore = create<ChatStore>((set, get) => {
               let nextMetadata = { ...currentMetadata };
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+                  const prevRule = nextMetadata.suggestedRule ?? '';
+                  const cleaned = cleanSuggestionContent(evt.args.rule);
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'rule', content: cleanSuggestionContent(evt.args.rule) },
+                    suggestedRule: prevRule ? `${prevRule}; ${cleaned}` : cleaned,
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
+                  const prevCtx = nextMetadata.suggestedContext ?? '';
+                  const cleaned = cleanSuggestionContent(evt.args.context);
                   nextMetadata = {
                     ...nextMetadata,
-                    suggestion: { type: 'context', content: cleanSuggestionContent(evt.args.context) },
+                    suggestedContext: prevCtx ? `${prevCtx}; ${cleaned}` : cleaned,
                   };
                 }
               }
@@ -1413,10 +1406,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
           // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
           const currentMetadata = get().streamingMetadata ?? {};
-          if (!currentMetadata.suggestion) {
+          if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
             const inferred = inferSuggestionFromAssistantText(restored);
             if (inferred) {
-              set({ streamingMetadata: { ...currentMetadata, suggestion: inferred } });
+              set({ streamingMetadata: { ...currentMetadata, ...inferred } });
             }
           }
 
@@ -1577,8 +1570,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     appendToTranslationRules: (snippet: string): void => {
       const incoming = snippet.trim();
       if (!incoming) return;
+      // 세미콜론 구분자를 불릿 포인트로 변환
+      const formatted = incoming
+        .split(';')
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .map((r) => `- ${r}`)
+        .join('\n');
       const current = get().translationRules.trim();
-      const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
+      const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
       set({ translationRules: next });
       schedulePersist();
     },
@@ -1591,8 +1591,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     appendToProjectContext: (snippet: string): void => {
       const incoming = snippet.trim();
       if (!incoming) return;
+      // 세미콜론 구분자를 불릿 포인트로 변환
+      const formatted = incoming
+        .split(';')
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .map((r) => `- ${r}`)
+        .join('\n');
       const current = get().projectContext.trim();
-      const next = current.length > 0 ? `${current}\n\n${incoming}` : incoming;
+      const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
       set({ projectContext: next });
       schedulePersist();
     },
