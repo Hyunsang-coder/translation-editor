@@ -76,7 +76,7 @@ AskUserQuestion으로 확인:
 
 ```bash
 # 커밋
-git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
 git commit -m "chore: bump version to 1.1.0"
 
 # 태그 (선택 시)
