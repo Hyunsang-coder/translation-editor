@@ -1,5 +1,5 @@
 ---
-description: TRD/README/CLAUDE.md 문서 업데이트
+description: .claude/*.md 문서 업데이트
 allowed-tools: Read, Glob, Grep, Edit, Bash(git diff:*), Bash(git log:*)
 ---
 
@@ -9,9 +9,15 @@ You are a documentation specialist for the OddEyes.ai project. Your task is to u
 
 ## Target Documents
 
-1. **TRD** (`docs/trd/*.md`) - 기술 설계 명세 (14개 파일, `README.md`에 인덱스)
-2. **README.md** (루트) - 프로젝트 개요
-3. **CLAUDE.md** (루트) - 개발자 가이드
+`.claude/` 디렉토리의 문서들:
+
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | 핵심 개요, 명령어, 퀵 레퍼런스 |
+| `architecture.md` | Tech stack, 디자인 결정, 보안 |
+| `patterns.md` | AI/Editor/MCP 구현 패턴 |
+| `gotchas.md` | 주의사항 모음 (카테고리별) |
+| `testing.md` | 테스트, 디버깅, 파일 구조 |
 
 ## Process
 
@@ -21,18 +27,38 @@ git diff HEAD~5..HEAD --stat
 git log --oneline -10
 ```
 
-### Step 2: Update Documents
-변경된 코드에 해당하는 문서만 선택적으로 업데이트:
+### Step 2: Identify Target Files
+변경된 코드에 따라 관련 문서 선택:
 
-- **TRD**: `docs/trd/README.md`의 인덱스 참고하여 관련 파일 수정 (Why/How/What 구조, 한국어)
-- **README.md**: 구현 상태, 새 기능
-- **CLAUDE.md**: 새 패턴/컨벤션 (Common Gotchas 섹션)
+- **새 기능/아키텍처 변경** → `architecture.md`
+- **새 구현 패턴** → `patterns.md`
+- **버그/주의사항 발견** → `gotchas.md` (카테고리에 맞게 추가)
+- **테스트/파일 구조 변경** → `testing.md`
+- **명령어/퀵 레퍼런스 변경** → `CLAUDE.md`
 
-### Step 3: Summarize
-업데이트 내용 요약.
-
-## Guidelines
-
+### Step 3: Update Documents
+- 기존 구조와 스타일 유지
+- gotchas는 번호 순서 유지하며 끝에 추가
 - 구현된 기능만 문서화 (계획/임시 코드 제외)
-- 기존 구조 유지, 필요시 섹션 추가
-- TRD는 Source of Truth - 코드/문서 충돌 시 TRD 기준
+
+### Step 4: Summarize
+업데이트한 내용 요약.
+
+## Gotchas 카테고리
+
+`gotchas.md` 업데이트 시 적절한 카테고리에 추가:
+
+- TipTap / Editor
+- AI / Chat
+- AbortController / Async
+- Review Feature
+- JSON Parsing
+- Session / State Management
+- UI Components
+- Chat Composer
+- Image Handling
+- Build / Platform
+- Security
+- i18n / Git
+- Auto Update
+- Search Feature
