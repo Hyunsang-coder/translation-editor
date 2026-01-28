@@ -268,8 +268,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
               ) : (
                 <>
                   {isStreaming ? (
-                    // 스트리밍 중: 단순 텍스트 렌더링 (성능 최적화)
-                    <div className="text-sm leading-relaxed chat-markdown whitespace-pre-wrap">
+                    // 스트리밍 중: 단순 텍스트 렌더링 + pulse 효과 (성능 최적화)
+                    <div className="text-sm leading-relaxed chat-markdown whitespace-pre-wrap animate-pulse">
                       {cleanCitationArtifacts(displayContent)}
                     </div>
                   ) : (
