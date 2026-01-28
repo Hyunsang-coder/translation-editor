@@ -4,6 +4,7 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
+// confluence_word_count 도구 삭제됨 - getConfluencePage 응답에 단어 수 자동 첨부 (McpClientManager.ts)
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -469,9 +470,11 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       ]
       : ['- notion_*: (비활성화됨)']),
     // Confluence 도구 안내
-    confluenceEnabled
-      ? '- confluence_*: Atlassian Confluence 페이지 검색/조회.'
-      : '- confluence_*: (비활성화됨)',
+    ...(confluenceEnabled
+      ? [
+        '- getConfluencePage: Confluence 페이지 조회. 응답에 단어 수가 자동 포함됨.',
+      ]
+      : ['- confluence_*: (비활성화됨)']),
     '',
     '도구 선택 우선순위 (위에서 아래로 평가):',
     '',
@@ -487,7 +490,7 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
       : '3. Notion 참조 필요\n   → (Notion 비활성화됨)',
     '',
     confluenceEnabled
-      ? '4. Confluence 참조 필요\n   → confluence 도구 사용'
+      ? '4. Confluence 참조 또는 번역 분량 산정\n   → getConfluencePage로 페이지 조회 (단어 수는 응답에 자동 포함)'
       : '4. Confluence 참조 필요\n   → (Confluence 비활성화됨)',
     '',
     '5. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)',
@@ -774,7 +777,9 @@ export async function streamAssistantReply(
 
   // MCP 도구 (Atlassian Confluence)
   const mcpTools = input.confluenceSearchEnabled ? await mcpClientManager.getTools() : [];
-  
+
+  // confluence_word_count 도구 삭제됨 - getConfluencePage 응답에 단어 수 자동 첨부
+
   // Notion 도구 (REST API 기반)
   const notionTools = input.notionSearchEnabled ? await mcpClientManager.getNotionTools() : [];
 

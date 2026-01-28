@@ -3,6 +3,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
 import { clearAllMcpServer } from "@/tauri/mcpRegistry";
+import { countWords, formatWordCountResult } from "@/utils/wordCounter";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -56,13 +57,22 @@ function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
         }
 
         // 결과를 텍스트로 변환
-        return result.content
+        const textResult = result.content
           .map(c => {
             if (c.type === "text") return c.text || "";
             if (c.type === "image") return `[Image: ${c.mimeType}]`;
             return JSON.stringify(c);
           })
           .join("\n");
+
+        // getConfluencePage 응답에 단어 수 자동 첨부
+        if (mcpTool.name === "getConfluencePage" && textResult.length > 0) {
+          const wordCountResult = countWords(textResult);
+          const wordCountInfo = formatWordCountResult(wordCountResult, 'all');
+          return `${textResult}\n\n---\n📊 단어 수 (자동 계산):\n${wordCountInfo}`;
+        }
+
+        return textResult;
       } catch (error) {
         throw new Error(`MCP tool call failed: ${error}`);
       }

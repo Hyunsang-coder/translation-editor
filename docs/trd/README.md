@@ -26,7 +26,7 @@
 | [06-attachments.md](./06-attachments.md) | 첨부 파일 시스템 |
 | [07-concurrency.md](./07-concurrency.md) | Race Condition 방지 패턴 |
 | [08-storage.md](./08-storage.md) | 데이터 영속성 (SQLite) |
-| [09-specialized.md](./09-specialized.md) | 특화 기능 (Ghost Chips 등) |
+| [09-specialized.md](./09-specialized.md) | 특화 기능 (Ghost Chips, Confluence 단어 카운팅) |
 | [10-dev-tools.md](./10-dev-tools.md) | 개발 도구, 빌드/배포, 자동 업데이트 |
 | [11-api-keys.md](./11-api-keys.md) | API Key 및 커넥터 관리 |
 | [12-i18n.md](./12-i18n.md) | 다국어 지원 |

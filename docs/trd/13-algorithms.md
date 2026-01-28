@@ -379,7 +379,141 @@ HumanMessage: 번역 규칙 + 용어집 + 검수 대상 세그먼트
 
 ---
 
-## 13.10 파일 매핑 요약
+## 13.10 Confluence 단어 카운팅 알고리즘
+
+### Why
+- 번역 분량 산정을 위해 번역 대상 텍스트만 정확히 카운팅
+- 코드, URL, 이미지 등 번역 불필요 콘텐츠 제외
+
+### 콘텐츠 전처리 함수
+
+```typescript
+function preprocessContent(content: string): string {
+  return content
+    // 이미지 제거
+    .replace(/!\[.*?\]\(.*?\)/g, '')           // Markdown ![alt](url)
+    .replace(/<img[^>]*>/gi, '')                // HTML <img>
+
+    // URL 제거 (링크 텍스트는 유지)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')    // [text](url) → text
+    .replace(/<a[^>]*>([^<]*)<\/a>/gi, '$1')    // <a>text</a> → text
+    .replace(/https?:\/\/[^\s]+/g, '')          // 순수 URL
+
+    // 코드 블록 제거
+    .replace(/```[\s\S]*?```/g, '')             // 펜스 코드 블록
+    .replace(/`[^`]+`/g, '')                    // 인라인 코드
+    .replace(/<code>[\s\S]*?<\/code>/gi, '')
+    .replace(/<pre>[\s\S]*?<\/pre>/gi, '')
+
+    // Confluence 매크로/임베드 제거
+    .replace(/<ac:structured-macro[\s\S]*?<\/ac:structured-macro>/gi, '')
+    .replace(/<ac:image[\s\S]*?\/>/gi, '')
+
+    // 비디오/iframe 제거
+    .replace(/<video[\s\S]*?<\/video>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+
+    // 공백 정규화
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+```
+
+### 섹션 추출 함수
+
+```typescript
+function extractSection(content: string, headingText: string): string | null {
+  const headingRegex = /^(#{1,6})\s+(.+)$/gm;
+  let targetLevel: number | null = null;
+  let startIndex: number | null = null;
+  let endIndex: number | null = null;
+
+  let match;
+  while ((match = headingRegex.exec(content)) !== null) {
+    const level = match[1].length;
+    const text = match[2].trim();
+
+    if (startIndex === null) {
+      // 타겟 Heading 찾기 (대소문자 무시)
+      if (text.toLowerCase() === headingText.toLowerCase()) {
+        targetLevel = level;
+        startIndex = match.index + match[0].length;
+      }
+    } else {
+      // 다음 동급/상위 Heading에서 종료
+      if (level <= targetLevel!) {
+        endIndex = match.index;
+        break;
+      }
+    }
+  }
+
+  if (startIndex === null) return null;
+  return content.slice(startIndex, endIndex ?? undefined).trim();
+}
+```
+
+### 언어별 카운팅
+
+**모든 언어를 공백 구분 단어 수로 카운팅** (번역 분량 산정 목적)
+
+```typescript
+// 언어 판별용 패턴 (단어 내 문자 검사)
+const LANG_CHAR_PATTERNS = {
+  korean: /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/,      // 한글
+  chinese: /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/,     // 중국어
+  japanese: /[\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF]/,    // 히라가나 + 가타카나
+  english: /[a-zA-Z]/,                                      // 영어
+};
+
+function countByLanguage(text: string): WordCountBreakdown {
+  const cleaned = preprocessContent(text);
+  const plainText = stripHtml(cleaned);
+  const words = plainText.trim().split(/\s+/).filter(Boolean);
+
+  const breakdown = { english: 0, korean: 0, chinese: 0, japanese: 0 };
+
+  for (const word of words) {
+    // 단어에 포함된 문자로 언어 판별
+    if (LANG_CHAR_PATTERNS.korean.test(word)) breakdown.korean++;
+    else if (LANG_CHAR_PATTERNS.chinese.test(word)) breakdown.chinese++;
+    else if (LANG_CHAR_PATTERNS.japanese.test(word)) breakdown.japanese++;
+    else if (LANG_CHAR_PATTERNS.english.test(word)) breakdown.english++;
+  }
+
+  return breakdown;
+}
+```
+
+### URL 파싱
+
+```typescript
+function extractPageIdFromUrl(input: string): string {
+  // URL 형식: https://xxx.atlassian.net/wiki/spaces/SPACE/pages/123456/Title
+  const urlMatch = input.match(/\/pages\/(\d+)/);
+  if (urlMatch) return urlMatch[1];
+
+  // 이미 숫자 ID인 경우
+  if (/^\d+$/.test(input)) return input;
+
+  throw new Error("Invalid Confluence page ID or URL");
+}
+```
+
+### 카운팅 단위
+
+**모든 언어를 공백 구분 단어 수로 통일**
+
+번역 분량 산정 시 단어 수 기준이 가장 직관적이고 범용적임.
+언어별 breakdown은 참고용으로 제공.
+
+### 구현 파일
+- `src/utils/wordCounter.ts` - 핵심 카운팅 로직
+- `src/ai/mcp/McpClientManager.ts` - MCP 응답 후처리 (단어 수 자동 첨부)
+
+---
+
+## 13.11 파일 매핑 요약
 
 | 기능 | 파일 |
 |------|------|
@@ -395,3 +529,5 @@ HumanMessage: 번역 규칙 + 용어집 + 검수 대상 세그먼트
 | 이미지 플레이스홀더 | `src/utils/imagePlaceholder.ts` |
 | 검색 정규화 | `src/utils/normalizeForSearch.ts` |
 | 하이라이트 Decoration | `src/editor/extensions/ReviewHighlight.ts` |
+| 단어 카운팅 | `src/utils/wordCounter.ts` |
+| Confluence 도구 | `src/ai/tools/confluenceTools.ts` |
