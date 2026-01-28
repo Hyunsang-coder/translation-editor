@@ -15,6 +15,7 @@ import {
   aggregateResults,
   formatWordCountResult,
   formatMultiPageResults,
+  isNonWordToken,
   type WordCountBreakdown,
   type PageWordCountResult,
 } from './wordCounter';
@@ -90,8 +91,8 @@ describe('countTotalWords', () => {
 
   it('테이블 HTML도 처리한다', () => {
     const html = '<table><tr><td>Hello</td><td>World</td></tr></table>';
-    // HelloWorld로 붙어서 1단어로 카운트
-    expect(countTotalWords(html)).toBe(1);
+    // 각 셀이 공백으로 분리되어 2단어로 카운트
+    expect(countTotalWords(html)).toBe(2);
   });
 
   it('코드 블록은 제외한다', () => {
@@ -169,6 +170,52 @@ describe('extractSection', () => {
   });
 });
 
+describe('isNonWordToken (MS Word 스타일)', () => {
+  it('순수 숫자는 비단어다', () => {
+    expect(isNonWordToken('2025')).toBe(true);
+    expect(isNonWordToken('4096')).toBe(true);
+    expect(isNonWordToken('123')).toBe(true);
+    expect(isNonWordToken('0.5')).toBe(true);
+  });
+
+  it('순수 기호는 비단어다', () => {
+    expect(isNonWordToken('/')).toBe(true);
+    expect(isNonWordToken('->')).toBe(true);
+    expect(isNonWordToken('&')).toBe(true);
+    expect(isNonWordToken('→')).toBe(true);
+    expect(isNonWordToken('x')).toBe(true);  // 4096 x 4096의 x
+  });
+
+  it('기술 용어는 단어다 (MS Word처럼)', () => {
+    // 파일 확장자 - 단어로 카운트
+    expect(isNonWordToken('.max')).toBe(false);
+    expect(isNonWordToken('.fbx')).toBe(false);
+    // 파일명 - 단어로 카운트
+    expect(isNonWordToken('Spur.Max')).toBe(false);
+    expect(isNonWordToken('SK_Spur.fbx')).toBe(false);
+    // 약어 - 단어로 카운트
+    expect(isNonWordToken('UV')).toBe(false);
+    expect(isNonWordToken('FBX')).toBe(false);
+    expect(isNonWordToken('RGBA')).toBe(false);
+    // 기술 식별자 - 단어로 카운트
+    expect(isNonWordToken('3ds')).toBe(false);
+    expect(isNonWordToken('T_Spur_D')).toBe(false);
+    expect(isNonWordToken('70K')).toBe(false);
+  });
+
+  it('일반 영어 단어는 단어다', () => {
+    expect(isNonWordToken('Hello')).toBe(false);
+    expect(isNonWordToken('vehicle')).toBe(false);
+    expect(isNonWordToken('the')).toBe(false);
+  });
+
+  it('문장부호가 붙어도 정상 처리한다', () => {
+    expect(isNonWordToken('vehicles.')).toBe(false);
+    expect(isNonWordToken('4096,')).toBe(true);  // 숫자
+    expect(isNonWordToken('(UV)')).toBe(false);  // 약어는 단어
+  });
+});
+
 describe('countByLanguage', () => {
   it('영어 단어를 카운팅한다', () => {
     const text = 'Hello world, this is a test!';
@@ -223,6 +270,24 @@ describe('countByLanguage', () => {
       chinese: 0,
       japanese: 0,
     });
+  });
+
+  it('excludeTechnical 옵션으로 순수 숫자/기호만 제외한다 (MS Word 스타일)', () => {
+    const text = 'Use 3ds Max to create files at 4096 x 4096';
+    const withAll = countByLanguage(text, { excludeTechnical: false });
+    const withoutNonWords = countByLanguage(text, { excludeTechnical: true });
+
+    // 전체: Use, 3ds, Max, to, create, files, at, 4096, x, 4096 중 영어만
+    expect(withAll.english).toBe(8);  // Use, 3ds, Max, to, create, files, at, x
+    // 비단어 제외: 4096, x, 4096 제외
+    expect(withoutNonWords.english).toBe(7);  // Use, 3ds, Max, to, create, files, at
+  });
+
+  it('기술 용어(파일명, 약어)는 단어로 카운트한다', () => {
+    const text = 'Export Spur.Max as SK_Spur.fbx with UV mapping';
+    const result = countByLanguage(text, { excludeTechnical: true });
+    // Export, Spur.Max, as, SK_Spur.fbx, with, UV, mapping 모두 단어
+    expect(result.english).toBe(7);
   });
 });
 
@@ -303,9 +368,8 @@ describe('countWords', () => {
   it('표 안의 텍스트를 포함한다', () => {
     const content = '<table><tr><td>First</td><td>Second</td></tr><tr><td>Third</td><td>Fourth</td></tr></table>';
     const result = countWords(content);
-    // stripHtml이 태그 제거 후 텍스트 연결됨 (FirstSecondThirdFourth = 1단어)
-    // 실제 Confluence에서는 텍스트가 공백으로 분리될 수 있음
-    expect(result.totalWords).toBeGreaterThanOrEqual(1);
+    // stripHtml이 </td>, </th> 뒤에 공백을 추가하여 셀 텍스트가 분리됨
+    expect(result.totalWords).toBe(4);
   });
 
   it('섹션 필터를 적용한다', () => {
@@ -326,6 +390,27 @@ These are the details with some words.`;
     const result = countWords(content, { sectionHeading: 'NonExistent' });
     expect(result.totalWords).toBe(0);
     expect(result.sectionTitle).toBe('NonExistent');
+  });
+
+  it('excludeTechnical 옵션으로 순수 숫자/기호만 제외한다', () => {
+    const content = 'High poly model at 4096 / 2048 resolution';
+    const withAll = countWords(content, { excludeTechnical: false });
+    const withoutNonWords = countWords(content, { excludeTechnical: true });
+
+    // 전체 토큰: High, poly, model, at, 4096, /, 2048, resolution
+    expect(withAll.totalWords).toBe(8);
+    // 비단어(숫자/기호) 제외: 4096, /, 2048 제외
+    expect(withoutNonWords.totalWords).toBe(5);
+    expect(withoutNonWords.breakdown.english).toBe(5);
+  });
+
+  it('기술 용어는 MS Word처럼 단어로 카운트한다', () => {
+    const content = 'Use 3ds Max with UV mapping and .fbx export';
+    const result = countWords(content, { excludeTechnical: true });
+
+    // 모든 기술 용어(3ds, UV, .fbx)가 단어로 카운트됨
+    // Use, 3ds, Max, with, UV, mapping, and, .fbx, export = 9단어
+    expect(result.breakdown.english).toBe(9);
   });
 });
 

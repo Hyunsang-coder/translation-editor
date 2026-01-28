@@ -27,15 +27,17 @@ export function hashContent(content: string): string {
 /**
  * HTML 태그를 제거하고 텍스트만 추출
  * - 블록 태그(p, div, h1-6, li 등) 뒤에는 줄바꿈을 추가하여 텍스트 구조 유지
+ * - 테이블 셀(td, th) 뒤에는 공백을 추가하여 단어 분리 유지
  * - HTML 엔티티(&nbsp;, &lt; 등)를 일반 문자로 변환
  * @param html - HTML 문자열
  * @returns 순수 텍스트
  */
 export function stripHtml(html: string): string {
   if (!html) return '';
-  
+
   const text = html
-    .replace(/<\/p>|<\/div>|<\/h[1-6]>|<\/li>|<\/blockquote>|<\/pre>/gi, '\n')
+    .replace(/<\/p>|<\/div>|<\/h[1-6]>|<\/li>|<\/blockquote>|<\/pre>|<\/tr>/gi, '\n')
+    .replace(/<\/td>|<\/th>/gi, ' ')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, '');
 

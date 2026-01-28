@@ -24,86 +24,117 @@ Confluence 페이지의 실제 번역 대상 텍스트만 카운팅하여 정확
 ### What
 - **번역 불필요 콘텐츠 제외**: 코드 블록, 이미지, URL, 영상, 매크로
 - **언어별 필터링**: 전체/영어/한국어/중국어/일본어/CJK
-- **섹션별 카운팅**: 특정 Heading 아래만 선택적 카운팅
+- **섹션별 카운팅**: 특정 Heading 포함/제외 필터링
+- **콘텐츠 타입별 카운팅**: 표/리스트/본문/제목 필터링
 - **여러 페이지 처리**: 복수 페이지 일괄 카운팅 + 총합
 
 ### How
 
-#### 아키텍처
-MCP 응답 후처리 방식으로 자동 카운팅:
-- **MCP**: `getConfluencePage`로 페이지 내용 조회
-- **TypeScript**: MCP 응답 수신 시 `countWords()` 자동 실행
-- **결과**: 페이지 내용 + 단어 수가 함께 LLM에 전달
+#### 아키텍처 (v2 - 전용 도구 방식)
+
+`confluence_word_count` 전용 도구로 단어 수만 계산하여 JSON 반환:
 
 ```
-사용자 입력 → LLM → getConfluencePage (MCP)
-           → MCP 응답 + 단어 수 자동 첨부 → LLM → 응답
+Before (v1):
+  유저 → LLM → getConfluencePage → [본문 전체 + 단어 수] → LLM (수만 토큰) → 응답
+
+After (v2):
+  유저 → LLM → confluence_word_count({pageIds, language, sections, sectionMode, contentType})
+             → 내부: MCP fetch → 프로그래밍 계산 → [JSON 수치만] → LLM (수백 토큰) → 응답
 ```
 
-별도 도구 호출 없이 1회 왕복으로 처리되어 응답 속도 향상.
+**토큰 절약**: 본문 전체가 LLM 컨텍스트에 들어가지 않음.
 
-#### 카운팅 기준
+#### 도구 분리
 
-**모든 언어를 공백 구분 단어 수로 통일** (번역 분량 산정 목적)
+| 도구 | 용도 |
+|------|------|
+| `getConfluencePage` | 페이지 내용 조회 (참고/인용 필요 시) |
+| `confluence_word_count` | 단어 수 계산 (분량 산정) ★ 단어 수 질문에는 이것 사용 |
 
-- 전처리 후 공백(`\s+`)으로 분할하여 단어 수 카운팅
-- 언어별 breakdown은 각 단어에 포함된 문자로 언어 판별
+#### 파라미터
 
-#### 결과 형식
+| 파라미터 | 설명 | 기본값 |
+|---------|------|--------|
+| `pageIds` | 페이지 ID 또는 URL 배열 (최대 10개) | 필수 |
+| `language` | 언어 필터 (all/english/korean/chinese/japanese/cjk) | all |
+| `sections` | 필터링할 섹션 제목 배열 | - |
+| `sectionMode` | include=지정 섹션만, exclude=지정 섹션 제외 | include |
+| `contentType` | all/tables/lists/paragraphs/headings | all |
+| `excludeTechnical` | 기술 식별자 제외 (파일명, 확장자, 약어, 숫자+단위 등) | true |
 
-`getConfluencePage` 응답에 자동 첨부되는 단어 수 정보:
+#### 반환 형식 (JSON)
 
+```json
+{
+  "pages": [
+    {
+      "pageId": "123456",
+      "totalWords": 1420,
+      "breakdown": { "english": 1420, "korean": 0, "chinese": 0, "japanese": 0 }
+    }
+  ],
+  "aggregate": {
+    "totalWords": 1420,
+    "breakdown": { "english": 1420, "korean": 0, "chinese": 0, "japanese": 0 }
+  },
+  "filters": {
+    "language": "english",
+    "sections": ["부록"],
+    "sectionMode": "exclude",
+    "contentType": "all",
+    "excludeTechnical": true
+  }
+}
 ```
-[페이지 내용...]
 
----
-📊 단어 수 (자동 계산):
-📊 총 단어 수: 1,234
-   - 영어: 800
-   - 한국어: 400
-   - 중국어: 20
-   - 일본어: 14
-```
+#### 에러 처리
 
-#### 콘텐츠 전처리 (제외 항목)
-
-| 제외 대상 | 처리 방식 |
-|----------|----------|
-| 코드 블록 | 펜스 코드(```), 인라인 코드, `<pre>`, `<code>` 제거 |
-| 이미지 | Markdown `![]()`, HTML `<img>` 제거 |
-| URL | 순수 URL 제거, 링크 텍스트는 유지 (`[텍스트](url)` → `텍스트`) |
-| 영상/임베드 | `<video>`, `<iframe>` 제거 |
-| Confluence 매크로 | `<ac:structured-macro>`, `<ac:image>` 제거 |
+| 상황 | 반환값 |
+|------|--------|
+| 섹션 못 찾음 | 해당 page에 `"error"`, `"availableSections": [...]` |
+| 콘텐츠 타입 없음 | `"totalWords": 0`, `"note": "지정한 콘텐츠 타입(tables)의 내용이 없습니다"` |
+| MCP 호출 실패 | 해당 page에 `"error": "페이지를 가져올 수 없습니다: ..."` |
 
 #### 사용 시나리오
 
-| 시나리오 | 입력 예시 | 출력 |
-|---------|----------|------|
-| 단일 페이지 | "페이지 전체 단어 수" | 전체 단어 수 |
-| 영어만 | "영어 단어만 세어줘" | 영어 단어 수 |
-| 한국어만 | "한국어만 카운팅" | 한국어 단어 수 |
-| 특정 섹션 | "'설치 방법' 섹션만 세어줘" | 해당 섹션 단어 수 |
-| 여러 페이지 | "이 3개 페이지 합쳐서 분량" | 각 페이지별 + 총합 |
-| 조합 | "'API Reference'의 영어만" | 해당 섹션의 영어 단어 수 |
-
-#### 포함 항목
-
-| 포함 대상 | 설명 |
-|----------|------|
-| 표(테이블) | 표 안의 모든 텍스트 포함 |
-| 접힌 섹션 | expand/collapse 매크로 내 텍스트 포함 |
-| 일반 텍스트 | 단락, 헤딩, 리스트 등 |
+| 시나리오 | LLM Tool Call 예시 |
+|---------|-------------------|
+| 단일 페이지 전체 | `{ pageIds: ["123"], language: "all" }` |
+| 영어만 | `{ pageIds: ["123"], language: "english" }` |
+| 부록 제외 | `{ pageIds: ["123"], sections: ["부록"], sectionMode: "exclude" }` |
+| 특정 섹션만 | `{ pageIds: ["123"], sections: ["API Reference"], sectionMode: "include" }` |
+| 테이블만 | `{ pageIds: ["123"], contentType: "tables" }` |
+| 복수 페이지 | `{ pageIds: ["url1", "url2", "url3"], language: "korean" }` |
+| 기술문서(파일명 포함) | `{ pageIds: ["123"], excludeTechnical: false }` |
 
 ### 구현 파일
 
 | 파일 | 설명 |
 |------|------|
 | `src/utils/wordCounter.ts` | 핵심 단어 카운팅 로직 (순수 함수) |
-| `src/utils/wordCounter.test.ts` | 단위 테스트 |
-| `src/ai/mcp/McpClientManager.ts` | MCP 응답 후처리 (단어 수 자동 첨부) |
+| `src/utils/htmlContentExtractor.ts` | HTML 콘텐츠 타입별 추출 + 섹션 필터링 |
+| `src/ai/tools/confluenceTools.ts` | `confluence_word_count` LangChain 도구 |
+| `src/ai/chat.ts` | 도구 등록 + 프롬프트 가이드 |
+
+### 비단어 토큰 필터링 (`excludeTechnical: true`, MS Word 스타일)
+
+MS Word처럼 단순하게 순수 숫자와 기호만 제외:
+
+| 제외 | 예시 |
+|------|------|
+| 순수 숫자 | `2025`, `4096`, `0.5` |
+| 순수 기호 | `/`, `->`, `&`, `→`, `x` |
+
+| 포함 (단어로 카운트) | 예시 |
+|---------------------|------|
+| 기술 용어 | `3ds`, `UV`, `FBX`, `RGBA` |
+| 파일 확장자 | `.max`, `.fbx`, `.tga` |
+| 파일명 | `Spur.Max`, `SK_Spur.fbx` |
+| 숫자+단위 | `70K`, `4096x4096` |
 
 ### 제한사항
 
 1. **MCP 연결 필수**: Confluence 미연결 시 사용 불가
-2. **페이지 크기 제한**: 대용량 페이지는 MCP 응답 제한에 걸릴 수 있음
-3. **필터링**: 섹션별/언어별 필터링은 LLM이 응답 내용을 보고 판단
+2. **페이지 수 제한**: 한 번에 최대 10개 페이지
+3. **HTML 기반 섹션 필터링**: Confluence HTML의 `<h1>`~`<h6>` 태그 기반

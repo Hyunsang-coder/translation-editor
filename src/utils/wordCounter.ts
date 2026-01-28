@@ -105,6 +105,41 @@ const LANG_CHAR_PATTERNS = {
 } as const;
 
 /**
+ * 비단어 토큰 여부 판별 (MS Word 스타일)
+ *
+ * MS Word처럼 단순하게:
+ * - 순수 숫자 제외 (2025, 4096)
+ * - 순수 기호 제외 (/, ->, &, x)
+ * - 나머지는 모두 단어로 카운트 (3ds, UV, .fbx 등 기술 용어 포함)
+ *
+ * @param word 단어
+ * @returns 비단어(숫자/기호)이면 true
+ */
+export function isNonWordToken(word: string): boolean {
+  // 문장부호 제거
+  const trimmed = word
+    .replace(/[.,;:!?()[\]{}'"]+$/, '')
+    .replace(/^[.,;:!?()[\]{}'"]+/, '');
+
+  if (!trimmed) return true;
+
+  // 순수 숫자 (2025, 4096, 70, 0.5 등)
+  if (/^[\d.,]+$/.test(trimmed)) return true;
+
+  // 순수 기호 (/, ->, &, →, x 등 - 단독 사용 시)
+  if (/^[\/\-\>\<\&\→\×xX]+$/.test(trimmed)) return true;
+
+  return false;
+}
+
+/**
+ * @deprecated Use isNonWordToken instead (simpler MS Word style)
+ */
+export function isTechnicalToken(word: string): boolean {
+  return isNonWordToken(word);
+}
+
+/**
  * 특정 섹션 추출
  * TRD 13.10 extractSection 함수 참조
  *
@@ -147,13 +182,34 @@ export function extractSection(content: string, headingText: string): string | n
  * preprocessContent → stripHtml → 공백 split → 카운트
  *
  * @param text 텍스트 (HTML 또는 plain text)
+ * @param options 카운팅 옵션
  * @returns 총 단어 수
  */
-export function countTotalWords(text: string): number {
+export function countTotalWords(text: string, options: CountByLanguageOptions = {}): number {
+  const { excludeTechnical = false } = options;
+
   if (!text || text.trim().length === 0) return 0;
   const cleaned = preprocessContent(text);
   const plainText = stripHtml(cleaned);
-  return plainText.trim().split(/\s+/).filter(Boolean).length;
+  let words = plainText.trim().split(/\s+/).filter(Boolean);
+
+  if (excludeTechnical) {
+    words = words.filter((word) => !isNonWordToken(word));
+  }
+
+  return words.length;
+}
+
+/**
+ * 언어별 단어 카운팅 옵션
+ */
+export interface CountByLanguageOptions {
+  /**
+   * 비단어 토큰 제외 여부 (기본: false)
+   * true면 순수 숫자, 순수 기호만 제외 (MS Word 스타일)
+   * 기술 용어(3ds, UV, .fbx 등)는 단어로 카운트
+   */
+  excludeTechnical?: boolean;
 }
 
 /**
@@ -161,9 +217,12 @@ export function countTotalWords(text: string): number {
  * 모든 언어를 공백 구분 단어 수로 카운팅
  *
  * @param text 텍스트 (HTML 또는 plain text)
+ * @param options 카운팅 옵션
  * @returns 언어별 단어 수
  */
-export function countByLanguage(text: string): WordCountBreakdown {
+export function countByLanguage(text: string, options: CountByLanguageOptions = {}): WordCountBreakdown {
+  const { excludeTechnical = false } = options;
+
   if (!text || text.trim().length === 0) {
     return { english: 0, korean: 0, chinese: 0, japanese: 0 };
   }
@@ -180,6 +239,11 @@ export function countByLanguage(text: string): WordCountBreakdown {
   };
 
   for (const word of words) {
+    // 비단어 토큰(순수 숫자/기호) 필터링
+    if (excludeTechnical && isNonWordToken(word)) {
+      continue;
+    }
+
     // 단어에 포함된 문자로 언어 판별
     if (LANG_CHAR_PATTERNS.korean.test(word)) {
       breakdown.korean++;
@@ -241,20 +305,33 @@ export function extractPageIdFromUrl(input: string): string {
 }
 
 /**
+ * countWords 옵션
+ */
+export interface CountWordsOptions {
+  /** 언어 필터 */
+  language?: LanguageFilter;
+  /** 섹션 필터 (Heading 텍스트) */
+  sectionHeading?: string;
+  /**
+   * 기술적 식별자 제외 여부 (기본: false)
+   * true면 파일명, 확장자, 약어(UV, FBX 등), 숫자+단위(70K, 4096x4096) 등 제외
+   * 번역 분량 산정 시 더 정확한 결과를 위해 사용
+   */
+  excludeTechnical?: boolean;
+}
+
+/**
  * 단일 콘텐츠 카운팅
  *
  * @param content 콘텐츠 텍스트
- * @param options 옵션 (언어 필터, 섹션 필터)
+ * @param options 옵션 (언어 필터, 섹션 필터, 기술적 식별자 제외)
  * @returns 카운팅 결과
  */
 export function countWords(
   content: string,
-  options: {
-    language?: LanguageFilter;
-    sectionHeading?: string;
-  } = {}
+  options: CountWordsOptions = {}
 ): WordCountResult {
-  const { language = 'all', sectionHeading } = options;
+  const { language = 'all', sectionHeading, excludeTechnical = false } = options;
 
   // 섹션 필터 적용
   let targetContent = content;
@@ -270,13 +347,13 @@ export function countWords(
     targetContent = section;
   }
 
-  // 언어별 카운팅
-  const breakdown = countByLanguage(targetContent);
+  // 언어별 카운팅 (기술적 식별자 필터 적용)
+  const breakdown = countByLanguage(targetContent, { excludeTechnical });
 
   // 'all' 필터는 실제 전체 단어 수 (숫자만 있는 단어 포함)
   // 언어별 필터는 해당 언어 단어만
   const totalWords = language === 'all'
-    ? countTotalWords(targetContent)
+    ? countTotalWords(targetContent, { excludeTechnical })
     : calculateTotal(breakdown, language);
 
   return {

@@ -3,7 +3,6 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
 import { clearAllMcpServer } from "@/tauri/mcpRegistry";
-import { countWords, formatWordCountResult } from "@/utils/wordCounter";
 
 export interface McpConnectionStatus {
   isConnected: boolean;
@@ -64,13 +63,6 @@ function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
             return JSON.stringify(c);
           })
           .join("\n");
-
-        // getConfluencePage 응답에 단어 수 자동 첨부
-        if (mcpTool.name === "getConfluencePage" && textResult.length > 0) {
-          const wordCountResult = countWords(textResult);
-          const wordCountInfo = formatWordCountResult(wordCountResult, 'all');
-          return `${textResult}\n\n---\n📊 단어 수 (자동 계산):\n${wordCountInfo}`;
-        }
 
         return textResult;
       } catch (error) {
