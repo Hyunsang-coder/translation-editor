@@ -434,6 +434,12 @@ impl McpClient {
         Err("Tool call failed: unknown error".to_string())
     }
 
+    /// OAuth 액세스 토큰 가져오기 (REST API 직접 호출용)
+    /// MCP 연결 없이도 토큰만 가져올 수 있음
+    pub async fn get_oauth_token(&self) -> Option<String> {
+        self.oauth.get_access_token().await
+    }
+
     /// 연결 해제
     pub async fn disconnect(&self) {
         // SSE 연결 종료

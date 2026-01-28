@@ -1,8 +1,11 @@
 /**
  * Confluence 전용 도구
  *
- * confluence_word_count: MCP로 페이지를 fetch한 뒤 프로그래밍적으로 단어 수만 계산하여
- * JSON 결과만 LLM에 반환. 본문 전체가 컨텍스트에 들어가는 것을 방지하여 토큰 절약.
+ * confluence_word_count: MCP tool을 Tauri command로 직접 호출하여 페이지를 fetch한 뒤
+ * TypeScript에서 단어 수만 계산하여 JSON 결과만 LLM에 반환.
+ *
+ * 핵심: MCP tool 결과가 LangChain을 거치지 않으므로 LLM 컨텍스트에 노출되지 않음.
+ * (LangChain tool로 호출하면 결과가 AI에게 전달됨)
  *
  * TRD 참조: docs/plans/confluence-word-count-v2.md
  */
@@ -16,12 +19,6 @@ import {
   type LanguageFilter,
   type WordCountBreakdown,
 } from '@/utils/wordCounter';
-import {
-  extractContentByType,
-  filterSections,
-  type ContentType,
-  type SectionMode,
-} from '@/utils/htmlContentExtractor';
 
 /**
  * 페이지별 결과 타입
@@ -46,9 +43,6 @@ interface ConfluenceWordCountResponse {
   };
   filters: {
     language: LanguageFilter;
-    sections?: string[];
-    sectionMode?: SectionMode;
-    contentType: ContentType;
     excludeTechnical: boolean;
   };
 }
@@ -84,26 +78,6 @@ const confluenceWordCountSchema = z.object({
     .describe(
       '카운팅할 언어 필터. "all"=전체, "english"=영어만, "korean"=한국어만, "cjk"=한중일 합산'
     ),
-  sections: z
-    .array(z.string())
-    .optional()
-    .describe(
-      '필터링할 섹션 제목(heading 텍스트) 배열. sectionMode와 함께 사용. 대소문자 무시. 예: ["API Reference", "설치 방법"]'
-    ),
-  sectionMode: z
-    .enum(['include', 'exclude'])
-    .optional()
-    .default('include')
-    .describe(
-      '"include"=지정한 섹션들만 카운팅, "exclude"=지정한 섹션들을 제외하고 카운팅. sections가 없으면 무시됨'
-    ),
-  contentType: z
-    .enum(['all', 'tables', 'lists', 'paragraphs', 'headings'])
-    .optional()
-    .default('all')
-    .describe(
-      '콘텐츠 유형 필터. "tables"=표 안 텍스트만, "lists"=리스트만, "paragraphs"=본문만, "headings"=제목만'
-    ),
   excludeTechnical: z
     .boolean()
     .optional()
@@ -115,13 +89,53 @@ const confluenceWordCountSchema = z.object({
 
 type ConfluenceWordCountArgs = z.infer<typeof confluenceWordCountSchema>;
 
+// 캐시된 cloudId (세션 동안 유지)
+let cachedCloudId: string | null = null;
+
 /**
- * MCP를 통해 Confluence 페이지 HTML 가져오기
+ * Atlassian cloudId 가져오기 (MCP tool로 조회)
  */
-async function fetchConfluencePage(pageId: string): Promise<string> {
+async function getCloudId(): Promise<string> {
+  if (cachedCloudId) return cachedCloudId;
+
+  const result = await invoke<McpToolResult>('mcp_call_tool', {
+    name: 'getAccessibleAtlassianResources',
+    arguments: {},
+  });
+
+  if (result.isError) {
+    throw new Error('Atlassian 리소스 조회 실패: ' + result.content.map((c) => c.text || '').join('\n'));
+  }
+
+  const text = result.content.map((c) => c.text || '').join('');
+  try {
+    const resources = JSON.parse(text);
+    if (Array.isArray(resources) && resources.length > 0 && resources[0].id) {
+      cachedCloudId = resources[0].id as string;
+      return cachedCloudId;
+    }
+  } catch {
+    const match = text.match(/"id"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) {
+      cachedCloudId = match[1];
+      return cachedCloudId;
+    }
+  }
+
+  throw new Error('Atlassian cloudId를 찾을 수 없습니다');
+}
+
+/**
+ * MCP tool로 Confluence 페이지 콘텐츠 가져오기 (Tauri command 직접 호출)
+ * LangChain을 거치지 않으므로 LLM 컨텍스트에 노출되지 않음
+ */
+async function fetchConfluencePageViaMcp(pageId: string): Promise<string> {
+  const cloudId = await getCloudId();
+
+  // MCP tool을 Tauri command로 직접 호출 (LangChain 안 거침)
   const result = await invoke<McpToolResult>('mcp_call_tool', {
     name: 'getConfluencePage',
-    arguments: { pageId },
+    arguments: { cloudId, pageId, contentFormat: 'markdown' },
   });
 
   if (result.isError) {
@@ -140,16 +154,16 @@ async function processPage(
   pageIdOrUrl: string,
   args: ConfluenceWordCountArgs
 ): Promise<PageResult> {
-  const { language = 'all', sections, sectionMode = 'include', contentType = 'all', excludeTechnical = true } = args;
+  const { language = 'all', excludeTechnical = true } = args;
 
   try {
     // 1. 페이지 ID 추출
     const pageId = extractPageIdFromUrl(pageIdOrUrl);
 
-    // 2. MCP로 페이지 HTML 가져오기
-    let html: string;
+    // 2. MCP tool로 페이지 markdown 가져오기 (Tauri command 직접 호출)
+    let markdown: string;
     try {
-      html = await fetchConfluencePage(pageId);
+      markdown = await fetchConfluencePageViaMcp(pageId);
     } catch (e) {
       return {
         pageId,
@@ -159,51 +173,19 @@ async function processPage(
       };
     }
 
-    // 3. 섹션 필터링
-    let filteredHtml = html;
-    let sectionError: string | undefined;
-    let availableSections: string[] | undefined;
+    // 3. 단어 카운팅 (markdown을 직접 카운팅)
+    console.log('[confluence_word_count] Markdown length:', markdown.length);
+    console.log('[confluence_word_count] Markdown preview (first 1000 chars):', markdown.slice(0, 1000));
 
-    if (sections && sections.length > 0) {
-      const filterResult = filterSections(html, sections, sectionMode);
-      filteredHtml = filterResult.html;
-      sectionError = filterResult.error;
-      availableSections = filterResult.availableSections;
-    }
+    const countResult = countWords(markdown, { language, excludeTechnical });
+    console.log('[confluence_word_count] Count result:', countResult);
 
-    // 4. 콘텐츠 타입 필터링
-    const contentText = extractContentByType(filteredHtml, contentType);
-
-    // 콘텐츠 타입 결과가 없는 경우
-    if (!contentText && contentType !== 'all' && filteredHtml.length > 0) {
-      return {
-        pageId,
-        totalWords: 0,
-        breakdown: { english: 0, korean: 0, chinese: 0, japanese: 0 },
-        note: `지정한 콘텐츠 타입(${contentType})의 내용이 없습니다`,
-        ...(availableSections ? { availableSections } : {}),
-      };
-    }
-
-    // 5. 단어 카운팅 (기술적 식별자 필터 적용)
-    const countResult = countWords(contentText, { language, excludeTechnical });
-
-    const result: PageResult = {
+    return {
       pageId,
       totalWords: countResult.totalWords,
       breakdown: countResult.breakdown,
     };
-
-    if (sectionError) {
-      result.error = sectionError;
-      if (availableSections) {
-        result.availableSections = availableSections;
-      }
-    }
-
-    return result;
   } catch (e) {
-    // 페이지 ID 추출 실패 등
     return {
       pageId: pageIdOrUrl,
       totalWords: 0,
@@ -225,7 +207,6 @@ function aggregateResults(pages: PageResult[]): { totalWords: number; breakdown:
   };
 
   for (const page of pages) {
-    // 에러 없는 페이지만 합산
     if (!page.error || page.totalWords > 0) {
       breakdown.english += page.breakdown.english;
       breakdown.korean += page.breakdown.korean;
@@ -244,7 +225,7 @@ function aggregateResults(pages: PageResult[]): { totalWords: number; breakdown:
  */
 export const confluenceWordCountTool = tool(
   async (args: ConfluenceWordCountArgs): Promise<string> => {
-    const { pageIds, language = 'all', sections, sectionMode = 'include', contentType = 'all', excludeTechnical = true } = args;
+    const { pageIds, language = 'all', excludeTechnical = true } = args;
 
     // 각 페이지 처리
     const pageResults = await Promise.all(
@@ -256,8 +237,6 @@ export const confluenceWordCountTool = tool(
       pages: pageResults,
       filters: {
         language,
-        ...(sections && sections.length > 0 ? { sections, sectionMode } : {}),
-        contentType,
         excludeTechnical,
       },
     };
@@ -274,7 +253,7 @@ export const confluenceWordCountTool = tool(
     description:
       'Confluence 페이지의 단어 수를 카운팅합니다. 번역 분량 산정에 사용. ' +
       '페이지 본문 전체가 아닌 단어 수만 반환하므로 토큰을 절약합니다. ' +
-      '섹션별(sections), 언어별(language), 콘텐츠 유형별(contentType) 필터링을 지원합니다. ' +
+      '언어별(language) 필터링을 지원합니다. ' +
       '페이지 내용 참고/인용이 필요하면 getConfluencePage를 사용하세요.',
     schema: confluenceWordCountSchema,
   }

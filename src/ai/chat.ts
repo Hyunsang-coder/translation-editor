@@ -777,9 +777,13 @@ export async function streamAssistantReply(
   );
 
   // MCP 도구 (Atlassian Confluence)
-  const mcpTools = input.confluenceSearchEnabled ? await mcpClientManager.getTools() : [];
+  // getConfluencePage는 제외 - confluence_word_count가 REST API로 직접 처리
+  // AI가 getConfluencePage를 직접 호출하면 결과가 LLM 컨텍스트에 들어가 토큰 낭비
+  const allMcpTools = input.confluenceSearchEnabled ? await mcpClientManager.getTools() : [];
+  const mcpTools = allMcpTools.filter((tool) => tool.name !== 'getConfluencePage');
 
   // confluence_word_count 도구 (MCP 연결 시 활성화)
+  // REST API로 HTML을 가져와 TypeScript에서 단어 수만 계산 → LLM 컨텍스트에 내용 노출 안 됨
   const confluenceTools = input.confluenceSearchEnabled ? [confluenceWordCountTool] : [];
 
   // Notion 도구 (REST API 기반)

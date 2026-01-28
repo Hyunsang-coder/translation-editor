@@ -26,6 +26,8 @@ export function preprocessContent(content: string): string {
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/<ac:image[\s\S]*?\/>/gi, '')
     .replace(/!\[.*?\]\(.*?\)/g, '')           // Markdown ![alt](url)
+    // 이미지 파일명 (Confluence markdown에서 이미지가 파일명으로만 표시되는 경우)
+    .replace(/\b[\w-]+\.(png|jpg|jpeg|gif|svg|webp)\b/gi, '')
 
     // 코드 블록 제거 (번역 불필요)
     .replace(/<code>[\s\S]*?<\/code>/gi, '')

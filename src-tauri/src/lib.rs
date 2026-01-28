@@ -295,6 +295,8 @@ pub fn run() {
             commands::connector::connector_delete_token,
             commands::connector::connector_list_status,
             commands::connector::connector_start_oauth,
+            // Confluence REST API (MCP OAuth 토큰 재사용)
+            commands::confluence::confluence_get_page_html,
             // Notion REST API
             commands::notion::notion_set_token,
             commands::notion::notion_has_token,
