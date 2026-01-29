@@ -69,6 +69,22 @@ export interface ExtractTextOptions {
 // ============================================================================
 
 /**
+ * Heading 위치 정보 (재귀 탐색용)
+ */
+interface HeadingLocation {
+  /** heading 노드 */
+  node: AdfNode;
+  /** heading 레벨 (1-6) */
+  level: number;
+  /** heading 텍스트 */
+  text: string;
+  /** 원본 문서에서의 경로 (부모 노드들의 인덱스) */
+  path: number[];
+  /** 최상위 노드 인덱스 */
+  topLevelIndex: number;
+}
+
+/**
  * 노드에서 heading 텍스트 추출 (내부 헬퍼)
  */
 function getHeadingText(node: AdfNode): string {
@@ -82,6 +98,73 @@ function getHeadingText(node: AdfNode): string {
 function getHeadingLevel(node: AdfNode): number {
   if (node.type !== 'heading') return 0;
   return (node.attrs?.level as number) ?? 1;
+}
+
+/**
+ * 모든 heading을 재귀적으로 찾아 위치 정보와 함께 반환
+ * layoutSection, panel, expand 등 중첩 구조 지원
+ */
+function findAllHeadingsRecursive(
+  nodes: AdfNode[],
+  currentPath: number[] = [],
+  topLevelIndex: number = -1
+): HeadingLocation[] {
+  const results: HeadingLocation[] = [];
+
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (!node) continue;
+
+    const path = [...currentPath, i];
+    // 최상위 레벨이면 topLevelIndex 갱신
+    const effectiveTopIndex = currentPath.length === 0 ? i : topLevelIndex;
+
+    if (node.type === 'heading') {
+      const fullText = getHeadingText(node).trim();
+      results.push({
+        node,
+        level: getHeadingLevel(node),
+        text: fullText,
+        path,
+        topLevelIndex: effectiveTopIndex,
+      });
+    }
+
+    // 자식 노드 재귀 탐색
+    if (node.content && node.content.length > 0) {
+      results.push(...findAllHeadingsRecursive(node.content, path, effectiveTopIndex));
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Heading 텍스트 매칭 (부분 매칭 지원)
+ * 우선순위: 1. 정확히 일치 > 2. 첫 줄 일치 > 3. 포함 매칭 (번호/접미사 제거 후)
+ */
+function matchesHeading(headingText: string, target: string): boolean {
+  const normalized = headingText.toLowerCase().trim();
+  const normalizedTarget = target.toLowerCase().trim();
+
+  // 1. 정확히 일치
+  if (normalized === normalizedTarget) return true;
+
+  // 2. 첫 줄 일치 (다국어 페이지 "Title\n번역")
+  const firstLine = normalized.split('\n')[0]?.trim() ?? '';
+  if (firstLine === normalizedTarget) return true;
+
+  // 3. 포함 매칭 (번호/접미사 제거 후)
+  //    "1. Overview" → "overview" 포함 체크
+  //    "1.1 Details" → "details" 포함 체크
+  //    "Overview (v2)" → "overview" 포함 체크
+  const cleanedHeading = normalized
+    .replace(/^[\d.]+\s*/, '')       // 선행 번호 제거 (1. 또는 1.1 등)
+    .replace(/\s*\([^)]*\)\s*$/, '') // 후행 괄호 제거
+    .trim();
+  if (cleanedHeading === normalizedTarget) return true;
+
+  return false;
 }
 
 /**
@@ -179,9 +262,10 @@ export function extractText(doc: AdfDocument, options: ExtractTextOptions = {}):
  *
  * 지정된 heading 텍스트를 찾아 해당 섹션의 내용을 반환합니다.
  * 섹션은 다음 동급/상위 heading 또는 문서 끝까지입니다.
+ * 재귀 탐색으로 layoutSection, panel, expand 등 중첩 구조 내 heading도 지원.
  *
  * @param doc ADF 문서
- * @param headingText 찾을 heading 텍스트 (대소문자 무시)
+ * @param headingText 찾을 heading 텍스트 (대소문자 무시, 부분 매칭 지원)
  * @returns 섹션 내용과 찾음 여부
  *
  * @example
@@ -191,6 +275,8 @@ export function extractText(doc: AdfDocument, options: ExtractTextOptions = {}):
  *   const sectionDoc = wrapAsDocument(content);
  *   const text = extractText(sectionDoc);
  * }
+ * // 부분 매칭: "1. Overview"를 "Overview"로 찾기
+ * const { content, found } = extractSection(doc, 'Overview');
  * ```
  */
 export function extractSection(doc: AdfDocument, headingText: string): SectionResult {
@@ -198,43 +284,39 @@ export function extractSection(doc: AdfDocument, headingText: string): SectionRe
     return { content: [], found: false };
   }
 
-  const normalizedTarget = headingText.toLowerCase().trim();
-  let targetLevel: number | null = null;
-  let startIndex: number | null = null;
-  let endIndex: number | null = null;
+  // 모든 heading을 재귀적으로 찾기
+  const allHeadings = findAllHeadingsRecursive(doc.content);
 
-  // 타겟 heading 찾기
-  for (let i = 0; i < doc.content.length; i++) {
-    const node = doc.content[i];
-    if (!node) continue;
-
-    if (node.type === 'heading') {
-      const text = getHeadingText(node).toLowerCase().trim();
-      const level = getHeadingLevel(node);
-
-      if (startIndex === null) {
-        // 타겟 heading 찾기 (정확히 일치 또는 첫 줄이 일치)
-        // Confluence 다국어 페이지에서 "Title\n번역" 형태 지원
-        const firstLine = text.split('\n')[0]?.trim() ?? '';
-        if (text === normalizedTarget || firstLine === normalizedTarget) {
-          targetLevel = level;
-          startIndex = i + 1; // heading 다음부터
-        }
-      } else {
-        // 다음 동급/상위 heading에서 종료
-        if (level <= targetLevel!) {
-          endIndex = i;
-          break;
-        }
-      }
+  // 타겟 heading 찾기 (부분 매칭 지원)
+  let targetIdx = -1;
+  for (let i = 0; i < allHeadings.length; i++) {
+    const h = allHeadings[i];
+    if (h && matchesHeading(h.text, headingText)) {
+      targetIdx = i;
+      break;
     }
   }
 
-  if (startIndex === null) {
+  if (targetIdx === -1) {
     return { content: [], found: false };
   }
 
-  const content = doc.content.slice(startIndex, endIndex ?? undefined);
+  const targetHeading = allHeadings[targetIdx]!;
+  const targetLevel = targetHeading.level;
+  const startTopIndex = targetHeading.topLevelIndex;
+
+  // 다음 동급/상위 heading 찾기
+  let endTopIndex: number | null = null;
+  for (let i = targetIdx + 1; i < allHeadings.length; i++) {
+    const h = allHeadings[i];
+    if (h && h.level <= targetLevel) {
+      endTopIndex = h.topLevelIndex;
+      break;
+    }
+  }
+
+  // heading 다음 노드부터 다음 동급/상위 heading 전까지 추출
+  const content = doc.content.slice(startTopIndex + 1, endTopIndex ?? undefined);
   return { content, found: true };
 }
 
@@ -242,9 +324,10 @@ export function extractSection(doc: AdfDocument, headingText: string): SectionRe
  * 처음부터 특정 섹션 전까지 추출
  *
  * 문서 시작부터 지정된 heading 직전까지의 내용을 반환합니다.
+ * 재귀 탐색으로 layoutSection, panel, expand 등 중첩 구조 내 heading도 지원.
  *
  * @param doc ADF 문서
- * @param headingText 종료할 heading 텍스트 (대소문자 무시)
+ * @param headingText 종료할 heading 텍스트 (대소문자 무시, 부분 매칭 지원)
  * @returns 추출된 내용과 찾음 여부
  *
  * @example
@@ -254,6 +337,8 @@ export function extractSection(doc: AdfDocument, headingText: string): SectionRe
  *   const introDoc = wrapAsDocument(content);
  *   // introDoc에는 'Appendix' 섹션 이전의 모든 노드가 포함됨
  * }
+ * // 부분 매칭: "1. Appendix"를 "Appendix"로 찾기
+ * const { content, found } = extractUntilSection(doc, 'Appendix');
  * ```
  */
 export function extractUntilSection(doc: AdfDocument, headingText: string): SectionResult {
@@ -261,23 +346,16 @@ export function extractUntilSection(doc: AdfDocument, headingText: string): Sect
     return { content: [], found: false };
   }
 
-  const normalizedTarget = headingText.toLowerCase().trim();
+  // 모든 heading을 재귀적으로 찾기
+  const allHeadings = findAllHeadingsRecursive(doc.content);
 
-  // 타겟 heading 찾기
-  for (let i = 0; i < doc.content.length; i++) {
-    const node = doc.content[i];
-    if (!node) continue;
-
-    if (node.type === 'heading') {
-      const text = getHeadingText(node).toLowerCase().trim();
-      // 정확히 일치 또는 첫 줄이 일치 (다국어 페이지 "Title\n번역" 형태 지원)
-      const firstLine = text.split('\n')[0]?.trim() ?? '';
-      if (text === normalizedTarget || firstLine === normalizedTarget) {
-        return {
-          content: doc.content.slice(0, i),
-          found: true,
-        };
-      }
+  // 타겟 heading 찾기 (부분 매칭 지원)
+  for (const heading of allHeadings) {
+    if (matchesHeading(heading.text, headingText)) {
+      return {
+        content: doc.content.slice(0, heading.topLevelIndex),
+        found: true,
+      };
     }
   }
 
@@ -359,36 +437,35 @@ export function listAvailableSections(doc: AdfDocument, options?: ListSectionsOp
 
   const includeLevel = options?.includeLevel ?? false;
 
-  if (includeLevel) {
-    const sections: SectionInfo[] = [];
-    for (const node of doc.content) {
+  // 재귀적으로 모든 heading 노드 찾기 (layoutSection 등 중첩 구조 지원)
+  function findHeadingsRecursive(nodes: AdfNode[], result: SectionInfo[]): void {
+    for (const node of nodes) {
       if (node.type === 'heading') {
         const fullText = getHeadingText(node).trim();
         // 다국어 페이지에서 첫 줄만 섹션명으로 사용 (검색 시 첫 줄로 매칭)
         const text = fullText.split('\n')[0]?.trim() ?? fullText;
         if (text) {
-          sections.push({
+          result.push({
             text,
             level: getHeadingLevel(node),
           });
         }
       }
-    }
-    return sections;
-  }
-
-  const sections: string[] = [];
-  for (const node of doc.content) {
-    if (node.type === 'heading') {
-      const fullText = getHeadingText(node).trim();
-      // 다국어 페이지에서 첫 줄만 섹션명으로 사용
-      const text = fullText.split('\n')[0]?.trim() ?? fullText;
-      if (text) {
-        sections.push(text);
+      // 자식 노드 재귀 탐색 (layoutSection, layoutColumn, panel 등)
+      if (node.content && node.content.length > 0) {
+        findHeadingsRecursive(node.content, result);
       }
     }
   }
-  return sections;
+
+  const sections: SectionInfo[] = [];
+  findHeadingsRecursive(doc.content, sections);
+
+  if (includeLevel) {
+    return sections;
+  }
+
+  return sections.map((s) => s.text);
 }
 
 /**

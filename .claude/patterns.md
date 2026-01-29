@@ -179,15 +179,26 @@ interface AdfNode { type: string; attrs?: Record<string, unknown>; content?: Adf
 
 // 핵심 함수
 extractText(doc, { excludeTypes: ['codeBlock'] })  // 텍스트 추출
-extractSection(doc, 'Overview')       // 특정 섹션 추출 (heading 기준)
+extractSection(doc, 'Overview')       // 특정 섹션 추출 (heading 기준, 부분 매칭 지원)
 extractUntilSection(doc, 'Appendix')  // 처음부터 특정 섹션 전까지
 filterByContentType(doc, 'table')     // 콘텐츠 타입별 필터 (table/text/list)
-listAvailableSections(doc)            // 섹션 목록 조회
+listAvailableSections(doc)            // 섹션 목록 조회 (재귀 탐색)
 wrapAsDocument(nodes)                 // AdfNode[] → AdfDocument 래핑
 ```
 
+**재귀 탐색**: `listAvailableSections()`, `extractSection()`, `extractUntilSection()`은 모든 중첩 구조
+(layoutSection, panel, expand 등) 내부의 heading도 탐색.
+
+**부분 매칭**: heading 검색 시 다음 순서로 매칭:
+1. 정확히 일치: `"Overview"` = `"Overview"`
+2. 첫 줄 일치: `"Title\n번역"` → `"Title"`로 검색 가능
+3. 번호/접미사 제거: `"1. Overview"` → `"Overview"`, `"Overview (v2)"` → `"Overview"`
+
 **ADF 우선 전략**: `confluenceTools.ts`에서 ADF 형식을 먼저 요청하고, 실패 시 Markdown으로 폴백.
 ADF는 구조적 정보(heading level, 표 셀 구분)를 보존하여 더 정확한 섹션 필터링 가능.
+
+**형식별 분리 캐시**: 동일 페이지에 ADF와 Markdown 둘 다 캐시 가능. `getFromCache(pageId, 'adf')`로
+선호 형식 지정, 없으면 다른 형식 반환.
 
 ## Build Commands
 

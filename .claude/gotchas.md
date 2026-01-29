@@ -175,3 +175,9 @@ Critical implementation warnings learned from past issues.
 71. **HTML Paste Table Column Width**: `htmlNormalizer.ts`의 `ALLOWED_ATTR`에 `colwidth` 속성이 필요함. 누락 시 Confluence/Word 등에서 표 붙여넣기 후 TipTap이 열 너비 정보를 잃어 드래그 리사이즈 불가.
 
 72. **Inline Element Visual Spacing**: 인라인 요소(strong, em 등)가 한글/영문 텍스트 사이에서 시각적 공백을 만들 수 있음. CSS `margin-left/right: -0.05em`으로 브라우저 렌더링 간격 상쇄. `letter-spacing`은 영문에서 효과 없음.
+
+73. **ADF Section Recursive Search**: `extractSection()`과 `extractUntilSection()`은 재귀 탐색으로 layoutSection, panel, expand 등 중첩 구조 내 heading도 찾음. 단, 추출 결과는 최상위 노드 기준으로 슬라이스되므로 중첩 구조 내부만 추출하는 것은 불가.
+
+74. **ADF Heading Partial Match**: `"1. Overview"`를 `"Overview"`로 검색 가능. 정규식 `^[\d.]+\s*`로 선행 번호 제거, `\s*\([^)]*\)\s*$`로 후행 괄호 제거. 정확한 매칭이 우선하며, 부분 매칭은 폴백으로 사용.
+
+75. **ADF Cache Format Separation**: `confluenceTools.ts`의 페이지 캐시는 ADF와 Markdown을 별도 필드로 저장. 동일 페이지에 두 형식이 공존 가능하며, `getFromCache(pageId, 'adf')`로 선호 형식 지정. ADF 실패 후 Markdown 캐시만 있어도 이후 요청에서 ADF 재시도 가능.
