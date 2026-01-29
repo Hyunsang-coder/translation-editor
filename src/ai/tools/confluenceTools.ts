@@ -206,12 +206,13 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
   const now = Date.now();
 
   if (existing && (now - existing.cachedAt <= PAGE_CACHE_TTL_MS)) {
-    // 기존 캐시가 유효하면 형식만 추가
+    // 기존 캐시가 유효하면 형식 추가 + 타임스탬프 갱신
     if (format === 'adf') {
       existing.adf = content as AdfDocument;
     } else {
       existing.markdown = content as string;
     }
+    existing.cachedAt = now;
     console.log(`[confluence_word_count] Updated cache for page ${pageId} (added ${format})`);
   } else {
     // 새 캐시 생성
@@ -440,8 +441,10 @@ async function processPage(
 
       // 사용 가능한 섹션 목록 추출
       availableSectionNames = listAvailableSections(pageContent.content) as string[];
-      console.log('[confluence_word_count] Available sections:', JSON.stringify(availableSectionNames, null, 2));
-      console.log('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
+      if (import.meta.env.DEV) {
+        console.log('[confluence_word_count] Available sections:', JSON.stringify(availableSectionNames, null, 2));
+        console.log('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
+      }
 
       const filterOptions: {
         sectionHeading?: string;
@@ -462,8 +465,9 @@ async function processPage(
           sectionTitle: args.sectionHeading || args.untilSection,
         };
       } else {
-        console.log('[confluence_word_count] Extracted text length:', text.length);
-        console.log('[confluence_word_count] Extracted text preview (first 1000 chars):', text.slice(0, 1000));
+        if (import.meta.env.DEV) {
+          console.log('[confluence_word_count] Extracted text length:', text.length);
+        }
 
         // ADF에서 추출한 텍스트에 countWords 적용 (섹션/콘텐츠 타입 필터는 이미 적용됨)
         countResult = countWords(text, {
@@ -475,9 +479,10 @@ async function processPage(
     } else {
       // Markdown 형식: 기존 로직 사용
       const markdown = pageContent.content;
-      console.log('[confluence_word_count] Processing Markdown document');
-      console.log('[confluence_word_count] Markdown length:', markdown.length);
-      console.log('[confluence_word_count] Markdown preview (first 1000 chars):', markdown.slice(0, 1000));
+      if (import.meta.env.DEV) {
+        console.log('[confluence_word_count] Processing Markdown document');
+        console.log('[confluence_word_count] Markdown length:', markdown.length);
+      }
 
       countResult = countWords(markdown, {
         language,
@@ -492,7 +497,9 @@ async function processPage(
       }
     }
 
-    console.log('[confluence_word_count] Count result:', countResult);
+    if (import.meta.env.DEV) {
+      console.log('[confluence_word_count] Count result:', countResult);
+    }
 
     // 섹션 필터 적용 시 섹션을 찾지 못한 경우 note 추가
     const result: PageResult = {

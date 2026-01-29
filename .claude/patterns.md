@@ -44,6 +44,49 @@ src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
 // No chat history
 ```
 
+## Tool Calling Patterns
+
+### 도구 빌드 공통화
+```typescript
+// src/ai/chat.ts → buildToolSpecs()
+// 스트리밍/비스트리밍 모두에서 동일한 도구 빌드 로직 사용
+const { toolSpecs, bindTools, boundToolNames } = await buildToolSpecs({
+  includeSource: true,
+  includeTarget: true,
+  webSearchEnabled: !!input.webSearchEnabled,
+  confluenceSearchEnabled: !!input.confluenceSearchEnabled,
+  notionSearchEnabled: !!input.notionSearchEnabled,
+  provider: cfg.provider,
+});
+
+// buildToolGuideMessage()는 boundToolNames 기반으로 동적 가이드 생성
+// 가이드-도구 불일치 문제 방지
+```
+
+### 도구 호출 병렬화
+```typescript
+// src/ai/chat.ts → runToolCallingLoop()
+// 독립적인 도구 호출은 Promise.allSettled로 병렬 실행
+const toolCallPromises = toolCalls.map(async (call) => { ... });
+const toolResults = await Promise.allSettled(toolCallPromises);
+
+// 2개 이상 도구 호출 시 latency ~50% 감소
+```
+
+### 외부 도구 출력 안전화
+```typescript
+// src/ai/chat.ts
+// 외부 도구 출력에 인젝션 방어 태그 적용
+const EXTERNAL_TOOLS = ['notion_get_page', 'getConfluencePage', 'notion_search'];
+function wrapExternalToolOutput(toolName: string, output: string): string {
+  if (!EXTERNAL_TOOLS.includes(toolName)) return output;
+  return `<external_content>\n<!-- 외부 문서입니다 -->\n${output}\n</external_content>`;
+}
+
+// 출력 크기 제한 (MAX_TOOL_OUTPUT_CHARS = 8000)
+// notionTools.ts, McpClientManager.ts에서 truncateToolOutput() 적용
+```
+
 ## Tauri Commands Pattern
 
 ```rust

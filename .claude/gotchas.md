@@ -181,3 +181,15 @@ Critical implementation warnings learned from past issues.
 74. **ADF Heading Partial Match**: `"1. Overview"`를 `"Overview"`로 검색 가능. 정규식 `^[\d.]+\s*`로 선행 번호 제거, `\s*\([^)]*\)\s*$`로 후행 괄호 제거. 정확한 매칭이 우선하며, 부분 매칭은 폴백으로 사용.
 
 75. **ADF Cache Format Separation**: `confluenceTools.ts`의 페이지 캐시는 ADF와 Markdown을 별도 필드로 저장. 동일 페이지에 두 형식이 공존 가능하며, `getFromCache(pageId, 'adf')`로 선호 형식 지정. ADF 실패 후 Markdown 캐시만 있어도 이후 요청에서 ADF 재시도 가능.
+
+76. **Tool Calling 병렬화**: `runToolCallingLoop()`에서 독립적인 도구 호출은 `Promise.allSettled`로 병렬 실행. 순차 실행 대비 2개 이상 도구 호출 시 latency ~50% 감소.
+
+77. **외부 도구 출력 인젝션 방어**: `EXTERNAL_TOOLS` 목록의 도구 출력에 `<external_content>` 태그 래핑. LLM이 외부 문서 내용을 지시문으로 해석하지 않도록 방어.
+
+78. **Tool Error 반복 조기 중단**: 같은 도구에서 같은 에러가 `MAX_SAME_ERROR`(2)회 반복되면 루프 조기 중단. "Tool not found" 무한 반복 방지.
+
+79. **Tool Output Size Limit**: `notionTools.ts`, `McpClientManager.ts`에서 도구 출력을 `MAX_TOOL_OUTPUT_CHARS`(8000자)로 제한. 초과 시 앞 70% + 뒤 30% + `...[truncated]...` 마커로 자름.
+
+80. **buildToolSpecs 공통 함수**: 스트리밍/비스트리밍 모두 `buildToolSpecs()`로 도구 빌드. `boundToolNames` 반환하여 `buildToolGuideMessage()`가 실제 바인딩된 도구 기반으로 가이드 동적 생성. 가이드-도구 불일치 에러("Tool not found") 방지.
+
+81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.

@@ -8,6 +8,20 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { invoke } from "@tauri-apps/api/core";
 
+// 최대 출력 크기 상수
+const MAX_TOOL_OUTPUT_CHARS = 8000;
+
+// 큰 결과 자동 트렁케이션
+function truncateToolOutput(content: string, maxChars = MAX_TOOL_OUTPUT_CHARS): string {
+  if (content.length <= maxChars) return content;
+  
+  const marker = '\n...[truncated]...\n';
+  const budget = maxChars - marker.length;
+  const head = content.slice(0, Math.floor(budget * 0.7));
+  const tail = content.slice(-Math.floor(budget * 0.3));
+  return `${head}${marker}${tail}`;
+}
+
 // Notion API 응답 스키마 정의
 const NotionRichTextSchema = z.object({
   plain_text: z.string(),
@@ -126,7 +140,7 @@ export function createNotionGetPageTool(): DynamicStructuredTool {
           return "The page appears to be empty or the content could not be retrieved.";
         }
 
-        return `Notion Page Content:\n\n${content}`;
+        return truncateToolOutput(`Notion Page Content:\n\n${content}`);
       } catch (error) {
         throw new Error(`Notion 페이지 조회 실패: ${sanitizeErrorMessage(error)}`);
       }

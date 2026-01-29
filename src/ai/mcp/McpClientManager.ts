@@ -5,6 +5,20 @@ import { z } from "zod";
 import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
 import { clearAllMcpServer } from "@/tauri/mcpRegistry";
 
+// 최대 출력 크기 상수
+const MAX_TOOL_OUTPUT_CHARS = 8000;
+
+// 큰 결과 자동 트렁케이션
+function truncateToolOutput(content: string, maxChars = MAX_TOOL_OUTPUT_CHARS): string {
+  if (content.length <= maxChars) return content;
+  
+  const marker = '\n...[truncated]...\n';
+  const budget = maxChars - marker.length;
+  const head = content.slice(0, Math.floor(budget * 0.7));
+  const tail = content.slice(-Math.floor(budget * 0.3));
+  return `${head}${marker}${tail}`;
+}
+
 export interface McpConnectionStatus {
   isConnected: boolean;
   isConnecting: boolean;
@@ -65,7 +79,7 @@ function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
           })
           .join("\n");
 
-        return textResult;
+        return truncateToolOutput(textResult);
       } catch (error) {
         throw new Error(`MCP tool call failed: ${error}`);
       }
