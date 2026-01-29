@@ -4,6 +4,7 @@
 
 use crate::mcp::oauth::AtlassianOAuth;
 use crate::mcp::types::*;
+use crate::mcp::emit_mcp_status_changed;
 use futures::StreamExt;
 use reqwest_eventsource::{Event, EventSource};
 use std::collections::HashMap;
@@ -60,10 +61,12 @@ impl McpClient {
         status
     }
 
-    /// 상태 업데이트
+    /// 상태 업데이트 및 프론트엔드에 이벤트 발송
     async fn update_status(&self, update: impl FnOnce(&mut McpConnectionStatus)) {
         let mut status = self.status.write().await;
         update(&mut status);
+        // 프론트엔드에 상태 변경 이벤트 발송
+        emit_mcp_status_changed(&status);
     }
 
     /// Atlassian MCP 서버에 연결
@@ -228,7 +231,9 @@ impl McpClient {
                             }
                             Some(Err(e)) => {
                                 eprintln!("[MCP] SSE error: {}", e);
-                                status.write().await.error = Some(format!("SSE error: {}", e));
+                                let mut s = status.write().await;
+                                s.error = Some(format!("SSE error: {}", e));
+                                emit_mcp_status_changed(&s);
                                 break;
                             }
                             None => {
@@ -245,10 +250,12 @@ impl McpClient {
                 }
             }
 
-            // 연결 종료 시 상태 업데이트
+            // 연결 종료 시 상태 업데이트 및 이벤트 발송
             let mut s = status.write().await;
             s.is_connected = false;
             s.is_connecting = false;
+            emit_mcp_status_changed(&s);
+            println!("[MCP] SSE disconnected, event emitted to frontend");
         });
 
         // 엔드포인트 수신 대기 (최대 10초)

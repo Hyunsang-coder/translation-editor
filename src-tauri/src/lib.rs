@@ -163,6 +163,9 @@ pub fn run() {
                 secrets::SECRETS.set_app_data_dir(app_data_dir.clone()).await;
             });
 
+            // MCP 모듈에 AppHandle 설정 (상태 변경 이벤트 발송용)
+            mcp::set_app_handle(app.handle().clone());
+
             // 앱 시작 시 오래된 임시 이미지 파일 정리 (24시간 이상 경과된 파일)
             if let Ok(deleted) = commands::attachments::cleanup_temp_images() {
                 if deleted > 0 {

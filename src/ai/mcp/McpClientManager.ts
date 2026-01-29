@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
@@ -144,6 +145,7 @@ class McpClientManager {
   private initialized = false;
   private isAtlassianStatusPolling = false;
   private lastAtlassianConnectAttemptAt: number | null = null;
+  private eventUnlisten: UnlistenFn | null = null;
 
   // Singleton Instance
   private static instance: McpClientManager;
@@ -168,6 +170,10 @@ class McpClientManager {
       return;
     }
     this.initialized = true;
+
+    // Rust 백엔드에서 상태 변경 이벤트 구독
+    // SSE 연결이 끊기거나 에러 발생 시 실시간으로 상태 업데이트
+    await this.subscribeToBackendEvents();
 
     try {
       // Atlassian: 저장된 토큰 상태 확인
@@ -230,6 +236,33 @@ class McpClientManager {
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error("[McpClientManager] Failed to sync status:", error);
+      }
+    }
+  }
+
+  /**
+   * Rust 백엔드에서 상태 변경 이벤트 구독
+   * SSE 연결 끊김, 에러 발생 등을 실시간으로 감지
+   */
+  private async subscribeToBackendEvents(): Promise<void> {
+    if (this.eventUnlisten) {
+      return; // 이미 구독 중
+    }
+
+    try {
+      this.eventUnlisten = await listen<McpConnectionStatus>("mcp-status-changed", (event) => {
+        if (import.meta.env.DEV) {
+          console.log("[McpClientManager] Received status event from backend:", event.payload);
+        }
+        this.updateStatus(event.payload);
+      });
+
+      if (import.meta.env.DEV) {
+        console.log("[McpClientManager] Subscribed to backend status events");
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("[McpClientManager] Failed to subscribe to backend events:", error);
       }
     }
   }
