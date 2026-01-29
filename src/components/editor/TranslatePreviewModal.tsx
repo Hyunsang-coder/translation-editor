@@ -8,7 +8,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import Image from '@tiptap/extension-image';
+import { ImagePlaceholder } from '@/editor/extensions/ImagePlaceholder';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
@@ -202,7 +202,7 @@ export function TranslatePreviewModal(props: {
     TableRow,
     TableHeader,
     TableCell,
-    Image.configure({
+    ImagePlaceholder.configure({
       inline: false,
       allowBase64: true,
     }),
@@ -370,9 +370,9 @@ export function TranslatePreviewModal(props: {
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 bg-editor-surface">
                     {sourceHtml ? (
-                      <div 
-                        className="tiptap ProseMirror focus:outline-none max-w-none" 
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sourceHtml) }} 
+                      <div
+                        className="tiptap ProseMirror focus:outline-none max-w-none"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sourceHtml, { FORBID_TAGS: ['img'] }) }}
                       />
                     ) : (
                       <SkeletonParagraph seed={0} lines={9} />

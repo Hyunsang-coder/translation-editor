@@ -127,11 +127,11 @@ export function ReviewResultsTable({
                   type="checkbox"
                   checked={allChecked}
                   onChange={() => onToggleAll?.()}
-                  className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
                   aria-label={t('review.selectAll', '전체 선택')}
                 />
               </th>
-              <th className="px-2 py-2 text-left font-medium text-editor-muted w-[5%] min-w-[32px]">
+              <th className="pl-3 pr-2 py-2 text-left font-medium text-editor-muted w-[5%] min-w-[32px]">
                 #
               </th>
               <th className="px-1 py-2 text-left font-medium text-editor-muted w-[10%]">
@@ -160,11 +160,11 @@ export function ReviewResultsTable({
                     type="checkbox"
                     checked={issue.checked}
                     onChange={() => onToggleCheck?.(issue.id)}
-                    className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                    className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
                     aria-label={t('review.selectIssue', '이슈 선택')}
                   />
                 </td>
-                <td className="px-2 py-2 text-editor-muted font-medium text-center">
+                <td className="pl-3 pr-2 py-2 text-editor-muted font-medium text-center">
                   {idx + 1}
                 </td>
                 <td className="px-1 py-2">
