@@ -142,6 +142,30 @@ export function isTechnicalToken(word: string): boolean {
 }
 
 /**
+ * 처음부터 특정 섹션 전까지 추출
+ *
+ * @param content 전체 콘텐츠
+ * @param headingText 종료할 Heading 텍스트 (이 섹션 직전까지 추출)
+ * @returns 해당 섹션 이전의 콘텐츠 또는 null (못 찾은 경우)
+ */
+export function extractUntilSection(content: string, headingText: string): string | null {
+  const headingRegex = /^(#{1,6})\s+(.+)$/gm;
+
+  let match;
+  while ((match = headingRegex.exec(content)) !== null) {
+    const text = (match[2] ?? '').trim();
+
+    // 타겟 Heading 찾으면 그 직전까지 반환
+    if (text.toLowerCase() === headingText.toLowerCase()) {
+      return content.slice(0, match.index).trim();
+    }
+  }
+
+  // 해당 섹션을 찾지 못하면 null
+  return null;
+}
+
+/**
  * 특정 섹션 추출
  * TRD 13.10 extractSection 함수 참조
  *
@@ -307,19 +331,136 @@ export function extractPageIdFromUrl(input: string): string {
 }
 
 /**
+ * 콘텐츠 타입 필터
+ */
+export type ContentTypeFilter = 'all' | 'table' | 'text';
+
+/**
+ * Markdown 표 추출
+ * GFM (GitHub Flavored Markdown) 표 형식 지원
+ *
+ * @param content Markdown 콘텐츠
+ * @returns 표 내용만 추출된 텍스트 (여러 표는 줄바꿈으로 연결)
+ */
+export function extractTables(content: string): string {
+  const lines = content.split('\n');
+  const tableLines: string[] = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // 표 구분선 감지 (|---|---| 또는 |:---|:---:| 등)
+    const isSeparator = /^\|[\s\-:]+\|/.test(trimmed) && trimmed.includes('-');
+    // 표 행 감지 (| 로 시작하고 | 로 끝남)
+    const isTableRow = trimmed.startsWith('|') && trimmed.endsWith('|');
+
+    if (isSeparator) {
+      inTable = true;
+      continue; // 구분선 자체는 포함하지 않음
+    }
+
+    if (inTable && isTableRow) {
+      // 셀 내용만 추출 (| 제거)
+      const cellContent = trimmed
+        .slice(1, -1) // 앞뒤 | 제거
+        .split('|')
+        .map((cell) => cell.trim())
+        .join(' ');
+      tableLines.push(cellContent);
+    } else if (inTable && !isTableRow) {
+      // 표 종료
+      inTable = false;
+    } else if (!inTable && isTableRow) {
+      // 표 헤더 (다음 줄이 구분선이면 표 시작)
+      // 일단 저장해두고 구분선이 오면 표로 인정
+      const nextLineIndex = lines.indexOf(line) + 1;
+      if (nextLineIndex < lines.length) {
+        const nextLine = lines[nextLineIndex]?.trim() ?? '';
+        if (/^\|[\s\-:]+\|/.test(nextLine) && nextLine.includes('-')) {
+          const cellContent = trimmed
+            .slice(1, -1)
+            .split('|')
+            .map((cell) => cell.trim())
+            .join(' ');
+          tableLines.push(cellContent);
+        }
+      }
+    }
+  }
+
+  return tableLines.join('\n');
+}
+
+/**
+ * Markdown 표 제거 (표 외 텍스트만 추출)
+ *
+ * @param content Markdown 콘텐츠
+ * @returns 표를 제외한 텍스트
+ */
+export function removeTables(content: string): string {
+  const lines = content.split('\n');
+  const textLines: string[] = [];
+  let inTable = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+
+    const isSeparator = /^\|[\s\-:]+\|/.test(trimmed) && trimmed.includes('-');
+    const isTableRow = trimmed.startsWith('|') && trimmed.endsWith('|');
+
+    if (isSeparator) {
+      inTable = true;
+      continue;
+    }
+
+    if (inTable && isTableRow) {
+      continue; // 표 행 제외
+    } else if (inTable && !isTableRow) {
+      inTable = false;
+    }
+
+    if (!inTable && isTableRow) {
+      // 표 헤더일 수 있음 - 다음 줄 확인
+      const nextLine = lines[i + 1]?.trim() ?? '';
+      if (/^\|[\s\-:]+\|/.test(nextLine) && nextLine.includes('-')) {
+        // 표 헤더면 제외
+        continue;
+      }
+    }
+
+    if (!inTable) {
+      textLines.push(line);
+    }
+  }
+
+  return textLines.join('\n');
+}
+
+/**
  * countWords 옵션
  */
 export interface CountWordsOptions {
   /** 언어 필터 */
   language?: LanguageFilter;
-  /** 섹션 필터 (Heading 텍스트) */
+  /** 섹션 필터 (Heading 텍스트) - 해당 섹션의 내용만 */
   sectionHeading?: string;
+  /** 종료 섹션 (Heading 텍스트) - 처음부터 해당 섹션 직전까지 */
+  untilSection?: string;
   /**
    * 기술적 식별자 제외 여부 (기본: false)
    * true면 파일명, 확장자, 약어(UV, FBX 등), 숫자+단위(70K, 4096x4096) 등 제외
    * 번역 분량 산정 시 더 정확한 결과를 위해 사용
    */
   excludeTechnical?: boolean;
+  /**
+   * 콘텐츠 타입 필터 (기본: 'all')
+   * 'all' = 전체 콘텐츠
+   * 'table' = 표 안의 내용만
+   * 'text' = 표 제외한 텍스트만
+   */
+  contentType?: ContentTypeFilter;
 }
 
 /**
@@ -333,11 +474,29 @@ export function countWords(
   content: string,
   options: CountWordsOptions = {}
 ): WordCountResult {
-  const { language = 'all', sectionHeading, excludeTechnical = false } = options;
+  const {
+    language = 'all',
+    sectionHeading,
+    untilSection,
+    excludeTechnical = false,
+    contentType = 'all',
+  } = options;
 
-  // 섹션 필터 적용
+  // 1. 섹션 필터 적용 (sectionHeading과 untilSection은 상호 배타적)
   let targetContent = content;
-  if (sectionHeading) {
+  if (untilSection) {
+    // 처음부터 해당 섹션 직전까지
+    const extracted = extractUntilSection(content, untilSection);
+    if (extracted === null) {
+      return {
+        totalWords: 0,
+        breakdown: { english: 0, korean: 0, chinese: 0, japanese: 0 },
+        sectionTitle: `until ${untilSection}`,
+      };
+    }
+    targetContent = extracted;
+  } else if (sectionHeading) {
+    // 해당 섹션만
     const section = extractSection(content, sectionHeading);
     if (section === null) {
       return {
@@ -349,7 +508,14 @@ export function countWords(
     targetContent = section;
   }
 
-  // 언어별 카운팅 (기술적 식별자 필터 적용)
+  // 2. 콘텐츠 타입 필터 적용
+  if (contentType === 'table') {
+    targetContent = extractTables(targetContent);
+  } else if (contentType === 'text') {
+    targetContent = removeTables(targetContent);
+  }
+
+  // 3. 언어별 카운팅 (기술적 식별자 필터 적용)
   const breakdown = countByLanguage(targetContent, { excludeTechnical });
 
   // 'all' 필터는 실제 전체 단어 수 (숫자만 있는 단어 포함)

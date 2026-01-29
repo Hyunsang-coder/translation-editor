@@ -7,6 +7,9 @@ import { describe, it, expect } from 'vitest';
 import {
   preprocessContent,
   extractSection,
+  extractUntilSection,
+  extractTables,
+  removeTables,
   countTotalWords,
   countByLanguage,
   calculateTotal,
@@ -108,6 +111,133 @@ describe('countTotalWords', () => {
   it('빈 문자열은 0을 반환한다', () => {
     expect(countTotalWords('')).toBe(0);
     expect(countTotalWords('   ')).toBe(0);
+  });
+});
+
+describe('extractTables', () => {
+  it('Markdown 표에서 내용을 추출한다', () => {
+    const content = `# Title
+
+Some text here.
+
+| Name | Value |
+|------|-------|
+| Apple | Red |
+| Banana | Yellow |
+
+More text after table.`;
+
+    const result = extractTables(content);
+    expect(result).toContain('Apple');
+    expect(result).toContain('Red');
+    expect(result).toContain('Banana');
+    expect(result).toContain('Yellow');
+    expect(result).not.toContain('Some text here');
+    expect(result).not.toContain('More text after');
+  });
+
+  it('여러 표를 모두 추출한다', () => {
+    const content = `| A | B |
+|---|---|
+| 1 | 2 |
+
+Text between tables.
+
+| C | D |
+|---|---|
+| 3 | 4 |`;
+
+    const result = extractTables(content);
+    expect(result).toContain('1');
+    expect(result).toContain('2');
+    expect(result).toContain('3');
+    expect(result).toContain('4');
+  });
+
+  it('표가 없으면 빈 문자열을 반환한다', () => {
+    const content = 'Just plain text without any tables.';
+    const result = extractTables(content);
+    expect(result.trim()).toBe('');
+  });
+});
+
+describe('removeTables', () => {
+  it('Markdown 표를 제거하고 나머지 텍스트를 반환한다', () => {
+    const content = `# Title
+
+Some text here.
+
+| Name | Value |
+|------|-------|
+| Apple | Red |
+
+More text after table.`;
+
+    const result = removeTables(content);
+    expect(result).toContain('Title');
+    expect(result).toContain('Some text here');
+    expect(result).toContain('More text after table');
+    expect(result).not.toContain('Apple');
+    expect(result).not.toContain('Red');
+  });
+
+  it('표가 없으면 원본을 그대로 반환한다', () => {
+    const content = 'Just plain text.';
+    const result = removeTables(content);
+    expect(result).toBe(content);
+  });
+});
+
+describe('extractUntilSection', () => {
+  const sampleContent = `# Introduction
+
+This is the intro section.
+
+## Overview
+
+Overview content here.
+
+## Details
+
+Details content here.
+
+## Conclusion
+
+Final thoughts.`;
+
+  it('처음부터 지정한 섹션 전까지 추출한다', () => {
+    const result = extractUntilSection(sampleContent, 'Details');
+    expect(result).not.toBeNull();
+    expect(result).toContain('Introduction');
+    expect(result).toContain('This is the intro section');
+    expect(result).toContain('Overview');
+    expect(result).toContain('Overview content here');
+    expect(result).not.toContain('Details content here');
+    expect(result).not.toContain('Final thoughts');
+  });
+
+  it('첫 번째 섹션 전까지 추출한다', () => {
+    const content = `Some intro text.
+
+# First Section
+
+First content.`;
+    const result = extractUntilSection(content, 'First Section');
+    expect(result).not.toBeNull();
+    expect(result).toContain('Some intro text');
+    expect(result).not.toContain('First content');
+  });
+
+  it('존재하지 않는 섹션에 대해 null을 반환한다', () => {
+    const result = extractUntilSection(sampleContent, 'NonExistent');
+    expect(result).toBeNull();
+  });
+
+  it('대소문자를 무시하고 매칭한다', () => {
+    const result = extractUntilSection(sampleContent, 'DETAILS');
+    expect(result).not.toBeNull();
+    expect(result).toContain('Overview content here');
+    expect(result).not.toContain('Details content here');
   });
 });
 
@@ -411,6 +541,106 @@ These are the details with some words.`;
     // 모든 기술 용어(3ds, UV, .fbx)가 단어로 카운트됨
     // Use, 3ds, Max, with, UV, mapping, and, .fbx, export = 9단어
     expect(result.breakdown.english).toBe(9);
+  });
+
+  it('contentType="table"로 표 안의 내용만 카운팅한다', () => {
+    const content = `# Weekly Progress
+
+Some intro text here.
+
+| Task | Status |
+|------|--------|
+| Design | Complete |
+| Development | In progress |
+
+More text after.`;
+
+    const tableOnly = countWords(content, { contentType: 'table' });
+    const allContent = countWords(content, { contentType: 'all' });
+
+    // 표만: Task, Status, Design, Complete, Development, In, progress = 7단어
+    expect(tableOnly.breakdown.english).toBe(7);
+    // 전체는 더 많아야 함
+    expect(allContent.breakdown.english).toBeGreaterThan(tableOnly.breakdown.english);
+  });
+
+  it('contentType="text"로 표 제외한 텍스트만 카운팅한다', () => {
+    const content = `# Title
+
+Intro paragraph here.
+
+| Col A | Col B |
+|-------|-------|
+| Data1 | Data2 |
+
+Conclusion paragraph.`;
+
+    const textOnly = countWords(content, { contentType: 'text' });
+    const allContent = countWords(content, { contentType: 'all' });
+
+    // 표 제외: Title, Intro, paragraph, here, Conclusion, paragraph = 6단어
+    expect(textOnly.breakdown.english).toBe(6);
+    // 전체는 더 많아야 함
+    expect(allContent.breakdown.english).toBeGreaterThan(textOnly.breakdown.english);
+  });
+
+  it('sectionHeading + contentType 조합이 작동한다', () => {
+    const content = `# Overview
+
+Overview text here.
+
+# Weekly Progress
+
+Progress intro.
+
+| Task | Owner |
+|------|-------|
+| Review | Alice |
+| Test | Bob |
+
+Progress summary.`;
+
+    const result = countWords(content, {
+      sectionHeading: 'Weekly Progress',
+      contentType: 'table',
+    });
+
+    // Weekly Progress 섹션의 표만: Task, Owner, Review, Alice, Test, Bob = 6단어
+    expect(result.breakdown.english).toBe(6);
+  });
+
+  it('untilSection으로 해당 섹션 전까지만 카운팅한다', () => {
+    const content = `# Introduction
+
+This is intro with five words.
+
+## Details
+
+Details section has more content here.
+
+## Conclusion
+
+Final words.`;
+
+    const result = countWords(content, { untilSection: 'Details' });
+
+    // Introduction 섹션만: Introduction, This, is, intro, with, five, words = 7단어
+    expect(result.breakdown.english).toBe(7);
+  });
+
+  it('untilSection이 없으면 전체 카운팅한다', () => {
+    const content = `# Intro
+
+Some words here.
+
+## Section
+
+More words.`;
+
+    const withUntil = countWords(content, { untilSection: 'Section' });
+    const withoutUntil = countWords(content);
+
+    expect(withoutUntil.totalWords).toBeGreaterThan(withUntil.totalWords);
   });
 });
 

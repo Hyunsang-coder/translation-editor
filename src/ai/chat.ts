@@ -473,7 +473,9 @@ function buildToolGuideMessage(params: { includeSource: boolean; includeTarget: 
     ...(confluenceEnabled
       ? [
         '- getConfluencePage: Confluence 페이지 내용 조회. 참고/인용이 필요할 때 사용.',
-        '- confluence_word_count: ★ 단어 수/분량 질문에는 반드시 이 도구 사용. pageIds, language, sections, sectionMode, contentType 파라미터로 필터링 가능.',
+        '- confluence_word_count: ★ 단어 수/분량 질문에는 반드시 이 도구 사용.',
+        '  파라미터: pageIds(필수), language, sectionHeading(특정 섹션만), untilSection(해당 섹션 전까지), contentType(all/table/text), outputFormat',
+        '  예시: "Details 전까지" → untilSection="Details" | "Overview만" → sectionHeading="Overview" | "표만" → contentType="table"',
       ]
       : ['- confluence_*: (비활성화됨)']),
     '',
