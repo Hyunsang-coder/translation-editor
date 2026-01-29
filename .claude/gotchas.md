@@ -171,3 +171,7 @@ Critical implementation warnings learned from past issues.
 69. **ADF Section Heading Matching**: Confluence 다국어 페이지에서 heading이 `"Title\n번역"` 형태로 저장됨. `extractSection()`과 `extractUntilSection()`은 첫 줄만 비교하여 매칭. 예: `"General Status\n전체 현황"` → `sectionHeading: "General Status"`로 검색 가능.
 
 70. **ADF vs Markdown Fallback**: `confluenceTools.ts`는 ADF 형식을 우선 요청하고, 파싱 실패 시 Markdown으로 자동 폴백. ADF가 구조적 정보를 더 정확히 보존하지만, MCP 서버 오류나 비표준 응답 시 Markdown이 더 안정적.
+
+71. **HTML Paste Table Column Width**: `htmlNormalizer.ts`의 `ALLOWED_ATTR`에 `colwidth` 속성이 필요함. 누락 시 Confluence/Word 등에서 표 붙여넣기 후 TipTap이 열 너비 정보를 잃어 드래그 리사이즈 불가.
+
+72. **Inline Element Visual Spacing**: 인라인 요소(strong, em 등)가 한글/영문 텍스트 사이에서 시각적 공백을 만들 수 있음. CSS `margin-left/right: -0.05em`으로 브라우저 렌더링 간격 상쇄. `letter-spacing`은 영문에서 효과 없음.

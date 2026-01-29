@@ -859,6 +859,8 @@
 /* 인라인 서식 */
 .chat-composer-tiptap strong {
   @apply font-semibold;
+  margin-left: -0.05em;
+  margin-right: -0.05em;
 }
 
 .chat-composer-tiptap em {

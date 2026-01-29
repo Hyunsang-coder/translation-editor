@@ -88,7 +88,7 @@ export function ReviewResultsTable({
   return (
     <div className="space-y-4">
       {/* 통계 요약 */}
-      <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-4 text-xs">
         <span className="font-medium text-editor-text">
           {t('review.totalIssues', '총 {count}건', { count: issues.length })}
         </span>
@@ -118,11 +118,11 @@ export function ReviewResultsTable({
 
       {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 수정 제안 | 설명 */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs table-fixed">
           <thead>
             <tr className="border-b border-editor-border">
               {/* 표시 (하이라이트) 헤더 */}
-              <th className="px-2 py-2 text-center w-8">
+              <th className="px-2 py-2 text-center w-[5%] min-w-[32px]">
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -131,16 +131,16 @@ export function ReviewResultsTable({
                   aria-label={t('review.selectAll', '전체 선택')}
                 />
               </th>
-              <th className="px-2 py-2 text-left font-medium text-editor-muted w-8">
+              <th className="px-2 py-2 text-left font-medium text-editor-muted w-[5%] min-w-[32px]">
                 #
               </th>
-              <th className="px-1 py-2 text-left font-medium text-editor-muted whitespace-nowrap">
+              <th className="px-1 py-2 text-left font-medium text-editor-muted w-[10%]">
                 {t('review.issueType', '유형')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[45%]">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%]">
                 {t('review.suggestedFix', '수정 제안')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[45%]">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%]">
                 {t('review.description', '설명')}
               </th>
             </tr>

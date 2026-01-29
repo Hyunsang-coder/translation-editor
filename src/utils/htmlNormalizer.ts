@@ -48,6 +48,7 @@ const ALLOWED_ATTR = [
   'align',
   'width',
   'height',
+  'colwidth',
 ];
 
 const BLOCK_TAGS = new Set([
