@@ -918,3 +918,23 @@
 .dark .chat-composer-tiptap ::selection {
   @apply bg-primary-800;
 }
+
+/* ============================================
+   Image Placeholder - 이미지 로딩 방지
+   ============================================ */
+
+.image-placeholder {
+  @apply inline-flex items-center gap-1.5 px-2 py-1 my-1;
+  @apply bg-editor-surface border border-editor-border rounded;
+  @apply text-editor-muted text-sm;
+  @apply select-none;
+  user-select: none;
+}
+
+.image-placeholder-icon {
+  @apply text-base leading-none;
+}
+
+.image-placeholder-label {
+  @apply font-mono text-xs;
+}

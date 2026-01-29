@@ -6,7 +6,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import Image from '@tiptap/extension-image';
+import { ImagePlaceholder } from '@/editor/extensions/ImagePlaceholder';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
@@ -67,7 +67,7 @@ export function TipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({
+      ImagePlaceholder.configure({
         inline: false,
         allowBase64: true,
       }),
@@ -217,7 +217,7 @@ export function SourceTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({
+      ImagePlaceholder.configure({
         inline: false,
         allowBase64: true,
       }),
@@ -373,7 +373,7 @@ export function TargetTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({
+      ImagePlaceholder.configure({
         inline: false,
         allowBase64: true,
       }),

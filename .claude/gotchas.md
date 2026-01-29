@@ -193,3 +193,5 @@ Critical implementation warnings learned from past issues.
 80. **buildToolSpecs 공통 함수**: 스트리밍/비스트리밍 모두 `buildToolSpecs()`로 도구 빌드. `boundToolNames` 반환하여 `buildToolGuideMessage()`가 실제 바인딩된 도구 기반으로 가이드 동적 생성. 가이드-도구 불일치 에러("Tool not found") 방지.
 
 81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.
+
+82. **ImagePlaceholder Extension**: `TipTapEditor.tsx`에서 `@tiptap/extension-image` 대신 `ImagePlaceholder` 사용. 이미지를 로딩하지 않고 `🖼️ [Image]`로 표시. `src` 속성은 `data-src`로 보존되어 JSON/HTML 내보내기 시 복원됨.

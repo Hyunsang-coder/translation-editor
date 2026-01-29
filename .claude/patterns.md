@@ -27,6 +27,19 @@ src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
 
+### Image Placeholder
+```typescript
+// src/editor/extensions/ImagePlaceholder.ts
+// 이미지를 로딩하지 않고 placeholder로 표시
+// - 네트워크 요청 방지 (failed to load resource 에러 제거)
+// - 에디터 성능 향상 (Base64 이미지 렌더링 생략)
+// - 이미지 데이터(src)는 JSON에 그대로 보존
+
+// 표시: 🖼️ [Image]
+// 삭제: 기본 키보드/마우스 동작으로 삭제 가능
+// 내보내기: getHTML() 시 원본 <img> 태그로 출력
+```
+
 ## AI Payload Construction
 
 ### Chat Mode
