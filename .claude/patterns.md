@@ -151,20 +151,43 @@ LLM 컨텍스트에 전체 응답이 노출되지 않아 토큰 절약.
 ```typescript
 // src/ai/tools/confluenceTools.ts
 
-// 1. Tauri command로 MCP tool 직접 호출
+// 1. Tauri command로 MCP tool 직접 호출 (ADF 우선, Markdown 폴백)
 const result = await invoke<McpToolResult>('mcp_call_tool', {
   name: 'getConfluencePage',
-  arguments: { cloudId, pageId, contentFormat: 'markdown' },
+  arguments: { cloudId, pageId, contentFormat: 'adf' },  // ADF 우선
 });
 
 // 2. TypeScript에서 결과 처리 (단어 카운팅 등)
-const countResult = countWords(markdown, { language, excludeTechnical });
+const countResult = countWords(content, { language, excludeTechnical });
 
 // 3. JSON 요약만 LLM에 반환
 return JSON.stringify({ totalWords, breakdown });
 ```
 
 **Use Case**: 대용량 콘텐츠에서 통계/요약만 필요할 때 (예: 번역 분량 산정)
+
+## ADF (Atlassian Document Format) Parsing
+
+Confluence 페이지 구조적 파싱을 위한 ADF 파서.
+
+```typescript
+// src/utils/adfParser.ts
+
+// 타입
+interface AdfDocument { type: 'doc'; version: number; content: AdfNode[]; }
+interface AdfNode { type: string; attrs?: Record<string, unknown>; content?: AdfNode[]; text?: string; }
+
+// 핵심 함수
+extractText(doc, { excludeTypes: ['codeBlock'] })  // 텍스트 추출
+extractSection(doc, 'Overview')       // 특정 섹션 추출 (heading 기준)
+extractUntilSection(doc, 'Appendix')  // 처음부터 특정 섹션 전까지
+filterByContentType(doc, 'table')     // 콘텐츠 타입별 필터 (table/text/list)
+listAvailableSections(doc)            // 섹션 목록 조회
+wrapAsDocument(nodes)                 // AdfNode[] → AdfDocument 래핑
+```
+
+**ADF 우선 전략**: `confluenceTools.ts`에서 ADF 형식을 먼저 요청하고, 실패 시 Markdown으로 폴백.
+ADF는 구조적 정보(heading level, 표 셀 구분)를 보존하여 더 정확한 섹션 필터링 가능.
 
 ## Build Commands
 

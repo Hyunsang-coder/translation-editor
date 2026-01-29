@@ -21,6 +21,16 @@ import {
   type LanguageFilter,
   type WordCountBreakdown,
 } from '@/utils/wordCounter';
+import type { AdfDocument } from '@/utils/adfParser';
+import {
+  extractText,
+  extractSection,
+  extractUntilSection,
+  filterByContentType,
+  wrapAsDocument,
+  isValidAdfDocument,
+  listAvailableSections,
+} from '@/utils/adfParser';
 
 /**
  * 페이지별 결과 타입
@@ -123,12 +133,26 @@ type ConfluenceWordCountArgs = z.infer<typeof confluenceWordCountSchema>;
 let cachedCloudId: string | null = null;
 
 /**
+ * 페이지 콘텐츠 형식
+ */
+type PageContentFormat = 'markdown' | 'adf';
+
+/**
+ * 페이지 콘텐츠 (Markdown 또는 ADF)
+ */
+type PageContent =
+  | { format: 'markdown'; content: string }
+  | { format: 'adf'; content: AdfDocument };
+
+/**
  * 페이지 콘텐츠 캐시 (TTL: 5분)
  * - 같은 세션 내 동일 페이지 반복 요청 시 API 호출 절약
  * - 5분 후 자동 만료 (페이지 내용 변경 반영)
+ * - ADF 우선, Markdown 폴백 형식 지원
  */
 interface CachedPage {
-  markdown: string;
+  content: string | AdfDocument;
+  format: PageContentFormat;
   cachedAt: number;
 }
 const PAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
@@ -137,7 +161,7 @@ const pageCache = new Map<string, CachedPage>();
 /**
  * 페이지 캐시에서 조회 (TTL 확인)
  */
-function getFromCache(pageId: string): string | null {
+function getFromCache(pageId: string): PageContent | null {
   const cached = pageCache.get(pageId);
   if (!cached) return null;
 
@@ -147,16 +171,20 @@ function getFromCache(pageId: string): string | null {
     return null;
   }
 
-  console.log(`[confluence_word_count] Cache HIT for page ${pageId}`);
-  return cached.markdown;
+  console.log(`[confluence_word_count] Cache HIT for page ${pageId} (format: ${cached.format})`);
+
+  if (cached.format === 'adf') {
+    return { format: 'adf', content: cached.content as AdfDocument };
+  }
+  return { format: 'markdown', content: cached.content as string };
 }
 
 /**
  * 페이지 캐시에 저장
  */
-function saveToCache(pageId: string, markdown: string): void {
-  pageCache.set(pageId, { markdown, cachedAt: Date.now() });
-  console.log(`[confluence_word_count] Cached page ${pageId} (cache size: ${pageCache.size})`);
+function saveToCache(pageId: string, content: string | AdfDocument, format: PageContentFormat): void {
+  pageCache.set(pageId, { content, format, cachedAt: Date.now() });
+  console.log(`[confluence_word_count] Cached page ${pageId} (format: ${format}, cache size: ${pageCache.size})`);
 }
 
 /**
@@ -205,8 +233,12 @@ async function getCloudId(): Promise<string> {
  * LangChain을 거치지 않으므로 LLM 컨텍스트에 노출되지 않음
  *
  * 캐싱: 5분 TTL로 같은 페이지 반복 요청 시 API 호출 절약
+ *
+ * ADF 우선 요청:
+ * 1. ADF 형식으로 먼저 요청 (더 정확한 구조 정보)
+ * 2. ADF 파싱 실패 시 Markdown으로 폴백
  */
-async function fetchConfluencePageViaMcp(pageId: string): Promise<string> {
+async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
   // 1. 캐시 확인
   const cached = getFromCache(pageId);
   if (cached !== null) {
@@ -216,7 +248,40 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<string> {
   // 2. API 호출
   const cloudId = await getCloudId();
 
-  // MCP tool을 Tauri command로 직접 호출 (LangChain 안 거침)
+  // 2a. ADF 형식 먼저 시도
+  try {
+    console.log('[confluence_word_count] Trying ADF format first...');
+    const adfResult = await invoke<McpToolResult>('mcp_call_tool', {
+      name: 'getConfluencePage',
+      arguments: { cloudId, pageId, contentFormat: 'adf' },
+    });
+
+    if (!adfResult.isError) {
+      const rawText = adfResult.content
+        .map((c) => (c.type === 'text' ? c.text || '' : ''))
+        .join('\n');
+
+      // ADF 응답 파싱 시도
+      try {
+        const parsed = JSON.parse(rawText);
+        // MCP 응답이 { body: AdfDocument } 형식인 경우
+        const adfDoc = parsed.body ?? parsed;
+
+        if (isValidAdfDocument(adfDoc)) {
+          console.log('[confluence_word_count] ADF format success');
+          saveToCache(pageId, adfDoc, 'adf');
+          return { format: 'adf', content: adfDoc };
+        }
+      } catch {
+        console.warn('[confluence_word_count] Failed to parse ADF response as JSON');
+      }
+    }
+  } catch (e) {
+    console.warn('[confluence_word_count] ADF request failed:', e instanceof Error ? e.message : String(e));
+  }
+
+  // 2b. Markdown 폴백
+  console.log('[confluence_word_count] Falling back to Markdown format...');
   const result = await invoke<McpToolResult>('mcp_call_tool', {
     name: 'getConfluencePage',
     arguments: { cloudId, pageId, contentFormat: 'markdown' },
@@ -243,9 +308,60 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<string> {
   }
 
   // 3. 캐시에 저장
-  saveToCache(pageId, markdown);
+  saveToCache(pageId, markdown, 'markdown');
 
-  return markdown;
+  return { format: 'markdown', content: markdown };
+}
+
+/**
+ * ADF 문서에서 텍스트 추출 (섹션/콘텐츠 타입 필터 적용)
+ */
+function extractTextFromAdfWithFilters(
+  adfDoc: AdfDocument,
+  options: {
+    sectionHeading?: string;
+    untilSection?: string;
+    contentType?: ContentTypeFilter;
+  }
+): { text: string; sectionFound: boolean } {
+  const { sectionHeading, untilSection, contentType = 'all' } = options;
+
+  let targetDoc: AdfDocument = adfDoc;
+  let sectionFound = true;
+
+  // 1. 섹션 필터 적용
+  if (untilSection) {
+    const result = extractUntilSection(adfDoc, untilSection);
+    if (!result.found) {
+      sectionFound = false;
+    } else {
+      targetDoc = wrapAsDocument(result.content);
+    }
+  } else if (sectionHeading) {
+    const result = extractSection(adfDoc, sectionHeading);
+    if (!result.found) {
+      sectionFound = false;
+    } else {
+      targetDoc = wrapAsDocument(result.content);
+    }
+  }
+
+  if (!sectionFound) {
+    return { text: '', sectionFound: false };
+  }
+
+  // 2. 콘텐츠 타입 필터 적용
+  if (contentType === 'table') {
+    targetDoc = filterByContentType(targetDoc, 'table');
+  } else if (contentType === 'text') {
+    // 표 제외 - 'text' 필터 사용
+    targetDoc = filterByContentType(targetDoc, 'text');
+  }
+
+  // 3. 텍스트 추출 (코드 블록 제외)
+  const text = extractText(targetDoc, { excludeTypes: ['codeBlock'] });
+
+  return { text, sectionFound: true };
 }
 
 /**
@@ -261,10 +377,10 @@ async function processPage(
     // 1. 페이지 ID 추출
     const pageId = extractPageIdFromUrl(pageIdOrUrl);
 
-    // 2. MCP tool로 페이지 markdown 가져오기 (Tauri command 직접 호출)
-    let markdown: string;
+    // 2. MCP tool로 페이지 콘텐츠 가져오기 (ADF 우선, Markdown 폴백)
+    let pageContent: PageContent;
     try {
-      markdown = await fetchConfluencePageViaMcp(pageId);
+      pageContent = await fetchConfluencePageViaMcp(pageId);
     } catch (e) {
       return {
         pageId,
@@ -274,17 +390,68 @@ async function processPage(
       };
     }
 
-    // 3. 단어 카운팅 (markdown을 직접 카운팅)
-    console.log('[confluence_word_count] Markdown length:', markdown.length);
-    console.log('[confluence_word_count] Markdown preview (first 1000 chars):', markdown.slice(0, 1000));
+    // 3. 단어 카운팅 (ADF 또는 Markdown)
+    let countResult;
+    let sectionNotFound = false;
 
-    const countResult = countWords(markdown, {
-      language,
-      excludeTechnical,
-      ...(args.sectionHeading ? { sectionHeading: args.sectionHeading } : {}),
-      ...(args.untilSection ? { untilSection: args.untilSection } : {}),
-      ...(args.contentType && args.contentType !== 'all' ? { contentType: args.contentType } : {}),
-    });
+    if (pageContent.format === 'adf') {
+      // ADF 형식: 구조적 필터링 후 텍스트 추출
+      console.log('[confluence_word_count] Processing ADF document');
+
+      // 디버깅: ADF 구조 및 사용 가능한 섹션 출력
+      const availableSections = listAvailableSections(pageContent.content, { includeLevel: true });
+      console.log('[confluence_word_count] Available sections:', JSON.stringify(availableSections, null, 2));
+      console.log('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
+
+      const filterOptions: {
+        sectionHeading?: string;
+        untilSection?: string;
+        contentType?: ContentTypeFilter;
+      } = {};
+      if (args.sectionHeading) filterOptions.sectionHeading = args.sectionHeading;
+      if (args.untilSection) filterOptions.untilSection = args.untilSection;
+      if (args.contentType) filterOptions.contentType = args.contentType;
+
+      const { text, sectionFound } = extractTextFromAdfWithFilters(pageContent.content, filterOptions);
+
+      if (!sectionFound) {
+        sectionNotFound = true;
+        countResult = {
+          totalWords: 0,
+          breakdown: { english: 0, korean: 0, chinese: 0, japanese: 0 },
+          sectionTitle: args.sectionHeading || args.untilSection,
+        };
+      } else {
+        console.log('[confluence_word_count] Extracted text length:', text.length);
+        console.log('[confluence_word_count] Extracted text preview (first 1000 chars):', text.slice(0, 1000));
+
+        // ADF에서 추출한 텍스트에 countWords 적용 (섹션/콘텐츠 타입 필터는 이미 적용됨)
+        countResult = countWords(text, {
+          language,
+          excludeTechnical,
+          // 섹션/콘텐츠 타입 필터는 ADF 레벨에서 이미 적용됨
+        });
+      }
+    } else {
+      // Markdown 형식: 기존 로직 사용
+      const markdown = pageContent.content;
+      console.log('[confluence_word_count] Processing Markdown document');
+      console.log('[confluence_word_count] Markdown length:', markdown.length);
+      console.log('[confluence_word_count] Markdown preview (first 1000 chars):', markdown.slice(0, 1000));
+
+      countResult = countWords(markdown, {
+        language,
+        excludeTechnical,
+        ...(args.sectionHeading ? { sectionHeading: args.sectionHeading } : {}),
+        ...(args.untilSection ? { untilSection: args.untilSection } : {}),
+        ...(args.contentType && args.contentType !== 'all' ? { contentType: args.contentType } : {}),
+      });
+
+      if (countResult.totalWords === 0 && countResult.sectionTitle) {
+        sectionNotFound = true;
+      }
+    }
+
     console.log('[confluence_word_count] Count result:', countResult);
 
     // 섹션 필터 적용 시 섹션을 찾지 못한 경우 note 추가
@@ -294,7 +461,7 @@ async function processPage(
       breakdown: countResult.breakdown,
     };
 
-    if (countResult.totalWords === 0 && countResult.sectionTitle) {
+    if (sectionNotFound) {
       if (args.untilSection) {
         result.note = `섹션 "${args.untilSection}"을(를) 찾지 못했습니다. 페이지의 헤딩 이름을 확인해주세요.`;
       } else if (args.sectionHeading) {

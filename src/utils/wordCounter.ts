@@ -10,6 +10,19 @@
  */
 
 import { stripHtml } from './hash';
+import type { AdfDocument } from './adfParser';
+import {
+  extractText as extractAdfText,
+  extractSection as extractAdfSection,
+  extractUntilSection as extractAdfUntilSection,
+  filterByContentType as filterAdfByContentType,
+  wrapAsDocument,
+} from './adfParser';
+
+/**
+ * 콘텐츠 입력 타입 (Markdown 문자열 또는 ADF 문서)
+ */
+export type ContentInput = string | { type: 'adf'; doc: AdfDocument };
 
 /**
  * 번역 불필요 콘텐츠 전처리 (TRD 13.10 preprocessContent)
@@ -464,13 +477,13 @@ export interface CountWordsOptions {
 }
 
 /**
- * 단일 콘텐츠 카운팅
+ * Markdown 콘텐츠 단어 카운팅 (내부 함수)
  *
- * @param content 콘텐츠 텍스트
+ * @param content Markdown 콘텐츠 텍스트
  * @param options 옵션 (언어 필터, 섹션 필터, 기술적 식별자 제외)
  * @returns 카운팅 결과
  */
-export function countWords(
+function countWordsFromMarkdown(
   content: string,
   options: CountWordsOptions = {}
 ): WordCountResult {
@@ -529,6 +542,97 @@ export function countWords(
     breakdown,
     ...(sectionHeading ? { sectionTitle: sectionHeading } : {}),
   };
+}
+
+/**
+ * ADF 문서 단어 카운팅 (내부 함수)
+ *
+ * @param doc ADF 문서
+ * @param options 옵션 (언어 필터, 섹션 필터, 기술적 식별자 제외)
+ * @returns 카운팅 결과
+ */
+function countWordsFromAdf(
+  doc: AdfDocument,
+  options: CountWordsOptions = {}
+): WordCountResult {
+  const {
+    language = 'all',
+    sectionHeading,
+    untilSection,
+    excludeTechnical = false,
+    contentType = 'all',
+  } = options;
+
+  // 1. 섹션 필터 적용 (sectionHeading과 untilSection은 상호 배타적)
+  let filteredDoc: AdfDocument | null = doc;
+  let sectionTitle: string | undefined;
+
+  if (untilSection) {
+    // 처음부터 해당 섹션 직전까지
+    const extracted = extractAdfUntilSection(doc, untilSection);
+    if (!extracted.found) {
+      return {
+        totalWords: 0,
+        breakdown: { english: 0, korean: 0, chinese: 0, japanese: 0 },
+        sectionTitle: `until ${untilSection}`,
+      };
+    }
+    filteredDoc = wrapAsDocument(extracted.content);
+    sectionTitle = `until ${untilSection}`;
+  } else if (sectionHeading) {
+    // 해당 섹션만
+    const extracted = extractAdfSection(doc, sectionHeading);
+    if (!extracted.found) {
+      return {
+        totalWords: 0,
+        breakdown: { english: 0, korean: 0, chinese: 0, japanese: 0 },
+        sectionTitle: sectionHeading,
+      };
+    }
+    filteredDoc = wrapAsDocument(extracted.content);
+    sectionTitle = sectionHeading;
+  }
+
+  // 2. 콘텐츠 타입 필터 적용
+  if (contentType !== 'all' && filteredDoc) {
+    filteredDoc = filterAdfByContentType(filteredDoc, contentType);
+  }
+
+  // 3. ADF에서 텍스트 추출
+  const textContent = filteredDoc ? extractAdfText(filteredDoc) : '';
+
+  // 4. 언어별 카운팅 (기술적 식별자 필터 적용)
+  const breakdown = countByLanguage(textContent, { excludeTechnical });
+
+  // 'all' 필터는 실제 전체 단어 수 (숫자만 있는 단어 포함)
+  // 언어별 필터는 해당 언어 단어만
+  const totalWords = language === 'all'
+    ? countTotalWords(textContent, { excludeTechnical })
+    : calculateTotal(breakdown, language);
+
+  return {
+    totalWords,
+    breakdown,
+    ...(sectionTitle ? { sectionTitle } : {}),
+  };
+}
+
+/**
+ * 단일 콘텐츠 카운팅
+ * Markdown 문자열 또는 ADF 문서를 받아 단어 수를 카운팅합니다.
+ *
+ * @param content 콘텐츠 (Markdown 문자열 또는 ADF 문서 객체)
+ * @param options 옵션 (언어 필터, 섹션 필터, 기술적 식별자 제외)
+ * @returns 카운팅 결과
+ */
+export function countWords(
+  content: ContentInput,
+  options: CountWordsOptions = {}
+): WordCountResult {
+  if (typeof content === 'object' && content.type === 'adf') {
+    return countWordsFromAdf(content.doc, options);
+  }
+  return countWordsFromMarkdown(content as string, options);
 }
 
 /**

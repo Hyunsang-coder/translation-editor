@@ -165,3 +165,9 @@ Critical implementation warnings learned from past issues.
 ## Search Feature
 
 68. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
+
+## Confluence / ADF
+
+69. **ADF Section Heading Matching**: Confluence 다국어 페이지에서 heading이 `"Title\n번역"` 형태로 저장됨. `extractSection()`과 `extractUntilSection()`은 첫 줄만 비교하여 매칭. 예: `"General Status\n전체 현황"` → `sectionHeading: "General Status"`로 검색 가능.
+
+70. **ADF vs Markdown Fallback**: `confluenceTools.ts`는 ADF 형식을 우선 요청하고, 파싱 실패 시 Markdown으로 자동 폴백. ADF가 구조적 정보를 더 정확히 보존하지만, MCP 서버 오류나 비표준 응답 시 Markdown이 더 안정적.
