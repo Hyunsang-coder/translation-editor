@@ -195,3 +195,9 @@ Critical implementation warnings learned from past issues.
 81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.
 
 82. **ImagePlaceholder Extension**: `TipTapEditor.tsx`에서 `@tiptap/extension-image` 대신 `ImagePlaceholder` 사용. 이미지를 로딩하지 않고 `🖼️ [Image]`로 표시. `src` 속성은 `data-src`로 보존되어 JSON/HTML 내보내기 시 복원됨.
+
+83. **getConfluencePage 캐시 공유**: `getConfluencePageTool`은 MCP 직접 바인딩 대신 TypeScript 래퍼로 구현. `confluence_word_count`와 `pageCache`(5분 TTL)를 공유하여 연속 요청 시 API 재호출 방지. markdown 요청 시 캐시에 ADF만 있으면 `extractText()`로 텍스트 추출.
+
+84. **Confluence 도구 재요청 감지**: `returnedFullContentPageIds` Set으로 이미 전체 내용을 반환한 페이지 추적. 같은 대화에서 같은 페이지 재요청 시 "이미 조회했습니다" 메시지만 반환 (20000자 → ~50자). LLM 컨텍스트 폭발 방지.
+
+85. **Tool Output Size 도구별 차이**: `confluenceTools.ts`는 `MAX_TOOL_OUTPUT_CHARS = 20000`자 (페이지 전체 조회용), `notionTools.ts`/`McpClientManager.ts`는 8000자. Confluence는 재요청 감지가 있어 더 큰 제한 허용.

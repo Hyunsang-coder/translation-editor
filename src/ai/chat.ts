@@ -4,7 +4,7 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
-import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
+import { confluenceWordCountTool, getConfluencePageTool } from '@/ai/tools/confluenceTools';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -560,6 +560,8 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     toolSpecs.push(...mcpTools);
     // confluence_word_count 도구 추가
     toolSpecs.push(confluenceWordCountTool);
+    // getConfluencePage 래퍼 도구 추가 (캐시 공유)
+    toolSpecs.push(getConfluencePageTool);
   }
 
   // Notion 도구 (REST API 기반)
@@ -650,6 +652,12 @@ function buildToolGuideMessage(params: {
       '  예시: "Details 전까지" → untilSection="Details" | "Overview만" → sectionHeading="Overview" | "표만" → contentType="table"'
     );
   }
+  if (has('getConfluencePage')) {
+    toolGuide.push(
+      '- getConfluencePage: Confluence 페이지 전체 내용 조회. 요약/분석/인용에 사용.',
+      '  단어 수만 필요하면 confluence_word_count 사용 (토큰 절약).'
+    );
+  }
 
   toolGuide.push('', '도구 선택 우선순위 (위에서 아래로 평가):', '');
 
@@ -677,9 +685,10 @@ function buildToolGuideMessage(params: {
     priority++;
   }
 
-  if (has('confluence_word_count')) {
-    toolGuide.push(`${priority}. Confluence 번역 분량 산정`);
-    toolGuide.push('   → confluence_word_count로 단어 수만 조회 (토큰 절약)');
+  if (has('confluence_word_count') || has('getConfluencePage')) {
+    toolGuide.push(`${priority}. Confluence 페이지 참조`);
+    toolGuide.push('   → 단어 수/분량만 필요: confluence_word_count (토큰 절약)');
+    toolGuide.push('   → 내용 요약/분석/인용: getConfluencePage');
     toolGuide.push('');
     priority++;
   }

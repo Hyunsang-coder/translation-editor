@@ -172,6 +172,22 @@ const PAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 const pageCache = new Map<string, CachedPage>();
 
 /**
+ * LLM 컨텍스트 절약용: 이미 전체 내용을 반환한 페이지 ID 추적
+ * - getConfluencePage로 전체 내용을 반환한 페이지만 기록
+ * - 같은 페이지 재요청 시 짧은 안내 메시지 반환 (8000자 → ~50자)
+ * - confluence_word_count는 숫자만 반환하므로 여기 기록 안 함
+ */
+const returnedFullContentPageIds = new Set<string>();
+
+/**
+ * 전체 내용 반환 기록 초기화 (테스트 또는 새 대화 시작 시)
+ */
+export function clearReturnedPageIds(): void {
+  returnedFullContentPageIds.clear();
+  console.log('[getConfluencePage] Returned page IDs cleared');
+}
+
+/**
  * 페이지 캐시에서 조회 (TTL 확인)
  * 선호 형식을 우선 반환, 없으면 다른 형식 반환
  */
@@ -624,6 +640,139 @@ function formatSummaryOutput(
 
   return lines.join('\n');
 }
+
+/**
+ * 도구 출력 크기 제한 (LLM 컨텍스트 보호)
+ * - 20000자 ≈ 30,000 토큰 (컨텍스트의 15~25%)
+ * - 재요청 감지로 같은 페이지는 1회만 차지하므로 여유있게 설정
+ */
+const MAX_TOOL_OUTPUT_CHARS = 20000;
+
+function truncateToolOutput(output: string, maxChars: number = MAX_TOOL_OUTPUT_CHARS): string {
+  if (output.length <= maxChars) return output;
+  const truncated = output.slice(0, maxChars);
+  return truncated + `\n\n[... truncated, showing ${maxChars.toLocaleString()} of ${output.length.toLocaleString()} chars]`;
+}
+
+/**
+ * getConfluencePage 래퍼 도구
+ *
+ * MCP의 getConfluencePage를 직접 바인딩하지 않고, 캐시를 활용하는 TypeScript 래퍼로 대체.
+ * confluence_word_count와 캐시를 공유하여 "단어 수 알려줘" → "내용 요약해줘" 연속 요청 시 API 재호출 방지.
+ */
+const getConfluencePageSchema = z.object({
+  pageId: z
+    .string()
+    .describe(
+      'Confluence 페이지 ID 또는 URL. 예: "123456" 또는 "https://xxx.atlassian.net/wiki/spaces/SPACE/pages/123456/Title"'
+    ),
+  contentFormat: z
+    .enum(['markdown', 'adf'])
+    .optional()
+    .default('markdown')
+    .describe('반환할 콘텐츠 형식. "markdown"(기본) 또는 "adf"(Atlassian Document Format)'),
+});
+
+export const getConfluencePageTool = tool(
+  async (args: z.infer<typeof getConfluencePageSchema>): Promise<string> => {
+    const { pageId: pageIdOrUrl, contentFormat = 'markdown' } = args;
+
+    try {
+      // 1. 페이지 ID 추출
+      const pageId = extractPageIdFromUrl(pageIdOrUrl);
+
+      // 2. 이미 이 대화에서 전체 내용을 반환한 페이지인지 확인 (컨텍스트 절약)
+      if (returnedFullContentPageIds.has(pageId)) {
+        console.log(`[getConfluencePage] Page ${pageId} already returned in this session, skipping`);
+        return `이 페이지(ID: ${pageId})는 이미 이 대화에서 조회했습니다. 위의 내용을 참고하세요.`;
+      }
+
+      // 3. 캐시 확인 (선호 형식 우선)
+      const preferredFormat: PageContentFormat = contentFormat === 'adf' ? 'adf' : 'markdown';
+      const cached = getFromCache(pageId, preferredFormat);
+
+      if (cached !== null) {
+        // 캐시 히트: 형식에 맞게 반환
+        returnedFullContentPageIds.add(pageId); // 전체 내용 반환 기록
+
+        if (cached.format === 'adf') {
+          if (contentFormat === 'adf') {
+            // ADF 요청 + ADF 캐시: 그대로 반환
+            const output = JSON.stringify(cached.content, null, 2);
+            return truncateToolOutput(output);
+          }
+          // markdown 요청 + ADF 캐시: ADF에서 텍스트 추출
+          const text = extractText(cached.content, { excludeTypes: ['codeBlock'] });
+          return truncateToolOutput(text);
+        }
+        // markdown 캐시
+        return truncateToolOutput(cached.content);
+      }
+
+      // 3. 캐시 미스: MCP로 페이지 가져오기
+      const cloudId = await getCloudId();
+
+      // 요청한 형식으로 시도
+      const result = await invoke<McpToolResult>('mcp_call_tool', {
+        name: 'getConfluencePage',
+        arguments: { cloudId, pageId, contentFormat },
+      });
+
+      if (result.isError) {
+        throw new Error(result.content.map((c) => c.text || '').join('\n'));
+      }
+
+      const rawText = result.content
+        .map((c) => (c.type === 'text' ? c.text || '' : ''))
+        .join('\n');
+
+      // 4. 응답 파싱 및 캐싱
+      returnedFullContentPageIds.add(pageId); // 전체 내용 반환 기록
+
+      if (contentFormat === 'adf') {
+        try {
+          const parsed = JSON.parse(rawText);
+          const adfDoc = parsed.body ?? parsed;
+
+          if (isValidAdfDocument(adfDoc)) {
+            saveToCache(pageId, adfDoc, 'adf');
+            const output = JSON.stringify(adfDoc, null, 2);
+            return truncateToolOutput(output);
+          }
+        } catch {
+          console.warn('[getConfluencePage] Failed to parse ADF response');
+        }
+        // ADF 파싱 실패 시 raw 텍스트 반환 (캐싱 없음)
+        return truncateToolOutput(rawText);
+      }
+
+      // Markdown 형식
+      let markdown = rawText;
+      try {
+        const parsed = JSON.parse(rawText);
+        if (parsed.body && typeof parsed.body === 'string') {
+          markdown = parsed.body;
+        }
+      } catch {
+        // JSON이 아니면 그대로 사용
+      }
+
+      saveToCache(pageId, markdown, 'markdown');
+      return truncateToolOutput(markdown);
+    } catch (e) {
+      return `페이지를 가져올 수 없습니다: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  },
+  {
+    name: 'getConfluencePage',
+    description:
+      'Confluence 페이지의 전체 내용을 가져옵니다. ' +
+      '페이지 요약, 내용 분석, 특정 정보 추출 등에 사용. ' +
+      '단어 수만 필요하면 confluence_word_count를 사용하세요 (토큰 절약). ' +
+      'URL 또는 페이지 ID를 입력할 수 있습니다.',
+    schema: getConfluencePageSchema,
+  }
+);
 
 /**
  * confluence_word_count 도구

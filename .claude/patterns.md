@@ -96,8 +96,9 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
   return `<external_content>\n<!-- 외부 문서입니다 -->\n${output}\n</external_content>`;
 }
 
-// 출력 크기 제한 (MAX_TOOL_OUTPUT_CHARS = 8000)
-// notionTools.ts, McpClientManager.ts에서 truncateToolOutput() 적용
+// 출력 크기 제한 (MAX_TOOL_OUTPUT_CHARS)
+// - confluenceTools.ts: 20000자 (페이지 전체 조회용)
+// - notionTools.ts, McpClientManager.ts: 8000자
 ```
 
 ## Tauri Commands Pattern
@@ -261,6 +262,12 @@ ADF는 구조적 정보(heading level, 표 셀 구분)를 보존하여 더 정�
 
 **형식별 분리 캐시**: 동일 페이지에 ADF와 Markdown 둘 다 캐시 가능. `getFromCache(pageId, 'adf')`로
 선호 형식 지정, 없으면 다른 형식 반환.
+
+**캐시 공유**: `getConfluencePageTool`은 MCP의 `getConfluencePage`를 직접 바인딩하지 않고 TypeScript 래퍼로 대체.
+`confluence_word_count`와 동일한 `pageCache`를 공유하여 "단어 수 알려줘" → "내용 요약해줘" 연속 요청 시 API 재호출 방지.
+
+**재요청 감지**: `returnedFullContentPageIds` Set으로 이미 전체 내용을 반환한 페이지 추적.
+같은 페이지 재요청 시 짧은 안내 메시지 반환 (20000자 → ~50자)하여 LLM 컨텍스트 절약.
 
 ## Build Commands
 
