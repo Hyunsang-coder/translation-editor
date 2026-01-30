@@ -15,6 +15,8 @@ import {
   extractUntilSection,
   filterByContentType,
   listAvailableSections,
+  extractByColumn,
+  listAvailableSectionsWithColumns,
   type AdfNode as _AdfNode,
   type AdfDocument,
 } from './adfParser';
@@ -1141,5 +1143,274 @@ describe('Partial heading matching', () => {
 
     const text = extractText({ version: 1, type: 'doc', content: result.content });
     expect(text).toContain('Overview content.');
+  });
+});
+
+// ============================================================================
+// extractByColumn 테스트
+// ============================================================================
+
+describe('extractByColumn', () => {
+  /**
+   * 2-column 레이아웃 문서 (바이링구얼 페이지 시뮬레이션)
+   */
+  const bilingualDoc: AdfDocument = {
+    version: 1,
+    type: 'doc',
+    content: [
+      {
+        type: 'layoutSection',
+        content: [
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Meeting log' }],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'English meeting notes here.' }],
+              },
+            ],
+          },
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Meeting log' }],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: '한국어 회의록 내용.' }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'layoutSection',
+        content: [
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Action Items' }],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'English action items.' }],
+              },
+            ],
+          },
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Action Items' }],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: '한국어 액션 아이템.' }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  it('column 1 (좌측)의 콘텐츠만 추출한다', () => {
+    const result = extractByColumn(bilingualDoc, 1);
+
+    const text = extractText(result);
+    expect(text).toContain('English meeting notes here.');
+    expect(text).toContain('English action items.');
+    expect(text).not.toContain('한국어 회의록 내용.');
+    expect(text).not.toContain('한국어 액션 아이템.');
+  });
+
+  it('column 2 (우측)의 콘텐츠만 추출한다', () => {
+    const result = extractByColumn(bilingualDoc, 2);
+
+    const text = extractText(result);
+    expect(text).toContain('한국어 회의록 내용.');
+    expect(text).toContain('한국어 액션 아이템.');
+    expect(text).not.toContain('English meeting notes here.');
+    expect(text).not.toContain('English action items.');
+  });
+
+  it('존재하지 않는 column 번호는 빈 결과를 반환한다', () => {
+    const result = extractByColumn(bilingualDoc, 3);
+    expect(result.content.length).toBe(0);
+  });
+
+  it('column 0 이하는 빈 결과를 반환한다', () => {
+    const result = extractByColumn(bilingualDoc, 0);
+    expect(result.content.length).toBe(0);
+
+    const resultNegative = extractByColumn(bilingualDoc, -1);
+    expect(resultNegative.content.length).toBe(0);
+  });
+
+  it('layoutSection이 없는 문서는 빈 결과를 반환한다', () => {
+    const simpleDoc: AdfDocument = {
+      version: 1,
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'No layout here.' }],
+        },
+      ],
+    };
+
+    const result = extractByColumn(simpleDoc, 1);
+    expect(result.content.length).toBe(0);
+  });
+
+  it('빈 문서에서는 빈 결과를 반환한다', () => {
+    const emptyDoc: AdfDocument = {
+      version: 1,
+      type: 'doc',
+      content: [],
+    };
+
+    const result = extractByColumn(emptyDoc, 1);
+    expect(result.content.length).toBe(0);
+  });
+
+  it('추출된 컬럼 내의 heading도 정상적으로 포함된다', () => {
+    const result = extractByColumn(bilingualDoc, 1);
+    const sections = listAvailableSections(result) as string[];
+
+    expect(sections).toContain('Meeting log');
+    expect(sections).toContain('Action Items');
+    expect(sections.length).toBe(2);
+  });
+});
+
+// ============================================================================
+// listAvailableSectionsWithColumns 테스트
+// ============================================================================
+
+describe('listAvailableSectionsWithColumns', () => {
+  /**
+   * 중복 섹션명이 있는 2-column 문서
+   */
+  const bilingualDoc: AdfDocument = {
+    version: 1,
+    type: 'doc',
+    content: [
+      {
+        type: 'layoutSection',
+        content: [
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Meeting log' }],
+              },
+              {
+                type: 'heading',
+                attrs: { level: 3 },
+                content: [{ type: 'text', text: 'PBB' }],
+              },
+            ],
+          },
+          {
+            type: 'layoutColumn',
+            attrs: { width: 50 },
+            content: [
+              {
+                type: 'heading',
+                attrs: { level: 2 },
+                content: [{ type: 'text', text: 'Meeting log' }],
+              },
+              {
+                type: 'heading',
+                attrs: { level: 3 },
+                content: [{ type: 'text', text: 'CTU' }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'heading',
+        attrs: { level: 1 },
+        content: [{ type: 'text', text: 'Footer' }],
+      },
+    ],
+  };
+
+  it('중복 섹션명에 컬럼 정보를 표시한다', () => {
+    const sections = listAvailableSectionsWithColumns(bilingualDoc);
+
+    expect(sections).toContain('Meeting log [col 1]');
+    expect(sections).toContain('Meeting log [col 2]');
+    // PBB, CTU는 중복이 아니므로 컬럼 표시 없음
+    expect(sections).toContain('PBB');
+    expect(sections).toContain('CTU');
+    // Footer는 layoutSection 외부이므로 컬럼 표시 없음
+    expect(sections).toContain('Footer');
+  });
+
+  it('중복이 없는 문서는 컬럼 표시 없이 반환한다', () => {
+    const uniqueDoc: AdfDocument = {
+      version: 1,
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: 'Introduction' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Details' }],
+        },
+      ],
+    };
+
+    const sections = listAvailableSectionsWithColumns(uniqueDoc);
+    expect(sections).toEqual(['Introduction', 'Details']);
+  });
+
+  it('빈 문서는 빈 배열을 반환한다', () => {
+    const emptyDoc: AdfDocument = {
+      version: 1,
+      type: 'doc',
+      content: [],
+    };
+
+    const sections = listAvailableSectionsWithColumns(emptyDoc);
+    expect(sections).toEqual([]);
+  });
+
+  it('순서가 문서 순서와 동일하다', () => {
+    const sections = listAvailableSectionsWithColumns(bilingualDoc);
+
+    // layoutSection 내: col1 먼저, col2 다음
+    expect(sections[0]).toBe('Meeting log [col 1]');
+    expect(sections[1]).toBe('PBB');
+    expect(sections[2]).toBe('Meeting log [col 2]');
+    expect(sections[3]).toBe('CTU');
+    expect(sections[4]).toBe('Footer');
   });
 });

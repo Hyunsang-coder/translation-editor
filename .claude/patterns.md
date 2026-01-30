@@ -238,12 +238,18 @@ extractText(doc, { excludeTypes: ['codeBlock'] })  // 텍스트 추출
 extractSection(doc, 'Overview')       // 특정 섹션 추출 (heading 기준, 부분 매칭 지원)
 extractUntilSection(doc, 'Appendix')  // 처음부터 특정 섹션 전까지
 filterByContentType(doc, 'table')     // 콘텐츠 타입별 필터 (table/text/list)
+extractByColumn(doc, 1)               // 2-column 레이아웃에서 특정 컬럼 추출 (1=좌, 2=우)
 listAvailableSections(doc)            // 섹션 목록 조회 (재귀 탐색)
+listAvailableSectionsWithColumns(doc) // 중복 섹션에 "[col N]" 표시
 wrapAsDocument(nodes)                 // AdfNode[] → AdfDocument 래핑
 ```
 
 **재귀 탐색**: `listAvailableSections()`, `extractSection()`, `extractUntilSection()`은 모든 중첩 구조
 (layoutSection, panel, expand 등) 내부의 heading도 탐색.
+
+**컬럼 필터링**: 2-column 바이링구얼 페이지에서 좌/우 컬럼 구분이 필요할 때 `extractByColumn(doc, columnIndex)` 사용.
+`confluence_word_count` 도구의 `column` 파라미터(1=좌측, 2=우측)로 노출됨.
+`listAvailableSectionsWithColumns()`는 중복 섹션명에 `[col N]` 접미사를 붙여 구분.
 
 **부분 매칭**: heading 검색 시 다음 순서로 매칭:
 1. 정확히 일치: `"Overview"` = `"Overview"`

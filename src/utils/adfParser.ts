@@ -492,6 +492,123 @@ export function wrapAsDocument(content: AdfNode[]): AdfDocument {
 }
 
 /**
+ * 특정 컬럼의 콘텐츠만 추출
+ *
+ * layoutSection 내의 특정 인덱스 컬럼만 추출합니다.
+ * Confluence 2-column 레이아웃에서 좌/우 컬럼 구분에 사용합니다.
+ * layoutSection 외부 노드는 포함되지 않습니다.
+ *
+ * @param doc ADF 문서
+ * @param columnIndex 컬럼 번호 (1-based, 1=첫번째/좌측, 2=두번째/우측)
+ * @returns 해당 컬럼 내용만 포함한 ADF 문서
+ *
+ * @example
+ * ```typescript
+ * // 2-column 레이아웃에서 좌측 컬럼만 추출
+ * const leftDoc = extractByColumn(doc, 1);
+ * // 우측 컬럼만 추출
+ * const rightDoc = extractByColumn(doc, 2);
+ * ```
+ */
+export function extractByColumn(doc: AdfDocument, columnIndex: number): AdfDocument {
+  if (!doc.content || columnIndex < 1) {
+    return wrapAsDocument([]);
+  }
+
+  const result: AdfNode[] = [];
+  const idx = columnIndex - 1; // 0-based 인덱스로 변환
+
+  for (const node of doc.content) {
+    if (node.type === 'layoutSection' && node.content) {
+      const column = node.content[idx];
+      if (column?.type === 'layoutColumn' && column.content) {
+        result.push(...column.content);
+      }
+    }
+  }
+
+  return wrapAsDocument(result);
+}
+
+/**
+ * 문서 내 모든 섹션 목록 반환 (컬럼 정보 포함)
+ *
+ * 문서에 포함된 모든 heading의 텍스트를 순서대로 반환합니다.
+ * layoutSection 내 중복 섹션의 경우 컬럼 번호를 표시합니다.
+ *
+ * @param doc ADF 문서
+ * @returns 섹션명 배열 (중복 시 "[col N]" 접미사 포함)
+ *
+ * @example
+ * ```typescript
+ * const sections = listAvailableSectionsWithColumns(doc);
+ * // ["Meeting log [col 1]", "PBB [col 1]", "Meeting log [col 2]", "CTU [col 2]"]
+ * ```
+ */
+export function listAvailableSectionsWithColumns(doc: AdfDocument): string[] {
+  if (!doc.content || doc.content.length === 0) {
+    return [];
+  }
+
+  interface HeadingWithColumn {
+    text: string;
+    columnIndex: number | null; // null = layoutSection 외부
+  }
+
+  const headings: HeadingWithColumn[] = [];
+
+  // 재귀적으로 heading 찾기 (컬럼 정보 포함)
+  function findHeadingsInNode(node: AdfNode, columnIndex: number | null): void {
+    if (node.type === 'heading') {
+      const fullText = getHeadingText(node).trim();
+      const text = fullText.split('\n')[0]?.trim() ?? fullText;
+      if (text) {
+        headings.push({ text, columnIndex });
+      }
+    }
+
+    if (node.content && node.content.length > 0) {
+      for (const child of node.content) {
+        findHeadingsInNode(child, columnIndex);
+      }
+    }
+  }
+
+  // 문서 순회
+  for (const node of doc.content) {
+    if (node.type === 'layoutSection' && node.content) {
+      // layoutSection 내 각 컬럼 처리
+      for (let colIdx = 0; colIdx < node.content.length; colIdx++) {
+        const column = node.content[colIdx];
+        if (column?.type === 'layoutColumn' && column.content) {
+          for (const child of column.content) {
+            findHeadingsInNode(child, colIdx + 1); // 1-based
+          }
+        }
+      }
+    } else {
+      // layoutSection 외부
+      findHeadingsInNode(node, null);
+    }
+  }
+
+  // 중복 섹션명 찾기
+  const textCounts = new Map<string, number>();
+  for (const h of headings) {
+    textCounts.set(h.text, (textCounts.get(h.text) || 0) + 1);
+  }
+
+  // 결과 생성 (중복 시 컬럼 정보 추가)
+  return headings.map((h) => {
+    const isDuplicate = (textCounts.get(h.text) || 0) > 1;
+    if (isDuplicate && h.columnIndex !== null) {
+      return `${h.text} [col ${h.columnIndex}]`;
+    }
+    return h.text;
+  });
+}
+
+/**
  * ADF 문서 유효성 검사
  *
  * 기본적인 ADF 문서 구조를 검사합니다.

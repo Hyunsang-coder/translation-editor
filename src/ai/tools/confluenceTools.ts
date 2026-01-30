@@ -29,7 +29,8 @@ import {
   filterByContentType,
   wrapAsDocument,
   isValidAdfDocument,
-  listAvailableSections,
+  extractByColumn,
+  listAvailableSectionsWithColumns,
 } from '@/utils/adfParser';
 
 /**
@@ -117,6 +118,15 @@ const confluenceWordCountSchema = z.object({
     .default('all')
     .describe(
       '카운팅할 콘텐츠 타입. "all"=전체 (기본), "table"=표 안의 내용만, "text"=표 제외한 텍스트만'
+    ),
+  column: z
+    .number()
+    .int()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe(
+      '컬럼 번호 (1=좌측, 2=우측). 2-column 레이아웃 페이지에서 특정 컬럼만 카운팅. layoutSection이 없으면 무시됨.'
     ),
   outputFormat: z
     .enum(['json', 'summary'])
@@ -354,31 +364,41 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
 }
 
 /**
- * ADF 문서에서 텍스트 추출 (섹션/콘텐츠 타입 필터 적용)
+ * ADF 문서에서 텍스트 추출 (컬럼/섹션/콘텐츠 타입 필터 적용)
  */
 function extractTextFromAdfWithFilters(
   adfDoc: AdfDocument,
   options: {
+    column?: number;
     sectionHeading?: string;
     untilSection?: string;
     contentType?: ContentTypeFilter;
   }
 ): { text: string; sectionFound: boolean } {
-  const { sectionHeading, untilSection, contentType = 'all' } = options;
+  const { column, sectionHeading, untilSection, contentType = 'all' } = options;
 
   let targetDoc: AdfDocument = adfDoc;
   let sectionFound = true;
 
-  // 1. 섹션 필터 적용
+  // 1. 컬럼 필터 적용 (가장 먼저)
+  if (column !== undefined) {
+    targetDoc = extractByColumn(targetDoc, column);
+    // 컬럼 추출 후 내용이 없으면 layoutSection이 없거나 해당 컬럼이 없는 경우
+    if (targetDoc.content.length === 0) {
+      console.log(`[confluence_word_count] Column ${column} not found or empty`);
+    }
+  }
+
+  // 2. 섹션 필터 적용
   if (untilSection) {
-    const result = extractUntilSection(adfDoc, untilSection);
+    const result = extractUntilSection(targetDoc, untilSection);
     if (!result.found) {
       sectionFound = false;
     } else {
       targetDoc = wrapAsDocument(result.content);
     }
   } else if (sectionHeading) {
-    const result = extractSection(adfDoc, sectionHeading);
+    const result = extractSection(targetDoc, sectionHeading);
     if (!result.found) {
       sectionFound = false;
     } else {
@@ -390,7 +410,7 @@ function extractTextFromAdfWithFilters(
     return { text: '', sectionFound: false };
   }
 
-  // 2. 콘텐츠 타입 필터 적용
+  // 3. 콘텐츠 타입 필터 적용
   if (contentType === 'table') {
     targetDoc = filterByContentType(targetDoc, 'table');
   } else if (contentType === 'text') {
@@ -398,7 +418,7 @@ function extractTextFromAdfWithFilters(
     targetDoc = filterByContentType(targetDoc, 'text');
   }
 
-  // 3. 텍스트 추출 (코드 블록 제외)
+  // 4. 텍스트 추출 (코드 블록 제외)
   const text = extractText(targetDoc, { excludeTypes: ['codeBlock'] });
 
   return { text, sectionFound: true };
@@ -439,18 +459,20 @@ async function processPage(
       // ADF 형식: 구조적 필터링 후 텍스트 추출
       console.log('[confluence_word_count] Processing ADF document');
 
-      // 사용 가능한 섹션 목록 추출
-      availableSectionNames = listAvailableSections(pageContent.content) as string[];
+      // 사용 가능한 섹션 목록 추출 (중복 시 컬럼 정보 포함)
+      availableSectionNames = listAvailableSectionsWithColumns(pageContent.content);
       if (import.meta.env.DEV) {
         console.log('[confluence_word_count] Available sections:', JSON.stringify(availableSectionNames, null, 2));
         console.log('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
       }
 
       const filterOptions: {
+        column?: number;
         sectionHeading?: string;
         untilSection?: string;
         contentType?: ContentTypeFilter;
       } = {};
+      if (args.column) filterOptions.column = args.column;
       if (args.sectionHeading) filterOptions.sectionHeading = args.sectionHeading;
       if (args.untilSection) filterOptions.untilSection = args.untilSection;
       if (args.contentType) filterOptions.contentType = args.contentType;
@@ -649,9 +671,10 @@ export const confluenceWordCountTool = tool(
     description:
       'Confluence 페이지의 단어 수를 카운팅합니다. 번역 분량 산정에 사용. ' +
       '페이지 본문 전체가 아닌 단어 수만 반환하므로 토큰을 절약합니다. ' +
-      '주요 파라미터: pageIds(필수), language, sectionHeading, untilSection, contentType, outputFormat. ' +
+      '주요 파라미터: pageIds(필수), language, sectionHeading, untilSection, contentType, column, outputFormat. ' +
       '예: "Details 전까지" → untilSection="Details". "Overview 섹션만" → sectionHeading="Overview". ' +
-      '"표만" → contentType="table". "간단히" → outputFormat="summary". ' +
+      '"표만" → contentType="table". "좌측 컬럼만" → column=1. "우측 컬럼만" → column=2. "간단히" → outputFormat="summary". ' +
+      '2-column 레이아웃 페이지에서 같은 제목이 좌우에 있으면 column으로 구분 가능. ' +
       '페이지 내용 참고/인용이 필요하면 getConfluencePage를 사용하세요.',
     schema: confluenceWordCountSchema,
   }
