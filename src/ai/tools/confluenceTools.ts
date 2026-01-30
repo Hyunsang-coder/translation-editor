@@ -168,7 +168,7 @@ interface CachedPage {
   /** 캐시 시간 */
   cachedAt: number;
 }
-const PAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+const PAGE_CACHE_TTL_MS = 30 * 60 * 1000; // 30분
 const pageCache = new Map<string, CachedPage>();
 
 /**
