@@ -67,3 +67,6 @@ src-tauri/gen/schemas/
 .tmp/
 .npm-cache/
 tasks/
+
+# Remotion demo (별도 관리)
+remotion-demo/
