@@ -195,3 +195,5 @@ Critical implementation warnings learned from past issues.
 81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.
 
 82. **ImagePlaceholder Extension**: `TipTapEditor.tsx`에서 `@tiptap/extension-image` 대신 `ImagePlaceholder` 사용. 이미지를 로딩하지 않고 `🖼️ [Image]`로 표시. `src` 속성은 `data-src`로 보존되어 JSON/HTML 내보내기 시 복원됨.
+
+83. **Review suggestedFix HTML 태그 처리**: AI가 테이블 셀 수정 시 `<td>텍스트</td>` 형태로 suggestedFix를 반환할 수 있음. `hasHtmlTags()` 검사로 HTML 포함 시 Apply 버튼 숨김 (서식 손실 방지). 표시는 `stripHtml()`로 태그 제거 후 보여줌.
