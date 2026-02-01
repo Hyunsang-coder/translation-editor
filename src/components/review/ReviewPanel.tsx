@@ -282,8 +282,8 @@ export function ReviewPanel(): JSX.Element {
 
     // 검색용: 마크다운 서식/리스트 마커 제거 (에디터는 plain text 기반 검색)
     const searchText = normalizeForSearch(issue.targetExcerpt);
-    // 교체용: suggestedFix는 그대로 사용 (AI가 순수 텍스트로 반환)
-    const replaceText = issue.suggestedFix;
+    // 교체용: HTML 태그 제거 (AI가 가끔 <strong> 등을 포함하여 반환)
+    const replaceText = stripHtml(issue.suggestedFix).trim();
 
     // 에디터에서 검색
     editor.commands.setSearchTerm(searchText);
