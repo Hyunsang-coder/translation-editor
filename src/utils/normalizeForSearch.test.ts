@@ -3,6 +3,7 @@ import {
   applyUnicodeNormalization,
   normalizeForSearch,
   stripMarkdownInline,
+  buildNormalizedTextWithMapping,
 } from './normalizeForSearch';
 
 describe('applyUnicodeNormalization', () => {
@@ -140,5 +141,49 @@ describe('stripMarkdownInline', () => {
 
   it('링크에서 텍스트만 추출한다', () => {
     expect(stripMarkdownInline('[example](https://example.com)')).toBe('example');
+  });
+});
+
+describe('buildNormalizedTextWithMapping', () => {
+  it('유니코드 따옴표를 정규화한다', () => {
+    const result = buildNormalizedTextWithMapping('"hello"');
+    expect(result.normalizedText).toBe('"hello"');
+    expect(result.indexMap.length).toBe(result.normalizedText.length);
+  });
+
+  it('연속 공백을 단일 공백으로 축소한다', () => {
+    const result = buildNormalizedTextWithMapping('hello    world');
+    expect(result.normalizedText).toBe('hello world');
+  });
+
+  it('CRLF를 공백으로 변환한다', () => {
+    const result = buildNormalizedTextWithMapping('hello\r\nworld');
+    expect(result.normalizedText).toBe('hello world');
+  });
+
+  it('앞뒤 공백을 제거한다 (trim)', () => {
+    const result = buildNormalizedTextWithMapping('  hello world  ');
+    expect(result.normalizedText).toBe('hello world');
+  });
+
+  it('인덱스 매핑이 원본 위치를 정확히 추적한다', () => {
+    const original = 'a  b'; // 'a', ' ', ' ', 'b'
+    const result = buildNormalizedTextWithMapping(original);
+    expect(result.normalizedText).toBe('a b');
+    // 'a' → 0, ' ' → 1 또는 2, 'b' → 3
+    expect(result.indexMap[0]).toBe(0); // 'a'
+    expect(result.indexMap[2]).toBe(3); // 'b'
+  });
+
+  it('빈 문자열을 처리한다', () => {
+    const result = buildNormalizedTextWithMapping('');
+    expect(result.normalizedText).toBe('');
+    expect(result.indexMap).toEqual([]);
+  });
+
+  it('공백만 있는 문자열을 처리한다', () => {
+    const result = buildNormalizedTextWithMapping('   ');
+    expect(result.normalizedText).toBe('');
+    expect(result.indexMap).toEqual([]);
   });
 });

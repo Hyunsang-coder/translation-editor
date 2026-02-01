@@ -4,7 +4,10 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
-import { normalizeForSearch, applyUnicodeNormalization } from '@/utils/normalizeForSearch';
+import {
+  normalizeForSearch,
+  buildNormalizedTextWithMapping,
+} from '@/utils/normalizeForSearch';
 
 export interface ReviewHighlightOptions {
   highlightClass: string;
@@ -31,95 +34,6 @@ function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions
   });
 
   return { text, positions };
-}
-
-/**
- * 정규화된 텍스트와 원본 위치 매핑 구축
- *
- * 정규화 과정에서 문자가 제거/변환되므로, 정규화된 텍스트의 각 인덱스가
- * 원본 텍스트의 어느 인덱스에 해당하는지 추적합니다.
- *
- * @param originalText - 원본 텍스트
- * @returns normalizedText: 정규화된 텍스트, indexMap: normalizedText[i] → originalText index
- */
-function buildNormalizedTextWithMapping(originalText: string): {
-  normalizedText: string;
-  indexMap: number[];
-} {
-  // 유니코드 문자 정규화 (1:1 매핑 유지) - 공통 함수 사용
-  const processed = applyUnicodeNormalization(originalText);
-
-  // CRLF, CR → 일반 공백 (1:1 또는 2:1 매핑)
-  // 먼저 \r\n을 단일 문자로 처리하기 위해 인덱스 매핑 구축
-  const indexMap: number[] = [];
-  let normalizedText = '';
-
-  let i = 0;
-  while (i < processed.length) {
-    const char = processed[i];
-    const nextChar = processed[i + 1];
-
-    // CRLF 처리 (2문자 → 1공백)
-    if (char === '\r' && nextChar === '\n') {
-      normalizedText += ' ';
-      indexMap.push(i);
-      i += 2;
-      continue;
-    }
-
-    // CR만 있는 경우 (1문자 → 1공백)
-    if (char === '\r') {
-      normalizedText += ' ';
-      indexMap.push(i);
-      i++;
-      continue;
-    }
-
-    // 일반 문자
-    normalizedText += char;
-    indexMap.push(i);
-    i++;
-  }
-
-  // 연속 공백 축소 (여러 공백 → 1공백)
-  const finalText: string[] = [];
-  const finalIndexMap: number[] = [];
-  let prevWasSpace = false;
-
-  for (let j = 0; j < normalizedText.length; j++) {
-    const char = normalizedText[j]!;
-    const originalIdx = indexMap[j]!;
-    const isSpace = /\s/.test(char);
-
-    if (isSpace) {
-      if (!prevWasSpace) {
-        finalText.push(' ');
-        finalIndexMap.push(originalIdx);
-      }
-      // 연속 공백은 스킵 (매핑에서 제외)
-      prevWasSpace = true;
-    } else {
-      finalText.push(char);
-      finalIndexMap.push(originalIdx);
-      prevWasSpace = false;
-    }
-  }
-
-  // 앞뒤 공백 제거
-  let startTrim = 0;
-  let endTrim = finalText.length;
-
-  while (startTrim < finalText.length && /\s/.test(finalText[startTrim]!)) {
-    startTrim++;
-  }
-  while (endTrim > startTrim && /\s/.test(finalText[endTrim - 1]!)) {
-    endTrim--;
-  }
-
-  return {
-    normalizedText: finalText.slice(startTrim, endTrim).join(''),
-    indexMap: finalIndexMap.slice(startTrim, endTrim),
-  };
 }
 
 /**
