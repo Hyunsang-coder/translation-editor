@@ -267,24 +267,20 @@ export function ConnectorsSection(): JSX.Element {
   // Notion 토큰 다이얼로그
   const [showNotionDialog, setShowNotionDialog] = useState(false);
 
-  // MCP 상태 구독 (Atlassian)
+  // MCP 상태 구독 (Atlassian + Notion 통합)
   useEffect(() => {
-    const unsubscribe = mcpClientManager.subscribe((status) => {
+    const unsubAtlassian = mcpClientManager.subscribe((status) => {
       setMcpStatus(status);
-      // Atlassian 커넥터 토큰 상태 동기화
       setTokenStatus('atlassian', status.hasStoredToken ?? false);
     });
-    return unsubscribe;
-  }, [setTokenStatus]);
-
-  // Notion MCP 상태 구독
-  useEffect(() => {
-    const unsubscribe = mcpClientManager.subscribeNotion((status) => {
+    const unsubNotion = mcpClientManager.subscribeNotion((status) => {
       setNotionStatus(status);
-      // Notion 커넥터 토큰 상태 동기화
       setTokenStatus('notion', status.hasStoredToken ?? false);
     });
-    return unsubscribe;
+    return () => {
+      unsubAtlassian();
+      unsubNotion();
+    };
   }, [setTokenStatus]);
 
   // Atlassian MCP 연결

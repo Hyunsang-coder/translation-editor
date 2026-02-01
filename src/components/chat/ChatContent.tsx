@@ -120,14 +120,17 @@ export function ChatContent(): JSX.Element {
   const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
 
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());
-  useEffect(() => mcpClientManager.subscribe(setMcpStatus), []);
 
-  // Notion 상태 동기화
+  // MCP 및 Notion 상태 구독 (통합)
   useEffect(() => {
-    const unsubscribe = mcpClientManager.subscribeNotion((status) => {
+    const unsubMcp = mcpClientManager.subscribe(setMcpStatus);
+    const unsubNotion = mcpClientManager.subscribeNotion((status) => {
       useConnectorStore.getState().setTokenStatus('notion', status.hasStoredToken ?? false);
     });
-    return unsubscribe;
+    return () => {
+      unsubMcp();
+      unsubNotion();
+    };
   }, []);
 
   // Tauri 드래그 앤 드롭 이벤트 리스너

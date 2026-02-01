@@ -23,8 +23,13 @@ export function FloatingChatButton(): JSX.Element {
   const startPos = useRef({ x: 0, y: 0 });
   const startButtonPos = useRef({ x: 0, y: 0 });
 
-  // 현재 위치 계산 (null이면 기본 우측 하단)
-  const [currentPos, setCurrentPos] = useState<{ x: number; y: number } | null>(null);
+  // 현재 위치 (초기값: store 값 또는 기본 우측 하단)
+  const [currentPos, setCurrentPos] = useState<{ x: number; y: number }>(() =>
+    floatingButtonPosition ?? {
+      x: window.innerWidth - BUTTON_SIZE - MARGIN,
+      y: window.innerHeight - BUTTON_SIZE - MARGIN,
+    }
+  );
   const [isHovered, setIsHovered] = useState(false);
   const [isDraggingState, setIsDraggingState] = useState(false);
   // 툴팁은 실제 마우스 진입 이벤트가 있어야만 표시
@@ -50,41 +55,22 @@ export function FloatingChatButton(): JSX.Element {
     }
   }, [chatPanelOpen]);
 
-  useEffect(() => {
-    if (floatingButtonPosition) {
-      setCurrentPos(floatingButtonPosition);
-    } else {
-      // 기본 위치: 우측 하단
-      setCurrentPos({
-        x: window.innerWidth - BUTTON_SIZE - MARGIN,
-        y: window.innerHeight - BUTTON_SIZE - MARGIN,
-      });
-    }
-  }, [floatingButtonPosition]);
-
-  // 윈도우 리사이즈 시 위치 조정
+  // 윈도우 리사이즈 시 위치 조정 (화면 밖으로 나가지 않도록)
   useEffect(() => {
     const handleResize = () => {
-      if (!floatingButtonPosition) {
-        // 기본 위치일 경우 우측 하단 유지
-        setCurrentPos({
-          x: window.innerWidth - BUTTON_SIZE - MARGIN,
-          y: window.innerHeight - BUTTON_SIZE - MARGIN,
-        });
-      } else {
-        // 저장된 위치가 화면 밖으로 나가지 않도록
+      setCurrentPos((pos) => {
         const maxX = window.innerWidth - BUTTON_SIZE;
         const maxY = window.innerHeight - BUTTON_SIZE;
-        setCurrentPos({
-          x: Math.max(0, Math.min(floatingButtonPosition.x, maxX)),
-          y: Math.max(0, Math.min(floatingButtonPosition.y, maxY)),
-        });
-      }
+        return {
+          x: Math.max(0, Math.min(pos.x, maxX)),
+          y: Math.max(0, Math.min(pos.y, maxY)),
+        };
+      });
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [floatingButtonPosition]);
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return; // 좌클릭만
@@ -92,7 +78,7 @@ export function FloatingChatButton(): JSX.Element {
     hasMoved.current = false;
     setIsDraggingState(true);
     startPos.current = { x: e.clientX, y: e.clientY };
-    startButtonPos.current = currentPos || { x: 0, y: 0 };
+    startButtonPos.current = currentPos;
     document.body.style.userSelect = 'none';
   }, [currentPos]);
 
@@ -154,7 +140,7 @@ export function FloatingChatButton(): JSX.Element {
   }, [setFloatingButtonPosition]);
 
   // 채팅 패널이 열려있으면 버튼 숨김
-  if (!currentPos || chatPanelOpen) return <></>;
+  if (chatPanelOpen) return <></>;
 
   const currentSize = isHovered ? BUTTON_SIZE_HOVER : BUTTON_SIZE;
   // hover 시 크기 변화에 따른 위치 보정 (중심 유지)

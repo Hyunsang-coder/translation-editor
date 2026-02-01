@@ -4,8 +4,8 @@
  * 네이티브 select를 대체하여 일관된 스타일링 제공
  */
 
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Portal } from '@headlessui/react';
-import { Fragment, useRef, useState, useLayoutEffect } from 'react';
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/react';
+import { Fragment } from 'react';
 
 export interface SelectOption {
   value: string;
@@ -54,17 +54,6 @@ export function Select({
   size = 'md',
   anchor: anchorPosition = 'bottom',
 }: SelectProps): JSX.Element {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-
-  // 버튼 위치 계산
-  useLayoutEffect(() => {
-    if (isOpen && buttonRef.current) {
-      setButtonRect(buttonRef.current.getBoundingClientRect());
-    }
-  }, [isOpen]);
-
   // 현재 선택된 옵션의 label 찾기
   const getSelectedLabel = (): string => {
     if (hasGroups(options)) {
@@ -83,64 +72,40 @@ export function Select({
     ? 'h-7 text-[11px] px-2'
     : 'h-8 text-[11px] px-3';
 
-  // 드롭다운 위치 스타일 계산
-  const getDropdownStyle = (): React.CSSProperties => {
-    if (!buttonRect) return {};
-
-    const style: React.CSSProperties = {
-      position: 'fixed',
-      left: buttonRect.left,
-      minWidth: buttonRect.width,
-    };
-
-    if (anchorPosition === 'top') {
-      style.bottom = window.innerHeight - buttonRect.top + 4;
-    } else {
-      style.top = buttonRect.bottom + 4;
-    }
-
-    return style;
-  };
+  // anchor prop 설정 (Headless UI가 자동으로 Portal과 위치 처리)
+  const anchorConfig = anchorPosition === 'top'
+    ? { to: 'top start' as const, gap: '4px' }
+    : { to: 'bottom start' as const, gap: '4px' };
 
   return (
     <Listbox value={value} onChange={onChange} disabled={disabled}>
-      {({ open }) => {
-        // open 상태 동기화
-        if (open !== isOpen) {
-          // 다음 틱에 상태 업데이트 (렌더 중 setState 방지)
-          setTimeout(() => setIsOpen(open), 0);
-        }
+      <div className={`relative ${className}`}>
+        <ListboxButton
+          className={`${sizeClasses} w-full rounded-lg border border-editor-border bg-editor-bg text-editor-text
+                     flex items-center justify-between gap-2
+                     focus:outline-none focus:ring-2 focus:ring-primary-500
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     hover:bg-editor-surface transition-colors`}
+          aria-label={ariaLabel}
+          title={title}
+        >
+          <span className="truncate">{getSelectedLabel()}</span>
+          <svg
+            className="w-3 h-3 text-editor-muted shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </ListboxButton>
 
-        return (
-          <div className={`relative ${className}`}>
-            <ListboxButton
-              ref={buttonRef}
-              className={`${sizeClasses} w-full rounded-lg border border-editor-border bg-editor-bg text-editor-text
-                         flex items-center justify-between gap-2
-                         focus:outline-none focus:ring-2 focus:ring-primary-500
-                         disabled:opacity-50 disabled:cursor-not-allowed
-                         hover:bg-editor-surface transition-colors`}
-              aria-label={ariaLabel}
-              title={title}
-            >
-              <span className="truncate">{getSelectedLabel()}</span>
-              <svg
-                className="w-3 h-3 text-editor-muted shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </ListboxButton>
-
-            <Portal>
-              <ListboxOptions
-                className="z-[9999] max-h-60 overflow-auto
-                           rounded-lg border border-editor-border bg-editor-bg shadow-lg
-                           focus:outline-none"
-                style={getDropdownStyle()}
-              >
+        <ListboxOptions
+          anchor={anchorConfig}
+          className="z-[9999] max-h-60 overflow-auto
+                     rounded-lg border border-editor-border bg-editor-bg shadow-lg
+                     focus:outline-none [--anchor-gap:4px]"
+        >
           {hasGroups(options) ? (
             options.map((group) => (
               <Fragment key={group.label}>
@@ -185,11 +150,8 @@ export function Select({
               </ListboxOption>
             ))
           )}
-              </ListboxOptions>
-            </Portal>
-          </div>
-        );
-      }}
+        </ListboxOptions>
+      </div>
     </Listbox>
   );
 }
