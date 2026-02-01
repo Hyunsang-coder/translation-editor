@@ -67,6 +67,56 @@ function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions
 }
 
 /**
+ * 특정 segmentGroupId를 가진 블록들의 문서 위치 범위 찾기
+ * Apply 시 세그먼트 범위 내에서만 매치를 찾기 위해 사용
+ *
+ * @param doc - ProseMirror 문서
+ * @param segmentGroupId - 찾을 세그먼트 그룹 ID
+ * @returns 해당 세그먼트의 시작~끝 위치, 없으면 null
+ */
+export function findSegmentRange(
+  doc: ProseMirrorNode,
+  segmentGroupId: string,
+): { from: number; to: number } | null {
+  let minFrom: number | null = null;
+  let maxTo: number | null = null;
+
+  doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
+    // segmentGroupId 속성을 가진 블록 노드 찾기
+    if (node.attrs?.segmentGroupId === segmentGroupId) {
+      const nodeEnd = pos + node.nodeSize;
+      if (minFrom === null || pos < minFrom) {
+        minFrom = pos;
+      }
+      if (maxTo === null || nodeEnd > maxTo) {
+        maxTo = nodeEnd;
+      }
+    }
+  });
+
+  if (minFrom !== null && maxTo !== null) {
+    return { from: minFrom, to: maxTo };
+  }
+  return null;
+}
+
+/**
+ * 주어진 범위 내에 있는 매치만 필터링
+ *
+ * @param matches - 전체 매치 목록
+ * @param range - 허용 범위 { from, to }
+ * @returns 범위 내의 매치만 반환
+ */
+export function filterMatchesInRange(
+  matches: SearchMatch[],
+  range: { from: number; to: number },
+): SearchMatch[] {
+  return matches.filter(
+    (match) => match.from >= range.from && match.to <= range.to,
+  );
+}
+
+/**
  * 검색어에 대한 모든 매치 찾기
  * 양방향 정규화: 에디터 텍스트와 검색어 모두 정규화하여 비교
  */

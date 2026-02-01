@@ -10,6 +10,10 @@ import { buildAlignedChunksAsync } from '@/ai/tools/reviewTool';
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
+import {
+  findSegmentRange,
+  filterMatchesInRange,
+} from '@/editor/extensions/SearchHighlight';
 import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
@@ -285,7 +289,16 @@ export function ReviewPanel(): JSX.Element {
     editor.commands.setSearchTerm(searchText);
 
     // 매치가 있는지 확인
-    const matches = editor.storage.searchHighlight?.matches || [];
+    let matches = editor.storage.searchHighlight?.matches || [];
+
+    // 세그먼트 범위 제한: segmentGroupId가 있으면 해당 범위 내 매치만 사용
+    if (issue.segmentGroupId && matches.length > 0) {
+      const segmentRange = findSegmentRange(editor.state.doc, issue.segmentGroupId);
+      if (segmentRange) {
+        matches = filterMatchesInRange(matches, segmentRange);
+      }
+    }
+
     if (matches.length === 0) {
       addToast({
         type: 'error',
@@ -296,7 +309,16 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
-    // 첫 번째 매치 교체
+    // 세그먼트 범위 내 첫 번째 매치의 인덱스 찾기
+    const allMatches = editor.storage.searchHighlight?.matches || [];
+    const targetMatchIndex = allMatches.findIndex(
+      (m) => m.from === matches[0]?.from && m.to === matches[0]?.to,
+    );
+    if (targetMatchIndex >= 0) {
+      editor.commands.setCurrentMatchIndex(targetMatchIndex);
+    }
+
+    // 현재 매치 교체
     editor.commands.replaceMatch(replaceText);
 
     // 검색어 초기화
