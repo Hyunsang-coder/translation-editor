@@ -387,8 +387,8 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           }
 
           if (dispatch) {
-            // 현재 매치 텍스트 치환 (insertText로 mark 보존)
-            tr.insertText(replacement, match.from, match.to);
+            // 현재 매치 텍스트 치환 (plain text로 교체, mark 제거)
+            tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
             dispatch(tr);
           }
 
@@ -417,11 +417,11 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           }
 
           if (dispatch) {
-            // 뒤에서부터 치환 (위치 변경 방지, insertText로 mark 보존)
+            // 뒤에서부터 치환 (위치 변경 방지)
             const sortedMatches = [...storage.matches].sort((a, b) => b.from - a.from);
 
             for (const match of sortedMatches) {
-              tr.insertText(replacement, match.from, match.to);
+              tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
             }
 
             dispatch(tr);
