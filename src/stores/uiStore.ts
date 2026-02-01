@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { toast as sonnerToast } from 'sonner';
 import type { EditorUIState, Toast } from '@/types';
 import { useReviewStore } from '@/stores/reviewStore';
 
@@ -200,31 +201,36 @@ export const useUIStore = create<UIStore>()(
         set({ isPanelsSwapped: swapped });
       },
 
-      // Toasts
+      // Toasts (using sonner)
       addToast: (toast: Omit<Toast, 'id'>): void => {
-        const id = crypto.randomUUID();
-        const newToast: Toast = { ...toast, id };
+        const options = {
+          duration: toast.duration ?? 3000,
+        };
 
-        set((state) => ({
-          toasts: [...state.toasts, newToast],
-        }));
-
-        // 자동 제거
-        if (toast.duration !== 0) {
-          setTimeout(() => {
-            get().removeToast(id);
-          }, toast.duration ?? 3000);
+        switch (toast.type) {
+          case 'success':
+            sonnerToast.success(toast.message, options);
+            break;
+          case 'error':
+            sonnerToast.error(toast.message, options);
+            break;
+          case 'warning':
+            sonnerToast.warning(toast.message, options);
+            break;
+          case 'info':
+          default:
+            sonnerToast.info(toast.message, options);
+            break;
         }
       },
 
-      removeToast: (id: string): void => {
-        set((state) => ({
-          toasts: state.toasts.filter((t) => t.id !== id),
-        }));
+      removeToast: (_id: string): void => {
+        // sonner handles dismissal automatically
+        sonnerToast.dismiss();
       },
 
       clearToasts: (): void => {
-        set({ toasts: [] });
+        sonnerToast.dismiss();
       },
 
       // Review Panel

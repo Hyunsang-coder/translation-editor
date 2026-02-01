@@ -312,7 +312,7 @@ export function ReviewPanel(): JSX.Element {
     // 세그먼트 범위 내 첫 번째 매치의 인덱스 찾기
     const allMatches = editor.storage.searchHighlight?.matches || [];
     const targetMatchIndex = allMatches.findIndex(
-      (m) => m.from === matches[0]?.from && m.to === matches[0]?.to,
+      (m: any) => m.from === matches[0]?.from && m.to === matches[0]?.to,
     );
     if (targetMatchIndex >= 0) {
       editor.commands.setCurrentMatchIndex(targetMatchIndex);

@@ -103,6 +103,17 @@ export function ProjectSidebar(): JSX.Element {
     );
   }
 
+  const getUniqueTitle = (baseTitle: string): string => {
+    const existingTitles = new Set(items.map((p) => p.title));
+    if (!existingTitles.has(baseTitle)) return baseTitle;
+
+    let counter = 2;
+    while (existingTitles.has(`${baseTitle} (${counter})`)) {
+      counter++;
+    }
+    return `${baseTitle} (${counter})`;
+  };
+
   const handleNewProject = async (): Promise<void> => {
     const ok = await confirm('새 프로젝트를 생성할까요?', {
       title: 'New Project',
@@ -120,8 +131,11 @@ export function ProjectSidebar(): JSX.Element {
       }
     }
 
+    const baseTitle = form.title.trim() || 'New Project';
+    const uniqueTitle = getUniqueTitle(baseTitle);
+
     const created = await createProject({
-      title: form.title.trim() || 'New Project',
+      title: uniqueTitle,
       domain: 'general',
     });
 
@@ -231,27 +245,11 @@ export function ProjectSidebar(): JSX.Element {
   return (
     <div className="h-full flex flex-col bg-editor-surface border-r border-editor-border relative">
       <div className="h-12 px-3 flex items-center justify-between border-b border-editor-border">
-        {/* Toggle & Title */}
+        {/* New Project & Title */}
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={toggleProjectSidebar}
-            className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title="프로젝트 사이드바 접기"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="9" y1="3" x2="9" y2="21" />
-            </svg>
-          </button>
-          <div className="text-xs font-semibold text-editor-text">{t('projectSidebar.projects')}</div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="text-editor-text hover:text-primary-500 transition-colors"
+            className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-primary-500"
             onClick={() => setShowNew((v) => !v)}
             title="새 프로젝트"
           >
@@ -260,7 +258,21 @@ export function ProjectSidebar(): JSX.Element {
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
           </button>
+          <div className="text-xs font-semibold text-editor-text">{t('projectSidebar.projects')}</div>
         </div>
+
+        {/* Toggle */}
+        <button
+          type="button"
+          onClick={toggleProjectSidebar}
+          className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
+          title="프로젝트 사이드바 접기"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+        </button>
       </div>
 
       {showNew && (

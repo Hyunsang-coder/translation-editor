@@ -9,6 +9,7 @@
 | State | Zustand with persistence |
 | AI | LangChain.js (OpenAI + Anthropic) |
 | UI Layout | Hybrid Panel (Settings sidebar + Floating Chat via react-rnd) |
+| Toast | Sonner (position: top-center) |
 | Backend | Tauri 2 + Rust |
 | Storage | SQLite (`.ite` project files) |
 | i18n | i18next (Korean/English) |

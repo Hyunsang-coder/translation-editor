@@ -131,12 +131,21 @@ export function FloatingChatPanel(): JSX.Element | null {
       dragHandleClassName="floating-chat-handle"
       onDragStop={handleDragStop}
       onResizeStop={handleResizeStop}
+      resizeHandleStyles={{
+        top: { height: '12px', top: '0', left: '0', right: '0', zIndex: 10 },
+      }}
       style={{ zIndex: 9998 }}
-      className="rounded-xl shadow-2xl border border-editor-border bg-editor-bg overflow-hidden"
+      className="rounded-xl shadow-2xl border border-editor-border bg-editor-bg"
     >
-      <div ref={panelRef} className="h-full flex flex-col">
-        {/* 드래그 핸들 (헤더) */}
-        <div className="floating-chat-handle h-10 flex items-center justify-between px-3 border-b border-editor-border bg-editor-surface cursor-move select-none">
+      <div ref={panelRef} className="h-full flex flex-col overflow-hidden rounded-xl">
+        {/* 드래그 핸들 (헤더) - 상단에 리사이즈 영역 포함 */}
+        <div className="bg-editor-surface rounded-t-xl">
+          {/* 리사이즈 핸들 영역 */}
+          <div className="h-2 flex items-center justify-center">
+            <div className="w-8 h-0.5 bg-editor-muted/40 rounded-full" />
+          </div>
+          {/* 헤더 컨텐츠 */}
+          <div className="floating-chat-handle h-8 flex items-center justify-between px-3 border-b border-editor-border cursor-move select-none">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-editor-text">{t('chat.title')}</span>
           </div>
@@ -175,6 +184,7 @@ export function FloatingChatPanel(): JSX.Element | null {
             >
               <span className="text-lg leading-none">−</span>
             </button>
+          </div>
           </div>
         </div>
 

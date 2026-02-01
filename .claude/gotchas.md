@@ -197,3 +197,7 @@ Critical implementation warnings learned from past issues.
 82. **ImagePlaceholder Extension**: `TipTapEditor.tsx`에서 `@tiptap/extension-image` 대신 `ImagePlaceholder` 사용. 이미지를 로딩하지 않고 `🖼️ [Image]`로 표시. `src` 속성은 `data-src`로 보존되어 JSON/HTML 내보내기 시 복원됨.
 
 83. **Review suggestedFix HTML 태그 처리**: AI가 테이블 셀 수정 시 `<td>텍스트</td>` 형태로 suggestedFix를 반환할 수 있음. `hasHtmlTags()` 검사로 HTML 포함 시 Apply 버튼 숨김 (서식 손실 방지). 표시는 `stripHtml()`로 태그 제거 후 보여줌.
+
+84. **react-rnd 드래그/리사이즈 핸들 충돌**: `FloatingChatPanel`에서 `dragHandleClassName`이 지정된 영역은 리사이즈 핸들보다 우선 적용됨. 상단 리사이즈를 위해 `resizeHandleStyles`로 핸들 영역을 확장하고, 내부 컨텐츠에 상단 패딩을 추가하여 리사이즈 핸들 클릭 영역 확보 필요.
+
+85. **Toast 라이브러리 Sonner**: `react-toastify` 대신 `sonner` 사용. `uiStore.addToast()`가 내부적으로 `sonner.toast.success/error/warning/info()`를 호출. `ToastHost.tsx`에서 `<Toaster>` 컴포넌트 렌더링.
