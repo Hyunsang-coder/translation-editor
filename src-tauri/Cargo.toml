@@ -1,6 +1,6 @@
 [package]
 name = "OddEyes"
-version = "1.4.0"
+version = "1.4.2"
 description = "인간 번역사를 위한 AI 번역 에디터 - OddEyes.ai"
 authors = ["OddEyes.ai Team"]
 edition = "2021"
