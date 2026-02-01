@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AiProvider } from '@/ai/config';
 import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
 
 const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
@@ -30,8 +29,6 @@ interface AiConfigState {
 
 interface AiConfigActions {
   loadSecureKeys: () => Promise<void>;
-  /** @deprecated Use setTranslationModel/setChatModel instead */
-  setProvider: (provider: AiProvider) => void;
   setTranslationModel: (model: string) => void;
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
@@ -154,16 +151,6 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           }
         },
 
-        /** @deprecated Use setTranslationModel/setChatModel instead */
-        setProvider: (provider) => {
-          console.warn('[aiConfigStore] setProvider is deprecated. Use setTranslationModel/setChatModel instead.');
-          // 호환성을 위해 해당 provider 활성화만 수행
-          if (provider === 'anthropic') {
-            set({ anthropicEnabled: true });
-          } else {
-            set({ openaiEnabled: true });
-          }
-        },
         setTranslationModel: (model) => set({ translationModel: model }),
         setChatModel: (model) => set({ chatModel: model }),
 

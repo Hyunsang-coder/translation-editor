@@ -148,13 +148,6 @@ export function isNonWordToken(word: string): boolean {
 }
 
 /**
- * @deprecated Use isNonWordToken instead (simpler MS Word style)
- */
-export function isTechnicalToken(word: string): boolean {
-  return isNonWordToken(word);
-}
-
-/**
  * 처음부터 특정 섹션 전까지 추출
  *
  * @param content 전체 콘텐츠

@@ -80,7 +80,6 @@ export function TranslatePreviewModal(props: {
 }): JSX.Element | null {
   const { t } = useTranslation();
   const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, progress, streamingText, onClose, onApply, onCancel, onRetry } = props;
-  // const theme = useUIStore((s) => s.theme);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
