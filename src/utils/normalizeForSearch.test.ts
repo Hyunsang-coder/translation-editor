@@ -73,6 +73,22 @@ describe('normalizeForSearch', () => {
     it('중첩된 서식을 처리한다', () => {
       expect(normalizeForSearch('**_bold and italic_**')).toBe('bold and italic');
     });
+
+    it('snake_case를 보존한다', () => {
+      expect(normalizeForSearch('get_source_documents')).toBe('get_source_documents');
+      expect(normalizeForSearch('snake_case_example')).toBe('snake_case_example');
+      expect(normalizeForSearch('my_var_name')).toBe('my_var_name');
+    });
+
+    it('단어 경계의 _..._ 는 제거하고 intraword _는 보존한다', () => {
+      // 단어 경계 이탤릭 → 제거
+      expect(normalizeForSearch('_italic_')).toBe('italic');
+      expect(normalizeForSearch('hello _world_ there')).toBe('hello world there');
+      // snake_case → 보존
+      expect(normalizeForSearch('use get_source_documents tool')).toBe(
+        'use get_source_documents tool',
+      );
+    });
   });
 
   describe('리스트/헤딩 마커 제거', () => {

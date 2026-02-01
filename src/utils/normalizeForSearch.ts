@@ -69,7 +69,9 @@ export function normalizeForSearch(text: string): string {
       .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
       .replace(/\*(.+?)\*/g, '$1') // *italic* → italic
       .replace(/__(.+?)__/g, '$1') // __bold__ → bold
-      .replace(/_(.+?)_/g, '$1') // _italic/underline_ → italic
+      // _italic_ 제거 - 단어 경계에서만 (snake_case 보호)
+      // (?<![a-zA-Z0-9]) = 앞에 영숫자 없음, (?![a-zA-Z0-9]) = 뒤에 영숫자 없음
+      .replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g, '$1')
       .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
       .replace(/`(.+?)`/g, '$1') // `code` → code
       .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [text](url) → text
@@ -100,7 +102,8 @@ export function stripMarkdownInline(text: string): string {
     .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
     .replace(/\*(.+?)\*/g, '$1') // *italic* → italic
     .replace(/__(.+?)__/g, '$1') // __bold__ → bold
-    .replace(/_(.+?)_/g, '$1') // _underline_ → underline
+    // _italic_ 제거 - 단어 경계에서만 (snake_case 보호)
+    .replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g, '$1')
     .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
     .replace(/`(.+?)`/g, '$1') // `code` → code
     .replace(/\[(.+?)\]\(.+?\)/g, '$1'); // [text](url) → text
