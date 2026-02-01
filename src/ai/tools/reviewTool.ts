@@ -286,6 +286,7 @@ const POLISH_OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
   "issues": [
     {
       "segmentOrder": 1,
+      "segmentGroupId": "세그먼트 ID (필수)",
       "type": "문법|오탈자|어색|번역투|중복",
       "targetExcerpt": "검사 대상에서 복사",
       "problem": "무엇이 문제인지 (1줄)",
@@ -297,9 +298,13 @@ const POLISH_OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 ---REVIEW_END---
 
 ## excerpt 작성 규칙 (필수!)
-- targetExcerpt: 검사 대상에서 **그대로 복사** (30자 이내)
-- 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
-- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
+- targetExcerpt: 검사 대상에서 **문자 그대로 복사** (30자 이내)
+- segmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
+- **금지**: 요약, 재작성, 줄임
+- **필수**: 공백, 구두점, 대소문자 모두 원본과 동일하게
+- 리터럴 토큰 보존: snake_case, camelCase, 코드 식별자는 변경 없이 그대로
+- 범위 제한: 단일 문단/리스트 항목/테이블 셀 내에서만 발췌 (블록 경계 금지)
+- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 적용됨
 
 ## HTML 테이블 처리 규칙
 - 테이블이 <table> HTML 형식으로 전달될 수 있음
@@ -372,6 +377,7 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
   "issues": [
     {
       "segmentOrder": 1,
+      "segmentGroupId": "세그먼트 ID (필수)",
       "type": "오역|누락|왜곡|일관성",
       "sourceExcerpt": "원문에서 복사",
       "targetExcerpt": "번역문에서 복사",
@@ -384,10 +390,14 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 ---REVIEW_END---
 
 ## excerpt 작성 규칙 (필수!)
-- sourceExcerpt: 원문(Source)에서 **그대로 복사** (30자 이내)
-- targetExcerpt: 번역문(Target)에서 **그대로 복사** (30자 이내)
-- 절대 요약하거나 재작성 금지! 원본 텍스트 그대로 복사할 것
-- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 함
+- sourceExcerpt: 원문(Source)에서 **문자 그대로 복사** (30자 이내)
+- targetExcerpt: 번역문(Target)에서 **문자 그대로 복사** (30자 이내)
+- segmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
+- **금지**: 요약, 재작성, 줄임
+- **필수**: 공백, 구두점, 대소문자 모두 원본과 동일하게
+- 리터럴 토큰 보존: snake_case, camelCase, 코드 식별자는 변경 없이 그대로
+- 범위 제한: 단일 문단/리스트 항목/테이블 셀 내에서만 발췌 (블록 경계 금지)
+- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 적용됨
 
 ## HTML 테이블 처리 규칙
 - 테이블이 <table> HTML 형식으로 전달될 수 있음
