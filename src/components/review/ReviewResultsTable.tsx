@@ -14,6 +14,15 @@ interface ReviewResultsTableProps {
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
 }
 
+/**
+ * suggestedFix에 HTML 태그가 포함되어 있는지 확인
+ * HTML 서식이 있으면 Apply 시 서식 손실이 발생하므로 Apply 버튼을 숨김
+ */
+function hasHtmlTags(text: string | undefined): boolean {
+  if (!text) return false;
+  return /<[^>]+>/.test(text);
+}
+
 function getIssueTypeLabel(type: IssueType): string {
   switch (type) {
     case 'error':
@@ -188,7 +197,7 @@ export function ReviewResultsTable({
                           {t('review.copy', '복사')}
                         </button>
                       )}
-                      {issue.suggestedFix && issue.type !== 'omission' && onApply && (
+                      {issue.suggestedFix && issue.type !== 'omission' && !hasHtmlTags(issue.suggestedFix) && onApply && (
                         <button
                           type="button"
                           onClick={() => onApply(issue)}
