@@ -12,8 +12,11 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import type { BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
+import type { BaseMessage, AIMessageChunk } from '@langchain/core/messages';
+import type { ToolCallChunk } from '@langchain/core/messages/tool';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 // Rate limiting: in-memory store (Vercel Edge에서는 요청 간 공유되지 않음)
 // 프로덕션에서는 Vercel KV 또는 Upstash Redis 사용 권장
@@ -29,11 +32,25 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000', // Development
 ];
 
+interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+interface ToolCallResult {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
 interface ChatRequestBody {
   messages: Array<{
-    role: 'system' | 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant' | 'tool';
     content: string;
+    tool_call_id?: string;
   }>;
+  tools?: ToolDefinition[];
   model?: string;
   provider?: 'openai' | 'anthropic';
   temperature?: number;
@@ -131,7 +148,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     const body = (await request.json()) as ChatRequestBody;
-    const { messages, model, provider = 'openai', temperature, maxTokens } = body;
+    const { messages, tools, model, provider = 'openai', temperature, maxTokens } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -156,13 +173,18 @@ export default async function handler(request: Request): Promise<Response> {
           return new HumanMessage(msg.content);
         case 'assistant':
           return new AIMessage(msg.content);
+        case 'tool':
+          return new ToolMessage({
+            tool_call_id: msg.tool_call_id || '',
+            content: msg.content,
+          });
         default:
           return new HumanMessage(msg.content);
       }
     });
 
     // 모델 생성
-    let chatModel;
+    let chatModel: ChatOpenAI | ChatAnthropic;
     if (provider === 'anthropic') {
       if (!anthropicApiKey) {
         return new Response(
@@ -198,23 +220,112 @@ export default async function handler(request: Request): Promise<Response> {
       });
     }
 
+    // 도구 정의가 있으면 LangChain 도구로 변환하여 바인딩
+    let modelToUse: ChatOpenAI | ChatAnthropic | ReturnType<ChatOpenAI['bindTools']> = chatModel;
+    if (tools && tools.length > 0) {
+      // 클라이언트에서 전달받은 도구 정의를 LangChain 도구로 변환
+      const langchainTools = tools.map((t) => {
+        // 동적으로 zod 스키마 생성
+        const schemaObj: Record<string, z.ZodTypeAny> = {};
+        const props = (t.parameters as any)?.properties || {};
+        const required = (t.parameters as any)?.required || [];
+
+        for (const [key, value] of Object.entries(props)) {
+          const prop = value as any;
+          let zodType: z.ZodTypeAny;
+
+          switch (prop.type) {
+            case 'string':
+              zodType = z.string();
+              break;
+            case 'number':
+              zodType = z.number();
+              break;
+            case 'boolean':
+              zodType = z.boolean();
+              break;
+            case 'array':
+              zodType = z.array(z.any());
+              break;
+            default:
+              zodType = z.any();
+          }
+
+          if (prop.description) {
+            zodType = zodType.describe(prop.description);
+          }
+
+          if (!required.includes(key)) {
+            zodType = zodType.optional();
+          }
+
+          schemaObj[key] = zodType;
+        }
+
+        return tool(
+          async () => {
+            // 서버에서는 도구를 실행하지 않음 - 클라이언트에서 실행
+            return 'Tool execution delegated to client';
+          },
+          {
+            name: t.name,
+            description: t.description,
+            schema: z.object(schemaObj),
+          }
+        );
+      });
+
+      modelToUse = (chatModel as ChatOpenAI).bindTools(langchainTools);
+    }
+
     // SSE 스트리밍 응답 생성
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const langchainStream = await chatModel.stream(langchainMessages);
+          const langchainStream = await (modelToUse as any).stream(langchainMessages);
+
+          let _accumulatedText = '';
+          const accumulatedToolCallChunks: ToolCallChunk[] = [];
+          let finalAiMessage: AIMessageChunk | null = null;
 
           for await (const chunk of langchainStream) {
+            // 텍스트 토큰 처리
             const content = typeof chunk.content === 'string' ? chunk.content : '';
             if (content) {
+              _accumulatedText += content;
               const data = JSON.stringify({ type: 'token', content });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
+
+            // 도구 호출 청크 수집
+            if (chunk.tool_call_chunks && Array.isArray(chunk.tool_call_chunks)) {
+              accumulatedToolCallChunks.push(...chunk.tool_call_chunks);
+            }
+
+            // 최종 메시지 누적
+            if (finalAiMessage === null) {
+              finalAiMessage = chunk;
+            } else {
+              finalAiMessage = finalAiMessage.concat(chunk);
+            }
           }
 
-          // 완료 이벤트
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
+          // 도구 호출 청크 병합
+          const toolCalls = mergeToolCallChunks(accumulatedToolCallChunks);
+
+          // 최종 메시지에서도 tool_calls 추출 시도
+          if (toolCalls.length === 0 && finalAiMessage) {
+            const extracted = extractToolCalls(finalAiMessage);
+            toolCalls.push(...extracted);
+          }
+
+          // 완료 이벤트 (도구 호출 포함)
+          const doneData: { type: string; toolCalls?: ToolCallResult[] } = { type: 'done' };
+          if (toolCalls.length > 0) {
+            doneData.toolCalls = toolCalls;
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(doneData)}\n\n`));
           controller.close();
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -224,6 +335,66 @@ export default async function handler(request: Request): Promise<Response> {
         }
       },
     });
+
+    // 도구 호출 청크 병합 헬퍼
+    function mergeToolCallChunks(chunks: ToolCallChunk[]): ToolCallResult[] {
+      const byIndex = new Map<number, ToolCallChunk[]>();
+      for (const chunk of chunks) {
+        const idx = chunk.index ?? 0;
+        if (!byIndex.has(idx)) byIndex.set(idx, []);
+        byIndex.get(idx)!.push(chunk);
+      }
+
+      const result: ToolCallResult[] = [];
+      for (const [, groupChunks] of byIndex) {
+        let id = '';
+        let name = '';
+        let argsStr = '';
+        for (const c of groupChunks) {
+          if (c.id) id = c.id;
+          if (c.name) name = c.name;
+          if (c.args) argsStr += c.args;
+        }
+        if (name) {
+          let args: Record<string, unknown> = {};
+          try {
+            args = JSON.parse(argsStr) || {};
+          } catch {
+            args = {};
+          }
+          result.push({ id: id || crypto.randomUUID(), name, args });
+        }
+      }
+      return result;
+    }
+
+    // 최종 메시지에서 tool_calls 추출
+    function extractToolCalls(ai: unknown): ToolCallResult[] {
+      const a = ai as any;
+      const rawCalls = a?.tool_calls || a?.additional_kwargs?.tool_calls || [];
+      if (!Array.isArray(rawCalls)) return [];
+
+      return rawCalls
+        .filter((call: any) => call && (call.name || call.function?.name))
+        .map((call: any) => {
+          const name = call.name || call.function?.name;
+          const id = call.id || call.tool_call_id || crypto.randomUUID();
+          let args: Record<string, unknown> = {};
+
+          const rawArgs = call.args || call.input || call.function?.arguments;
+          if (typeof rawArgs === 'string') {
+            try {
+              args = JSON.parse(rawArgs) || {};
+            } catch {
+              args = {};
+            }
+          } else if (rawArgs && typeof rawArgs === 'object') {
+            args = rawArgs;
+          }
+
+          return { id, name, args };
+        });
+    }
 
     return new Response(stream, {
       headers: {

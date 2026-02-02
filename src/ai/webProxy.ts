@@ -41,6 +41,52 @@ export interface WebTranslateOptions {
   abortSignal?: AbortSignal | null | undefined;
 }
 
+export interface WebReviewSegment {
+  id: string;
+  order: number;
+  source: string;
+  target: string;
+}
+
+export interface WebReviewOptions {
+  segments: WebReviewSegment[];
+  systemPrompt: string;
+  translationRules?: string | undefined;
+  glossary?: string | undefined;
+  model?: string | undefined;
+  provider?: 'openai' | 'anthropic' | undefined;
+  onToken?: ((fullText: string, delta: string) => void) | undefined;
+  abortSignal?: AbortSignal | null | undefined;
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface WebChatWithToolsOptions {
+  messages: ChatMessage[];
+  tools?: ToolDefinition[] | undefined;
+  model?: string | undefined;
+  provider?: 'openai' | 'anthropic' | undefined;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  onToken?: ((fullText: string, delta: string) => void) | undefined;
+  abortSignal?: AbortSignal | null | undefined;
+}
+
+export interface WebChatWithToolsResult {
+  content: string;
+  toolCalls: ToolCall[];
+}
+
 // ============================================
 // Platform Check
 // ============================================
@@ -235,4 +281,127 @@ export async function webProxyTranslate(options: WebTranslateOptions): Promise<s
   }
 
   return fullText;
+}
+
+/**
+ * 웹 프록시를 통한 검수 스트리밍
+ */
+export async function webProxyReview(options: WebReviewOptions): Promise<string> {
+  const {
+    segments,
+    systemPrompt,
+    translationRules,
+    glossary,
+    model,
+    provider,
+    onToken,
+    abortSignal,
+  } = options;
+
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/ai/review`;
+
+  let fullText = '';
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      segments,
+      systemPrompt,
+      translationRules,
+      glossary,
+      model,
+      provider,
+    }),
+    ...(abortSignal ? { signal: abortSignal } : {}),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+
+  for await (const event of parseSSEStream(reader, decoder)) {
+    if (abortSignal?.aborted) {
+      reader.cancel();
+      break;
+    }
+
+    if (event.type === 'token' && event.content) {
+      fullText += event.content;
+      onToken?.(fullText, event.content);
+    } else if (event.type === 'error') {
+      throw new Error(event.error || 'Stream error');
+    } else if (event.type === 'done') {
+      return event.fullResponse || fullText;
+    }
+  }
+
+  return fullText;
+}
+
+/**
+ * 웹 프록시를 통한 채팅 (도구 지원)
+ * - 서버에서 tool binding 수행
+ * - tool_calls가 있으면 클라이언트에 반환하여 실행하도록 함
+ */
+export async function webProxyChatWithTools(options: WebChatWithToolsOptions): Promise<WebChatWithToolsResult> {
+  const { messages, tools, model, provider, temperature, maxTokens, onToken, abortSignal } = options;
+
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/ai/chat`;
+
+  let fullText = '';
+  let toolCalls: ToolCall[] = [];
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, tools, model, provider, temperature, maxTokens }),
+    ...(abortSignal ? { signal: abortSignal } : {}),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+
+  for await (const event of parseSSEStream(reader, decoder)) {
+    if (abortSignal?.aborted) {
+      reader.cancel();
+      break;
+    }
+
+    if (event.type === 'token' && event.content) {
+      fullText += event.content;
+      onToken?.(fullText, event.content);
+    } else if (event.type === 'tool_calls' && Array.isArray((event as any).toolCalls)) {
+      toolCalls = (event as any).toolCalls;
+    } else if (event.type === 'error') {
+      throw new Error(event.error || 'Stream error');
+    } else if (event.type === 'done') {
+      // done 이벤트에 toolCalls가 포함될 수 있음
+      if (Array.isArray((event as any).toolCalls)) {
+        toolCalls = (event as any).toolCalls;
+      }
+      break;
+    }
+  }
+
+  return { content: fullText, toolCalls };
 }

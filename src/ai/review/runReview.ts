@@ -2,13 +2,16 @@
  * 검수 전용 API 호출 함수
  * - Tool calling 없이 단순 1회 호출
  * - 채팅 인프라 우회로 빠른 응답
+ * - 웹 환경에서는 프록시 사용
  */
 
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
+import { getAiConfig } from '@/ai/config';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
 import { type ReviewIntensity, isPolishingMode } from '@/stores/reviewStore';
+import { shouldUseWebProxy, webProxyReview } from '@/ai/webProxy';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
@@ -43,12 +46,44 @@ function extractChunkContent(chunk: AIMessageChunk): string {
  * @returns AI 응답 텍스트 (JSON 형식)
  */
 export async function runReview(params: RunReviewParams): Promise<string> {
+  const useWebProxy = shouldUseWebProxy();
+  const systemPrompt = buildReviewPrompt(params.intensity);
+
+  // ============================================
+  // 웹 환경: 프록시 사용
+  // ============================================
+  if (useWebProxy) {
+    const cfg = getAiConfig();
+
+    // 세그먼트를 프록시 형식으로 변환
+    const segments = params.segments.map((s) => ({
+      id: s.groupId,
+      order: s.order,
+      source: s.sourceText,
+      target: s.targetText,
+    }));
+
+    const result = await webProxyReview({
+      segments,
+      systemPrompt,
+      translationRules: params.translationRules,
+      glossary: params.glossary,
+      model: cfg.model,
+      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
+      onToken: params.onToken,
+      abortSignal: params.abortSignal,
+    });
+
+    return result;
+  }
+
+  // ============================================
+  // Tauri 환경: 직접 API 호출
+  // ============================================
+
   // useFor: 'translation'으로 설정하여 Responses API 비활성화 (성능 향상)
   // 검수는 도구 호출 없이 단순 텍스트 생성이므로 Responses API 불필요
   const model = createChatModel(undefined, { useFor: 'translation', maxTokens: 4096 });
-
-  // 시스템 프롬프트: 검수 지침만
-  const systemPrompt = buildReviewPrompt(params.intensity);
 
   // 사용자 메시지: 컨텍스트 + 세그먼트
   const userContentParts: string[] = [];

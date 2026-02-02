@@ -1,7 +1,13 @@
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
-import { shouldUseWebProxy, webProxyChat } from '@/ai/webProxy';
+import {
+  shouldUseWebProxy,
+  webProxyChatWithTools,
+  type ToolDefinition,
+  type ToolCall as WebToolCall,
+  type ChatMessage as WebChatMessage,
+} from '@/ai/webProxy';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
@@ -328,7 +334,7 @@ async function runToolCallingLoop(params: {
 
     // 실시간 스트리밍: .stream() 사용
     let accumulatedText = '';
-    let accumulatedToolCallChunks: ToolCallChunk[] = [];
+    const accumulatedToolCallChunks: ToolCallChunk[] = [];
     let finalAiMessage: AIMessageChunk | null = null;
 
     try {
@@ -512,6 +518,212 @@ async function runToolCallingLoop(params: {
     usedTools: true,
     toolsUsed,
   };
+}
+
+// ============================================
+// 웹 Tool Calling Loop (클라이언트 에뮬레이션)
+// ============================================
+
+/**
+ * 웹 환경용 도구 정의
+ * - get_source_document, get_target_document만 지원
+ * - MCP 도구(Confluence, Notion)는 웹에서 미지원 (로컬 프로세스 필요)
+ * - web_search는 서버 측에서 처리 (OpenAI/Anthropic 내장)
+ */
+const WEB_TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: 'get_source_document',
+    description: '원문(Source) 문서를 Markdown 형식으로 가져옵니다. 사용자가 문서 내용, 번역 품질, 표현에 대해 질문하면 먼저 이 도구를 호출하세요.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '문서가 매우 길 때, 이 구절 주변만 발췌하고 싶으면 사용',
+        },
+        maxChars: {
+          type: 'number',
+          description: '문서가 길 때 반환할 최대 문자 수 (기본 8000)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_target_document',
+    description: '번역문(Target) 문서를 Markdown 형식으로 가져옵니다. 사용자가 번역 결과, 표현 자연스러움, 오역 여부에 대해 질문하면 먼저 이 도구를 호출하세요.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '문서가 매우 길 때, 이 구절 주변만 발췌하고 싶으면 사용',
+        },
+        maxChars: {
+          type: 'number',
+          description: '문서가 길 때 반환할 최대 문자 수 (기본 8000)',
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+/**
+ * 웹 환경용 도구 가이드 메시지
+ */
+function buildWebToolGuideMessage(): string {
+  return `도구 사용 가이드:
+★ 도구를 적극적으로 활용하세요. 추측보다 도구 호출로 정확한 정보를 얻는 것이 좋습니다.
+
+- get_source_document: 원문 조회. 사용자가 문서 내용에 대해 질문하면 먼저 호출하세요.
+- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.
+
+도구 선택 우선순위:
+1. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")
+   → get_source_document + get_target_document로 문서 조회 후 답변
+
+2. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)
+   → get_source_document, get_target_document를 먼저 호출하여 근거 확보`;
+}
+
+/**
+ * 웹 환경에서 도구 실행 (클라이언트 측)
+ * - Zustand store에서 문서 데이터 접근
+ */
+async function executeWebTool(toolCall: WebToolCall): Promise<string> {
+  const { name, args } = toolCall;
+
+  if (name === 'get_source_document') {
+    try {
+      const result = await getSourceDocumentTool.invoke(args);
+      return typeof result === 'string' ? result : JSON.stringify(result);
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Tool execution failed';
+    }
+  }
+
+  if (name === 'get_target_document') {
+    try {
+      const result = await getTargetDocumentTool.invoke(args);
+      return typeof result === 'string' ? result : JSON.stringify(result);
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Tool execution failed';
+    }
+  }
+
+  return `Unknown tool: ${name}`;
+}
+
+/**
+ * 웹 환경용 Tool Calling Loop
+ * - 서버에서 tool binding + 1회 호출
+ * - 클라이언트에서 tool 실행 후 결과를 서버에 재전송
+ * - 최대 6회 반복
+ */
+async function runWebToolCallingLoop(
+  input: GenerateReplyInput,
+  cb: StreamCallbacks | undefined,
+  cfg: ReturnType<typeof getAiConfig>,
+): Promise<string> {
+  const MAX_STEPS = 6;
+  const toolsUsed: string[] = [];
+
+  // 시스템 프롬프트 구성
+  const baseSystemPrompt = input.translatorPersona
+    ? `${input.translatorPersona}\n\n당신은 번역 작업을 돕는 AI 어시스턴트입니다.`
+    : '당신은 번역 작업을 돕는 AI 어시스턴트입니다.';
+
+  const systemPrompt = [
+    baseSystemPrompt,
+    '',
+    buildWebToolGuideMessage(),
+  ].join('\n');
+
+  // 초기 메시지 구성
+  const chatMessages: WebChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+  ];
+
+  // 최근 채팅 히스토리 추가 (최대 20개)
+  const recentHistory = input.recentMessages.slice(-20);
+  for (const msg of recentHistory) {
+    chatMessages.push({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+    });
+  }
+
+  // 사용자 메시지 추가
+  chatMessages.push({ role: 'user', content: input.userMessage });
+
+  let accumulatedText = '';
+
+  for (let step = 0; step < MAX_STEPS; step++) {
+    // AbortSignal 체크
+    if (input.abortSignal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
+
+    cb?.onModelRun?.(step);
+
+    // 서버에 요청 (도구 정의 포함)
+    const result = await webProxyChatWithTools({
+      messages: chatMessages,
+      tools: WEB_TOOL_DEFINITIONS,
+      model: cfg.model,
+      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
+      onToken: (fullText, delta) => {
+        accumulatedText = fullText;
+        cb?.onToken?.(fullText, delta);
+      },
+      abortSignal: input.abortSignal,
+    });
+
+    // 도구 호출이 없으면 최종 응답
+    if (result.toolCalls.length === 0) {
+      cb?.onToolsUsed?.(toolsUsed);
+      return result.content || accumulatedText;
+    }
+
+    // AI 응답 메시지 추가
+    chatMessages.push({
+      role: 'assistant',
+      content: result.content || '',
+    });
+
+    // 도구 실행 및 결과 추가
+    for (const toolCall of result.toolCalls) {
+      if (!toolsUsed.includes(toolCall.name)) {
+        toolsUsed.push(toolCall.name);
+      }
+
+      cb?.onToolCall?.({ phase: 'start', toolName: toolCall.name, args: toolCall.args });
+
+      const toolResult = await executeWebTool(toolCall);
+
+      cb?.onToolCall?.({
+        phase: 'end',
+        toolName: toolCall.name,
+        status: toolResult.startsWith('Unknown tool') || toolResult.includes('failed') ? 'error' : 'success',
+      });
+
+      // 도구 결과를 메시지에 추가
+      // LangChain 형식: tool role + tool_call_id
+      (chatMessages as any[]).push({
+        role: 'tool',
+        content: toolResult,
+        tool_call_id: toolCall.id,
+      });
+    }
+
+    // 누적 텍스트 초기화 (다음 스트리밍을 위해)
+    accumulatedText = '';
+  }
+
+  // 최대 스텝 도달
+  cb?.onToolsUsed?.(toolsUsed);
+  return accumulatedText || '요청을 처리하는 데 필요한 컨텍스트를 충분히 확보하지 못했습니다. 질문을 더 구체화해 주세요.';
 }
 
 // 내장 웹 검색 도구 (provider별 분기) - 공통 함수로 추출
@@ -936,41 +1148,10 @@ export async function streamAssistantReply(
   }
 
   // ============================================================
-  // 웹 환경: 간소화된 채팅 (Tool Calling 없음)
+  // 웹 환경: Tool Calling 지원 (클라이언트 에뮬레이션)
   // ============================================================
   if (useWebProxy) {
-    // 웹 환경에서는 Tool Calling, MCP, 이미지 첨부 미지원
-    // 간단한 시스템 프롬프트 + 히스토리 + 사용자 메시지로 구성
-    const systemPrompt = input.translatorPersona
-      ? `${input.translatorPersona}\n\n당신은 번역 작업을 돕는 AI 어시스턴트입니다.`
-      : '당신은 번역 작업을 돕는 AI 어시스턴트입니다.';
-
-    const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt },
-    ];
-
-    // 최근 채팅 히스토리 추가 (최대 20개)
-    const recentHistory = input.recentMessages.slice(-20);
-    for (const msg of recentHistory) {
-      chatMessages.push({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-      });
-    }
-
-    // 사용자 메시지 추가
-    chatMessages.push({ role: 'user', content: input.userMessage });
-
-    const finalText = await webProxyChat({
-      messages: chatMessages,
-      model: cfg.model,
-      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
-      onToken: (fullText, delta) => cb?.onToken?.(fullText, delta),
-      abortSignal: input.abortSignal,
-    });
-
-    cb?.onToolsUsed?.([]);
-    return finalText;
+    return await runWebToolCallingLoop(input, cb, cfg);
   }
 
   // ============================================================
