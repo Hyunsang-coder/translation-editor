@@ -1,0 +1,45 @@
+# Tauri/Rust backend (not needed for web)
+src-tauri/
+
+# Desktop build output
+dist/
+
+# Dependencies (Vercel installs them)
+node_modules/
+
+# IDE/Editor
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local env files
+.env
+.env.local
+.env*.local
+
+# Test/Coverage
+coverage/
+*.tsbuildinfo
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Project files
+*.ite
+
+# Other
+.tmp/
+.npm-cache/
+tasks/
+remotion-demo/
