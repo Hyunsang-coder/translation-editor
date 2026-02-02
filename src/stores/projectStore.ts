@@ -12,8 +12,7 @@ import type {
 } from '@/types';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { hashContent, stripHtml } from '@/utils/hash';
-import { loadProject as tauriLoadProject, saveProject as tauriSaveProject } from '@/tauri/project';
-import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
+import { getPlatform } from '@/platform';
 import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
@@ -342,11 +341,12 @@ export const useProjectStore = create<ProjectStore>()(
       initializeProject: (): void => {
         set({ isLoading: true, error: null });
         void (async () => {
+          const platform = await getPlatform();
           const { lastProjectId } = get();
 
           if (lastProjectId) {
             try {
-              const loaded = await tauriLoadProject(lastProjectId);
+              const loaded = await platform.storage.loadProject(lastProjectId);
               const td = buildTargetDocument(loaded);
               const sd = buildSourceDocument(loaded);
               set({
@@ -371,10 +371,10 @@ export const useProjectStore = create<ProjectStore>()(
 
           // lastProjectId가 없거나 로드 실패한 경우: DB에 저장된 최근 프로젝트를 우선 로드
           try {
-            const ids = await tauriListProjectIds();
+            const ids = await platform.storage.listProjectIds();
             const first = ids[0];
             if (first) {
-              const loaded = await tauriLoadProject(first);
+              const loaded = await platform.storage.loadProject(first);
               const td = buildTargetDocument(loaded);
               const sd = buildSourceDocument(loaded);
               set({
@@ -395,20 +395,44 @@ export const useProjectStore = create<ProjectStore>()(
               return;
             }
           } catch {
-            // Tauri runtime 미탐지/DB 조회 실패 등은 폴백으로 처리
+            // 플랫폼 runtime 미탐지/DB 조회 실패 등은 폴백으로 처리
           }
 
-          // 프로젝트가 하나도 없는 경우: null 유지 (Blank Page UX를 위함)
-          set({
-            project: null,
-            isLoading: false,
-            lastProjectId: null,
-            sourceDocJson: null,
-            targetDocJson: null,
-          });
-          // chatStore 초기화 (프로젝트 없음)
-          const { useChatStore } = await import('@/stores/chatStore');
-          await useChatStore.getState().hydrateForProject(null);
+          // 프로젝트가 하나도 없는 경우: 빈 프로젝트 자동 생성
+          try {
+            const newProject = await platform.storage.createProject({
+              title: 'New Project',
+              domain: 'General',
+            });
+            const td = buildTargetDocument(newProject);
+            const sd = buildSourceDocument(newProject);
+            set({
+              project: newProject,
+              isDirty: false,
+              isLoading: false,
+              error: null,
+              lastProjectId: newProject.id,
+              targetDocument: td.text,
+              sourceDocument: sd.text,
+              sourceDocJson: htmlToTipTapJson(sd.text),
+              targetDocJson: htmlToTipTapJson(td.text),
+            });
+            // chatStore 하이드레이션
+            const { useChatStore } = await import('@/stores/chatStore');
+            await useChatStore.getState().hydrateForProject(newProject.id);
+          } catch {
+            // 프로젝트 생성 실패 시 null 유지
+            set({
+              project: null,
+              isLoading: false,
+              lastProjectId: null,
+              sourceDocJson: null,
+              targetDocJson: null,
+            });
+            // chatStore 초기화 (프로젝트 없음)
+            const { useChatStore } = await import('@/stores/chatStore');
+            await useChatStore.getState().hydrateForProject(null);
+          }
         })();
       },
 
@@ -765,7 +789,7 @@ export const useProjectStore = create<ProjectStore>()(
             },
           };
 
-          console.log('[saveProject] Calling tauriSaveProject...', {
+          console.log('[saveProject] Calling platform.storage.saveProject...', {
             projectId: projectToSave.id,
             blocksCount: Object.keys(nextBlocks).length,
             targetBlocksSample: Object.values(nextBlocks)
@@ -774,7 +798,8 @@ export const useProjectStore = create<ProjectStore>()(
               .map(b => ({ id: b.id, contentLength: b.content.length, content: b.content.slice(0, 100) })),
           });
 
-          await tauriSaveProject(projectToSave);
+          const platform = await getPlatform();
+          await platform.storage.saveProject(projectToSave);
 
           console.log('[saveProject] SUCCESS - saved project:', projectToSave.id);
 
@@ -821,7 +846,8 @@ export const useProjectStore = create<ProjectStore>()(
             }
           }
 
-          const loaded = await tauriLoadProject(projectId);
+          const platform = await getPlatform();
+          const loaded = await platform.storage.loadProject(projectId);
           loadProject(loaded);
 
           // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출

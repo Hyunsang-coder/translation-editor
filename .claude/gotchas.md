@@ -207,3 +207,15 @@ Critical implementation warnings learned from past issues.
 87. **HTML Normalizer 리스트 내 이미지**: `htmlNormalizer.ts`의 `normalizeDivs()`에서 `<li>` 안의 이미지만 포함한 `<div>`는 unwrap하여 이미지가 리스트 항목과 같은 줄에 유지되도록 함. Confluence 붙여넣기 시 `<li><div><img></div></li>` 구조가 들어옴.
 
 88. **shouldNormalizePastedHtml 보안 검사**: `style=`, `javascript:`, `data:text`, `data:application` 포함 여부를 검사하여 인라인 스타일 변환 및 XSS 공격 차단. 단순 텍스트는 정규화 건너뜀.
+
+## Build / Platform
+
+89. **Web Proxy 플랫폼 분기**: `shouldUseWebProxy()` (= `!isTauriRuntime()`)로 웹/데스크톱 분기. 웹에서는 `/api/ai/*` 프록시 사용, Tauri에서는 직접 LangChain API 호출. API 키 검증은 Tauri에서만 수행 (웹은 서버에서 관리).
+
+90. **Web 버전 Tool Calling 미지원**: 웹 환경에서는 Tool Calling, MCP, 이미지 첨부 기능 미지원. `chat.ts`의 `streamAssistantReply()`에서 웹이면 간소화된 채팅(시스템 프롬프트 + 히스토리 + 메시지)만 사용.
+
+91. **웹 첫 방문 시 자동 프로젝트 생성**: `projectStore.initializeProject()`에서 저장된 프로젝트가 없으면 "New Project"를 자동 생성. 이 없이는 FloatingChatButton이 렌더링되지 않음 (`project && <FloatingChatButton />` 조건).
+
+92. **Vercel Rate Limiting In-Memory 한계**: `api/ai/*/route.ts`의 rate limit Map은 Edge Function 인스턴스별로 독립적. 프로덕션에서는 Vercel KV 또는 Upstash Redis 사용 권장.
+
+93. **exactOptionalPropertyTypes 타입 호환**: TypeScript `exactOptionalPropertyTypes: true` 설정에서 `signal?: AbortSignal` 타입은 `AbortSignal | undefined`와 호환 안 됨. fetch options에서 `...(signal ? { signal } : {})`로 조건부 spread 사용.

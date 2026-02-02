@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 410 404">
+  <defs>
+    <linearGradient id="vitea" x1="100%" y1="0%" x2="0%" y2="0%">
+      <stop stop-color="#41D1FF" offset="0%"/>
+      <stop stop-color="#BD34FE" offset="100%"/>
+    </linearGradient>
+    <linearGradient id="viteb" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop stop-color="#FFEA83" offset="0%"/>
+      <stop stop-color="#FFDD35" offset="50%"/>
+      <stop stop-color="#FFA800" offset="100%"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#vitea)" d="M399.6 59.6 215.4 388c-3.8 6.8-13.6 6.8-17.4 0L10.4 59.6c-4.2-7.4 2-16.6 10.8-15.3l184.7 28.2a11 11 0 0 0 3.4 0l184.7-28.2c8.8-1.3 15 7.9 10.8 15.3Z"/>
+  <path fill="url(#viteb)" d="M292.5 1.2 156.3 24.7a4.8 4.8 0 0 0-4 5.6l23.2 130.6a4.8 4.8 0 0 0 6 3.7l38-11.1c3.3-1 6.6 1.7 6 5l-11.3 58.2c-.7 3.8 2.9 7 6.6 5.7l23.5-8.1a4.8 4.8 0 0 0 3.1-3.5l36.6-175.6c.8-3.8-2.6-7.1-6.4-6.4l-39.1 7.2c-3.8.7-7.1-2.6-6.4-6.4l7.6-39.2c.7-3.8-2.6-7.1-6.4-6.4Z"/>
+</svg>
+

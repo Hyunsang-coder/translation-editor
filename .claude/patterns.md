@@ -287,9 +287,74 @@ npx tauri build --target universal-apple-darwin
 # Specific bundle only
 npx tauri build --bundles dmg    # macOS
 npx tauri build --bundles nsis   # Windows
+
+# Web build
+npm run build:web                # Output: dist-web/
 ```
 
 **Build Output Paths**:
 - macOS: `src-tauri/target/release/bundle/dmg/`
 - macOS Universal: `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`
 - Windows: `src-tauri/target/release/bundle/nsis/`
+- Web: `dist-web/`
+
+## Web AI Proxy Pattern
+
+웹 환경에서 AI 기능을 위한 프록시 패턴.
+
+```typescript
+// src/ai/webProxy.ts
+// 플랫폼 감지 → Tauri면 직접 호출, 웹이면 프록시 사용
+
+export function shouldUseWebProxy(): boolean {
+  return !isTauriRuntime();
+}
+
+// 번역/채팅 함수에서 분기
+if (useWebProxy) {
+  // 웹: Vercel API Routes 프록시 (SSE 스트리밍)
+  return await webProxyTranslate({ sourceMarkdown, targetLanguage, ... });
+} else {
+  // Tauri: 직접 LangChain API 호출
+  const model = createChatModel();
+  return await model.invoke(messages);
+}
+```
+
+### SSE 스트리밍 클라이언트
+
+```typescript
+// src/platform/web/ai.ts
+async function* parseSSEStream(reader, decoder) {
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // data: {...}\n\n 형식 파싱
+    for (const line of buffer.split('\n')) {
+      if (line.startsWith('data: ')) yield JSON.parse(line.slice(6));
+    }
+  }
+}
+```
+
+### Vercel Edge Function 구조
+
+```typescript
+// api/ai/chat/route.ts
+export async function POST(request: Request) {
+  // 1. Rate limiting (IP 기반)
+  // 2. CORS 검증
+  // 3. LangChain 모델 생성 (서버 환경변수에서 API 키)
+  // 4. SSE 스트리밍 응답
+  const stream = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of model.stream(messages)) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      }
+    }
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+}
+```

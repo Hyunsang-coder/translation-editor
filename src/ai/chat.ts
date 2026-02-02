@@ -1,6 +1,7 @@
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { shouldUseWebProxy, webProxyChat } from '@/ai/webProxy';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
@@ -926,12 +927,55 @@ export async function streamAssistantReply(
   cb?: StreamCallbacks,
 ): Promise<string> {
   const cfg = getAiConfig();
+  const useWebProxy = shouldUseWebProxy();
 
   if (cfg.provider === 'mock') {
     const mock = getMockResponse(input);
     cb?.onToken?.(mock, mock);
     return mock;
   }
+
+  // ============================================================
+  // 웹 환경: 간소화된 채팅 (Tool Calling 없음)
+  // ============================================================
+  if (useWebProxy) {
+    // 웹 환경에서는 Tool Calling, MCP, 이미지 첨부 미지원
+    // 간단한 시스템 프롬프트 + 히스토리 + 사용자 메시지로 구성
+    const systemPrompt = input.translatorPersona
+      ? `${input.translatorPersona}\n\n당신은 번역 작업을 돕는 AI 어시스턴트입니다.`
+      : '당신은 번역 작업을 돕는 AI 어시스턴트입니다.';
+
+    const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // 최근 채팅 히스토리 추가 (최대 20개)
+    const recentHistory = input.recentMessages.slice(-20);
+    for (const msg of recentHistory) {
+      chatMessages.push({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      });
+    }
+
+    // 사용자 메시지 추가
+    chatMessages.push({ role: 'user', content: input.userMessage });
+
+    const finalText = await webProxyChat({
+      messages: chatMessages,
+      model: cfg.model,
+      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
+      onToken: (fullText, delta) => cb?.onToken?.(fullText, delta),
+      abortSignal: input.abortSignal,
+    });
+
+    cb?.onToolsUsed?.([]);
+    return finalText;
+  }
+
+  // ============================================================
+  // Tauri 환경: 전체 기능 (Tool Calling, MCP, 이미지 등)
+  // ============================================================
 
   // 요청 유형 자동 감지
   const requestType = input.requestType ?? detectRequestType(input.userMessage);

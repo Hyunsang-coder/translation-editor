@@ -6,23 +6,9 @@ import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { useProjectStore } from '@/stores/projectStore';
-import { searchGlossary } from '@/tauri/glossary';
-import { isTauriRuntime } from '@/tauri/invoke';
-import {
-  loadChatProjectSettings,
-  loadChatSessions,
-  saveChatProjectSettings,
-  saveChatSessions,
-  type ChatProjectSettings,
-} from '@/tauri/chat';
-import {
-  attachFile,
-  deleteAttachment as deleteAttachmentApi,
-  listAttachments,
-  type AttachmentDto,
-  previewAttachment,
-  readImageAsDataUrl,
-} from '@/tauri/attachments';
+import { getPlatform } from '@/platform';
+import type { ChatProjectSettings } from '@/tauri/chat';
+import type { AttachmentDto } from '@/platform/types';
 import {
   createGhostMaskSession,
   maskGhostChips,
@@ -275,13 +261,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
   });
 
   const persistNow = async (): Promise<void> => {
-    if (!isTauriRuntime()) return;
     if (get().isHydrating) return; // 로드 중에는 저장하지 않음 (데이터 유실 방지)
 
     // getActiveProjectId() 대신 현재 스토어에 로드된 ID 사용
     const projectId = get().loadedProjectId;
     if (!projectId) return;
 
+    const platform = await getPlatform();
     const session = get().currentSession;
     const settings = buildChatSettings();
 
@@ -289,16 +275,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     // - 저장은 전체 sessions를 대상으로 하되, 백엔드에서도 최종적으로 5개로 clamp됩니다.
     const sessions = get().sessions.slice(0, MAX_CHAT_SESSIONS);
     if (sessions.length > 0) {
-      await saveChatSessions({ projectId, sessions });
+      await platform.storage.saveChatSessions({ projectId, sessions });
     } else if (session) {
       // 안전장치: sessions가 비어있지만 currentSession이 있으면 1개만 저장
-      await saveChatSessions({ projectId, sessions: [session] });
+      await platform.storage.saveChatSessions({ projectId, sessions: [session] });
     }
-    await saveChatProjectSettings({ projectId, settings });
+    await platform.storage.saveChatProjectSettings({ projectId, settings });
   };
 
   const schedulePersist = (): void => {
-    if (!isTauriRuntime()) return;
     if (chatPersistTimer !== null) {
       window.clearTimeout(chatPersistTimer);
       chatPersistTimer = null;
@@ -447,15 +432,12 @@ export const useChatStore = create<ChatStore>((set, get) => {
       });
 
       try {
-        if (!isTauriRuntime()) {
-          set({ isHydrating: false });
-          return;
-        }
+        const platform = await getPlatform();
 
         const [sessionsRes, settingsRes, attachmentsRes] = await Promise.all([
-          loadChatSessions(projectId),
-          loadChatProjectSettings(projectId),
-          listAttachments(projectId),
+          platform.storage.loadChatSessions(projectId),
+          platform.storage.loadChatProjectSettings(projectId),
+          platform.attachments.list(projectId),
         ]);
 
         const atts = attachmentsRes ?? [];
@@ -800,13 +782,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
         let glossaryInjected = '';
         try {
           if (project?.id) {
+            const platform = await getPlatform();
             const plainContext = contextBlocks
               .map((b) => stripHtml(b.content))
               .join('\n')
               .slice(0, 1200);
             const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
             const hits = q.trim().length
-              ? await searchGlossary({
+              ? await platform.storage.searchGlossary({
                 projectId: project.id,
                 query: q,
                 domain: project.metadata.domain,
@@ -1249,13 +1232,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
         let glossaryInjected = '';
         try {
           if (project?.id) {
+            const platform = await getPlatform();
             const plainContext = contextBlocks
               .map((b) => stripHtml(b.content))
               .join('\n')
               .slice(0, 1200);
             const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
             const hits = q.trim().length
-              ? await searchGlossary({
+              ? await platform.storage.searchGlossary({
                 projectId: project.id,
                 query: q,
                 domain: project.metadata.domain,
@@ -1633,7 +1617,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       set({ isLoading: true });
       try {
-        const newAtt = await attachFile(projectId, path);
+        const platform = await getPlatform();
+        const newAtt = await platform.attachments.attach(projectId, path);
         set((state) => ({
           attachments: [...state.attachments, newAtt],
           isLoading: false,
@@ -1649,7 +1634,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
     deleteAttachment: async (id: string): Promise<void> => {
       set({ isLoading: true });
       try {
-        await deleteAttachmentApi(id);
+        const platform = await getPlatform();
+        await platform.attachments.delete(id);
         set((state) => ({
           attachments: state.attachments.filter((a) => a.id !== id),
           isLoading: false,
@@ -1668,12 +1654,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       // Note: isLoading을 사용하지 않음 - AI 응답 생성용 플래그이므로 첨부 시 스켈레톤이 표시되는 문제 방지
       try {
-        const tmp = await previewAttachment(path);
+        const platform = await getPlatform();
+        const tmp = await platform.attachments.preview(path);
 
         // 이미지 파일인 경우 썸네일 data URL 생성 + API 제한에 맞게 리사이즈
         const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         if (imageExtensions.includes(tmp.fileType.toLowerCase()) && tmp.filePath) {
-          const rawDataUrl = await readImageAsDataUrl(tmp.filePath, tmp.fileType);
+          const rawDataUrl = await platform.attachments.readImageAsDataUrl(tmp.filePath, tmp.fileType);
           if (rawDataUrl) {
             // API 제한(Anthropic 5MB)에 맞게 자동 리사이즈
             const resizedDataUrl = await resizeImageForApi(rawDataUrl, IMAGE_SIZE_LIMITS.anthropic);
@@ -1706,7 +1693,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
       if (!projectId) return;
 
       try {
-        const atts = await listAttachments(projectId);
+        const platform = await getPlatform();
+        const atts = await platform.attachments.list(projectId);
         set({ attachments: atts });
       } catch (e) {
         // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지

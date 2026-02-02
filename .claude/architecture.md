@@ -10,10 +10,22 @@
 | AI | LangChain.js (OpenAI + Anthropic) |
 | UI Layout | Hybrid Panel (Settings sidebar + Floating Chat via react-rnd) |
 | Toast | Sonner (position: top-center) |
-| Backend | Tauri 2 + Rust |
-| Storage | SQLite (`.ite` project files) |
+| Backend | Tauri 2 + Rust (desktop) / Vercel Edge Functions (web) |
+| Storage | SQLite (desktop) / IndexedDB (web) |
 | i18n | i18next (Korean/English) |
 | Auto Update | Tauri updater plugin + GitHub Releases |
+
+## Platform Support
+
+| Feature | Tauri (Desktop) | Web (Vercel) |
+|---------|----------------|--------------|
+| AI Chat | Direct LangChain API | `/api/ai/chat` proxy |
+| AI Translation | Direct LangChain API | `/api/ai/translate` proxy |
+| Tool Calling | Full support | Not supported |
+| MCP Integration | Rust native clients | Not supported |
+| Image Attachments | File system + Vision API | Not supported |
+| Storage | SQLite (.ite files) | IndexedDB |
+| Secrets | OS Keychain | Server-side env vars |
 
 ## Key Design Decisions
 
@@ -146,3 +158,57 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 | Attachments (per file) | 30,000 chars |
 | Attachments (total) | 100,000 chars |
 | Chat images | max 10, auto-resized (Anthropic 5MB, OpenAI 20MB) |
+
+## Web Version Architecture
+
+### Platform Abstraction Layer (`src/platform/`)
+
+```
+src/platform/
+├── index.ts          # Platform detection, lazy adapter loading
+├── types.ts          # PlatformAdapter interface
+├── tauri/            # Tauri-specific implementations
+│   ├── storage.ts    # SQLite via Tauri commands
+│   ├── secrets.ts    # OS Keychain
+│   ├── dialog.ts     # Native file dialogs
+│   └── attachments.ts
+└── web/              # Web-specific implementations
+    ├── storage.ts    # IndexedDB
+    ├── secrets.ts    # In-memory (server manages keys)
+    ├── dialog.ts     # HTML file input
+    ├── attachments.ts
+    └── ai.ts         # AI proxy client
+```
+
+### Vercel API Routes (`api/`)
+
+```
+api/ai/
+├── chat/route.ts      # SSE streaming chat proxy
+└── translate/route.ts # SSE streaming translation proxy
+```
+
+**Features**:
+- Rate limiting: 20 req/min (chat), 10 req/min (translate)
+- CORS domain restriction
+- Server-side API key management
+
+### Build Commands
+
+```bash
+# Desktop (Tauri)
+npm run tauri:dev      # Development
+npm run tauri:build    # Production
+
+# Web (Vercel)
+npm run dev:web        # Development (port 3000)
+npm run build:web      # Production (output: dist-web/)
+npm run preview:web    # Preview production build
+```
+
+### Environment Variables (Vercel)
+
+```bash
+OPENAI_API_KEY=sk-...      # Server-side only
+ANTHROPIC_API_KEY=sk-ant-... # Server-side only
+```

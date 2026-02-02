@@ -1,6 +1,7 @@
 import type { ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { shouldUseWebProxy, webProxyTranslate } from '@/ai/webProxy';
 import i18n from '@/i18n/config';
 import {
   translateInChunks,
@@ -118,20 +119,23 @@ export async function translateSourceDocToTargetDocJson(params: {
   abortSignal?: AbortSignal | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig({ useFor: 'translation' });
+  const useWebProxy = shouldUseWebProxy();
 
   // mock provider는 더 이상 지원하지 않음
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
   }
 
-  // API 키 검증 (provider별 분기)
-  if (cfg.provider === 'anthropic') {
-    if (!cfg.anthropicApiKey) {
-      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
-    }
-  } else {
-    if (!cfg.openaiApiKey) {
-      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+  // API 키 검증 (Tauri 환경에서만 - 웹은 서버에서 관리)
+  if (!useWebProxy) {
+    if (cfg.provider === 'anthropic') {
+      if (!cfg.anthropicApiKey) {
+        throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
+      }
+    } else {
+      if (!cfg.openaiApiKey) {
+        throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+      }
     }
   }
 
@@ -257,27 +261,47 @@ export async function translateSourceDocToTargetDocJson(params: {
     throw new Error('번역이 취소되었습니다.');
   }
 
-  // 번역 실행
-  const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-  const res = await model.invoke(messages, invokeOptions);
+  // ============================================================
+  // 번역 실행 (웹 프록시 vs 직접 API 호출)
+  // ============================================================
+  let raw: string;
 
-  // finish_reason 확인 (응답 잘림 감지)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const finishReason = (res as any)?.response_metadata?.finish_reason;
-  if (finishReason === 'length') {
-    throw new Error(
-      `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
-      `문서를 분할하여 번역하거나 다시 시도해주세요.`
-    );
+  if (useWebProxy) {
+    // 웹 환경: Vercel API Routes 프록시 사용
+    raw = await webProxyTranslate({
+      sourceMarkdown,
+      targetLanguage: tgtLang,
+      translationRules: params.translationRules,
+      projectContext: params.projectContext,
+      translatorPersona: params.translatorPersona,
+      glossary: params.glossary,
+      model: cfg.model,
+      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
+      abortSignal: params.abortSignal,
+    });
+  } else {
+    // Tauri 환경: 직접 LangChain API 호출
+    const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+    const res = await model.invoke(messages, invokeOptions);
+
+    // finish_reason 확인 (응답 잘림 감지)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finishReason = (res as any)?.response_metadata?.finish_reason;
+    if (finishReason === 'length') {
+      throw new Error(
+        `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
+        `문서를 분할하여 번역하거나 다시 시도해주세요.`
+      );
+    }
+
+    // 응답 텍스트 추출
+    const rawContent = res.content;
+    raw = typeof rawContent === 'string'
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+        : String(rawContent);
   }
-
-  // 응답 텍스트 추출
-  const rawContent = res.content;
-  const raw = typeof rawContent === 'string'
-    ? rawContent
-    : Array.isArray(rawContent)
-      ? rawContent.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
-      : String(rawContent);
 
   // 응답이 비어있는 경우
   if (!raw || raw.trim().length === 0) {
@@ -353,19 +377,22 @@ export async function translateWithStreaming(
   params: StreamingTranslationParams
 ): Promise<{ doc: TipTapDocJson; raw: string }> {
   const cfg = getAiConfig({ useFor: 'translation' });
+  const useWebProxy = shouldUseWebProxy();
 
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
   }
 
-  // API 키 검증 (provider별 분기)
-  if (cfg.provider === 'anthropic') {
-    if (!cfg.anthropicApiKey) {
-      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
-    }
-  } else {
-    if (!cfg.openaiApiKey) {
-      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+  // API 키 검증 (Tauri 환경에서만 - 웹은 서버에서 관리)
+  if (!useWebProxy) {
+    if (cfg.provider === 'anthropic') {
+      if (!cfg.anthropicApiKey) {
+        throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
+      }
+    } else {
+      if (!cfg.openaiApiKey) {
+        throw new Error(i18n.t('errors.openaiApiKeyMissing'));
+      }
     }
   }
 
@@ -483,39 +510,62 @@ export async function translateWithStreaming(
     throw new Error('번역이 취소되었습니다.');
   }
 
-  // 스트리밍 실행
+  // ============================================================
+  // 스트리밍 실행 (웹 프록시 vs 직접 API 호출)
+  // ============================================================
   let accumulated = '';
-  const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-  const stream = await model.stream(messages, streamOptions);
 
-  for await (const chunk of stream) {
-    // 취소 확인
-    if (params.abortSignal?.aborted) {
-      throw new Error('번역이 취소되었습니다.');
-    }
-
-    // chunk.content에서 텍스트 추출
-    const delta = typeof chunk.content === 'string'
-      ? chunk.content
-      : Array.isArray(chunk.content)
-        ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
-        : '';
-
-    if (delta) {
-      accumulated += delta;
-      // 마커 이후 텍스트만 콜백에 전달 (지침 반복 필터링)
-      const startMarker = '---TRANSLATION_START---';
-      const endMarker = '---TRANSLATION_END---';
-      const startIdx = accumulated.indexOf(startMarker);
-      if (startIdx !== -1) {
-        let filtered = accumulated.slice(startIdx + startMarker.length);
-        const endIdx = filtered.indexOf(endMarker);
-        if (endIdx !== -1) {
-          filtered = filtered.slice(0, endIdx);
-        }
-        params.onToken?.(filtered.trim());
+  // 토큰 콜백 래퍼 (마커 필터링)
+  const filterAndCallToken = (fullText: string) => {
+    const startMarker = '---TRANSLATION_START---';
+    const endMarker = '---TRANSLATION_END---';
+    const startIdx = fullText.indexOf(startMarker);
+    if (startIdx !== -1) {
+      let filtered = fullText.slice(startIdx + startMarker.length);
+      const endIdx = filtered.indexOf(endMarker);
+      if (endIdx !== -1) {
+        filtered = filtered.slice(0, endIdx);
       }
-      // 마커가 아직 없으면 콜백 호출 안함 (로딩 상태 유지)
+      params.onToken?.(filtered.trim());
+    }
+  };
+
+  if (useWebProxy) {
+    // 웹 환경: Vercel API Routes 프록시 사용
+    accumulated = await webProxyTranslate({
+      sourceMarkdown,
+      targetLanguage: tgtLang,
+      translationRules: params.translationRules,
+      projectContext: params.projectContext,
+      translatorPersona: params.translatorPersona,
+      glossary: params.glossary,
+      model: cfg.model,
+      provider: cfg.provider === 'anthropic' ? 'anthropic' : 'openai',
+      onToken: (fullText) => filterAndCallToken(fullText),
+      abortSignal: params.abortSignal,
+    });
+  } else {
+    // Tauri 환경: 직접 LangChain API 호출
+    const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+    const stream = await model.stream(messages, streamOptions);
+
+    for await (const chunk of stream) {
+      // 취소 확인
+      if (params.abortSignal?.aborted) {
+        throw new Error('번역이 취소되었습니다.');
+      }
+
+      // chunk.content에서 텍스트 추출
+      const delta = typeof chunk.content === 'string'
+        ? chunk.content
+        : Array.isArray(chunk.content)
+          ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+          : '';
+
+      if (delta) {
+        accumulated += delta;
+        filterAndCallToken(accumulated);
+      }
     }
   }
 

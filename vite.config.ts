@@ -8,6 +8,10 @@ import pkg from './package.json';
 const appVersion = pkg.version;
 
 const host = process.env.TAURI_DEV_HOST;
+
+// 빌드 타겟: 'tauri' (기본) 또는 'web'
+const buildTarget = process.env.BUILD_TARGET || 'tauri';
+const isWebBuild = buildTarget === 'web';
 const monacoPlugin =
   // vite-plugin-monaco-editor는 CJS로 배포되며 exports.default에 실제 플러그인 함수가 들어있습니다.
   // ESM 환경(vite.config.ts)에서는 default import가 exports 객체로 들어올 수 있어 안전하게 처리합니다.
@@ -28,7 +32,8 @@ export default defineConfig(({ command }) => {
   const isBuild = command === 'build';
 
   return {
-    base: isBuild ? './' : '/',
+    // Web build uses absolute paths for Vercel, Tauri uses relative paths
+    base: isWebBuild ? '/' : (isBuild ? './' : '/'),
     // 보안: 기본적으로 VITE_ 프리픽스만 클라이언트에 노출합니다.
     // (BRAVE_SEARCH_API 등 비밀키는 Rust(Tauri) 백엔드에서만 읽도록 설계)
     envPrefix: ['VITE_'],
@@ -40,6 +45,8 @@ export default defineConfig(({ command }) => {
       'process.version': JSON.stringify(process.version),
       global: 'window',
       __APP_VERSION__: JSON.stringify(appVersion),
+      // 빌드 타겟 플래그 (런타임에서 플랫폼 감지에 사용)
+      __BUILD_TARGET__: JSON.stringify(buildTarget),
     },
 
     plugins: [
@@ -70,14 +77,20 @@ export default defineConfig(({ command }) => {
 
   // Build options for production
   build: {
-    // Tauri uses Chromium on Windows and WebKit on macOS and Linux
-    target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari14',
+    // Web build: modern browsers only
+    // Tauri: Chromium on Windows and WebKit on macOS/Linux
+    target: isWebBuild
+      ? 'esnext'
+      : (process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari14'),
     // Produce sourcemaps for debugging
     sourcemap: !!process.env.TAURI_DEBUG,
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
-    
+    // Web build output directory
+    outDir: isWebBuild ? 'dist-web' : 'dist',
+
     // Node.js 모듈 외부화 (빌드 시 브라우저 번들에 포함하지 않음)
     // - MCP SDK가 Node 모듈을 참조하더라도, 브라우저에서 실행될 때(Tauri) 무시되도록 함
+    // - Web build에서는 Tauri 모듈도 외부화 (dead code elimination)
     rollupOptions: {
         external: [
             // Node.js built-ins that shouldn't be bundled for browser
@@ -92,7 +105,15 @@ export default defineConfig(({ command }) => {
             'node:process',
             'node:stream',
             'node:util',
-            'node:events'
+            'node:events',
+            // Web build: Tauri modules (tree-shaking으로 제거되지만 안전을 위해 명시)
+            ...(isWebBuild ? [
+              '@tauri-apps/api/core',
+              '@tauri-apps/plugin-dialog',
+              '@tauri-apps/plugin-process',
+              '@tauri-apps/plugin-shell',
+              '@tauri-apps/plugin-updater',
+            ] : []),
         ],
     },
   },
@@ -101,10 +122,10 @@ export default defineConfig(({ command }) => {
   clearScreen: false,
 
   server: {
-    // Tauri expects a fixed port
-    port: 1420,
-    strictPort: true,
-    host: host || false,
+    // Tauri expects a fixed port, Web uses 3000
+    port: isWebBuild ? 3000 : 1420,
+    strictPort: !isWebBuild, // Web build는 포트 유연하게
+    host: isWebBuild ? true : (host || false), // Web build는 모든 호스트에서 접근 가능
     hmr: host
       ? {
           protocol: 'ws',

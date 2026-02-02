@@ -18,6 +18,8 @@ This file provides guidance to Claude Code when working with this repository.
 npm install              # Install dependencies
 npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
+npm run dev:web          # Web dev server (port 3000)
+npm run build:web        # Web production build (dist-web/)
 npm test                 # Vitest watch mode
 npm run test:run         # Single test run
 cd src-tauri && cargo test  # Rust tests
@@ -29,7 +31,9 @@ src/ai/           # AI integration (chat.ts, translateDocument.ts, review/)
 src/editor/       # TipTap extensions
 src/stores/       # Zustand stores
 src/components/   # React components
+src/platform/     # Platform abstraction (tauri/, web/)
 src-tauri/src/    # Rust backend (commands/, mcp/)
+api/              # Vercel API Routes (web only)
 ```
 
 ### Version Files (Keep in Sync)
@@ -42,7 +46,7 @@ src-tauri/src/    # Rust backend (commands/, mcp/)
 This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
-- `gotchas.md` - Critical implementation warnings (88 items)
+- `gotchas.md` - Critical implementation warnings (93 items)
 - `testing.md` - Testing, debugging, file organization
 
 ## Core Principles
