@@ -3,11 +3,17 @@ import ReactDOM from 'react-dom/client';
 import { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import '@fontsource/noto-sans-kr/300.css';
-import '@fontsource/noto-sans-kr/400.css';
-import '@fontsource/noto-sans-kr/500.css';
-import '@fontsource/noto-sans-kr/600.css';
-import '@fontsource/noto-sans-kr/700.css';
+// Tauri build: use local fontsource fonts
+// Web build: use Google Fonts CDN (configured in index.html)
+declare const __BUILD_TARGET__: string;
+if (__BUILD_TARGET__ === 'tauri') {
+  // Dynamic import to enable tree-shaking for web build
+  // 사용 중인 weight만 포함: 400(normal), 500(medium), 600(semibold), 700(bold)
+  import('@fontsource/noto-sans-kr/400.css');
+  import('@fontsource/noto-sans-kr/500.css');
+  import('@fontsource/noto-sans-kr/600.css');
+  import('@fontsource/noto-sans-kr/700.css');
+}
 import App from './App';
 import './index.css';
 import i18n from './i18n/config';

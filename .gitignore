@@ -71,3 +71,5 @@ tasks/
 
 # Remotion demo (별도 관리)
 remotion-demo/
+.vercel
+.env*.local

@@ -6,6 +6,16 @@
     <link rel="alternate icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ITE - Integrated Translation Editor</title>
+    <!-- Google Fonts for Web build (Tauri uses local fontsource) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link id="google-fonts" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" disabled>
+    <script>
+      // Enable Google Fonts only for web build (Tauri uses local fonts)
+      if (!window.__TAURI_INTERNALS__) {
+        document.getElementById('google-fonts').removeAttribute('disabled');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
