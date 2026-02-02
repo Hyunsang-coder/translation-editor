@@ -15,6 +15,32 @@ npm run test:coverage # Coverage report
 - **Config**: `vitest.config.ts`
 - **TDD Skill**: `/tdd` for Red-Green-Refactor workflow
 
+## E2E Testing (Playwright)
+
+```bash
+npm run test:e2e      # Run all E2E tests
+npm run test:e2e:ui   # Playwright UI mode
+npm run test:harness  # Editor test harness (manual testing)
+```
+
+- **Framework**: Playwright
+- **Location**: `e2e/*.spec.ts`
+- **Config**: `playwright.config.ts`
+- **Test Harness**: `src/test-harness/` - Tauri/API 키 없이 에디터만 독립 테스트
+
+### E2E Test Files
+
+| File | Tests |
+|------|-------|
+| `e2e/paste-normalizer.spec.ts` | HTML 붙여넣기 정규화 (Confluence, XSS, 테이블 등) |
+
+### Test Harness
+
+`http://localhost:1421/test-harness.html`에서 붙여넣기 정규화를 실시간 테스트:
+- Input HTML / Normalized HTML / Editor HTML / Editor JSON 비교
+- Quick Test Cases 버튼으로 엣지 케이스 테스트
+- 실제 TipTap 에디터와 동일한 설정 사용
+
 ### Test Files
 
 | File | Tests |

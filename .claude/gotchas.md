@@ -201,3 +201,9 @@ Critical implementation warnings learned from past issues.
 84. **react-rnd 드래그/리사이즈 핸들 충돌**: `FloatingChatPanel`에서 `dragHandleClassName`이 지정된 영역은 리사이즈 핸들보다 우선 적용됨. 상단 리사이즈를 위해 `resizeHandleStyles`로 핸들 영역을 확장하고, 내부 컨텐츠에 상단 패딩을 추가하여 리사이즈 핸들 클릭 영역 확보 필요.
 
 85. **Toast 라이브러리 Sonner**: `react-toastify` 대신 `sonner` 사용. `uiStore.addToast()`가 내부적으로 `sonner.toast.success/error/warning/info()`를 호출. `ToastHost.tsx`에서 `<Toaster>` 컴포넌트 렌더링.
+
+86. **ImagePlaceholder inline 설정**: `ImagePlaceholder.configure({ inline: true })`로 설정해야 리스트(`<li>`) 내 이미지가 텍스트와 같은 줄에 표시됨. `inline: false`면 TipTap이 이미지를 블록 노드로 처리하여 별도 줄로 분리됨.
+
+87. **HTML Normalizer 리스트 내 이미지**: `htmlNormalizer.ts`의 `normalizeDivs()`에서 `<li>` 안의 이미지만 포함한 `<div>`는 unwrap하여 이미지가 리스트 항목과 같은 줄에 유지되도록 함. Confluence 붙여넣기 시 `<li><div><img></div></li>` 구조가 들어옴.
+
+88. **shouldNormalizePastedHtml 보안 검사**: `style=`, `javascript:`, `data:text`, `data:application` 포함 여부를 검사하여 인라인 스타일 변환 및 XSS 공격 차단. 단순 텍스트는 정규화 건너뜀.

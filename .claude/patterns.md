@@ -35,9 +35,27 @@ src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
 // - 에디터 성능 향상 (Base64 이미지 렌더링 생략)
 // - 이미지 데이터(src)는 JSON에 그대로 보존
 
-// 표시: 🖼️ [Image]
+// 표시: 🖼️ [Image], 🎬 [Video], 📎 [Embed]
 // 삭제: 기본 키보드/마우스 동작으로 삭제 가능
 // 내보내기: getHTML() 시 원본 <img> 태그로 출력
+
+// 설정: inline: true (리스트 내 이미지가 텍스트와 같은 줄에 표시)
+ImagePlaceholder.configure({ inline: true, allowBase64: true })
+```
+
+### HTML Paste Normalization
+```typescript
+// src/utils/htmlNormalizer.ts
+// 붙여넣기된 HTML 정규화 파이프라인
+
+normalizePastedHtml(html)
+  // 1. Confluence 태그 변환 (ac:image → img, video/iframe → placeholder)
+  // 2. 인라인 스타일 → 시맨틱 태그 (font-weight: bold → <strong>)
+  // 3. DOMPurify 보안 정제 (허용 태그/속성만 유지)
+  // 4. 후처리: span unwrap, div→p, 빈 p 제거, URL 검증
+
+// 보안: javascript:, data:text/html 등 위험한 URL 프로토콜 차단
+// 리스트 내 이미지: <li> 안의 이미지만 포함한 div는 unwrap
 ```
 
 ## AI Payload Construction
