@@ -190,6 +190,12 @@ export function ChatContent(): JSX.Element {
   const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
   const setNotionEnabled = useConnectorStore((s) => s.setEnabled);
 
+  // 웹 버전에서는 커넥터(Confluence, Notion) 비활성화
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    setIsDesktop(isTauriRuntime());
+  }, []);
+
   const [showStreamingSkeleton, setShowStreamingSkeleton] = useState(false);
 
   useEffect(() => {
@@ -701,19 +707,22 @@ export function ChatContent(): JSX.Element {
                     <span className="flex-1">{t('chat.webSearch')}</span>
                     <span className="text-[11px] text-editor-muted">{webSearchEnabled ? 'ON' : 'OFF'}</span>
                   </label>
-                  <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                  <label className={`w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors select-none ${!isDesktop ? 'opacity-50 cursor-not-allowed text-editor-muted' : 'text-editor-text hover:bg-editor-border/60 cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       className="accent-primary-500"
-                      checked={confluenceSearchEnabled}
+                      checked={confluenceSearchEnabled && isDesktop}
                       onChange={(e) => setConfluenceSearchEnabled(e.target.checked)}
-                      disabled={isLoading}
+                      disabled={isLoading || !isDesktop}
                     />
-                    <span className="flex-1">{t('chat.confluenceSearch')}</span>
-                    <span className="text-[11px] text-editor-muted">{confluenceSearchEnabled ? 'ON' : 'OFF'}</span>
+                    <span className="flex-1">
+                      {t('chat.confluenceSearch')}
+                      {!isDesktop && <span className="ml-1 text-[10px]">({t('appSettings.connectors.desktopOnly')})</span>}
+                    </span>
+                    <span className="text-[11px] text-editor-muted">{confluenceSearchEnabled && isDesktop ? 'ON' : 'OFF'}</span>
                   </label>
 
-                  {confluenceSearchEnabled && !mcpStatus.isConnected && (
+                  {isDesktop && confluenceSearchEnabled && !mcpStatus.isConnected && (
                     <button
                       type="button"
                       className="w-full px-3 py-2 flex items-center gap-2 text-sm text-primary-500 hover:bg-editor-border/60 transition-colors"
@@ -729,19 +738,22 @@ export function ChatContent(): JSX.Element {
                   )}
 
                   {/* Notion 검색 */}
-                  <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
+                  <label className={`w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors select-none ${!isDesktop ? 'opacity-50 cursor-not-allowed text-editor-muted' : 'text-editor-text hover:bg-editor-border/60 cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       className="accent-primary-500"
-                      checked={notionEnabled && notionHasToken}
+                      checked={notionEnabled && notionHasToken && isDesktop}
                       onChange={(e) => setNotionEnabled('notion', e.target.checked)}
-                      disabled={isLoading || !notionHasToken}
+                      disabled={isLoading || !notionHasToken || !isDesktop}
                     />
-                    <span className="flex-1">{t('chat.notionSearch')}</span>
-                    <span className="text-[11px] text-editor-muted">{notionEnabled && notionHasToken ? 'ON' : 'OFF'}</span>
+                    <span className="flex-1">
+                      {t('chat.notionSearch')}
+                      {!isDesktop && <span className="ml-1 text-[10px]">({t('appSettings.connectors.desktopOnly')})</span>}
+                    </span>
+                    <span className="text-[11px] text-editor-muted">{notionEnabled && notionHasToken && isDesktop ? 'ON' : 'OFF'}</span>
                   </label>
 
-                  {notionEnabled && !notionHasToken && (
+                  {isDesktop && notionEnabled && !notionHasToken && (
                     <button
                       type="button"
                       className="w-full px-3 py-2 flex items-center gap-2 text-sm text-primary-500 hover:bg-editor-border/60 transition-colors"

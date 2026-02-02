@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
+import { isTauriRuntime } from '@/platform';
 
 interface NotionTokenDialogProps {
   isOpen: boolean;
@@ -135,6 +136,7 @@ interface ConnectorItemProps {
   onDisconnect: () => void | Promise<void>;
   onClearAll?: (() => void | Promise<void>) | undefined;
   comingSoon?: boolean;
+  disabled?: boolean;
 }
 
 function ConnectorItem({
@@ -149,10 +151,13 @@ function ConnectorItem({
   onDisconnect,
   onClearAll,
   comingSoon,
+  disabled,
 }: ConnectorItemProps): JSX.Element {
   const { t } = useTranslation();
 
-  const statusText = error
+  const statusText = disabled
+    ? t('appSettings.connectors.desktopOnly')
+    : error
     ? t('appSettings.connectors.error')
     : isConnecting
       ? t('appSettings.connectors.connecting')
@@ -162,21 +167,23 @@ function ConnectorItem({
           ? t('appSettings.connectors.authenticated')
           : t('appSettings.connectors.notConnected');
 
-  const statusColor = error
-    ? 'text-red-500'
-    : isConnecting
-      ? 'text-yellow-500'
-      : isConnected
-        ? 'text-green-500'
-        : hasToken
-          ? 'text-blue-500'
-          : 'text-editor-muted';
+  const statusColor = disabled
+    ? 'text-editor-muted'
+    : error
+      ? 'text-red-500'
+      : isConnecting
+        ? 'text-yellow-500'
+        : isConnected
+          ? 'text-green-500'
+          : hasToken
+            ? 'text-blue-500'
+            : 'text-editor-muted';
 
   // 아이콘이 이미지 경로인지 확인 (확장자로 판단)
   const isImagePath = icon && /\.(png|jpg|jpeg|svg|gif|webp)$/i.test(icon);
 
   return (
-    <div className={`p-3 rounded-lg border ${hasToken ? 'border-primary-500/30 bg-primary-500/5' : 'border-editor-border bg-editor-bg'} ${comingSoon ? 'opacity-50' : ''}`}>
+    <div className={`p-3 rounded-lg border ${hasToken ? 'border-primary-500/30 bg-primary-500/5' : 'border-editor-border bg-editor-bg'} ${comingSoon || disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-3">
         {isImagePath ? (
           <img 
@@ -204,7 +211,7 @@ function ConnectorItem({
           <span className={`text-xs ${statusColor}`}>
             {statusText}
           </span>
-          {!comingSoon && (
+          {!comingSoon && !disabled && (
             <>
               {isConnected ? (
                 <button
@@ -251,7 +258,13 @@ function ConnectorItem({
 export function ConnectorsSection(): JSX.Element {
   const { t } = useTranslation();
   const { setTokenStatus } = useConnectorStore();
-  
+
+  // 웹 버전에서는 커넥터 비활성화 (데스크톱 전용)
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    setIsDesktop(isTauriRuntime());
+  }, []);
+
   // MCP 상태 (Atlassian)
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>({
     isConnected: false,
@@ -405,6 +418,15 @@ export function ConnectorsSection(): JSX.Element {
         {t('appSettings.connectors.description')}
       </p>
 
+      {/* 웹 버전 안내 */}
+      {!isDesktop && (
+        <div className="p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+          <p className="text-xs text-yellow-600 dark:text-yellow-400">
+            {t('appSettings.connectors.desktopOnlyNotice')}
+          </p>
+        </div>
+      )}
+
       {/* 커넥터 목록 (MCP + 빌트인) */}
       <div className="space-y-2">
         {MCP_CONNECTORS.map((connector) => {
@@ -423,6 +445,7 @@ export function ConnectorsSection(): JSX.Element {
               onDisconnect={props.onDisconnect}
               onClearAll={props.onClearAll}
               comingSoon={props.comingSoon}
+              disabled={!isDesktop}
             />
           );
         })}
@@ -437,6 +460,7 @@ export function ConnectorsSection(): JSX.Element {
             onConnect={() => handleBuiltinConnect(connector.id)}
             onDisconnect={() => handleBuiltinDisconnect(connector.id)}
             comingSoon={true} // OAuth 구현 전까지 비활성화
+            disabled={!isDesktop}
           />
         ))}
       </div>

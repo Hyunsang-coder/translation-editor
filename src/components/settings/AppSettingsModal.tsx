@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { ConnectorsSection } from './ConnectorsSection';
+import { isTauriRuntime } from '@/platform';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -12,8 +13,8 @@ interface AppSettingsModalProps {
 
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
   const { t } = useTranslation();
-  const { 
-    language, setLanguage, 
+  const {
+    language, setLanguage,
     theme, setTheme,
   } = useUIStore();
   const {
@@ -26,6 +27,12 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setOpenaiEnabled,
     setAnthropicEnabled,
   } = useAiConfigStore();
+
+  // 웹 버전에서는 API 키 입력을 숨김 (서버 프록시 사용)
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    setIsDesktop(isTauriRuntime());
+  }, []);
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -166,7 +173,8 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
-            {/* API Keys & Provider Enable */}
+            {/* API Keys & Provider Enable - 데스크톱 버전에서만 표시 */}
+            {isDesktop && (
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🔑</span>
@@ -256,6 +264,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     )}
                 </div>
             </section>
+            )}
 
             {/* Connectors */}
             <ConnectorsSection />

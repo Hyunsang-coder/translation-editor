@@ -96,6 +96,8 @@
       "clearAllTooltip": "Delete all tokens and authentication info",
       "error": "Error",
       "comingSoon": "Coming Soon",
+      "desktopOnly": "Desktop Only",
+      "desktopOnlyNotice": "Connectors are only available in the desktop app. Download the desktop app to connect external services like Notion and Confluence.",
       "notion": {
         "dialogTitle": "Connect Notion",
         "dialogDescription": "Enter your Notion Integration Token. You can create a token in your Notion settings.",
