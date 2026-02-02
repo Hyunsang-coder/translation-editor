@@ -42,10 +42,10 @@
     }
   ],
   "functions": {
-    "api/ai/chat/route.ts": {
+    "api/ai/chat.ts": {
       "maxDuration": 60
     },
-    "api/ai/translate/route.ts": {
+    "api/ai/translate.ts": {
       "maxDuration": 60
     }
   }
