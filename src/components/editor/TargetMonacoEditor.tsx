@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { findGhostChips } from '@/utils/ghostChip';
+import { AddToChatButton } from '@/components/ui/AddToChatButton';
 
 export interface TargetMonacoEditorProps {
   value: string;
@@ -538,9 +539,8 @@ export function TargetMonacoEditor({
       />
 
       {/* Monaco용 플로팅 버튼(React 바깥에서 위치를 직접 갱신) */}
-      <button
+      <AddToChatButton
         id="ite-add-to-chat-monaco"
-        type="button"
         style={{
           position: 'fixed',
           display: 'none',
@@ -548,10 +548,9 @@ export function TargetMonacoEditor({
           left: 0,
           zIndex: 50,
         }}
-        className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg transition-colors shadow-sm"
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
-          const el = e.currentTarget;
+          const el = e.currentTarget as HTMLElement;
           const text = (el.getAttribute('data-text') ?? '').trim();
           if (!text) return;
 
@@ -565,10 +564,7 @@ export function TargetMonacoEditor({
 
           el.style.display = 'none';
         }}
-        title="선택한 텍스트를 채팅 입력창에 추가"
-      >
-        Add to chat
-      </button>
+      />
 
     </div>
   );

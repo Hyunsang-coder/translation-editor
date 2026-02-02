@@ -21,6 +21,7 @@ import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
 import { setTargetEditor as setTargetEditorRegistry } from '@/editor/editorRegistry';
+import { AddToChatButton } from '@/components/ui/AddToChatButton';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -605,15 +606,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}
       {addToChatBubble && (
-        <button
-          type="button"
+        <AddToChatButton
           style={{
             position: 'fixed',
             top: addToChatBubble.top,
             left: addToChatBubble.left,
             zIndex: 80,
           }}
-          className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg transition-colors shadow-sm"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             const text = addToChatBubble.text.trim();
@@ -624,10 +623,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             requestComposerFocus();
             setAddToChatBubble(null);
           }}
-          title="선택한 텍스트를 채팅 입력창에 추가"
-        >
-          Add to chat
-        </button>
+        />
       )}
     </div>
   );

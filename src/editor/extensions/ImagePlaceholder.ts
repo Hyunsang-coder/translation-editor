@@ -23,6 +23,12 @@ export const ImagePlaceholder = Image.extend<ImagePlaceholderOptions>({
     const src = HTMLAttributes.src as string | undefined;
     const alt = HTMLAttributes.alt as string | undefined;
 
+    // alt 텍스트에 따라 아이콘과 라벨 결정
+    const isVideo = alt === '[Video]';
+    const isEmbed = alt === '[Embed]';
+    const icon = isVideo ? '🎬' : isEmbed ? '📎' : '🖼️';
+    const label = isVideo ? '[Video]' : isEmbed ? '[Embed]' : '[Image]';
+
     return [
       'div',
       {
@@ -35,21 +41,33 @@ export const ImagePlaceholder = Image.extend<ImagePlaceholderOptions>({
       [
         'span',
         { class: 'image-placeholder-icon' },
-        '🖼️',
+        icon,
       ],
       [
         'span',
         { class: 'image-placeholder-label' },
-        '[Image]',
+        label,
       ],
     ];
   },
 
   parseHTML() {
     return [
-      // 기존 img 태그 파싱
+      // 기존 img 태그 파싱 (src 있는 경우)
       {
         tag: 'img[src]',
+      },
+      // src 없는 img 태그도 파싱 (Confluence placeholder 등)
+      {
+        tag: 'img',
+        getAttrs: (node) => {
+          if (typeof node === 'string') return false;
+          const element = node as HTMLElement;
+          return {
+            src: element.getAttribute('src') || '',
+            alt: element.getAttribute('alt') || '[Image]',
+          };
+        },
       },
       // placeholder div도 파싱 (재로드 시)
       {

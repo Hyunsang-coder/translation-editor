@@ -73,8 +73,12 @@ const BLOCK_TAGS = new Set([
   'hr',
 ]);
 
-// 허용된 URL 프로토콜 (보안: javascript:, data:, vbscript: 등 차단)
+// 허용된 URL 프로토콜 (보안: javascript:, vbscript: 등 차단)
 const ALLOWED_URL_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:'];
+
+// 허용된 data: URL 패턴 (이미지만 허용, text/html 등 위험한 MIME 타입 차단)
+const ALLOWED_DATA_URL_PATTERN =
+  /^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml|bmp|ico)/i;
 
 /**
  * URL이 안전한 프로토콜을 사용하는지 검증
@@ -84,21 +88,31 @@ const ALLOWED_URL_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:'];
 function isUrlSafe(url: string | null): boolean {
   if (!url) return true; // 빈 URL은 허용
 
-  const trimmed = url.trim().toLowerCase();
-  if (trimmed === '') return true;
+  const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === '') return true;
 
   // 상대 경로는 허용
-  if (trimmed.startsWith('/') || trimmed.startsWith('#') || trimmed.startsWith('.')) {
+  if (
+    lower.startsWith('/') ||
+    lower.startsWith('#') ||
+    lower.startsWith('.')
+  ) {
     return true;
   }
 
   // 프로토콜이 없는 경우 허용 (상대 경로로 처리됨)
-  if (!trimmed.includes(':')) {
+  if (!lower.includes(':')) {
     return true;
   }
 
+  // data: URL은 이미지 MIME 타입만 허용 (보안: text/html, application/javascript 등 차단)
+  if (lower.startsWith('data:')) {
+    return ALLOWED_DATA_URL_PATTERN.test(trimmed);
+  }
+
   // 허용된 프로토콜인지 확인
-  return ALLOWED_URL_PROTOCOLS.some(protocol => trimmed.startsWith(protocol));
+  return ALLOWED_URL_PROTOCOLS.some((protocol) => lower.startsWith(protocol));
 }
 
 /**
@@ -124,14 +138,90 @@ function sanitizeUrls(root: ParentNode): void {
   }
 }
 
+/**
+ * Confluence 커스텀 태그를 표준 HTML로 변환
+ * - ac:image → img placeholder
+ * - ac:structured-macro (multimedia) → img placeholder (video)
+ * - ac:emoticon → 이모지 텍스트
+ * - ac:link → a 태그
+ */
+function normalizeConfluenceTags(html: string): string {
+  let result = html;
+
+  // ac:image 태그를 img placeholder로 변환
+  // <ac:image ...><ri:attachment ri:filename="file.png" /></ac:image>
+  // <ac:image ...><ri:url ri:value="https://..." /></ac:image>
+  result = result.replace(
+    /<ac:image[^>]*>[\s\S]*?<\/ac:image>/gi,
+    '<img src="" alt="[Image]" data-confluence-image="true" />',
+  );
+
+  // Self-closing ac:image 태그
+  result = result.replace(
+    /<ac:image[^>]*\/>/gi,
+    '<img src="" alt="[Image]" data-confluence-image="true" />',
+  );
+
+  // ac:structured-macro (multimedia/video) 태그를 video placeholder로 변환
+  result = result.replace(
+    /<ac:structured-macro[^>]*ac:name="multimedia"[^>]*>[\s\S]*?<\/ac:structured-macro>/gi,
+    '<img src="" alt="[Video]" data-confluence-video="true" />',
+  );
+
+  // ac:emoticon 태그를 빈 문자열로 변환 (이모지는 무시)
+  result = result.replace(/<ac:emoticon[^>]*\/?>/gi, '');
+  result = result.replace(/<\/ac:emoticon>/gi, '');
+
+  // ac:link 내부의 텍스트만 추출 (복잡한 구조이므로 단순화)
+  // 완벽한 변환은 어려우므로 링크 텍스트만 보존
+  result = result.replace(
+    /<ac:link[^>]*>[\s\S]*?<ac:link-body>([\s\S]*?)<\/ac:link-body>[\s\S]*?<\/ac:link>/gi,
+    '$1',
+  );
+
+  // 나머지 ac: 태그는 내용만 보존 (태그 자체 제거)
+  result = result.replace(/<ac:[^>]*>/gi, '');
+  result = result.replace(/<\/ac:[^>]*>/gi, '');
+
+  // ri: 태그도 제거
+  result = result.replace(/<ri:[^>]*\/?>/gi, '');
+  result = result.replace(/<\/ri:[^>]*>/gi, '');
+
+  // 일반 HTML video 태그를 placeholder로 변환
+  result = result.replace(
+    /<video[^>]*>[\s\S]*?<\/video>/gi,
+    '<img src="" alt="[Video]" data-video-placeholder="true" />',
+  );
+  result = result.replace(
+    /<video[^>]*\/>/gi,
+    '<img src="" alt="[Video]" data-video-placeholder="true" />',
+  );
+
+  // iframe (YouTube, Vimeo 등 embed) 도 placeholder로 변환
+  result = result.replace(
+    /<iframe[^>]*>[\s\S]*?<\/iframe>/gi,
+    '<img src="" alt="[Embed]" data-embed-placeholder="true" />',
+  );
+  result = result.replace(
+    /<iframe[^>]*\/>/gi,
+    '<img src="" alt="[Embed]" data-embed-placeholder="true" />',
+  );
+
+  return result;
+}
+
 export function shouldNormalizePastedHtml(html: string): boolean {
   if (!html) return false;
   const lower = html.toLowerCase();
   return (
     lower.includes('<table') ||
     lower.includes('confluence') ||
+    lower.includes('atlassian') ||
     lower.includes('ac:') ||
-    lower.includes('data-table')
+    lower.includes('data-table') ||
+    lower.includes('<video') ||
+    lower.includes('<iframe') ||
+    lower.includes('<img')
   );
 }
 
@@ -141,7 +231,9 @@ export function normalizePastedHtml(html: string): string {
   }
 
   try {
-    const styledNormalized = convertInlineStyles(html);
+    // Confluence 커스텀 태그를 표준 HTML로 변환 (DOMPurify 전에 처리)
+    const confluenceNormalized = normalizeConfluenceTags(html);
+    const styledNormalized = convertInlineStyles(confluenceNormalized);
     const sanitized = DOMPurify.sanitize(styledNormalized, {
       ALLOWED_TAGS,
       ALLOWED_ATTR,

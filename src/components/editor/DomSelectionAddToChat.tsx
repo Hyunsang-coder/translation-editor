@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { AddToChatButton } from '@/components/ui/AddToChatButton';
 
 interface BubbleState {
   visible: boolean;
@@ -90,39 +91,31 @@ export function DomSelectionAddToChat(): JSX.Element | null {
   if (!bubble.visible) return null;
 
   return createPortal(
-    <div
+    <AddToChatButton
       style={{
         position: 'fixed',
         top: bubble.top,
         left: bubble.left,
         zIndex: 50,
       }}
-    >
-      <button
-        type="button"
-        className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg transition-colors shadow-sm"
-        onMouseDown={(e) => {
-          // 클릭 시 selection이 바로 풀리는 걸 방지
-          e.preventDefault();
-        }}
-        onClick={() => {
-          const ui = useUIStore.getState();
-          // 플로팅 Chat 패널 열기
-          ui.setChatPanelOpen(true);
+      onMouseDown={(e) => {
+        // 클릭 시 selection이 바로 풀리는 걸 방지
+        e.preventDefault();
+      }}
+      onClick={() => {
+        const ui = useUIStore.getState();
+        // 플로팅 Chat 패널 열기
+        ui.setChatPanelOpen(true);
 
-          const chat = useChatStore.getState();
-          chat.appendComposerText(bubble.text);
-          chat.requestComposerFocus();
+        const chat = useChatStore.getState();
+        chat.appendComposerText(bubble.text);
+        chat.requestComposerFocus();
 
-          // bubble을 닫기 위해 selection 해제
-          window.getSelection()?.removeAllRanges();
-          setBubble((b) => ({ ...b, visible: false, text: '' }));
-        }}
-        title="선택한 텍스트를 채팅 입력창에 추가"
-      >
-        Add to chat
-      </button>
-    </div>,
+        // bubble을 닫기 위해 selection 해제
+        window.getSelection()?.removeAllRanges();
+        setBubble((b) => ({ ...b, visible: false, text: '' }));
+      }}
+    />,
     portalEl,
   );
 }

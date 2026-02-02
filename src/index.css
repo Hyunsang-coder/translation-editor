@@ -929,6 +929,23 @@
   @apply text-editor-muted text-sm;
   @apply select-none;
   user-select: none;
+  transition: all 0.15s ease;
+}
+
+/* TipTap 선택 상태 (ProseMirror-selectednode 클래스 사용) */
+.image-placeholder.ProseMirror-selectednode {
+  @apply border-primary-500;
+  background-color: #eff6ff;
+  outline: 2px solid rgba(59, 130, 246, 0.3);
+  outline-offset: 1px;
+}
+
+/* 다크 모드 선택 상태 */
+.dark .image-placeholder.ProseMirror-selectednode {
+  @apply border-primary-400;
+  background-color: rgba(30, 58, 138, 0.3);
+  outline: 2px solid rgba(96, 165, 250, 0.3);
+  outline-offset: 1px;
 }
 
 .image-placeholder-icon {
