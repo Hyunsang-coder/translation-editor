@@ -8,6 +8,7 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
+import { FileTranslationView } from '@/components/file-translation';
 import { createProject } from '@/tauri/project';
 
 /**
@@ -15,7 +16,7 @@ import { createProject } from '@/tauri/project';
  * Hybrid Panel Layout: Editor + Settings Sidebar (고정) + Floating Chat
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, projectSidebarCollapsed } = useUIStore();
+  const { focusMode, sidebarCollapsed, projectSidebarCollapsed, workMode } = useUIStore();
   const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
   const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const project = useProjectStore((s) => s.project);
@@ -90,9 +91,11 @@ export function MainLayout(): JSX.Element {
         </aside>
 
         <div className="flex-1 min-w-0 min-h-0 relative flex">
-          {/* 에디터 캔버스 (TipTap) */}
+          {/* 메인 콘텐츠 영역 - workMode에 따라 에디터 또는 파일 번역 뷰 */}
           <div className="flex-1 min-w-0 min-h-0">
-            {project ? (
+            {workMode === 'file' ? (
+              <FileTranslationView />
+            ) : project ? (
               <EditorCanvasTipTap focusMode={focusMode} />
             ) : (
               <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">

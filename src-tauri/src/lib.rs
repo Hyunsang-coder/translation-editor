@@ -318,6 +318,9 @@ pub fn run() {
             commands::secrets::secrets_has,
             commands::secrets::secrets_list_keys,
             commands::secrets::secrets_migrate_legacy,
+            // PPTX 처리
+            commands::pptx::extract_pptx_texts,
+            commands::pptx::write_translated_pptx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

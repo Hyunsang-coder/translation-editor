@@ -12,6 +12,7 @@ interface UIState extends EditorUIState {
   language: 'ko' | 'en';
   toasts: Toast[];
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
+  workMode: 'document' | 'file'; // 작업 모드: document(문서) / file(파일)
 
   // Floating Chat Panel state
   sidebarActiveTab: 'settings' | 'review';
@@ -58,6 +59,9 @@ interface UIActions {
 
   // Language
   setLanguage: (language: 'ko' | 'en') => void;
+
+  // Work Mode
+  setWorkMode: (mode: 'document' | 'file') => void;
 
   // Panel Layout
   isPanelsSwapped: boolean;
@@ -117,6 +121,7 @@ export const useUIStore = create<UIStore>()(
       projectSidebarCollapsed: false,
       theme: 'system',
       language: 'ko',
+      workMode: 'document',
       isPanelsSwapped: false,
       toasts: [],
       reviewPanelOpen: false,
@@ -189,6 +194,11 @@ export const useUIStore = create<UIStore>()(
       // Language
       setLanguage: (language: 'ko' | 'en'): void => {
         set({ language });
+      },
+
+      // Work Mode
+      setWorkMode: (mode: 'document' | 'file'): void => {
+        set({ workMode: mode });
       },
 
       // Panel Layout
@@ -334,6 +344,7 @@ export const useUIStore = create<UIStore>()(
       partialize: (state) => ({
         theme: state.theme,
         language: state.language,
+        workMode: state.workMode,
         focusMode: state.focusMode,
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,

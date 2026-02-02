@@ -80,4 +80,28 @@ export async function pickChatAttachmentFile(): Promise<string | null> {
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
 
+/**
+ * PPTX 파일 선택 다이얼로그
+ */
+export async function pickPptxFile(): Promise<string | null> {
+  const file = await open({
+    title: 'PPTX 파일 선택',
+    multiple: false,
+    filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
+  });
+  if (!file) return null;
+  return Array.isArray(file) ? (file[0] ?? null) : file;
+}
 
+/**
+ * 번역된 PPTX 저장 경로 선택 다이얼로그
+ * @param defaultName 기본 파일명
+ */
+export async function pickTranslatedPptxSavePath(defaultName: string): Promise<string | null> {
+  const path = await save({
+    title: '번역된 PPTX 저장 위치 선택',
+    defaultPath: defaultName,
+    filters: [{ name: 'PowerPoint', extensions: ['pptx'] }],
+  });
+  return path ?? null;
+}

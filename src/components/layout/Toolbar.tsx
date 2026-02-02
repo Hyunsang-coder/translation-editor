@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Settings, Search } from 'lucide-react';
+import { Wrench, Settings, Search, FileText, FileArchive } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 
@@ -9,7 +9,7 @@ import { useProjectStore } from '@/stores/projectStore';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel } = useUIStore();
+  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, workMode, setWorkMode } = useUIStore();
   const { project } = useProjectStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -49,11 +49,41 @@ export function Toolbar(): JSX.Element {
 
   return (
     <header className="h-14 border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
-      {/* 프로젝트 정보 */}
+      {/* 프로젝트 정보 + 모드 스위치 */}
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-editor-text">
           {project?.metadata.title ?? t('common.untitledProject')}
         </h1>
+
+        {/* 작업 모드 스위치 (세그먼트 버튼) */}
+        <div className="flex rounded-lg bg-editor-border/50 p-0.5">
+          <button
+            type="button"
+            onClick={() => setWorkMode('document')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              workMode === 'document'
+                ? 'bg-editor-surface text-editor-text shadow-sm'
+                : 'text-editor-muted hover:text-editor-text'
+            }`}
+            title={t('toolbar.documentMode')}
+          >
+            <FileText size={16} />
+            <span>{t('toolbar.documentMode')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWorkMode('file')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              workMode === 'file'
+                ? 'bg-editor-surface text-editor-text shadow-sm'
+                : 'text-editor-muted hover:text-editor-text'
+            }`}
+            title={t('toolbar.fileMode')}
+          >
+            <FileArchive size={16} />
+            <span>{t('toolbar.fileMode')}</span>
+          </button>
+        </div>
       </div>
 
       {/* 툴바 액션 */}

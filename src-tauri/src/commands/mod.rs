@@ -15,3 +15,4 @@ pub mod secure_store;
 pub mod secrets;
 pub mod mcp;
 pub mod notion;
+pub mod pptx;

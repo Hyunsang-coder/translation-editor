@@ -116,7 +116,9 @@
     "tools": "Tools",
     "settings": "Settings",
     "projectSettings": "Project Settings",
-    "review": "Review"
+    "review": "Review",
+    "documentMode": "Document Mode",
+    "fileMode": "File Mode"
   },
   "projectSidebar": {
     "projects": "Projects",
@@ -316,5 +318,36 @@
     "skipVersion": "Skip This Version",
     "cancel": "Cancel",
     "downloadFailed": "Download failed. Please try again later."
+  },
+  "fileTranslation": {
+    "dropzone": {
+      "title": "Drop a PPTX file here",
+      "description": "or click to select a file",
+      "supportedFormat": "Supported format: .pptx",
+      "selectFile": "Select file"
+    },
+    "header": {
+      "slideCount": "{{count}} slides",
+      "removeFile": "Remove file"
+    },
+    "slideList": {
+      "empty": "No slides found.",
+      "noText": "(No text)",
+      "status": {
+        "pending": "Pending",
+        "translating": "Translating",
+        "done": "Done",
+        "error": "Error"
+      }
+    },
+    "progress": {
+      "ready": "Ready to translate",
+      "translating": "Translating...",
+      "completed": "Translation complete",
+      "slides": "slides",
+      "start": "Start Translation",
+      "stop": "Stop",
+      "reTranslate": "Translate Again"
+    }
   }
 }
