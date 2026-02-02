@@ -26,8 +26,8 @@ const ALLOWED_ORIGINS = [
   'https://oddeyes.ai',
   'https://www.oddeyes.ai',
   'https://app.oddeyes.ai',
-  process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : '',
-].filter(Boolean);
+  'http://localhost:3000', // Development
+];
 
 interface ChatRequestBody {
   messages: Array<{
@@ -69,7 +69,7 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number; rese
   return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - record.count, resetIn: record.resetTime - now };
 }
 
-function getCORSHeaders(request: Request): HeadersInit {
+function getCORSHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('origin') || '';
   const isAllowed = ALLOWED_ORIGINS.includes(origin);
 
@@ -115,7 +115,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const body: ChatRequestBody = await request.json();
+    const body = (await request.json()) as ChatRequestBody;
     const { messages, model, provider = 'openai', temperature, maxTokens } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {

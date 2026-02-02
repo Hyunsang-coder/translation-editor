@@ -23,8 +23,8 @@ const ALLOWED_ORIGINS = [
   'https://oddeyes.ai',
   'https://www.oddeyes.ai',
   'https://app.oddeyes.ai',
-  process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : '',
-].filter(Boolean);
+  'http://localhost:3000', // Development
+];
 
 interface TranslateRequestBody {
   sourceMarkdown: string;
@@ -61,7 +61,7 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number; rese
   return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - record.count, resetIn: record.resetTime - now };
 }
 
-function getCORSHeaders(request: Request): HeadersInit {
+function getCORSHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('origin') || '';
   const isAllowed = ALLOWED_ORIGINS.includes(origin);
 
@@ -153,7 +153,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const body: TranslateRequestBody = await request.json();
+    const body = (await request.json()) as TranslateRequestBody;
     const { sourceMarkdown, provider = 'openai', model } = body;
 
     if (!sourceMarkdown || typeof sourceMarkdown !== 'string') {
