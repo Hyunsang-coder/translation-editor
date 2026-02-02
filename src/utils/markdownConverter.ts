@@ -253,16 +253,84 @@ export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string 
  * @returns TipTap document JSON
  */
 export function markdownToTipTapJsonForTranslation(markdown: string): TipTapDocJson {
+  // 전처리: --- 를 수평선으로 인식하려면 앞뒤에 빈 줄이 필요함
+  // AI 응답에서 빈 줄이 누락될 수 있으므로 정규화
+  const normalized = normalizeHorizontalRules(markdown);
+
   const editor = new Editor({
     extensions: getExtensionsForTranslation(),
   });
 
-  editor.commands.setContent(markdown);
+  editor.commands.setContent(normalized);
 
   const json = editor.getJSON() as TipTapDocJson;
   editor.destroy();
 
   return json;
+}
+
+/**
+ * Markdown의 --- (horizontal rule)를 정규화
+ *
+ * Markdown에서 ---가 수평선으로 파싱되려면 앞뒤에 빈 줄이 필요합니다.
+ * AI 번역 결과에서 빈 줄이 누락되는 경우가 있어 전처리로 보정합니다.
+ *
+ * @param markdown - 원본 Markdown
+ * @returns 정규화된 Markdown
+ */
+function normalizeHorizontalRules(markdown: string): string {
+  // 1단계: 이미지 뒤에 바로 붙은 --- 분리
+  // 예: "![](url)---" → "![](url)\n\n---"
+  // 예: "![alt](url)---" → "![alt](url)\n\n---"
+  let normalized = markdown.replace(
+    /(\!\[[^\]]*\]\([^)]*\))[\s]*([-*_]{3,})/g,
+    '$1\n\n$2'
+  );
+
+  // 2단계: --- 앞뒤에 빈 줄 보장
+  // 패턴: 줄 시작 + optional 공백 + --- + optional 공백 + 줄 끝
+  // 단, 코드 블록 내부는 제외해야 함
+
+  const lines = normalized.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+
+    // 코드 블록 토글
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      result.push(line);
+      continue;
+    }
+
+    // 코드 블록 내부면 그대로 유지
+    if (inCodeBlock) {
+      result.push(line);
+      continue;
+    }
+
+    // --- 또는 *** 또는 ___ (horizontal rule 패턴)
+    if (/^[\s]*[-*_]{3,}[\s]*$/.test(line)) {
+      // 앞에 빈 줄이 없으면 추가
+      const lastLine = result[result.length - 1];
+      if (result.length > 0 && lastLine !== undefined && lastLine.trim() !== '') {
+        result.push('');
+      }
+      result.push(line);
+      // 뒤에 빈 줄이 없으면 추가 (다음 줄 확인)
+      const nextLine = lines[i + 1];
+      if (i + 1 < lines.length && nextLine !== undefined && nextLine.trim() !== '') {
+        result.push('');
+      }
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
 }
 
 /**

@@ -244,7 +244,7 @@ export function ProjectSidebar(): JSX.Element {
 
   return (
     <div className="h-full flex flex-col bg-editor-surface border-r border-editor-border relative">
-      <div className="h-12 px-3 flex items-center justify-between border-b border-editor-border">
+      <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         {/* New Project & Title */}
         <div className="flex items-center gap-2">
           <button
