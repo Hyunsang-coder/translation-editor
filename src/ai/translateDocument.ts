@@ -234,12 +234,6 @@ export async function translateSourceDocToTargetDocJson(params: {
     );
   }
 
-  // createChatModel()을 사용하여 provider별 모델 생성
-  const model = createChatModel(undefined, {
-    useFor: 'translation',
-    maxTokens: calculatedMaxTokens,
-  });
-
   const messages = [
     { role: 'system' as const, content: systemPrompt },
     {
@@ -281,6 +275,11 @@ export async function translateSourceDocToTargetDocJson(params: {
     });
   } else {
     // Tauri 환경: 직접 LangChain API 호출
+    // createChatModel()은 Tauri에서만 사용 (웹은 서버 프록시 사용)
+    const model = createChatModel(undefined, {
+      useFor: 'translation',
+      maxTokens: calculatedMaxTokens,
+    });
     const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
     const res = await model.invoke(messages, invokeOptions);
 
@@ -483,12 +482,6 @@ export async function translateWithStreaming(
     );
   }
 
-  // createChatModel()을 사용하여 provider별 모델 생성
-  const model = createChatModel(undefined, {
-    useFor: 'translation',
-    maxTokens: calculatedMaxTokens,
-  });
-
   const messages = [
     { role: 'system' as const, content: systemPrompt },
     {
@@ -546,6 +539,11 @@ export async function translateWithStreaming(
     });
   } else {
     // Tauri 환경: 직접 LangChain API 호출
+    // createChatModel()은 Tauri에서만 사용 (웹은 서버 프록시 사용)
+    const model = createChatModel(undefined, {
+      useFor: 'translation',
+      maxTokens: calculatedMaxTokens,
+    });
     const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
     const stream = await model.stream(messages, streamOptions);
 
