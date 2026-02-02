@@ -288,10 +288,10 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           if (storage.matches.length > 0 && storage.currentIndex >= 0) {
             const match = storage.matches[storage.currentIndex];
             if (match) {
-              setTimeout(() => {
+              queueMicrotask(() => {
                 editor.commands.setTextSelection(match.from);
                 // 에디터 포커스 유지하지 않음 (검색바에 포커스 유지)
-              }, 0);
+              });
             }
           }
 
@@ -335,9 +335,9 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 현재 매치로 스크롤
           const match = storage.matches[storage.currentIndex];
           if (match) {
-            setTimeout(() => {
+            queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
-            }, 0);
+            });
           }
 
           return true;
@@ -364,9 +364,9 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 현재 매치로 스크롤
           const match = storage.matches[storage.currentIndex];
           if (match) {
-            setTimeout(() => {
+            queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
-            }, 0);
+            });
           }
 
           return true;
@@ -392,8 +392,8 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             dispatch(tr);
           }
 
-          // 매치 재계산 (setTimeout으로 트랜잭션 완료 후 실행)
-          setTimeout(() => {
+          // 매치 재계산 (queueMicrotask로 트랜잭션 완료 후 실행)
+          queueMicrotask(() => {
             storage.matches = findMatches(editor.state.doc, storage.searchTerm, storage.caseSensitive);
             // 인덱스 조정 (현재 위치 유지, 범위 초과 시 조정)
             if (storage.currentIndex >= storage.matches.length) {
@@ -402,7 +402,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             // decoration 갱신을 위해 빈 트랜잭션 발행
             const refreshTr = editor.view.state.tr.setMeta(searchHighlightPluginKey, { refresh: true });
             editor.view.dispatch(refreshTr);
-          }, 0);
+          });
 
           return true;
         },
@@ -428,13 +428,13 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           }
 
           // 매치 재계산
-          setTimeout(() => {
+          queueMicrotask(() => {
             storage.matches = findMatches(editor.state.doc, storage.searchTerm, storage.caseSensitive);
             storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
             // decoration 갱신
             const refreshTr = editor.view.state.tr.setMeta(searchHighlightPluginKey, { refresh: true });
             editor.view.dispatch(refreshTr);
-          }, 0);
+          });
 
           return true;
         },
@@ -474,9 +474,9 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 해당 매치로 스크롤
           const match = storage.matches[index];
           if (match) {
-            setTimeout(() => {
+            queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
-            }, 0);
+            });
           }
 
           return true;

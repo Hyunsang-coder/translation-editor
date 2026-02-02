@@ -207,3 +207,31 @@ Critical implementation warnings learned from past issues.
 87. **HTML Normalizer 리스트 내 이미지**: `htmlNormalizer.ts`의 `normalizeDivs()`에서 `<li>` 안의 이미지만 포함한 `<div>`는 unwrap하여 이미지가 리스트 항목과 같은 줄에 유지되도록 함. Confluence 붙여넣기 시 `<li><div><img></div></li>` 구조가 들어옴.
 
 88. **shouldNormalizePastedHtml 보안 검사**: `style=`, `javascript:`, `data:text`, `data:application` 포함 여부를 검사하여 인라인 스타일 변환 및 XSS 공격 차단. 단순 텍스트는 정규화 건너뜀.
+
+89. **SQLite WAL Mode**: `Database::new()`에서 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;` 설정. 쓰기 중 읽기 가능, 동시성 대폭 향상. 단일 Mutex 연결 병목 완화.
+
+90. **Token Estimation CJK Ratio**: `estimateMarkdownTokens()`는 영어(~4자/토큰)와 CJK(~1.2자/토큰)를 구분하여 가중 평균 계산. 한글 문서에서 토큰 과소추정 방지.
+
+91. **Event Listener Debounce Pattern**: `DomSelectionAddToChat.tsx`의 `selectionchange`, `scroll`, `resize` 이벤트는 150ms debounce 적용. 60+ events/sec 폭주 방지.
+
+92. **mousemove Listener Optimization**: `FloatingChatButton.tsx`에서 `{ once: true }` 옵션으로 첫 마우스 이동 후 리스너 자동 제거. 60-120 calls/sec 불필요한 호출 방지.
+
+93. **Rate Limit (429) Retry**: `src/ai/retry.ts`의 `withRetry()`로 AI 호출 래핑. Exponential backoff (1s → 30s) + jitter로 429/5xx 에러 자동 재시도.
+
+94. **Tool Call Timeout**: `chat.ts`에서 개별 tool.invoke()에 30초 timeout 적용. 느린 외부 API(Notion, Confluence)가 전체 채팅을 블록하지 않도록 방지.
+
+95. **CSV Import Batch Processing**: `db/mod.rs`의 `import_glossary_csv()`는 파일 읽기/파싱을 Lock 외부에서 수행 후 500개 단위 배치 커밋. DB Lock 유지 시간 최소화.
+
+96. **MCP Reconnection Backoff**: `mcp/client.rs`의 `connect()`는 최대 5회 재시도, exponential backoff (1s → 30s) + jitter. 일시적 네트워크 오류에 자동 복구.
+
+97. **TipTap History Depth Limit**: `StarterKit.configure({ history: { depth: 100 } })`로 Undo 히스토리 제한. 무제한 히스토리로 인한 메모리 누수 방지.
+
+98. **AbortController Atomic Replacement**: `chatStore.ts`에서 abort 후 새 controller를 즉시 생성하여 null 상태 최소화. 이전 패턴은 `abort() → set(null) → new AbortController()` 사이에 race window 존재.
+
+99. **ReviewResultsTable Virtualization**: `@tanstack/react-virtual`로 500개+ 이슈 가상화. CSS Grid 기반 (`grid-cols-[32px_32px_60px_1fr_1fr]`) 레이아웃으로 테이블 대체.
+
+100. **SearchHighlight queueMicrotask**: `setTimeout(..., 0)` 대신 `queueMicrotask()` 사용. 이벤트 루프 이전에 microtask 실행하여 race condition window 축소.
+
+101. **Monaco Editor Error Boundary**: `SourceMonacoEditor.tsx`에 `EditorErrorBoundary` 래핑. Monaco 초기화 실패 시 "Retry" 버튼이 있는 fallback UI 표시.
+
+102. **Chat Document Tools Table Support**: `documentTools.ts`의 `get_source_document`, `get_target_document`는 `tipTapJsonToMarkdownForTranslation()` 사용. 테이블을 `[table]` 플레이스홀더 대신 HTML로 변환하여 LLM이 내용 조회 가능.

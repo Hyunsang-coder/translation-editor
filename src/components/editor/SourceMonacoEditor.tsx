@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, Component, type ReactNode } from 'react';
 import Editor from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import { useUIStore } from '@/stores/uiStore';
@@ -6,6 +6,68 @@ import { useUIStore } from '@/stores/uiStore';
 export interface SourceMonacoEditorProps {
   value: string;
   onChange?: (next: string) => void;
+}
+
+// Error Boundary for Monaco Editor
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: (error: Error, resetErrorBoundary: () => void) => ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class EditorErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  resetErrorBoundary = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      if (this.props.fallback) {
+        return this.props.fallback(this.state.error, this.resetErrorBoundary);
+      }
+      return (
+        <EditorErrorFallback
+          error={this.state.error}
+          resetErrorBoundary={this.resetErrorBoundary}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function EditorErrorFallback({
+  error,
+  resetErrorBoundary,
+}: {
+  error: Error;
+  resetErrorBoundary: () => void;
+}) {
+  return (
+    <div className="h-full w-full flex flex-col items-center justify-center bg-editor-bg border border-editor-border rounded-md p-4">
+      <p className="text-red-500 mb-2">Editor failed to load</p>
+      <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
+      <button
+        onClick={resetErrorBoundary}
+        className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm"
+      >
+        Retry
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -47,16 +109,18 @@ export function SourceMonacoEditor({ value, onChange }: SourceMonacoEditorProps)
   );
 
   return (
-    <div className="h-full w-full rounded-md border border-editor-border bg-editor-bg overflow-hidden">
-      <Editor
-        height="100%"
-        language="plaintext"
-        theme={monacoTheme}
-        value={value}
-        options={options}
-        onChange={(next) => onChange?.(next ?? '')}
-      />
-    </div>
+    <EditorErrorBoundary>
+      <div className="h-full w-full rounded-md border border-editor-border bg-editor-bg overflow-hidden">
+        <Editor
+          height="100%"
+          language="plaintext"
+          theme={monacoTheme}
+          value={value}
+          options={options}
+          onChange={(next) => onChange?.(next ?? '')}
+        />
+      </div>
+    </EditorErrorBoundary>
   );
 }
 

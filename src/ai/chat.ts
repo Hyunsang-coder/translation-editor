@@ -5,6 +5,7 @@ import { buildLangChainMessages, detectRequestType, type RequestType } from '@/a
 import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
+import { withRetry } from './retry';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -20,6 +21,34 @@ function uniqueStrings(items: string[]): string[] {
     if (!out.includes(t)) out.push(t);
   }
   return out;
+}
+
+/**
+ * Promise에 타임아웃을 적용하는 유틸리티
+ * @param promise 감쌀 Promise
+ * @param ms 타임아웃 시간 (밀리초)
+ * @param timeoutMessage 타임아웃 시 에러 메시지
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  timeoutMessage = 'Operation timed out'
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${timeoutMessage} after ${ms}ms`));
+    }, ms);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
 }
 
 /**
@@ -331,9 +360,11 @@ async function runToolCallingLoop(params: {
     let finalAiMessage: AIMessageChunk | null = null;
 
     try {
-      const stream = await (modelWithTools as any).stream(loopMessages, {
-        signal: params.abortSignal,
-      });
+      const stream = await withRetry(
+        () => (modelWithTools as any).stream(loopMessages, {
+          signal: params.abortSignal,
+        }) as Promise<AsyncIterable<AIMessageChunk>>,
+      );
 
       for await (const chunk of stream) {
         // AbortSignal 체크
@@ -430,7 +461,11 @@ async function runToolCallingLoop(params: {
         }
 
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
-        const out = await tool.invoke(call.args ?? {});
+        const out = await withTimeout(
+          tool.invoke(call.args ?? {}),
+          30000,
+          `Tool ${call.name} timed out`
+        );
 
         // AbortSignal 체크 (tool 호출 후에도 체크)
         if (params.abortSignal?.aborted) {

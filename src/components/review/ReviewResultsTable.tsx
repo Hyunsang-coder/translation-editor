@@ -1,4 +1,6 @@
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ReviewIssue, IssueType } from '@/stores/reviewStore';
 import { stripMarkdownInline } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
@@ -65,6 +67,28 @@ export function ReviewResultsTable({
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
 
+  // 이슈 타입별 카운트 (hooks must be called before early returns)
+  const counts = useMemo(
+    () =>
+      issues.reduce(
+        (acc, issue) => {
+          acc[issue.type] = (acc[issue.type] || 0) + 1;
+          return acc;
+        },
+        {} as Record<IssueType, number>,
+      ),
+    [issues],
+  );
+
+  // Virtualization setup
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: issues.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 72, // estimated row height
+    overscan: 5,
+  });
+
   if (issues.length === 0) {
     // 원래 이슈가 있었지만 모두 해결된 경우 vs 처음부터 이슈가 없던 경우 구분
     const message = totalIssuesFound > 0
@@ -84,15 +108,6 @@ export function ReviewResultsTable({
       </div>
     );
   }
-
-  // 이슈 타입별 카운트
-  const counts = issues.reduce(
-    (acc, issue) => {
-      acc[issue.type] = (acc[issue.type] || 0) + 1;
-      return acc;
-    },
-    {} as Record<IssueType, number>,
-  );
 
   return (
     <div className="space-y-4">
@@ -126,113 +141,130 @@ export function ReviewResultsTable({
       </div>
 
       {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 수정 제안 | 설명 */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs table-fixed">
-          <thead>
-            <tr className="border-b border-editor-border">
-              {/* 표시 (하이라이트) 헤더 */}
-              <th className="px-2 py-2 text-center w-[5%] min-w-[32px]">
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  onChange={() => onToggleAll?.()}
-                  className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                  aria-label={t('review.selectAll', '전체 선택')}
-                />
-              </th>
-              <th className="pl-3 pr-2 py-2 text-left font-medium text-editor-muted w-[5%] min-w-[32px]">
-                #
-              </th>
-              <th className="px-1 py-2 text-left font-medium text-editor-muted w-[10%]">
-                {t('review.issueType', '유형')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%]">
-                {t('review.suggestedFix', '수정 제안')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%]">
-                {t('review.description', '설명')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {issues.map((issue, idx) => (
-              <tr
-                key={issue.id}
-                className={`
-                  border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors
-                  ${issue.checked ? 'bg-primary-500/5' : ''}
-                `}
-              >
-                {/* 표시 (하이라이트 토글) */}
-                <td className="px-2 py-1.5 text-center">
-                  <input
-                    type="checkbox"
-                    checked={issue.checked}
-                    onChange={() => onToggleCheck?.(issue.id)}
-                    className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                    aria-label={t('review.selectIssue', '이슈 선택')}
-                  />
-                </td>
-                <td className="pl-3 pr-2 py-2 text-editor-muted font-medium text-center">
-                  {idx + 1}
-                </td>
-                <td className="px-1 py-2">
-                  <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
-                    {getIssueTypeLabel(issue.type)}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-editor-text text-xs">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="break-words">
-                      {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
+      <div className="border border-editor-border rounded-md overflow-hidden">
+        {/* 헤더 */}
+        <div className="grid grid-cols-[32px_32px_60px_1fr_1fr] gap-0 bg-editor-surface border-b border-editor-border text-xs">
+          <div className="px-2 py-2 flex items-center justify-center">
+            <input
+              type="checkbox"
+              checked={allChecked}
+              onChange={() => onToggleAll?.()}
+              className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+              aria-label={t('review.selectAll', '전체 선택')}
+            />
+          </div>
+          <div className="px-2 py-2 font-medium text-editor-muted text-center">#</div>
+          <div className="px-2 py-2 font-medium text-editor-muted">{t('review.issueType', '유형')}</div>
+          <div className="px-3 py-2 font-medium text-editor-muted">{t('review.suggestedFix', '수정 제안')}</div>
+          <div className="px-3 py-2 font-medium text-editor-muted">{t('review.description', '설명')}</div>
+        </div>
+
+        {/* 가상화된 리스트 */}
+        <div
+          ref={parentRef}
+          className="overflow-auto"
+          style={{ maxHeight: '400px' }}
+        >
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const issue = issues[virtualRow.index];
+              if (!issue) return null;
+              return (
+                <div
+                  key={issue.id}
+                  className={`
+                    grid grid-cols-[32px_32px_60px_1fr_1fr] gap-0 text-xs
+                    border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors
+                    ${issue.checked ? 'bg-primary-500/5' : ''}
+                  `}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {/* 체크박스 */}
+                  <div className="px-2 py-2 flex items-start justify-center">
+                    <input
+                      type="checkbox"
+                      checked={issue.checked}
+                      onChange={() => onToggleCheck?.(issue.id)}
+                      className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                      aria-label={t('review.selectIssue', '이슈 선택')}
+                    />
+                  </div>
+                  {/* 번호 */}
+                  <div className="px-2 py-2 text-editor-muted font-medium text-center">
+                    {virtualRow.index + 1}
+                  </div>
+                  {/* 유형 */}
+                  <div className="px-2 py-2">
+                    <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
+                      {getIssueTypeLabel(issue.type)}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      {issue.suggestedFix && issue.type === 'omission' && onCopy && (
-                        <button
-                          type="button"
-                          onClick={() => onCopy(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
-                          title={t('review.copy', '복사')}
-                        >
-                          {t('review.copy', '복사')}
-                        </button>
-                      )}
-                      {issue.suggestedFix && issue.type !== 'omission' && !hasHtmlTags(issue.suggestedFix) && onApply && (
-                        <button
-                          type="button"
-                          onClick={() => onApply(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
-                          title={t('review.apply', '적용')}
-                        >
-                          {t('review.apply', '적용')}
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(issue.id)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                          title={t('review.ignore', '무시')}
-                        >
-                          {t('review.ignore', '무시')}
-                        </button>
-                      )}
+                  </div>
+                  {/* 수정 제안 */}
+                  <div className="px-3 py-2 text-editor-text">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="break-words">
+                        {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {issue.suggestedFix && issue.type === 'omission' && onCopy && (
+                          <button
+                            type="button"
+                            onClick={() => onCopy(issue)}
+                            className="px-1.5 py-0.5 text-xs rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                            title={t('review.copy', '복사')}
+                          >
+                            {t('review.copy', '복사')}
+                          </button>
+                        )}
+                        {issue.suggestedFix && issue.type !== 'omission' && !hasHtmlTags(issue.suggestedFix) && onApply && (
+                          <button
+                            type="button"
+                            onClick={() => onApply(issue)}
+                            className="px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
+                            title={t('review.apply', '적용')}
+                          >
+                            {t('review.apply', '적용')}
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={() => onDelete(issue.id)}
+                            className="px-1.5 py-0.5 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                            title={t('review.ignore', '무시')}
+                          >
+                            {t('review.ignore', '무시')}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </td>
-                <td className="px-3 py-2 text-editor-text text-xs">
-                  {issue.description ? (
-                    <ul className="list-disc list-inside space-y-0.5">
-                      {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
-                        <li key={i} className="break-words">{item}</li>
-                      ))}
-                    </ul>
-                  ) : '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {/* 설명 */}
+                  <div className="px-3 py-2 text-editor-text">
+                    {issue.description ? (
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
+                          <li key={`${issue.id}-desc-${i}`} className="break-words">{item}</li>
+                        ))}
+                      </ul>
+                    ) : '-'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

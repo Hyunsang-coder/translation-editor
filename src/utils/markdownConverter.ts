@@ -350,10 +350,20 @@ export function isValidTipTapDocJson(v: unknown): v is TipTapDocJson {
  * @returns 추정 토큰 수
  */
 export function estimateMarkdownTokens(text: string): number {
-  const chars = text.length;
-  // 평균적으로 3자당 1토큰으로 추정 (한영 혼용 고려)
-  // Markdown은 JSON 오버헤드가 없으므로 추가 계수 없음
-  return Math.ceil(chars / 3);
+  const totalChars = text.length;
+  if (totalChars === 0) return 0;
+
+  // CJK 문자 (한중일) 카운트 - 토큰 비율이 다름
+  const cjkPattern = /[\u4e00-\u9fff\uac00-\ud7af\u3040-\u30ff\u3100-\u312f]/g;
+  const cjkMatches = text.match(cjkPattern);
+  const cjkChars = cjkMatches ? cjkMatches.length : 0;
+  const nonCjkChars = totalChars - cjkChars;
+
+  // 영어: ~4자당 1토큰, 한국어/CJK: ~1.2자당 1토큰
+  const cjkTokens = cjkChars / 1.2;
+  const nonCjkTokens = nonCjkChars / 4;
+
+  return Math.ceil(cjkTokens + nonCjkTokens);
 }
 
 /**

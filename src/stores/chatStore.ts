@@ -831,15 +831,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
         // 질문(question) 모드: 최근 히스토리(최대 10개) 포함
         const recent: ChatMessage[] = priorMessages;
 
-        // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
+        // Issue #2 Fix: 이전 요청이 있으면 취소 (race condition 방지를 위해 새 컨트롤러를 먼저 생성)
         const prevAbortController = get().abortController;
+        const abortController = new AbortController();
+
+        // 이전 요청 취소
         if (prevAbortController) {
           prevAbortController.abort();
-          set({ abortController: null }); // abort 후 즉시 null로 설정
         }
 
-        // 새로운 AbortController 생성
-        const abortController = new AbortController();
+        // 새 컨트롤러를 원자적으로 설정 (null 갭 없음)
         set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
         const assistantId = addMessage({
@@ -1213,15 +1214,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const capturedAttachments = get().composerAttachments;
       set({ composerAttachments: [] });
 
-      // Issue #2 Fix: 이전 요청이 있으면 취소하고 즉시 null 설정 (race window 제거)
+      // Issue #2 Fix: 이전 요청이 있으면 취소 (race condition 방지를 위해 새 컨트롤러를 먼저 생성)
       const prevAbortController = get().abortController;
+      const abortController = new AbortController();
+
+      // 이전 요청 취소
       if (prevAbortController) {
         prevAbortController.abort();
-        set({ abortController: null }); // abort 후 즉시 null로 설정
       }
 
-      // 새로운 AbortController 생성
-      const abortController = new AbortController();
+      // 새 컨트롤러를 원자적으로 설정 (null 갭 없음)
       set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
       try {

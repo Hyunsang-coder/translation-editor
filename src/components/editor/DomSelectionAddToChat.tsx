@@ -4,6 +4,18 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
 
+// Debounce utility
+const debounce = <T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  ms: number,
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), ms);
+  };
+};
+
 interface BubbleState {
   visible: boolean;
   top: number;
@@ -77,14 +89,16 @@ export function DomSelectionAddToChat(): JSX.Element | null {
       });
     };
 
-    document.addEventListener('selectionchange', onSelectionChange);
-    window.addEventListener('scroll', onSelectionChange, { passive: true });
-    window.addEventListener('resize', onSelectionChange);
+    const debouncedHandler = debounce(onSelectionChange, 150);
+
+    document.addEventListener('selectionchange', debouncedHandler);
+    window.addEventListener('scroll', debouncedHandler, { passive: true });
+    window.addEventListener('resize', debouncedHandler);
 
     return () => {
-      document.removeEventListener('selectionchange', onSelectionChange);
-      window.removeEventListener('scroll', onSelectionChange);
-      window.removeEventListener('resize', onSelectionChange);
+      document.removeEventListener('selectionchange', debouncedHandler);
+      window.removeEventListener('scroll', debouncedHandler);
+      window.removeEventListener('resize', debouncedHandler);
     };
   }, []);
 

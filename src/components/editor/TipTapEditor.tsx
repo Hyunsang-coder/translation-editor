@@ -51,6 +51,10 @@ export function TipTapEditor({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
+        history: {
+          depth: 100,
+          newGroupDelay: 500,
+        },
         // BulletList, OrderedList, Bold, Italic, Strike, Blockquote 모두 포함
       }),
       Link.configure({
@@ -201,6 +205,10 @@ export function SourceTipTapEditor({
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
+        },
+        history: {
+          depth: 100,
+          newGroupDelay: 500,
         },
       }),
       Link.configure({
@@ -357,6 +365,10 @@ export function TargetTipTapEditor({
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
+        },
+        history: {
+          depth: 100,
+          newGroupDelay: 500,
         },
       }),
       Link.configure({

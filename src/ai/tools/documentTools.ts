@@ -4,7 +4,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
-import { tipTapJsonToMarkdown, type TipTapDocJson } from '@/utils/markdownConverter';
+import { tipTapJsonToMarkdownForTranslation, type TipTapDocJson } from '@/utils/markdownConverter';
 
 /**
  * Source 문서를 Markdown 형식으로 반환
@@ -26,7 +26,7 @@ function resolveSourceDocumentMarkdown(): string {
   // TipTap JSON이 있으면 Markdown으로 변환
   if (sourceDocJson != null && typeof sourceDocJson === 'object' && sourceDocJson.type === 'doc') {
     try {
-      return tipTapJsonToMarkdown(sourceDocJson as TipTapDocJson);
+      return tipTapJsonToMarkdownForTranslation(sourceDocJson as TipTapDocJson);
     } catch (e) {
       console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }
@@ -57,7 +57,7 @@ function resolveTargetDocumentMarkdown(): string {
   // TipTap JSON이 있으면 Markdown으로 변환
   if (targetDocJson != null && typeof targetDocJson === 'object' && targetDocJson.type === 'doc') {
     try {
-      return tipTapJsonToMarkdown(targetDocJson as TipTapDocJson);
+      return tipTapJsonToMarkdownForTranslation(targetDocJson as TipTapDocJson);
     } catch (e) {
       console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }

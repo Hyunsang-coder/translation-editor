@@ -42,7 +42,7 @@ src-tauri/src/    # Rust backend (commands/, mcp/)
 This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
-- `gotchas.md` - Critical implementation warnings (88 items)
+- `gotchas.md` - Critical implementation warnings (102 items)
 - `testing.md` - Testing, debugging, file organization
 
 ## Core Principles

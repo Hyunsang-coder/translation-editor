@@ -18,6 +18,7 @@ import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { htmlToTipTapJson } from '@/utils/markdownConverter';
+import { clearEditorRegistry } from '@/editor/editorRegistry';
 
 // ============================================
 // Store State Interface
@@ -806,6 +807,8 @@ export const useProjectStore = create<ProjectStore>()(
         if (project?.id === projectId) return;
 
         stopAutoSave();
+        // 에디터 레지스트리 정리 (이전 프로젝트의 에디터 참조 제거)
+        clearEditorRegistry();
         // Issue #5 수정: 프로젝트 전환 시작 시 pendingDocDiff 즉시 정리
         // loadProject()에서도 정리하지만, 전환 시작 시점에 명시적으로 정리하여
         // 비동기 작업 중 stale diff 참조 방지

@@ -6,10 +6,12 @@ use crate::mcp::oauth::AtlassianOAuth;
 use crate::mcp::types::*;
 use crate::mcp::emit_mcp_status_changed;
 use futures::StreamExt;
+use rand::Rng;
 use reqwest_eventsource::{Event, EventSource};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 
 const MCP_SSE_URL: &str = "https://mcp.atlassian.com/v1/sse";
@@ -69,10 +71,12 @@ impl McpClient {
         emit_mcp_status_changed(&status);
     }
 
-    /// Atlassian MCP 서버에 연결
+    /// Atlassian MCP 서버에 연결 (지수 백오프 재시도 포함)
     pub async fn connect(&self) -> Result<(), String> {
+        const MAX_RETRY_ATTEMPTS: u32 = 5;
+
         println!("[MCP] connect() called");
-        
+
         // 이미 연결 중이거나 연결된 경우
         {
             let status = self.status.read().await;
@@ -87,11 +91,10 @@ impl McpClient {
             s.error = None;
         }).await;
 
-        // OAuth 토큰 확인
+        // OAuth 토큰 확인 (재시도 대상 아님 - 사용자 인터랙션 필요)
         println!("[MCP] Checking OAuth token...");
         if !self.oauth.has_token().await {
             println!("[MCP] No token found, starting OAuth flow...");
-            // OAuth 인증 시작
             match self.oauth.start_auth_flow().await {
                 Ok(msg) => {
                     println!("[MCP] OAuth flow completed successfully: {}", msg);
@@ -109,8 +112,55 @@ impl McpClient {
             println!("[MCP] Token already exists");
         }
 
-        // SSE 연결 시작
+        // SSE 연결 및 초기화 (지수 백오프로 재시도)
+        let mut attempt = 0u32;
+        loop {
+            match self.connect_inner().await {
+                Ok(()) => {
+                    self.update_status(|s| {
+                        s.is_connected = true;
+                        s.is_connecting = false;
+                        s.server_name = Some("Atlassian".to_string());
+                    }).await;
+                    return Ok(());
+                }
+                Err(e) if attempt < MAX_RETRY_ATTEMPTS => {
+                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s... max 30s
+                    let base_delay_ms = 1000u64 * (1u64 << attempt);
+                    let jitter_ms = rand::thread_rng().gen_range(0..1000);
+                    let delay_ms = std::cmp::min(base_delay_ms + jitter_ms, 30000);
+
+                    println!(
+                        "[MCP] Connection attempt {} failed: {}. Retrying in {}ms...",
+                        attempt + 1,
+                        e,
+                        delay_ms
+                    );
+
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                    attempt += 1;
+                }
+                Err(e) => {
+                    let error_msg = format!(
+                        "Connection failed after {} attempts: {}",
+                        attempt + 1,
+                        e
+                    );
+                    println!("[MCP] {}", error_msg);
+                    self.update_status(|s| {
+                        s.is_connecting = false;
+                        s.error = Some(error_msg.clone());
+                    }).await;
+                    return Err(error_msg);
+                }
+            }
+        }
+    }
+
+    /// SSE 연결 및 MCP 초기화 수행 (내부 구현)
+    async fn connect_inner(&self) -> Result<(), String> {
         println!("[MCP] Starting SSE connection...");
+
         match self.start_sse_connection().await {
             Ok(()) => {
                 // MCP 초기화 수행
@@ -120,31 +170,15 @@ impl McpClient {
                         if let Err(e) = self.fetch_tools().await {
                             eprintln!("[MCP] Failed to fetch tools: {}", e);
                         }
-
-                        self.update_status(|s| {
-                            s.is_connected = true;
-                            s.is_connecting = false;
-                            s.server_name = Some("Atlassian".to_string());
-                        }).await;
                         Ok(())
                     }
                     Err(e) => {
                         self.disconnect().await;
-                        self.update_status(|s| {
-                            s.is_connecting = false;
-                            s.error = Some(e.clone());
-                        }).await;
                         Err(e)
                     }
                 }
             }
-            Err(e) => {
-                self.update_status(|s| {
-                    s.is_connecting = false;
-                    s.error = Some(e.clone());
-                }).await;
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 

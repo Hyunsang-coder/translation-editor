@@ -35,24 +35,24 @@ export function FloatingChatButton(): JSX.Element {
   // 툴팁은 실제 마우스 진입 이벤트가 있어야만 표시
   // (버튼이 마우스 아래에 나타나는 경우 제외)
   const [tooltipEnabled, setTooltipEnabled] = useState(false);
-  const mouseMoveCountRef = useRef(0);
-  const initialMouseMoveCountRef = useRef(0);
+  // 버튼이 보인 후 마우스가 움직였는지 추적 (tooltip 표시 여부 결정용)
+  const hasMouseMovedSinceVisible = useRef(false);
 
-  // 마우스 이동 횟수 추적 (버튼 마운트 시점 기준으로 실제 이동 감지)
+  // 버튼이 보일 때 마우스 이동 감지 (once 옵션으로 첫 이동 시 자동 제거)
   useEffect(() => {
+    if (chatPanelOpen) return;
+
+    // 버튼이 보이면 플래그 리셋 및 툴팁 비활성화
+    hasMouseMovedSinceVisible.current = false;
+    setTooltipEnabled(false);
+
     const handleMouseMove = () => {
-      mouseMoveCountRef.current += 1;
+      hasMouseMovedSinceVisible.current = true;
     };
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => document.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+    // { once: true } - 첫 번째 이동 시 자동으로 리스너 제거
+    document.addEventListener('mousemove', handleMouseMove, { once: true });
 
-  // 버튼이 보일 때 현재 마우스 이동 횟수 기록
-  useEffect(() => {
-    if (!chatPanelOpen) {
-      initialMouseMoveCountRef.current = mouseMoveCountRef.current;
-      setTooltipEnabled(false);
-    }
+    return () => document.removeEventListener('mousemove', handleMouseMove);
   }, [chatPanelOpen]);
 
   // 윈도우 리사이즈 시 위치 조정 (화면 밖으로 나가지 않도록)
@@ -162,9 +162,7 @@ export function FloatingChatButton(): JSX.Element {
           setIsHovered(true);
           // 툴팁 활성화: 버튼이 나타난 후 마우스가 실제로 움직였을 때만
           // (버튼이 마우스 아래에 갑자기 나타난 경우 제외)
-          const hasMouseMovedSinceButtonAppeared =
-            mouseMoveCountRef.current > initialMouseMoveCountRef.current;
-          if (hasMouseMovedSinceButtonAppeared) {
+          if (hasMouseMovedSinceVisible.current) {
             setTooltipEnabled(true);
           }
         }}

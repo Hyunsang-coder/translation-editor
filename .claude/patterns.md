@@ -274,6 +274,38 @@ ADF는 구조적 정보(heading level, 표 셀 구분)를 보존하여 더 정�
 **형식별 분리 캐시**: 동일 페이지에 ADF와 Markdown 둘 다 캐시 가능. `getFromCache(pageId, 'adf')`로
 선호 형식 지정, 없으면 다른 형식 반환.
 
+## AI Call Resilience
+
+```typescript
+// src/ai/retry.ts
+// Rate limit (429) 및 일시적 서버 오류에 대한 자동 재시도
+
+import { withRetry } from './retry';
+
+// 사용 예시
+const stream = await withRetry(
+  () => model.stream(messages, { signal }),
+  { maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000 }
+);
+
+// 재시도 대상 에러
+// - 429 Too Many Requests (rate limit)
+// - 500, 502, 503 (server errors)
+// - timeout, network, ECONNRESET
+
+// AbortError는 재시도하지 않음 (사용자 취소)
+```
+
+**Tool Call Timeout**:
+```typescript
+// src/ai/chat.ts - withTimeout 유틸리티
+const out = await withTimeout(
+  tool.invoke(call.args ?? {}),
+  30000,  // 30초 timeout
+  `Tool ${call.name} timed out`
+);
+```
+
 ## Build Commands
 
 ```bash
