@@ -81,15 +81,30 @@ function getCORSHeaders(request: Request): Record<string, string> {
   };
 }
 
-export async function OPTIONS(request: Request): Promise<Response> {
-  return new Response(null, {
-    status: 204,
-    headers: getCORSHeaders(request),
-  });
-}
+// Vercel Edge Function 설정
+export const config = {
+  runtime: 'edge',
+  maxDuration: 60,
+};
 
-export async function POST(request: Request): Promise<Response> {
+export default async function handler(request: Request): Promise<Response> {
   const corsHeaders = getCORSHeaders(request);
+
+  // OPTIONS 요청 처리 (CORS preflight)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
+  }
+
+  // POST 요청만 허용
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   // Rate limiting
   const clientIP = getClientIP(request);
@@ -232,10 +247,3 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 }
-
-// Vercel Edge Function 설정
-export const config = {
-  runtime: 'edge',
-  // 스트리밍을 위해 maxDuration 설정 (Pro plan: 60s, Enterprise: 300s)
-  maxDuration: 60,
-};

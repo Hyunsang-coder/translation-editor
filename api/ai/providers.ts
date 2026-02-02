@@ -25,15 +25,29 @@ function getCORSHeaders(request: Request): Record<string, string> {
   };
 }
 
-export async function OPTIONS(request: Request): Promise<Response> {
-  return new Response(null, {
-    status: 204,
-    headers: getCORSHeaders(request),
-  });
-}
+// Vercel Edge Function 설정
+export const config = {
+  runtime: 'edge',
+};
 
-export async function GET(request: Request): Promise<Response> {
+export default async function handler(request: Request): Promise<Response> {
   const corsHeaders = getCORSHeaders(request);
+
+  // OPTIONS 요청 처리 (CORS preflight)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
+  }
+
+  // GET 요청만 허용
+  if (request.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   // 환경변수에서 API 키 존재 여부 확인 (키 값 자체는 노출하지 않음)
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
@@ -56,8 +70,3 @@ export async function GET(request: Request): Promise<Response> {
     }
   );
 }
-
-// Vercel Edge Function 설정
-export const config = {
-  runtime: 'edge',
-};
