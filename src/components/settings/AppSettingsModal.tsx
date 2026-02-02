@@ -173,98 +173,134 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 </div>
             </section>
 
-            {/* API Keys & Provider Enable - 데스크톱 버전에서만 표시 */}
-            {isDesktop && (
+            {/* AI Providers - 데스크톱/웹 모두 표시 */}
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🔑</span>
                     <h3 className="font-semibold text-editor-text">{t('appSettings.apiKeys')}</h3>
                 </div>
-                <p className="text-xs text-editor-muted">
-                    {t('appSettings.apiKeysDescription')}
-                </p>
 
-                {/* OpenAI API Key + Enable Checkbox */}
-                <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="openai-enabled"
-                                checked={openaiEnabled}
-                                onChange={(e) => setOpenaiEnabled(e.target.checked)}
-                                disabled={!openaiApiKey}
-                                className="accent-primary-500 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                            <label
-                                htmlFor="openai-enabled"
-                                className={`text-sm font-semibold cursor-pointer ${openaiEnabled && openaiApiKey ? 'text-editor-text' : 'text-editor-muted'}`}
-                            >
-                                {t('appSettings.useOpenai')}
-                            </label>
+                {isDesktop ? (
+                  <>
+                    <p className="text-xs text-editor-muted">
+                        {t('appSettings.apiKeysDescription')}
+                    </p>
+
+                    {/* OpenAI API Key + Enable Checkbox */}
+                    <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="openai-enabled"
+                                    checked={openaiEnabled}
+                                    onChange={(e) => setOpenaiEnabled(e.target.checked)}
+                                    disabled={!openaiApiKey}
+                                    className="accent-primary-500 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <label
+                                    htmlFor="openai-enabled"
+                                    className={`text-sm font-semibold cursor-pointer ${openaiEnabled && openaiApiKey ? 'text-editor-text' : 'text-editor-muted'}`}
+                                >
+                                    {t('appSettings.useOpenai')}
+                                </label>
+                            </div>
+                            {openaiApiKey && (
+                                <button
+                                    onClick={() => setOpenaiApiKey(undefined)}
+                                    className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                                >
+                                    {t('common.clear')}
+                                </button>
+                            )}
                         </div>
-                        {openaiApiKey && (
-                            <button
-                                onClick={() => setOpenaiApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-                            >
-                                {t('common.clear')}
-                            </button>
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={t('appSettings.openaiApiKeyPlaceholder')}
+                            value={openaiApiKey || ''}
+                            onChange={(e) => setOpenaiApiKey(e.target.value)}
+                        />
+                        {!openaiApiKey && (
+                            <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
                         )}
                     </div>
-                    <input
-                        type="password"
-                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                        placeholder={t('appSettings.openaiApiKeyPlaceholder')}
-                        value={openaiApiKey || ''}
-                        onChange={(e) => setOpenaiApiKey(e.target.value)}
-                    />
-                    {!openaiApiKey && (
-                        <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
-                    )}
-                </div>
 
-                {/* Anthropic API Key + Enable Checkbox */}
-                <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="anthropic-enabled"
-                                checked={anthropicEnabled}
-                                onChange={(e) => setAnthropicEnabled(e.target.checked)}
-                                disabled={!anthropicApiKey}
-                                className="accent-primary-500 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                            <label
-                                htmlFor="anthropic-enabled"
-                                className={`text-sm font-semibold cursor-pointer ${anthropicEnabled && anthropicApiKey ? 'text-editor-text' : 'text-editor-muted'}`}
-                            >
-                                {t('appSettings.useAnthropic')}
-                            </label>
+                    {/* Anthropic API Key + Enable Checkbox */}
+                    <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="anthropic-enabled"
+                                    checked={anthropicEnabled}
+                                    onChange={(e) => setAnthropicEnabled(e.target.checked)}
+                                    disabled={!anthropicApiKey}
+                                    className="accent-primary-500 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <label
+                                    htmlFor="anthropic-enabled"
+                                    className={`text-sm font-semibold cursor-pointer ${anthropicEnabled && anthropicApiKey ? 'text-editor-text' : 'text-editor-muted'}`}
+                                >
+                                    {t('appSettings.useAnthropic')}
+                                </label>
+                            </div>
+                            {anthropicApiKey && (
+                                <button
+                                    onClick={() => setAnthropicApiKey(undefined)}
+                                    className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                                >
+                                    {t('common.clear')}
+                                </button>
+                            )}
                         </div>
-                        {anthropicApiKey && (
-                            <button
-                                onClick={() => setAnthropicApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-                            >
-                                {t('common.clear')}
-                            </button>
+                        <input
+                            type="password"
+                            className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                            placeholder={t('appSettings.anthropicApiKeyPlaceholder')}
+                            value={anthropicApiKey || ''}
+                            onChange={(e) => setAnthropicApiKey(e.target.value)}
+                        />
+                        {!anthropicApiKey && (
+                            <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
                         )}
                     </div>
-                    <input
-                        type="password"
-                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
-                        placeholder={t('appSettings.anthropicApiKeyPlaceholder')}
-                        value={anthropicApiKey || ''}
-                        onChange={(e) => setAnthropicApiKey(e.target.value)}
-                    />
-                    {!anthropicApiKey && (
-                        <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
-                    )}
-                </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-editor-muted">
+                        {t('appSettings.webProvidersDescription')}
+                    </p>
+
+                    {/* 웹 버전: 프로바이더 상태 표시 (읽기 전용) */}
+                    <div className="space-y-2">
+                        <div className={`p-3 rounded-lg border ${openaiEnabled ? 'border-green-500/50 bg-green-500/5' : 'border-editor-border bg-editor-bg/50 opacity-50'}`}>
+                            <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${openaiEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                <span className={`text-sm font-semibold ${openaiEnabled ? 'text-editor-text' : 'text-editor-muted'}`}>
+                                    OpenAI (GPT)
+                                </span>
+                                <span className="text-xs text-editor-muted ml-auto">
+                                    {openaiEnabled ? t('appSettings.available') : t('appSettings.unavailable')}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className={`p-3 rounded-lg border ${anthropicEnabled ? 'border-green-500/50 bg-green-500/5' : 'border-editor-border bg-editor-bg/50 opacity-50'}`}>
+                            <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${anthropicEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                <span className={`text-sm font-semibold ${anthropicEnabled ? 'text-editor-text' : 'text-editor-muted'}`}>
+                                    Anthropic (Claude)
+                                </span>
+                                <span className="text-xs text-editor-muted ml-auto">
+                                    {anthropicEnabled ? t('appSettings.available') : t('appSettings.unavailable')}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                  </>
+                )}
             </section>
-            )}
 
             {/* Connectors */}
             <ConnectorsSection />

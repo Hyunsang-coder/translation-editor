@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
+import { isTauriRuntime } from '@/platform';
 
 const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
 
@@ -29,6 +30,8 @@ interface AiConfigState {
 
 interface AiConfigActions {
   loadSecureKeys: () => Promise<void>;
+  /** 웹 환경에서 서버의 프로바이더 상태를 로드 */
+  loadWebProviders: () => Promise<void>;
   setTranslationModel: (model: string) => void;
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
@@ -89,13 +92,20 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
-        // 기본값: OpenAI만 활성화
+        // 웹 버전: 양쪽 모두 활성화 (서버에서 API 키 관리)
+        // 데스크톱 버전: OpenAI만 기본 활성화 (사용자가 API 키 입력 필요)
         openaiEnabled: true,
-        anthropicEnabled: false,
+        anthropicEnabled: !isTauriRuntime(),
 
         loadSecureKeys: async () => {
           if (keysLoaded) return;
           keysLoaded = true;
+
+          // 웹 환경에서는 서버 프로바이더 상태 로드
+          if (!isTauriRuntime()) {
+            await get().loadWebProviders();
+            return;
+          }
 
           try {
             // 1. 번들 로드 시도
@@ -148,6 +158,54 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
             const message = err instanceof Error ? err.message : String(err);
             console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
+          }
+        },
+
+        loadWebProviders: async () => {
+          // 웹 환경에서만 사용 - 서버의 프로바이더 상태를 조회
+          if (isTauriRuntime()) return;
+
+          try {
+            const baseUrl = (import.meta.env.VITE_API_BASE_URL as string) || '';
+            const response = await fetch(`${baseUrl}/api/ai/providers`);
+
+            if (!response.ok) {
+              console.warn('[aiConfigStore] Failed to fetch web providers:', response.status);
+              return;
+            }
+
+            const data = await response.json() as { providers: { openai: boolean; anthropic: boolean } };
+            const { openai, anthropic } = data.providers;
+
+            set({
+              openaiEnabled: openai,
+              anthropicEnabled: anthropic,
+            });
+
+            // 사용 가능한 프로바이더가 없으면 경고
+            if (!openai && !anthropic) {
+              console.warn('[aiConfigStore] No AI providers available on server');
+            }
+
+            // 현재 선택된 모델이 비활성화된 프로바이더면 변경
+            const state = get();
+            const isCurrentChatClaude = state.chatModel.startsWith('claude');
+            const isCurrentTransClaude = state.translationModel.startsWith('claude');
+
+            if (isCurrentChatClaude && !anthropic && openai) {
+              set({ chatModel: 'gpt-5.2' });
+            } else if (!isCurrentChatClaude && !openai && anthropic) {
+              set({ chatModel: 'claude-sonnet-4-5' });
+            }
+
+            if (isCurrentTransClaude && !anthropic && openai) {
+              set({ translationModel: 'gpt-5.2' });
+            } else if (!isCurrentTransClaude && !openai && anthropic) {
+              set({ translationModel: 'claude-sonnet-4-5' });
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn('[aiConfigStore] Failed to load web providers:', message);
           }
         },
 
@@ -246,10 +304,14 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
       }),
       merge: (persisted, current) => {
         const next = { ...current, ...(persisted as Partial<AiConfigState>) };
+        // 웹 버전에서는 양쪽 프로바이더 모두 활성화 (서버에서 API 키 관리)
+        const isWeb = !isTauriRuntime();
         return {
           ...next,
           openaiApiKey: undefined,
           anthropicApiKey: undefined,
+          // 웹 환경에서는 persist된 값과 관계없이 양쪽 활성화
+          ...(isWeb ? { openaiEnabled: true, anthropicEnabled: true } : {}),
         };
       },
     }
