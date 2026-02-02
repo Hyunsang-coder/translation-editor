@@ -68,7 +68,7 @@ export function TipTapEditor({
       TableHeader,
       TableCell,
       ImagePlaceholder.configure({
-        inline: false,
+        inline: true,
         allowBase64: true,
       }),
       Underline,
@@ -218,7 +218,7 @@ export function SourceTipTapEditor({
       TableHeader,
       TableCell,
       ImagePlaceholder.configure({
-        inline: false,
+        inline: true,
         allowBase64: true,
       }),
       Underline,
@@ -374,7 +374,7 @@ export function TargetTipTapEditor({
       TableHeader,
       TableCell,
       ImagePlaceholder.configure({
-        inline: false,
+        inline: true,
         allowBase64: true,
       }),
       Underline,

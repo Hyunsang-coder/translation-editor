@@ -17,6 +17,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:harness": "vite --open /test-harness.html --port 1421",
     "release:copy": "cp -r release/* ../oddeyes-release/ && cp src-tauri/target/release/bundle/dmg/*.dmg ../oddeyes-release/ && echo '✅ Copied to oddeyes-release'",
     "release:docs": "cp release/README.md release/CHANGELOG.md ../oddeyes-release/ && echo '✅ Docs copied'"
   },
@@ -74,6 +77,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.58.1",
     "@tauri-apps/cli": "^2.1.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

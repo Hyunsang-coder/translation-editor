@@ -221,7 +221,11 @@ export function shouldNormalizePastedHtml(html: string): boolean {
     lower.includes('data-table') ||
     lower.includes('<video') ||
     lower.includes('<iframe') ||
-    lower.includes('<img')
+    lower.includes('<img') ||
+    lower.includes('style=') ||        // 인라인 스타일 변환 필요
+    lower.includes('javascript:') ||   // XSS 차단 필요
+    lower.includes('data:text') ||     // 위험한 data URL 차단 필요
+    lower.includes('data:application') // 위험한 data URL 차단 필요
   );
 }
 
@@ -336,6 +340,20 @@ function normalizeDivs(root: ParentNode) {
     const hasBlockChild = Array.from(div.children).some((child) =>
       BLOCK_TAGS.has(child.tagName.toLowerCase()),
     );
+
+    // <li> 안의 이미지만 포함한 div는 unwrap (이미지가 같은 줄에 표시되도록)
+    const parentTag = (parent as Element).tagName?.toLowerCase();
+    const hasOnlyImage =
+      div.children.length === 1 &&
+      div.children[0]?.tagName.toLowerCase() === 'img';
+
+    if (parentTag === 'li' && hasOnlyImage) {
+      while (div.firstChild) {
+        parent.insertBefore(div.firstChild, div);
+      }
+      parent.removeChild(div);
+      continue;
+    }
 
     if (hasBlockChild) {
       while (div.firstChild) {

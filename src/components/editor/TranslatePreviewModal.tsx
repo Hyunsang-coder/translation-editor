@@ -202,7 +202,7 @@ export function TranslatePreviewModal(props: {
     TableHeader,
     TableCell,
     ImagePlaceholder.configure({
-      inline: false,
+      inline: true,
       allowBase64: true,
     }),
     Underline,
