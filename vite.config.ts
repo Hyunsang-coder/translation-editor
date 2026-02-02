@@ -72,6 +72,16 @@ export default defineConfig(({ command }) => {
       '@utils': path.resolve(__dirname, './src/utils'),
       // Polyfill node:async_hooks for LangChain MCP Adapters
       'node:async_hooks': path.resolve(__dirname, './src/mocks/async_hooks.js'),
+      // Web build: Tauri modules -> stub (external은 브라우저에서 import 에러 발생)
+      ...(isWebBuild ? {
+        '@tauri-apps/api/core': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/api/window': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/api/webview': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/plugin-dialog': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/plugin-process': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/plugin-shell': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+        '@tauri-apps/plugin-updater': path.resolve(__dirname, './src/mocks/tauri-stub.js'),
+      } : {}),
     },
   },
 
@@ -106,14 +116,7 @@ export default defineConfig(({ command }) => {
             'node:stream',
             'node:util',
             'node:events',
-            // Web build: Tauri modules (tree-shaking으로 제거되지만 안전을 위해 명시)
-            ...(isWebBuild ? [
-              '@tauri-apps/api/core',
-              '@tauri-apps/plugin-dialog',
-              '@tauri-apps/plugin-process',
-              '@tauri-apps/plugin-shell',
-              '@tauri-apps/plugin-updater',
-            ] : []),
+            // Note: Tauri modules는 alias로 stub 처리 (external 사용 시 브라우저에서 import 에러)
         ],
     },
   },
