@@ -54,7 +54,7 @@ export function ReviewModal({ open, onClose }: ReviewModalProps): JSX.Element | 
 
     const controller = new AbortController();
     setAbortController(controller);
-    startReview();
+    startReview(chunks);
 
     try {
       // 모든 청크를 순차 검수

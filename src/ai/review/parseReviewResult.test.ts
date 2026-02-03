@@ -31,6 +31,31 @@ describe('parseReviewResult', () => {
       expect(issues[0]?.targetExcerpt).toBe('안녕');
       expect(issues[0]?.type).toBe('error');
     });
+
+    it('응답에 "issues":[] 예시가 있어도 실제 마커 JSON을 우선 파싱', () => {
+      const response = `
+예시: {"issues": []}
+
+---REVIEW_START---
+{
+  "issues": [
+    {
+      "segmentOrder": 1,
+      "sourceExcerpt": "Hello",
+      "targetExcerpt": "안녕",
+      "type": "오역",
+      "problem": "잘못된 번역"
+    }
+  ]
+}
+---REVIEW_END---
+      `;
+
+      const issues = parseReviewResult(response);
+
+      expect(issues).toHaveLength(1);
+      expect(issues[0]?.sourceExcerpt).toBe('Hello');
+    });
   });
 
   describe('brace counting JSON 추출', () => {

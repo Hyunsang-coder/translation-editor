@@ -248,11 +248,6 @@ export function parseReviewResult(aiResponse: string): ReviewIssue[] {
     return [];
   }
 
-  // "문제 없음" 체크
-  if (aiResponse.includes('"issues": []') || aiResponse.includes('"issues":[]')) {
-    return [];
-  }
-
   // AI 오류 메시지 감지 (false positive 방지)
   if (detectAiErrorResponse(aiResponse)) {
     console.error('[parseReviewResult] AI error response detected:', aiResponse.slice(0, 300));

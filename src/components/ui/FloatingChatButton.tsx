@@ -23,11 +23,11 @@ export function FloatingChatButton(): JSX.Element {
   const startPos = useRef({ x: 0, y: 0 });
   const startButtonPos = useRef({ x: 0, y: 0 });
 
-  // 현재 위치 (초기값: store 값 또는 기본 우측 하단)
+  // 현재 위치 (초기값: store 값 또는 기본 상단 가운데)
   const [currentPos, setCurrentPos] = useState<{ x: number; y: number }>(() =>
     floatingButtonPosition ?? {
-      x: window.innerWidth - BUTTON_SIZE - MARGIN,
-      y: window.innerHeight - BUTTON_SIZE - MARGIN,
+      x: (window.innerWidth - BUTTON_SIZE) / 2,
+      y: MARGIN,
     }
   );
   const [isHovered, setIsHovered] = useState(false);
@@ -130,12 +130,12 @@ export function FloatingChatButton(): JSX.Element {
     }
   }, [toggleChatPanel]);
 
-  // 더블클릭으로 기본 위치로 리셋
+  // 더블클릭으로 기본 위치로 리셋 (상단 가운데)
   const handleDoubleClick = useCallback(() => {
     setFloatingButtonPosition(null);
     setCurrentPos({
-      x: window.innerWidth - BUTTON_SIZE - MARGIN,
-      y: window.innerHeight - BUTTON_SIZE - MARGIN,
+      x: (window.innerWidth - BUTTON_SIZE) / 2,
+      y: MARGIN,
     });
   }, [setFloatingButtonPosition]);
 

@@ -111,7 +111,7 @@ interface ReviewActions {
   /**
    * 검수 시작 상태로 전환
    */
-  startReview: () => void;
+  startReview: (chunksOverride?: AlignedChunk[]) => void;
 
   /**
    * 검수 완료 상태로 전환
@@ -266,13 +266,15 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     });
   },
 
-  startReview: () => {
-    const { chunks, highlightNonce } = get();
+  startReview: (chunksOverride?: AlignedChunk[]) => {
+    const { highlightNonce } = get();
+    const nextChunks = chunksOverride ?? get().chunks;
     set({
       isReviewing: true,
       results: [],
       currentChunkIndex: 0,
-      progress: { completed: 0, total: chunks.length },
+      chunks: nextChunks,
+      progress: { completed: 0, total: nextChunks.length },
       highlightNonce: highlightNonce + 1, // 즉시 이전 하이라이트 제거
       totalIssuesFound: 0, // 새 검수 시작 시 리셋
       streamingText: '', // 스트리밍 텍스트 초기화

@@ -8,6 +8,8 @@ import {
   normalizeForSearch,
   buildNormalizedTextWithMapping,
 } from '@/utils/normalizeForSearch';
+import { findSegmentRange } from '@/editor/extensions/SearchHighlight';
+import { hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
 
 export interface ReviewHighlightOptions {
   highlightClass: string;
@@ -42,7 +44,7 @@ function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions
  * - 양방향 정규화: 에디터 텍스트와 검색 텍스트 모두 정규화하여 비교
  * - 이슈당 첫 번째 매치만 사용 (동일 텍스트 다중 매치 시 혼란 방지)
  */
-function createDecorations(
+export function createReviewDecorations(
   doc: ProseMirrorNode,
   issues: ReviewIssue[],
   highlightClass: string,
@@ -63,6 +65,8 @@ function createDecorations(
   );
   console.log(`[ReviewHighlight:${excerptField}] issues count:`, issues.length);
 
+  const hasSegmentGroups = hasSegmentGroupId(doc);
+
   issues.forEach((issue, idx) => {
     const rawSearchText = issue[excerptField];
     if (!rawSearchText || rawSearchText.length === 0) {
@@ -79,22 +83,32 @@ function createDecorations(
       return;
     }
 
-    // 정규화된 텍스트에서 검색
-    const normalizedIndex = normalizedFullText.indexOf(searchText);
+    const normalizedSegmentGroupId = normalizeSegmentGroupId(issue.segmentGroupId);
+    const segmentRange = normalizedSegmentGroupId
+      ? findSegmentRange(doc, normalizedSegmentGroupId)
+      : null;
+    if (issue.segmentGroupId && hasSegmentGroups && !segmentRange) {
+      console.log(
+        `[ReviewHighlight:${excerptField}] issue #${idx}: segmentGroupId not found, skipping`,
+      );
+      return;
+    }
 
-    // 디버깅: 검색 결과
-    console.log(`[ReviewHighlight:${excerptField}] issue #${idx}:`, {
-      raw: rawSearchText,
-      stripped: searchText,
-      found: normalizedIndex !== -1,
-      normalizedIndex,
-      type: issue.type,
-    });
+    let normalizedIndex = -1;
+    let found = false;
+    let searchFrom = 0;
 
-    if (normalizedIndex !== -1 && normalizedIndex < fullTextIndexMap.length) {
+    while ((normalizedIndex = normalizedFullText.indexOf(searchText, searchFrom)) !== -1) {
+      if (normalizedIndex >= fullTextIndexMap.length) {
+        break;
+      }
+
       // 정규화된 인덱스 → 원본 텍스트 인덱스 → 문서 위치
       const originalStartIndex = fullTextIndexMap[normalizedIndex];
-      if (originalStartIndex === undefined) return;
+      if (originalStartIndex === undefined) {
+        searchFrom = normalizedIndex + 1;
+        continue;
+      }
 
       const normalizedEndIndex = normalizedIndex + searchText.length - 1;
       const originalEndIndex =
@@ -102,24 +116,47 @@ function createDecorations(
           ? fullTextIndexMap[normalizedEndIndex]
           : undefined;
 
-      if (originalEndIndex === undefined) return;
+      if (originalEndIndex === undefined) {
+        searchFrom = normalizedIndex + 1;
+        continue;
+      }
 
       // 원본 텍스트 인덱스 → 문서 위치
       const from = positions[originalStartIndex];
       const to = positions[originalEndIndex];
 
-      if (from === undefined || to === undefined) return;
+      if (from === undefined || to === undefined) {
+        searchFrom = normalizedIndex + 1;
+        continue;
+      }
 
-      if (to + 1 > from) {
+      const toExclusive = to + 1;
+      const inSegmentRange = !segmentRange || (from >= segmentRange.from && toExclusive <= segmentRange.to);
+
+      if (toExclusive > from && inSegmentRange) {
         decorations.push(
-          Decoration.inline(from, to + 1, {
+          Decoration.inline(from, toExclusive, {
             class: highlightClass,
             'data-issue-id': issue.id,
             'data-issue-type': issue.type,
           }),
         );
+        found = true;
+        break;
       }
+
+      searchFrom = normalizedIndex + 1;
     }
+
+    // 디버깅: 검색 결과
+    console.log(`[ReviewHighlight:${excerptField}] issue #${idx}:`, {
+      raw: rawSearchText,
+      stripped: searchText,
+      found,
+      normalizedIndex,
+      type: issue.type,
+      segmentGroupId: issue.segmentGroupId,
+    });
   });
 
   return DecorationSet.create(doc, decorations);
@@ -155,7 +192,7 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
             }
 
             const checkedIssues = getCheckedIssues();
-            return createDecorations(state.doc, checkedIssues, highlightClass, excerptField);
+            return createReviewDecorations(state.doc, checkedIssues, highlightClass, excerptField);
           },
 
           apply: (tr, oldDecorationSet, _oldState, newState) => {
@@ -169,7 +206,7 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
             // 문서가 변경되었거나 meta에 refresh 플래그가 있으면 재계산
             if (tr.docChanged || tr.getMeta('reviewHighlightRefresh')) {
               const checkedIssues = getCheckedIssues();
-              return createDecorations(newState.doc, checkedIssues, highlightClass, excerptField);
+              return createReviewDecorations(newState.doc, checkedIssues, highlightClass, excerptField);
             }
 
             // 변경 없으면 기존 decoration 유지 (position mapping)

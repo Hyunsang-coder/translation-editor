@@ -12,11 +12,11 @@ import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
 import {
   findSegmentRange,
-  filterMatchesInRange,
 } from '@/editor/extensions/SearchHighlight';
 import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
+import { filterMatchesBySegment, hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
 
 /**
  * Source 텍스트의 언어를 감지
@@ -195,7 +195,7 @@ export function ReviewPanel(): JSX.Element {
 
     const controller = new AbortController();
     setAbortController(controller);
-    startReview();
+    startReview(freshChunks);
 
     // Glossary 검색 (첫 청크 기반)
     let glossaryText = '';
@@ -332,13 +332,16 @@ export function ReviewPanel(): JSX.Element {
     let usedFuzzyMatch = false;
     let fuzzyMatchResult = null;
 
+    const hasSegmentGroups = hasSegmentGroupId(editor.state.doc);
+
     // 세그먼트 범위 제한: segmentGroupId가 있으면 해당 범위 내 매치만 사용
     let segmentRange = null;
     if (issue.segmentGroupId && matches.length > 0) {
-      segmentRange = findSegmentRange(editor.state.doc, issue.segmentGroupId);
-      if (segmentRange) {
-        matches = filterMatchesInRange(matches, segmentRange);
-      }
+      const normalizedSegmentGroupId = normalizeSegmentGroupId(issue.segmentGroupId);
+      segmentRange = normalizedSegmentGroupId
+        ? findSegmentRange(editor.state.doc, normalizedSegmentGroupId)
+        : null;
+      matches = filterMatchesBySegment(matches, segmentRange, true, hasSegmentGroups);
     }
 
     // 2단계: 정확한 매칭 실패 시 퍼지 매칭 폴백
@@ -348,8 +351,8 @@ export function ReviewPanel(): JSX.Element {
       fuzzyMatchResult = editor.storage.searchHighlight?.lastFuzzyMatch || null;
 
       // 세그먼트 범위 다시 적용
-      if (issue.segmentGroupId && matches.length > 0 && segmentRange) {
-        matches = filterMatchesInRange(matches, segmentRange);
+      if (issue.segmentGroupId && matches.length > 0) {
+        matches = filterMatchesBySegment(matches, segmentRange, true, hasSegmentGroups);
       }
 
       if (matches.length > 0 && fuzzyMatchResult) {
