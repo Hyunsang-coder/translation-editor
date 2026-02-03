@@ -344,9 +344,9 @@ const HALLUCINATION_GUARD = `## 과잉 검출 방지 (필수!)
 
 const FEW_SHOT_EXAMPLES = `## 예시
 
-### 오역 (검출 O)
-Source: "You must restart"
-Target: "재시작할 수 있습니다"
+### 오역 (검출 O) - 영→한 번역
+Source (영어): "You must restart the application"
+Target (한글): "애플리케이션을 재시작할 수 있습니다"
 → must→can 의미 변경
 {
   "issues": [{
@@ -359,6 +359,7 @@ Target: "재시작할 수 있습니다"
     "suggestedFix": "재시작해야 합니다"
   }]
 }
+주의: sourceExcerpt는 영어(Source), targetExcerpt는 한글(Target)에서 복사!
 
 ### 의역 (검출 X)
 Source: "It goes without saying"
@@ -390,14 +391,20 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 ---REVIEW_END---
 
 ## excerpt 작성 규칙 (필수!)
-- sourceExcerpt: 원문(Source)에서 **문자 그대로 복사** (30자 이내)
-- targetExcerpt: 번역문(Target)에서 **문자 그대로 복사** (30자 이내)
+- sourceExcerpt: **Source 열**(원문)에서 **문자 그대로 복사** (30자 이내)
+- targetExcerpt: **Target 열**(번역문)에서 **문자 그대로 복사** (30자 이내)
 - segmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
+
+**⚠️ 절대 금지**: sourceExcerpt와 targetExcerpt를 혼동하지 마세요!
+- Source가 영어면 sourceExcerpt는 영어
+- Target이 한글이면 targetExcerpt는 한글
+- 반대로 하면 시스템이 텍스트를 찾지 못해 수정이 불가능합니다!
+
 - **금지**: 요약, 재작성, 줄임
 - **필수**: 공백, 구두점, 대소문자 모두 원본과 동일하게
 - 리터럴 토큰 보존: snake_case, camelCase, 코드 식별자는 변경 없이 그대로
 - 범위 제한: 단일 문단/리스트 항목/테이블 셀 내에서만 발췌 (블록 경계 금지)
-- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 적용됨
+- 시스템이 targetExcerpt로 번역문에서 위치를 검색함 → 정확히 일치해야 적용됨
 
 ## HTML 테이블 처리 규칙
 - 테이블이 <table> HTML 형식으로 전달될 수 있음

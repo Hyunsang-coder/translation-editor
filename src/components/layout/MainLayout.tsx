@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
@@ -10,14 +10,20 @@ import { ToastHost } from '@/components/ui/ToastHost';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 import { createProject } from '@/tauri/project';
 
+// 개발자 테스트 패널 (lazy load)
+const ReviewTestPanel = lazy(() =>
+  import('@/components/dev/ReviewTestPanel').then((m) => ({ default: m.ReviewTestPanel }))
+);
+
 /**
  * 메인 레이아웃 컴포넌트
  * Hybrid Panel Layout: Editor + Settings Sidebar (고정) + Floating Chat
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, projectSidebarCollapsed } = useUIStore();
+  const { focusMode, sidebarCollapsed, projectSidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
   const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
   const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
+  const setDevTestPanelOpen = useUIStore((s) => s.setDevTestPanelOpen);
   const project = useProjectStore((s) => s.project);
   const loadProject = useProjectStore((s) => s.loadProject);
 
@@ -72,6 +78,18 @@ export function MainLayout(): JSX.Element {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [setSettingsSidebarWidth]);
+
+  // 개발자 테스트 패널 단축키 (Ctrl+Shift+D / Cmd+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        toggleDevTestPanel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [toggleDevTestPanel]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -140,6 +158,31 @@ export function MainLayout(): JSX.Element {
           <FloatingChatPanel />
           <FloatingChatButton />
         </>
+      )}
+
+      {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}
+      {devTestPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-editor-surface rounded-lg shadow-xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="px-4 py-3 border-b border-editor-border flex items-center justify-between bg-editor-surface">
+              <h2 className="font-semibold text-editor-text">검수 테스트 패널 (Dev)</h2>
+              <button
+                type="button"
+                onClick={() => setDevTestPanelOpen(false)}
+                className="text-editor-muted hover:text-editor-text"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <Suspense fallback={<div className="p-4 text-editor-muted">Loading...</div>}>
+                <ReviewTestPanel />
+              </Suspense>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

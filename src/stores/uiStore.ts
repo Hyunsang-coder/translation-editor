@@ -13,6 +13,7 @@ interface UIState extends EditorUIState {
   language: 'ko' | 'en';
   toasts: Toast[];
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
+  devTestPanelOpen: boolean; // 개발자 테스트 패널 (검수 디버그용)
 
   // Floating Chat Panel state
   sidebarActiveTab: 'settings' | 'review';
@@ -74,6 +75,10 @@ interface UIActions {
   openReviewPanel: () => void;
   closeReviewPanel: () => void;
 
+  // Dev Test Panel
+  toggleDevTestPanel: () => void;
+  setDevTestPanelOpen: (open: boolean) => void;
+
   // Floating Chat Panel
   setSidebarActiveTab: (tab: 'settings' | 'review') => void;
   setChatPanelOpen: (open: boolean) => void;
@@ -121,6 +126,7 @@ export const useUIStore = create<UIStore>()(
       isPanelsSwapped: false,
       toasts: [],
       reviewPanelOpen: false,
+      devTestPanelOpen: false,
 
       // Floating Chat Panel - 기본값
       sidebarActiveTab: 'settings',
@@ -253,6 +259,15 @@ export const useUIStore = create<UIStore>()(
       closeReviewPanel: (): void => {
         // 더 이상 reviewPanelOpen 상태를 사용하지 않지만, 하위 호환성을 위해 유지
         set({ sidebarActiveTab: 'settings' });
+      },
+
+      // Dev Test Panel
+      toggleDevTestPanel: (): void => {
+        set((state) => ({ devTestPanelOpen: !state.devTestPanelOpen }));
+      },
+
+      setDevTestPanelOpen: (open: boolean): void => {
+        set({ devTestPanelOpen: open });
       },
 
       // Floating Chat Panel

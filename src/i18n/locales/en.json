@@ -248,8 +248,11 @@
       "notFound": "Text not found in translation. The document may have changed."
     },
     "applyConfirm": {
-      "delete": "Suggested fix is empty. Delete the selected text?"
-    }
+      "delete": "Suggested fix is empty. Delete the selected text?",
+      "fuzzyMatch": "Found similar text ({{similarity}}% match). Apply the fix?\n\nMatched text: \"{{matchedText}}\""
+    },
+    "fuzzyMatchApplied": "Applied fix using fuzzy matching.",
+    "clipboardFallback": "Text not found. Copied to clipboard. Please apply manually."
   },
   "chat": {
     "title": "Chat",

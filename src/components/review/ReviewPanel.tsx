@@ -6,7 +6,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildAlignedChunksAsync } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync, type AlignedSegment } from '@/ai/tools/reviewTool';
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { getTargetEditor } from '@/editor/editorRegistry';
@@ -17,6 +17,42 @@ import {
 import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
+
+/**
+ * Source 텍스트의 언어를 감지
+ * 간단한 휴리스틱: 한글/영문/일본어/중국어 비율로 판단
+ */
+function detectSourceLanguage(segments: AlignedSegment[]): string {
+  const sampleText = segments
+    .slice(0, 3)
+    .map((s) => s.sourceText)
+    .join(' ')
+    .slice(0, 500);
+
+  if (!sampleText.trim()) return '원문';
+
+  // 각 문자 체계 비율 계산
+  const koreanChars = (sampleText.match(/[\uAC00-\uD7AF\u1100-\u11FF]/g) || []).length;
+  const japaneseChars = (sampleText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+  const chineseChars = (sampleText.match(/[\u4E00-\u9FFF]/g) || []).length;
+  const latinChars = (sampleText.match(/[a-zA-Z]/g) || []).length;
+
+  const total = koreanChars + japaneseChars + chineseChars + latinChars;
+  if (total === 0) return '원문';
+
+  const koreanRatio = koreanChars / total;
+  const japaneseRatio = japaneseChars / total;
+  const chineseRatio = chineseChars / total;
+  const latinRatio = latinChars / total;
+
+  // 가장 높은 비율의 언어 반환
+  if (koreanRatio > 0.3) return 'Korean';
+  if (japaneseRatio > 0.3) return 'Japanese';
+  if (chineseRatio > 0.3) return 'Chinese';
+  if (latinRatio > 0.5) return 'English';
+
+  return '원문';
+}
 
 /** 검수 모드 선택 드롭다운 (대조 검수 + 폴리싱) */
 function IntensitySelect({
@@ -198,11 +234,14 @@ export function ReviewPanel(): JSX.Element {
           const currentRules = useChatStore.getState().translationRules;
 
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
+          // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
           const response = await runReview({
             segments: chunk.segments,
             intensity,
             translationRules: currentRules,
             glossary: glossaryText,
+            sourceLanguage: detectSourceLanguage(chunk.segments),
+            targetLanguage: project.metadata.targetLanguage,
             abortSignal: controller.signal,
             onToken: (text) => setStreamingText(text),
           });
@@ -255,7 +294,7 @@ export function ReviewPanel(): JSX.Element {
     finishReview();
   }, [abortController, finishReview]);
 
-  const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
+  const handleApplySuggestion = useCallback(async (issue: ReviewIssue) => {
     const { addToast } = useUIStore.getState();
     const editor = getTargetEditor();
 
@@ -285,27 +324,72 @@ export function ReviewPanel(): JSX.Element {
     // 교체용: HTML 태그 제거 (AI가 가끔 <strong> 등을 포함하여 반환)
     const replaceText = stripHtml(issue.suggestedFix).trim();
 
-    // 에디터에서 검색
+    // 1단계: 정확한 매칭 시도
     editor.commands.setSearchTerm(searchText);
 
     // 매치가 있는지 확인
     let matches = editor.storage.searchHighlight?.matches || [];
+    let usedFuzzyMatch = false;
+    let fuzzyMatchResult = null;
 
     // 세그먼트 범위 제한: segmentGroupId가 있으면 해당 범위 내 매치만 사용
+    let segmentRange = null;
     if (issue.segmentGroupId && matches.length > 0) {
-      const segmentRange = findSegmentRange(editor.state.doc, issue.segmentGroupId);
+      segmentRange = findSegmentRange(editor.state.doc, issue.segmentGroupId);
       if (segmentRange) {
         matches = filterMatchesInRange(matches, segmentRange);
       }
     }
 
+    // 2단계: 정확한 매칭 실패 시 퍼지 매칭 폴백
     if (matches.length === 0) {
-      addToast({
-        type: 'error',
-        message: t('review.applyError.notFound'),
-      });
+      editor.commands.setSearchTermFuzzy(searchText, 0.7);
+      matches = editor.storage.searchHighlight?.matches || [];
+      fuzzyMatchResult = editor.storage.searchHighlight?.lastFuzzyMatch || null;
+
+      // 세그먼트 범위 다시 적용
+      if (issue.segmentGroupId && matches.length > 0 && segmentRange) {
+        matches = filterMatchesInRange(matches, segmentRange);
+      }
+
+      if (matches.length > 0 && fuzzyMatchResult) {
+        usedFuzzyMatch = true;
+        const similarityPercent = Math.round(fuzzyMatchResult.score * 100);
+
+        // 퍼지 매칭 성공 - 확인 다이얼로그
+        const confirmed = window.confirm(
+          t('review.applyConfirm.fuzzyMatch', {
+            similarity: similarityPercent,
+            matchedText: fuzzyMatchResult.matchedText.slice(0, 50) +
+              (fuzzyMatchResult.matchedText.length > 50 ? '...' : ''),
+          })
+        );
+
+        if (!confirmed) {
+          editor.commands.setSearchTerm('');
+          return;
+        }
+      }
+    }
+
+    // 3단계: 최종 실패 - 클립보드 복사 폴백
+    if (matches.length === 0) {
       // 검색어 초기화
       editor.commands.setSearchTerm('');
+
+      // 클립보드에 복사 시도
+      try {
+        await navigator.clipboard.writeText(replaceText);
+        addToast({
+          type: 'warning',
+          message: t('review.clipboardFallback'),
+        });
+      } catch {
+        addToast({
+          type: 'error',
+          message: t('review.applyError.notFound'),
+        });
+      }
       return;
     }
 
@@ -330,7 +414,7 @@ export function ReviewPanel(): JSX.Element {
 
     addToast({
       type: 'success',
-      message: t('review.applySuccess'),
+      message: usedFuzzyMatch ? t('review.fuzzyMatchApplied') : t('review.applySuccess'),
     });
   }, [t, deleteIssue]);
 

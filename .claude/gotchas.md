@@ -235,3 +235,9 @@ Critical implementation warnings learned from past issues.
 101. **Monaco Editor Error Boundary**: `SourceMonacoEditor.tsx`에 `EditorErrorBoundary` 래핑. Monaco 초기화 실패 시 "Retry" 버튼이 있는 fallback UI 표시.
 
 102. **Chat Document Tools Table Support**: `documentTools.ts`의 `get_source_document`, `get_target_document`는 `tipTapJsonToMarkdownForTranslation()` 사용. 테이블을 `[table]` 플레이스홀더 대신 HTML로 변환하여 LLM이 내용 조회 가능.
+
+103. **Review Apply Fuzzy Matching Fallback**: `handleApplySuggestion()`은 정확한 매칭 실패 시 `setSearchTermFuzzy()`로 Levenshtein 기반 퍼지 매칭 시도 (threshold 70%). 성공 시 사용자 확인 다이얼로그 표시. 최종 실패 시 클립보드 복사 폴백.
+
+104. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. 프롬프트에 `⚠️ 절대 금지` 경고와 "잘못 복사하면 시스템이 텍스트를 찾지 못합니다!" 메시지로 강조. 언어 방향(영→한 등) 명시 필수.
+
+105. **Fuzzy Match Threshold Boundary**: `findBestFuzzyMatch()`의 threshold는 `>=` 비교 (정확히 threshold와 같은 유사도도 포함). 내부적으로 `threshold - 0.0001`로 초기화하여 경계값 처리.

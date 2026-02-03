@@ -6,6 +6,7 @@ import {
   normalizeForSearch,
   buildNormalizedTextWithMapping,
 } from '@/utils/normalizeForSearch';
+import { findBestFuzzyMatch, type FuzzyMatchResult } from '@/utils/fuzzyMatch';
 
 // ============================================
 // Types
@@ -33,6 +34,8 @@ export interface SearchHighlightStorage {
   caseSensitive: boolean;
   matches: SearchMatch[];
   currentIndex: number;
+  /** 마지막 퍼지 매칭 결과 (유사도 정보 포함) */
+  lastFuzzyMatch: FuzzyMatchResult | null;
 }
 
 // ============================================
@@ -120,6 +123,72 @@ export function filterMatchesInRange(
  * 검색어에 대한 모든 매치 찾기
  * 양방향 정규화: 에디터 텍스트와 검색어 모두 정규화하여 비교
  */
+/**
+ * 퍼지 매칭으로 검색어 찾기
+ * 정확한 매칭 실패 시 폴백으로 사용
+ */
+function findFuzzyMatch(
+  doc: ProseMirrorNode,
+  searchTerm: string,
+  threshold: number = 0.7
+): { matches: SearchMatch[]; fuzzyResult: FuzzyMatchResult | null } {
+  if (!searchTerm || searchTerm.length === 0) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  const { text, positions } = buildTextWithPositions(doc);
+
+  if (positions.length === 0) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  // 검색어 정규화
+  const normalizedSearchTerm = normalizeForSearch(searchTerm);
+
+  if (normalizedSearchTerm.length === 0) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  // 에디터 텍스트 정규화
+  const { normalizedText, indexMap } = buildNormalizedTextWithMapping(text);
+
+  // 퍼지 매칭 수행
+  const fuzzyResult = findBestFuzzyMatch(normalizedText, normalizedSearchTerm, threshold);
+
+  if (!fuzzyResult) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  // 정규화된 인덱스 → 원본 텍스트 인덱스 → 문서 위치
+  const originalStartIndex = indexMap[fuzzyResult.index];
+  const normalizedEndIndex = fuzzyResult.index + fuzzyResult.length - 1;
+  const originalEndIndex = normalizedEndIndex < indexMap.length
+    ? indexMap[normalizedEndIndex]
+    : undefined;
+
+  if (originalStartIndex === undefined || originalEndIndex === undefined) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  const fromPos = positions[originalStartIndex];
+  const toPos = positions[originalEndIndex];
+
+  if (fromPos === undefined || toPos === undefined) {
+    return { matches: [], fuzzyResult: null };
+  }
+
+  // 실제 매칭된 텍스트 업데이트 (원본 텍스트 기준)
+  const actualMatchedText = text.slice(originalStartIndex, originalEndIndex + 1);
+
+  return {
+    matches: [{ from: fromPos, to: toPos + 1 }],
+    fuzzyResult: {
+      ...fuzzyResult,
+      matchedText: actualMatchedText,
+    },
+  };
+}
+
 function findMatches(
   doc: ProseMirrorNode,
   searchTerm: string,
@@ -235,6 +304,11 @@ declare module '@tiptap/core' {
        * 현재 매치 인덱스 설정
        */
       setCurrentMatchIndex: (index: number) => ReturnType;
+      /**
+       * 퍼지 매칭으로 검색어 설정
+       * 정확한 매칭 실패 시 유사한 텍스트를 찾습니다.
+       */
+      setSearchTermFuzzy: (term: string, threshold?: number) => ReturnType;
     };
   }
 }
@@ -255,6 +329,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
       caseSensitive: false,
       matches: [] as SearchMatch[],
       currentIndex: 0,
+      lastFuzzyMatch: null as FuzzyMatchResult | null,
     };
   },
 
@@ -477,6 +552,46 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
             });
+          }
+
+          return true;
+        },
+
+      setSearchTermFuzzy:
+        (term: string, threshold: number = 0.7) =>
+        ({ editor, tr, dispatch }) => {
+          const storage = this.storage;
+          storage.searchTerm = term;
+          storage.lastFuzzyMatch = null;
+
+          // 퍼지 매칭 수행
+          const { matches, fuzzyResult } = findFuzzyMatch(editor.state.doc, term, threshold);
+          storage.matches = matches;
+          storage.lastFuzzyMatch = fuzzyResult;
+          storage.currentIndex = matches.length > 0 ? 0 : -1;
+
+          // 디버깅: 퍼지 검색 결과 로그
+          console.log('[SearchHighlight:setSearchTermFuzzy]', {
+            term,
+            normalizedTerm: normalizeForSearch(term),
+            threshold,
+            matchCount: matches.length,
+            fuzzyResult,
+          });
+
+          if (dispatch) {
+            tr.setMeta(searchHighlightPluginKey, { refresh: true });
+            dispatch(tr);
+          }
+
+          // 첫 번째 매치로 스크롤
+          if (matches.length > 0 && storage.currentIndex >= 0) {
+            const match = matches[storage.currentIndex];
+            if (match) {
+              queueMicrotask(() => {
+                editor.commands.setTextSelection(match.from);
+              });
+            }
           }
 
           return true;

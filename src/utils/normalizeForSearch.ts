@@ -65,7 +65,9 @@ export function normalizeForSearch(text: string): string {
       .replace(UNICODE_NORMALIZE_PATTERNS.cjkCornerBrackets, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.cjkDoubleCornerBrackets, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.dashes, '-')
-      // 4. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
+      // 4. 마크다운 이스케이프 제거 (AI가 \~ \* \_ 등으로 이스케이프할 수 있음)
+      .replace(/\\([~*_`\[\]()#>+\-!|])/g, '$1') // \~ → ~, \* → * 등
+      // 5. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
       .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
       .replace(/\*(.+?)\*/g, '$1') // *italic* → italic
       .replace(/__(.+?)__/g, '$1') // __bold__ → bold
@@ -75,13 +77,13 @@ export function normalizeForSearch(text: string): string {
       .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
       .replace(/`(.+?)`/g, '$1') // `code` → code
       .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [text](url) → text
-      // 5. 리스트/헤딩 마커 제거
+      // 6. 리스트/헤딩 마커 제거
       .replace(/^#{1,6}\s+/gm, '') // # Heading → Heading
       .replace(/^\s*[-*+]\s+/gm, '') // - item → item
       .replace(/^\s*\d+\.\s+/gm, '') // 1. item → item
-      // 6. 특수 공백 문자 정규화 (Unicode)
+      // 7. 특수 공백 문자 정규화 (Unicode)
       .replace(UNICODE_NORMALIZE_PATTERNS.specialSpaces, ' ')
-      // 7. 줄바꿈 통일 및 공백 정규화
+      // 8. 줄바꿈 통일 및 공백 정규화
       .replace(/\r\n|\r/g, ' ') // CRLF, CR → 공백
       .replace(/\s+/g, ' ') // 연속 공백/줄바꿈 → 단일 공백
       .trim()

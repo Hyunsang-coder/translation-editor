@@ -53,6 +53,7 @@ npm run test:harness  # Editor test harness (manual testing)
 | `src/utils/imagePlaceholder.test.ts` | `extractImages`, `restoreImages`, token savings |
 | `src/utils/wordCounter.test.ts` | `countWords`, MS Word style word counting |
 | `src/utils/htmlContentExtractor.test.ts` | `extractContent`, Confluence HTML parsing |
+| `src/utils/__tests__/fuzzyMatch.test.ts` | `levenshteinSimilarity`, `findBestFuzzyMatch`, normalizeForSearch 통합 |
 
 ## Backend Testing (Rust)
 
@@ -143,6 +144,7 @@ src/
 │   ├── imagePlaceholder.ts       # Image extraction/restoration
 │   ├── imageResize.ts            # Canvas API resizing
 │   ├── normalizeForSearch.ts     # Markdown normalization
+│   ├── fuzzyMatch.ts             # Levenshtein distance fuzzy matching
 │   ├── htmlNormalizer.ts         # HTML sanitization
 │   ├── wordCounter.ts            # MS Word style word counting
 │   ├── htmlContentExtractor.ts   # Confluence HTML content extraction

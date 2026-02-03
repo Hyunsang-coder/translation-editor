@@ -15,6 +15,10 @@ export interface RunReviewParams {
   intensity: ReviewIntensity;
   translationRules?: string;
   glossary?: string;
+  /** Source 언어 (예: "Korean", "한국어") */
+  sourceLanguage?: string | undefined;
+  /** Target 언어 (예: "English", "영어") */
+  targetLanguage?: string | undefined;
   abortSignal?: AbortSignal;
   onToken?: (accumulated: string) => void;
 }
@@ -53,6 +57,18 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   // 사용자 메시지: 컨텍스트 + 세그먼트
   const userContentParts: string[] = [];
 
+  // 언어 정보 추가 (Source/Target 방향 명시)
+  const srcLang = params.sourceLanguage || '원문';
+  const tgtLang = params.targetLanguage || '번역문';
+  userContentParts.push(`## 번역 방향
+- **Source** (원문): ${srcLang}
+- **Target** (번역문): ${tgtLang}
+
+**⚠️ 필수**: excerpt 작성 시 Source/Target을 절대 혼동하지 마세요!
+- sourceExcerpt → Source 열(${srcLang})에서 복사
+- targetExcerpt → Target 열(${tgtLang})에서 복사
+- 잘못 복사하면 시스템이 텍스트를 찾지 못합니다!`);
+
   if (params.translationRules?.trim()) {
     userContentParts.push(`## 번역 규칙\n${params.translationRules.trim()}`);
   }
@@ -65,8 +81,8 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   const isPolishing = isPolishingMode(params.intensity);
   const segmentsText = params.segments
     .map((s) => isPolishing
-      ? `[#${s.order}]\nText: ${s.targetText}`
-      : `[#${s.order}]\nSource: ${s.sourceText}\nTarget: ${s.targetText}`
+      ? `[#${s.order}]\nText (${tgtLang}): ${s.targetText}`
+      : `[#${s.order}]\nSource (${srcLang}): ${s.sourceText}\nTarget (${tgtLang}): ${s.targetText}`
     )
     .join('\n\n');
   userContentParts.push(`## ${isPolishing ? '검사 대상' : '검수 대상'}\n${segmentsText}`);

@@ -208,6 +208,28 @@ resizeImageForApi()   // Progressive resize for API limits
 // Search (Cmd+F) on Source panel, Replace (Cmd+H) on Target panel
 ```
 
+## Fuzzy Matching for Review Apply
+
+```typescript
+// src/utils/fuzzyMatch.ts
+// Levenshtein distance 기반 퍼지 매칭
+
+// AI가 targetExcerpt를 정확히 복사하지 않아 정확한 매칭 실패 시 폴백
+findBestFuzzyMatch(text, searchTerm, threshold)
+  // threshold: 최소 유사도 (기본 0.7 = 70%)
+  // 슬라이딩 윈도우로 최적 매칭 위치 탐색
+  // 대소문자 무시, 윈도우 크기 ±30% 범위
+
+// Review Apply 3단계 폴백:
+// 1. 정확한 매칭 (setSearchTerm)
+// 2. 퍼지 매칭 (setSearchTermFuzzy) → 확인 다이얼로그
+// 3. 클립보드 복사 폴백
+
+// SearchHighlight 확장:
+setSearchTermFuzzy(term, threshold)  // 퍼지 검색 커맨드
+storage.lastFuzzyMatch               // 마지막 퍼지 매칭 결과 (유사도 포함)
+```
+
 ## Grouped Zustand Selectors
 
 ```typescript
