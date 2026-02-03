@@ -35,7 +35,6 @@ export {
   estimateTokenCount,
   estimateNodeTokens,
   estimateDocTokens,
-  identifyChunkBoundaries,
   splitDocIntoChunks,
   splitMarkdownSafely,
   chunkToDoc,

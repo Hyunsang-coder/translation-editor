@@ -46,11 +46,13 @@
 
 #### Review Mode (`runReview.ts`)
 - AI-assisted review for errors, omissions, distortions, consistency
-- Document split into chunks → sequential AI review → JSON parsing
+- Document split into chunks → sequential AI review → Markdown parsing
+- Output format: Markdown with `---REVIEW_START/END---` markers (required `Suggestion` field)
 - Results displayed in table with Apply/Copy/Ignore actions
 - **Two Categories**:
   - **Comparison Review** (대조 검수): Source↔Target comparison
   - **Polishing** (폴리싱): Target-only inspection
+- **Retranslation**: Uses `translateWithStreaming()` with all project settings (translationRules, projectContext, translatorPersona, glossary) + reviewIssues context
 
 ### 3. Tool Calling Architecture
 

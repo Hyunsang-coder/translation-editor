@@ -375,9 +375,3 @@ export function getChunkingInfo(doc: TipTapDocJson): {
     estimatedChunks,
   };
 }
-
-// 레거시 함수들 (하위 호환성 유지)
-export function identifyChunkBoundaries(): [] {
-  // Markdown 기반 분할에서는 사용하지 않음
-  return [];
-}

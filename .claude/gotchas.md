@@ -241,3 +241,11 @@ Critical implementation warnings learned from past issues.
 104. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. 프롬프트에 `⚠️ 절대 금지` 경고와 "잘못 복사하면 시스템이 텍스트를 찾지 못합니다!" 메시지로 강조. 언어 방향(영→한 등) 명시 필수.
 
 105. **Fuzzy Match Threshold Boundary**: `findBestFuzzyMatch()`의 threshold는 `>=` 비교 (정확히 threshold와 같은 유사도도 포함). 내부적으로 `threshold - 0.0001`로 초기화하여 경계값 처리.
+
+106. **Review Suggestion Parsing Key Compatibility**: `parseReviewResult.ts`는 JSON 파싱 시 `suggestedFix`, `suggestion`, `Suggestion` 세 가지 키를 모두 지원. AI가 프롬프트에서 `Suggestion` 키를 사용하더라도 JSON으로 출력할 때 다른 키를 사용할 수 있으므로 호환성 보장.
+
+107. **Review Output Format Consistency**: `runReview.ts`는 시스템 프롬프트의 Markdown 형식을 따르도록 지시. "JSON만 출력하세요" 같은 충돌하는 지시를 제거하여 AI가 일관된 형식으로 응답하도록 보장.
+
+108. **Review Results Table Layout**: `ReviewResultsTable.tsx`는 `table-fixed` 레이아웃에서 고정 컬럼(체크박스, #, 심각도, 유형)을 하나로 통합하여 공간 효율성 향상. 1:2:3 비율(통합:수정제안:설명)로 설정하여 패널 리사이즈 시 균형있게 반응.
+
+109. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`, `translatorPersona`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.

@@ -189,13 +189,22 @@ resizeImageForApi()   // Progressive resize for API limits
 // API: src/ai/review/runReview.ts
 // Bypasses chat infrastructure for faster response
 // Uses streaming with onToken callback
+// Output format: Markdown with ---REVIEW_START/END--- markers (NOT JSON)
 
 // Parsing: src/ai/review/parseReviewResult.ts
 // Uses ---REVIEW_START/END--- markers
+// Markdown format: ### Issue #N with **Suggestion**: field (required)
+// JSON fallback: supports suggestedFix, suggestion, Suggestion keys for compatibility
 // Falls back to brace counting for JSON extraction
 
 // Highlight: src/editor/extensions/ReviewHighlight.ts
 // ProseMirror Decoration-based, auto-recalculates on doc change
+
+// Results Table: src/components/review/ReviewResultsTable.tsx
+// Layout: table-fixed with 1:2:3 column ratio
+// Combined column: checkbox, #, severity, type (vertical flex layout)
+// Columns: combined (16.67%), suggestedFix (33.33%), description (50%)
+// Container: flex-1 overflow-y-auto for full-height usage
 ```
 
 ## Search/Replace Feature
