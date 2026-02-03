@@ -3,6 +3,7 @@ import { Rnd } from 'react-rnd';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { ChatContent } from '@/components/chat/ChatContent';
 
 const MIN_WIDTH = 320;
@@ -24,6 +25,7 @@ export function FloatingChatPanel(): JSX.Element | null {
   const setChatPanelPosition = useUIStore((s) => s.setChatPanelPosition);
   const chatPanelSize = useUIStore((s) => s.chatPanelSize);
   const setChatPanelSize = useUIStore((s) => s.setChatPanelSize);
+  const projectTitle = useProjectStore((s) => s.project?.metadata.title);
 
   const hasInitialized = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -146,8 +148,10 @@ export function FloatingChatPanel(): JSX.Element | null {
           </div>
           {/* 헤더 컨텐츠 */}
           <div className="floating-chat-handle h-8 flex items-center justify-between px-3 border-b border-editor-border cursor-move select-none">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-editor-text">{t('chat.title')}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-medium text-editor-text truncate">
+              {projectTitle ? `${projectTitle} ${t('chat.title')}` : t('chat.title')}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             {/* 고정 핀 버튼 */}
