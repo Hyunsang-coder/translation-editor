@@ -2,8 +2,7 @@ import { useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
-import { FloatingChatPanel } from '@/components/panels/FloatingChatPanel';
-import { FloatingChatButton } from '@/components/ui/FloatingChatButton';
+import { DockedChatPanel } from '@/components/panels/DockedChatPanel';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
@@ -17,7 +16,7 @@ const ReviewTestPanel = lazy(() =>
 
 /**
  * 메인 레이아웃 컴포넌트
- * Hybrid Panel Layout: Editor + Settings Sidebar (고정) + Floating Chat
+ * Panel Layout: ProjectSidebar + DockedChat + Editor + SettingsSidebar
  */
 export function MainLayout(): JSX.Element {
   const { focusMode, sidebarCollapsed, projectSidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
@@ -107,6 +106,9 @@ export function MainLayout(): JSX.Element {
           <ProjectSidebar />
         </aside>
 
+        {/* 도킹된 채팅 패널 (ProjectSidebar 우측) */}
+        {project && <DockedChatPanel />}
+
         <div className="flex-1 min-w-0 min-h-0 relative flex">
           {/* 에디터 캔버스 (TipTap) */}
           <div className="flex-1 min-w-0 min-h-0">
@@ -151,14 +153,6 @@ export function MainLayout(): JSX.Element {
           )}
         </div>
       </main>
-
-      {/* 플로팅 컴포넌트 (PanelGroup 외부) */}
-      {project && (
-        <>
-          <FloatingChatPanel />
-          <FloatingChatButton />
-        </>
-      )}
 
       {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}
       {devTestPanelOpen && (

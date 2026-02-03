@@ -215,7 +215,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   // 최대 출력 토큰: Provider/모델별 제한 고려
   // - Claude 계열: 64000 (Haiku 4.5 기준)
   // - GPT-5 시리즈: 65536
-  // - GPT-4.1/4o 등 이전 모델: 16384
+  // - GPT-4o 등 이전 모델: 16384
   const maxAllowedTokens = cfg.provider === 'anthropic'
     ? 64000
     : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);
@@ -471,7 +471,7 @@ export async function translateWithStreaming(
   // 최대 출력 토큰: Provider/모델별 제한 고려
   // - Claude 계열: 64000 (Haiku 4.5 기준)
   // - GPT-5 시리즈: 65536
-  // - GPT-4.1/4o 등 이전 모델: 16384
+  // - GPT-4o 등 이전 모델: 16384
   const maxAllowedTokens = cfg.provider === 'anthropic'
     ? 64000
     : (cfg.model?.startsWith('gpt-5') ? 65536 : 16384);

@@ -232,15 +232,6 @@ const TWO_PASS_REVIEW_PROMPT = `# Translation Review System
 // ============================================
 
 const REVIEW_INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
-  minimal: `## 검출 기준: Critical 이슈만
-
-검출 대상:
-- 명백한 오역 (의미가 정반대)
-- 핵심 정보 완전 누락
-- 비즈니스 영향이 있는 오류
-
-Pass 2에서 Major/Minor는 모두 제거`,
-
   balanced: `## 검출 기준: Critical + Major 이슈
 
 검출 대상:

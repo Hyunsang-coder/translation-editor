@@ -7,7 +7,7 @@ import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewToo
 // ============================================
 
 /** 검수 강도 (대조 검수만 지원) */
-export type ReviewIntensity = 'minimal' | 'balanced' | 'thorough';
+export type ReviewIntensity = 'balanced' | 'thorough';
 
 // ============================================
 // Review Result Types
@@ -199,7 +199,7 @@ let cachedNonce: number = -1;
 
 const initialState: ReviewState = {
   // 검수 설정 기본값
-  intensity: 'balanced',
+  intensity: 'balanced' as ReviewIntensity,
 
   // 검수 실행 상태 기본값
   chunks: [],

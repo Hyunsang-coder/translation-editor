@@ -67,7 +67,6 @@ const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   openai: [
     { value: 'gpt-5.2' },
     { value: 'gpt-5-mini' },
-    { value: 'gpt-4.1' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-5' },

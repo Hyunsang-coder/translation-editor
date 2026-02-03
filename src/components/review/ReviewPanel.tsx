@@ -64,9 +64,8 @@ function IntensitySelect({
   const { t } = useTranslation();
 
   const options = [
-    { value: 'minimal', label: t('review.intensity.minimal', '가볍게 (Critical만)') },
-    { value: 'balanced', label: t('review.intensity.balanced', '기본 (Critical+Major)') },
-    { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히 (모든 이슈)') },
+    { value: 'balanced', label: t('review.intensity.balanced', '중요한 오류만 (Critical+Major)') },
+    { value: 'thorough', label: t('review.intensity.thorough', '모든 이슈 (Critical+Major+Minor)') },
   ];
 
   return (
@@ -579,6 +578,18 @@ export function ReviewPanel(): JSX.Element {
                 </pre>
               </details>
             )}
+
+            {/* 검수 결과 설명 */}
+            <div className="p-3 bg-primary-500/5 border border-primary-500/20 rounded text-sm text-editor-text">
+              <p className="font-medium mb-1">
+                {intensity === 'balanced'
+                  ? t('review.intensity.balanced.description', '중요한 오류만 검출 (Critical + Major)')
+                  : t('review.intensity.thorough.description', '모든 이슈 검출 (Critical + Major + Minor)')}
+              </p>
+              <p className="text-xs text-editor-muted">
+                {t('review.retranslation.note', '선택한 검수 강도에 따라 검출된 이슈를 반영하여 재번역합니다.')}
+              </p>
+            </div>
 
             <ReviewResultsTable
               issues={allIssues}

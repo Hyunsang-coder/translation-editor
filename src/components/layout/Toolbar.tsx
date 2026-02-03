@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Settings, Search } from 'lucide-react';
+import { Wrench, Settings, Search, MessageSquare } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 
@@ -9,7 +9,7 @@ import { useProjectStore } from '@/stores/projectStore';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel } = useUIStore();
+  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore();
   const { project } = useProjectStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -44,6 +44,11 @@ export function Toolbar(): JSX.Element {
 
   const handleReview = () => {
     openReviewPanel();
+    setDropdownOpen(false);
+  };
+
+  const handleChat = () => {
+    toggleChatPanel();
     setDropdownOpen(false);
   };
 
@@ -102,6 +107,19 @@ export function Toolbar(): JSX.Element {
               >
                 <Search size={16} />
                 <span>{t('toolbar.review')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                onClick={handleChat}
+                aria-pressed={chatPanelOpen}
+              >
+                <MessageSquare size={16} />
+                <span className="flex-1">{t('toolbar.chat')}</span>
+                {chatPanelOpen && (
+                  <span className="text-xs text-accent-primary">ON</span>
+                )}
               </button>
             </div>
           )}

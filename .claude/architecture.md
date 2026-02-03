@@ -36,7 +36,7 @@
 - **Dynamic max_tokens** by model:
   - Claude: 64000 (Haiku 4.5 limit)
   - GPT-5: 65536
-  - GPT-4.1/4o: 16384
+  - GPT-4o: 16384
 - **Image Placeholder**: Base64 images replaced with placeholders (saves 99%+ tokens)
 
 #### Chat/Question Mode (`chat.ts`)

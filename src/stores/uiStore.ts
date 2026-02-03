@@ -15,18 +15,14 @@ interface UIState extends EditorUIState {
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
   devTestPanelOpen: boolean; // 개발자 테스트 패널 (검수 디버그용)
 
-  // Floating Chat Panel state
+  // Docked Chat Panel state
   sidebarActiveTab: 'settings' | 'review';
   chatPanelOpen: boolean;
-  chatPanelPinned: boolean; // 고정 시 외부 클릭으로 최소화되지 않음
-  chatPanelPosition: { x: number; y: number };
-  chatPanelSize: { width: number; height: number };
+  chatPanelPinned: boolean; // 고정 시 외부 클릭으로 닫히지 않음
 
-  // Settings sidebar width (resizable)
+  // Sidebar widths (resizable)
   settingsSidebarWidth: number;
-
-  // Floating chat button position
-  floatingButtonPosition: { x: number; y: number } | null; // null = 기본 위치 (우측 하단)
+  chatPanelWidth: number;
 
   // Editor typography settings (Source/Target 패널별 독립 설정)
   sourceFontSize: number; // px
@@ -85,14 +81,10 @@ interface UIActions {
   toggleChatPanel: () => void;
   setChatPanelPinned: (pinned: boolean) => void;
   toggleChatPanelPinned: () => void;
-  setChatPanelPosition: (position: { x: number; y: number }) => void;
-  setChatPanelSize: (size: { width: number; height: number }) => void;
 
-  // Settings sidebar width
+  // Sidebar widths
   setSettingsSidebarWidth: (width: number) => void;
-
-  // Floating button position
-  setFloatingButtonPosition: (position: { x: number; y: number } | null) => void;
+  setChatPanelWidth: (width: number) => void;
 
   // Editor typography (Source/Target 패널별 독립 설정)
   setSourceFontSize: (size: number) => void;
@@ -128,18 +120,14 @@ export const useUIStore = create<UIStore>()(
       reviewPanelOpen: false,
       devTestPanelOpen: false,
 
-      // Floating Chat Panel - 기본값
+      // Docked Chat Panel - 기본값
       sidebarActiveTab: 'settings',
-      chatPanelOpen: false,
-      chatPanelPinned: false, // 기본값: 고정 안함 (외부 클릭 시 최소화)
-      chatPanelPosition: { x: 0, y: 100 }, // 실제 위치는 컴포넌트에서 계산
-      chatPanelSize: { width: 420, height: 600 },
+      chatPanelOpen: true, // 기본: 열림 (UX: 사용자가 바로 인지)
+      chatPanelPinned: true, // 도킹 모드에서는 기본 고정
 
-      // Settings sidebar width
+      // Sidebar widths
       settingsSidebarWidth: 320,
-
-      // Floating button position (null = 기본 우측 하단)
-      floatingButtonPosition: null,
+      chatPanelWidth: 380,
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
       sourceFontSize: 14,
@@ -291,22 +279,14 @@ export const useUIStore = create<UIStore>()(
         set((state) => ({ chatPanelPinned: !state.chatPanelPinned }));
       },
 
-      setChatPanelPosition: (position: { x: number; y: number }): void => {
-        set({ chatPanelPosition: position });
-      },
-
-      setChatPanelSize: (size: { width: number; height: number }): void => {
-        set({ chatPanelSize: size });
-      },
-
-      // Settings sidebar width
+      // Sidebar widths
       setSettingsSidebarWidth: (width: number): void => {
         set({ settingsSidebarWidth: Math.max(280, Math.min(600, width)) }); // min 280, max 600
       },
 
-      // Floating button position
-      setFloatingButtonPosition: (position: { x: number; y: number } | null): void => {
-        set({ floatingButtonPosition: position });
+      // Chat panel width (도킹 모드)
+      setChatPanelWidth: (width: number): void => {
+        set({ chatPanelWidth: Math.max(320, Math.min(600, width)) }); // min 320, max 600
       },
 
       // Editor typography (Source/Target 패널별 독립 설정)
@@ -359,15 +339,13 @@ export const useUIStore = create<UIStore>()(
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
         isPanelsSwapped: state.isPanelsSwapped,
-        // Floating Chat Panel persist
+        // Docked Chat Panel persist
         sidebarActiveTab: state.sidebarActiveTab,
         chatPanelOpen: state.chatPanelOpen,
         chatPanelPinned: state.chatPanelPinned,
-        chatPanelPosition: state.chatPanelPosition,
-        chatPanelSize: state.chatPanelSize,
-        // Settings sidebar & floating button
+        // Settings sidebar & chat panel width
         settingsSidebarWidth: state.settingsSidebarWidth,
-        floatingButtonPosition: state.floatingButtonPosition,
+        chatPanelWidth: state.chatPanelWidth,
         // Editor typography (Source/Target 패널별 독립 설정)
         sourceFontSize: state.sourceFontSize,
         sourceLineHeight: state.sourceLineHeight,
