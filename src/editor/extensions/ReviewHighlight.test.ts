@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Schema } from '@tiptap/pm/model';
 import { createReviewDecorations } from './ReviewHighlight';
 import { findSegmentRange } from './SearchHighlight';
-import type { IssueType } from '@/stores/reviewStore';
+import type { IssueType, IssueSeverity } from '@/stores/reviewStore';
 
 const schema = new Schema({
   nodes: {
@@ -36,7 +36,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: 'Hello world',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },
@@ -62,7 +63,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: 'Hello world',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },
@@ -96,7 +98,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: 'Hello world',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },
@@ -118,7 +121,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: 'Hello world',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },
@@ -144,7 +148,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: '<strong></strong>',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },
@@ -166,7 +171,8 @@ describe('ReviewHighlight segment range', () => {
         sourceExcerpt: '',
         targetExcerpt: 'Hello world',
         suggestedFix: '',
-        type: 'error' as IssueType,
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
         description: '',
         checked: true,
       },

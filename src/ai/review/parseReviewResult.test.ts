@@ -29,7 +29,7 @@ describe('parseReviewResult', () => {
       expect(issues).toHaveLength(1);
       expect(issues[0]?.sourceExcerpt).toBe('Hello');
       expect(issues[0]?.targetExcerpt).toBe('안녕');
-      expect(issues[0]?.type).toBe('error');
+      expect(issues[0]?.type).toBe('mistranslation');
     });
 
     it('응답에 "issues":[] 예시가 있어도 실제 마커 JSON을 우선 파싱', () => {
@@ -67,7 +67,7 @@ describe('parseReviewResult', () => {
       "segmentOrder": 2,
       "sourceExcerpt": "World",
       "targetExcerpt": "월드",
-      "type": "일관성",
+      "type": "용어",
       "problem": "용어 불일치"
     }
   ]
@@ -77,7 +77,7 @@ describe('parseReviewResult', () => {
       const issues = parseReviewResult(response);
 
       expect(issues).toHaveLength(1);
-      expect(issues[0]?.type).toBe('consistency');
+      expect(issues[0]?.type).toBe('terminology');
     });
 
     it('중첩된 중괄호 처리', () => {
@@ -105,14 +105,14 @@ Some text after
   });
 
   describe('이슈 타입 분류', () => {
-    it('오역 → error', () => {
+    it('오역 → mistranslation', () => {
       const response = `{"issues": [{"type": "오역", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('error');
+      expect(parseReviewResult(response)[0]?.type).toBe('mistranslation');
     });
 
-    it('mistranslation → error', () => {
+    it('mistranslation → mistranslation', () => {
       const response = `{"issues": [{"type": "mistranslation", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('error');
+      expect(parseReviewResult(response)[0]?.type).toBe('mistranslation');
     });
 
     it('누락 → omission', () => {
@@ -120,42 +120,41 @@ Some text after
       expect(parseReviewResult(response)[0]?.type).toBe('omission');
     });
 
-    it('왜곡 → distortion', () => {
-      const response = `{"issues": [{"type": "왜곡", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('distortion');
+    it('추가 → addition', () => {
+      const response = `{"issues": [{"type": "추가", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
+      expect(parseReviewResult(response)[0]?.type).toBe('addition');
     });
 
-    it('일관성 → consistency', () => {
-      const response = `{"issues": [{"type": "일관성", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('consistency');
+    it('뉘앙스 → nuance_shift', () => {
+      const response = `{"issues": [{"type": "뉘앙스 변형", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
+      expect(parseReviewResult(response)[0]?.type).toBe('nuance_shift');
     });
 
-    it('용어 → consistency', () => {
+    it('용어 → terminology', () => {
       const response = `{"issues": [{"type": "용어 불일치", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('consistency');
+      expect(parseReviewResult(response)[0]?.type).toBe('terminology');
     });
 
-    it('알 수 없는 타입 → error (기본값)', () => {
+    it('알 수 없는 타입 → mistranslation (기본값)', () => {
       const response = `{"issues": [{"type": "기타", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('error');
+      expect(parseReviewResult(response)[0]?.type).toBe('mistranslation');
     });
   });
 
   describe('description 필드 생성', () => {
-    it('problem/reason/impact 합성', () => {
+    it('problem/reason 합성', () => {
       const response = `{
         "issues": [{
           "type": "오역",
           "sourceExcerpt": "a",
           "targetExcerpt": "b",
           "problem": "문제 설명",
-          "reason": "이유",
-          "impact": "영향"
+          "reason": "이유"
         }]
       }`;
 
       const issues = parseReviewResult(response);
-      expect(issues[0]?.description).toBe('문제 설명 | 이유 | 영향');
+      expect(issues[0]?.description).toBe('문제 설명 | 이유');
     });
 
     it('problem만 있는 경우', () => {
@@ -184,6 +183,65 @@ Some text after
 
       const issues = parseReviewResult(response);
       expect(issues[0]?.description).toBe('레거시 설명');
+    });
+  });
+
+  describe('suggestedFix 처리', () => {
+    it('suggestedFix 키 사용', () => {
+      const response = `{
+        "issues": [{
+          "type": "오역",
+          "sourceExcerpt": "a",
+          "targetExcerpt": "b",
+          "suggestedFix": "수정안"
+        }]
+      }`;
+
+      const issues = parseReviewResult(response);
+      expect(issues[0]?.suggestedFix).toBe('수정안');
+    });
+
+    it('suggestion 키 호환성 (소문자)', () => {
+      const response = `{
+        "issues": [{
+          "type": "오역",
+          "sourceExcerpt": "a",
+          "targetExcerpt": "b",
+          "suggestion": "수정안 소문자"
+        }]
+      }`;
+
+      const issues = parseReviewResult(response);
+      expect(issues[0]?.suggestedFix).toBe('수정안 소문자');
+    });
+
+    it('Suggestion 키 호환성 (대문자)', () => {
+      const response = `{
+        "issues": [{
+          "type": "오역",
+          "sourceExcerpt": "a",
+          "targetExcerpt": "b",
+          "Suggestion": "수정안 대문자"
+        }]
+      }`;
+
+      const issues = parseReviewResult(response);
+      expect(issues[0]?.suggestedFix).toBe('수정안 대문자');
+    });
+
+    it('suggestedFix 우선 순위 (suggestedFix > suggestion)', () => {
+      const response = `{
+        "issues": [{
+          "type": "오역",
+          "sourceExcerpt": "a",
+          "targetExcerpt": "b",
+          "suggestedFix": "우선",
+          "suggestion": "후순위"
+        }]
+      }`;
+
+      const issues = parseReviewResult(response);
+      expect(issues[0]?.suggestedFix).toBe('우선');
     });
   });
 
@@ -225,35 +283,56 @@ Some text after
     });
   });
 
-  describe('마크다운 테이블 폴백', () => {
-    it('JSON 실패 시 마크다운 테이블 파싱', () => {
+  describe('Markdown 형식 파싱 (새 형식)', () => {
+    it('Issue # 형식 파싱', () => {
       const response = `
-| 세그먼트 | 원문 | 유형 | 설명 |
-|---------|------|------|------|
-| #1 | Hello | 오역 | 잘못된 번역 |
-| #2 | World | 누락 | 번역 누락 |
-      `;
+---REVIEW_START---
+## Translation Review Result
 
-      const issues = parseReviewResult(response);
+### Issue #1
+- **Source**: "Hello world"
+- **Target**: "안녕하세요 세계"
+- **Type**: Mistranslation
+- **Severity**: Critical
+- **SegmentGroupId**: seg-001
+- **Explanation**: 의미가 다릅니다
+- **Suggestion**: 안녕 세상
 
-      expect(issues).toHaveLength(2);
-      expect(issues[0]?.segmentOrder).toBe(1);
-      expect(issues[0]?.sourceExcerpt).toBe('Hello');
-      expect(issues[0]?.type).toBe('error');
-      expect(issues[1]?.type).toBe('omission');
-    });
+---
 
-    it('2열 테이블도 처리', () => {
-      const response = `
-| 원문 | 문제 |
-|------|------|
-| Hello | 오역입니다 |
+## Summary
+- Critical: 1
+- Major: 0
+- Minor: 0
+---REVIEW_END---
       `;
 
       const issues = parseReviewResult(response);
 
       expect(issues).toHaveLength(1);
-      expect(issues[0]?.sourceExcerpt).toBe('Hello');
+      expect(issues[0]?.sourceExcerpt).toBe('Hello world');
+      expect(issues[0]?.targetExcerpt).toBe('안녕하세요 세계');
+      expect(issues[0]?.type).toBe('mistranslation');
+      expect(issues[0]?.severity).toBe('critical');
+      expect(issues[0]?.segmentGroupId).toBe('seg-001');
+      expect(issues[0]?.description).toBe('의미가 다릅니다');
+      expect(issues[0]?.suggestedFix).toBe('안녕 세상');
+    });
+
+    it('No issues found 처리', () => {
+      const response = `
+---REVIEW_START---
+## Translation Review Result
+
+Review complete. No issues found.
+
+- Segments reviewed: 5
+- Issues detected: 0
+---REVIEW_END---
+      `;
+
+      const issues = parseReviewResult(response);
+      expect(issues).toHaveLength(0);
     });
   });
 
@@ -284,7 +363,8 @@ describe('deduplicateIssues', () => {
         sourceExcerpt: 'a',
         targetExcerpt: 'b',
         suggestedFix: '',
-        type: 'error' as const,
+        type: 'mistranslation' as const,
+        severity: 'major' as const,
         description: '설명1',
         checked: true,
       },
@@ -295,7 +375,8 @@ describe('deduplicateIssues', () => {
         sourceExcerpt: 'a',
         targetExcerpt: 'b',
         suggestedFix: '',
-        type: 'error' as const,
+        type: 'mistranslation' as const,
+        severity: 'major' as const,
         description: '설명2',
         checked: true,
       },
@@ -307,6 +388,7 @@ describe('deduplicateIssues', () => {
         targetExcerpt: 'd',
         suggestedFix: '',
         type: 'omission' as const,
+        severity: 'critical' as const,
         description: '설명3',
         checked: true,
       },

@@ -300,11 +300,10 @@ export function ReviewTestPanel(): JSX.Element {
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeTab === tab
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${activeTab === tab
                 ? 'border-primary-500 text-primary-500'
                 : 'border-transparent text-editor-muted hover:text-editor-text'
-            }`}
+              }`}
           >
             {tab === 'chunks' && '청크 데이터'}
             {tab === 'prompt' && '시스템 프롬프트'}
@@ -386,12 +385,12 @@ export function ReviewTestPanel(): JSX.Element {
                 <div key={issue.id} className="border border-editor-border rounded p-3 text-xs space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">#{idx + 1}</span>
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      issue.type === 'error' ? 'bg-red-500/10 text-red-500' :
-                      issue.type === 'omission' ? 'bg-orange-500/10 text-orange-500' :
-                      issue.type === 'distortion' ? 'bg-yellow-500/10 text-yellow-500' :
-                      'bg-blue-500/10 text-blue-500'
-                    }`}>
+                    <span className={`px-1.5 py-0.5 rounded ${issue.type === 'mistranslation' ? 'bg-red-500/10 text-red-500' :
+                        issue.type === 'omission' ? 'bg-orange-500/10 text-orange-500' :
+                          issue.type === 'nuance_shift' ? 'bg-yellow-500/10 text-yellow-500' :
+                            issue.type === 'terminology' ? 'bg-blue-500/10 text-blue-500' :
+                              'bg-purple-500/10 text-purple-500'
+                      }`}>
                       {issue.type}
                     </span>
                     <span className="text-editor-muted">세그먼트 #{issue.segmentOrder}</span>
@@ -434,11 +433,10 @@ export function ReviewTestPanel(): JSX.Element {
               searchResults.map((result, resultIdx) => (
                 <div
                   key={result.issueId}
-                  className={`border rounded p-3 text-xs space-y-2 ${
-                    result.found
+                  className={`border rounded p-3 text-xs space-y-2 ${result.found
                       ? 'border-green-500/30 bg-green-500/5'
                       : 'border-red-500/30 bg-red-500/5'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className={`px-1.5 py-0.5 rounded text-white ${result.found ? 'bg-green-500' : 'bg-red-500'}`}>

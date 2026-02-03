@@ -6,24 +6,23 @@ import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewToo
 // Review Settings Types
 // ============================================
 
-/** 검수 강도 (대조 검수 + 폴리싱) */
-export type ReviewIntensity =
-  | 'minimal' | 'balanced' | 'thorough'  // 대조 검수: 원문 ↔ 번역문
-  | 'grammar' | 'fluency';                // 폴리싱: 번역문만
-
-/**
- * 폴리싱 모드인지 판별
- * 폴리싱 모드는 원문 없이 번역문만 검사
- */
-export function isPolishingMode(intensity: ReviewIntensity): boolean {
-  return intensity === 'grammar' || intensity === 'fluency';
-}
+/** 검수 강도 (대조 검수만 지원) */
+export type ReviewIntensity = 'minimal' | 'balanced' | 'thorough';
 
 // ============================================
 // Review Result Types
 // ============================================
 
-export type IssueType = 'error' | 'omission' | 'distortion' | 'consistency';
+/** 이슈 타입 (Two-Pass Review) */
+export type IssueType =
+  | 'omission'       // 원문 정보가 번역에서 누락
+  | 'addition'       // 원문에 없는 내용 추가
+  | 'nuance_shift'   // 톤, 강조점, 긴급성, 확신도 변형
+  | 'terminology'    // 프로젝트 글로서리/표준 용어와 불일치
+  | 'mistranslation'; // 명백한 의미 오역
+
+/** 이슈 심각도 */
+export type IssueSeverity = 'critical' | 'major' | 'minor';
 
 /**
  * 결정적 ID 생성 (중복 제거 + 체크 상태 유지용)
@@ -59,6 +58,7 @@ export interface ReviewIssue {
   targetExcerpt: string;         // 현재 번역 (하이라이트 대상)
   suggestedFix: string;          // 수정 제안 (참고용)
   type: IssueType;
+  severity: IssueSeverity;       // 심각도 (critical/major/minor)
   description: string;
   checked: boolean;              // 체크 상태
 }

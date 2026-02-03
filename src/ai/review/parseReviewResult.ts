@@ -1,47 +1,66 @@
-import type { ReviewIssue, IssueType } from '@/stores/reviewStore';
+import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { generateIssueId } from '@/stores/reviewStore';
 
 /**
- * 문제 유형을 분류
+ * 문제 유형을 분류 (Two-Pass Review 타입)
  */
 function categorizeIssueType(typeText: string): IssueType {
   const normalized = typeText.toLowerCase().trim();
 
-  if (normalized.includes('오역') || normalized.includes('error') || normalized.includes('mistranslation')) {
-    return 'error';
-  }
-
-  if (normalized.includes('누락') || normalized.includes('omission') || normalized.includes('missing')) {
+  if (normalized.includes('omission') || normalized.includes('누락') || normalized.includes('missing')) {
     return 'omission';
   }
 
-  if (normalized.includes('왜곡') || normalized.includes('distortion') || normalized.includes('강도') || normalized.includes('정도')) {
-    return 'distortion';
+  if (normalized.includes('addition') || normalized.includes('추가')) {
+    return 'addition';
   }
 
-  if (normalized.includes('일관성') || normalized.includes('consistency') ||
-      normalized.includes('용어') || normalized.includes('glossary') || normalized.includes('term')) {
-    return 'consistency';
+  if (normalized.includes('nuance') || normalized.includes('뉘앙스') || normalized.includes('shift') ||
+    normalized.includes('톤') || normalized.includes('강조')) {
+    return 'nuance_shift';
   }
 
-  // 기타 경우 기본값
-  return 'error';
+  if (normalized.includes('terminology') || normalized.includes('용어') ||
+    normalized.includes('glossary') || normalized.includes('term')) {
+    return 'terminology';
+  }
+
+  if (normalized.includes('mistranslation') || normalized.includes('오역') ||
+    normalized.includes('error') || normalized.includes('왜곡') || normalized.includes('distortion')) {
+    return 'mistranslation';
+  }
+
+  // 기본값
+  return 'mistranslation';
 }
 
 /**
- * 세그먼트 번호 추출
+ * 심각도 분류
  */
-function extractSegmentOrder(text: string): number {
-  // #N, #0, #1 등의 형태에서 숫자 추출
-  const match = text.match(/#?(\d+)/);
-  return match && match[1] ? parseInt(match[1], 10) : 0;
+function categorizeSeverity(severityText: string): IssueSeverity {
+  const normalized = severityText.toLowerCase().trim();
+
+  if (normalized.includes('critical') || normalized.includes('심각')) {
+    return 'critical';
+  }
+
+  if (normalized.includes('major') || normalized.includes('중요')) {
+    return 'major';
+  }
+
+  if (normalized.includes('minor') || normalized.includes('경미') || normalized.includes('사소')) {
+    return 'minor';
+  }
+
+  // 기본값
+  return 'major';
 }
 
 /**
- * 마커 기반 JSON 추출 (Phase 3)
- * ---REVIEW_START--- 와 ---REVIEW_END--- 사이의 JSON 추출
+ * 마커 기반 콘텐츠 추출
+ * ---REVIEW_START--- 와 ---REVIEW_END--- 사이의 콘텐츠 추출
  */
-function extractMarkedJson(text: string): string | null {
+function extractMarkedContent(text: string): string | null {
   const startMarker = '---REVIEW_START---';
   const endMarker = '---REVIEW_END---';
   const startIdx = text.indexOf(startMarker);
@@ -54,53 +73,132 @@ function extractMarkedJson(text: string): string | null {
 }
 
 /**
- * 균형 잡힌 중괄호로 JSON 객체 추출
- * greedy 정규식 대신 중괄호 카운팅으로 정확한 JSON 범위 찾기
+ * Markdown 형식의 이슈 파싱 (새 출력 형식)
+ * 
+ * 예시:
+ * ### Issue #1
+ * - **Source**: "원문 텍스트"
+ * - **Target**: "번역 텍스트"
+ * - **Type**: Omission
+ * - **Severity**: Critical
+ * - **SegmentGroupId**: seg-001
+ * - **Explanation**: 문제 설명
+ * - **Suggestion**: 수정 제안
  */
-function extractJsonObject(text: string): string | null {
-  // "issues" 키워드가 포함된 첫 번째 { 찾기
-  const issuesIndex = text.indexOf('"issues"');
-  if (issuesIndex === -1) return null;
+function parseMarkdownIssues(content: string): ReviewIssue[] {
+  const issues: ReviewIssue[] = [];
 
-  // "issues" 앞의 가장 가까운 { 찾기
-  let startIndex = -1;
-  for (let i = issuesIndex - 1; i >= 0; i--) {
-    if (text[i] === '{') {
-      startIndex = i;
-      break;
-    }
+  // "No issues found" 체크
+  if (content.includes('No issues found') || content.includes('Issues detected: 0')) {
+    return [];
   }
-  if (startIndex === -1) return null;
 
-  // 중괄호 카운팅으로 매칭되는 } 찾기
-  let depth = 0;
-  for (let i = startIndex; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') {
-      depth--;
-      if (depth === 0) {
-        return text.slice(startIndex, i + 1);
+  // 이슈 블록 분리 (### Issue #N 패턴)
+  const issueBlocks = content.split(/###\s*Issue\s*#?\d*/i).filter(block => block.trim());
+
+  for (const block of issueBlocks) {
+    const lines = block.split('\n');
+
+    let sourceExcerpt = '';
+    let targetExcerpt = '';
+    let typeStr = '';
+    let severityStr = '';
+    let segmentGroupId: string | undefined;
+    let explanation = '';
+    let suggestion = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // **Source**: "텍스트" 또는 - **Source**: "텍스트"
+      const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?([^"]*)"?/i);
+      if (sourceMatch) {
+        sourceExcerpt = sourceMatch[1]?.trim() || '';
+        continue;
+      }
+
+      // **Target**: "텍스트" 또는 (missing)
+      const targetMatch = trimmed.match(/\*\*Target\*\*:\s*"?([^"]*)"?/i);
+      if (targetMatch) {
+        const val = targetMatch[1]?.trim() || '';
+        targetExcerpt = val === '(missing)' ? '' : val;
+        continue;
+      }
+
+      // **Type**: Omission
+      const typeMatch = trimmed.match(/\*\*Type\*\*:\s*(.+)/i);
+      if (typeMatch) {
+        typeStr = typeMatch[1]?.trim() || '';
+        continue;
+      }
+
+      // **Severity**: Critical
+      const severityMatch = trimmed.match(/\*\*Severity\*\*:\s*(.+)/i);
+      if (severityMatch) {
+        severityStr = severityMatch[1]?.trim() || '';
+        continue;
+      }
+
+      // **SegmentGroupId**: seg-001
+      const segmentMatch = trimmed.match(/\*\*SegmentGroupId\*\*:\s*(.+)/i);
+      if (segmentMatch) {
+        segmentGroupId = segmentMatch[1]?.trim();
+        continue;
+      }
+
+      // **Explanation**: 설명
+      const explanationMatch = trimmed.match(/\*\*Explanation\*\*:\s*(.+)/i);
+      if (explanationMatch) {
+        explanation = explanationMatch[1]?.trim() || '';
+        continue;
+      }
+
+      // **Suggestion**: 제안
+      const suggestionMatch = trimmed.match(/\*\*Suggestion\*\*:\s*(.+)/i);
+      if (suggestionMatch) {
+        suggestion = suggestionMatch[1]?.trim() || '';
+        continue;
       }
     }
+
+    // 유효한 이슈인지 확인 (최소한 타입과 source/target 중 하나는 있어야 함)
+    if (typeStr && (sourceExcerpt || targetExcerpt)) {
+      const type = categorizeIssueType(typeStr);
+      const severity = categorizeSeverity(severityStr);
+
+      issues.push({
+        id: generateIssueId(0, typeStr, sourceExcerpt, targetExcerpt),
+        segmentOrder: 0,
+        segmentGroupId,
+        sourceExcerpt,
+        targetExcerpt,
+        suggestedFix: suggestion,
+        type,
+        severity,
+        description: explanation,
+        checked: true,
+      });
+    }
   }
-  return null;
+
+  return issues;
 }
 
 /**
- * JSON 형식의 AI 응답 파싱 시도
+ * JSON 형식 이슈 파싱 (레거시 호환)
  */
-function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
-  // JSON 블록 추출 (균형 잡힌 중괄호 매칭)
-  const jsonStr = extractJsonObject(aiResponse);
-  if (!jsonStr) return null;
+function parseJsonIssues(content: string): ReviewIssue[] | null {
+  // JSON 객체 추출 시도
+  const jsonMatch = content.match(/\{[\s\S]*"issues"[\s\S]*\}/);
+  if (!jsonMatch) return null;
 
   try {
-    const parsed = JSON.parse(jsonStr) as { issues?: unknown[] };
+    const parsed = JSON.parse(jsonMatch[0]) as { issues?: unknown[] };
     const rawIssues = parsed.issues ?? [];
 
     return rawIssues.map((issue: unknown) => {
       const i = issue as Record<string, unknown>;
-      // segmentOrder가 문자열("1")인 경우에도 숫자로 변환
+
       const segmentOrder = typeof i.segmentOrder === 'number'
         ? i.segmentOrder
         : typeof i.segmentOrder === 'string'
@@ -109,19 +207,23 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
       const segmentGroupId = typeof i.segmentGroupId === 'string' ? i.segmentGroupId : undefined;
       const sourceExcerpt = typeof i.sourceExcerpt === 'string' ? i.sourceExcerpt : '';
       const targetExcerpt = typeof i.targetExcerpt === 'string' ? i.targetExcerpt : '';
-      const suggestedFix = typeof i.suggestedFix === 'string' ? i.suggestedFix : '';
+      // suggestedFix 또는 suggestion 키 모두 처리 (프롬프트 호환성)
+      const suggestedFix = typeof i.suggestedFix === 'string' ? i.suggestedFix
+        : typeof i.suggestion === 'string' ? i.suggestion
+          : typeof i.Suggestion === 'string' ? i.Suggestion
+            : '';
       const typeStr = typeof i.type === 'string' ? i.type : '';
+      const severityStr = typeof i.severity === 'string' ? i.severity : '';
 
-      // problem, reason, impact 필드를 합쳐서 description 생성
+      // problem, reason 필드를 합쳐서 description 생성
       const problem = typeof i.problem === 'string' ? i.problem : '';
       const reason = typeof i.reason === 'string' ? i.reason : '';
-      const impact = typeof i.impact === 'string' ? i.impact : '';
+      const explanation = typeof i.explanation === 'string' ? i.explanation : '';
       const legacyDescription = typeof i.description === 'string' ? i.description : '';
 
-      // 새 형식(problem/reason/impact) 우선, 없으면 기존 description 사용
-      const description = problem
-        ? [problem, reason, impact].filter(Boolean).join(' | ')
-        : legacyDescription;
+      const description = explanation || (problem
+        ? [problem, reason].filter(Boolean).join(' | ')
+        : legacyDescription);
 
       return {
         id: generateIssueId(segmentOrder, typeStr, sourceExcerpt, targetExcerpt),
@@ -131,95 +233,19 @@ function parseJsonResponse(aiResponse: string): ReviewIssue[] | null {
         targetExcerpt,
         suggestedFix,
         type: categorizeIssueType(typeStr),
+        severity: categorizeSeverity(severityStr),
         description,
         checked: true,
       };
     });
   } catch (e) {
-    console.warn('[parseReviewResult] JSON parsing failed:', e, 'input:', jsonStr.slice(0, 200));
-    return null; // JSON 파싱 실패 → 마크다운 폴백
+    console.warn('[parseReviewResult] JSON parsing failed:', e);
+    return null;
   }
-}
-
-/**
- * 마크다운 테이블 형식의 AI 응답 파싱 (폴백)
- */
-function parseMarkdownTable(aiResponse: string): ReviewIssue[] {
-  const issues: ReviewIssue[] = [];
-
-  const lines = aiResponse.split('\n');
-  let inTable = false;
-  let headerPassed = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      inTable = true;
-
-      if (trimmed.includes('---') || trimmed.includes(':-')) {
-        headerPassed = true;
-        continue;
-      }
-
-      if (!headerPassed) {
-        if (trimmed.includes('세그먼트') || trimmed.includes('원문') ||
-            trimmed.includes('Segment') || trimmed.includes('Source')) {
-          continue;
-        }
-      }
-
-      const cells = trimmed
-        .split('|')
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
-
-      if (cells.length >= 4) {
-        const segmentOrder = extractSegmentOrder(cells[0] ?? '');
-        const sourceExcerpt = cells[1] ?? '';
-        const issueType = categorizeIssueType(cells[2] ?? '');
-        const description = cells[3] ?? '';
-
-        issues.push({
-          id: generateIssueId(segmentOrder, cells[2] ?? '', sourceExcerpt, ''),
-          segmentOrder,
-          segmentGroupId: undefined, // 마크다운 테이블에서는 없음
-          sourceExcerpt,
-          targetExcerpt: '', // 마크다운 테이블에서는 없음
-          suggestedFix: '',  // 마크다운 테이블에서는 없음
-          type: issueType,
-          description,
-          checked: true,
-        });
-      } else if (cells.length >= 2) {
-        const sourceExcerpt = cells[0] ?? '';
-        const description = cells[1] ?? '';
-        const issueType = categorizeIssueType(description);
-
-        issues.push({
-          id: generateIssueId(0, description, sourceExcerpt, ''),
-          segmentOrder: 0,
-          segmentGroupId: undefined,
-          sourceExcerpt,
-          targetExcerpt: '',
-          suggestedFix: '',
-          type: issueType,
-          description,
-          checked: true,
-        });
-      }
-    } else if (inTable && trimmed.length === 0) {
-      inTable = false;
-      headerPassed = false;
-    }
-  }
-
-  return issues;
 }
 
 /**
  * AI 오류 메시지 패턴 감지
- * AI가 실제 검수 대신 오류 메시지만 반환하는 경우 감지
  */
 function detectAiErrorResponse(text: string): boolean {
   const errorPatterns = [
@@ -236,50 +262,57 @@ function detectAiErrorResponse(text: string): boolean {
 
 /**
  * AI 응답을 파싱하여 ReviewIssue 배열로 변환
- * Phase 3: 마커 기반 추출 우선
- * 1. 마커 기반 JSON 추출 (---REVIEW_START/END---)
- * 2. brace counting 기반 JSON 추출 (기존)
- * 3. 마크다운 테이블 파싱 (fallback)
+ * 
+ * 파싱 순서:
+ * 1. 마커 기반 콘텐츠 추출 (---REVIEW_START/END---)
+ * 2. Markdown 형식 파싱 (새 형식)
+ * 3. JSON 형식 파싱 (레거시 호환)
  *
- * @throws Error AI 오류 메시지가 감지되거나 파싱 완전 실패 시
+ * @throws Error AI 오류 메시지가 감지될 경우
  */
 export function parseReviewResult(aiResponse: string): ReviewIssue[] {
   if (!aiResponse || typeof aiResponse !== 'string') {
     return [];
   }
 
-  // AI 오류 메시지 감지 (false positive 방지)
+  // AI 오류 메시지 감지
   if (detectAiErrorResponse(aiResponse)) {
     console.error('[parseReviewResult] AI error response detected:', aiResponse.slice(0, 300));
     throw new Error('AI 응답에서 오류가 감지되었습니다. 다시 시도해주세요.');
   }
 
-  // 1차: 마커 기반 추출 (Phase 3 신규)
-  const markedJson = extractMarkedJson(aiResponse);
-  if (markedJson) {
-    const issues = parseJsonResponse(markedJson);
-    if (issues !== null) return issues;
+  // 마커 기반 콘텐츠 추출
+  const markedContent = extractMarkedContent(aiResponse);
+  const contentToParse = markedContent || aiResponse;
+
+  // 1차: Markdown 형식 파싱 (새 형식)
+  const markdownIssues = parseMarkdownIssues(contentToParse);
+  if (markdownIssues.length > 0) {
+    return markdownIssues;
   }
 
-  // 2차: brace counting (기존)
-  const jsonIssues = parseJsonResponse(aiResponse);
-  if (jsonIssues !== null) {
+  // 2차: JSON 형식 파싱 (레거시 호환)
+  const jsonIssues = parseJsonIssues(contentToParse);
+  if (jsonIssues !== null && jsonIssues.length > 0) {
     return jsonIssues;
   }
 
-  // 3차: 마크다운 테이블 (fallback)
-  const markdownIssues = parseMarkdownTable(aiResponse);
+  // "No issues found" 케이스 - 빈 배열 반환
+  if (contentToParse.includes('No issues found') ||
+    contentToParse.includes('Issues detected: 0') ||
+    contentToParse.includes('이슈 없음')) {
+    return [];
+  }
 
-  // 파싱 완전 실패: JSON도 마크다운도 찾지 못했고, 응답이 의미있는 길이인 경우
-  // (짧은 응답은 "문제 없음" 또는 빈 결과일 수 있음)
-  if (markdownIssues.length === 0 && aiResponse.trim().length > 100) {
+  // 파싱 실패 경고
+  if (aiResponse.trim().length > 100) {
     console.warn(
-      '[parseReviewResult] Complete parsing failure, response may be malformed:',
+      '[parseReviewResult] Parsing failed, response may be malformed:',
       aiResponse.slice(0, 300),
     );
   }
 
-  return markdownIssues;
+  return [];
 }
 
 /**

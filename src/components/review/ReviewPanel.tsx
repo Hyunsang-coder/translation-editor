@@ -6,17 +6,14 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildAlignedChunksAsync, type AlignedSegment } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
-import { getTargetEditor } from '@/editor/editorRegistry';
-import {
-  findSegmentRange,
-} from '@/editor/extensions/SearchHighlight';
-import { normalizeForSearch } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
-import { Select, type SelectOptionGroup } from '@/components/ui/Select';
-import { filterMatchesBySegment, hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
+import { Select } from '@/components/ui/Select';
+import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
+import { htmlToTipTapJson, tipTapJsonToHtml } from '@/utils/markdownConverter';
 
 /**
  * Source 텍스트의 언어를 감지
@@ -54,7 +51,7 @@ function detectSourceLanguage(segments: AlignedSegment[]): string {
   return '원문';
 }
 
-/** 검수 모드 선택 드롭다운 (대조 검수 + 폴리싱) */
+/** 검수 강도 선택 드롭다운 (대조 검수만) */
 function IntensitySelect({
   value,
   onChange,
@@ -66,28 +63,16 @@ function IntensitySelect({
 }) {
   const { t } = useTranslation();
 
-  const options: SelectOptionGroup[] = [
-    {
-      label: t('review.category.comparison', '대조 검수 (원문↔번역문)'),
-      options: [
-        { value: 'minimal', label: t('review.intensity.minimal', '가볍게') },
-        { value: 'balanced', label: t('review.intensity.balanced', '기본') },
-        { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히') },
-      ],
-    },
-    {
-      label: t('review.category.polishing', '폴리싱 (번역문만)'),
-      options: [
-        { value: 'grammar', label: t('review.intensity.grammar', '문법/오탈자') },
-        { value: 'fluency', label: t('review.intensity.fluency', '어색한 문장') },
-      ],
-    },
+  const options = [
+    { value: 'minimal', label: t('review.intensity.minimal', '가볍게 (Critical만)') },
+    { value: 'balanced', label: t('review.intensity.balanced', '기본 (Critical+Major)') },
+    { value: 'thorough', label: t('review.intensity.thorough', '꼼꼼히 (모든 이슈)') },
   ];
 
   return (
     <div className="flex items-center gap-2">
       <label className="text-xs text-editor-muted whitespace-nowrap">
-        {t('review.mode', '검수 모드')}
+        {t('review.intensity', '검수 강도')}
       </label>
       <Select
         value={value}
@@ -96,7 +81,7 @@ function IntensitySelect({
         disabled={disabled ?? false}
         size="sm"
         className="flex-1 min-w-[120px]"
-        aria-label={t('review.mode', '검수 모드')}
+        aria-label={t('review.intensity', '검수 강도')}
       />
     </div>
   );
@@ -151,6 +136,16 @@ export function ReviewPanel(): JSX.Element {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // 재번역 상태 (TranslatePreviewModal 연동)
+  const [retranslatePreviewOpen, setRetranslatePreviewOpen] = useState(false);
+  const [retranslatePreviewDoc, setRetranslatePreviewDoc] = useState<TipTapDocJson | null>(null);
+  const [retranslateLoading, setRetranslateLoading] = useState(false);
+  const [retranslateError, setRetranslateError] = useState<string | null>(null);
+  const [retranslateStreamingText, setRetranslateStreamingText] = useState<string>('');
+  const retranslateAbortController = useRef<AbortController | null>(null);
+  // 청크 캐시 (검수/재번역에서 사용)
+  const chunksRef = useRef<AlignedChunk[]>([]);
+
   // 경과 시간 타이머
   useEffect(() => {
     if (!isReviewing) {
@@ -192,6 +187,9 @@ export function ReviewPanel(): JSX.Element {
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
     if (freshChunks.length === 0) return;
+
+    // 청크 캐싱 (재번역에서 사용)
+    chunksRef.current = freshChunks;
 
     const controller = new AbortController();
     setAbortController(controller);
@@ -294,133 +292,6 @@ export function ReviewPanel(): JSX.Element {
     finishReview();
   }, [abortController, finishReview]);
 
-  const handleApplySuggestion = useCallback(async (issue: ReviewIssue) => {
-    const { addToast } = useUIStore.getState();
-    const editor = getTargetEditor();
-
-    if (!issue.targetExcerpt || issue.suggestedFix === undefined) {
-      addToast({
-        type: 'error',
-        message: t('review.applyError.missingData'),
-      });
-      return;
-    }
-
-    if (!editor) {
-      addToast({
-        type: 'error',
-        message: t('review.applyError.notFound'),
-      });
-      return;
-    }
-
-    // 빈 suggestedFix = 삭제 제안
-    if (issue.suggestedFix === '') {
-      if (!window.confirm(t('review.applyConfirm.delete'))) return;
-    }
-
-    // 검색용: 마크다운 서식/리스트 마커 제거 (에디터는 plain text 기반 검색)
-    const searchText = normalizeForSearch(issue.targetExcerpt);
-    // 교체용: HTML 태그 제거 (AI가 가끔 <strong> 등을 포함하여 반환)
-    const replaceText = stripHtml(issue.suggestedFix).trim();
-
-    // 1단계: 정확한 매칭 시도
-    editor.commands.setSearchTerm(searchText);
-
-    // 매치가 있는지 확인
-    let matches = editor.storage.searchHighlight?.matches || [];
-    let usedFuzzyMatch = false;
-    let fuzzyMatchResult = null;
-
-    const hasSegmentGroups = hasSegmentGroupId(editor.state.doc);
-
-    // 세그먼트 범위 제한: segmentGroupId가 있으면 해당 범위 내 매치만 사용
-    let segmentRange = null;
-    if (issue.segmentGroupId && matches.length > 0) {
-      const normalizedSegmentGroupId = normalizeSegmentGroupId(issue.segmentGroupId);
-      segmentRange = normalizedSegmentGroupId
-        ? findSegmentRange(editor.state.doc, normalizedSegmentGroupId)
-        : null;
-      matches = filterMatchesBySegment(matches, segmentRange, true, hasSegmentGroups);
-    }
-
-    // 2단계: 정확한 매칭 실패 시 퍼지 매칭 폴백
-    if (matches.length === 0) {
-      editor.commands.setSearchTermFuzzy(searchText, 0.7);
-      matches = editor.storage.searchHighlight?.matches || [];
-      fuzzyMatchResult = editor.storage.searchHighlight?.lastFuzzyMatch || null;
-
-      // 세그먼트 범위 다시 적용
-      if (issue.segmentGroupId && matches.length > 0) {
-        matches = filterMatchesBySegment(matches, segmentRange, true, hasSegmentGroups);
-      }
-
-      if (matches.length > 0 && fuzzyMatchResult) {
-        usedFuzzyMatch = true;
-        const similarityPercent = Math.round(fuzzyMatchResult.score * 100);
-
-        // 퍼지 매칭 성공 - 확인 다이얼로그
-        const confirmed = window.confirm(
-          t('review.applyConfirm.fuzzyMatch', {
-            similarity: similarityPercent,
-            matchedText: fuzzyMatchResult.matchedText.slice(0, 50) +
-              (fuzzyMatchResult.matchedText.length > 50 ? '...' : ''),
-          })
-        );
-
-        if (!confirmed) {
-          editor.commands.setSearchTerm('');
-          return;
-        }
-      }
-    }
-
-    // 3단계: 최종 실패 - 클립보드 복사 폴백
-    if (matches.length === 0) {
-      // 검색어 초기화
-      editor.commands.setSearchTerm('');
-
-      // 클립보드에 복사 시도
-      try {
-        await navigator.clipboard.writeText(replaceText);
-        addToast({
-          type: 'warning',
-          message: t('review.clipboardFallback'),
-        });
-      } catch {
-        addToast({
-          type: 'error',
-          message: t('review.applyError.notFound'),
-        });
-      }
-      return;
-    }
-
-    // 세그먼트 범위 내 첫 번째 매치의 인덱스 찾기
-    const allMatches = editor.storage.searchHighlight?.matches || [];
-    const targetMatchIndex = allMatches.findIndex(
-      (m: any) => m.from === matches[0]?.from && m.to === matches[0]?.to,
-    );
-    if (targetMatchIndex >= 0) {
-      editor.commands.setCurrentMatchIndex(targetMatchIndex);
-    }
-
-    // 현재 매치 교체
-    editor.commands.replaceMatch(replaceText);
-
-    // 검색어 초기화
-    editor.commands.setSearchTerm('');
-
-    deleteIssue(issue.id);
-    // Note: 하이라이트는 ReviewHighlight plugin이 tr.docChanged 감지 시 자동 재계산
-    // 수정된 이슈는 results에서 삭제되어 더 이상 하이라이트 안됨
-
-    addToast({
-      type: 'success',
-      message: usedFuzzyMatch ? t('review.fuzzyMatchApplied') : t('review.applySuccess'),
-    });
-  }, [t, deleteIssue]);
-
   /**
    * 누락 유형: suggestedFix를 클립보드에 복사
    * 번역문에 없는 텍스트이므로 자동 적용이 불가능하여 수동 삽입 유도
@@ -451,6 +322,120 @@ export function ReviewPanel(): JSX.Element {
       });
     }
   }, [t]);
+
+  /**
+   * 체크된 이슈를 반영하여 재번역 (기존 번역 함수 사용)
+   */
+  const handleRetranslate = useCallback(async () => {
+    const checkedIssues = getCheckedIssues();
+    if (checkedIssues.length === 0 || !project) return;
+
+    const sourceDocument = useProjectStore.getState().sourceDocument;
+    if (!sourceDocument) {
+      useUIStore.getState().addToast({
+        type: 'warning',
+        message: t('review.retranslate.noSegments', '재번역할 세그먼트가 없습니다. 먼저 검수를 실행해주세요.'),
+      });
+      return;
+    }
+
+    // 재번역 시작 - 모달 열기
+    setRetranslatePreviewOpen(true);
+    setRetranslateLoading(true);
+    setRetranslateError(null);
+    setRetranslatePreviewDoc(null);
+    setRetranslateStreamingText('');
+
+    const controller = new AbortController();
+    retranslateAbortController.current = controller;
+
+    try {
+      const { translationRules, projectContext, translatorPersona } = useChatStore.getState();
+      const sourceDocJson = htmlToTipTapJson(sourceDocument);
+
+      // 용어집 검색
+      let glossary = '';
+      try {
+        const query = sourceDocument.slice(0, 2000);
+        if (query.trim() && project.id) {
+          const hits = await searchGlossary({
+            projectId: project.id,
+            query,
+            domain: project.metadata.domain,
+            limit: 30,
+          });
+          if (hits.length > 0) {
+            glossary = hits
+              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+              .join('\n');
+          }
+        }
+      } catch {
+        // 용어집 검색 실패 무시
+      }
+
+      // 기존 번역 함수 사용 (검수 이슈 컨텍스트 포함)
+      const { doc } = await translateWithStreaming({
+        project,
+        sourceDocJson,
+        translationRules,
+        projectContext,
+        translatorPersona,
+        glossary,
+        reviewIssues: checkedIssues,
+        onToken: (text) => setRetranslateStreamingText(text),
+        abortSignal: controller.signal,
+      });
+
+      setRetranslatePreviewDoc(doc);
+    } catch (error) {
+      if (controller.signal.aborted) {
+        setRetranslateError(t('review.retranslate.cancelled', '재번역이 취소되었습니다.'));
+      } else {
+        setRetranslateError(formatTranslationError(error));
+      }
+    } finally {
+      setRetranslateLoading(false);
+      retranslateAbortController.current = null;
+    }
+  }, [project, getCheckedIssues, t]);
+
+  const handleRetranslateCancel = useCallback(() => {
+    if (retranslateAbortController.current) {
+      retranslateAbortController.current.abort();
+    }
+    setRetranslateLoading(false);
+  }, []);
+
+  const handleRetranslateClose = useCallback(() => {
+    setRetranslatePreviewOpen(false);
+    setRetranslatePreviewDoc(null);
+    setRetranslateError(null);
+    setRetranslateStreamingText('');
+  }, []);
+
+  /**
+   * 재번역 결과를 에디터에 적용
+   */
+  const handleApplyRetranslation = useCallback(() => {
+    if (!retranslatePreviewDoc || !project) return;
+
+    // TipTapDocJson을 HTML로 변환하여 target document에 적용
+    const html = tipTapJsonToHtml(retranslatePreviewDoc);
+    useProjectStore.getState().setTargetDocument(html);
+
+    // 검수 결과 초기화
+    resetReview();
+
+    // 모달 닫기
+    handleRetranslateClose();
+
+    // 결과 알림
+    useUIStore.getState().addToast({
+      type: 'success',
+      message: t('review.retranslate.applied', '재번역이 적용되었습니다.'),
+    });
+  }, [retranslatePreviewDoc, project, resetReview, handleRetranslateClose, t]);
 
   const handleReset = useCallback(() => {
     if (isReviewing) {
@@ -555,7 +540,6 @@ export function ReviewPanel(): JSX.Element {
                   issues={allIssues}
                   onToggleCheck={toggleIssueCheck}
                   onDelete={deleteIssue}
-                  onApply={handleApplySuggestion}
                   onCopy={handleCopySuggestion}
                   onToggleAll={() => setAllIssuesChecked(!allChecked)}
                   allChecked={allChecked}
@@ -600,7 +584,6 @@ export function ReviewPanel(): JSX.Element {
               issues={allIssues}
               onToggleCheck={toggleIssueCheck}
               onDelete={deleteIssue}
-              onApply={handleApplySuggestion}
               onCopy={handleCopySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
@@ -630,6 +613,17 @@ export function ReviewPanel(): JSX.Element {
             </button>
           ) : (
             <>
+              {/* 재번역 버튼 (체크된 이슈가 있을 때만 표시) */}
+              {checkedIssues.length > 0 && results.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRetranslate}
+                  disabled={retranslateLoading}
+                  className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {t('review.retranslate.button', '재번역')}
+                </button>
+              )}
               {results.length > 0 && (
                 <button
                   type="button"
@@ -653,6 +647,22 @@ export function ReviewPanel(): JSX.Element {
           )}
         </div>
       </div>
+
+      {/* 재번역 미리보기 모달 (기존 번역 diff UI 사용) */}
+      <TranslatePreviewModal
+        open={retranslatePreviewOpen}
+        title={t('review.retranslate.preview', '재번역 미리보기')}
+        docJson={retranslatePreviewDoc}
+        sourceHtml={useProjectStore.getState().sourceDocument}
+        originalHtml={useProjectStore.getState().targetDocument}
+        isLoading={retranslateLoading}
+        error={retranslateError}
+        streamingText={retranslateStreamingText}
+        onClose={handleRetranslateClose}
+        onApply={handleApplyRetranslation}
+        onCancel={handleRetranslateCancel}
+        onRetry={handleRetranslate}
+      />
     </div>
   );
 }

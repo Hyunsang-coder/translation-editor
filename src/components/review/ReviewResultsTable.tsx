@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ReviewIssue, IssueType } from '@/stores/reviewStore';
+import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { stripMarkdownInline } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
 
@@ -9,31 +9,23 @@ interface ReviewResultsTableProps {
   onToggleCheck?: (issueId: string) => void;
   onToggleAll?: () => void;
   onDelete?: (issueId: string) => void;
-  onApply?: (issue: ReviewIssue) => void;
   onCopy?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
 }
 
-/**
- * suggestedFix에 HTML 태그가 포함되어 있는지 확인
- * HTML 서식이 있으면 Apply 시 서식 손실이 발생하므로 Apply 버튼을 숨김
- */
-function hasHtmlTags(text: string | undefined): boolean {
-  if (!text) return false;
-  return /<[^>]+>/.test(text);
-}
-
 function getIssueTypeLabel(type: IssueType): string {
   switch (type) {
-    case 'error':
-      return '오역';
     case 'omission':
       return '누락';
-    case 'distortion':
-      return '왜곡';
-    case 'consistency':
-      return '일관성';
+    case 'addition':
+      return '추가';
+    case 'nuance_shift':
+      return '뉘앙스';
+    case 'terminology':
+      return '용어';
+    case 'mistranslation':
+      return '오역';
     default:
       return type;
   }
@@ -41,16 +33,44 @@ function getIssueTypeLabel(type: IssueType): string {
 
 function getIssueTypeColor(type: IssueType): string {
   switch (type) {
-    case 'error':
+    case 'mistranslation':
       return 'bg-red-500/10 text-red-600 dark:text-red-400';
     case 'omission':
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
-    case 'distortion':
+    case 'addition':
+      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
+    case 'nuance_shift':
       return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400';
-    case 'consistency':
+    case 'terminology':
       return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
     default:
       return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
+  }
+}
+
+function getSeverityLabel(severity: IssueSeverity): string {
+  switch (severity) {
+    case 'critical':
+      return 'Critical';
+    case 'major':
+      return 'Major';
+    case 'minor':
+      return 'Minor';
+    default:
+      return severity;
+  }
+}
+
+function getSeverityColor(severity: IssueSeverity): string {
+  switch (severity) {
+    case 'critical':
+      return 'text-red-600 dark:text-red-400';
+    case 'major':
+      return 'text-orange-600 dark:text-orange-400';
+    case 'minor':
+      return 'text-gray-500 dark:text-gray-400';
+    default:
+      return 'text-gray-500';
   }
 }
 
@@ -59,7 +79,6 @@ export function ReviewResultsTable({
   onToggleCheck,
   onToggleAll,
   onDelete,
-  onApply,
   onCopy,
   allChecked = false,
   totalIssuesFound = 0,
@@ -75,6 +94,19 @@ export function ReviewResultsTable({
           return acc;
         },
         {} as Record<IssueType, number>,
+      ),
+    [issues],
+  );
+
+  // 심각도별 카운트
+  const severityCounts = useMemo(
+    () =>
+      issues.reduce(
+        (acc, issue) => {
+          acc[issue.severity] = (acc[issue.severity] || 0) + 1;
+          return acc;
+        },
+        {} as Record<IssueSeverity, number>,
       ),
     [issues],
   );
@@ -102,14 +134,35 @@ export function ReviewResultsTable({
   return (
     <div className="space-y-4">
       {/* 통계 요약 */}
-      <div className="flex items-center gap-4 text-xs">
-        <span className="font-medium text-editor-text">
-          {t('review.totalIssues', '총 {count}건', { count: issues.length })}
-        </span>
-        <div className="flex items-center gap-2">
-          {counts.error && (
+      <div className="flex flex-col gap-2 text-xs">
+        {/* 심각도 요약 */}
+        <div className="flex items-center gap-3">
+          <span className="font-medium text-editor-text">
+            {t('review.totalIssues', '총 {count}건', { count: issues.length })}
+          </span>
+          <div className="flex items-center gap-2">
+            {severityCounts.critical && (
+              <span className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 dark:text-red-400">
+                Critical {severityCounts.critical}
+              </span>
+            )}
+            {severityCounts.major && (
+              <span className="px-2 py-0.5 rounded text-xs bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                Major {severityCounts.major}
+              </span>
+            )}
+            {severityCounts.minor && (
+              <span className="px-2 py-0.5 rounded text-xs bg-gray-500/10 text-gray-600 dark:text-gray-400">
+                Minor {severityCounts.minor}
+              </span>
+            )}
+          </div>
+        </div>
+        {/* 유형별 요약 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {counts.mistranslation && (
             <span className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 dark:text-red-400">
-              {t('review.typeError', '오역')} {counts.error}
+              {t('review.typeMistranslation', '오역')} {counts.mistranslation}
             </span>
           )}
           {counts.omission && (
@@ -117,25 +170,30 @@ export function ReviewResultsTable({
               {t('review.typeOmission', '누락')} {counts.omission}
             </span>
           )}
-          {counts.distortion && (
-            <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-              {t('review.typeDistortion', '왜곡')} {counts.distortion}
+          {counts.addition && (
+            <span className="px-2 py-0.5 rounded text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400">
+              {t('review.typeAddition', '추가')} {counts.addition}
             </span>
           )}
-          {counts.consistency && (
+          {counts.nuance_shift && (
+            <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+              {t('review.typeNuanceShift', '뉘앙스')} {counts.nuance_shift}
+            </span>
+          )}
+          {counts.terminology && (
             <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              {t('review.typeConsistency', '일관성')} {counts.consistency}
+              {t('review.typeTerminology', '용어')} {counts.terminology}
             </span>
           )}
         </div>
       </div>
 
-      {/* 테이블 - 컬럼 순서: 체크 | # | 유형 | 수정 제안 | 설명 */}
+      {/* 테이블 - 컬럼 순서: 체크 | # | 심각도 | 유형 | 수정 제안 | 설명 */}
       <div className="overflow-x-auto max-h-[400px] overflow-y-auto border border-editor-border rounded-md">
         <table className="w-full text-xs table-fixed">
           <thead className="sticky top-0 bg-editor-surface z-10">
             <tr className="border-b border-editor-border">
-              {/* 표시 (하이라이트) 헤더 */}
+              {/* 체크박스 헤더 */}
               <th className="px-2 py-2 text-center w-[32px]">
                 <input
                   type="checkbox"
@@ -149,9 +207,12 @@ export function ReviewResultsTable({
                 #
               </th>
               <th className="px-2 py-2 text-left font-medium text-editor-muted w-[60px]">
+                {t('review.severity', '심각도')}
+              </th>
+              <th className="px-2 py-2 text-left font-medium text-editor-muted w-[60px]">
                 {t('review.issueType', '유형')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%] min-w-[200px]">
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[35%] min-w-[180px]">
                 {t('review.suggestedFix', '수정 제안')}
               </th>
               <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%] min-w-[200px]">
@@ -168,7 +229,7 @@ export function ReviewResultsTable({
                   ${issue.checked ? 'bg-primary-500/5' : ''}
                 `}
               >
-                {/* 표시 (하이라이트 토글) */}
+                {/* 체크박스 */}
                 <td className="px-2 py-2 text-center align-top">
                   <input
                     type="checkbox"
@@ -181,38 +242,36 @@ export function ReviewResultsTable({
                 <td className="px-2 py-2 text-editor-muted font-medium text-center align-top">
                   {idx + 1}
                 </td>
+                {/* 심각도 */}
+                <td className="px-2 py-2 align-top">
+                  <span className={`text-xs font-medium ${getSeverityColor(issue.severity)}`}>
+                    {getSeverityLabel(issue.severity)}
+                  </span>
+                </td>
+                {/* 유형 */}
                 <td className="px-2 py-2 align-top">
                   <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
                     {getIssueTypeLabel(issue.type)}
                   </span>
                 </td>
+                {/* 수정 제안 */}
                 <td className="px-3 py-2 text-editor-text text-xs align-top">
                   <div className="flex flex-col gap-1.5">
                     <span className="break-words">
                       {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
                     </span>
                     <div className="flex items-center gap-1.5">
-                      {issue.suggestedFix && issue.type === 'omission' && onCopy && (
+                      {issue.suggestedFix && onCopy && (
                         <button
                           type="button"
                           onClick={() => onCopy(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
                           title={t('review.copy', '복사')}
                         >
                           {t('review.copy', '복사')}
                         </button>
                       )}
-                      {issue.suggestedFix && issue.type !== 'omission' && !hasHtmlTags(issue.suggestedFix) && onApply && (
-                        <button
-                          type="button"
-                          onClick={() => onApply(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
-                          title={t('review.apply', '적용')}
-                        >
-                          {t('review.apply', '적용')}
-                        </button>
-                      )}
-                      {onDelete && (
+                      {issue.suggestedFix && onDelete && (
                         <button
                           type="button"
                           onClick={() => onDelete(issue.id)}
@@ -225,6 +284,7 @@ export function ReviewResultsTable({
                     </div>
                   </div>
                 </td>
+                {/* 설명 */}
                 <td className="px-3 py-2 text-editor-text text-xs align-top">
                   {issue.description ? (
                     <ul className="list-disc list-inside space-y-0.5">

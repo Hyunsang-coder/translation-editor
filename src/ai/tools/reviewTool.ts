@@ -2,7 +2,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useReviewStore, type ReviewIntensity, isPolishingMode } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
@@ -161,266 +161,162 @@ export async function buildAlignedChunksAsync(
 // Kept for reference but removed to avoid unused variable warnings
 
 // ============================================
-// 검수자 역할 정의 (Phase 3: 과잉 검출 방지)
+// Two-Pass Review Prompt (새 검수 시스템)
 // ============================================
 
-const REVIEWER_ROLE = `당신은 10년 경력의 전문 번역 검수자입니다.
+/**
+ * Two-Pass Review 방법론
+ * Pass 1: Segment-Based Detection - 과검출 허용하며 모든 의심 항목 기록
+ * Pass 2: Critical Filtering - False Positive 제거, 최종 이슈 확정
+ */
 
-## 검수 철학
-- 번역자의 의도적 선택을 존중
-- 과잉 검출보다 정확한 검출을 우선
-- 의역과 오역을 명확히 구분
-- 확신 없으면 문제 아님`;
+const TWO_PASS_REVIEW_PROMPT = `# Translation Review System
+
+## Core Methodology: Two-Pass Review
+
+**Pass 1: Segment-Based Detection**
+1. 원문을 의미 단위(문장/절)로 분할
+2. 각 세그먼트에 대응하는 번역 부분 식별
+3. 1:1 대조하며 잠재 이슈 검출
+4. 모든 의심 항목 기록 (과검출 허용)
+
+**Pass 2: Critical Filtering**
+1. Pass 1 이슈 각각 재검토
+2. 필터링 질문 적용:
+   - 실제 의미 손실이 있는가?
+   - 타겟 언어에서 자연스러운 생략/변형인가?
+   - 문화적 적응으로 정당화되는가?
+3. 오탐(False Positive) 제거
+4. 최종 이슈 목록 확정
+
+---
+
+## Issue Types
+
+| Type | Description |
+|------|-------------|
+| Omission | 원문 정보가 번역에서 누락 |
+| Addition | 원문에 없는 내용 추가 |
+| Nuance Shift | 톤, 강조점, 긴급성, 확신도 변형 |
+| Terminology | 프로젝트 글로서리/표준 용어와 불일치 |
+| Mistranslation | 명백한 의미 오역 |
+
+---
+
+## Severity Levels
+
+| Level | Criteria |
+|-------|----------|
+| Critical | 핵심 정보 누락, 의미 왜곡, 비즈니스 영향 |
+| Major | 중요 세부사항 누락, 명확한 톤 변형 |
+| Minor | 미세한 뉘앙스 차이, 스타일 선호 수준 |
+
+---
+
+## False Positive Prevention
+
+**이슈 아님으로 판정하는 경우:**
+- 타겟 언어에서 자연스러운 생략 (예: 한국어 주어 생략)
+- 문화적 적응으로 정당화되는 변형
+- 동일 의미의 다른 표현
+- 타겟 독자에게 더 명확한 의역
+
+**실제 이슈로 판정하는 경우:**
+- 정보 손실 발생
+- 독자가 다른 행동/이해를 하게 될 가능성
+- 기술적 정확성 훼손
+- 프로젝트 글로서리 위반`;
 
 // ============================================
-// 검수 강도별 프롬프트 (강화됨: 카테고리 통합)
+// 검수 강도별 프롬프트
 // ============================================
 
-// 대조 검수용 프롬프트 (원문 ↔ 번역문)
-const REVIEW_INTENSITY_PROMPTS: Record<'minimal' | 'balanced' | 'thorough', string> = {
-  minimal: `## 검출 기준: 명백한 오류만
+const REVIEW_INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
+  minimal: `## 검출 기준: Critical 이슈만
 
-검출:
-- 의미가 정반대인 오역 (긍정↔부정, 허용↔금지)
-- 금액, 날짜, 수량 등 팩트 오류
-- 핵심 정보(조건, 경고) 완전 누락
+검출 대상:
+- 명백한 오역 (의미가 정반대)
+- 핵심 정보 완전 누락
+- 비즈니스 영향이 있는 오류
 
-허용 (검출 안 함):
-- 어순 변경, 의역, 문체 차이
-- 부가 설명 생략
-- 뉘앙스 차이`,
+Pass 2에서 Major/Minor는 모두 제거`,
 
-  balanced: `## 검출 기준: 의미 전달 오류
+  balanced: `## 검출 기준: Critical + Major 이슈
 
-검출:
-- 오역 (의미가 달라진 경우)
-- 정보 누락 (문장/절 단위)
-- 의미 왜곡 (강도, 범위, 조건 변경)
+검출 대상:
+- 모든 Critical 이슈
+- 중요 세부사항 누락/변형
+- 용어 불일치 (글로서리 위반)
 
-허용 (검출 안 함):
-- 자연스러운 의역
-- 어순, 문체 차이
-- 사소한 뉘앙스 차이`,
+Pass 2에서 Minor는 제거`,
 
-  thorough: `## 검출 기준: 세밀한 검토
+  thorough: `## 검출 기준: 모든 이슈
 
-검출:
-- 모든 오역 (미세한 의미 차이 포함)
-- 모든 누락 (사소한 정보 포함)
-- 의미 왜곡 (강도, 범위, 조건)
-- 용어 일관성 (같은 원어가 다르게 번역)
-- 뉘앙스 변화
+검출 대상:
+- Critical, Major, Minor 모두 보고
+- 미세한 뉘앙스 차이도 포함
+- 스타일 선호 수준까지 검토
 
-허용 (검출 안 함):
-- 명백히 의도된 로컬라이제이션`,
+단, False Positive는 여전히 제거`,
 };
 
 // ============================================
-// 폴리싱 모드 (번역문만 검사)
+// 출력 형식 (Markdown 기반)
 // ============================================
 
-const POLISHER_ROLE_GRAMMAR = `당신은 10년 경력의 전문 교정자입니다.
-
-## 교정 철학
-- 문법과 맞춤법 오류만 검출
-- 문체 선택은 존중
-- 확신 없으면 문제 아님`;
-
-const POLISHER_ROLE_FLUENCY = `당신은 10년 경력의 전문 에디터입니다.
-
-## 편집 철학
-- 어색하고 부자연스러운 표현만 검출
-- 의도적인 문체 선택은 존중
-- 원문 의미 보존을 위한 표현은 허용
-- 확신 없으면 문제 아님`;
-
-const POLISH_PROMPTS: Record<'grammar' | 'fluency', string> = {
-  grammar: `## 검출 기준: 문법/오탈자
-
-검출:
-- 맞춤법 오류 (띄어쓰기, 철자)
-- 문법 오류 (조사, 어미, 시제 불일치)
-- 오타/탈자
-- 구두점 오류 (마침표, 쉼표, 따옴표)
-- 숫자/단위 표기 오류
-
-허용 (검출 안 함):
-- 문체/어투 선택
-- 의역 표현
-- 문장 구조 선택
-- 번역투 표현 (fluency에서 검출)`,
-
-  fluency: `## 검출 기준: 어색한 문장
-
-검출:
-- 부자연스러운 어순
-- 번역투 표현 (직역체, "~되어지다", "~에 대해서")
-- 어색한 조사/접속사 사용
-- 중복 표현 ("가장 최고", "미리 예약")
-- 주어-술어 호응 불일치
-- 불필요한 피동/사동 표현
-- 장황한 표현 (간결하게 줄일 수 있는 경우)
-
-허용 (검출 안 함):
-- 문법적으로 정확한 표현
-- 의도적인 문체 선택
-- 원문 의미 보존을 위한 표현`,
-};
-
-const POLISH_HALLUCINATION_GUARD = `## 과잉 검출 방지 (필수!)
-
-수정 전 자문: "이것이 오류인가, 작성자의 선택인가?"
-
-문제 아닌 것:
-- 의도적인 문체 선택
-- 강조를 위한 반복
-- 특정 독자층을 위한 표현
-- 전문 용어 사용
-
-확신 없음 = 문제 없음`;
-
-const POLISH_OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
+const OUTPUT_FORMAT = `## Output Format
 
 ---REVIEW_START---
-{
-  "issues": [
-    {
-      "segmentOrder": 1,
-      "segmentGroupId": "세그먼트 ID (필수)",
-      "type": "문법|오탈자|어색|번역투|중복",
-      "targetExcerpt": "검사 대상에서 복사",
-      "problem": "무엇이 문제인지 (1줄)",
-      "reason": "왜 문제인지 (1줄)",
-      "suggestedFix": "대체 텍스트만"
-    }
-  ]
-}
+## Translation Review Result
+
+### Issue #1
+- **Source**: "[원문 해당 부분]"
+- **Target**: "[번역문 해당 부분]" 또는 (missing)
+- **Type**: [Omission/Addition/Nuance Shift/Terminology/Mistranslation]
+- **Severity**: [Critical/Major/Minor]
+- **SegmentGroupId**: [세그먼트 ID]
+- **Explanation**: [문제 설명]
+- **Suggestion**: [수정된 번역문 - 필수!]
+
+---
+
+## Summary
+- Critical: [N]
+- Major: [N]
+- Minor: [N]
 ---REVIEW_END---
 
-## excerpt 작성 규칙 (필수!)
-- targetExcerpt: 검사 대상에서 **문자 그대로 복사** (30자 이내)
-- segmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
-- **금지**: 요약, 재작성, 줄임
-- **필수**: 공백, 구두점, 대소문자 모두 원본과 동일하게
-- 리터럴 토큰 보존: snake_case, camelCase, 코드 식별자는 변경 없이 그대로
-- 범위 제한: 단일 문단/리스트 항목/테이블 셀 내에서만 발췌 (블록 경계 금지)
-- 시스템이 targetExcerpt로 문서 내 위치를 검색함 → 정확히 일치해야 적용됨
-
-## HTML 테이블 처리 규칙
-- 테이블이 <table> HTML 형식으로 전달될 수 있음
-- 테이블 **내용**(셀 안의 텍스트)만 검수 대상, HTML 태그 자체는 무시
-- excerpt 작성 시: 셀 내 텍스트만 발췌 (예: "작업 항목", "1850 md")
-- **금지**: HTML 태그를 excerpt에 포함 (예: "<td>텍스트</td>")
-
-## suggestedFix 작성 규칙 (필수!)
-- suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
-- 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
-- 범위가 다르면 문장이 깨짐!
-- 테이블 셀 내용 수정 시: 셀 텍스트만 제안 (HTML 태그 없이)
-
-금지: 마커 외부 텍스트, 설명문, 마크다운
-문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;
-
-// ============================================
-// 과잉 검출 방지 가이드 (Phase 3)
-// ============================================
-
-const HALLUCINATION_GUARD = `## 과잉 검출 방지 (필수!)
-
-검출 전 자문: "이것이 번역 오류인가, 번역자의 선택인가?"
-
-문제 아닌 것:
-- 어순 변경 (자연스러운 문장 구성)
-- 존칭/경어 수준 조정
-- 문화적 로컬라이제이션
-- 명시적 주어 추가/생략
-- 자연스러운 의역
-
-확신 없음 = 문제 없음`;
-
-// ============================================
-// Few-shot 예시 (Phase 3: 과잉 검출 방지)
-// ============================================
-
-const FEW_SHOT_EXAMPLES = `## 예시
-
-### 오역 (검출 O) - 영→한 번역
-Source (영어): "You must restart the application"
-Target (한글): "애플리케이션을 재시작할 수 있습니다"
-→ must→can 의미 변경
-{
-  "issues": [{
-    "segmentOrder": 1,
-    "type": "오역",
-    "sourceExcerpt": "You must restart",
-    "targetExcerpt": "재시작할 수 있습니다",
-    "problem": "의무(must)가 가능(can)으로 변경",
-    "reason": "원문은 필수, 번역은 선택으로 의미 전달",
-    "suggestedFix": "재시작해야 합니다"
-  }]
-}
-주의: sourceExcerpt는 영어(Source), targetExcerpt는 한글(Target)에서 복사!
-
-### 의역 (검출 X)
-Source: "It goes without saying"
-Target: "두말할 나위 없이"
-→ 자연스러운 의역, 의미 완전 전달
-{ "issues": [] }`;
-
-// ============================================
-// 개선된 출력 형식 (Phase 3: 마커 기반)
-// ============================================
-
-const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
-
+**출력 예시 (반드시 이 형식을 따르세요):**
 ---REVIEW_START---
-{
-  "issues": [
-    {
-      "segmentOrder": 1,
-      "segmentGroupId": "세그먼트 ID (필수)",
-      "type": "오역|누락|왜곡|일관성",
-      "sourceExcerpt": "원문에서 복사",
-      "targetExcerpt": "번역문에서 복사",
-      "problem": "무엇이 문제인지 (1줄)",
-      "reason": "왜 문제인지 (1줄)",
-      "suggestedFix": "대체 텍스트만"
-    }
-  ]
-}
+## Translation Review Result
+
+### Issue #1
+- **Source**: "fully stealth heists"
+- **Target**: "도둑질을 실행하도록"
+- **Type**: Mistranslation
+- **Severity**: Critical
+- **SegmentGroupId**: seg-001
+- **Explanation**: 'fully stealth heists'는 '완전히 은밀하게 강도를 수행하다'는 의미인데, '도둑질을 실행하도록'으로 번역되어 '은밀함(stealth)'의 핵심 개념이 누락되었습니다.
+- **Suggestion**: 완전히 은밀하게 강도를 진행
+
+---
 ---REVIEW_END---
 
-## excerpt 작성 규칙 (필수!)
-- sourceExcerpt: **Source 열**(원문)에서 **문자 그대로 복사** (30자 이내)
-- targetExcerpt: **Target 열**(번역문)에서 **문자 그대로 복사** (30자 이내)
-- segmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
+**이슈 없을 경우:**
+---REVIEW_START---
+## Translation Review Result
 
-**⚠️ 절대 금지**: sourceExcerpt와 targetExcerpt를 혼동하지 마세요!
-- Source가 영어면 sourceExcerpt는 영어
-- Target이 한글이면 targetExcerpt는 한글
-- 반대로 하면 시스템이 텍스트를 찾지 못해 수정이 불가능합니다!
+Review complete. No issues found.
 
-- **금지**: 요약, 재작성, 줄임
-- **필수**: 공백, 구두점, 대소문자 모두 원본과 동일하게
-- 리터럴 토큰 보존: snake_case, camelCase, 코드 식별자는 변경 없이 그대로
-- 범위 제한: 단일 문단/리스트 항목/테이블 셀 내에서만 발췌 (블록 경계 금지)
-- 시스템이 targetExcerpt로 번역문에서 위치를 검색함 → 정확히 일치해야 적용됨
+- Segments reviewed: [N]
+- Issues detected: 0
+---REVIEW_END---
 
-## HTML 테이블 처리 규칙
-- 테이블이 <table> HTML 형식으로 전달될 수 있음
-- 테이블 **내용**(셀 안의 텍스트)만 검수 대상, HTML 태그 자체는 무시
-- excerpt 작성 시: 셀 내 텍스트만 발췌 (예: "작업 항목", "1850 md")
-- **금지**: 전체 테이블 HTML을 excerpt로 복사 (예: "<table>...</table>")
-- **금지**: HTML 태그를 excerpt에 포함 (예: "<td>텍스트</td>")
-
-## suggestedFix 작성 규칙 (필수!)
-- suggestedFix는 targetExcerpt와 **정확히 같은 범위**의 텍스트
-- 시스템이 targetExcerpt를 suggestedFix로 **1:1 교체**함
-- 범위가 다르면 문장이 깨짐!
-- 테이블 셀 내용 수정 시: 셀 텍스트만 제안 (HTML 태그 없이)
-
-금지: 마커 외부 텍스트, 설명문, 마크다운
-문제 없음: ---REVIEW_START---{ "issues": [] }---REVIEW_END---`;
+## 작성 규칙 (필수!)
+- Source/Target excerpt: 원문/번역문에서 **문자 그대로 복사** (50자 이내)
+- **Suggestion 필수!**: 각 이슈에 올바른 번역 수정안을 반드시 제시 (빈 값 금지)
+- SegmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
+- 마커(---REVIEW_START/END---) 외부에 텍스트 금지`;
 
 // ============================================
 // 프롬프트 생성 함수
@@ -428,35 +324,13 @@ const OUTPUT_FORMAT = `## 출력 형식 (엄격 준수!)
 
 /**
  * 검수 설정에 따른 동적 프롬프트 생성
- * - 대조 검수 (minimal/balanced/thorough): 원문 ↔ 번역문 비교
- * - 폴리싱 (grammar/fluency): 번역문만 검사
+ * Two-Pass Review 방법론 기반
  */
 export function buildReviewPrompt(intensity: ReviewIntensity): string {
-  // 폴리싱 모드
-  if (isPolishingMode(intensity)) {
-    const polishIntensity = intensity as 'grammar' | 'fluency';
-    const role = polishIntensity === 'grammar' ? POLISHER_ROLE_GRAMMAR : POLISHER_ROLE_FLUENCY;
-    return [
-      role,
-      '',
-      POLISH_PROMPTS[polishIntensity],
-      '',
-      POLISH_HALLUCINATION_GUARD,
-      '',
-      POLISH_OUTPUT_FORMAT,
-    ].join('\n');
-  }
-
-  // 대조 검수 모드
-  const reviewIntensity = intensity as 'minimal' | 'balanced' | 'thorough';
   return [
-    REVIEWER_ROLE,
+    TWO_PASS_REVIEW_PROMPT,
     '',
-    REVIEW_INTENSITY_PROMPTS[reviewIntensity],
-    '',
-    HALLUCINATION_GUARD,
-    '',
-    FEW_SHOT_EXAMPLES,
+    REVIEW_INTENSITY_PROMPTS[intensity],
     '',
     OUTPUT_FORMAT,
   ].join('\n');

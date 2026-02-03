@@ -500,3 +500,22 @@ export function extractTranslationMarkdown(response: string): string {
   console.warn('[Translation] No markers found, using raw response');
   return response.trim();
 }
+
+/**
+ * TipTap JSON을 HTML로 변환
+ *
+ * @param docJson - TipTap JSON 문서
+ * @returns HTML 문자열
+ */
+export function tipTapJsonToHtml(docJson: TipTapDocJson): string {
+  const extensions = getExtensionsForTranslation();
+  const editor = new Editor({
+    extensions,
+    content: docJson as Content,
+    editable: false,
+  });
+
+  const html = editor.getHTML();
+  editor.destroy();
+  return html;
+}

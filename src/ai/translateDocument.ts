@@ -325,6 +325,8 @@ export type { TranslationProgressCallback, ChunkedTranslationResult };
 // 스트리밍 번역 (실시간 타이핑 효과)
 // ============================================================
 
+import type { ReviewIssue } from '@/stores/reviewStore';
+
 /**
  * 스트리밍 번역 파라미터
  */
@@ -336,6 +338,8 @@ export interface StreamingTranslationParams {
   translatorPersona?: string;
   /** 용어집 (source = target 형식) */
   glossary?: string;
+  /** 검수 이슈 (재번역 시 컨텍스트로 전달) */
+  reviewIssues?: ReviewIssue[];
   /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
   onToken?: (accumulatedText: string) => void;
   /** 취소 신호 */
@@ -424,6 +428,31 @@ export async function translateWithStreaming(
   const glossary = params.glossary?.trim();
   if (glossary) {
     systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
+  }
+
+  // 검수 이슈가 있으면 재번역 컨텍스트로 추가
+  if (params.reviewIssues && params.reviewIssues.length > 0) {
+    const typeLabels: Record<string, string> = {
+      omission: '누락',
+      addition: '추가',
+      nuance_shift: '뉘앙스 변형',
+      terminology: '용어 불일치',
+      mistranslation: '오역',
+    };
+    const issuesContext = params.reviewIssues.map((issue, idx) => {
+      return [
+        `${idx + 1}. [${typeLabels[issue.type] || issue.type}] "${issue.sourceExcerpt || ''}" → "${issue.targetExcerpt || '(누락)'}"`,
+        `   문제: ${issue.description || ''}`,
+        issue.suggestedFix ? `   수정 제안: ${issue.suggestedFix}` : '',
+      ].filter(Boolean).join('\n');
+    }).join('\n\n');
+
+    systemLines.push(
+      '[검수 이슈 - 반드시 수정 필요!]',
+      '아래 검수에서 발견된 이슈들을 해결하는 방향으로 번역하세요:',
+      issuesContext,
+      ''
+    );
   }
 
   const systemPrompt = systemLines.join('\n').trim();
@@ -656,3 +685,4 @@ export async function translateSourceDocWithChunking(
     successfulChunks: result.successfulChunks,
   };
 }
+
