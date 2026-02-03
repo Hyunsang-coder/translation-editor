@@ -132,9 +132,9 @@ export function ReviewResultsTable({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full flex flex-col min-h-0">
       {/* 통계 요약 */}
-      <div className="flex flex-col gap-2 text-xs">
+      <div className="flex flex-col gap-2 text-xs shrink-0">
         {/* 심각도 요약 */}
         <div className="flex items-center gap-3">
           <span className="font-medium text-editor-text">
@@ -188,13 +188,13 @@ export function ReviewResultsTable({
         </div>
       </div>
 
-      {/* 테이블 - 컬럼 순서: 체크 | # | 심각도 | 유형 | 수정 제안 | 설명 */}
-      <div className="overflow-x-auto max-h-[400px] overflow-y-auto border border-editor-border rounded-md">
+      {/* 테이블 - 컬럼 순서: 통합 컬럼(체크|#|심각도|유형) | 수정 제안 | 설명 */}
+      <div className="overflow-x-auto flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
         <table className="w-full text-xs table-fixed">
           <thead className="sticky top-0 bg-editor-surface z-10">
             <tr className="border-b border-editor-border">
-              {/* 체크박스 헤더 */}
-              <th className="px-2 py-2 text-center w-[32px]">
+              {/* 통합 컬럼 헤더 (1:2:3 비율 중 1) */}
+              <th className="px-2 py-2 text-center font-medium text-editor-muted w-[16.67%] min-w-[80px]">
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -203,19 +203,12 @@ export function ReviewResultsTable({
                   aria-label={t('review.selectAll', '전체 선택')}
                 />
               </th>
-              <th className="px-2 py-2 text-center font-medium text-editor-muted w-[32px]">
-                #
-              </th>
-              <th className="px-2 py-2 text-left font-medium text-editor-muted w-[60px]">
-                {t('review.severity', '심각도')}
-              </th>
-              <th className="px-2 py-2 text-left font-medium text-editor-muted w-[60px]">
-                {t('review.issueType', '유형')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[35%] min-w-[180px]">
+              {/* 수정 제안 (1:2:3 비율 중 2) */}
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[33.33%] min-w-[180px]">
                 {t('review.suggestedFix', '수정 제안')}
               </th>
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[40%] min-w-[200px]">
+              {/* 설명 (1:2:3 비율 중 3) */}
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[50%] min-w-[200px]">
                 {t('review.description', '설명')}
               </th>
             </tr>
@@ -229,33 +222,33 @@ export function ReviewResultsTable({
                   ${issue.checked ? 'bg-primary-500/5' : ''}
                 `}
               >
-                {/* 체크박스 */}
-                <td className="px-2 py-2 text-center align-top">
-                  <input
-                    type="checkbox"
-                    checked={issue.checked}
-                    onChange={() => onToggleCheck?.(issue.id)}
-                    className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                    aria-label={t('review.selectIssue', '이슈 선택')}
-                  />
+                {/* 통합 컬럼: 체크박스, #, 심각도, 유형을 세로로 배치 (1:2:3 비율 중 1) */}
+                <td className="px-2 py-2 align-top w-[16.67%] min-w-[80px]">
+                  <div className="flex flex-col items-center gap-1.5">
+                    {/* 체크박스 */}
+                    <input
+                      type="checkbox"
+                      checked={issue.checked}
+                      onChange={() => onToggleCheck?.(issue.id)}
+                      className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                      aria-label={t('review.selectIssue', '이슈 선택')}
+                    />
+                    {/* 번호 */}
+                    <span className="text-editor-muted font-medium text-xs">
+                      {idx + 1}
+                    </span>
+                    {/* 심각도 */}
+                    <span className={`text-xs font-medium ${getSeverityColor(issue.severity)}`}>
+                      {getSeverityLabel(issue.severity)}
+                    </span>
+                    {/* 유형 */}
+                    <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
+                      {getIssueTypeLabel(issue.type)}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-2 py-2 text-editor-muted font-medium text-center align-top">
-                  {idx + 1}
-                </td>
-                {/* 심각도 */}
-                <td className="px-2 py-2 align-top">
-                  <span className={`text-xs font-medium ${getSeverityColor(issue.severity)}`}>
-                    {getSeverityLabel(issue.severity)}
-                  </span>
-                </td>
-                {/* 유형 */}
-                <td className="px-2 py-2 align-top">
-                  <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
-                    {getIssueTypeLabel(issue.type)}
-                  </span>
-                </td>
-                {/* 수정 제안 */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top">
+                {/* 수정 제안 (1:2:3 비율 중 2) */}
+                <td className="px-3 py-2 text-editor-text text-xs align-top w-[33.33%] min-w-[180px]">
                   <div className="flex flex-col gap-1.5">
                     <span className="break-words">
                       {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
@@ -284,8 +277,8 @@ export function ReviewResultsTable({
                     </div>
                   </div>
                 </td>
-                {/* 설명 */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top">
+                {/* 설명 (1:2:3 비율 중 3) */}
+                <td className="px-3 py-2 text-editor-text text-xs align-top w-[50%] min-w-[200px]">
                   {issue.description ? (
                     <ul className="list-disc list-inside space-y-0.5">
                       {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
