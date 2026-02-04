@@ -80,20 +80,20 @@ export function ChatContent(): JSX.Element {
   // 활성화된 프로바이더의 모델만 표시
   const enabledChatPresets = useMemo((): SelectOptionGroup[] => {
     const presets: SelectOptionGroup[] = [];
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
     if (anthropicEnabled) {
       presets.push({
         label: 'Anthropic',
         options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
       });
     }
+    if (openaiEnabled) {
+      presets.push({
+        label: 'OpenAI',
+        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
+      });
+    }
     return presets;
-  }, [openaiEnabled, anthropicEnabled]);
+  }, [anthropicEnabled, openaiEnabled]);
 
   // 모든 모델 플랫 리스트 (유효성 검사용)
   const allChatModels = useMemo(() => {

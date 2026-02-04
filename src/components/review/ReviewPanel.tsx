@@ -586,9 +586,11 @@ export function ReviewPanel(): JSX.Element {
                   ? t('review.intensity.balanced.description', '중요한 오류만 검출 (Critical + Major)')
                   : t('review.intensity.thorough.description', '모든 이슈 검출 (Critical + Major + Minor)')}
               </p>
-              <p className="text-xs text-editor-muted">
-                {t('review.retranslation.note', '선택한 검수 강도에 따라 검출된 이슈를 반영하여 재번역합니다.')}
-              </p>
+              {checkedIssues.length > 0 && (
+                <p className="text-xs text-editor-muted">
+                  {t('review.retranslation.note', '선택한 검수 강도에 따라 검출된 이슈를 반영하여 재번역합니다.')}
+                </p>
+              )}
             </div>
 
             <ReviewResultsTable
