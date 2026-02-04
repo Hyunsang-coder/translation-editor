@@ -793,7 +793,7 @@ export function ChatContent(): JSX.Element {
                 disabled={isLoading}
                 aria-label={t('chat.chatModelAriaLabel')}
                 title={t('chat.chatModelTitle')}
-                className="min-w-[130px]"
+                className="min-w-[100px]"
                 anchor="top"
               />
               <button

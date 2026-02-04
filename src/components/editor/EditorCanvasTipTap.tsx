@@ -432,7 +432,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             aria-label={t('editor.translationModelAriaLabel')}
             title={t('editor.translationModel')}
             size="sm"
-            className="min-w-[130px]"
+            className="min-w-[100px]"
           />
           <button
             type="button"
@@ -466,7 +466,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         {/* Source Panel */}
         {!focusMode && (
           <>
-            <Panel id="source" defaultSize="50" minSize="20" className="min-w-0">
+            <Panel id="source" defaultSize="50" minSize="30" className="min-w-0">
               <div
                 className="h-full flex flex-col min-w-0"
                 style={{
@@ -518,7 +518,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         )}
 
         {/* Target Panel */}
-        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="20" className="min-w-0">
+        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="30" className="min-w-0">
           <div
             className="h-full flex flex-col min-w-0"
             style={{
