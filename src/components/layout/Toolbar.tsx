@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Settings, Search, MessageSquare } from 'lucide-react';
+import { Wrench, Settings, Search, MessageSquare, Cog } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 
 /**
  * 상단 툴바 컴포넌트
@@ -12,6 +13,7 @@ export function Toolbar(): JSX.Element {
   const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore();
   const { project } = useProjectStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 드롭다운 외부 클릭 시 닫기
@@ -49,6 +51,11 @@ export function Toolbar(): JSX.Element {
 
   const handleChat = () => {
     toggleChatPanel();
+    setDropdownOpen(false);
+  };
+
+  const handleAppSettings = () => {
+    setShowAppSettings(true);
     setDropdownOpen(false);
   };
 
@@ -94,10 +101,14 @@ export function Toolbar(): JSX.Element {
               <button
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
-                onClick={handleProjectSettings}
+                onClick={handleChat}
+                aria-pressed={chatPanelOpen}
               >
-                <Settings size={16} />
-                <span>{t('toolbar.projectSettings')}</span>
+                <MessageSquare size={16} />
+                <span className="flex-1">{t('toolbar.chat')}</span>
+                {chatPanelOpen && (
+                  <span className="text-xs text-accent-primary">ON</span>
+                )}
               </button>
               <div className="h-px bg-editor-border" />
               <button
@@ -112,19 +123,29 @@ export function Toolbar(): JSX.Element {
               <button
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
-                onClick={handleChat}
-                aria-pressed={chatPanelOpen}
+                onClick={handleProjectSettings}
               >
-                <MessageSquare size={16} />
-                <span className="flex-1">{t('toolbar.chat')}</span>
-                {chatPanelOpen && (
-                  <span className="text-xs text-accent-primary">ON</span>
-                )}
+                <Settings size={16} />
+                <span>{t('toolbar.projectSettings')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                onClick={handleAppSettings}
+              >
+                <Cog size={16} />
+                <span>{t('projectSidebar.appSettings')}</span>
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* App Settings Modal */}
+      {showAppSettings && (
+        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
+      )}
     </header>
   );
 }

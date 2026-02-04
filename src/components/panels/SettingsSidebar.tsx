@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Settings, Search } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -11,7 +12,8 @@ import { ReviewPanel } from '@/components/review/ReviewPanel';
 
 /**
  * Settings & Review 사이드바 컴포넌트
- * 고정 사이드바로 Settings 또는 Review 탭을 표시
+ * 접힌 상태: 아이콘만 표시 (Settings/Review 아이콘)
+ * 펼친 상태: Settings 또는 Review 탭 표시
  */
 export function SettingsSidebar(): JSX.Element {
   const { t } = useTranslation();
@@ -32,17 +34,34 @@ export function SettingsSidebar(): JSX.Element {
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
   const removeGlossaryPath = useProjectStore((s) => s.removeGlossaryPath);
 
-  // 사이드바 축소 상태
+  // 접힌 상태: 아이콘만 표시
   if (sidebarCollapsed) {
     return (
-      <div className="h-full flex flex-col items-center py-4">
+      <div className="w-12 h-full flex flex-col items-center py-2 gap-1 bg-editor-surface border-r border-editor-border">
+        {/* Settings 아이콘 */}
         <button
           type="button"
-          onClick={toggleSidebar}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title="Open Settings"
+          onClick={() => {
+            toggleSidebar();
+            setSidebarActiveTab('settings');
+          }}
+          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+          title={t('chat.settings')}
         >
-          ⚙️
+          <Settings size={20} />
+        </button>
+
+        {/* Review 아이콘 */}
+        <button
+          type="button"
+          onClick={() => {
+            toggleSidebar();
+            setSidebarActiveTab('review');
+          }}
+          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+          title={t('review.title', '검수')}
+        >
+          <Search size={20} />
         </button>
       </div>
     );
@@ -301,6 +320,16 @@ export function SettingsSidebar(): JSX.Element {
     <div className="h-full flex flex-col min-h-0">
       {/* Tab Header */}
       <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none">
+        {/* 접기 버튼 */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="p-2 hover:bg-editor-border transition-colors text-editor-muted"
+          title={t('common.collapse', '접기')}
+        >
+          {sidebarActiveTab === 'settings' ? <Settings size={18} /> : <Search size={18} />}
+        </button>
+
         <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
           {/* Settings 탭 */}
           <div
@@ -331,18 +360,6 @@ export function SettingsSidebar(): JSX.Element {
           >
             <span className="truncate flex-1">{t('review.title', '검수')}</span>
           </div>
-        </div>
-
-        {/* Panel Controls */}
-        <div className="flex items-center px-2 gap-1 border-l border-editor-border bg-editor-bg shrink-0">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
-            title={t('chat.closePanel')}
-          >
-            ✕
-          </button>
         </div>
       </div>
 

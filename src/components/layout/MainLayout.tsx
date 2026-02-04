@@ -17,10 +17,11 @@ const ReviewTestPanel = lazy(() =>
 
 /**
  * 메인 레이아웃 컴포넌트
- * Panel Layout: ProjectSidebar + SettingsSidebar + Editor + DockedChat
+ * Panel Layout: [ProjectSidebar] + [SettingsSidebar] + Editor + [DockedChat]
+ * 각 패널은 자체적으로 접힌 상태(아이콘만)와 펼친 상태를 가짐
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, projectSidebarCollapsed, projectSidebarHidden, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
+  const { focusMode, sidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
   const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
   const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const setDevTestPanelOpen = useUIStore((s) => s.setDevTestPanelOpen);
@@ -102,62 +103,55 @@ export function MainLayout(): JSX.Element {
 
       {/* 메인 에디터 영역 */}
       <main className="flex-1 flex overflow-hidden min-h-0">
-        {/* 프로젝트 사이드바 */}
-        {!projectSidebarHidden && (
-          <aside
-            className={`${projectSidebarCollapsed ? 'w-12' : 'w-[210px]'
-              } border-r border-editor-border overflow-hidden transition-all duration-200`}
-          >
-            <ProjectSidebar />
-          </aside>
-        )}
+        {/* 프로젝트 사이드바 (항상 렌더링, 자체적으로 접힘 처리) */}
+        <ProjectSidebar />
 
-        {/* Settings/Review 사이드바 (ProjectSidebar 우측, 드래그로 너비 조정 가능) */}
-        {!sidebarCollapsed && project && (
+        {/* Settings/Review 사이드바 (프로젝트 있을 때만, 자체적으로 접힘 처리) */}
+        {project && (
           <aside
-            className="shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative"
-            style={{ width: settingsSidebarWidth }}
+            className={`shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative ${sidebarCollapsed ? '' : ''}`}
+            style={{ width: sidebarCollapsed ? 48 : settingsSidebarWidth }}
           >
             <SettingsSidebar />
-            {/* 리사이즈 핸들 (우측) */}
-            <div
-              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
-              onMouseDown={handleResizeStart}
-            />
+            {/* 리사이즈 핸들 (펼친 상태에서만) */}
+            {!sidebarCollapsed && (
+              <div
+                className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
+                onMouseDown={handleResizeStart}
+              />
+            )}
           </aside>
         )}
 
-        <div className="flex-1 min-w-[400px] min-h-0 relative flex">
-          {/* 에디터 캔버스 (TipTap) */}
-          <div className="flex-1 min-w-0 min-h-0">
-            {project ? (
-              <EditorCanvasTipTap focusMode={focusMode} />
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
-                {/* Empty State Content */}
-                <div className="max-w-md text-center space-y-8">
-                  <div className="space-y-4">
-                    <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
-                    <p className="text-editor-muted leading-relaxed">
-                      문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
-                      기존 프로젝트가 있다면 왼쪽 사이드바에서 선택할 수 있습니다.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCreateProject}
-                    className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95"
-                  >
-                    새 프로젝트 시작하기
-                  </button>
+        {/* 에디터 캔버스 (TipTap) */}
+        <div className="flex-1 min-w-[300px] min-h-0">
+          {project ? (
+            <EditorCanvasTipTap focusMode={focusMode} />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
+              {/* Empty State Content */}
+              <div className="max-w-md text-center space-y-8">
+                <div className="space-y-4">
+                  <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
+                  <p className="text-editor-muted leading-relaxed">
+                    문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
+                    기존 프로젝트가 있다면 왼쪽 사이드바에서 선택할 수 있습니다.
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleCreateProject}
+                  className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95"
+                >
+                  새 프로젝트 시작하기
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* 도킹된 채팅 패널 (우측 끝) */}
-          {project && <DockedChatPanel />}
+            </div>
+          )}
         </div>
+
+        {/* 도킹된 채팅 패널 (프로젝트 있을 때만, 자체적으로 접힘 처리) */}
+        {project && <DockedChatPanel />}
       </main>
 
       {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}

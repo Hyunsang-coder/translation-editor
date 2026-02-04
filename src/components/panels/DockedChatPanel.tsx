@@ -1,8 +1,7 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
-import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { ChatContent } from '@/components/chat/ChatContent';
 
@@ -11,12 +10,13 @@ const MAX_WIDTH = 600;
 
 /**
  * 도킹된 채팅 패널 컴포넌트
- * ProjectSidebar 우측에 고정 배치, 리사이즈 가능
+ * 접힌 상태: 아이콘만 표시
+ * 펼친 상태: 채팅 패널 표시
  */
-export function DockedChatPanel(): JSX.Element | null {
+export function DockedChatPanel(): JSX.Element {
   const { t } = useTranslation();
   const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
-  const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
+  const toggleChatPanel = useUIStore((s) => s.toggleChatPanel);
   const chatPanelWidth = useUIStore((s) => s.chatPanelWidth);
   const setChatPanelWidth = useUIStore((s) => s.setChatPanelWidth);
   const projectTitle = useProjectStore((s) => s.project?.metadata.title);
@@ -24,13 +24,6 @@ export function DockedChatPanel(): JSX.Element | null {
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
-
-  // 패널 닫힐 때 진행 중인 AI 요청 취소
-  useEffect(() => {
-    if (!chatPanelOpen) {
-      useChatStore.getState().abortController?.abort();
-    }
-  }, [chatPanelOpen]);
 
   // 리사이즈 핸들러
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -68,12 +61,20 @@ export function DockedChatPanel(): JSX.Element | null {
     };
   }, [setChatPanelWidth]);
 
-  const handleClose = useCallback(() => {
-    setChatPanelOpen(false);
-  }, [setChatPanelOpen]);
-
+  // 접힌 상태: 아이콘만 표시
   if (!chatPanelOpen) {
-    return null;
+    return (
+      <div className="w-12 h-full flex flex-col items-center py-2 bg-editor-surface border-l border-editor-border">
+        <button
+          type="button"
+          onClick={toggleChatPanel}
+          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+          title={t('chat.title')}
+        >
+          <MessageSquare size={20} />
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -82,18 +83,19 @@ export function DockedChatPanel(): JSX.Element | null {
       style={{ width: chatPanelWidth }}
     >
       {/* 헤더 */}
-      <div className="h-10 flex items-center justify-between px-3 border-b border-editor-border bg-editor-surface shrink-0">
-        <span className="text-sm font-medium text-editor-text truncate">
-          {projectTitle ? `${projectTitle} ${t('chat.title')}` : t('chat.title')}
-        </span>
+      <div className="h-10 flex items-center px-2 border-b border-editor-border bg-editor-surface shrink-0">
+        {/* 접기 버튼 */}
         <button
           type="button"
-          onClick={handleClose}
-          className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('common.close')}
+          onClick={toggleChatPanel}
+          className="p-1.5 rounded hover:bg-editor-border transition-colors text-editor-muted"
+          title={t('common.collapse', '접기')}
         >
-          <X size={16} />
+          <MessageSquare size={18} />
         </button>
+        <span className="text-sm font-medium text-editor-text truncate ml-2">
+          {projectTitle ? `${projectTitle} ${t('chat.title')}` : t('chat.title')}
+        </span>
       </div>
 
       {/* 채팅 콘텐츠 */}

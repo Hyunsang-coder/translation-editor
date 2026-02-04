@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FolderOpen } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import { createProject } from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
@@ -13,7 +14,6 @@ type NewProjectForm = {
   domain: ProjectDomain;
 };
 
-import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 
 export function ProjectSidebar(): JSX.Element {
   const { t } = useTranslation();
@@ -30,7 +30,6 @@ export function ProjectSidebar(): JSX.Element {
   const [items, setItems] = useState<RecentProjectInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [showAppSettings, setShowAppSettings] = useState(false);
   const [form, setForm] = useState<NewProjectForm>({
     title: 'New Project',
     domain: 'general',
@@ -84,20 +83,17 @@ export function ProjectSidebar(): JSX.Element {
     }
   }, [renamingId]);
 
+  // 접힌 상태: 아이콘만 표시
   if (projectSidebarCollapsed) {
     return (
-      <div className="h-full flex flex-col items-center py-4 bg-editor-surface border-r border-editor-border">
+      <div className="w-12 h-full flex flex-col items-center py-2 bg-editor-surface border-r border-editor-border">
         <button
           type="button"
           onClick={toggleProjectSidebar}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors text-editor-muted"
-          title="Show sidebar"
+          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+          title={t('projectSidebar.projects')}
         >
-          {/* Sidebar Expand Icon */}
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
+          <FolderOpen size={20} />
         </button>
       </div>
     );
@@ -244,33 +240,30 @@ export function ProjectSidebar(): JSX.Element {
 
   return (
     <div className="h-full flex flex-col bg-editor-surface border-r border-editor-border relative">
-      <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
-        {/* New Project & Title */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-primary-500"
-            onClick={() => setShowNew((v) => !v)}
-            title="새 프로젝트"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-          </button>
-          <div className="text-xs font-semibold text-editor-text">{t('projectSidebar.projects')}</div>
-        </div>
-
-        {/* Toggle */}
+      <div className="h-10 px-3 flex items-center justify-between border-b border-editor-border shrink-0">
+        {/* Toggle (접기) */}
         <button
           type="button"
           onClick={toggleProjectSidebar}
           className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
-          title="프로젝트 사이드바 접기"
+          title={t('projectSidebar.collapse', '접기')}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line x1="9" y1="3" x2="9" y2="21" />
+          <FolderOpen size={18} />
+        </button>
+
+        {/* Title */}
+        <div className="text-xs font-semibold text-editor-text flex-1 ml-2">{t('projectSidebar.projects')}</div>
+
+        {/* New Project */}
+        <button
+          type="button"
+          className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted hover:text-primary-500"
+          onClick={() => setShowNew((v) => !v)}
+          title="새 프로젝트"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
       </div>
@@ -369,20 +362,6 @@ export function ProjectSidebar(): JSX.Element {
           })}
       </div>
 
-      <div className="p-3 border-t border-editor-border bg-editor-surface shrink-0">
-        <button
-            type="button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-editor-bg border border-editor-border text-editor-text hover:bg-editor-border transition-colors text-xs font-semibold"
-            onClick={() => setShowAppSettings(true)}
-        >
-            <span className="text-sm">⚙️</span>
-            {t('projectSidebar.appSettings')}
-        </button>
-      </div>
-
-      {showAppSettings && (
-        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
-      )}
 
       {/* Context Menu */}
       {contextMenu && (
