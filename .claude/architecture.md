@@ -8,7 +8,7 @@
 | Editor | TipTap (ProseMirror) - dual instances |
 | State | Zustand with persistence |
 | AI | LangChain.js (OpenAI + Anthropic) |
-| UI Layout | Hybrid Panel (Settings sidebar + Floating Chat via react-rnd) |
+| UI Layout | Hybrid Panel (Settings sidebar + Docked Chat panel) |
 | Toast | Sonner (position: top-center) |
 | Backend | Tauri 2 + Rust |
 | Storage | SQLite (`.ite` project files) |
@@ -130,8 +130,9 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 - **Focus Mode**: Source panel can be hidden (3-panel → 2-panel)
 - **Hybrid Panel Layout**:
   - Settings/Review sidebar: Fixed right, draggable width (280-600px)
-  - Floating Chat panel: Draggable/resizable via react-rnd (min 320×400px)
-  - Chat Pin Feature: Prevents auto-minimize on outside click
+  - Docked Chat panel: Fixed bottom, resizable height (min 200px)
+  - Responsive layout: `useResponsiveLayout` hook auto-collapses panels on narrow screens (< 1200px)
+  - Panel state persists across sessions
 - **Chat Composer**:
   - `+` button for attachments/web search toggle
   - Enter to send, Shift+Enter for newline

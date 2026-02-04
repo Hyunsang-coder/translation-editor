@@ -76,7 +76,7 @@ Critical implementation warnings learned from past issues.
 
 33. **Markdown Normalization for Search**: Use `normalizeForSearch()` to strip markdown formatting (bold, italic, list markers) before searching in TipTap editor's plain text. AI responses often include markdown in excerpts.
 
-34. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` and `SearchHighlight.ts` use `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()`. This handles Unicode special spaces, CRLF, consecutive whitespace, and quote normalization (curly quotes → straight quotes, CJK brackets → quotes).
+34. **Bidirectional Text Normalization for Highlight**: `ReviewHighlight.ts` uses `buildNormalizedTextWithMapping()` with shared `applyUnicodeNormalization()`. This handles Unicode special spaces, CRLF, consecutive whitespace, and quote normalization (curly quotes → straight quotes, CJK brackets → quotes).
 
 35. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 
@@ -106,15 +106,7 @@ Critical implementation warnings learned from past issues.
 
 45. **Select Component setTimeout**: Avoid using `setTimeout(() => setIsOpen(open), 0)` pattern inside components. Use `useEffect` with proper dependencies instead to prevent memory warnings on rapid mount/unmount.
 
-46. **Chat Panel Pin State**: `uiStore.chatPanelPinned` controls whether outside clicks minimize the floating chat panel. Pin state persists across sessions.
-
-47. **FloatingChatButton Drag vs Click**: Use `hasMoved` ref to distinguish drag from click. If mouse moves during mousedown, it's a drag - don't toggle panel on mouseup. Double-click resets position to default.
-
-48. **FloatingChatButton Tooltip Delay**: Track `mouseMoveCount` to prevent tooltip showing when button appears under static cursor. Only enable tooltip after actual mouse movement over the button.
-
-49. **Conditional Event Listeners**: For global event listeners (like `mousemove` on FloatingChatButton), only register when the component is actually visible/needed. Use dependencies in `useEffect` to conditionally attach/detach listeners.
-
-50. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
+46. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
 
 ## Chat Composer
 
@@ -162,10 +154,6 @@ Critical implementation warnings learned from past issues.
 
 67. **Auto Update System**: `useAutoUpdate.ts` hook uses `@tauri-apps/plugin-updater` to check GitHub Releases for updates. Features: automatic check on app start (production only, 3s delay), download progress tracking, skip version (localStorage), cancel download (AbortController).
 
-## Search Feature
-
-68. **SearchHighlight Extension Pattern**: Use `buildTextWithPositions()` for cross-node text search (same pattern as ReviewHighlight). Replace operations must recalculate matches after each replacement due to position shifts.
-
 ## Confluence / ADF
 
 69. **ADF Section Heading Matching**: Confluence 다국어 페이지에서 heading이 `"Title\n번역"` 형태로 저장됨. `extractSection()`과 `extractUntilSection()`은 첫 줄만 비교하여 매칭. 예: `"General Status\n전체 현황"` → `sectionHeading: "General Status"`로 검색 가능.
@@ -198,9 +186,7 @@ Critical implementation warnings learned from past issues.
 
 83. **Review suggestedFix HTML 태그 처리**: AI가 테이블 셀 수정 시 `<td>텍스트</td>` 형태로 suggestedFix를 반환할 수 있음. `hasHtmlTags()` 검사로 HTML 포함 시 Apply 버튼 숨김 (서식 손실 방지). 표시는 `stripHtml()`로 태그 제거 후 보여줌.
 
-84. **react-rnd 드래그/리사이즈 핸들 충돌**: `FloatingChatPanel`에서 `dragHandleClassName`이 지정된 영역은 리사이즈 핸들보다 우선 적용됨. 상단 리사이즈를 위해 `resizeHandleStyles`로 핸들 영역을 확장하고, 내부 컨텐츠에 상단 패딩을 추가하여 리사이즈 핸들 클릭 영역 확보 필요.
-
-85. **Toast 라이브러리 Sonner**: `react-toastify` 대신 `sonner` 사용. `uiStore.addToast()`가 내부적으로 `sonner.toast.success/error/warning/info()`를 호출. `ToastHost.tsx`에서 `<Toaster>` 컴포넌트 렌더링.
+84. **Toast 라이브러리 Sonner**: `react-toastify` 대신 `sonner` 사용. `uiStore.addToast()`가 내부적으로 `sonner.toast.success/error/warning/info()`를 호출. `ToastHost.tsx`에서 `<Toaster>` 컴포넌트 렌더링.
 
 86. **ImagePlaceholder inline 설정**: `ImagePlaceholder.configure({ inline: true })`로 설정해야 리스트(`<li>`) 내 이미지가 텍스트와 같은 줄에 표시됨. `inline: false`면 TipTap이 이미지를 블록 노드로 처리하여 별도 줄로 분리됨.
 
@@ -214,9 +200,7 @@ Critical implementation warnings learned from past issues.
 
 91. **Event Listener Debounce Pattern**: `DomSelectionAddToChat.tsx`의 `selectionchange`, `scroll`, `resize` 이벤트는 150ms debounce 적용. 60+ events/sec 폭주 방지.
 
-92. **mousemove Listener Optimization**: `FloatingChatButton.tsx`에서 `{ once: true }` 옵션으로 첫 마우스 이동 후 리스너 자동 제거. 60-120 calls/sec 불필요한 호출 방지.
-
-93. **Rate Limit (429) Retry**: `src/ai/retry.ts`의 `withRetry()`로 AI 호출 래핑. Exponential backoff (1s → 30s) + jitter로 429/5xx 에러 자동 재시도.
+92. **Rate Limit (429) Retry**: `src/ai/retry.ts`의 `withRetry()`로 AI 호출 래핑. Exponential backoff (1s → 30s) + jitter로 429/5xx 에러 자동 재시도.
 
 94. **Tool Call Timeout**: `chat.ts`에서 개별 tool.invoke()에 30초 timeout 적용. 느린 외부 API(Notion, Confluence)가 전체 채팅을 블록하지 않도록 방지.
 
@@ -230,22 +214,16 @@ Critical implementation warnings learned from past issues.
 
 99. **ReviewResultsTable Virtualization**: `@tanstack/react-virtual`로 500개+ 이슈 가상화. CSS Grid 기반 (`grid-cols-[32px_32px_60px_1fr_1fr]`) 레이아웃으로 테이블 대체.
 
-100. **SearchHighlight queueMicrotask**: `setTimeout(..., 0)` 대신 `queueMicrotask()` 사용. 이벤트 루프 이전에 microtask 실행하여 race condition window 축소.
-
-101. **Monaco Editor Error Boundary**: `SourceMonacoEditor.tsx`에 `EditorErrorBoundary` 래핑. Monaco 초기화 실패 시 "Retry" 버튼이 있는 fallback UI 표시.
+100. **Monaco Editor Error Boundary**: `SourceMonacoEditor.tsx`에 `EditorErrorBoundary` 래핑. Monaco 초기화 실패 시 "Retry" 버튼이 있는 fallback UI 표시.
 
 102. **Chat Document Tools Table Support**: `documentTools.ts`의 `get_source_document`, `get_target_document`는 `tipTapJsonToMarkdownForTranslation()` 사용. 테이블을 `[table]` 플레이스홀더 대신 HTML로 변환하여 LLM이 내용 조회 가능.
 
-103. **Review Apply Fuzzy Matching Fallback**: `handleApplySuggestion()`은 정확한 매칭 실패 시 `setSearchTermFuzzy()`로 Levenshtein 기반 퍼지 매칭 시도 (threshold 70%). 성공 시 사용자 확인 다이얼로그 표시. 최종 실패 시 클립보드 복사 폴백.
+103. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. 프롬프트에 `⚠️ 절대 금지` 경고와 "잘못 복사하면 시스템이 텍스트를 찾지 못합니다!" 메시지로 강조. 언어 방향(영→한 등) 명시 필수.
 
-104. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. 프롬프트에 `⚠️ 절대 금지` 경고와 "잘못 복사하면 시스템이 텍스트를 찾지 못합니다!" 메시지로 강조. 언어 방향(영→한 등) 명시 필수.
+104. **Review Suggestion Parsing Key Compatibility**: `parseReviewResult.ts`는 JSON 파싱 시 `suggestedFix`, `suggestion`, `Suggestion` 세 가지 키를 모두 지원. AI가 프롬프트에서 `Suggestion` 키를 사용하더라도 JSON으로 출력할 때 다른 키를 사용할 수 있으므로 호환성 보장.
 
-105. **Fuzzy Match Threshold Boundary**: `findBestFuzzyMatch()`의 threshold는 `>=` 비교 (정확히 threshold와 같은 유사도도 포함). 내부적으로 `threshold - 0.0001`로 초기화하여 경계값 처리.
+105. **Review Output Format Consistency**: `runReview.ts`는 시스템 프롬프트의 Markdown 형식을 따르도록 지시. "JSON만 출력하세요" 같은 충돌하는 지시를 제거하여 AI가 일관된 형식으로 응답하도록 보장.
 
-106. **Review Suggestion Parsing Key Compatibility**: `parseReviewResult.ts`는 JSON 파싱 시 `suggestedFix`, `suggestion`, `Suggestion` 세 가지 키를 모두 지원. AI가 프롬프트에서 `Suggestion` 키를 사용하더라도 JSON으로 출력할 때 다른 키를 사용할 수 있으므로 호환성 보장.
+106. **Review Results Table Layout**: `ReviewResultsTable.tsx`는 `table-fixed` 레이아웃에서 고정 컬럼(체크박스, #, 심각도, 유형)을 하나로 통합하여 공간 효율성 향상. 1:2:3 비율(통합:수정제안:설명)로 설정하여 패널 리사이즈 시 균형있게 반응.
 
-107. **Review Output Format Consistency**: `runReview.ts`는 시스템 프롬프트의 Markdown 형식을 따르도록 지시. "JSON만 출력하세요" 같은 충돌하는 지시를 제거하여 AI가 일관된 형식으로 응답하도록 보장.
-
-108. **Review Results Table Layout**: `ReviewResultsTable.tsx`는 `table-fixed` 레이아웃에서 고정 컬럼(체크박스, #, 심각도, 유형)을 하나로 통합하여 공간 효율성 향상. 1:2:3 비율(통합:수정제안:설명)로 설정하여 패널 리사이즈 시 균형있게 반응.
-
-109. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`, `translatorPersona`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.
+107. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`, `translatorPersona`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.

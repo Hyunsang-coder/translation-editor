@@ -31,7 +31,6 @@ export interface AiConfig {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   maxRecentMessages: number;
-  judgeModel: string;
 }
 
 function getEnvString(key: string): string | undefined {
@@ -77,6 +76,5 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: 20,
-    judgeModel: getEnvString('VITE_AI_JUDGE_MODEL') ?? 'gpt-5-mini',
   };
 }
