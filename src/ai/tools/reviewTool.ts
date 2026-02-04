@@ -266,7 +266,7 @@ const OUTPUT_FORMAT = `## Output Format
 - **Type**: [Omission/Addition/Nuance Shift/Terminology/Mistranslation]
 - **Severity**: [Critical/Major/Minor]
 - **SegmentGroupId**: [세그먼트 ID]
-- **Explanation**: [문제 설명]
+- **Explanation**: [1~2문장으로 간결하게]
 - **Suggestion**: [수정된 번역문 - 필수!]
 
 ---
@@ -287,7 +287,7 @@ const OUTPUT_FORMAT = `## Output Format
 - **Type**: Mistranslation
 - **Severity**: Critical
 - **SegmentGroupId**: seg-001
-- **Explanation**: 'fully stealth heists'는 '완전히 은밀하게 강도를 수행하다'는 의미인데, '도둑질을 실행하도록'으로 번역되어 '은밀함(stealth)'의 핵심 개념이 누락되었습니다.
+- **Explanation**: 'stealth(은밀함)' 핵심 개념 누락
 - **Suggestion**: 완전히 은밀하게 강도를 진행
 
 ---

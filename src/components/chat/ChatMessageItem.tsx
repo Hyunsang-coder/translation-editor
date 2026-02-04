@@ -262,19 +262,19 @@ export const ChatMessageItem = memo(function ChatMessageItem({
 
               {/* 스트리밍 중이고 콘텐츠가 비어있으면 스켈레톤 표시 */}
               {isStreaming && (!displayContent || displayContent.trim().length === 0) ? (
-                <div className="text-sm leading-relaxed">
+                <div className="text-xs leading-relaxed">
                   {showStreamingSkeleton && renderAssistantSkeleton(displayMetadata?.toolCallsInProgress)}
                 </div>
               ) : (
                 <>
                   {isStreaming ? (
                     // 스트리밍 중: 단순 텍스트 렌더링 + pulse 효과 (성능 최적화)
-                    <div className="text-sm leading-relaxed chat-markdown whitespace-pre-wrap animate-pulse">
+                    <div className="text-xs leading-relaxed chat-markdown whitespace-pre-wrap animate-pulse">
                       {cleanCitationArtifacts(displayContent)}
                     </div>
                   ) : (
                     // 스트리밍 완료: Markdown 렌더링
-                    <div className="text-sm leading-relaxed chat-markdown">
+                    <div className="text-xs leading-relaxed chat-markdown">
                       <MemoizedMarkdown content={displayContent} />
                     </div>
                   )}
