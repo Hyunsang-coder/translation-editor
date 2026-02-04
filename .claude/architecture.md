@@ -24,7 +24,7 @@
 - **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, tables, images
 - **Editor-only Formats**: Underline, Highlight, Subscript, Superscript (lost during Markdown conversion)
 - **Notion-Style UX**: Noto Sans KR font, 16px, line-height 1.8, max-width 800px
-- Focus Mode can hide Source panel
+- Focus Mode: "원문 숨기기/보이기" button in editor header hides Source panel
 
 ### 2. AI Interaction Model
 

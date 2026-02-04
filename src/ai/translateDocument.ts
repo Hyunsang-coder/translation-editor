@@ -16,11 +16,7 @@ import {
   isValidTipTapDocJson,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
-import {
-  extractImages,
-  restoreImages,
-  estimateTokenSavings,
-} from '@/utils/imagePlaceholder';
+import { stripImages } from '@/utils/imagePlaceholder';
 
 // TipTapDocJson 타입을 re-export
 export type { TipTapDocJson };
@@ -136,17 +132,15 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   // ============================================================
-  // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
+  // TipTap JSON → Markdown 변환 + 이미지 제거
   // ============================================================
   const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
 
-  // 이미지 URL(특히 Base64)을 플레이스홀더로 대체하여 토큰 절약
-  const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
+  // 이미지를 완전히 제거하여 토큰 절약 (번역은 텍스트만 대상)
+  const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
 
-  // 이미지 토큰 절약량 로깅 (디버그용)
-  if (imageMap.size > 0) {
-    const savedTokens = estimateTokenSavings(imageMap);
-    console.log(`[Translation] Image placeholder: ${imageMap.size} images, ~${savedTokens.toLocaleString()} tokens saved`);
+  if (imageCount > 0) {
+    console.log(`[Translation] Stripped ${imageCount} images from source`);
   }
 
   const srcLang = 'Source';
@@ -300,13 +294,9 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   // ============================================================
-  // 이미지 플레이스홀더 복원 + Markdown → TipTap JSON 변환
+  // Markdown → TipTap JSON 변환 (이미지 복원 불필요)
   // ============================================================
-  const translatedMarkdown = imageMap.size > 0
-    ? restoreImages(translatedMarkdownRaw, imageMap)
-    : translatedMarkdownRaw;
-
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdownRaw);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
@@ -340,6 +330,8 @@ export interface StreamingTranslationParams {
   glossary?: string;
   /** 검수 이슈 (재번역 시 컨텍스트로 전달) */
   reviewIssues?: ReviewIssue[];
+  /** 재번역 시 사용자 추가 지시사항 */
+  retranslateMessage?: string;
   /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
   onToken?: (accumulatedText: string) => void;
   /** 취소 신호 */
@@ -373,14 +365,12 @@ export async function translateWithStreaming(
     }
   }
 
-  // TipTap JSON → Markdown 변환 + 이미지 플레이스홀더 적용
+  // TipTap JSON → Markdown 변환 + 이미지 제거
   const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
-  const { sanitized: sourceMarkdown, imageMap } = extractImages(rawSourceMarkdown);
+  const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
 
-  // 이미지 토큰 절약량 로깅 (디버그용)
-  if (imageMap.size > 0) {
-    const savedTokens = estimateTokenSavings(imageMap);
-    console.log(`[Streaming Translation] Image placeholder: ${imageMap.size} images, ~${savedTokens.toLocaleString()} tokens saved`);
+  if (imageCount > 0) {
+    console.log(`[Streaming Translation] Stripped ${imageCount} images from source`);
   }
 
   const srcLang = 'Source';
@@ -451,6 +441,15 @@ export async function translateWithStreaming(
       '[검수 이슈 - 반드시 수정 필요!]',
       '아래 검수에서 발견된 이슈들을 해결하는 방향으로 번역하세요:',
       issuesContext,
+      ''
+    );
+  }
+
+  // 재번역 시 사용자 추가 지시사항
+  if (params.retranslateMessage?.trim()) {
+    systemLines.push(
+      '[사용자 추가 지시사항]',
+      params.retranslateMessage.trim(),
       ''
     );
   }
@@ -565,12 +564,8 @@ export async function translateWithStreaming(
     );
   }
 
-  // 이미지 플레이스홀더 복원 + Markdown → TipTap JSON 변환
-  const translatedMarkdown = imageMap.size > 0
-    ? restoreImages(translatedMarkdownRaw, imageMap)
-    : translatedMarkdownRaw;
-
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
+  // Markdown → TipTap JSON 변환 (이미지 복원 불필요)
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdownRaw);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');

@@ -227,3 +227,7 @@ Critical implementation warnings learned from past issues.
 106. **Review Results Table Layout**: `ReviewResultsTable.tsx`는 `table-fixed` 레이아웃에서 고정 컬럼(체크박스, #, 심각도, 유형)을 하나로 통합하여 공간 효율성 향상. 1:2:3 비율(통합:수정제안:설명)로 설정하여 패널 리사이즈 시 균형있게 반응.
 
 107. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`, `translatorPersona`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.
+
+108. **Focus Mode Button Location**: Focus Mode 토글 버튼은 상단 Toolbar가 아닌 에디터 패널 헤더(모델 선택 드롭다운 왼쪽)에 위치. 이모지 대신 텍스트("원문 숨기기"/"원문 보이기")로 표시하여 직관성 향상.
+
+109. **Font Size Consistency (text-xs)**: 사이드바, 패널 헤더, 설정 입력 필드 등 대부분의 UI 텍스트는 `text-xs`(12px) 사용. `text-sm`(14px)은 본문 콘텐츠나 에디터 내용에만 사용. 일관성 유지를 위해 새 UI 추가 시 주변 컴포넌트 폰트 크기 확인 필요.

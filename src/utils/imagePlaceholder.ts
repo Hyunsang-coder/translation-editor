@@ -1,13 +1,13 @@
 /**
- * 이미지 플레이스홀더 유틸리티
+ * 이미지 처리 유틸리티
  *
- * 번역 요청 시 이미지 URL(특히 Base64)을 플레이스홀더로 대체하여 토큰을 절약하고,
- * 번역 완료 후 원본 URL을 복원합니다.
+ * 번역 요청 시 이미지를 제거하여 토큰을 절약합니다.
+ * 번역은 텍스트만 대상으로 하므로 이미지 복원은 불필요합니다.
  *
  * 토큰 절약 효과:
- * - Base64 10KB: ~3,300 토큰 → 1-2 토큰 (99.9% 절약)
- * - Base64 50KB: ~16,500 토큰 → 1-2 토큰 (99.99% 절약)
- * - URL 200자: ~67 토큰 → 1-2 토큰 (97% 절약)
+ * - Base64 10KB: ~3,300 토큰 → 0 토큰 (100% 절약)
+ * - Base64 50KB: ~16,500 토큰 → 0 토큰 (100% 절약)
+ * - URL 200자: ~67 토큰 → 0 토큰 (100% 절약)
  */
 
 /**
@@ -33,19 +33,43 @@ const IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
 const BASE64_PATTERN = /^data:image\//;
 
 /**
- * 번역 전: Markdown에서 이미지 URL을 플레이스홀더로 대체
+ * 번역 전: Markdown에서 이미지를 완전히 제거
  *
- * Base64 이미지는 수만 자가 될 수 있으므로 반드시 대체 필요.
- * URL 이미지도 토큰 절약을 위해 대체합니다.
+ * 번역은 텍스트만 대상으로 하므로 이미지 정보는 AI에 전달할 필요 없음.
+ * 이미지 라인 자체를 제거하여 토큰을 최대한 절약합니다.
  *
  * @param markdown - 원본 Markdown 텍스트
- * @returns 플레이스홀더가 적용된 Markdown과 복원용 맵
+ * @returns 이미지가 제거된 Markdown과 제거된 이미지 수
  *
  * @example
- * const md = '# Title\n![alt](data:image/png;base64,...)';
- * const { sanitized, imageMap } = extractImages(md);
- * // sanitized: '# Title\n![alt](IMAGE_PLACEHOLDER_0)'
- * // imageMap: Map { 'IMAGE_PLACEHOLDER_0' => 'data:image/png;base64,...' }
+ * const md = '# Title\n![alt](https://example.com/img.png)\nSome text';
+ * const { stripped, imageCount } = stripImages(md);
+ * // stripped: '# Title\n\nSome text'
+ * // imageCount: 1
+ */
+export function stripImages(markdown: string): StripImagesResult {
+  let imageCount = 0;
+
+  const stripped = markdown.replace(IMAGE_REGEX, () => {
+    imageCount++;
+    return '';
+  });
+
+  return { stripped, imageCount };
+}
+
+/**
+ * 이미지 제거 결과 타입
+ */
+export interface StripImagesResult {
+  /** 이미지가 제거된 Markdown */
+  stripped: string;
+  /** 제거된 이미지 수 */
+  imageCount: number;
+}
+
+/**
+ * @deprecated Use stripImages instead. 이미지 복원이 필요 없으므로 placeholder 방식은 deprecated.
  */
 export function extractImages(markdown: string): ImageExtractionResult {
   const imageMap = new Map<string, string>();
@@ -64,16 +88,7 @@ export function extractImages(markdown: string): ImageExtractionResult {
 }
 
 /**
- * 번역 후: 플레이스홀더를 원본 URL로 복원
- *
- * @param markdown - 플레이스홀더가 포함된 Markdown 텍스트
- * @param imageMap - extractImages에서 반환된 플레이스홀더 → URL 맵
- * @returns 원본 URL이 복원된 Markdown
- *
- * @example
- * const translated = '# 제목\n![대체 텍스트](IMAGE_PLACEHOLDER_0)';
- * const restored = restoreImages(translated, imageMap);
- * // restored: '# 제목\n![대체 텍스트](data:image/png;base64,...)'
+ * @deprecated Use stripImages instead. 이미지 복원이 필요 없으므로 더 이상 사용하지 않음.
  */
 export function restoreImages(
   markdown: string,

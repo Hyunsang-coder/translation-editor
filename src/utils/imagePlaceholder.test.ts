@@ -1,10 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import {
+  stripImages,
   extractImages,
   restoreImages,
   getImageInfo,
   estimateTokenSavings,
 } from './imagePlaceholder';
+
+describe('stripImages', () => {
+  it('단일 이미지 제거', () => {
+    const markdown = '# Title\n![alt text](https://example.com/image.png)\nSome text';
+    const { stripped, imageCount } = stripImages(markdown);
+
+    expect(stripped).toBe('# Title\n\nSome text');
+    expect(imageCount).toBe(1);
+  });
+
+  it('여러 이미지 제거', () => {
+    const markdown = '![a](url1)\nText\n![b](url2)\nMore text\n![c](url3)';
+    const { stripped, imageCount } = stripImages(markdown);
+
+    expect(stripped).toBe('\nText\n\nMore text\n');
+    expect(imageCount).toBe(3);
+  });
+
+  it('Base64 이미지 제거', () => {
+    const base64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const markdown = `Before\n![photo](${base64})\nAfter`;
+    const { stripped, imageCount } = stripImages(markdown);
+
+    expect(stripped).toBe('Before\n\nAfter');
+    expect(imageCount).toBe(1);
+  });
+
+  it('이미지가 없는 경우', () => {
+    const markdown = '# Title\nSome text without images.';
+    const { stripped, imageCount } = stripImages(markdown);
+
+    expect(stripped).toBe(markdown);
+    expect(imageCount).toBe(0);
+  });
+
+  it('빈 문자열', () => {
+    const { stripped, imageCount } = stripImages('');
+
+    expect(stripped).toBe('');
+    expect(imageCount).toBe(0);
+  });
+
+  it('인라인 이미지 제거', () => {
+    const markdown = 'Text before ![img](url) text after.';
+    const { stripped, imageCount } = stripImages(markdown);
+
+    expect(stripped).toBe('Text before  text after.');
+    expect(imageCount).toBe(1);
+  });
+});
 
 describe('extractImages', () => {
   it('단일 이미지 추출', () => {

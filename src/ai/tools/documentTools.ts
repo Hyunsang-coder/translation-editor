@@ -1,6 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
+import { useReviewStore, type ReviewIssue, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
@@ -151,6 +152,138 @@ export const getTargetDocumentTool = tool(
     description:
       '번역문(Target) 문서를 Markdown 형식으로 가져옵니다. 사용자가 번역 결과, 표현 자연스러움, 오역 여부에 대해 질문하면 먼저 이 도구를 호출하세요. 문서가 길면 자동으로 일부만 반환됩니다. 서식(헤딩, 리스트, 볼드 등)이 Markdown으로 표현됩니다.',
     schema: DocumentToolArgsSchema,
+  },
+);
+
+// ============================================
+// Review Results Tool
+// ============================================
+
+const ReviewResultsArgsSchema = z.object({
+  severityFilter: z.enum(['all', 'critical', 'major', 'minor']).optional()
+    .describe('심각도 필터 (기본: all)'),
+  typeFilter: z.enum(['all', 'omission', 'addition', 'nuance_shift', 'terminology', 'mistranslation']).optional()
+    .describe('이슈 유형 필터 (기본: all)'),
+  uncheckedOnly: z.boolean().optional()
+    .describe('체크되지 않은 이슈만 (기본: false)'),
+});
+
+type ReviewResultsArgs = z.infer<typeof ReviewResultsArgsSchema>;
+
+const SEVERITY_LABELS: Record<IssueSeverity, string> = {
+  critical: '심각',
+  major: '주요',
+  minor: '경미',
+};
+
+const TYPE_LABELS: Record<IssueType, string> = {
+  omission: '누락',
+  addition: '추가',
+  nuance_shift: '뉘앙스 변형',
+  terminology: '용어 불일치',
+  mistranslation: '오역',
+};
+
+function formatReviewIssue(issue: ReviewIssue, index: number): string {
+  const severityLabel = SEVERITY_LABELS[issue.severity] || issue.severity;
+  const typeLabel = TYPE_LABELS[issue.type] || issue.type;
+  const checkedMark = issue.checked ? '✓' : '○';
+
+  const lines = [
+    `${index + 1}. [${checkedMark}] [${severityLabel}] ${typeLabel}`,
+    `   원문: "${issue.sourceExcerpt}"`,
+    `   번역: "${issue.targetExcerpt}"`,
+    `   설명: ${issue.description}`,
+  ];
+
+  if (issue.suggestedFix) {
+    lines.push(`   제안: "${issue.suggestedFix}"`);
+  }
+
+  return lines.join('\n');
+}
+
+export const getReviewResultsTool = tool(
+  async (rawArgs) => {
+    const args = ReviewResultsArgsSchema.safeParse(rawArgs ?? {});
+    const parsed: ReviewResultsArgs = args.success ? args.data : {};
+
+    const reviewState = useReviewStore.getState();
+    const { isReviewing, results, progress } = reviewState;
+
+    // 검수 중인 경우
+    if (isReviewing) {
+      return `검수가 진행 중입니다. (${progress.completed}/${progress.total} 청크 완료)\n완료 후 다시 조회해주세요.`;
+    }
+
+    // 검수 결과가 없는 경우
+    if (results.length === 0) {
+      return '검수 결과가 없습니다. 검수 패널에서 검수를 먼저 실행해주세요.';
+    }
+
+    // 모든 이슈 가져오기
+    let issues = reviewState.getAllIssues();
+
+    // 필터 적용
+    if (parsed.severityFilter && parsed.severityFilter !== 'all') {
+      issues = issues.filter(i => i.severity === parsed.severityFilter);
+    }
+    if (parsed.typeFilter && parsed.typeFilter !== 'all') {
+      issues = issues.filter(i => i.type === parsed.typeFilter);
+    }
+    if (parsed.uncheckedOnly) {
+      issues = issues.filter(i => !i.checked);
+    }
+
+    // 결과 없음
+    if (issues.length === 0) {
+      const filterDesc = [];
+      if (parsed.severityFilter && parsed.severityFilter !== 'all') {
+        filterDesc.push(`심각도: ${SEVERITY_LABELS[parsed.severityFilter as IssueSeverity]}`);
+      }
+      if (parsed.typeFilter && parsed.typeFilter !== 'all') {
+        filterDesc.push(`유형: ${TYPE_LABELS[parsed.typeFilter as IssueType]}`);
+      }
+      if (parsed.uncheckedOnly) {
+        filterDesc.push('미체크만');
+      }
+      const filterText = filterDesc.length > 0 ? ` (필터: ${filterDesc.join(', ')})` : '';
+      return `조건에 맞는 이슈가 없습니다${filterText}.`;
+    }
+
+    // 요약 통계
+    const totalIssues = reviewState.getAllIssues();
+    const checkedCount = totalIssues.filter(i => i.checked).length;
+    const criticalCount = totalIssues.filter(i => i.severity === 'critical').length;
+    const majorCount = totalIssues.filter(i => i.severity === 'major').length;
+    const minorCount = totalIssues.filter(i => i.severity === 'minor').length;
+
+    const summary = [
+      `## 검수 결과 요약`,
+      `- 총 이슈: ${totalIssues.length}개 (체크됨: ${checkedCount}개)`,
+      `- 심각도별: 심각 ${criticalCount}개, 주요 ${majorCount}개, 경미 ${minorCount}개`,
+      '',
+    ];
+
+    // 필터 적용 안내
+    if (issues.length !== totalIssues.length) {
+      summary.push(`(필터 적용: ${issues.length}개 표시 중)`);
+      summary.push('');
+    }
+
+    // 이슈 목록
+    summary.push('## 이슈 목록');
+    summary.push('');
+
+    const formattedIssues = issues.map((issue, idx) => formatReviewIssue(issue, idx));
+
+    return summary.join('\n') + formattedIssues.join('\n\n');
+  },
+  {
+    name: 'get_review_results',
+    description:
+      '번역 검수 결과를 조회합니다. 검수에서 발견된 이슈(누락, 오역, 용어 불일치 등) 목록을 반환합니다. 심각도나 유형별로 필터링할 수 있습니다. 사용자가 검수 결과, 이슈, 오류에 대해 물어볼 때 이 도구를 호출하세요.',
+    schema: ReviewResultsArgsSchema,
   },
 );
 

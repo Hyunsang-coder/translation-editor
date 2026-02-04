@@ -135,6 +135,10 @@ export function ReviewPanel(): JSX.Element {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // 재번역 중간 모달 (지시사항 입력)
+  const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
+  const [retranslateMessage, setRetranslateMessage] = useState('');
+
   // 재번역 상태 (TranslatePreviewModal 연동)
   const [retranslatePreviewOpen, setRetranslatePreviewOpen] = useState(false);
   const [retranslatePreviewDoc, setRetranslatePreviewDoc] = useState<TipTapDocJson | null>(null);
@@ -323,9 +327,9 @@ export function ReviewPanel(): JSX.Element {
   }, [t]);
 
   /**
-   * 체크된 이슈를 반영하여 재번역 (기존 번역 함수 사용)
+   * 재번역 버튼 클릭 - 중간 모달 열기
    */
-  const handleRetranslate = useCallback(async () => {
+  const handleRetranslateClick = useCallback(() => {
     const checkedIssues = getCheckedIssues();
     if (checkedIssues.length === 0 || !project) return;
 
@@ -338,7 +342,25 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
-    // 재번역 시작 - 모달 열기
+    // 중간 모달 열기
+    setRetranslateModalOpen(true);
+    setRetranslateMessage('');
+  }, [project, getCheckedIssues, t]);
+
+  /**
+   * 체크된 이슈를 반영하여 재번역 실행
+   */
+  const handleRetranslateExecute = useCallback(async () => {
+    const checkedIssues = getCheckedIssues();
+    if (checkedIssues.length === 0 || !project) return;
+
+    const sourceDocument = useProjectStore.getState().sourceDocument;
+    if (!sourceDocument) return;
+
+    // 중간 모달 닫기
+    setRetranslateModalOpen(false);
+
+    // 재번역 시작 - 프리뷰 모달 열기
     setRetranslatePreviewOpen(true);
     setRetranslateLoading(true);
     setRetranslateError(null);
@@ -373,7 +395,8 @@ export function ReviewPanel(): JSX.Element {
         // 용어집 검색 실패 무시
       }
 
-      // 기존 번역 함수 사용 (검수 이슈 컨텍스트 포함)
+      // 기존 번역 함수 사용 (검수 이슈 + 사용자 메시지 컨텍스트 포함)
+      const trimmedMessage = retranslateMessage.trim();
       const { doc } = await translateWithStreaming({
         project,
         sourceDocJson,
@@ -382,6 +405,7 @@ export function ReviewPanel(): JSX.Element {
         translatorPersona,
         glossary,
         reviewIssues: checkedIssues,
+        ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => setRetranslateStreamingText(text),
         abortSignal: controller.signal,
       });
@@ -397,7 +421,7 @@ export function ReviewPanel(): JSX.Element {
       setRetranslateLoading(false);
       retranslateAbortController.current = null;
     }
-  }, [project, getCheckedIssues, t]);
+  }, [project, getCheckedIssues, retranslateMessage, t]);
 
   const handleRetranslateCancel = useCallback(() => {
     if (retranslateAbortController.current) {
@@ -588,7 +612,7 @@ export function ReviewPanel(): JSX.Element {
               </p>
               {checkedIssues.length > 0 && (
                 <p className="text-xs text-editor-muted">
-                  {t('review.retranslation.note', '선택한 검수 강도에 따라 검출된 이슈를 반영하여 재번역합니다.')}
+                  {t('review.retranslation.note', '선택한 이슈의 검수 결과를 반영하여 재번역합니다.')}
                 </p>
               )}
             </div>
@@ -630,7 +654,7 @@ export function ReviewPanel(): JSX.Element {
               {checkedIssues.length > 0 && results.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleRetranslate}
+                  onClick={handleRetranslateClick}
                   disabled={retranslateLoading}
                   className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
                 >
@@ -674,8 +698,58 @@ export function ReviewPanel(): JSX.Element {
         onClose={handleRetranslateClose}
         onApply={handleApplyRetranslation}
         onCancel={handleRetranslateCancel}
-        onRetry={handleRetranslate}
+        onRetry={handleRetranslateExecute}
       />
+
+      {/* 재번역 중간 모달 (지시사항 입력) */}
+      {retranslateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-4 py-3 border-b border-editor-border">
+              <h3 className="text-sm font-semibold text-editor-text">
+                {t('review.retranslate.modal.title', '재번역 설정')}
+              </h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <p className="text-xs text-editor-muted mb-2">
+                  {t('review.retranslate.modal.issueCount', '선택된 이슈: {{count}}개', { count: checkedIssues.length })}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-editor-text mb-1.5">
+                  {t('review.retranslate.modal.messageLabel', '추가 지시사항')}
+                  <span className="text-editor-muted font-normal ml-1">
+                    {t('review.retranslate.modal.optional', '(선택)')}
+                  </span>
+                </label>
+                <textarea
+                  value={retranslateMessage}
+                  onChange={(e) => setRetranslateMessage(e.target.value)}
+                  placeholder={t('review.retranslate.modal.placeholder', '예: 전체적으로 더 격식체로 번역해주세요.')}
+                  className="w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                />
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRetranslateModalOpen(false)}
+                className="px-3 py-1.5 text-xs rounded border border-editor-border hover:bg-editor-bg transition-colors"
+              >
+                {t('common.cancel', '취소')}
+              </button>
+              <button
+                type="button"
+                onClick={handleRetranslateExecute}
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              >
+                {t('review.retranslate.modal.execute', '재번역 실행')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

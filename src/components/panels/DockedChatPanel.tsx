@@ -93,7 +93,7 @@ export function DockedChatPanel(): JSX.Element {
         >
           <MessageSquare size={18} />
         </button>
-        <span className="text-sm font-medium text-editor-text truncate ml-2">
+        <span className="text-xs font-medium text-editor-text truncate ml-2">
           {projectTitle ? `${projectTitle} ${t('chat.title')}` : t('chat.title')}
         </span>
       </div>

@@ -117,7 +117,7 @@
     "settings": "Settings",
     "projectSettings": "Project Settings",
     "review": "Review",
-    "chat": "AI Chat"
+    "aiChat": "AI Chat"
   },
   "projectSidebar": {
     "projects": "Projects",
@@ -165,6 +165,8 @@
     },
     "review": "Review",
     "reviewTitle": "Translation Review",
+    "hideSource": "Hide Source",
+    "showSource": "Show Source",
     "chunks": "sections",
     "completedIn": "Completed in",
     "search": {
@@ -223,9 +225,7 @@
     "intensity": "Review Intensity",
     "intensity.minimal": "Obvious errors only",
     "intensity.balanced": "Important errors",
-    "intensity.balanced.description": "Detect important errors only (Critical + Major)",
     "intensity.thorough": "Thorough review",
-    "intensity.thorough.description": "Detect all issues (Critical + Major + Minor)",
     "intensity.grammar": "Grammar/Typos",
     "intensity.fluency": "Awkward Sentences",
     "categories": "Review Categories",
@@ -251,12 +251,11 @@
       "notFound": "Text not found in translation. The document may have changed."
     },
     "applyConfirm": {
-      "delete": "Suggested fix is empty. Delete the selected text?"
+      "delete": "Suggested fix is empty. Delete the selected text?",
+      "fuzzyMatch": "Found similar text ({{similarity}}% match). Apply the fix?\n\nMatched text: \"{{matchedText}}\""
     },
-    "clipboardFallback": "Text not found. Copied to clipboard. Please apply manually.",
-    "retranslation": {
-      "note": "Selected review intensity will be reflected when retranslating detected issues."
-    }
+    "fuzzyMatchApplied": "Applied fix using fuzzy matching.",
+    "clipboardFallback": "Text not found. Copied to clipboard. Please apply manually."
   },
   "chat": {
     "title": "Chat",

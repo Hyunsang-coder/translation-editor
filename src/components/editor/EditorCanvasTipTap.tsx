@@ -51,6 +51,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const setChatPanelOpen = useUIStore((s) => s.setChatPanelOpen);
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
   const addToast = useUIStore((s) => s.addToast);
+  const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
   // 복사용 JSON 상태
   const sourceDocJson = useProjectStore((s) => s.sourceDocJson);
@@ -70,20 +71,20 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   // 활성화된 프로바이더의 모델만 표시
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
     const presets: SelectOptionGroup[] = [];
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
     if (openaiEnabled) {
       presets.push({
         label: 'OpenAI',
         options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
       });
     }
+    if (anthropicEnabled) {
+      presets.push({
+        label: 'Anthropic',
+        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
+      });
+    }
     return presets;
-  }, [anthropicEnabled, openaiEnabled]);
+  }, [openaiEnabled, anthropicEnabled]);
 
   // 모든 모델 플랫 리스트 (유효성 검사용)
   const allTranslationModels = useMemo(() => {
@@ -425,6 +426,14 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleFocusMode}
+            className="px-2 py-1 rounded text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+            title={t('toolbar.focusMode')}
+          >
+            {focusMode ? t('editor.showSource', '원문 보이기') : t('editor.hideSource', '원문 숨기기')}
+          </button>
           <Select
             value={translationModel}
             onChange={setTranslationModel}
@@ -432,7 +441,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             aria-label={t('editor.translationModelAriaLabel')}
             title={t('editor.translationModel')}
             size="sm"
-            className="min-w-[100px]"
+            className="min-w-[130px]"
           />
           <button
             type="button"
@@ -466,7 +475,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         {/* Source Panel */}
         {!focusMode && (
           <>
-            <Panel id="source" defaultSize="50" minSize="30" className="min-w-0">
+            <Panel id="source" defaultSize="50" minSize="20" className="min-w-0">
               <div
                 className="h-full flex flex-col min-w-0"
                 style={{
@@ -518,7 +527,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         )}
 
         {/* Target Panel */}
-        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="30" className="min-w-0">
+        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="20" className="min-w-0">
           <div
             className="h-full flex flex-col min-w-0"
             style={{
@@ -526,63 +535,63 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               '--editor-line-height': targetLineHeight,
             } as CSSProperties}
           >
-          <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                {t('editor.target').toUpperCase()}
+            <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                  {t('editor.target').toUpperCase()}
+                </span>
+                <Select
+                  value={project.metadata.targetLanguage || ''}
+                  onChange={setTargetLanguage}
+                  options={[
+                    { value: '한국어', label: t('editor.languages.korean') },
+                    { value: '영어', label: t('editor.languages.english') },
+                    { value: '일본어', label: t('editor.languages.japanese') },
+                    { value: '중국어', label: t('editor.languages.chinese') },
+                    { value: '스페인어', label: t('editor.languages.spanish') },
+                    { value: '러시아어', label: t('editor.languages.russian') },
+                  ]}
+                  placeholder={t('editor.selectLanguage')}
+                  size="sm"
+                  className="min-w-[80px]"
+                />
+              </div>
+              <span className="text-[10px] text-editor-muted">
+                {targetWordCount.toLocaleString()} {t('editor.words')}
               </span>
-              <Select
-                value={project.metadata.targetLanguage || ''}
-                onChange={setTargetLanguage}
-                options={[
-                  { value: '한국어', label: t('editor.languages.korean') },
-                  { value: '영어', label: t('editor.languages.english') },
-                  { value: '일본어', label: t('editor.languages.japanese') },
-                  { value: '중국어', label: t('editor.languages.chinese') },
-                  { value: '스페인어', label: t('editor.languages.spanish') },
-                  { value: '러시아어', label: t('editor.languages.russian') },
-                ]}
-                placeholder={t('editor.selectLanguage')}
-                size="sm"
-                className="min-w-[80px]"
-              />
             </div>
-            <span className="text-[10px] text-editor-muted">
-              {targetWordCount.toLocaleString()} {t('editor.words')}
-            </span>
-          </div>
-          <TipTapMenuBar editor={targetEditor} panelType="target" />
-          <SearchBar
-            editor={targetEditor}
-            panelType="target"
-            isOpen={targetSearchOpen}
-            onClose={handleTargetSearchClose}
-            initialReplaceMode={targetSearchReplaceMode}
-          />
-          {/* 여기에 transition 효과 추가 */}
-          <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 relative group/target ${targetFlash ? 'bg-green-500/10' : ''}`}>
-            <TargetTipTapEditor
-              content={targetDocument || ''}
-              onChange={setTargetDocument}
-              onJsonChange={setTargetDocJson}
-              className="h-full"
-              onEditorReady={handleTargetEditorReady}
-              onSearchOpen={handleTargetSearchOpen}
-              onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
+            <TipTapMenuBar editor={targetEditor} panelType="target" />
+            <SearchBar
+              editor={targetEditor}
+              panelType="target"
+              isOpen={targetSearchOpen}
+              onClose={handleTargetSearchClose}
+              initialReplaceMode={targetSearchReplaceMode}
             />
-            {/* 호버 복사 버튼 */}
-            <button
-              type="button"
-              onClick={() => void handleCopyTarget()}
-              className="absolute bottom-4 right-4 opacity-0 group-hover/target:opacity-100 transition-opacity px-2.5 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg shadow-sm flex items-center gap-1.5 text-editor-text"
-              title={t('common.copyToClipboard', '복사')}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              {t('common.copy', '복사')}
-            </button>
-          </div>
+            {/* 여기에 transition 효과 추가 */}
+            <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 relative group/target ${targetFlash ? 'bg-green-500/10' : ''}`}>
+              <TargetTipTapEditor
+                content={targetDocument || ''}
+                onChange={setTargetDocument}
+                onJsonChange={setTargetDocJson}
+                className="h-full"
+                onEditorReady={handleTargetEditorReady}
+                onSearchOpen={handleTargetSearchOpen}
+                onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
+              />
+              {/* 호버 복사 버튼 */}
+              <button
+                type="button"
+                onClick={() => void handleCopyTarget()}
+                className="absolute bottom-4 right-4 opacity-0 group-hover/target:opacity-100 transition-opacity px-2.5 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-bg shadow-sm flex items-center gap-1.5 text-editor-text"
+                title={t('common.copyToClipboard', '복사')}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {t('common.copy', '복사')}
+              </button>
+            </div>
           </div>
         </Panel>
       </PanelGroup>

@@ -345,7 +345,7 @@ export function ProjectSidebar(): JSX.Element {
                     />
                   ) : (
                     <>
-                      <div className={`text-sm font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
+                      <div className={`text-xs font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
                         }`}>
                         {p.title}
                       </div>

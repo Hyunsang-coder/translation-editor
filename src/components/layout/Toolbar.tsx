@@ -10,7 +10,7 @@ import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { focusMode, toggleFocusMode, setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore();
+  const { setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore();
   const { project } = useProjectStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
@@ -70,16 +70,6 @@ export function Toolbar(): JSX.Element {
 
       {/* 툴바 액션 */}
       <div className="flex items-center gap-2">
-        {/* Focus Mode 토글 */}
-        <button
-          type="button"
-          onClick={toggleFocusMode}
-          className="p-2 rounded-md hover:bg-editor-border transition-colors"
-          title={t('toolbar.focusMode')}
-        >
-          {focusMode ? '👁️' : '👀'}
-        </button>
-
         {/* Tools 드롭다운 */}
         <div ref={dropdownRef} className="relative">
           <button
@@ -105,10 +95,7 @@ export function Toolbar(): JSX.Element {
                 aria-pressed={chatPanelOpen}
               >
                 <MessageSquare size={16} />
-                <span className="flex-1">{t('toolbar.chat')}</span>
-                {chatPanelOpen && (
-                  <span className="text-xs text-accent-primary">ON</span>
-                )}
+                <span>{t('toolbar.aiChat')}</span>
               </button>
               <div className="h-px bg-editor-border" />
               <button

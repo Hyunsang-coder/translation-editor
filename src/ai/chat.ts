@@ -2,7 +2,7 @@ import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
-import { getSourceDocumentTool, getTargetDocumentTool } from '@/ai/tools/documentTools';
+import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
@@ -586,6 +586,9 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
   // 문서 도구
   if (input.includeSource) toolSpecs.push(getSourceDocumentTool);
   if (input.includeTarget) toolSpecs.push(getTargetDocumentTool);
+
+  // 검수 결과 도구 (항상 사용 가능)
+  toolSpecs.push(getReviewResultsTool);
 
   // MCP 도구 (Atlassian Confluence)
   // getConfluencePage는 제외 - confluence_word_count가 REST API로 직접 처리
