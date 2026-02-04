@@ -29,6 +29,11 @@ interface UIState extends EditorUIState {
   sourceLineHeight: number; // ratio
   targetFontSize: number; // px
   targetLineHeight: number; // ratio
+
+  // Responsive layout state
+  windowWidth: number; // 현재 윈도우 너비 (세션마다 새로 측정, persist 안함)
+  autoLayoutEnabled: boolean; // 자동 레이아웃 활성화 (기본: true)
+  projectSidebarHidden: boolean; // ProjectSidebar 완전 숨김 상태
 }
 
 interface UIActions {
@@ -95,6 +100,11 @@ interface UIActions {
   adjustTargetFontSize: (delta: number) => void;
   setTargetLineHeight: (height: number) => void;
   adjustTargetLineHeight: (delta: number) => void;
+
+  // Responsive layout
+  setWindowWidth: (width: number) => void;
+  setAutoLayoutEnabled: (enabled: boolean) => void;
+  setProjectSidebarHidden: (hidden: boolean) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -126,14 +136,19 @@ export const useUIStore = create<UIStore>()(
       chatPanelPinned: true, // 도킹 모드에서는 기본 고정
 
       // Sidebar widths
-      settingsSidebarWidth: 320,
-      chatPanelWidth: 380,
+      settingsSidebarWidth: 250,
+      chatPanelWidth: 250,
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
       sourceFontSize: 14,
       sourceLineHeight: 1.4,
       targetFontSize: 14,
       targetLineHeight: 1.4,
+
+      // Responsive layout defaults
+      windowWidth: typeof window !== 'undefined' ? window.innerWidth : 1400,
+      autoLayoutEnabled: true,
+      projectSidebarHidden: false,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -281,12 +296,12 @@ export const useUIStore = create<UIStore>()(
 
       // Sidebar widths
       setSettingsSidebarWidth: (width: number): void => {
-        set({ settingsSidebarWidth: Math.max(280, Math.min(600, width)) }); // min 280, max 600
+        set({ settingsSidebarWidth: Math.max(200, Math.min(600, width)) }); // min 200, max 600
       },
 
       // Chat panel width (도킹 모드)
       setChatPanelWidth: (width: number): void => {
-        set({ chatPanelWidth: Math.max(320, Math.min(600, width)) }); // min 320, max 600
+        set({ chatPanelWidth: Math.max(200, Math.min(600, width)) }); // min 200, max 600
       },
 
       // Editor typography (Source/Target 패널별 독립 설정)
@@ -329,6 +344,19 @@ export const useUIStore = create<UIStore>()(
           targetLineHeight: Math.max(1.0, Math.min(2.5, Math.round((state.targetLineHeight + delta) * 10) / 10)),
         }));
       },
+
+      // Responsive layout
+      setWindowWidth: (width: number): void => {
+        set({ windowWidth: width });
+      },
+
+      setAutoLayoutEnabled: (enabled: boolean): void => {
+        set({ autoLayoutEnabled: enabled });
+      },
+
+      setProjectSidebarHidden: (hidden: boolean): void => {
+        set({ projectSidebarHidden: hidden });
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -351,6 +379,9 @@ export const useUIStore = create<UIStore>()(
         sourceLineHeight: state.sourceLineHeight,
         targetFontSize: state.targetFontSize,
         targetLineHeight: state.targetLineHeight,
+        // Responsive layout (windowWidth는 persist 안함 - 세션마다 새로 측정)
+        autoLayoutEnabled: state.autoLayoutEnabled,
+        // projectSidebarHidden은 persist 안함 - 세션마다 윈도우 크기에 따라 결정
       }),
     }
   )

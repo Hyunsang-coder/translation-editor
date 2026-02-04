@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
 import { DockedChatPanel } from '@/components/panels/DockedChatPanel';
 import { Toolbar } from '@/components/layout/Toolbar';
@@ -16,15 +17,18 @@ const ReviewTestPanel = lazy(() =>
 
 /**
  * 메인 레이아웃 컴포넌트
- * Panel Layout: ProjectSidebar + DockedChat + Editor + SettingsSidebar
+ * Panel Layout: ProjectSidebar + SettingsSidebar + Editor + DockedChat
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, projectSidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
+  const { focusMode, sidebarCollapsed, projectSidebarCollapsed, projectSidebarHidden, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
   const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
   const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const setDevTestPanelOpen = useUIStore((s) => s.setDevTestPanelOpen);
   const project = useProjectStore((s) => s.project);
   const loadProject = useProjectStore((s) => s.loadProject);
+
+  // 반응형 레이아웃 훅 활성화
+  useResponsiveLayout();
 
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -55,8 +59,8 @@ export function MainLayout(): JSX.Element {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
-      // 왼쪽으로 드래그하면 너비 증가 (사이드바는 오른쪽에 있으므로)
-      const delta = startX.current - e.clientX;
+      // 오른쪽으로 드래그하면 너비 증가 (사이드바는 왼쪽에 있으므로)
+      const delta = e.clientX - startX.current;
       const newWidth = startWidth.current + delta;
       setSettingsSidebarWidth(newWidth);
     };
@@ -99,17 +103,31 @@ export function MainLayout(): JSX.Element {
       {/* 메인 에디터 영역 */}
       <main className="flex-1 flex overflow-hidden min-h-0">
         {/* 프로젝트 사이드바 */}
-        <aside
-          className={`${projectSidebarCollapsed ? 'w-12' : 'w-64'
-            } border-r border-editor-border overflow-hidden transition-all duration-200`}
-        >
-          <ProjectSidebar />
-        </aside>
+        {!projectSidebarHidden && (
+          <aside
+            className={`${projectSidebarCollapsed ? 'w-12' : 'w-[210px]'
+              } border-r border-editor-border overflow-hidden transition-all duration-200`}
+          >
+            <ProjectSidebar />
+          </aside>
+        )}
 
-        {/* 도킹된 채팅 패널 (ProjectSidebar 우측) */}
-        {project && <DockedChatPanel />}
+        {/* Settings/Review 사이드바 (ProjectSidebar 우측, 드래그로 너비 조정 가능) */}
+        {!sidebarCollapsed && project && (
+          <aside
+            className="shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative"
+            style={{ width: settingsSidebarWidth }}
+          >
+            <SettingsSidebar />
+            {/* 리사이즈 핸들 (우측) */}
+            <div
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
+              onMouseDown={handleResizeStart}
+            />
+          </aside>
+        )}
 
-        <div className="flex-1 min-w-0 min-h-0 relative flex">
+        <div className="flex-1 min-w-[400px] min-h-0 relative flex">
           {/* 에디터 캔버스 (TipTap) */}
           <div className="flex-1 min-w-0 min-h-0">
             {project ? (
@@ -137,20 +155,8 @@ export function MainLayout(): JSX.Element {
             )}
           </div>
 
-          {/* Settings/Review 사이드바 (드래그로 너비 조정 가능) */}
-          {!sidebarCollapsed && project && (
-            <aside
-              className="shrink-0 border-l border-editor-border bg-editor-bg overflow-hidden relative"
-              style={{ width: settingsSidebarWidth }}
-            >
-              {/* 리사이즈 핸들 */}
-              <div
-                className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
-                onMouseDown={handleResizeStart}
-              />
-              <SettingsSidebar />
-            </aside>
-          )}
+          {/* 도킹된 채팅 패널 (우측 끝) */}
+          {project && <DockedChatPanel />}
         </div>
       </main>
 

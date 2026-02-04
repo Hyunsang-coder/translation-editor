@@ -6,7 +6,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { ChatContent } from '@/components/chat/ChatContent';
 
-const MIN_WIDTH = 320;
+const MIN_WIDTH = 250;
 const MAX_WIDTH = 600;
 
 /**
@@ -45,8 +45,8 @@ export function DockedChatPanel(): JSX.Element | null {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
-      // 오른쪽으로 드래그하면 너비 증가 (패널이 왼쪽에 있으므로)
-      const delta = e.clientX - startX.current;
+      // 왼쪽으로 드래그하면 너비 증가 (패널이 오른쪽에 있으므로)
+      const delta = startX.current - e.clientX;
       const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth.current + delta));
       setChatPanelWidth(newWidth);
     };
@@ -78,7 +78,7 @@ export function DockedChatPanel(): JSX.Element | null {
 
   return (
     <aside
-      className="shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative flex flex-col"
+      className="shrink-0 border-l border-editor-border bg-editor-bg overflow-hidden relative flex flex-col"
       style={{ width: chatPanelWidth }}
     >
       {/* 헤더 */}
@@ -101,9 +101,9 @@ export function DockedChatPanel(): JSX.Element | null {
         <ChatContent />
       </div>
 
-      {/* 리사이즈 핸들 (우측) */}
+      {/* 리사이즈 핸들 (좌측) */}
       <div
-        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
         onMouseDown={handleResizeStart}
       />
     </aside>
