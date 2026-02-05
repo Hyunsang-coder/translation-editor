@@ -194,6 +194,18 @@
     @apply list-decimal pl-6 my-2;
   }
 
+  .chat-markdown ol ol {
+    list-style-type: lower-alpha;
+  }
+
+  .chat-markdown ol ol ol {
+    list-style-type: lower-roman;
+  }
+
+  .chat-markdown ol ol ol ol {
+    list-style-type: upper-alpha;
+  }
+
   .chat-markdown li {
     @apply my-1;
   }
@@ -326,6 +338,19 @@
 
 .ProseMirror ol {
   @apply list-decimal pl-6 my-3;
+}
+
+/* Nested ordered list hierarchy: 1. → a. → i. → A. */
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.ProseMirror ol ol ol ol {
+  list-style-type: upper-alpha;
 }
 
 .ProseMirror li {
@@ -901,6 +926,18 @@
 
 .chat-composer-tiptap ol {
   @apply list-decimal pl-5 my-1;
+}
+
+.chat-composer-tiptap ol ol {
+  list-style-type: lower-alpha;
+}
+
+.chat-composer-tiptap ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.chat-composer-tiptap ol ol ol ol {
+  list-style-type: upper-alpha;
 }
 
 .chat-composer-tiptap li {
