@@ -23,4 +23,8 @@ export async function loadProject(projectId: string): Promise<ITEProject> {
   return await invoke<ITEProject>('load_project', { args: { projectId } });
 }
 
+export async function duplicateProject(projectId: string): Promise<ITEProject> {
+  return await invoke<ITEProject>('duplicate_project', { args: { projectId } });
+}
+
 

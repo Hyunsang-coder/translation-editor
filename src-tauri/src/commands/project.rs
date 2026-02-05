@@ -137,3 +137,94 @@ pub fn save_project(project: IteProject, db_state: State<DbState>) -> CommandRes
 
     db.save_project(&project).map_err(CommandError::from)
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateProjectArgs {
+    pub project_id: String,
+}
+
+/// 프로젝트 복제
+#[tauri::command]
+pub fn duplicate_project(
+    args: DuplicateProjectArgs,
+    db_state: State<DbState>,
+) -> CommandResult<IteProject> {
+    let db = db_state.0.lock().map_err(|e| CommandError {
+        code: "LOCK_ERROR".to_string(),
+        message: format!("Failed to acquire database lock: {}", e),
+        details: None,
+    })?;
+
+    let original = db.load_project(&args.project_id).map_err(CommandError::from)?;
+    let now = chrono::Utc::now().timestamp_millis();
+    let new_project_id = uuid::Uuid::new_v4().to_string();
+
+    // 기존 block ID → 새 block ID 매핑
+    let mut block_id_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for old_id in original.blocks.keys() {
+        block_id_map.insert(old_id.clone(), uuid::Uuid::new_v4().to_string());
+    }
+
+    // 블록 복제 (새 ID 발급)
+    let mut new_blocks = std::collections::HashMap::new();
+    for (old_id, block) in &original.blocks {
+        let new_id = block_id_map[old_id].clone();
+        new_blocks.insert(new_id.clone(), crate::models::EditorBlock {
+            id: new_id,
+            block_type: block.block_type.clone(),
+            content: block.content.clone(),
+            hash: block.hash.clone(),
+            metadata: crate::models::BlockMetadata {
+                author: block.metadata.author.clone(),
+                created_at: now,
+                updated_at: now,
+                tags: block.metadata.tags.clone(),
+                comments: block.metadata.comments.clone(),
+            },
+        });
+    }
+
+    // 세그먼트 복제 (새 ID + block ID 매핑)
+    let new_segments: Vec<crate::models::SegmentGroup> = original.segments.iter().map(|seg| {
+        crate::models::SegmentGroup {
+            group_id: uuid::Uuid::new_v4().to_string(),
+            source_ids: seg.source_ids.iter().map(|id| {
+                block_id_map.get(id).cloned().unwrap_or_else(|| id.clone())
+            }).collect(),
+            target_ids: seg.target_ids.iter().map(|id| {
+                block_id_map.get(id).cloned().unwrap_or_else(|| id.clone())
+            }).collect(),
+            is_aligned: seg.is_aligned,
+            order: seg.order,
+        }
+    }).collect();
+
+    let new_project = IteProject {
+        id: new_project_id,
+        version: original.version.clone(),
+        metadata: crate::models::ProjectMetadata {
+            title: format!("{} (copy)", original.metadata.title),
+            description: original.metadata.description.clone(),
+            domain: original.metadata.domain.clone(),
+            target_language: original.metadata.target_language.clone(),
+            created_at: now,
+            updated_at: now,
+            author: original.metadata.author.clone(),
+            glossary_paths: original.metadata.glossary_paths.clone(),
+            settings: original.metadata.settings.clone(),
+        },
+        segments: new_segments,
+        blocks: new_blocks,
+        history: Vec::new(),
+    };
+
+    db.save_project(&new_project).map_err(CommandError::from)?;
+
+    // 채팅 프로젝트 설정 복제 (시스템 프롬프트, 레퍼런스 노트 등)
+    if let Ok(Some(settings_json)) = db.load_chat_project_settings(&args.project_id) {
+        let _ = db.save_chat_project_settings(&new_project.id, &settings_json, now);
+    }
+
+    Ok(new_project)
+}

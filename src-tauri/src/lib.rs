@@ -239,6 +239,7 @@ pub fn run() {
             commands::project::create_project,
             commands::project::load_project,
             commands::project::save_project,
+            commands::project::duplicate_project,
             commands::block::get_block,
             commands::block::update_block,
             commands::block::split_block,

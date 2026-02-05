@@ -290,6 +290,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             if (match) {
               queueMicrotask(() => {
                 editor.commands.setTextSelection(match.from);
+                editor.commands.scrollIntoView();
                 // 에디터 포커스 유지하지 않음 (검색바에 포커스 유지)
               });
             }
@@ -337,6 +338,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           if (match) {
             queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
+              editor.commands.scrollIntoView();
             });
           }
 
@@ -366,6 +368,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           if (match) {
             queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
+              editor.commands.scrollIntoView();
             });
           }
 
@@ -476,6 +479,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           if (match) {
             queueMicrotask(() => {
               editor.commands.setTextSelection(match.from);
+              editor.commands.scrollIntoView();
             });
           }
 

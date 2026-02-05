@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
-import { createProject } from '@/tauri/project';
+import { createProject, duplicateProject } from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -229,6 +229,16 @@ export function ProjectSidebar(): JSX.Element {
     }
   };
 
+  const handleDuplicate = async (projectId: string): Promise<void> => {
+    try {
+      await duplicateProject(projectId);
+      await refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '프로젝트 복제 실패';
+      await message(msg, { title: 'Error', kind: 'error' });
+    }
+  };
+
   const onContextMenu = (e: React.MouseEvent, projectId: string) => {
     e.preventDefault();
     setContextMenu({
@@ -367,6 +377,16 @@ export function ProjectSidebar(): JSX.Element {
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
+            onClick={() => {
+              const pid = contextMenu.projectId;
+              setContextMenu(null);
+              void handleDuplicate(pid);
+            }}
+          >
+            복제 (Duplicate)
+          </button>
           <button
             className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
             onClick={() => {
