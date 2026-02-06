@@ -182,7 +182,7 @@ Critical implementation warnings learned from past issues.
 
 81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.
 
-82. **ImagePlaceholder Extension**: `TipTapEditor.tsx`에서 `@tiptap/extension-image` 대신 `ImagePlaceholder` 사용. 이미지를 로딩하지 않고 `🖼️ [Image]`로 표시. `src` 속성은 `data-src`로 보존되어 JSON/HTML 내보내기 시 복원됨.
+82. **Image Extension Dual Mode**: `ImagePlaceholder`(placeholder)와 `ImageOriginal`(실제 이미지 렌더링) 두 extension 존재. `pasteImageMode` 설정에 따라 `TipTapEditor.tsx`에서 선택. 두 extension 모두 `extendedParseHTML`을 공유하여 `img[src]`와 `div[data-type="image"]` 양쪽 파싱 가능 → 모드 전환 시 이미지 데이터 보존.
 
 83. **Review suggestedFix HTML 태그 처리**: AI가 테이블 셀 수정 시 `<td>텍스트</td>` 형태로 suggestedFix를 반환할 수 있음. `hasHtmlTags()` 검사로 HTML 포함 시 Apply 버튼 숨김 (서식 손실 방지). 표시는 `stripHtml()`로 태그 제거 후 보여줌.
 
@@ -231,3 +231,9 @@ Critical implementation warnings learned from past issues.
 108. **Focus Mode Button Location**: Focus Mode 토글 버튼은 상단 Toolbar가 아닌 에디터 패널 헤더(모델 선택 드롭다운 왼쪽)에 위치. 이모지 대신 텍스트("원문 숨기기"/"원문 보이기")로 표시하여 직관성 향상.
 
 109. **Font Size Consistency (text-xs)**: 사이드바, 패널 헤더, 설정 입력 필드 등 대부분의 UI 텍스트는 `text-xs`(12px) 사용. `text-sm`(14px)은 본문 콘텐츠나 에디터 내용에만 사용. 일관성 유지를 위해 새 UI 추가 시 주변 컴포넌트 폰트 크기 확인 필요.
+
+110. **Image parseHTML 공유 필수**: `ImageOriginal`과 `ImagePlaceholder` 모두 `extendedParseHTML`을 사용해야 함. 기본 `Image` extension의 `parseHTML`은 `img[src]`만 인식하므로, placeholder HTML(`<div data-type="image">`)을 파싱하지 못해 모드 전환 시 이미지 데이터가 소실됨.
+
+111. **Review stripImages 누락 방지**: `reviewTool.ts`의 `buildAlignedChunks`/`buildAlignedChunksAsync` 모두 `stripImages()`로 이미지 제거 필수. 누락 시 Base64 이미지가 LLM에 전송되어 토큰 낭비(이미지당 3,000~16,000 토큰) 및 청킹 왜곡 발생.
+
+112. **CSP img-src 외부 이미지 허용**: `tauri.conf.json`의 CSP에 `img-src 'self' asset: data: https: http:` 필요. `https: http:` 누락 시 original 모드에서 CDN 이미지 로드 차단됨.

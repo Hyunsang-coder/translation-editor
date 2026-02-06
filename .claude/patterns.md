@@ -26,20 +26,32 @@ src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
 
-### Image Placeholder
+### Image Extensions (Dual Mode)
 ```typescript
 // src/editor/extensions/ImagePlaceholder.ts
-// 이미지를 로딩하지 않고 placeholder로 표시
-// - 네트워크 요청 방지 (failed to load resource 에러 제거)
-// - 에디터 성능 향상 (Base64 이미지 렌더링 생략)
-// - 이미지 데이터(src)는 JSON에 그대로 보존
+// 두 개의 extension으로 모드 전환 (pasteImageMode 설정에 따라)
 
-// 표시: 🖼️ [Image], 🎬 [Video], 📎 [Embed]
-// 삭제: 기본 키보드/마우스 동작으로 삭제 가능
-// 내보내기: getHTML() 시 원본 <img> 태그로 출력
+// ImagePlaceholder: placeholder 모드 (기본이 아닌 대체 모드)
+// - 네트워크 요청 방지, 에디터 성능 향상
+// - 표시: 🖼️ [Image], 🎬 [Video], 📎 [Embed]
+// - src는 data-src로 보존
 
-// 설정: inline: true (리스트 내 이미지가 텍스트와 같은 줄에 표시)
-ImagePlaceholder.configure({ inline: true, allowBase64: true })
+// ImageOriginal: original 모드 (기본값)
+// - 실제 <img> 태그 렌더링 (CDN 이미지 표시)
+// - 기본 Image extension의 renderHTML 사용
+
+// 공통 parseHTML (extendedParseHTML):
+// - img[src], img, div[data-type="image"] 모두 파싱
+// - placeholder ↔ original 모드 전환 시 데이터 보존
+
+// TipTapEditor.tsx에서 모드별 extension 선택:
+const imageExtension = useMemo(() => {
+  if (pasteImageMode === 'original') {
+    return ImageOriginal.configure({ inline: true, allowBase64: true });
+  }
+  return ImagePlaceholder.configure({ inline: true, allowBase64: true });
+}, [pasteImageMode]);
+// useEditor deps에 [extensions] 전달 → 모드 변경 시 에디터 재생성
 ```
 
 ### HTML Paste Normalization
@@ -47,14 +59,16 @@ ImagePlaceholder.configure({ inline: true, allowBase64: true })
 // src/utils/htmlNormalizer.ts
 // 붙여넣기된 HTML 정규화 파이프라인
 
-normalizePastedHtml(html)
+normalizePastedHtml(html, options?)
   // 1. Confluence 태그 변환 (ac:image → img, video/iframe → placeholder)
   // 2. 인라인 스타일 → 시맨틱 태그 (font-weight: bold → <strong>)
   // 3. DOMPurify 보안 정제 (허용 태그/속성만 유지)
   // 4. 후처리: span unwrap, div→p, 빈 p 제거, URL 검증
+  // 5. 옵션: removeImages (ignore 모드), removeLinks
 
 // 보안: javascript:, data:text/html 등 위험한 URL 프로토콜 차단
 // 리스트 내 이미지: <li> 안의 이미지만 포함한 div는 unwrap
+// shouldNormalizePastedHtml 미통과 시 applyPasteOptions()로 후처리
 ```
 
 ## AI Payload Construction
@@ -175,11 +189,16 @@ htmlToTipTapJson()       // HTML → TipTap JSON
 
 ```typescript
 // src/utils/imagePlaceholder.ts
+stripImages()     // 번역/검수 전 이미지 마크다운 제거 (토큰 절약)
 extractImages()   // Replace base64 with placeholders before translation
-restoreImages()   // Restore after translation
+restoreImages()   // Restore after translation (deprecated)
 
 // src/utils/imageResize.ts
 resizeImageForApi()   // Progressive resize for API limits
+
+// 번역: translateDocument.ts → stripImages() 적용
+// 검수: reviewTool.ts → buildAlignedChunks/Async에서 stripImages() 적용
+// 두 파이프라인 모두 이미지를 LLM 전송 전 제거
 ```
 
 ## Review Feature
