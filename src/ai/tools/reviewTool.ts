@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
+import { stripImages } from '@/utils/imagePlaceholder';
 import { searchGlossary } from '@/tauri/glossary';
 import type { ITEProject } from '@/types';
 
@@ -45,22 +46,22 @@ export function buildAlignedChunks(
   for (const seg of orderedSegments) {
     // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블도 HTML로 보존)
     // 번역용 함수 사용: 셀 내 리스트/다중 paragraph가 있는 테이블도 완전 보존
-    const sourceText = seg.sourceIds
+    const sourceText = stripImages(seg.sourceIds
       .map(id => {
         const html = project.blocks[id]?.content || '';
         if (!html.trim()) return '';
         const json = htmlToTipTapJson(html);
         return tipTapJsonToMarkdownForTranslation(json);
       })
-      .join('\n');
-    const targetText = seg.targetIds
+      .join('\n')).stripped;
+    const targetText = stripImages(seg.targetIds
       .map(id => {
         const html = project.blocks[id]?.content || '';
         if (!html.trim()) return '';
         const json = htmlToTipTapJson(html);
         return tipTapJsonToMarkdownForTranslation(json);
       })
-      .join('\n');
+      .join('\n')).stripped;
     const segmentSize = sourceText.length + targetText.length;
 
     // 청크 크기 초과 시 새 청크 시작
@@ -113,23 +114,23 @@ export async function buildAlignedChunksAsync(
 
     const seg = orderedSegments[i]!;
 
-    // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블도 HTML로 보존)
-    const sourceText = seg.sourceIds
+    // HTML → TipTap JSON → Markdown 변환 → 이미지 제거 (토큰 절약)
+    const sourceText = stripImages(seg.sourceIds
       .map(id => {
         const html = project.blocks[id]?.content || '';
         if (!html.trim()) return '';
         const json = htmlToTipTapJson(html);
         return tipTapJsonToMarkdownForTranslation(json);
       })
-      .join('\n');
-    const targetText = seg.targetIds
+      .join('\n')).stripped;
+    const targetText = stripImages(seg.targetIds
       .map(id => {
         const html = project.blocks[id]?.content || '';
         if (!html.trim()) return '';
         const json = htmlToTipTapJson(html);
         return tipTapJsonToMarkdownForTranslation(json);
       })
-      .join('\n');
+      .join('\n')).stripped;
     const segmentSize = sourceText.length + targetText.length;
 
     // 청크 크기 초과 시 새 청크 시작

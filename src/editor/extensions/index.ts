@@ -8,6 +8,5 @@ export { GhostChipExtension } from './GhostChip';
 export { DiffMarkExtension } from './DiffMark';
 export { SearchHighlight, getSearchState, searchHighlightPluginKey } from './SearchHighlight';
 export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
-export { ImagePlaceholder } from './ImagePlaceholder';
-export type { ImagePlaceholderOptions } from './ImagePlaceholder';
+export { ImagePlaceholder, ImageOriginal } from './ImagePlaceholder';
 

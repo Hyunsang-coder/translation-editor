@@ -229,8 +229,17 @@ export function shouldNormalizePastedHtml(html: string): boolean {
   );
 }
 
-export function normalizePastedHtml(html: string): string {
+export interface NormalizePasteOptions {
+  removeImages?: boolean;
+  removeLinks?: boolean;
+}
+
+export function normalizePastedHtml(html: string, options?: NormalizePasteOptions): string {
   if (!shouldNormalizePastedHtml(html)) {
+    // 옵션이 있으면 간단한 후처리라도 수행
+    if (options?.removeImages || options?.removeLinks) {
+      return applyPasteOptions(html, options);
+    }
     return html;
   }
 
@@ -252,6 +261,14 @@ export function normalizePastedHtml(html: string): string {
     removeEmptyParagraphs(doc.body);
     removeDuplicateTableHeaders(doc.body);
     sanitizeUrls(doc.body); // 보안: 위험한 URL 프로토콜 제거
+
+    // 붙여넣기 옵션 적용
+    if (options?.removeImages) {
+      removeAllImages(doc.body);
+    }
+    if (options?.removeLinks) {
+      unwrapAllLinks(doc.body);
+    }
 
     return doc.body.innerHTML;
   } catch (error) {
@@ -440,4 +457,51 @@ function findPreviousElementSibling(node: Element): Element | null {
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 모든 img 태그 제거
+ */
+function removeAllImages(root: ParentNode): void {
+  const images = Array.from(root.querySelectorAll('img'));
+  for (const img of images) {
+    img.remove();
+  }
+}
+
+/**
+ * 모든 a 태그를 텍스트 콘텐츠로 교체 (링크 제거)
+ */
+function unwrapAllLinks(root: ParentNode): void {
+  const links = Array.from(root.querySelectorAll('a'));
+  for (const link of links) {
+    const parent = link.parentNode;
+    if (!parent) continue;
+    while (link.firstChild) {
+      parent.insertBefore(link.firstChild, link);
+    }
+    parent.removeChild(link);
+  }
+}
+
+/**
+ * shouldNormalizePastedHtml을 통과하지 못한 HTML에 대한 간단한 후처리
+ */
+function applyPasteOptions(html: string, options: NormalizePasteOptions): string {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    if (!doc.body) return html;
+
+    if (options.removeImages) {
+      removeAllImages(doc.body);
+    }
+    if (options.removeLinks) {
+      unwrapAllLinks(doc.body);
+    }
+
+    return doc.body.innerHTML;
+  } catch {
+    return html;
+  }
 }

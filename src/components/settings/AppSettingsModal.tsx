@@ -12,9 +12,11 @@ interface AppSettingsModalProps {
 
 export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
   const { t } = useTranslation();
-  const { 
-    language, setLanguage, 
+  const {
+    language, setLanguage,
     theme, setTheme,
+    pasteImageMode, setPasteImageMode,
+    pasteLinkPreserve, setPasteLinkPreserve,
   } = useUIStore();
   const {
     openaiApiKey,
@@ -163,6 +165,59 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     >
                         <span className="text-xl">🖥️</span>
                     </button>
+                </div>
+            </section>
+
+            {/* Paste Settings */}
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">📋</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.paste')}</h3>
+                </div>
+
+                {/* Image Paste Mode */}
+                <div className="space-y-2">
+                    <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.pasteImageMode')}</label>
+                    <p className="text-[10px] text-editor-muted">{t('appSettings.pasteImageModeDescription')}</p>
+                    <div className="flex items-center gap-2">
+                        {(['placeholder', 'original', 'ignore'] as const).map((mode) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setPasteImageMode(mode)}
+                                className={`
+                                    px-3 py-1.5 rounded-lg text-xs font-medium
+                                    transition-all duration-200
+                                    ${pasteImageMode === mode
+                                        ? 'bg-primary-500 text-white shadow-md scale-105'
+                                        : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
+                                    }
+                                `}
+                            >
+                                {t(`appSettings.pasteImageMode${mode.charAt(0).toUpperCase() + mode.slice(1)}`)}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Link Preserve */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="paste-link-preserve"
+                            checked={pasteLinkPreserve}
+                            onChange={(e) => setPasteLinkPreserve(e.target.checked)}
+                            className="accent-primary-500 w-4 h-4 cursor-pointer"
+                        />
+                        <label
+                            htmlFor="paste-link-preserve"
+                            className={`text-sm font-medium cursor-pointer ${pasteLinkPreserve ? 'text-editor-text' : 'text-editor-muted'}`}
+                        >
+                            {t('appSettings.pasteLinkPreserve')}
+                        </label>
+                    </div>
+                    <p className="text-[10px] text-editor-muted pl-6">{t('appSettings.pasteLinkPreserveDescription')}</p>
                 </div>
             </section>
 

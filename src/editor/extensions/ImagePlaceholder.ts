@@ -8,22 +8,56 @@
 
 import Image from '@tiptap/extension-image';
 
-export interface ImagePlaceholderOptions {
-  inline: boolean;
-  allowBase64: boolean;
-  HTMLAttributes: Record<string, unknown>;
-}
+/**
+ * parseHTML 확장: placeholder div도 파싱 가능하도록
+ * placeholder ↔ original 모드 전환 시 데이터 보존
+ */
+const extendedParseHTML = [
+  { tag: 'img[src]' },
+  {
+    tag: 'img',
+    getAttrs: (node: string | HTMLElement) => {
+      if (typeof node === 'string') return false;
+      return {
+        src: node.getAttribute('src') || '',
+        alt: node.getAttribute('alt') || '[Image]',
+      };
+    },
+  },
+  {
+    tag: 'div[data-type="image"]',
+    getAttrs: (node: string | HTMLElement) => {
+      if (typeof node === 'string') return false;
+      return {
+        src: node.getAttribute('data-src'),
+        alt: node.getAttribute('data-alt'),
+      };
+    },
+  },
+];
 
-export const ImagePlaceholder = Image.extend<ImagePlaceholderOptions>({
+/**
+ * Original 모드: 실제 <img> 태그 렌더링 (CDN 이미지 표시)
+ * placeholder div도 파싱 가능 (모드 전환 시 데이터 보존)
+ */
+export const ImageOriginal = Image.extend({
+  name: 'image',
+  parseHTML() {
+    return extendedParseHTML;
+  },
+});
+
+/**
+ * Placeholder 모드: div placeholder로 렌더링
+ * src는 data-src로 보존
+ */
+export const ImagePlaceholder = Image.extend({
   name: 'image',
 
   renderHTML({ HTMLAttributes }) {
-    // 실제 이미지 대신 placeholder div 렌더링
-    // src 속성은 data-src로 보존하여 필요시 복원 가능
     const src = HTMLAttributes.src as string | undefined;
     const alt = HTMLAttributes.alt as string | undefined;
 
-    // alt 텍스트에 따라 아이콘과 라벨 결정
     const isVideo = alt === '[Video]';
     const isEmbed = alt === '[Embed]';
     const icon = isVideo ? '🎬' : isEmbed ? '📎' : '🖼️';
@@ -38,59 +72,12 @@ export const ImagePlaceholder = Image.extend<ImagePlaceholderOptions>({
         'data-type': 'image',
         contenteditable: 'false',
       },
-      [
-        'span',
-        { class: 'image-placeholder-icon' },
-        icon,
-      ],
-      [
-        'span',
-        { class: 'image-placeholder-label' },
-        label,
-      ],
+      ['span', { class: 'image-placeholder-icon' }, icon],
+      ['span', { class: 'image-placeholder-label' }, label],
     ];
   },
 
   parseHTML() {
-    return [
-      // 기존 img 태그 파싱 (src 있는 경우)
-      {
-        tag: 'img[src]',
-      },
-      // src 없는 img 태그도 파싱 (Confluence placeholder 등)
-      {
-        tag: 'img',
-        getAttrs: (node) => {
-          if (typeof node === 'string') return false;
-          const element = node as HTMLElement;
-          return {
-            src: element.getAttribute('src') || '',
-            alt: element.getAttribute('alt') || '[Image]',
-          };
-        },
-      },
-      // placeholder div도 파싱 (재로드 시)
-      {
-        tag: 'div[data-type="image"]',
-        getAttrs: (node) => {
-          if (typeof node === 'string') return false;
-          const element = node as HTMLElement;
-          return {
-            src: element.getAttribute('data-src'),
-            alt: element.getAttribute('data-alt'),
-          };
-        },
-      },
-    ];
-  },
-
-  // getHTML() 호출 시 원본 img 태그로 출력 (내보내기용)
-  addStorage() {
-    return {
-      // 원본 이미지 태그를 얻기 위한 helper
-      getOriginalHTML: (src: string, alt?: string) => {
-        return `<img src="${src}"${alt ? ` alt="${alt}"` : ''}>`;
-      },
-    };
+    return extendedParseHTML;
   },
 });

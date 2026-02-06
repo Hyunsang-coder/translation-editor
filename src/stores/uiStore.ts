@@ -34,6 +34,10 @@ interface UIState extends EditorUIState {
   windowWidth: number; // 현재 윈도우 너비 (세션마다 새로 측정, persist 안함)
   autoLayoutEnabled: boolean; // 자동 레이아웃 활성화 (기본: true)
   projectSidebarHidden: boolean; // ProjectSidebar 완전 숨김 상태
+
+  // Paste settings
+  pasteImageMode: 'placeholder' | 'original' | 'ignore';
+  pasteLinkPreserve: boolean;
 }
 
 interface UIActions {
@@ -105,6 +109,10 @@ interface UIActions {
   setWindowWidth: (width: number) => void;
   setAutoLayoutEnabled: (enabled: boolean) => void;
   setProjectSidebarHidden: (hidden: boolean) => void;
+
+  // Paste settings
+  setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore') => void;
+  setPasteLinkPreserve: (preserve: boolean) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -149,6 +157,10 @@ export const useUIStore = create<UIStore>()(
       windowWidth: typeof window !== 'undefined' ? window.innerWidth : 1400,
       autoLayoutEnabled: true,
       projectSidebarHidden: false,
+
+      // Paste settings defaults
+      pasteImageMode: 'placeholder',
+      pasteLinkPreserve: true,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -357,6 +369,15 @@ export const useUIStore = create<UIStore>()(
       setProjectSidebarHidden: (hidden: boolean): void => {
         set({ projectSidebarHidden: hidden });
       },
+
+      // Paste settings
+      setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore'): void => {
+        set({ pasteImageMode: mode });
+      },
+
+      setPasteLinkPreserve: (preserve: boolean): void => {
+        set({ pasteLinkPreserve: preserve });
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -382,6 +403,9 @@ export const useUIStore = create<UIStore>()(
         // Responsive layout (windowWidth는 persist 안함 - 세션마다 새로 측정)
         autoLayoutEnabled: state.autoLayoutEnabled,
         // projectSidebarHidden은 persist 안함 - 세션마다 윈도우 크기에 따라 결정
+        // Paste settings
+        pasteImageMode: state.pasteImageMode,
+        pasteLinkPreserve: state.pasteLinkPreserve,
       }),
     }
   )

@@ -6,12 +6,12 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import { ImagePlaceholder } from '@/editor/extensions/ImagePlaceholder';
+import { ImageOriginal, ImagePlaceholder } from '@/editor/extensions/ImagePlaceholder';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -44,25 +44,25 @@ export function SourceTipTapEditor({
 }: SourceTargetEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
+  const pasteImageMode = useUIStore((s) => s.pasteImageMode);
+  const pasteLinkPreserve = useUIStore((s) => s.pasteLinkPreserve);
 
-  const editor = useEditor({
-    extensions: [
+  // pasteImageMode에 따라 Image extension 선택
+  // original: 기본 Image (실제 <img> 렌더링), placeholder/ignore: ImagePlaceholder
+  const imageExtension = useMemo(() => {
+    if (pasteImageMode === 'original') {
+      return ImageOriginal.configure({ inline: true, allowBase64: true });
+    }
+    return ImagePlaceholder.configure({ inline: true, allowBase64: true });
+  }, [pasteImageMode]);
+
+  // pasteLinkPreserve에 따라 Link extension 포함/제외
+  // false면 에디터에 링크 mark 자체가 존재하지 않음
+  const extensions = useMemo(() => {
+    const base = [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
-        history: {
-          depth: 100,
-          newGroupDelay: 500,
-        },
-      }),
-      Link.configure({
-        openOnClick: false,
-        autolink: false,
-        linkOnPaste: false,
-        HTMLAttributes: {
-          class: 'tiptap-link',
-        },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        history: { depth: 100, newGroupDelay: 500 },
       }),
       Placeholder.configure({
         placeholder: t('editor.sourcePlaceholder'),
@@ -72,10 +72,7 @@ export function SourceTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      ImagePlaceholder.configure({
-        inline: true,
-        allowBase64: true,
-      }),
+      imageExtension,
       Underline,
       Highlight.configure({ multicolor: false }),
       Subscript,
@@ -88,14 +85,35 @@ export function SourceTipTapEditor({
         searchClass: 'search-match',
         currentClass: 'search-current',
       }),
-    ],
+    ];
+    if (pasteLinkPreserve) {
+      base.splice(1, 0, Link.configure({
+        openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
+        HTMLAttributes: { class: 'tiptap-link' },
+      }));
+    }
+    return base;
+  }, [imageExtension, pasteLinkPreserve, t]);
+
+  const editor = useEditor({
+    extensions,
     content,
     editable: true,
     editorProps: {
       attributes: {
         class: 'tiptap-editor focus:outline-none',
       },
-      transformPastedHTML: (html) => normalizePastedHtml(html),
+      transformPastedHTML: (html) => {
+        // 항상 최신 설정값을 읽어서 stale closure 문제 방지
+        const { pasteImageMode: imgMode } = useUIStore.getState();
+        const removeImages = imgMode === 'ignore';
+        if (removeImages) {
+          return normalizePastedHtml(html, { removeImages });
+        }
+        return normalizePastedHtml(html);
+      },
       handleKeyDown: (_view, event) => {
         // Cmd+F: 검색 열기
         const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
@@ -144,7 +162,7 @@ export function SourceTipTapEditor({
         onJsonChange(ed.getJSON() as Record<string, unknown>);
       }
     },
-  });
+  }, [extensions]);
 
   // 외부 content 변경 시 에디터 업데이트
   useEffect(() => {
@@ -206,25 +224,21 @@ export function TargetTipTapEditor({
 }: SourceTargetEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
+  const pasteImageMode = useUIStore((s) => s.pasteImageMode);
+  const pasteLinkPreserve = useUIStore((s) => s.pasteLinkPreserve);
 
-  const editor = useEditor({
-    extensions: [
+  const imageExtension = useMemo(() => {
+    if (pasteImageMode === 'original') {
+      return ImageOriginal.configure({ inline: true, allowBase64: true });
+    }
+    return ImagePlaceholder.configure({ inline: true, allowBase64: true });
+  }, [pasteImageMode]);
+
+  const extensions = useMemo(() => {
+    const base = [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
-        history: {
-          depth: 100,
-          newGroupDelay: 500,
-        },
-      }),
-      Link.configure({
-        openOnClick: false,
-        autolink: false,
-        linkOnPaste: false,
-        HTMLAttributes: {
-          class: 'tiptap-link',
-        },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        history: { depth: 100, newGroupDelay: 500 },
       }),
       Placeholder.configure({
         placeholder: t('editor.targetPlaceholder'),
@@ -234,10 +248,7 @@ export function TargetTipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      ImagePlaceholder.configure({
-        inline: true,
-        allowBase64: true,
-      }),
+      imageExtension,
       Underline,
       Highlight.configure({ multicolor: false }),
       Subscript,
@@ -250,14 +261,35 @@ export function TargetTipTapEditor({
         searchClass: 'search-match',
         currentClass: 'search-current',
       }),
-    ],
+    ];
+    if (pasteLinkPreserve) {
+      base.splice(1, 0, Link.configure({
+        openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
+        HTMLAttributes: { class: 'tiptap-link' },
+      }));
+    }
+    return base;
+  }, [imageExtension, pasteLinkPreserve, t]);
+
+  const editor = useEditor({
+    extensions,
     content,
     editable: true,
     editorProps: {
       attributes: {
         class: 'tiptap-editor focus:outline-none',
       },
-      transformPastedHTML: (html) => normalizePastedHtml(html),
+      transformPastedHTML: (html) => {
+        // 항상 최신 설정값을 읽어서 stale closure 문제 방지
+        const { pasteImageMode: imgMode } = useUIStore.getState();
+        const removeImages = imgMode === 'ignore';
+        if (removeImages) {
+          return normalizePastedHtml(html, { removeImages });
+        }
+        return normalizePastedHtml(html);
+      },
       handleKeyDown: (_view, event) => {
         // Cmd+F: 검색 열기
         const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
@@ -314,7 +346,7 @@ export function TargetTipTapEditor({
         onJsonChange(ed.getJSON() as Record<string, unknown>);
       }
     },
-  });
+  }, [extensions]);
 
   // 외부 content 변경 시 에디터 업데이트
   useEffect(() => {
