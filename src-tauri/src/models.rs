@@ -129,6 +129,12 @@ pub struct ChatSession {
     pub messages: Vec<ChatMessage>,
     #[serde(rename = "contextBlockIds")]
     pub context_block_ids: Vec<String>,
+    #[serde(rename = "confluenceSearchEnabled", default = "default_true")]
+    pub confluence_search_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// 채팅 메시지

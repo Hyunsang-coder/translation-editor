@@ -211,6 +211,7 @@ let writeThroughTimer: number | null = null;
 
 let autoSaveTimer: number | null = null;
 let autoSaveInFlight = false;
+let saveInFlight: Promise<void> | null = null;
 
 // ============================================
 // Initial State
@@ -365,8 +366,8 @@ export const useProjectStore = create<ProjectStore>()(
               const { useChatStore } = await import('@/stores/chatStore');
               await useChatStore.getState().hydrateForProject(loaded.id);
               return;
-            } catch {
-              // 로드 실패 시 무시
+            } catch (err) {
+              console.warn('[initializeProject] Failed to load lastProjectId:', lastProjectId, err instanceof Error ? err.message : err);
             }
           }
 
@@ -395,8 +396,10 @@ export const useProjectStore = create<ProjectStore>()(
               await useChatStore.getState().hydrateForProject(loaded.id);
               return;
             }
-          } catch {
-            // Tauri runtime 미탐지/DB 조회 실패 등은 폴백으로 처리
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to load project';
+            console.warn('[initializeProject] DB fallback failed:', message);
+            set({ error: message, isLoading: false });
           }
 
           // 프로젝트가 하나도 없는 경우: null 유지 (Blank Page UX를 위함)
@@ -565,9 +568,9 @@ export const useProjectStore = create<ProjectStore>()(
             try {
               await get().saveProject();
             } catch (e) {
-              // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
               const message = e instanceof Error ? e.message : String(e);
               console.warn('[createNewProject] Failed to save previous project:', message);
+              set({ saveStatus: 'error', lastSaveError: message });
             }
             // 저장 후 새 프로젝트 생성 진행
             createAndSetNewProject();
@@ -604,15 +607,14 @@ export const useProjectStore = create<ProjectStore>()(
 
       // 프로젝트 저장 (Tauri 백엔드 호출 예정)
       saveProject: async (): Promise<void> => {
+        // 동시 실행 방지: 이전 save가 완료될 때까지 대기
+        if (saveInFlight) {
+          await saveInFlight;
+        }
+
         const { project, targetDocument, sourceDocument, targetDocHandle } = get();
 
-        console.log('[saveProject] called', {
-          hasProject: !!project,
-          projectId: project?.id,
-          targetDocLength: targetDocument?.length,
-          sourceDocLength: sourceDocument?.length,
-          hasTargetDocHandle: !!targetDocHandle,
-        });
+        console.debug('[saveProject] called, projectId:', project?.id);
 
         if (!project) {
           console.warn('[saveProject] No project, returning');
@@ -620,6 +622,9 @@ export const useProjectStore = create<ProjectStore>()(
         }
 
         set({ isLoading: true, saveStatus: 'saving', lastSaveError: null });
+
+        let resolve: () => void;
+        saveInFlight = new Promise<void>((r) => { resolve = r; });
 
         try {
           const now = Date.now();
@@ -766,18 +771,11 @@ export const useProjectStore = create<ProjectStore>()(
             },
           };
 
-          console.log('[saveProject] Calling tauriSaveProject...', {
-            projectId: projectToSave.id,
-            blocksCount: Object.keys(nextBlocks).length,
-            targetBlocksSample: Object.values(nextBlocks)
-              .filter(b => b.type === 'target')
-              .slice(0, 2)
-              .map(b => ({ id: b.id, contentLength: b.content.length, content: b.content.slice(0, 100) })),
-          });
+          console.debug('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
 
           await tauriSaveProject(projectToSave);
 
-          console.log('[saveProject] SUCCESS - saved project:', projectToSave.id);
+          console.debug('[saveProject] success:', projectToSave.id);
 
           set({
             project: projectToSave,
@@ -797,6 +795,9 @@ export const useProjectStore = create<ProjectStore>()(
             saveStatus: 'error',
             lastSaveError: error instanceof Error ? error.message : 'Failed to save project',
           });
+        } finally {
+          saveInFlight = null;
+          resolve!();
         }
       },
 
@@ -1436,7 +1437,7 @@ export const useProjectStore = create<ProjectStore>()(
         const sourceBlock: EditorBlock = {
           id: sourceBlockId,
           type: 'source',
-          content: `<p>${sourceContent}</p>`,
+          content: toParagraphHtml(sourceContent),
           hash: hashContent(sourceContent),
           metadata: {
             createdAt: now,
@@ -1448,7 +1449,7 @@ export const useProjectStore = create<ProjectStore>()(
         const targetBlock: EditorBlock = {
           id: targetBlockId,
           type: 'target',
-          content: `<p>${targetContent}</p>`,
+          content: toParagraphHtml(targetContent),
           hash: hashContent(targetContent),
           metadata: {
             createdAt: now,
@@ -1503,14 +1504,12 @@ function scheduleWriteThroughSave(
   set: (partial: Partial<ProjectStore>) => void,
   get: () => ProjectStore,
 ): void {
-  console.log('[scheduleWriteThroughSave] scheduling save in', WRITE_THROUGH_DELAY_MS, 'ms');
 
   if (writeThroughTimer !== null) {
     window.clearTimeout(writeThroughTimer);
   }
 
   writeThroughTimer = window.setTimeout(() => {
-    console.log('[scheduleWriteThroughSave] timer fired, calling saveProject');
     void (async () => {
       try {
         // 단일 문서(Target/Source) 편집은 blocks로 역투영이 필요하므로,
@@ -1541,8 +1540,8 @@ function escapeHtml(text: string): string {
 
 function toParagraphHtml(text: string): string {
   const trimmed = text.trim();
-  // 이미 HTML 태그로 감싸져 있다면 그대로 반환
-  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+  // 실제 HTML 태그(<p>, <div>, <img ...> 등)가 존재하는지 확인
+  if (/<[a-z][a-z0-9]*[\s/>]/i.test(trimmed)) {
     return text;
   }
   // 그 외의 경우에만 이스케이프 후 <p>로 감쌈

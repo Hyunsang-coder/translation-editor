@@ -67,6 +67,22 @@ impl Database {
     /// 데이터베이스 스키마 초기화
     pub fn initialize(&self) -> Result<(), IteError> {
         self.conn.execute_batch(schema::CREATE_SCHEMA)?;
+        self.run_migrations()?;
+        Ok(())
+    }
+
+    /// 기존 DB에 누락된 컬럼을 추가하는 마이그레이션
+    fn run_migrations(&self) -> Result<(), IteError> {
+        // chat_sessions.confluence_search_enabled 컬럼 추가 (기존 DB 호환)
+        let has_column: bool = self
+            .conn
+            .prepare("SELECT confluence_search_enabled FROM chat_sessions LIMIT 0")
+            .is_ok();
+        if !has_column {
+            self.conn.execute_batch(
+                "ALTER TABLE chat_sessions ADD COLUMN confluence_search_enabled INTEGER NOT NULL DEFAULT 1;"
+            )?;
+        }
         Ok(())
     }
 
@@ -302,22 +318,23 @@ impl Database {
         });
 
         const MAX_SESSIONS: usize = 5;
-        const MAX_MESSAGES_PER_SESSION: usize = 30;
+        const MAX_MESSAGES_PER_SESSION: usize = 100;
 
         for session in sorted.into_iter().take(MAX_SESSIONS) {
             tx.execute(
-                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids, confluence_search_enabled)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 (
                     &session.id,
                     project_id,
                     &session.name,
                     session.created_at,
                     serde_json::to_string(&session.context_block_ids)?,
+                    session.confluence_search_enabled,
                 ),
             )?;
 
-            // 메시지를 timestamp 기준으로 정렬 후 최근 30개만 저장
+            // 메시지를 timestamp 기준으로 정렬 후 최근 MAX_MESSAGES_PER_SESSION개만 저장
             let mut messages: Vec<&crate::models::ChatMessage> = session.messages.iter().collect();
             messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
             let messages_to_save = if messages.len() > MAX_MESSAGES_PER_SESSION {
@@ -357,15 +374,15 @@ impl Database {
         Ok(sessions.into_iter().next())
     }
 
-    /// 채팅 세션 목록 로드 (최근 활동 기준, 최대 3개)
+    /// 채팅 세션 목록 로드 (최근 활동 기준, 최대 MAX_SESSIONS개)
     pub fn load_chat_sessions(&self, project_id: &str) -> Result<Vec<ChatSession>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT s.id, s.name, s.created_at, s.context_block_ids,
+            "SELECT s.id, s.name, s.created_at, s.context_block_ids, s.confluence_search_enabled,
                     COALESCE((SELECT MAX(m.timestamp) FROM chat_messages m WHERE m.session_id = s.id), s.created_at) AS last_ts
              FROM chat_sessions s
              WHERE s.project_id = ?1
              ORDER BY last_ts DESC
-             LIMIT 3",
+             LIMIT 5",
         )?;
 
         let iter = stmt.query_map([project_id], |row| {
@@ -374,12 +391,13 @@ impl Database {
                 row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)?,
                 row.get::<_, String>(3)?,
+                row.get::<_, bool>(4)?,
             ))
         })?;
 
         let mut sessions = Vec::new();
         for r in iter {
-            let (session_id, name, created_at, context_block_ids_json) = r?;
+            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled) = r?;
             let context_block_ids: Vec<String> =
                 serde_json::from_str(&context_block_ids_json).unwrap_or_default();
 
@@ -414,6 +432,7 @@ impl Database {
                 created_at,
                 messages,
                 context_block_ids,
+                confluence_search_enabled,
             });
         }
 
