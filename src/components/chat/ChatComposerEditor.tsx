@@ -61,6 +61,8 @@ export function ChatComposerEditor({
       }),
       Link.configure({
         openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
         HTMLAttributes: {
           class: 'text-primary-500 underline',
         },

@@ -195,6 +195,8 @@ export function TranslatePreviewModal(props: {
     }),
     Link.configure({
       openOnClick: false,
+      autolink: false,
+      linkOnPaste: false,
       HTMLAttributes: { class: 'tiptap-link' },
     }),
     Table.configure({ resizable: false }),

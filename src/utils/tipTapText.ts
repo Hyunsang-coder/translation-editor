@@ -23,7 +23,7 @@ const extensions = [
   StarterKit.configure({
     heading: { levels: [1, 2, 3, 4, 5, 6] },
   }),
-  Link.configure({ openOnClick: false }),
+  Link.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
   Table.configure({ resizable: false }),
   TableRow,
   TableHeader,

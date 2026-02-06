@@ -51,6 +51,8 @@ function createExtensions() {
     }),
     Link.configure({
       openOnClick: false,
+      autolink: false,
+      linkOnPaste: false,
     }),
     Table.configure({ resizable: false }), // 헤드리스에서는 리사이즈 불필요
     TableRow,
@@ -133,6 +135,8 @@ function createExtensionsForTranslation() {
     }),
     Link.configure({
       openOnClick: false,
+      autolink: false,
+      linkOnPaste: false,
     }),
     TableForTranslation.configure({ resizable: false }), // 항상 HTML로 변환하는 커스텀 Table
     TableRow,

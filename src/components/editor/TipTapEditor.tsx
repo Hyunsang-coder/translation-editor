@@ -58,6 +58,8 @@ export function SourceTipTapEditor({
       }),
       Link.configure({
         openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
         HTMLAttributes: {
           class: 'tiptap-link',
         },
@@ -218,6 +220,8 @@ export function TargetTipTapEditor({
       }),
       Link.configure({
         openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
         HTMLAttributes: {
           class: 'tiptap-link',
         },

@@ -175,6 +175,23 @@ function findMatches(
 }
 
 /**
+ * 매치 위치로 스크롤 (포커스 이동 없이)
+ * ProseMirror의 scrollIntoView는 DOM selection 기반이라
+ * 검색바에 포커스가 있을 때 동작하지 않으므로 직접 스크롤
+ */
+function scrollToMatch(editor: { view: { dom: HTMLElement; coordsAtPos: (pos: number, side?: number) => { top: number; bottom: number } }; commands: { setTextSelection: (pos: number) => boolean } }, pos: number): void {
+  editor.commands.setTextSelection(pos);
+  const coords = editor.view.coordsAtPos(pos);
+  const wrapper = editor.view.dom.closest('.tiptap-wrapper');
+  if (wrapper) {
+    const rect = wrapper.getBoundingClientRect();
+    if (coords.top < rect.top || coords.bottom > rect.bottom) {
+      wrapper.scrollTop += coords.top - rect.top - rect.height / 2;
+    }
+  }
+}
+
+/**
  * 검색 결과를 Decoration으로 변환
  */
 function createSearchDecorations(
@@ -289,9 +306,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             const match = storage.matches[storage.currentIndex];
             if (match) {
               queueMicrotask(() => {
-                editor.commands.setTextSelection(match.from);
-                editor.commands.scrollIntoView();
-                // 에디터 포커스 유지하지 않음 (검색바에 포커스 유지)
+                scrollToMatch(editor, match.from);
               });
             }
           }
@@ -337,8 +352,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           const match = storage.matches[storage.currentIndex];
           if (match) {
             queueMicrotask(() => {
-              editor.commands.setTextSelection(match.from);
-              editor.commands.scrollIntoView();
+              scrollToMatch(editor, match.from);
             });
           }
 
@@ -367,8 +381,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           const match = storage.matches[storage.currentIndex];
           if (match) {
             queueMicrotask(() => {
-              editor.commands.setTextSelection(match.from);
-              editor.commands.scrollIntoView();
+              scrollToMatch(editor, match.from);
             });
           }
 
@@ -478,8 +491,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           const match = storage.matches[index];
           if (match) {
             queueMicrotask(() => {
-              editor.commands.setTextSelection(match.from);
-              editor.commands.scrollIntoView();
+              scrollToMatch(editor, match.from);
             });
           }
 

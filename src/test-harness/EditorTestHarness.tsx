@@ -88,6 +88,8 @@ export function EditorTestHarness() {
       }),
       Link.configure({
         openOnClick: false,
+        autolink: false,
+        linkOnPaste: false,
         HTMLAttributes: {
           class: 'tiptap-link',
         },
