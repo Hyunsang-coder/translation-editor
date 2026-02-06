@@ -71,7 +71,7 @@ const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   anthropic: [
     { value: 'claude-sonnet-4-5' },
     { value: 'claude-haiku-4-5' },
-    { value: 'claude-opus-4-5' },
+    { value: 'claude-opus-4-6' },
   ],
 };
 
@@ -221,19 +221,22 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 5, // 버전 업: Multi-provider 지원 (provider 필드 제거)
+      version: 6, // 버전 업: Opus 4.5 → 4.6 모델 ID 변경
       migrate: (persisted: unknown, version: number) => {
         const data = persisted as Record<string, unknown>;
         if (version < 5) {
           // v4 → v5 마이그레이션: provider 기반으로 enabled 설정
           const oldProvider = (data.provider as string) || 'openai';
-          return {
-            translationModel: (data.translationModel as string) || 'gpt-5.2',
-            chatModel: (data.chatModel as string) || 'gpt-5.2',
-            // 기존 provider 기반으로 enabled 설정
-            openaiEnabled: oldProvider !== 'anthropic',  // anthropic이 아니면 true
-            anthropicEnabled: oldProvider === 'anthropic',
-          };
+          data.translationModel = (data.translationModel as string) || 'gpt-5.2';
+          data.chatModel = (data.chatModel as string) || 'gpt-5.2';
+          data.openaiEnabled = oldProvider !== 'anthropic';
+          data.anthropicEnabled = oldProvider === 'anthropic';
+        }
+        // v5 → v6: claude-opus-4-5 → claude-opus-4-6
+        if (version < 6) {
+          const rename = (v: unknown) => v === 'claude-opus-4-5' ? 'claude-opus-4-6' : v;
+          data.translationModel = rename(data.translationModel);
+          data.chatModel = rename(data.chatModel);
         }
         return data;
       },

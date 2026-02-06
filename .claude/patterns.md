@@ -144,6 +144,45 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
 
 All async Tauri commands use `async fn`. State passed via Tauri's State management.
 
+## SQLite Migration Pattern
+
+```rust
+// db/mod.rs — initialize() calls run_migrations() after CREATE_SCHEMA
+// Pattern: check column existence, then ALTER TABLE if missing
+
+fn run_migrations(&self) -> Result<(), IteError> {
+    let has_column = self.conn
+        .prepare("SELECT new_column FROM table LIMIT 0")
+        .is_ok();
+    if !has_column {
+        self.conn.execute_batch(
+            "ALTER TABLE table ADD COLUMN new_column TYPE NOT NULL DEFAULT value;"
+        )?;
+    }
+    Ok(())
+}
+```
+
+No formal migration framework — uses idempotent `SELECT LIMIT 0` probe per column. Add new migrations to `run_migrations()`.
+
+## Save Concurrency Guard
+
+```typescript
+// projectStore.ts — prevents overlapping saveProject() calls
+let saveInFlight: Promise<void> | null = null;
+
+saveProject: async () => {
+  if (saveInFlight) await saveInFlight;   // wait for previous
+  // ... set isLoading
+  let resolve: () => void;
+  saveInFlight = new Promise(r => { resolve = r; });
+  try { /* save logic */ }
+  finally { saveInFlight = null; resolve!(); }
+}
+```
+
+Two independent timers can trigger `saveProject()`: auto-save (500ms poll) and write-through (500ms debounce). The Promise guard serializes them.
+
 ## Development Workflow
 
 ### Adding New AI Features

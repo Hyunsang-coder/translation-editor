@@ -94,7 +94,13 @@ Critical implementation warnings learned from past issues.
 
 40. **Debounce Timer Project ID Verification**: When using debounced persist operations (like `schedulePersist`), capture the project ID at schedule time and verify it hasn't changed before executing the persist.
 
-41. **Chat Session Message Limit**: `MAX_MESSAGES_PER_SESSION = 1000` enforces FIFO deletion of old messages to prevent memory growth in long sessions.
+41. **Chat Session Message Limit**: Frontend `MAX_MESSAGES_PER_SESSION = 1000` enforces FIFO in-memory. Backend (`db/mod.rs`) saves up to 100 messages per session to SQLite. Ensure backend limit stays reasonable relative to frontend.
+
+113. **Save Concurrency Guard**: `projectStore.ts`의 `saveProject()`는 `saveInFlight` Promise로 동시 실행을 방지. Auto-save 타이머와 write-through 타이머가 독립적으로 `saveProject()`를 호출할 수 있으므로, 이전 save가 완료될 때까지 다음 save가 대기.
+
+114. **Chat Session/Message LIMIT 동기화**: `db/mod.rs`의 `load_chat_sessions` SQL LIMIT과 `save_chat_sessions`의 `MAX_SESSIONS`가 반드시 일치해야 함. 불일치 시 저장된 세션이 로드에서 누락되어 앱 재시작마다 영구 삭제됨.
+
+115. **toParagraphHtml HTML 감지**: `/<[a-z][a-z0-9]*[\s/>]/i` 정규식으로 실제 HTML 태그 존재 여부를 확인. 이전의 `startsWith('<') && endsWith('>')` 방식은 `<user input>`을 HTML로 오인하거나 `<p>Hello</p> world`를 텍스트로 오인하는 문제가 있었음.
 
 42. **Grouped Zustand Selectors**: Use selectors from `chatStore.selectors.ts` instead of individual `useChatStore()` calls. Grouped selectors use `useShallow` to minimize re-renders.
 
@@ -143,6 +149,8 @@ Critical implementation warnings learned from past issues.
 63. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols, strips dangerous attributes, normalizes inline styles.
 
 64. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories.
+
+116. **Console Log Content Leakage**: `saveProject`의 디버그 로그에서 사용자 콘텐츠(`content.slice(0, 100)`)를 출력하지 않도록 주의. `console.debug`로 최소 정보(projectId, blocksCount)만 기록. 프로덕션 빌드에서도 브라우저 콘솔에 노출됨.
 
 ## i18n / Git
 
@@ -195,6 +203,10 @@ Critical implementation warnings learned from past issues.
 88. **shouldNormalizePastedHtml 보안 검사**: `style=`, `javascript:`, `data:text`, `data:application` 포함 여부를 검사하여 인라인 스타일 변환 및 XSS 공격 차단. 단순 텍스트는 정규화 건너뜀.
 
 89. **SQLite WAL Mode**: `Database::new()`에서 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;` 설정. 쓰기 중 읽기 가능, 동시성 대폭 향상. 단일 Mutex 연결 병목 완화.
+
+117. **SQLite Migration Pattern**: `db/mod.rs`의 `run_migrations()`에서 `SELECT column FROM table LIMIT 0`으로 컬럼 존재 여부 확인 후 `ALTER TABLE ADD COLUMN` 실행. `CREATE TABLE IF NOT EXISTS`는 새 DB에만 적용되므로, 기존 DB에는 별도 마이그레이션 필요.
+
+118. **confluenceSearchEnabled Round-Trip**: `ChatSession`의 `confluenceSearchEnabled` 필드는 Rust 모델(`models.rs`) + DB 스키마(`schema.rs`) + 저장/로드 로직(`db/mod.rs`) 세 곳 모두에 존재해야 완전히 영속됨. 프론트엔드 전용 필드는 `?? true` fallback으로 기본값 적용.
 
 90. **Token Estimation CJK Ratio**: `estimateMarkdownTokens()`는 영어(~4자/토큰)와 CJK(~1.2자/토큰)를 구분하여 가중 평균 계산. 한글 문서에서 토큰 과소추정 방지.
 
