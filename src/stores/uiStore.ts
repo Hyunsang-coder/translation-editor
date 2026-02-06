@@ -159,7 +159,7 @@ export const useUIStore = create<UIStore>()(
       projectSidebarHidden: false,
 
       // Paste settings defaults
-      pasteImageMode: 'placeholder',
+      pasteImageMode: 'original',
       pasteLinkPreserve: true,
 
       // Focus Mode
