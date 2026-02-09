@@ -81,7 +81,12 @@ function createLangChainTool(mcpTool: McpTool): DynamicStructuredTool {
 
         return truncateToolOutput(textResult);
       } catch (error) {
-        throw new Error(`MCP tool call failed: ${error}`);
+        const message = error instanceof Error ? error.message : String(error);
+        const wrapped = new Error(`MCP tool call failed: ${message}`);
+        if (error instanceof Error && error.stack) {
+          wrapped.stack = wrapped.stack + '\nCaused by: ' + error.stack;
+        }
+        throw wrapped;
       }
     },
   });

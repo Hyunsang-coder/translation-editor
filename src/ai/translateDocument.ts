@@ -145,7 +145,7 @@ function buildTranslationSetup(params: {
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
 
   const persona = params.translatorPersona?.trim()
-    ? params.translatorPersona
+    ? `<user_persona>\n${params.translatorPersona}\n</user_persona>`
     : '당신은 경험많은 전문 번역가입니다.';
 
   const systemLines: string[] = [

@@ -123,9 +123,9 @@ function buildBaseSystemPrompt(project: ITEProject | null, persona?: string): st
   const src = 'Source';
   const tgt = project?.metadata.targetLanguage ?? 'Target';
 
-  // 사용자가 Persona를 설정했으면 그것을 사용, 아니면 기본값
+  // 사용자가 Persona를 설정했으면 XML 태그로 래핑하여 사용, 아니면 기본값
   const personaBlock = persona?.trim()
-    ? persona
+    ? `<user_persona>\n${persona}\n</user_persona>`
     : '당신은 경험많은 전문 번역가입니다.';
 
   return [
@@ -161,7 +161,7 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
   // 단, 사용자가 설정한 Persona가 있다면 '컨텍스트'로만 제공하여 번역 방향성을 참고하게 함 (행동 지침 X)
   const base = buildBaseSystemPrompt(project, undefined);
   const personaContext = opts?.translatorPersona?.trim()
-    ? `\n[참고: 사용자가 설정한 번역 페르소나]\n${opts.translatorPersona}\n(이 페르소나는 번역 작업 시 적용됩니다. 질문 답변 시에는 참고만 하세요.)`
+    ? `\n[참고: 사용자가 설정한 번역 페르소나]\n<user_persona>\n${opts.translatorPersona}\n</user_persona>\n(이 페르소나는 번역 작업 시 적용됩니다. 질문 답변 시에는 참고만 하세요.)`
     : '';
 
   return [
@@ -417,7 +417,7 @@ export async function buildTranslateOnlyMessages(
 ): Promise<BaseMessage[]> {
   const tgtLang = opts?.targetLanguage ?? 'Target';
   const persona = opts?.translatorPersona?.trim()
-    ? opts.translatorPersona
+    ? `<user_persona>\n${opts.translatorPersona}\n</user_persona>`
     : '당신은 경험많은 전문 번역가입니다.';
 
   const systemPrompt = [
