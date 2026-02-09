@@ -925,14 +925,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
                   const prev = nextMetadata.suggestedRule ?? '';
-                  const cleaned = cleanSuggestionContent(evt.args.rule);
+                  const cleaned = cleanSuggestionContent(String(evt.args.rule));
                   nextMetadata = {
                     ...nextMetadata,
                     suggestedRule: prev ? `${prev}; ${cleaned}` : cleaned,
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
                   const prev = nextMetadata.suggestedContext ?? '';
-                  const cleaned = cleanSuggestionContent(evt.args.context);
+                  const cleaned = cleanSuggestionContent(String(evt.args.context));
                   nextMetadata = {
                     ...nextMetadata,
                     suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
@@ -1360,14 +1360,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
               if (evt.phase === 'start' && evt.args) {
                 if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
                   const prevRule = nextMetadata.suggestedRule ?? '';
-                  const cleaned = cleanSuggestionContent(evt.args.rule);
+                  const cleaned = cleanSuggestionContent(String(evt.args.rule));
                   nextMetadata = {
                     ...nextMetadata,
                     suggestedRule: prevRule ? `${prevRule}; ${cleaned}` : cleaned,
                   };
                 } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
                   const prevCtx = nextMetadata.suggestedContext ?? '';
-                  const cleaned = cleanSuggestionContent(evt.args.context);
+                  const cleaned = cleanSuggestionContent(String(evt.args.context));
                   nextMetadata = {
                     ...nextMetadata,
                     suggestedContext: prevCtx ? `${prevCtx}; ${cleaned}` : cleaned,

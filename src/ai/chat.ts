@@ -9,6 +9,11 @@ import { withRetry } from './retry';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
+import type { BindToolsInput } from '@langchain/core/language_models/chat_models';
+import type { StructuredToolInterface } from '@langchain/core/tools';
+
+/** runToolCallingLoop가 실행 가능한 도구의 최소 인터페이스 */
+type ToolCallableSpec = { name: string; invoke: (arg: Record<string, unknown>) => Promise<unknown> };
 import { v4 as uuidv4 } from 'uuid';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { readFileBytes } from '@/tauri/attachments';
@@ -55,15 +60,15 @@ function withTimeout<T>(
  * OpenAI Responses API built-in tools(web_search_preview 등)은 function tool_calls 형태로 노출되지 않을 수 있어
  * message content blocks / annotations를 기반으로 "사용 흔적"을 보수적으로 감지합니다.
  */
-function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): string[] {
-  const hasWebSearchBound = Array.isArray(bindTools) && bindTools.some((t) => t && typeof t === 'object' && (t as any).type === 'web_search_preview');
+function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: BindToolsInput[]): string[] {
+  const hasWebSearchBound = Array.isArray(bindTools) && bindTools.some((t) => t && typeof t === 'object' && (t as Record<string, unknown>).type === 'web_search_preview');
   if (!hasWebSearchBound) return [];
 
-  const a = ai as any;
+  const a = ai as Record<string, unknown>;
   const candidates: string[] = [];
 
   // 1) Standard content blocks (LangChain v1)
-  const blocks = a?.contentBlocks ?? a?.content_blocks;
+  const blocks = (a?.contentBlocks ?? a?.content_blocks) as unknown[] | undefined;
   if (Array.isArray(blocks)) {
     for (const b of blocks) {
       const s = typeof b === 'string' ? b : JSON.stringify(b);
@@ -77,14 +82,15 @@ function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): str
   if (Array.isArray(content)) {
     for (const c of content) {
       if (c && typeof c === 'object') {
-        const type = String((c as any).type ?? '');
-        const annotations = (c as any).annotations;
+        const co = c as Record<string, unknown>;
+        const type = String(co.type ?? '');
+        const annotations = co.annotations;
         if (type.includes('server_tool') || type.includes('tool_result') || type.includes('tool_call')) {
           const s = JSON.stringify(c);
           if (s.includes('web_search')) candidates.push('web_search_preview');
         }
         if (Array.isArray(annotations)) {
-          const hasCitation = annotations.some((ann: any) => String(ann?.type ?? '').includes('citation') || JSON.stringify(ann).includes('url_citation'));
+          const hasCitation = (annotations as Record<string, unknown>[]).some((ann) => String(ann?.type ?? '').includes('citation') || JSON.stringify(ann).includes('url_citation'));
           if (hasCitation) candidates.push('web_search_preview');
         }
       }
@@ -92,7 +98,7 @@ function detectOpenAiBuiltInToolsFromMessage(ai: unknown, bindTools: any[]): str
   }
 
   // 3) additional_kwargs 등에도 provider별 metadata가 담길 수 있음
-  const extra = a?.additional_kwargs ?? a?.additionalKwargs ?? {};
+  const extra = (a?.additional_kwargs ?? a?.additionalKwargs ?? {}) as Record<string, unknown>;
   try {
     const s = JSON.stringify(extra);
     if (s.includes('web_search') || s.includes('url_citation')) candidates.push('web_search_preview');
@@ -167,7 +173,7 @@ export interface GenerateReplyInput {
 export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
-  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: any; status?: 'success' | 'error' }) => void;
+  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: Record<string, unknown>; status?: 'success' | 'error' }) => void;
   /** 모델 실행(생각) 시작 시 호출 */
   onModelRun?: (step: number) => void;
 }
@@ -190,27 +196,29 @@ function normalizeToolCalls(rawCalls: unknown): ToolCall[] {
   const out: ToolCall[] = [];
   for (const raw of rawCalls) {
     if (!raw || typeof raw !== 'object') continue;
-    const r = raw as any;
+    const r = raw as Record<string, unknown>;
 
     // OpenAI style: { id, type: 'function', function: { name, arguments } }
     // LangChain normalized: { id, name, args }
     // Anthropic style (possible): { id, name, input }
+    const fn = r.function as Record<string, unknown> | undefined;
+    const toolObj = r.tool as Record<string, unknown> | undefined;
     const name: string | undefined =
-      r.name ??
-      r.function?.name ??
-      r.tool?.name;
+      (r.name as string | undefined) ??
+      (fn?.name as string | undefined) ??
+      (toolObj?.name as string | undefined);
 
     if (!name || typeof name !== 'string') continue;
 
     const id: string | undefined =
-      r.id ??
-      r.tool_call_id ??
-      r.toolCallId;
+      (r.id as string | undefined) ??
+      (r.tool_call_id as string | undefined) ??
+      (r.toolCallId as string | undefined);
 
     const argsRaw =
       r.args ??
       r.input ??
-      r.function?.arguments ??
+      fn?.arguments ??
       r.arguments;
 
     const args =
@@ -225,13 +233,14 @@ function normalizeToolCalls(rawCalls: unknown): ToolCall[] {
 }
 
 function extractToolCalls(ai: unknown): ToolCall[] {
-  const a = ai as any;
+  const a = ai as Record<string, unknown>;
   // 가장 흔한 케이스 우선: ai.tool_calls (LangChain normalized)
   const direct = normalizeToolCalls(a?.tool_calls);
   if (direct.length > 0) return direct;
 
   // Provider/버전에 따라 additional_kwargs에 들어가는 케이스 대응
-  const fromAdditional = normalizeToolCalls(a?.additional_kwargs?.tool_calls ?? a?.additional_kwargs?.toolCalls);
+  const additionalKwargs = a?.additional_kwargs as Record<string, unknown> | undefined;
+  const fromAdditional = normalizeToolCalls(additionalKwargs?.tool_calls ?? additionalKwargs?.toolCalls);
   if (fromAdditional.length > 0) return fromAdditional;
 
   return [];
@@ -247,7 +256,7 @@ function extractChunkContent(chunk: AIMessageChunk): string {
     return content
       .map((c) => {
         if (typeof c === 'string') return c;
-        if (typeof c === 'object' && c && 'text' in c) return String((c as any).text ?? '');
+        if (typeof c === 'object' && c && 'text' in c) return String((c as { text: unknown }).text ?? '');
         return '';
       })
       .join('');
@@ -324,12 +333,12 @@ async function runToolCallingLoop(params: {
   /**
    * 실행 가능한(로컬) 도구 목록: tool_calls로 요청이 오면 우리가 직접 invoke합니다.
    */
-  tools: Array<{ name: string; invoke: (arg: any) => Promise<any> }>;
+  tools: ToolCallableSpec[];
   /**
    * 모델에 바인딩할 도구 목록 (OpenAI built-in tools 포함 가능)
    * - 예: { type: "web_search_preview" } 는 OpenAI가 서버 측에서 실행합니다.
    */
-  bindTools?: any[];
+  bindTools?: BindToolsInput[];
   messages: BaseMessage[];
   maxSteps?: number;
   cb?: StreamCallbacks;
@@ -343,11 +352,10 @@ async function runToolCallingLoop(params: {
   const errorCounts = new Map<string, number>();
 
   // 정석: tool calling은 bindTools()로 모델에 도구를 바인딩합니다. (LangChain 공식 문서 패턴)
-  const modelAny = params.model as any;
   const bindTools = params.bindTools ?? params.tools;
   const modelWithTools =
-    bindTools.length > 0 && typeof modelAny.bindTools === 'function'
-      ? modelAny.bindTools(bindTools)
+    bindTools.length > 0 && params.model.bindTools
+      ? params.model.bindTools(bindTools as BindToolsInput[])
       : params.model;
 
   const loopMessages: BaseMessage[] = [...params.messages];
@@ -366,10 +374,9 @@ async function runToolCallingLoop(params: {
     let finalAiMessage: AIMessageChunk | null = null;
 
     try {
+      const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
       const stream = await withRetry(
-        () => (modelWithTools as any).stream(loopMessages, {
-          signal: params.abortSignal,
-        }) as Promise<AsyncIterable<AIMessageChunk>>,
+        () => modelWithTools.stream(loopMessages, streamOptions) as Promise<AsyncIterable<AIMessageChunk>>,
       );
 
       for await (const chunk of stream) {
@@ -581,13 +588,13 @@ interface BuildToolSpecsInput {
 }
 
 interface BuildToolSpecsResult {
-  toolSpecs: any[];
-  bindTools: any[];
+  toolSpecs: StructuredToolInterface[];
+  bindTools: BindToolsInput[];
   boundToolNames: string[];
 }
 
 async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpecsResult> {
-  const toolSpecs: any[] = [suggestTranslationRule, suggestProjectContext];
+  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext];
 
   // 문서 도구
   if (input.includeSource) toolSpecs.push(getSourceDocumentTool);
@@ -622,12 +629,10 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     ? await buildConnectorTools(input.connectorConfigs, input.getConnectorToken)
     : [];
 
-  const bindTools = [...toolSpecs, ...builtInWebSearchTools, ...connectorTools];
+  const bindTools: BindToolsInput[] = [...toolSpecs, ...builtInWebSearchTools, ...connectorTools];
 
   // 바인딩된 도구 이름 목록 (동적 가이드 생성용)
-  const boundToolNames = toolSpecs
-    .filter((t) => t && typeof t === 'object' && 'name' in t)
-    .map((t) => t.name as string);
+  const boundToolNames = toolSpecs.map((t) => t.name);
 
   // 웹 검색이 활성화되면 가상 이름 추가
   if (input.webSearchEnabled && (input.provider === 'openai' || input.provider === 'anthropic')) {
@@ -937,7 +942,7 @@ export async function streamAssistantReply(
   try {
     ({ finalText, toolsUsed } = await runToolCallingLoop({
       model,
-      tools: toolSpecs as any,
+      tools: toolSpecs as ToolCallableSpec[],
       bindTools,
       messages: finalMessages,
       ...(cb ? { cb } : {}),
@@ -957,7 +962,7 @@ export async function streamAssistantReply(
       );
       ({ finalText, toolsUsed } = await runToolCallingLoop({
         model,
-        tools: toolSpecs as any,
+        tools: toolSpecs as ToolCallableSpec[],
         bindTools,
         messages: fallback,
         ...(cb ? { cb } : {}),

@@ -12,6 +12,7 @@ import {
   translateInChunks,
   type TranslationProgressCallback,
   type ChunkedTranslationResult,
+  type TipTapDocJson as ChunkingTipTapDocJson,
 } from './chunking';
 import {
   tipTapJsonToMarkdownForTranslation,
@@ -332,8 +333,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   const res = await model.invoke(messages, invokeOptions);
 
   // finish_reason 확인 (응답 잘림 감지)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const finishReason = (res as any)?.response_metadata?.finish_reason;
+  const finishReason = (res.response_metadata as Record<string, unknown> | undefined)?.finish_reason;
   if (finishReason === 'length') {
     throw new Error(
       `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
@@ -511,11 +511,9 @@ export async function translateSourceDocWithChunking(
   } = params;
 
   // 청크 분할 번역 실행
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await translateInChunks({
     project,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sourceDocJson: sourceDocJson as any,
+    sourceDocJson: sourceDocJson as ChunkingTipTapDocJson,
     translationRules,
     projectContext,
     translatorPersona,
@@ -526,16 +524,14 @@ export async function translateSourceDocWithChunking(
       // 기존 단일 번역 함수 호출 (abortSignal 전달)
       const translated = await translateSourceDocToTargetDocJson({
         project: chunkParams.project,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sourceDocJson: chunkParams.sourceDocJson as any,
+        sourceDocJson: chunkParams.sourceDocJson as TipTapDocJson,
         translationRules: chunkParams.translationRules,
         projectContext: chunkParams.projectContext,
         translatorPersona: chunkParams.translatorPersona,
         glossary: chunkParams.glossary,
         abortSignal,
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return translated as any;
+      return { doc: translated.doc as ChunkingTipTapDocJson, raw: translated.raw };
     },
   });
 
