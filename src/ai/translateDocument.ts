@@ -1,4 +1,5 @@
 import type { ITEProject } from '@/types';
+import type { ReviewIssue } from '@/stores/reviewStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import {
@@ -98,30 +99,25 @@ export function formatTranslationError(error: unknown): string {
   return msg;
 }
 
+// ============================================================
+// 번역 공통 setup / 후처리
+// ============================================================
+
 /**
- * Source 전체를 TipTap JSON 형태로 번역합니다.
- *
- * Markdown 파이프라인:
- * 1. TipTap JSON → Markdown 변환
- * 2. Markdown으로 LLM 호출 (토큰 효율적)
- * 3. Markdown 응답 → TipTap JSON 변환
- *
- * - 번역(Translate) 모드는 채팅 히스토리를 컨텍스트에 포함하지 않습니다.
+ * 번역 공통 setup: 검증, 프롬프트 구성, 토큰 계산, 모델/메시지 생성
  */
-export async function translateSourceDocToTargetDocJson(params: {
+function buildTranslationSetup(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
-  /** 용어집 (source = target 형식) */
   glossary?: string | undefined;
-  /** 취소 신호 */
-  abortSignal?: AbortSignal | undefined;
-}): Promise<{ doc: TipTapDocJson; raw: string }> {
+  reviewIssues?: ReviewIssue[] | undefined;
+  retranslateMessage?: string | undefined;
+}) {
   const cfg = getAiConfig({ useFor: 'translation' });
 
-  // mock provider는 더 이상 지원하지 않음
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
   }
@@ -137,12 +133,8 @@ export async function translateSourceDocToTargetDocJson(params: {
     }
   }
 
-  // ============================================================
   // TipTap JSON → Markdown 변환 + 이미지 제거
-  // ============================================================
   const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
-
-  // 이미지를 완전히 제거하여 토큰 절약 (번역은 텍스트만 대상)
   const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
 
   if (imageCount > 0) {
@@ -196,233 +188,7 @@ export async function translateSourceDocToTargetDocJson(params: {
     systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
   }
 
-  const systemPrompt = systemLines.join('\n').trim();
-
-  // ============================================================
-  // 동적 max_tokens 계산 (Markdown 기준, JSON 오버헤드 없음)
-  // ============================================================
-  const estimatedInputTokens = estimateMarkdownTokens(sourceMarkdown);
-  const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
-  const totalInputTokens = estimatedInputTokens + systemPromptTokens;
-
-  const MAX_CONTEXT = cfg.provider === 'anthropic' ? ANTHROPIC_CONTEXT_WINDOW : OPENAI_CONTEXT_WINDOW;
-  const availableOutputTokens = Math.floor((MAX_CONTEXT * CONTEXT_SAFETY_MARGIN) - totalInputTokens);
-
-  // 최소 출력 토큰 보장 (입력보다 약간 많게 - 번역 시 텍스트가 늘어날 수 있음)
-  const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
-  // 최대 출력 토큰: Provider/모델별 제한 고려
-  const maxAllowedTokens = cfg.provider === 'anthropic'
-    ? CLAUDE_MAX_OUTPUT_TOKENS
-    : (cfg.model?.startsWith('gpt-5') ? GPT5_MAX_OUTPUT_TOKENS : GPT4O_MAX_OUTPUT_TOKENS);
-  const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
-
-  // 입력이 너무 큰 경우 사전 에러
-  if (availableOutputTokens < minOutputTokens) {
-    throw new Error(
-      `문서가 너무 큽니다. 예상 입력: ${totalInputTokens.toLocaleString()} 토큰, ` +
-      `최대 허용: ${Math.floor(MAX_CONTEXT * 0.6).toLocaleString()} 토큰. ` +
-      `문서를 분할하여 번역해주세요.`
-    );
-  }
-
-  // createChatModel()을 사용하여 provider별 모델 생성
-  const model = createChatModel(undefined, {
-    useFor: 'translation',
-    maxTokens: calculatedMaxTokens,
-  });
-
-  const messages = [
-    { role: 'system' as const, content: systemPrompt },
-    {
-      role: 'user' as const,
-      content: [
-        '아래 Markdown 문서를 번역하여, 구분자 내에 번역된 Markdown만 반환하세요.',
-        '',
-        '---INPUT_DOCUMENT_START---',
-        sourceMarkdown,
-        '---INPUT_DOCUMENT_END---',
-        '',
-        '(DO NOT TRANSLATE THIS INSTRUCTION) Output ONLY the translated Markdown between ---TRANSLATION_START--- and ---TRANSLATION_END--- markers.',
-      ].join('\n'),
-    },
-  ];
-
-  // 취소 확인
-  if (params.abortSignal?.aborted) {
-    throw new Error('번역이 취소되었습니다.');
-  }
-
-  // 번역 실행
-  const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-  const res = await model.invoke(messages, invokeOptions);
-
-  // finish_reason 확인 (응답 잘림 감지)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const finishReason = (res as any)?.response_metadata?.finish_reason;
-  if (finishReason === 'length') {
-    throw new Error(
-      `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
-      `문서를 분할하여 번역하거나 다시 시도해주세요.`
-    );
-  }
-
-  // 응답 텍스트 추출
-  const rawContent = res.content;
-  const raw = typeof rawContent === 'string'
-    ? rawContent
-    : Array.isArray(rawContent)
-      ? rawContent.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
-      : String(rawContent);
-
-  // 응답이 비어있는 경우
-  if (!raw || raw.trim().length === 0) {
-    throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
-  }
-
-  // ============================================================
-  // Markdown 응답 추출 및 검증
-  // ============================================================
-  const translatedMarkdownRaw = extractTranslationMarkdown(raw);
-
-  // Markdown truncation 감지
-  const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
-  if (truncation.isTruncated) {
-    throw new Error(
-      `${i18n.t('errors.translationPreviewError')}\n` +
-      `응답이 잘렸습니다: ${truncation.reason}\n` +
-      `다시 시도해주세요.`
-    );
-  }
-
-  // ============================================================
-  // 볼드 마크 경계 보정 후 TipTap JSON 변환 (이미지 복원 불필요)
-  // ============================================================
-  const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
-
-  if (!isValidTipTapDocJson(translatedDoc)) {
-    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
-  }
-
-  return { doc: translatedDoc, raw };
-}
-
-// ============================================================
-// 진행률 콜백 타입 export
-// ============================================================
-
-export type { TranslationProgressCallback, ChunkedTranslationResult };
-
-// ============================================================
-// 스트리밍 번역 (실시간 타이핑 효과)
-// ============================================================
-
-import type { ReviewIssue } from '@/stores/reviewStore';
-
-/**
- * 스트리밍 번역 파라미터
- */
-export interface StreamingTranslationParams {
-  project: ITEProject;
-  sourceDocJson: TipTapDocJson;
-  translationRules?: string;
-  projectContext?: string;
-  translatorPersona?: string;
-  /** 용어집 (source = target 형식) */
-  glossary?: string;
-  /** 검수 이슈 (재번역 시 컨텍스트로 전달) */
-  reviewIssues?: ReviewIssue[];
-  /** 재번역 시 사용자 추가 지시사항 */
-  retranslateMessage?: string;
-  /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
-  onToken?: (accumulatedText: string) => void;
-  /** 취소 신호 */
-  abortSignal?: AbortSignal;
-}
-
-/**
- * 스트리밍 방식으로 번역을 수행합니다.
- *
- * - 실시간으로 번역 텍스트가 타이핑되는 효과
- * - 완료 후 TipTap JSON으로 변환
- * - onToken 콜백으로 누적된 텍스트 전달
- */
-export async function translateWithStreaming(
-  params: StreamingTranslationParams
-): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const cfg = getAiConfig({ useFor: 'translation' });
-
-  if (cfg.provider === 'mock') {
-    throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
-  }
-
-  // API 키 검증 (provider별 분기)
-  if (cfg.provider === 'anthropic') {
-    if (!cfg.anthropicApiKey) {
-      throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
-    }
-  } else {
-    if (!cfg.openaiApiKey) {
-      throw new Error(i18n.t('errors.openaiApiKeyMissing'));
-    }
-  }
-
-  // TipTap JSON → Markdown 변환 + 이미지 제거
-  const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
-  const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
-
-  if (imageCount > 0) {
-    console.log(`[Streaming Translation] Stripped ${imageCount} images from source`);
-  }
-
-  const srcLang = 'Source';
-  const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
-
-  const persona = params.translatorPersona?.trim()
-    ? params.translatorPersona
-    : '당신은 경험많은 전문 번역가입니다.';
-
-  const systemLines: string[] = [
-    persona,
-    `아래에 제공되는 Markdown 문서의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
-    '',
-    '=== 중요: 출력 형식 ===',
-    '반드시 아래 형태로만 출력하세요:',
-    '',
-    '---TRANSLATION_START---',
-    '[번역된 Markdown]',
-    '---TRANSLATION_END---',
-    '',
-    '절대 금지 사항:',
-    '- "번역 결과입니다", "다음과 같이 번역했습니다" 등의 설명문 금지',
-    '- 인사말, 부연 설명 금지',
-    '- 구분자 외부에 텍스트 금지',
-    '- 오직 구분자 내부에 번역된 Markdown만 출력',
-    '',
-    '=== 번역 규칙 ===',
-    '- 문서 구조/서식(heading, list, bold, italic, link, table 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
-    '- HTML 테이블(<table>...</table>)이 있으면 테이블 구조와 속성은 그대로 유지하고, 셀 안의 텍스트만 번역하세요.',
-    '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
-    '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
-    '',
-  ];
-
-  const rules = params.translationRules?.trim();
-  if (rules) {
-    systemLines.push('[번역 규칙]', rules, '');
-  }
-
-  const projectContext = params.projectContext?.trim();
-  if (projectContext) {
-    systemLines.push('[Project Context]', projectContext, '');
-  }
-
-  const glossary = params.glossary?.trim();
-  if (glossary) {
-    systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
-  }
-
-  // 검수 이슈가 있으면 재번역 컨텍스트로 추가
+  // 검수 이슈 (재번역 시)
   if (params.reviewIssues && params.reviewIssues.length > 0) {
     const typeLabels: Record<string, string> = {
       omission: '누락',
@@ -458,7 +224,7 @@ export async function translateWithStreaming(
 
   const systemPrompt = systemLines.join('\n').trim();
 
-  // 동적 max_tokens 계산
+  // 동적 max_tokens 계산 (Markdown 기준, JSON 오버헤드 없음)
   const estimatedInputTokens = estimateMarkdownTokens(sourceMarkdown);
   const systemPromptTokens = estimateMarkdownTokens(systemPrompt);
   const totalInputTokens = estimatedInputTokens + systemPromptTokens;
@@ -480,7 +246,6 @@ export async function translateWithStreaming(
     );
   }
 
-  // createChatModel()을 사용하여 provider별 모델 생성
   const model = createChatModel(undefined, {
     useFor: 'translation',
     maxTokens: calculatedMaxTokens,
@@ -501,6 +266,139 @@ export async function translateWithStreaming(
       ].join('\n'),
     },
   ];
+
+  return { model, messages };
+}
+
+/**
+ * 번역 응답 후처리: 마커 추출, truncation 검증, TipTap JSON 변환
+ */
+function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
+  const translatedMarkdownRaw = extractTranslationMarkdown(raw);
+
+  const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
+  if (truncation.isTruncated) {
+    throw new Error(
+      `${i18n.t('errors.translationPreviewError')}\n` +
+      `응답이 잘렸습니다: ${truncation.reason}\n` +
+      `다시 시도해주세요.`
+    );
+  }
+
+  const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
+
+  if (!isValidTipTapDocJson(translatedDoc)) {
+    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
+  }
+
+  return { doc: translatedDoc };
+}
+
+// ============================================================
+// 비스트리밍 번역
+// ============================================================
+
+/**
+ * Source 전체를 TipTap JSON 형태로 번역합니다.
+ *
+ * Markdown 파이프라인:
+ * 1. TipTap JSON → Markdown 변환
+ * 2. Markdown으로 LLM 호출 (토큰 효율적)
+ * 3. Markdown 응답 → TipTap JSON 변환
+ *
+ * - 번역(Translate) 모드는 채팅 히스토리를 컨텍스트에 포함하지 않습니다.
+ */
+export async function translateSourceDocToTargetDocJson(params: {
+  project: ITEProject;
+  sourceDocJson: TipTapDocJson;
+  translationRules?: string | undefined;
+  projectContext?: string | undefined;
+  translatorPersona?: string | undefined;
+  /** 용어집 (source = target 형식) */
+  glossary?: string | undefined;
+  /** 취소 신호 */
+  abortSignal?: AbortSignal | undefined;
+}): Promise<{ doc: TipTapDocJson; raw: string }> {
+  const { model, messages } = buildTranslationSetup(params);
+
+  // 취소 확인
+  if (params.abortSignal?.aborted) {
+    throw new Error('번역이 취소되었습니다.');
+  }
+
+  // 번역 실행
+  const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+  const res = await model.invoke(messages, invokeOptions);
+
+  // finish_reason 확인 (응답 잘림 감지)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finishReason = (res as any)?.response_metadata?.finish_reason;
+  if (finishReason === 'length') {
+    throw new Error(
+      `응답이 토큰 제한으로 잘렸습니다 (finish_reason: length). ` +
+      `문서를 분할하여 번역하거나 다시 시도해주세요.`
+    );
+  }
+
+  // 응답 텍스트 추출
+  const rawContent = res.content;
+  const raw = typeof rawContent === 'string'
+    ? rawContent
+    : Array.isArray(rawContent)
+      ? rawContent.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+      : String(rawContent);
+
+  if (!raw || raw.trim().length === 0) {
+    throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
+  }
+
+  const { doc } = processTranslationResponse(raw);
+  return { doc, raw };
+}
+
+// ============================================================
+// 진행률 콜백 타입 export
+// ============================================================
+
+export type { TranslationProgressCallback, ChunkedTranslationResult };
+
+// ============================================================
+// 스트리밍 번역 (실시간 타이핑 효과)
+// ============================================================
+
+/**
+ * 스트리밍 번역 파라미터
+ */
+export interface StreamingTranslationParams {
+  project: ITEProject;
+  sourceDocJson: TipTapDocJson;
+  translationRules?: string;
+  projectContext?: string;
+  translatorPersona?: string;
+  /** 용어집 (source = target 형식) */
+  glossary?: string;
+  /** 검수 이슈 (재번역 시 컨텍스트로 전달) */
+  reviewIssues?: ReviewIssue[];
+  /** 재번역 시 사용자 추가 지시사항 */
+  retranslateMessage?: string;
+  /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
+  onToken?: (accumulatedText: string) => void;
+  /** 취소 신호 */
+  abortSignal?: AbortSignal;
+}
+
+/**
+ * 스트리밍 방식으로 번역을 수행합니다.
+ *
+ * - 실시간으로 번역 텍스트가 타이핑되는 효과
+ * - 완료 후 TipTap JSON으로 변환
+ * - onToken 콜백으로 누적된 텍스트 전달
+ */
+export async function translateWithStreaming(
+  params: StreamingTranslationParams
+): Promise<{ doc: TipTapDocJson; raw: string }> {
+  const { model, messages } = buildTranslationSetup(params);
 
   // 취소 확인
   if (params.abortSignal?.aborted) {
@@ -548,27 +446,8 @@ export async function translateWithStreaming(
     throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
   }
 
-  // Markdown 응답 추출 및 검증
-  const translatedMarkdownRaw = extractTranslationMarkdown(accumulated);
-
-  const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
-  if (truncation.isTruncated) {
-    throw new Error(
-      `${i18n.t('errors.translationPreviewError')}\n` +
-      `응답이 잘렸습니다: ${truncation.reason}\n` +
-      `다시 시도해주세요.`
-    );
-  }
-
-  // 볼드 마크 경계 보정 후 TipTap JSON 변환 (이미지 복원 불필요)
-  const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
-
-  if (!isValidTipTapDocJson(translatedDoc)) {
-    throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
-  }
-
-  return { doc: translatedDoc, raw: accumulated };
+  const { doc } = processTranslationResponse(accumulated);
+  return { doc, raw: accumulated };
 }
 
 // ============================================================
@@ -677,4 +556,3 @@ export async function translateSourceDocWithChunking(
     successfulChunks: result.successfulChunks,
   };
 }
-
