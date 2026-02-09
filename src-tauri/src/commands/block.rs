@@ -66,6 +66,16 @@ pub fn split_block(
 
     // 콘텐츠 분할
     let original_content = &original_block.content;
+    if split_position < original_content.len() && !original_content.is_char_boundary(split_position) {
+        return Err(CommandError {
+            code: "INVALID_POSITION".to_string(),
+            message: format!(
+                "split_position {} is not a valid character boundary",
+                split_position
+            ),
+            details: None,
+        });
+    }
     let first_part = if split_position < original_content.len() {
         original_content[..split_position].to_string()
     } else {

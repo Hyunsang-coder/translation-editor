@@ -249,3 +249,19 @@ Critical implementation warnings learned from past issues.
 111. **Review stripImages 누락 방지**: `reviewTool.ts`의 `buildAlignedChunks`/`buildAlignedChunksAsync` 모두 `stripImages()`로 이미지 제거 필수. 누락 시 Base64 이미지가 LLM에 전송되어 토큰 낭비(이미지당 3,000~16,000 토큰) 및 청킹 왜곡 발생.
 
 112. **CSP img-src 외부 이미지 허용**: `tauri.conf.json`의 CSP에 `img-src 'self' asset: data: https: http:` 필요. `https: http:` 누락 시 original 모드에서 CDN 이미지 로드 차단됨.
+
+## Review Audit (2026-02-09)
+
+119. **Review Error Detection False Positive**: `parseReviewResult.ts`의 `detectAiErrorResponse()`가 `/error\s*:\s*/i` 패턴을 사용하여, 정상 검수 응답에서 "error"라는 단어가 포함되면 전체 응답을 에러로 처리하여 throw. 마커(`---REVIEW_START/END---`)가 존재하면 에러 감지를 스킵해야 함. 상세: `.claude/review-audit.md` 이슈 #1.
+
+120. **Review Excerpt Quote Parsing Truncation**: `parseReviewResult.ts`의 Markdown 파싱에서 `[^"]*` 패턴이 excerpt 내부 따옴표에서 잘림. 예: `**Source**: "He said "hello""` → `He said `만 캡처. 하이라이트 실패 원인. 상세: `.claude/review-audit.md` 이슈 #2.
+
+121. **Review maxTokens Truncation Undetected**: `runReview.ts`의 `maxTokens: 4096` 제한으로 이슈가 많은 청크에서 응답 잘림 발생 가능. `---REVIEW_END---` 마커 존재 여부로 잘림 감지 필요. 상세: `.claude/review-audit.md` 이슈 #3.
+
+122. **Review segmentOrder Always Zero**: `parseReviewResult.ts` Markdown 파싱에서 `segmentOrder`가 항상 0으로 하드코딩. 동일 타입+excerpt 조합의 이슈가 다른 세그먼트에 있으면 ID 충돌로 하나가 소실. 상세: `.claude/review-audit.md` 이슈 #4.
+
+123. **ReviewHighlight Production Console Logs**: `ReviewHighlight.ts`에 디버깅용 `console.log`가 잔존. 에디터 문서 변경마다 + 이슈 수만큼 로그 출력되어 성능 영향. 상세: `.claude/review-audit.md` 이슈 #5.
+
+124. **Review Glossary First Chunk Only**: `ReviewPanel.tsx`에서 glossary 검색이 첫 번째 청크(4000자)만 대상. 긴 문서 후반부의 용어 불일치 누락 가능. 상세: `.claude/review-audit.md` 이슈 #6.
+
+125. **Review severityFilter Set Re-render**: `reviewStore.ts`의 `severityFilter`가 `Set<IssueSeverity>` 타입. `toggleSeverityFilter()`에서 매번 `new Set()` 생성 → Zustand shallow 비교 시 항상 새 참조 → 전체 구독자 리렌더. `Record<IssueSeverity, boolean>`으로 변경 권장. 상세: `.claude/review-audit.md` 이슈 #7.

@@ -153,15 +153,20 @@ export const DiffMarkExtension = Mark.create<DiffMarkOptions>({
 
           const { doc } = state;
 
-          // 삭제 마크가 있는 노드 찾아서 제거
+          // 삭제 마크가 있는 노드 위치를 수집한 뒤 역순 삭제 (position shift 방지)
+          const deletionRanges: { from: number; to: number }[] = [];
           doc.descendants((node, pos) => {
             if (node.marks.some((mark) => mark.type.name === 'deletion')) {
-              tr.delete(pos, pos + node.nodeSize);
+              deletionRanges.push({ from: pos, to: pos + node.nodeSize });
             }
           });
+          for (let i = deletionRanges.length - 1; i >= 0; i--) {
+            const range = deletionRanges[i];
+            if (range) tr.delete(range.from, range.to);
+          }
 
           // 삽입 마크 제거 (텍스트는 유지)
-          tr.removeMark(0, doc.content.size, state.schema.marks.insertion);
+          tr.removeMark(0, tr.doc.content.size, state.schema.marks.insertion);
 
           dispatch(tr);
           return true;
@@ -173,15 +178,20 @@ export const DiffMarkExtension = Mark.create<DiffMarkOptions>({
 
           const { doc } = state;
 
-          // 삽입 마크가 있는 노드 찾아서 제거
+          // 삽입 마크가 있는 노드 위치를 수집한 뒤 역순 삭제 (position shift 방지)
+          const insertionRanges: { from: number; to: number }[] = [];
           doc.descendants((node, pos) => {
             if (node.marks.some((mark) => mark.type.name === 'insertion')) {
-              tr.delete(pos, pos + node.nodeSize);
+              insertionRanges.push({ from: pos, to: pos + node.nodeSize });
             }
           });
+          for (let i = insertionRanges.length - 1; i >= 0; i--) {
+            const range = insertionRanges[i];
+            if (range) tr.delete(range.from, range.to);
+          }
 
           // 삭제 마크 제거 (텍스트는 유지 - 복원)
-          tr.removeMark(0, doc.content.size, state.schema.marks.deletion);
+          tr.removeMark(0, tr.doc.content.size, state.schema.marks.deletion);
 
           dispatch(tr);
           return true;

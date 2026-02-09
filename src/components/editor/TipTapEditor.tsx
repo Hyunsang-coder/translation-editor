@@ -189,15 +189,6 @@ export function SourceTipTapEditor({
     }
   }, [editor, highlightNonce]);
 
-  // 에디터 cleanup (메모리 누수 방지)
-  useEffect(() => {
-    return () => {
-      if (editor) {
-        editor.destroy();
-      }
-    };
-  }, [editor]);
-
   if (!editor) {
     return <div className="h-full animate-pulse bg-editor-surface rounded-md" />;
   }
@@ -372,15 +363,6 @@ export function TargetTipTapEditor({
       refreshEditorHighlight(editor);
     }
   }, [editor, highlightNonce]);
-
-  // 에디터 cleanup (메모리 누수 방지)
-  useEffect(() => {
-    return () => {
-      if (editor) {
-        editor.destroy();
-      }
-    };
-  }, [editor]);
 
   if (!editor) {
     return <div className="h-full animate-pulse bg-editor-surface rounded-md" />;
