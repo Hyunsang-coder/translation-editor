@@ -3,6 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useShallow } from 'zustand/shallow';
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
 import { initializeSecrets } from '@/tauri/secrets';
 import { initializeConnectors } from '@/stores/connectorStore';
@@ -11,9 +12,11 @@ import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { UpdateModal } from '@/components/ui/UpdateModal';
 
 function App(): JSX.Element {
-  const { theme } = useUIStore();
-  const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore();
-  const { loadSecureKeys } = useAiConfigStore();
+  const theme = useUIStore((s) => s.theme);
+  const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore(
+    useShallow((s) => ({ initializeProject: s.initializeProject, startAutoSave: s.startAutoSave, stopAutoSave: s.stopAutoSave }))
+  );
+  const loadSecureKeys = useAiConfigStore((s) => s.loadSecureKeys);
 
   // 자동 업데이트
   const {

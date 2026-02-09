@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
 import i18n from 'i18next';
 
@@ -17,7 +18,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     theme, setTheme,
     pasteImageMode, setPasteImageMode,
     pasteLinkPreserve, setPasteLinkPreserve,
-  } = useUIStore();
+  } = useUIStore(
+    useShallow((s) => ({
+      language: s.language, setLanguage: s.setLanguage,
+      theme: s.theme, setTheme: s.setTheme,
+      pasteImageMode: s.pasteImageMode, setPasteImageMode: s.setPasteImageMode,
+      pasteLinkPreserve: s.pasteLinkPreserve, setPasteLinkPreserve: s.setPasteLinkPreserve,
+    }))
+  );
   const {
     openaiApiKey,
     anthropicApiKey,
@@ -27,7 +35,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     anthropicEnabled,
     setOpenaiEnabled,
     setAnthropicEnabled,
-  } = useAiConfigStore();
+  } = useAiConfigStore(
+    useShallow((s) => ({
+      openaiApiKey: s.openaiApiKey, anthropicApiKey: s.anthropicApiKey,
+      setOpenaiApiKey: s.setOpenaiApiKey, setAnthropicApiKey: s.setAnthropicApiKey,
+      openaiEnabled: s.openaiEnabled, anthropicEnabled: s.anthropicEnabled,
+      setOpenaiEnabled: s.setOpenaiEnabled, setAnthropicEnabled: s.setAnthropicEnabled,
+    }))
+  );
 
   // 모달 외부 클릭 시 닫기
   const handleOverlayClick = (e: React.MouseEvent) => {

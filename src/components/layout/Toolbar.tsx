@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Wrench, Settings, Search, MessageSquare, Cog } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 
 /**
@@ -10,8 +11,10 @@ import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore();
-  const { project } = useProjectStore();
+  const { setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore(
+    useShallow((s) => ({ setSidebarCollapsed: s.setSidebarCollapsed, setSidebarActiveTab: s.setSidebarActiveTab, openReviewPanel: s.openReviewPanel, chatPanelOpen: s.chatPanelOpen, toggleChatPanel: s.toggleChatPanel }))
+  );
+  const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

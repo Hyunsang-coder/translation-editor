@@ -1,12 +1,14 @@
 import { useCallback, useRef, useEffect, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
 import { DockedChatPanel } from '@/components/panels/DockedChatPanel';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 import { createProject } from '@/tauri/project';
 
@@ -21,7 +23,9 @@ const ReviewTestPanel = lazy(() =>
  * 각 패널은 자체적으로 접힌 상태(아이콘만)와 펼친 상태를 가짐
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore();
+  const { focusMode, sidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore(
+    useShallow((s) => ({ focusMode: s.focusMode, sidebarCollapsed: s.sidebarCollapsed, devTestPanelOpen: s.devTestPanelOpen, toggleDevTestPanel: s.toggleDevTestPanel }))
+  );
   const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
   const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const setDevTestPanelOpen = useUIStore((s) => s.setDevTestPanelOpen);
@@ -112,7 +116,9 @@ export function MainLayout(): JSX.Element {
             className={`shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative ${sidebarCollapsed ? '' : ''}`}
             style={{ width: sidebarCollapsed ? 48 : settingsSidebarWidth }}
           >
-            <SettingsSidebar />
+            <ErrorBoundary name="Settings">
+              <SettingsSidebar />
+            </ErrorBoundary>
             {/* 리사이즈 핸들 (펼친 상태에서만) */}
             {!sidebarCollapsed && (
               <div
@@ -126,7 +132,9 @@ export function MainLayout(): JSX.Element {
         {/* 에디터 캔버스 (TipTap) */}
         <div className="flex-1 min-w-[300px] min-h-0">
           {project ? (
-            <EditorCanvasTipTap focusMode={focusMode} />
+            <ErrorBoundary name="Editor">
+              <EditorCanvasTipTap focusMode={focusMode} />
+            </ErrorBoundary>
           ) : (
             <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
               {/* Empty State Content */}
@@ -151,7 +159,11 @@ export function MainLayout(): JSX.Element {
         </div>
 
         {/* 도킹된 채팅 패널 (프로젝트 있을 때만, 자체적으로 접힘 처리) */}
-        {project && <DockedChatPanel />}
+        {project && (
+          <ErrorBoundary name="Chat">
+            <DockedChatPanel />
+          </ErrorBoundary>
+        )}
       </main>
 
       {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}

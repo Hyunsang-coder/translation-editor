@@ -1,4 +1,5 @@
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { TranslationBlock } from '@/components/editor/TranslationBlock';
 
 /**
@@ -6,7 +7,9 @@ import { TranslationBlock } from '@/components/editor/TranslationBlock';
  * 읽기 전용 블록 기반 원문 표시
  */
 export function SourcePanel(): JSX.Element {
-  const { project, getBlocksBySegment } = useProjectStore();
+  const { project, getBlocksBySegment } = useProjectStore(
+    useShallow((s) => ({ project: s.project, getBlocksBySegment: s.getBlocksBySegment }))
+  );
 
   if (!project) {
     return (

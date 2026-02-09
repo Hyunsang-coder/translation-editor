@@ -1369,8 +1369,8 @@ export const useProjectStore = create<ProjectStore>()(
         const finalHtml = toParagraphHtml(finalText);
 
         // 최종 확정은 updateBlock을 통해 hash/updatedAt 및 write-thru 저장까지 같이 수행
-        delete pendingDiffs[blockId];
-        set({ pendingDiffs: { ...pendingDiffs } });
+        const { [blockId]: _, ...restDiffs } = pendingDiffs;
+        set({ pendingDiffs: restDiffs });
         get().updateBlock(blockId, finalHtml);
       },
 
@@ -1382,10 +1382,10 @@ export const useProjectStore = create<ProjectStore>()(
 
         // revert: 원본 HTML로 복원 (store에 저장해둔 originalHtml)
         const originalHtml = pending.originalHtml;
-        delete pendingDiffs[blockId];
+        const { [blockId]: _, ...restDiffs } = pendingDiffs;
 
         set({
-          pendingDiffs: { ...pendingDiffs },
+          pendingDiffs: restDiffs,
           project: {
             ...project,
             blocks: {

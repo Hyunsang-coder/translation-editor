@@ -362,8 +362,14 @@ pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<
         details: None,
     })?;
 
+    // 파일명에서 경로 탐색 문자 제거 (../../ 등 방지)
+    let safe_filename = std::path::Path::new(&filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image");
+
     // 고유한 파일명 생성
-    let unique_name = format!("{}_{}", Uuid::new_v4(), filename);
+    let unique_name = format!("{}_{}", Uuid::new_v4(), safe_filename);
     let path = temp_dir.join(&unique_name);
 
     // 파일 저장

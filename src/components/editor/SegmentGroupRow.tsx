@@ -1,5 +1,6 @@
 import { TranslationBlock } from '@/components/editor/TranslationBlock';
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { stripHtml } from '@/utils/hash';
 
 interface SegmentGroupRowProps {
@@ -17,7 +18,9 @@ export function SegmentGroupRow({
   focusMode,
   onNavigateToTarget,
 }: SegmentGroupRowProps): JSX.Element {
-  const { project, getBlocksBySegment } = useProjectStore();
+  const { project, getBlocksBySegment } = useProjectStore(
+    useShallow((s) => ({ project: s.project, getBlocksBySegment: s.getBlocksBySegment }))
+  );
 
   if (!project) {
     return <div />;

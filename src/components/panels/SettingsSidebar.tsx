@@ -3,6 +3,7 @@ import { Settings, Search } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { pickGlossaryFile, pickDocumentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -17,7 +18,9 @@ import { ReviewPanel } from '@/components/review/ReviewPanel';
  */
 export function SettingsSidebar(): JSX.Element {
   const { t } = useTranslation();
-  const { sidebarCollapsed, toggleSidebar, sidebarActiveTab, setSidebarActiveTab } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, sidebarActiveTab, setSidebarActiveTab } = useUIStore(
+    useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, sidebarActiveTab: s.sidebarActiveTab, setSidebarActiveTab: s.setSidebarActiveTab }))
+  );
 
   const translatorPersona = useChatStore((s) => s.translatorPersona);
   const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
