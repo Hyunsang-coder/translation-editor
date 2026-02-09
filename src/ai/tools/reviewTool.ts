@@ -2,7 +2,6 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useReviewStore, type ReviewIntensity } from '@/stores/reviewStore';
 import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { stripImages } from '@/utils/imagePlaceholder';
 import { searchGlossary } from '@/tauri/glossary';
@@ -229,28 +228,17 @@ const TWO_PASS_REVIEW_PROMPT = `# Translation Review System
 - 프로젝트 글로서리 위반`;
 
 // ============================================
-// 검수 강도별 프롬프트
+// 검출 기준 프롬프트 (항상 모든 이슈 검출)
 // ============================================
 
-const REVIEW_INTENSITY_PROMPTS: Record<ReviewIntensity, string> = {
-  balanced: `## 검출 기준: Critical + Major 이슈
-
-검출 대상:
-- 모든 Critical 이슈
-- 중요 세부사항 누락/변형
-- 용어 불일치 (글로서리 위반)
-
-Pass 2에서 Minor는 제거`,
-
-  thorough: `## 검출 기준: 모든 이슈
+const REVIEW_DETECTION_PROMPT = `## 검출 기준: 모든 이슈
 
 검출 대상:
 - Critical, Major, Minor 모두 보고
 - 미세한 뉘앙스 차이도 포함
 - 스타일 선호 수준까지 검토
 
-단, False Positive는 여전히 제거`,
-};
+단, False Positive는 여전히 제거`;
 
 // ============================================
 // 출력 형식 (Markdown 기반)
@@ -315,14 +303,14 @@ Review complete. No issues found.
 // ============================================
 
 /**
- * 검수 설정에 따른 동적 프롬프트 생성
+ * 검수 프롬프트 생성 (항상 모든 이슈 검출)
  * Two-Pass Review 방법론 기반
  */
-export function buildReviewPrompt(intensity: ReviewIntensity): string {
+export function buildReviewPrompt(): string {
   return [
     TWO_PASS_REVIEW_PROMPT,
     '',
-    REVIEW_INTENSITY_PROMPTS[intensity],
+    REVIEW_DETECTION_PROMPT,
     '',
     OUTPUT_FORMAT,
   ].join('\n');
@@ -359,9 +347,6 @@ export const reviewTranslationTool = tool(
     // Translation Rules, Project Context, Attachments 가져오기
     const { translationRules, projectContext, attachments } = useChatStore.getState();
 
-    // 검수 설정 가져오기
-    const { intensity } = useReviewStore.getState();
-
     // Glossary 검색 (첫 번째 청크 기반)
     let glossaryText = '';
     try {
@@ -394,8 +379,8 @@ export const reviewTranslationTool = tool(
       .map((a) => `[${a.filename}]\n${a.extractedText}`)
       .join('\n\n') || '';
 
-    // 검수 설정 기반 동적 프롬프트 생성
-    const dynamicInstructions = buildReviewPrompt(intensity);
+    // 검수 프롬프트 생성 (항상 모든 이슈 검출)
+    const dynamicInstructions = buildReviewPrompt();
 
     return {
       instructions: dynamicInstructions,

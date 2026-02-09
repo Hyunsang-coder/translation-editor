@@ -6,9 +6,6 @@ import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewToo
 // Review Settings Types
 // ============================================
 
-/** 검수 강도 (대조 검수만 지원) */
-export type ReviewIntensity = 'balanced' | 'thorough';
-
 // ============================================
 // Review Result Types
 // ============================================
@@ -74,8 +71,8 @@ export interface ReviewResult {
 // ============================================
 
 interface ReviewState {
-  // 검수 설정 (persist됨)
-  intensity: ReviewIntensity;
+  // severity 필터 (기본: Critical + Major 표시)
+  severityFilter: Set<IssueSeverity>;
 
   // 검수 실행 상태
   chunks: AlignedChunk[];
@@ -174,9 +171,14 @@ interface ReviewActions {
   refreshHighlight: () => void;
 
   /**
-   * 검수 강도 설정
+   * severity 필터 토글
    */
-  setIntensity: (intensity: ReviewIntensity) => void;
+  toggleSeverityFilter: (severity: IssueSeverity) => void;
+
+  /**
+   * 필터링된 이슈 가져오기 (severityFilter 적용)
+   */
+  getFilteredIssues: () => ReviewIssue[];
 
   /**
    * 스트리밍 텍스트 업데이트
@@ -198,8 +200,8 @@ let cachedNonce: number = -1;
 // ============================================
 
 const initialState: ReviewState = {
-  // 검수 설정 기본값
-  intensity: 'balanced' as ReviewIntensity,
+  // severity 필터 기본값: Critical + Major 표시
+  severityFilter: new Set<IssueSeverity>(['critical', 'major']),
 
   // 검수 실행 상태 기본값
   chunks: [],
@@ -392,8 +394,21 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set({ highlightNonce: highlightNonce + 1 });
   },
 
-  setIntensity: (intensity: ReviewIntensity) => {
-    set({ intensity });
+  toggleSeverityFilter: (severity: IssueSeverity) => {
+    const { severityFilter } = get();
+    const next = new Set(severityFilter);
+    if (next.has(severity)) {
+      next.delete(severity);
+    } else {
+      next.add(severity);
+    }
+    set({ severityFilter: next });
+  },
+
+  getFilteredIssues: () => {
+    const { severityFilter } = get();
+    const allIssues = get().getAllIssues();
+    return allIssues.filter((issue) => severityFilter.has(issue.severity));
   },
 
   setStreamingText: (text: string) => {

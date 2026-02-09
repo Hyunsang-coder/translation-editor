@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useReviewStore, type ReviewIntensity, type ReviewIssue } from '@/stores/reviewStore';
+import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -11,7 +11,6 @@ import { translateWithStreaming, type TipTapDocJson, formatTranslationError } fr
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { stripHtml } from '@/utils/hash';
-import { Select } from '@/components/ui/Select';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { htmlToTipTapJson, tipTapJsonToHtml } from '@/utils/markdownConverter';
 
@@ -51,41 +50,6 @@ function detectSourceLanguage(segments: AlignedSegment[]): string {
   return '원문';
 }
 
-/** 검수 강도 선택 드롭다운 (대조 검수만) */
-function IntensitySelect({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: ReviewIntensity;
-  onChange: (value: ReviewIntensity) => void;
-  disabled?: boolean;
-}) {
-  const { t } = useTranslation();
-
-  const options = [
-    { value: 'balanced', label: t('review.intensity.balanced', '중요한 오류만 (Critical+Major)') },
-    { value: 'thorough', label: t('review.intensity.thorough', '모든 이슈 (Critical+Major+Minor)') },
-  ];
-
-  return (
-    <div className="flex items-center gap-2">
-      <label className="text-xs text-editor-muted whitespace-nowrap">
-        {t('review.intensity', '검수 강도')}
-      </label>
-      <Select
-        value={value}
-        onChange={(v) => onChange(v as ReviewIntensity)}
-        options={options}
-        disabled={disabled ?? false}
-        size="sm"
-        className="flex-1 min-w-[120px]"
-        aria-label={t('review.intensity', '검수 강도')}
-      />
-    </div>
-  );
-}
-
 /** 로딩 도트 애니메이션 */
 function LoadingDots() {
   return (
@@ -108,9 +72,9 @@ export function ReviewPanel(): JSX.Element {
   // 검수 중 규칙이 변경되어도 각 청크 처리 시 최신 값 사용 (Issue #13 Fix)
 
   const {
-    // 검수 설정
-    intensity,
-    setIntensity,
+    // severity 필터
+    severityFilter,
+    toggleSeverityFilter,
     // 검수 실행 상태
     results,
     isReviewing,
@@ -238,7 +202,6 @@ export function ReviewPanel(): JSX.Element {
           // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
           const response = await runReview({
             segments: chunk.segments,
-            intensity,
             translationRules: currentRules,
             glossary: glossaryText,
             sourceLanguage: detectSourceLanguage(chunk.segments),
@@ -274,7 +237,6 @@ export function ReviewPanel(): JSX.Element {
     }
   }, [
     project,
-    intensity,
     startReview,
     finishReview,
     addResult,
@@ -490,23 +452,10 @@ export function ReviewPanel(): JSX.Element {
                 {t('review.readyToStart', '검수를 시작하려면 아래 버튼을 클릭하세요.')}
               </p>
             </div>
-
-            {/* 검수 강도 선택 */}
-            <div className="max-w-xs mx-auto">
-              <IntensitySelect
-                value={intensity}
-                onChange={setIntensity}
-              />
-            </div>
           </div>
         ) : isReviewing ? (
           // 검수 진행 중 (결과 유무와 관계없이)
           <div className="space-y-4">
-            {/* 검수 강도 (비활성) */}
-            <div className="w-48">
-              <IntensitySelect value={intensity} onChange={setIntensity} disabled={true} />
-            </div>
-
             {/* 상태 표시 영역 */}
             <div className="p-4 bg-editor-surface rounded-lg border border-editor-border space-y-3">
               {/* 헤더: 도트 애니메이션 + 텍스트 + 경과 시간 */}
@@ -567,6 +516,8 @@ export function ReviewPanel(): JSX.Element {
                   onToggleAll={() => setAllIssuesChecked(!allChecked)}
                   allChecked={allChecked}
                   totalIssuesFound={totalIssuesFound}
+                  severityFilter={severityFilter}
+                  onToggleSeverity={toggleSeverityFilter}
                 />
               </>
             )}
@@ -574,17 +525,6 @@ export function ReviewPanel(): JSX.Element {
         ) : (
           // 검수 결과 표시
           <div className="space-y-4">
-            {/* 검수 강도 선택 (결과 화면 상단) */}
-            <div className="flex items-center justify-between">
-              <div className="w-48">
-                <IntensitySelect
-                  value={intensity}
-                  onChange={setIntensity}
-                  disabled={isReviewing}
-                />
-              </div>
-            </div>
-
             {hasErrors && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-500">
                 {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
@@ -603,19 +543,13 @@ export function ReviewPanel(): JSX.Element {
               </details>
             )}
 
-            {/* 검수 결과 설명 */}
-            <div className="p-3 bg-primary-500/5 border border-primary-500/20 rounded text-sm text-editor-text">
-              <p className="font-medium mb-1">
-                {intensity === 'balanced'
-                  ? t('review.intensity.balanced.description', '중요한 오류만 검출 (Critical + Major)')
-                  : t('review.intensity.thorough.description', '모든 이슈 검출 (Critical + Major + Minor)')}
-              </p>
-              {checkedIssues.length > 0 && (
+            {checkedIssues.length > 0 && (
+              <div className="p-3 bg-primary-500/5 border border-primary-500/20 rounded text-sm text-editor-text">
                 <p className="text-xs text-editor-muted">
                   {t('review.retranslation.note', '선택한 이슈의 검수 결과를 반영하여 재번역합니다.')}
                 </p>
-              )}
-            </div>
+              </div>
+            )}
 
             <ReviewResultsTable
               issues={allIssues}
@@ -625,6 +559,8 @@ export function ReviewPanel(): JSX.Element {
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
               totalIssuesFound={totalIssuesFound}
+              severityFilter={severityFilter}
+              onToggleSeverity={toggleSeverityFilter}
             />
           </div>
         )}

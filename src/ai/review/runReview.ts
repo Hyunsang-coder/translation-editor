@@ -8,11 +8,9 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
-import type { ReviewIntensity } from '@/stores/reviewStore';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
-  intensity: ReviewIntensity;
   translationRules?: string;
   glossary?: string;
   /** Source 언어 (예: "Korean", "한국어") */
@@ -52,7 +50,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   const model = createChatModel(undefined, { useFor: 'translation', maxTokens: 4096 });
 
   // 시스템 프롬프트: 검수 지침만
-  const systemPrompt = buildReviewPrompt(params.intensity);
+  const systemPrompt = buildReviewPrompt();
 
   // 사용자 메시지: 컨텍스트 + 세그먼트
   const userContentParts: string[] = [];

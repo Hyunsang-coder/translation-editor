@@ -12,6 +12,8 @@ interface ReviewResultsTableProps {
   onCopy?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
+  severityFilter?: Set<IssueSeverity>;
+  onToggleSeverity?: (severity: IssueSeverity) => void;
 }
 
 function getIssueTypeLabel(type: IssueType): string {
@@ -82,23 +84,12 @@ export function ReviewResultsTable({
   onCopy,
   allChecked = false,
   totalIssuesFound = 0,
+  severityFilter,
+  onToggleSeverity,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
 
-  // 이슈 타입별 카운트 (useMemo로 최적화)
-  const counts = useMemo(
-    () =>
-      issues.reduce(
-        (acc, issue) => {
-          acc[issue.type] = (acc[issue.type] || 0) + 1;
-          return acc;
-        },
-        {} as Record<IssueType, number>,
-      ),
-    [issues],
-  );
-
-  // 심각도별 카운트
+  // 전체 이슈에서 심각도별 카운트 (필터링 전)
   const severityCounts = useMemo(
     () =>
       issues.reduce(
@@ -109,6 +100,25 @@ export function ReviewResultsTable({
         {} as Record<IssueSeverity, number>,
       ),
     [issues],
+  );
+
+  // severity 필터 적용
+  const filteredIssues = useMemo(
+    () => severityFilter ? issues.filter((issue) => severityFilter.has(issue.severity)) : issues,
+    [issues, severityFilter],
+  );
+
+  // 필터링된 이슈 타입별 카운트
+  const counts = useMemo(
+    () =>
+      filteredIssues.reduce(
+        (acc, issue) => {
+          acc[issue.type] = (acc[issue.type] || 0) + 1;
+          return acc;
+        },
+        {} as Record<IssueType, number>,
+      ),
+    [filteredIssues],
   );
 
   if (issues.length === 0) {
@@ -131,31 +141,59 @@ export function ReviewResultsTable({
     );
   }
 
+  const isFiltered = severityFilter && filteredIssues.length !== issues.length;
+
   return (
     <div className="space-y-4 h-full flex flex-col min-h-0">
       {/* 통계 요약 */}
       <div className="flex flex-col gap-2 text-xs shrink-0">
-        {/* 심각도 요약 */}
+        {/* 심각도 요약 (클릭 가능한 필터 토글) */}
         <div className="flex items-center gap-3">
           <span className="font-medium text-editor-text">
-            {t('review.totalIssues', '총 {count}건', { count: issues.length })}
+            {isFiltered
+              ? t('review.filteredCount', '총 {{total}}건 중 {{count}}건 표시', { total: issues.length, count: filteredIssues.length })
+              : t('review.totalIssues', '총 {{count}}건', { count: issues.length })}
           </span>
-          <div className="flex items-center gap-2">
-            {severityCounts.critical && (
-              <span className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-1.5">
+            {severityCounts.critical ? (
+              <button
+                type="button"
+                onClick={() => onToggleSeverity?.('critical')}
+                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                  !severityFilter || severityFilter.has('critical')
+                    ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                }`}
+              >
                 Critical {severityCounts.critical}
-              </span>
-            )}
-            {severityCounts.major && (
-              <span className="px-2 py-0.5 rounded text-xs bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              </button>
+            ) : null}
+            {severityCounts.major ? (
+              <button
+                type="button"
+                onClick={() => onToggleSeverity?.('major')}
+                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                  !severityFilter || severityFilter.has('major')
+                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                }`}
+              >
                 Major {severityCounts.major}
-              </span>
-            )}
-            {severityCounts.minor && (
-              <span className="px-2 py-0.5 rounded text-xs bg-gray-500/10 text-gray-600 dark:text-gray-400">
+              </button>
+            ) : null}
+            {severityCounts.minor ? (
+              <button
+                type="button"
+                onClick={() => onToggleSeverity?.('minor')}
+                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                  !severityFilter || severityFilter.has('minor')
+                    ? 'bg-gray-500/10 text-gray-600 dark:text-gray-400'
+                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                }`}
+              >
                 Minor {severityCounts.minor}
-              </span>
-            )}
+              </button>
+            ) : null}
           </div>
         </div>
         {/* 유형별 요약 */}
@@ -214,7 +252,7 @@ export function ReviewResultsTable({
             </tr>
           </thead>
           <tbody>
-            {issues.map((issue, idx) => (
+            {filteredIssues.map((issue, idx) => (
               <tr
                 key={issue.id}
                 className={`

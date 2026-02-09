@@ -61,7 +61,6 @@ interface SearchTestResult {
 
 export function ReviewTestPanel(): JSX.Element {
   const project = useProjectStore((s) => s.project);
-  const intensity = useReviewStore((s) => s.intensity);
   const translationRules = useChatStore((s) => s.translationRules);
 
   const [activeTab, setActiveTab] = useState<'chunks' | 'prompt' | 'response' | 'issues' | 'search' | 'editor'>('chunks');
@@ -83,8 +82,8 @@ export function ReviewTestPanel(): JSX.Element {
 
   // 시스템 프롬프트
   const systemPrompt = useMemo(() => {
-    return buildReviewPrompt(intensity);
-  }, [intensity]);
+    return buildReviewPrompt();
+  }, []);
 
   // 에디터 텍스트 가져오기 (projectStore의 targetDocJson에서 추출)
   const getEditorText = (): string => {
@@ -108,7 +107,6 @@ export function ReviewTestPanel(): JSX.Element {
     try {
       const response = await runReview({
         segments: currentChunk.segments,
-        intensity,
         translationRules,
         sourceLanguage: detectSourceLanguage(currentChunk.segments),
         targetLanguage: project.metadata.targetLanguage,
@@ -289,7 +287,7 @@ export function ReviewTestPanel(): JSX.Element {
               </option>
             ))}
           </select>
-          <span className="text-editor-muted">강도: {intensity}</span>
+          <span className="text-editor-muted">모든 이슈 검출</span>
         </div>
       </div>
 
