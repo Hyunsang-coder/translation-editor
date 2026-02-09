@@ -122,6 +122,8 @@ src/
 ├── editor/           # TipTap extensions
 │   ├── extensions/
 │   │   └── ReviewHighlight.ts
+│   ├── utils/
+│   │   └── replaceDocContent.ts  # ProseMirror 트랜잭션 기반 콘텐츠 교체
 │   └── editorRegistry.ts
 ├── stores/           # Zustand stores
 │   ├── projectStore.ts

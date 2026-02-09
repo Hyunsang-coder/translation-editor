@@ -26,6 +26,40 @@ src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
 
+### Content Sync (lastContentRef + replaceDocContent)
+```typescript
+// src/editor/utils/replaceDocContent.ts
+// ProseMirror 트랜잭션 기반 콘텐츠 교체 (setContent() 대체)
+// - preventUpdate 미설정 → onUpdate 콜백 정상 발동 → store 자동 동기화
+// - addToHistory 명시 제어: sync용 false, 번역 적용용 true
+
+replaceDocContent(editor, content, { addToHistory: false }); // sync
+replaceDocContent(editor, content, { addToHistory: true });  // 번역 적용 (Ctrl+Z 지원)
+
+// TipTapEditor.tsx, useBlockEditor.ts — lastContentRef 패턴
+const lastContentRef = useRef<string>(content);
+
+onCreate: ({ editor: ed }) => {
+  lastContentRef.current = ed.getHTML();
+},
+onUpdate: ({ editor: ed }) => {
+  const html = ed.getHTML();
+  lastContentRef.current = html;   // 항상 최신 HTML 추적
+  if (onChange) onChange(html);
+},
+
+// sync useEffect: getHTML() 비교 대신 lastContentRef 비교
+useEffect(() => {
+  if (!editor) return;
+  if (content === lastContentRef.current) return; // false positive 방지
+  replaceDocContent(editor, content, { addToHistory: false });
+}, [editor, content]);
+
+// ❌ 금지 패턴:
+// editor.commands.setContent()  → onUpdate 미발동, ghost undo step
+// content !== editor.getHTML()  → 비결정적 (속성 순서, 공백 차이)
+```
+
 ### Image Extensions (Dual Mode)
 ```typescript
 // src/editor/extensions/ImagePlaceholder.ts
@@ -210,7 +244,7 @@ Two independent timers can trigger `saveProject()`: auto-save (500ms poll) and w
 2. User clicks "Translate" button
 3. AI generates translation → Preview modal with diff view
 4. If error occurs → Retry button shown (recoverable errors only)
-5. User reviews and clicks "Apply" → Target document replaced entirely
+5. User reviews and clicks "Apply" → Target document replaced via `replaceDocContent(addToHistory: true)` (Ctrl+Z undoable)
 6. User manually edits Target if needed
 
 ## Markdown Conversion

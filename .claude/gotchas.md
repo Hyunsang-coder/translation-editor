@@ -222,6 +222,10 @@ Critical implementation warnings learned from past issues.
 
 97. **TipTap History Depth Limit**: `StarterKit.configure({ history: { depth: 100 } })`로 Undo 히스토리 제한. 무제한 히스토리로 인한 메모리 누수 방지.
 
+126. **setContent() Undo 히스토리 파괴 (HI-07)**: `editor.commands.setContent()`는 내부적으로 `preventUpdate: true`를 설정하여 `onUpdate` 콜백이 억제됨 → store HTML 미갱신 → 다음 렌더에서 false positive 발생. 또한 불필요한 `setContent()` 호출이 ghost undo step 생성 (시각적 변화 없는 교체 기록). **해결**: `replaceDocContent()` 유틸리티 사용 (`src/editor/utils/replaceDocContent.ts`).
+
+127. **getHTML() 비교 비결정성 (MD-11)**: `content !== editor.getHTML()` 비교는 비결정적 — 속성 순서, 공백, 셀프클로징 태그 등이 다를 수 있어 false positive 발생 → 불필요한 콘텐츠 교체 트리거. **해결**: `lastContentRef` 패턴으로 마지막으로 설정/수신한 HTML을 추적하여 정확한 동등성 비교.
+
 98. **AbortController Atomic Replacement**: `chatStore.ts`에서 abort 후 새 controller를 즉시 생성하여 null 상태 최소화. 이전 패턴은 `abort() → set(null) → new AbortController()` 사이에 race window 존재.
 
 99. **ReviewResultsTable Virtualization**: `@tanstack/react-virtual`로 500개+ 이슈 가상화. CSS Grid 기반 (`grid-cols-[32px_32px_60px_1fr_1fr]`) 레이아웃으로 테이블 대체.
