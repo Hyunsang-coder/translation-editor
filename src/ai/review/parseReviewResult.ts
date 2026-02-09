@@ -69,6 +69,11 @@ function extractMarkedContent(text: string): string | null {
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     return text.slice(startIdx + startMarker.length, endIdx).trim();
   }
+  // 잘림 감지: START는 있지만 END 없음
+  if (startIdx !== -1 && endIdx === -1) {
+    console.warn('[parseReviewResult] 응답이 잘린 것으로 보입니다 (REVIEW_END 마커 없음)');
+    return text.slice(startIdx + startMarker.length).trim();
+  }
   return null;
 }
 
