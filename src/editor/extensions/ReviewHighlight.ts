@@ -57,29 +57,17 @@ export function createReviewDecorations(
   const { normalizedText: normalizedFullText, indexMap: fullTextIndexMap } =
     buildNormalizedTextWithMapping(fullText);
 
-  // 디버깅: 에디터에서 추출한 전체 텍스트 (처음 500자)
-  console.log(`[ReviewHighlight:${excerptField}] fullText (first 500):`, fullText.slice(0, 500));
-  console.log(
-    `[ReviewHighlight:${excerptField}] normalizedFullText (first 500):`,
-    normalizedFullText.slice(0, 500),
-  );
-  console.log(`[ReviewHighlight:${excerptField}] issues count:`, issues.length);
-
   const hasSegmentGroups = hasSegmentGroupId(doc);
 
-  issues.forEach((issue, idx) => {
+  issues.forEach((issue) => {
     const rawSearchText = issue[excerptField];
     if (!rawSearchText || rawSearchText.length === 0) {
-      console.log(`[ReviewHighlight:${excerptField}] issue #${idx}: empty excerpt, skipping`);
       return;
     }
 
     // 검색 텍스트 정규화 (마크다운 서식 + 공백 정규화)
     const searchText = normalizeForSearch(rawSearchText);
     if (searchText.length === 0) {
-      console.log(
-        `[ReviewHighlight:${excerptField}] issue #${idx}: empty after normalizeForSearch, skipping`,
-      );
       return;
     }
 
@@ -88,14 +76,10 @@ export function createReviewDecorations(
       ? findSegmentRange(doc, normalizedSegmentGroupId)
       : null;
     if (issue.segmentGroupId && hasSegmentGroups && !segmentRange) {
-      console.log(
-        `[ReviewHighlight:${excerptField}] issue #${idx}: segmentGroupId not found, skipping`,
-      );
       return;
     }
 
     let normalizedIndex = -1;
-    let found = false;
     let searchFrom = 0;
 
     while ((normalizedIndex = normalizedFullText.indexOf(searchText, searchFrom)) !== -1) {
@@ -141,22 +125,12 @@ export function createReviewDecorations(
             'data-issue-type': issue.type,
           }),
         );
-        found = true;
         break;
       }
 
       searchFrom = normalizedIndex + 1;
     }
 
-    // 디버깅: 검색 결과
-    console.log(`[ReviewHighlight:${excerptField}] issue #${idx}:`, {
-      raw: rawSearchText,
-      stripped: searchText,
-      found,
-      normalizedIndex,
-      type: issue.type,
-      segmentGroupId: issue.segmentGroupId,
-    });
   });
 
   return DecorationSet.create(doc, decorations);

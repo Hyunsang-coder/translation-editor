@@ -111,14 +111,14 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const trimmed = line.trim();
 
       // **Source**: "텍스트" 또는 - **Source**: "텍스트"
-      const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?([^"]*)"?/i);
+      const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?(.*?)"?\s*$/i);
       if (sourceMatch) {
         sourceExcerpt = sourceMatch[1]?.trim() || '';
         continue;
       }
 
       // **Target**: "텍스트" 또는 (missing)
-      const targetMatch = trimmed.match(/\*\*Target\*\*:\s*"?([^"]*)"?/i);
+      const targetMatch = trimmed.match(/\*\*Target\*\*:\s*"?(.*?)"?\s*$/i);
       if (targetMatch) {
         const val = targetMatch[1]?.trim() || '';
         targetExcerpt = val === '(missing)' ? '' : val;
@@ -275,14 +275,15 @@ export function parseReviewResult(aiResponse: string): ReviewIssue[] {
     return [];
   }
 
-  // AI 오류 메시지 감지
-  if (detectAiErrorResponse(aiResponse)) {
+  // 마커 기반 콘텐츠 추출 (에러 감지보다 우선)
+  const markedContent = extractMarkedContent(aiResponse);
+
+  // AI 오류 메시지 감지 — 마커가 있으면 정상 응답으로 간주하고 스킵
+  if (!markedContent && detectAiErrorResponse(aiResponse)) {
     console.error('[parseReviewResult] AI error response detected:', aiResponse.slice(0, 300));
     throw new Error('AI 응답에서 오류가 감지되었습니다. 다시 시도해주세요.');
   }
 
-  // 마커 기반 콘텐츠 추출
-  const markedContent = extractMarkedContent(aiResponse);
   const contentToParse = markedContent || aiResponse;
 
   // 1차: Markdown 형식 파싱 (새 형식)
