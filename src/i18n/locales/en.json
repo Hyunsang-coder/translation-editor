@@ -258,7 +258,25 @@
       "fuzzyMatch": "Found similar text ({{similarity}}% match). Apply the fix?\n\nMatched text: \"{{matchedText}}\""
     },
     "fuzzyMatchApplied": "Applied fix using fuzzy matching.",
-    "clipboardFallback": "Text not found. Copied to clipboard. Please apply manually."
+    "clipboardFallback": "Text not found. Copied to clipboard. Please apply manually.",
+    "retranslation": {
+      "note": "Retranslates reflecting the selected review issues."
+    },
+    "retranslate": {
+      "noSegments": "No segments to retranslate.",
+      "cancelled": "Retranslation cancelled.",
+      "applied": "Retranslation applied.",
+      "button": "Retranslate",
+      "preview": "Retranslation Preview",
+      "modal": {
+        "title": "Retranslate",
+        "issueCount": "Reflecting {{count}} selected issue(s).",
+        "messageLabel": "Additional Instructions",
+        "optional": "(Optional)",
+        "placeholder": "Enter additional instructions...",
+        "execute": "Retranslate"
+      }
+    }
   },
   "chat": {
     "title": "Chat",

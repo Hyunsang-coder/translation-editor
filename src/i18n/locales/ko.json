@@ -258,7 +258,25 @@
       "fuzzyMatch": "유사한 텍스트를 찾았습니다 (유사도 {{similarity}}%). 적용하시겠습니까?\n\n찾은 텍스트: \"{{matchedText}}\""
     },
     "fuzzyMatchApplied": "유사 매칭으로 수정 제안이 적용되었습니다.",
-    "clipboardFallback": "텍스트를 찾을 수 없어 클립보드에 복사되었습니다. 직접 수정해 주세요."
+    "clipboardFallback": "텍스트를 찾을 수 없어 클립보드에 복사되었습니다. 직접 수정해 주세요.",
+    "retranslation": {
+      "note": "선택한 이슈의 검수 결과를 반영하여 재번역합니다."
+    },
+    "retranslate": {
+      "noSegments": "재번역할 세그먼트가 없습니다.",
+      "cancelled": "재번역이 취소되었습니다.",
+      "applied": "재번역 결과가 적용되었습니다.",
+      "button": "재번역",
+      "preview": "재번역 미리보기",
+      "modal": {
+        "title": "재번역",
+        "issueCount": "선택한 이슈 {{count}}건을 반영합니다.",
+        "messageLabel": "추가 지시사항",
+        "optional": "(선택)",
+        "placeholder": "추가로 반영할 내용을 입력하세요...",
+        "execute": "재번역 실행"
+      }
+    }
   },
   "chat": {
     "title": "채팅",
