@@ -70,7 +70,7 @@ function getSeverityColor(severity: IssueSeverity): string {
     case 'major':
       return 'text-orange-600 dark:text-orange-400';
     case 'minor':
-      return 'text-gray-500 dark:text-gray-400';
+      return 'text-blue-500 dark:text-blue-400';
     default:
       return 'text-gray-500';
   }
@@ -187,7 +187,7 @@ export function ReviewResultsTable({
                 onClick={() => onToggleSeverity?.('minor')}
                 className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.has('minor')
-                    ? 'bg-gray-500/10 text-gray-600 dark:text-gray-400'
+                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
               >

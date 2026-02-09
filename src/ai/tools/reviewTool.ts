@@ -208,8 +208,8 @@ const TWO_PASS_REVIEW_PROMPT = `# Translation Review System
 | Level | Criteria |
 |-------|----------|
 | Critical | 핵심 정보 누락, 의미 왜곡, 비즈니스 영향 |
-| Major | 중요 세부사항 누락, 명확한 톤 변형 |
-| Minor | 미세한 뉘앙스 차이, 스타일 선호 수준 |
+| Major | 중요 세부사항 누락, 명확한 톤 변형, 명백한 문법 오류(단복수, 관사, 수일치, 시제 등) |
+| Minor | 맞다/틀리다 판단이 어려운 뉘앙스 차이, 스타일 선호 수준 |
 
 ---
 
