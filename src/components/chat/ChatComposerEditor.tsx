@@ -120,6 +120,14 @@ export function ChatComposerEditor({
       const markdown = ed.storage.markdown?.getMarkdown() ?? '';
       lastSetContentRef.current = markdown;
       onChange(markdown);
+
+      // 부모 스크롤 컨테이너를 맨 아래로 스크롤 (입력 내용이 버튼에 가려지지 않도록)
+      requestAnimationFrame(() => {
+        const scrollContainer = ed.view.dom.closest('[data-ite-chat-composer]');
+        if (scrollContainer) {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }
+      });
     },
   });
 
