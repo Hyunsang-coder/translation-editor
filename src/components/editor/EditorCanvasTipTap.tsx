@@ -22,6 +22,7 @@ import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
 import { setTargetEditor as setTargetEditorRegistry } from '@/editor/editorRegistry';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
+import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -312,12 +313,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
 
-    // setContent는 onUpdate를 트리거하지 않을 수 있으므로, 명시적으로 store 업데이트
-    targetEditorRef.current.commands.setContent(translatePreviewDoc);
-    // setContent 후 즉시 HTML/JSON을 가져와서 store에 반영
+    // replaceDocContent는 onUpdate를 발동시키므로 store 자동 동기화됨
+    // addToHistory: true → Ctrl+Z로 번역 취소 가능
+    replaceDocContent(targetEditorRef.current, translatePreviewDoc, { addToHistory: true });
+    // 안전 장치: 수동 store 동기화 유지 (onUpdate로도 갱신되지만 redundant 허용)
     const updatedHtml = targetEditorRef.current.getHTML();
     setTargetDocument(updatedHtml);
-    // Issue #4 수정: AI 도구용 JSON 캐시도 동기화
     setTargetDocJson(targetEditorRef.current.getJSON() as Record<string, unknown>);
     setTranslatePreviewOpen(false);
 

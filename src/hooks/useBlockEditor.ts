@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
@@ -6,6 +6,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
+import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
 interface UseBlockEditorOptions {
   content: string;
@@ -38,6 +39,7 @@ export function useBlockEditor({
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
 
   const stableContent = useMemo(() => content, [content]);
+  const lastContentRef = useRef<string>(content);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -144,17 +146,19 @@ export function useBlockEditor({
       setIsFocused(false);
     },
     onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      lastContentRef.current = html;
       if (onChange) {
-        onChange(ed.getHTML());
+        onChange(html);
       }
     },
   });
 
-  // 외부 content 변경 시 에디터 업데이트
+  // 외부 content 변경 시 에디터 업데이트 (lastContentRef로 비교하여 false positive 방지)
   useEffect(() => {
-    if (editor && editor.getHTML() !== content) {
-      editor.commands.setContent(content);
-    }
+    if (!editor) return;
+    if (content === lastContentRef.current) return;
+    replaceDocContent(editor, content, { addToHistory: false });
   }, [content, editor]);
 
   // highlightNonce 변경 시 decoration 새로고침

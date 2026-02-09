@@ -11,7 +11,7 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -19,6 +19,7 @@ import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
+import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
 /**
  * Source 패널용 편집 가능 에디터
@@ -97,6 +98,8 @@ export function SourceTipTapEditor({
     return base;
   }, [imageExtension, pasteLinkPreserve, t]);
 
+  const lastContentRef = useRef<string>(content);
+
   const editor = useEditor({
     extensions,
     content,
@@ -149,14 +152,16 @@ export function SourceTipTapEditor({
       },
     },
     onCreate: ({ editor: ed }) => {
-      // 에디터 초기화 시 JSON 상태 동기화 (AI 도구용)
+      lastContentRef.current = ed.getHTML();
       if (onJsonChange) {
         onJsonChange(ed.getJSON() as Record<string, unknown>);
       }
     },
     onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      lastContentRef.current = html;
       if (onChange) {
-        onChange(ed.getHTML());
+        onChange(html);
       }
       if (onJsonChange) {
         onJsonChange(ed.getJSON() as Record<string, unknown>);
@@ -164,16 +169,12 @@ export function SourceTipTapEditor({
     },
   }, [extensions]);
 
-  // 외부 content 변경 시 에디터 업데이트
+  // 외부 content 변경 시 에디터 업데이트 (lastContentRef로 비교하여 false positive 방지)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
-      // Issue #4 수정: setContent는 onUpdate를 트리거하지 않을 수 있으므로 명시적 동기화
-      if (onJsonChange) {
-        onJsonChange(editor.getJSON() as Record<string, unknown>);
-      }
-    }
-  }, [editor, content, onJsonChange]);
+    if (!editor) return;
+    if (content === lastContentRef.current) return;
+    replaceDocContent(editor, content, { addToHistory: false });
+  }, [editor, content]);
 
   // 에디터 준비 완료 콜백
   useEffect(() => {
@@ -264,6 +265,8 @@ export function TargetTipTapEditor({
     return base;
   }, [imageExtension, pasteLinkPreserve, t]);
 
+  const lastContentRef = useRef<string>(content);
+
   const editor = useEditor({
     extensions,
     content,
@@ -324,14 +327,16 @@ export function TargetTipTapEditor({
       },
     },
     onCreate: ({ editor: ed }) => {
-      // 에디터 초기화 시 JSON 상태 동기화 (AI 도구용)
+      lastContentRef.current = ed.getHTML();
       if (onJsonChange) {
         onJsonChange(ed.getJSON() as Record<string, unknown>);
       }
     },
     onUpdate: ({ editor: ed }) => {
+      const html = ed.getHTML();
+      lastContentRef.current = html;
       if (onChange) {
-        onChange(ed.getHTML());
+        onChange(html);
       }
       if (onJsonChange) {
         onJsonChange(ed.getJSON() as Record<string, unknown>);
@@ -339,16 +344,12 @@ export function TargetTipTapEditor({
     },
   }, [extensions]);
 
-  // 외부 content 변경 시 에디터 업데이트
+  // 외부 content 변경 시 에디터 업데이트 (lastContentRef로 비교하여 false positive 방지)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
-      // Issue #4 수정: setContent는 onUpdate를 트리거하지 않을 수 있으므로 명시적 동기화
-      if (onJsonChange) {
-        onJsonChange(editor.getJSON() as Record<string, unknown>);
-      }
-    }
-  }, [editor, content, onJsonChange]);
+    if (!editor) return;
+    if (content === lastContentRef.current) return;
+    replaceDocContent(editor, content, { addToHistory: false });
+  }, [editor, content]);
 
   // 에디터 준비 완료 콜백
   useEffect(() => {
