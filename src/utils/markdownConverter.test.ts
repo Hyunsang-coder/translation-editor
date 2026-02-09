@@ -13,6 +13,7 @@ import {
   tipTapJsonToMarkdownForTranslation,
   markdownToTipTapJsonForTranslation,
   htmlToTipTapJson,
+  fixMisalignedBoldMarks,
 } from './markdownConverter';
 
 describe('markdownConverter - 기존 함수 (html: false)', () => {
@@ -423,5 +424,76 @@ describe('markdownConverter - 검수(Review) 파이프라인 시나리오', () =
     expect(markdown).toContain('할 일');
     expect(markdown).toContain('항목 A');
     expect(markdown).toContain('항목 B');
+  });
+});
+
+describe('fixMisalignedBoldMarks - LLM 볼드 마크 경계 보정', () => {
+  // 패턴 1: 닫는 ** 뒤에 이어지는 단어문자를 mark 안으로
+  it('**partial**rest → **partial rest** (닫는 ** 뒤 이어지는 단어)', () => {
+    expect(fixMisalignedBoldMarks('**Two typ**es')).toBe('**Two types**');
+    expect(fixMisalignedBoldMarks('**default s**etting')).toBe('**default setting**');
+  });
+
+  // 패턴 2: 여는 ** 앞에 이어지는 단어문자를 mark 안으로
+  it('prefix**partial** → **prefix partial** (여는 ** 앞 이어지는 단어)', () => {
+    expect(fixMisalignedBoldMarks('i**n the ne**w')).toBe('**in the new**');
+    expect(fixMisalignedBoldMarks('Th**is is bold**')).toBe('**This is bold**');
+  });
+
+  // 패턴 3: mark 안 앞뒤 공백을 mark 밖으로
+  it('** text ** → **text** (mark 안 앞뒤 공백을 밖으로)', () => {
+    expect(fixMisalignedBoldMarks('** be **')).toBe(' **be** ');
+    expect(fixMisalignedBoldMarks('word ** bold ** end')).toBe('word **bold** end');
+  });
+
+  // 패턴 1+2 복합
+  it('prefix**partial**rest → **prefix partial rest** (양쪽 모두)', () => {
+    expect(fixMisalignedBoldMarks('i**n the ne**w')).toBe('**in the new**');
+  });
+
+  // CJK 문자 지원
+  it('CJK 문자도 처리', () => {
+    expect(fixMisalignedBoldMarks('**기본 설**정')).toBe('**기본 설정**');
+    expect(fixMisalignedBoldMarks('설**정값**')).toBe('**설정값**');
+  });
+
+  // 코드 블록 내부는 건드리지 않음
+  it('코드 블록 내부는 보존', () => {
+    const input = '```\n**partial**rest\n```';
+    expect(fixMisalignedBoldMarks(input)).toBe(input);
+  });
+
+  it('코드 블록 외부만 보정', () => {
+    const input = '**partial**rest\n```\n**partial**rest\n```\n**partial**rest';
+    const expected = '**partialrest**\n```\n**partial**rest\n```\n**partialrest**';
+    expect(fixMisalignedBoldMarks(input)).toBe(expected);
+  });
+
+  // 정상 bold는 변경 없음
+  it('정상적인 bold는 변경하지 않음', () => {
+    expect(fixMisalignedBoldMarks('**normal bold**')).toBe('**normal bold**');
+    expect(fixMisalignedBoldMarks('text **bold** more')).toBe('text **bold** more');
+    expect(fixMisalignedBoldMarks('**한국어 볼드** 텍스트')).toBe('**한국어 볼드** 텍스트');
+  });
+
+  // 빈 문자열
+  it('빈 문자열 처리', () => {
+    expect(fixMisalignedBoldMarks('')).toBe('');
+  });
+
+  // bold가 없는 텍스트
+  it('bold 마크가 없는 텍스트는 그대로', () => {
+    expect(fixMisalignedBoldMarks('plain text without bold')).toBe('plain text without bold');
+  });
+
+  // 여러 bold가 한 줄에 있는 경우
+  it('한 줄에 여러 misaligned bold 처리', () => {
+    expect(fixMisalignedBoldMarks('**Two typ**es and **default s**etting'))
+      .toBe('**Two types** and **default setting**');
+  });
+
+  // 인라인 코드(`)는 건드리지 않음
+  it('인라인 코드 backtick은 건드리지 않음', () => {
+    expect(fixMisalignedBoldMarks('`code`block')).toBe('`code`block');
   });
 });

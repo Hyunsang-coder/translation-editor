@@ -192,7 +192,7 @@ export function tipTapJsonToMarkdown(json: TipTapDocJson): string {
   const markdown = editor.storage.markdown.getMarkdown();
   editor.destroy();
 
-  return markdown;
+  return normalizeMarkdownWhitespace(markdown);
 }
 
 /**
@@ -242,7 +242,7 @@ export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string 
   const markdown = editor.storage.markdown.getMarkdown();
   editor.destroy();
 
-  return markdown;
+  return normalizeMarkdownWhitespace(markdown);
 }
 
 /**
@@ -332,6 +332,164 @@ function normalizeHorizontalRules(markdown: string): string {
     } else {
       result.push(line);
     }
+  }
+
+  return result.join('\n');
+}
+
+/**
+ * 인라인 마크 앞뒤의 다중 공백을 단일 공백으로 정규화
+ *
+ * prosemirror-markdown의 expelEnclosingWhitespace와 tiptap-markdown의
+ * trimInline()/shiftDelim() 상호작용으로 마크 앞뒤에 여분 공백이 삽입되는 문제를 후처리.
+ * 예: "move  **bold**" → "move **bold**"
+ *
+ * 코드 블록(```) 내부는 건드리지 않음.
+ */
+export function normalizeMarkdownWhitespace(markdown: string): string {
+  if (!markdown) return markdown;
+
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    if (line.trimStart().startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      result.push(line);
+      continue;
+    }
+
+    if (inCodeBlock) {
+      result.push(line);
+      continue;
+    }
+
+    // 인라인 마크 앞의 다중 공백 → 단일 공백
+    // 대상: **, ~~, *, ` (** 와 ~~ 를 먼저 매칭하여 *보다 우선)
+    let normalized = line.replace(/ {2,}(\*\*|~~|\*|`)/g, ' $1');
+
+    // 인라인 마크 뒤의 다중 공백 → 단일 공백
+    // 닫는 마크 뒤 다중 공백: **text**  word → **text** word
+    normalized = normalized.replace(/(\*\*|~~|\*|`) {2,}/g, '$1 ');
+
+    result.push(normalized);
+  }
+
+  return result.join('\n');
+}
+
+/**
+ * LLM 번역 결과에서 볼드 마크(**) 경계가 단어 중간에서 끊기는 문제를 보정
+ *
+ * LLM이 토큰 단위로 출력하면서 ** 마커가 단어 경계와 어긋나는 경우 발생.
+ * 예: **Two typ**es → **Two types**
+ *
+ * 처리 패턴:
+ * 1. **partial**rest → **partial rest** (닫는 ** 뒤 이어지는 단어문자를 mark 안으로)
+ * 2. prefix**partial** → **prefix partial** (여는 ** 앞 이어지는 단어문자를 mark 안으로)
+ * 3. ** text ** → **text** (mark 안 앞뒤 공백을 mark 밖으로)
+ *
+ * 코드 블록(```) 내부는 건드리지 않음.
+ */
+export function fixMisalignedBoldMarks(markdown: string): string {
+  if (!markdown) return markdown;
+
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    if (line.trimStart().startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      result.push(line);
+      continue;
+    }
+
+    if (inCodeBlock) {
+      result.push(line);
+      continue;
+    }
+
+    // 단어 문자: 영숫자 + 언더스코어 + CJK
+    const wRe = /[\w\u4e00-\u9fff\uac00-\ud7af\u3040-\u30ff\u3100-\u312f]/;
+
+    // 전략: 각 **...** 쌍을 개별적으로 찾아서 경계 보정
+    // **...** 내부에 **를 포함하지 않는 콘텐츠만 매칭
+    const boldRe = /\*\*((?:[^*]|\*(?!\*))+)\*\*/g;
+    let fixed = '';
+    let lastIndex = 0;
+    let match;
+
+    while ((match = boldRe.exec(line)) !== null) {
+      const fullMatch = match[0];         // **content**
+      const content = match[1];           // content
+      const matchStart = match.index;     // position of first *
+      const matchEnd = matchStart + fullMatch.length;
+
+      // 이 bold 이전의 텍스트
+      let before = line.slice(lastIndex, matchStart);
+      // 이 bold 이후의 텍스트 (peek)
+      const after = line.slice(matchEnd);
+
+      // 패턴 2: before 끝에 단어문자가 붙어있으면 mark 안으로
+      let prefix = '';
+      const prefixMatch = before.match(new RegExp(`(${wRe.source}+)$`));
+      if (prefixMatch) {
+        prefix = prefixMatch[1] ?? '';
+        before = before.slice(0, -prefix.length);
+      }
+
+      // 패턴 1: after 시작에 단어문자가 붙어있으면 mark 안으로
+      let suffix = '';
+      const suffixMatch = after.match(new RegExp(`^(${wRe.source}+)`));
+      if (suffixMatch) {
+        suffix = suffixMatch[1] ?? '';
+        // boldRe.lastIndex를 suffix 길이만큼 앞으로
+        boldRe.lastIndex = matchEnd + suffix.length;
+      }
+
+      // 패턴 3: mark 안 앞뒤 공백을 mark 밖으로
+      let innerContent = prefix + content + suffix;
+      let leadingSpace = '';
+      let trailingSpace = '';
+      const spaceMatch = innerContent.match(/^(\s+)([\s\S]*?)(\s+)$/);
+      if (spaceMatch) {
+        leadingSpace = spaceMatch[1] ?? '';
+        innerContent = spaceMatch[2] ?? '';
+        trailingSpace = spaceMatch[3] ?? '';
+      } else {
+        const leadMatch = innerContent.match(/^(\s+)([\s\S]*)$/);
+        if (leadMatch) {
+          leadingSpace = leadMatch[1] ?? '';
+          innerContent = leadMatch[2] ?? '';
+        }
+        const trailMatch = innerContent.match(/^([\s\S]*?)(\s+)$/);
+        if (trailMatch) {
+          innerContent = trailMatch[1] ?? '';
+          trailingSpace = trailMatch[2] ?? '';
+        }
+      }
+
+      // leading space가 있으면 before 끝의 공백과 합쳐서 단일 공백으로
+      if (leadingSpace && before.endsWith(' ')) {
+        before = before.replace(/ +$/, '');
+        leadingSpace = ' ';
+      }
+
+      fixed += before + leadingSpace + '**' + innerContent + '**' + trailingSpace;
+      lastIndex = boldRe.lastIndex || matchEnd;
+    }
+
+    // 나머지 텍스트 추가
+    let remaining = line.slice(lastIndex);
+    // trailing space가 있었으면 remaining 시작의 공백과 합쳐서 단일 공백으로
+    if (fixed.endsWith(' ') && remaining.startsWith(' ')) {
+      remaining = remaining.replace(/^ +/, '');
+    }
+    fixed += remaining;
+
+    result.push(fixed);
   }
 
   return result.join('\n');
@@ -431,7 +589,7 @@ export function htmlToMarkdown(html: string): string {
   const markdown = editor.storage.markdown.getMarkdown();
   editor.destroy();
 
-  return markdown;
+  return normalizeMarkdownWhitespace(markdown);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   estimateMarkdownTokens,
   detectMarkdownTruncation,
   extractTranslationMarkdown,
+  fixMisalignedBoldMarks,
   isValidTipTapDocJson,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
@@ -294,9 +295,10 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   // ============================================================
-  // Markdown → TipTap JSON 변환 (이미지 복원 불필요)
+  // 볼드 마크 경계 보정 후 TipTap JSON 변환 (이미지 복원 불필요)
   // ============================================================
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdownRaw);
+  const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
@@ -564,8 +566,9 @@ export async function translateWithStreaming(
     );
   }
 
-  // Markdown → TipTap JSON 변환 (이미지 복원 불필요)
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdownRaw);
+  // 볼드 마크 경계 보정 후 TipTap JSON 변환 (이미지 복원 불필요)
+  const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
+  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
