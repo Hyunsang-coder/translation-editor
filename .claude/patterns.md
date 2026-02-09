@@ -248,6 +248,9 @@ resizeImageForApi()   // Progressive resize for API limits
 // Uses streaming with onToken callback
 // Output format: Markdown with ---REVIEW_START/END--- markers (NOT JSON)
 
+// Prompt: buildReviewPrompt() — 항상 모든 이슈 검출 (thorough)
+// ReviewIntensity 타입 삭제됨 — 프롬프트 필터링 대신 UI 필터링 사용
+
 // Parsing: src/ai/review/parseReviewResult.ts
 // Uses ---REVIEW_START/END--- markers
 // Markdown format: ### Issue #N with **Suggestion**: field (required)
@@ -256,6 +259,11 @@ resizeImageForApi()   // Progressive resize for API limits
 
 // Highlight: src/editor/extensions/ReviewHighlight.ts
 // ProseMirror Decoration-based, auto-recalculates on doc change
+
+// Severity Filter: reviewStore.severityFilter (Set<IssueSeverity>)
+// 기본값: new Set(['critical', 'major']) — Minor 숨김
+// UI: ReviewResultsTable의 severity 배지가 클릭 가능한 토글 버튼
+// 필터링: ReviewResultsTable 내부에서 filteredIssues로 표시
 
 // Results Table: src/components/review/ReviewResultsTable.tsx
 // Layout: table-fixed with 1:2:3 column ratio

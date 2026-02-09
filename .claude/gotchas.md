@@ -70,7 +70,7 @@ Critical implementation warnings learned from past issues.
 
 30. **Review Streaming Text State**: `reviewStore.streamingText` stores current chunk's AI response for real-time display. Updated via `onToken` callback in `runReview()`. Preserved after completion for debugging.
 
-31. **Review Polishing Mode**: Use `isPolishingMode(intensity)` from `reviewStore.ts` to check if current mode is grammar/fluency vs comparison. Polishing mode sends only `targetText` without `sourceText` to AI.
+31. **Review Severity Filter**: `reviewStore.severityFilter`는 `Set<IssueSeverity>`로 기본값 `['critical', 'major']`. 프롬프트는 항상 모든 이슈(Critical/Major/Minor) 검출하고 UI에서 severity 필터로 표시 제어. `ReviewIntensity` 타입은 삭제됨 — LLM이 프롬프트 필터링 지시를 무시하는 문제 때문에 UI 필터링으로 전환.
 
 32. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
 
