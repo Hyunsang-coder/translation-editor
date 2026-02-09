@@ -1,67 +1,106 @@
 # Hand-off: Code Review 이슈 수정 작업
 
 **작성일**: 2026-02-09
-**기준 커밋**: `002d0fb` (main)
-**리뷰 원본**: `docs/CODE_REVIEW_2026-02-09.md` (23개 이슈, Grade B+)
+**최종 업데이트**: 2026-02-09
+**기준 커밋**: `8c68b38` (main)
+**리뷰 원본**: `docs/CODE_REVIEW_2026-02-09.md` (23개 CR/HI/MD + 17개 LOW)
 
 ---
 
-## 완료된 작업 (11/23)
+## 전체 현황
+
+```
+CR+HI+MD 23건 → 해결 17건 → 미해결 6건
+LOW      17건 → 해결  5건 → 미해결 12건
+LO-17은 이전 커밋에서 이미 해결됨, MD-09/MD-10/MD-12는 검증 결과 수정 불필요
+```
+
+---
+
+## 완료된 작업 (22/40)
 
 ### Commit `e45c833` — Critical/High 버그 수정
 | 이슈 | 파일 | 수정 내용 |
 |------|------|----------|
-| **CR-01** DiffMark position shift | `src/editor/extensions/DiffMark.ts` | `doc.descendants()` 순회 중 삭제 → position 배열 수집 후 **역순 삭제** |
-| **CR-02** Rust UTF-8 경계 패닉 | `src-tauri/src/commands/block.rs` | `is_char_boundary()` 검증 추가, 실패 시 `INVALID_POSITION` 에러 반환 |
-| **HI-04** 셀렉터 없는 스토어 구독 | 8개 파일 | `useShallow` / 개별 셀렉터 적용 (App, MainLayout, Toolbar, SegmentGroupRow, SourcePanel, TargetPanel, AppSettingsModal, SettingsSidebar) |
-| **HI-06** Error Boundary 없음 | `src/components/ui/ErrorBoundary.tsx` (신규) + `MainLayout.tsx` | 범용 ErrorBoundary 생성, Editor/Chat/Settings 3개 영역 래핑 |
-| **HI-08** TipTapEditor double-destroy | `src/components/editor/TipTapEditor.tsx` | Source/Target 모두 수동 `editor.destroy()` useEffect 제거 (`useEditor`가 자체 처리) |
-| **MD-03** pendingDiffs 직접 mutation | `src/stores/projectStore.ts` | `delete obj[key]` → `const { [key]: _, ...rest }` 구조 분해 (2곳) |
-| **MD-04** 경로 탐색 보안 | `src-tauri/src/commands/attachments.rs` | `Path::file_name()`으로 파일명만 추출, `../../` 차단 |
+| **CR-01** DiffMark position shift | `DiffMark.ts` | position 배열 수집 후 **역순 삭제** |
+| **CR-02** Rust UTF-8 경계 패닉 | `block.rs` | `is_char_boundary()` 검증 추가 |
+| **HI-04** 셀렉터 없는 스토어 구독 | 8개 파일 | `useShallow` / 개별 셀렉터 적용 |
+| **HI-06** Error Boundary 없음 | `ErrorBoundary.tsx` (신규) | Editor/Chat/Settings 3개 영역 래핑 |
+| **HI-08** TipTapEditor double-destroy | `TipTapEditor.tsx` | 수동 destroy useEffect 제거 |
+| **MD-03** pendingDiffs 직접 mutation | `projectStore.ts` | 구조 분해 패턴 (2곳) |
+| **MD-04** 경로 탐색 보안 | `attachments.rs` | `Path::file_name()` 차단 |
 
 ### Commit `002d0fb` — Medium 소형 이슈
 | 이슈 | 파일 | 수정 내용 |
 |------|------|----------|
-| **MD-01** MCP 도구 래핑 | `src/ai/chat.ts` | `EXTERNAL_TOOLS` 화이트리스트 → `INTERNAL_TOOLS` 블랙리스트. 동적 MCP 도구도 자동 래핑 |
-| **MD-07** 매직 넘버 | `src/ai/constants.ts` (신규) + `client.ts` + `translateDocument.ts` | 토큰/컨텍스트 상수 집중화 |
-| **MD-09** async IIFE 에러 | `src/stores/projectStore.ts` | `initializeProject` 전체를 외부 try/catch로 감싸 미추적 에러 방지 |
-| **MD-10** uiStore 버전 | `src/stores/uiStore.ts` | `version: 1` + `migrate` 함수 추가 (기존 데이터 보존) |
+| **MD-01** MCP 도구 래핑 | `chat.ts` | `INTERNAL_TOOLS` 블랙리스트로 전환 |
+| **MD-07** 매직 넘버 | `constants.ts` (신규) | 토큰/컨텍스트 상수 집중화 |
+
+### Commits `a0e17c3`, `37ff20e`, `4825852` — 리팩토링
+| 이슈 | 파일 | 수정 내용 |
+|------|------|----------|
+| **HI-02** generate/stream 중복 | `chat.ts` | 미사용 `generateAssistantReply` 제거 |
+| **HI-03** 번역 프롬프트 중복 | `translateDocument.ts` | `buildTranslationSetup` 공통화 |
+
+### Commit `8c68b38` — 프롬프트 인젝션 방어 + 안정성
+| 이슈 | 파일 | 수정 내용 |
+|------|------|----------|
+| **MD-02** translatorPersona 인젝션 | `prompt.ts`, `translateDocument.ts` | `<user_persona>` XML 래핑 (4곳) |
+| **LO-04** MCP 에러 타입 소실 | `McpClientManager.ts` | `error.message` + 원본 스택 보존 |
+| **LO-13** ReviewPanel 매 렌더 호출 | `ReviewPanel.tsx` | `useMemo` 적용 |
+
+### 미커밋 — Quick Win 일괄 수정 (현재 스테이징)
+| 이슈 | 파일 | 수정 내용 |
+|------|------|----------|
+| **MD-05** buildTextWithPositions 중복 | `SearchHighlight.ts`, `ReviewHighlight.ts` | 공통 함수 export, ReviewHighlight에서 import |
+| **MD-06** replaceMatch 3중 계산 | `SearchHighlight.ts` | redundant `queueMicrotask` 제거 (apply에서 동기 처리) |
+| **LO-06** truncateToolOutput 중복 | `src/ai/utils.ts` (신규) | 공통 추출, 2곳에서 import |
+| **LO-11** setTimeout clearTimeout 누락 | `ChatContent.tsx` | useEffect cleanup 추가 (2곳) |
+| **LO-12** VisualDiffViewer 인덱스 key | `VisualDiffViewer.tsx` | 행 번호 기반 stable key |
+
+### 검증 완료 — 수정 불필요
+| 이슈 | 사유 |
+|------|------|
+| **MD-09** async IIFE 에러 | 이미 try-catch + `set({ error })` 반영됨 |
+| **MD-10** uiStore 버전 | 이미 `version: 1` + `migrate` 존재 |
+| **MD-12** ReviewHighlight Zustand 호출 | `getState()` 경량 동기 호출, docChanged 시에만 비용 발생 |
+| **LO-17** console.log verbose | 이전 커밋에서 이미 제거됨 |
 
 ---
 
-## 남은 작업 (12/23)
+## 남은 작업 (6 CR/HI/MD + 12 LOW)
 
-### HIGH — 중형 리팩터링 (4개)
+### HIGH — 대규모 리팩토링 (3개)
 
-| 이슈 | 파일 | 작업량 | 설명 |
+| 이슈 | 파일 | 난이도 | 설명 |
 |------|------|--------|------|
-| **HI-01** sendMessage/replayMessage 중복 | `chatStore.ts:622-1021, 1182-1463` | 🔴 대형 | ~500줄 공통 로직을 `executeAIChat()` 헬퍼로 추출. HI-05와 묶어서 진행 권장 |
-| **HI-02** generate/stream 중복 | `chat.ts:859-957, 962-1072` | 🟡 중형 | 메시지 빌딩, 툴 스펙, 가이드 메시지 ~200줄 공통 빌더 추출 |
-| **HI-03** 번역 프롬프트 중복 | `translateDocument.ts:106-308, 350-578` | 🟡 중형 | 시스템 프롬프트 구성 ~80줄, `buildTranslationPrompt()` 추출 |
-| **HI-05** chatStore 관심사 혼재 | `chatStore.ts` (1,767줄) | 🔴 대형 | 7개 관심사 → slice 패턴 또는 서비스 함수 분리. HI-01과 동시 진행 |
-| **HI-07** setContent undo 파괴 | `useBlockEditor.ts:155`, `TipTapEditor.tsx:169,353` | 🟢 소형 | TipTap API 조사 필요 (`editor.commands.insertContent` 또는 JSON diff) |
+| **HI-07** setContent undo 파괴 | `TipTapEditor.tsx`, `useBlockEditor.ts` | 중 | 번역 적용 후 Ctrl+Z 불가. TipTap API 조사 필요 |
+| **HI-01** sendMessage/replayMessage 중복 | `chatStore.ts` | **높** | ~500줄 공통 → `executeAIChat()` 추출. HI-05와 묶어서 |
+| **HI-05** chatStore 관심사 혼재 | `chatStore.ts` (1,767줄) | **높** | 7개 관심사 slice 분리. HI-01 선행 필요 |
 
-> **권장 순서**: HI-07 (소형) → HI-02 → HI-03 → HI-01+HI-05 (대형, 한 세션에 집중)
+### MEDIUM — 코드 품질 (3개)
 
-### MEDIUM — 남은 중형 작업 (6개)
+| 이슈 | 파일 | 난이도 | 설명 |
+|------|------|--------|------|
+| **MD-08** `as any` 16곳 | `chat.ts` 11, `translateDocument.ts` 5 | 중 | 타입 정의 보강 필요 |
+| **MD-11** getHTML() 비교 비신뢰성 | `TipTapEditor.tsx`, `useBlockEditor.ts` | 중 | HI-07과 연관 세트 |
+| **MD-13** Source/Target TipTapEditor 중복 | `TipTapEditor.tsx` | 중 | `panelType` prop 통합. HI-07 이후 진행 |
 
-| 이슈 | 파일 | 설명 |
-|------|------|------|
-| **MD-02** translatorPersona 인젝션 | `prompt.ts:127`, `translateDocument.ts:150,381` | 사용자 페르소나가 시스템 프롬프트에 직접 삽입 |
-| **MD-05** SearchHighlight/ReviewHighlight 이중 순회 | `SearchHighlight.ts:53`, `ReviewHighlight.ts:25` | `buildTextWithPositions` 함수 중복 + 이중 O(n) 순회 |
-| **MD-06** replaceMatch 3중 계산 | `SearchHighlight.ts:391-531` | `queueMicrotask` 제거, plugin apply 결과 재활용 |
-| **MD-08** `as any` 16곳 | `chat.ts` 11곳, `translateDocument.ts` 5곳 | 타입 정의 보강 필요 |
-| **MD-11** getHTML() 비교 비신뢰성 | `TipTapEditor.tsx:169,353`, `useBlockEditor.ts:155` | HTML 직렬화 차이로 오판 가능. JSON 비교 또는 content hash 도입 |
-| **MD-13** Source/Target TipTapEditor 중복 | `TipTapEditor.tsx:37-210, 216-395` | ~90% 동일, `panelType` prop으로 단일 컴포넌트 통합 |
+### LOW — 개선 사항 (12개)
 
-### LOW — 개선 사항 (17개, 선별 권장)
-
-우선 처리 가치가 높은 것:
-- **LO-09** Rust println! → `tracing` 크레이트 (보안, oauth.rs 25개+)
-- **LO-10** TranslationBlock split 시 duplicate blockId
-- **LO-03** Confluence pageCache 무한 증가 (LRU 필요)
-
-나머지(a11y, verbose logging, array key 등)는 점진적 개선.
+| 이슈 | 난이도 | 설명 |
+|------|--------|------|
+| **LO-01** 모달 포커스 트랩 | 중 | a11y: `role="dialog"`, 포커스 트래핑 |
+| **LO-02** 탭 키보드 내비게이션 | 중 | a11y: `role="tab"`, `aria-selected` |
+| **LO-03** Confluence pageCache 무한 증가 | 낮 | LRU 캐시 또는 최대 크기 제한 |
+| **LO-05** Rust 커맨드 에러 타입 불일치 | 중 | `CommandResult<T>` 통일 |
+| **LO-07** Rust lock 보일러플레이트 | 낮 | `acquire_db()` 헬퍼 추출 |
+| **LO-08** history.rs 미구현 스텁 | 낮 | 제거 또는 구현 |
+| **LO-09** Rust println! 25곳 | 낮 | `tracing` 크레이트 도입 (보안) |
+| **LO-10** TranslationBlock split 중복 blockId | 중 | 새 ID 할당 로직 |
+| **LO-14** ChatContent 816줄 모놀리식 | 높 | 컴포넌트 분리 |
+| **LO-15** buildAlignedChunks 2회 호출 | 낮 | 캐싱 |
+| **LO-16** Partial response 표시 없이 반환 | 낮 | partial 플래그 |
 
 ---
 
@@ -70,9 +109,17 @@
 | 파일 | 용도 |
 |------|------|
 | `src/ai/constants.ts` | AI 토큰/컨텍스트 상수 집중화 |
+| `src/ai/utils.ts` | `truncateToolOutput` 공통 유틸리티 |
 | `src/components/ui/ErrorBoundary.tsx` | 범용 React Error Boundary |
 
 ---
+
+## 권장 진행 순서
+
+1. **HI-07 + MD-11** (연관 세트) → setContent undo + getHTML 비교 개선
+2. **MD-13** → TipTapEditor 통합 (HI-07 이후)
+3. **MD-08** → `as any` 타입 정의 (독립 작업)
+4. **HI-01 + HI-05** → chatStore 대규모 리팩토링 (한 세션에 집중)
 
 ## 주의사항
 

@@ -8,7 +8,7 @@ import {
   normalizeForSearch,
   buildNormalizedTextWithMapping,
 } from '@/utils/normalizeForSearch';
-import { findSegmentRange } from '@/editor/extensions/SearchHighlight';
+import { findSegmentRange, buildTextWithPositions } from '@/editor/extensions/SearchHighlight';
 import { hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
 
 export interface ReviewHighlightOptions {
@@ -17,26 +17,6 @@ export interface ReviewHighlightOptions {
 }
 
 const reviewHighlightPluginKey = new PluginKey('reviewHighlight');
-
-/**
- * 문서의 전체 텍스트와 위치 매핑 구축
- * 노드 경계를 넘는 텍스트 검색을 위해 필요
- */
-function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
-  let text = '';
-  const positions: number[] = []; // positions[i] = text[i]에 해당하는 doc 내 위치
-
-  doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
-    if (node.isText && node.text) {
-      for (let i = 0; i < node.text.length; i++) {
-        positions.push(pos + i);
-      }
-      text += node.text;
-    }
-  });
-
-  return { text, positions };
-}
 
 /**
  * 문서에서 텍스트를 찾아 Decoration 생성

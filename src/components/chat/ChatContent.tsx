@@ -374,9 +374,10 @@ export function ChatContent(): JSX.Element {
     const { chatPanelOpen, setChatPanelOpen } = useUIStore.getState();
     if (!chatPanelOpen) setChatPanelOpen(true);
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       editorRef.current?.commands.focus('end');
     }, 100);
+    return () => clearTimeout(timer);
   }, [focusNonce]);
 
   // 기본 채팅 세션 1개는 자동 생성
@@ -402,9 +403,10 @@ export function ChatContent(): JSX.Element {
   useEffect(() => {
     if (!chatPanelOpen) return;
     editorRef.current?.commands.focus('end');
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+    return () => clearTimeout(timer);
   }, [chatPanelOpen]);
 
   // 메시지 추가 시 자동 스크롤

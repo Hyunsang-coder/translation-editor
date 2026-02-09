@@ -119,8 +119,8 @@ function SideBySideView({ rows }: { rows: SideBySideRow[] }) {
         <col className="w-[calc(50%-40px)]" />
        </colgroup>
        <tbody className="divide-y divide-transparent">
-         {rows.map((row, idx) => (
-           <tr key={idx} className="group hover:bg-editor-surface/30">
+         {rows.map((row) => (
+           <tr key={`${row.original.num ?? 'e'}-${row.changed.num ?? 'e'}`} className="group hover:bg-editor-surface/30">
              {/* Left: Original */}
              <LineCell 
                side="left" 

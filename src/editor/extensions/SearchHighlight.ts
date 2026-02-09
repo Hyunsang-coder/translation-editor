@@ -48,9 +48,9 @@ export const searchHighlightPluginKey = new PluginKey<DecorationSet>('searchHigh
 /**
  * 문서의 전체 텍스트와 위치 매핑 구축
  * 노드 경계를 넘는 텍스트 검색을 위해 필요
- * (ReviewHighlight.ts에서 가져온 패턴)
+ * (SearchHighlight / ReviewHighlight 공용)
  */
-function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
+export function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
   let text = '';
   const positions: number[] = [];
 
@@ -406,19 +406,9 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             // 현재 매치 텍스트 치환 (plain text로 교체, mark 제거)
             tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
             dispatch(tr);
+            // dispatch 후 plugin apply가 동기적으로 실행되어
+            // storage.matches 재계산 + currentIndex 조정 + decoration 갱신 완료
           }
-
-          // 매치 재계산 (queueMicrotask로 트랜잭션 완료 후 실행)
-          queueMicrotask(() => {
-            storage.matches = findMatches(editor.state.doc, storage.searchTerm, storage.caseSensitive);
-            // 인덱스 조정 (현재 위치 유지, 범위 초과 시 조정)
-            if (storage.currentIndex >= storage.matches.length) {
-              storage.currentIndex = Math.max(0, storage.matches.length - 1);
-            }
-            // decoration 갱신을 위해 빈 트랜잭션 발행
-            const refreshTr = editor.view.state.tr.setMeta(searchHighlightPluginKey, { refresh: true });
-            editor.view.dispatch(refreshTr);
-          });
 
           return true;
         },
@@ -441,16 +431,10 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             }
 
             dispatch(tr);
-          }
-
-          // 매치 재계산
-          queueMicrotask(() => {
-            storage.matches = findMatches(editor.state.doc, storage.searchTerm, storage.caseSensitive);
+            // dispatch 후 plugin apply가 동기적으로 matches 재계산 완료
+            // replaceAll 후에는 인덱스를 0으로 리셋
             storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
-            // decoration 갱신
-            const refreshTr = editor.view.state.tr.setMeta(searchHighlightPluginKey, { refresh: true });
-            editor.view.dispatch(refreshTr);
-          });
+          }
 
           return true;
         },
