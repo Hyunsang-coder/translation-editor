@@ -8,6 +8,7 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
+import { useUIStore } from '@/stores/uiStore';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
@@ -81,7 +82,10 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   userContentParts.push(`## 검수 대상\n${segmentsText}`);
 
   // 출력 지시 (시스템 프롬프트의 Markdown 형식을 따르도록)
-  userContentParts.push('위 출력 형식(---REVIEW_START/END--- 마커와 Markdown)을 정확히 따라 출력하세요.');
+  const appLang = useUIStore.getState().language === 'ko' ? '한국어' : 'English';
+  userContentParts.push(`위 출력 형식(---REVIEW_START/END--- 마커와 Markdown)을 정확히 따라 출력하세요.
+- Explanation: ${appLang}로 작성
+- Suggestion: 반드시 Target 언어(${tgtLang})로 작성`);
 
   const userContent = userContentParts.join('\n\n');
 
