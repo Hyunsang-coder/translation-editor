@@ -286,14 +286,20 @@ function mergeToolCallChunks(chunks: ToolCallChunk[]): ToolCall[] {
   return result;
 }
 
-// 외부 도구 목록 (프롬프트 인젝션 방어 대상)
-const EXTERNAL_TOOLS = ['notion_get_page', 'getConfluencePage', 'notion_search', 'notion_query_database'];
+// 내부 도구 목록 (출력이 신뢰 가능한 자체 도구)
+// 이 목록에 없는 도구(MCP, Notion, Confluence 등)는 외부 콘텐츠로 래핑됨
+const INTERNAL_TOOLS = new Set([
+  'get_source_document', 'get_target_document', 'get_review_results',
+  'suggest_translation_rule', 'suggest_project_context',
+  'confluence_word_count', 'review_translation', 'get_review_chunk',
+]);
 
 /**
  * 외부 도구 출력에 인젝션 방어 태그 추가
+ * 내부 도구를 제외한 모든 도구 출력을 래핑 (MCP 동적 도구 포함)
  */
 function wrapExternalToolOutput(toolName: string, output: string): string {
-  if (!EXTERNAL_TOOLS.includes(toolName)) return output;
+  if (INTERNAL_TOOLS.has(toolName)) return output;
 
   return [
     '<external_content>',

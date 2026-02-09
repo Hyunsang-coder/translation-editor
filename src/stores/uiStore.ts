@@ -381,6 +381,8 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
+      version: 1,
+      migrate: (persisted) => persisted as Record<string, unknown>,
       partialize: (state) => ({
         theme: state.theme,
         language: state.language,

@@ -344,75 +344,80 @@ export const useProjectStore = create<ProjectStore>()(
       initializeProject: (): void => {
         set({ isLoading: true, error: null });
         void (async () => {
-          const { lastProjectId } = get();
-
-          if (lastProjectId) {
-            try {
-              const loaded = await tauriLoadProject(lastProjectId);
-              const td = buildTargetDocument(loaded);
-              const sd = buildSourceDocument(loaded);
-              set({
-                project: loaded,
-                isDirty: false,
-                isLoading: false,
-                error: null,
-                targetDocument: td.text,
-                sourceDocument: sd.text,
-                // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
-                sourceDocJson: htmlToTipTapJson(sd.text),
-                targetDocJson: htmlToTipTapJson(td.text),
-              });
-              // chatStore 하이드레이션 (프로젝트별 설정 로드)
-              const { useChatStore } = await import('@/stores/chatStore');
-              await useChatStore.getState().hydrateForProject(loaded.id);
-              return;
-            } catch (err) {
-              console.warn('[initializeProject] Failed to load lastProjectId:', lastProjectId, err instanceof Error ? err.message : err);
-            }
-          }
-
-          // lastProjectId가 없거나 로드 실패한 경우: DB에 저장된 최근 프로젝트를 우선 로드
           try {
-            const ids = await tauriListProjectIds();
-            const first = ids[0];
-            if (first) {
-              const loaded = await tauriLoadProject(first);
-              const td = buildTargetDocument(loaded);
-              const sd = buildSourceDocument(loaded);
-              set({
-                project: loaded,
-                isDirty: false,
-                isLoading: false,
-                error: null,
-                lastProjectId: loaded.id,
-                targetDocument: td.text,
-                sourceDocument: sd.text,
-                // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
-                sourceDocJson: htmlToTipTapJson(sd.text),
-                targetDocJson: htmlToTipTapJson(td.text),
-              });
-              // chatStore 하이드레이션 (프로젝트별 설정 로드)
-              const { useChatStore } = await import('@/stores/chatStore');
-              await useChatStore.getState().hydrateForProject(loaded.id);
-              return;
-            }
-          } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to load project';
-            console.warn('[initializeProject] DB fallback failed:', message);
-            set({ error: message, isLoading: false });
-          }
+            const { lastProjectId } = get();
 
-          // 프로젝트가 하나도 없는 경우: null 유지 (Blank Page UX를 위함)
-          set({
-            project: null,
-            isLoading: false,
-            lastProjectId: null,
-            sourceDocJson: null,
-            targetDocJson: null,
-          });
-          // chatStore 초기화 (프로젝트 없음)
-          const { useChatStore } = await import('@/stores/chatStore');
-          await useChatStore.getState().hydrateForProject(null);
+            if (lastProjectId) {
+              try {
+                const loaded = await tauriLoadProject(lastProjectId);
+                const td = buildTargetDocument(loaded);
+                const sd = buildSourceDocument(loaded);
+                set({
+                  project: loaded,
+                  isDirty: false,
+                  isLoading: false,
+                  error: null,
+                  targetDocument: td.text,
+                  sourceDocument: sd.text,
+                  // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+                  sourceDocJson: htmlToTipTapJson(sd.text),
+                  targetDocJson: htmlToTipTapJson(td.text),
+                });
+                // chatStore 하이드레이션 (프로젝트별 설정 로드)
+                const { useChatStore } = await import('@/stores/chatStore');
+                await useChatStore.getState().hydrateForProject(loaded.id);
+                return;
+              } catch (err) {
+                console.warn('[initializeProject] Failed to load lastProjectId:', lastProjectId, err instanceof Error ? err.message : err);
+              }
+            }
+
+            // lastProjectId가 없거나 로드 실패한 경우: DB에 저장된 최근 프로젝트를 우선 로드
+            try {
+              const ids = await tauriListProjectIds();
+              const first = ids[0];
+              if (first) {
+                const loaded = await tauriLoadProject(first);
+                const td = buildTargetDocument(loaded);
+                const sd = buildSourceDocument(loaded);
+                set({
+                  project: loaded,
+                  isDirty: false,
+                  isLoading: false,
+                  error: null,
+                  lastProjectId: loaded.id,
+                  targetDocument: td.text,
+                  sourceDocument: sd.text,
+                  // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
+                  sourceDocJson: htmlToTipTapJson(sd.text),
+                  targetDocJson: htmlToTipTapJson(td.text),
+                });
+                // chatStore 하이드레이션 (프로젝트별 설정 로드)
+                const { useChatStore } = await import('@/stores/chatStore');
+                await useChatStore.getState().hydrateForProject(loaded.id);
+                return;
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Failed to load project';
+              console.warn('[initializeProject] DB fallback failed:', message);
+              set({ error: message, isLoading: false });
+            }
+
+            // 프로젝트가 하나도 없는 경우: null 유지 (Blank Page UX를 위함)
+            set({
+              project: null,
+              isLoading: false,
+              lastProjectId: null,
+              sourceDocJson: null,
+              targetDocJson: null,
+            });
+            // chatStore 초기화 (프로젝트 없음)
+            const { useChatStore } = await import('@/stores/chatStore');
+            await useChatStore.getState().hydrateForProject(null);
+          } catch (err) {
+            console.error('[initializeProject] Unhandled error:', err);
+            set({ error: err instanceof Error ? err.message : 'Initialization failed', isLoading: false });
+          }
         })();
       },
 

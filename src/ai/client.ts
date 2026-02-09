@@ -2,6 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
+import { DEFAULT_TRANSLATION_MAX_TOKENS, DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import i18n from '@/i18n/config';
 
 /**
@@ -28,10 +29,9 @@ export function createChatModel(
       ? { temperature: cfg.temperature } : {};
 
     // Claude는 max_tokens 기본값이 낮으므로 명시적 설정
-    // Anthropic 출력 토큰 제한: 8192 (번역), 4096 (채팅)
     const maxTokensOption = options?.maxTokens
       ? { maxTokens: options.maxTokens }
-      : (useFor === 'translation' ? { maxTokens: 8192 } : { maxTokens: 4096 });
+      : (useFor === 'translation' ? { maxTokens: DEFAULT_TRANSLATION_MAX_TOKENS } : { maxTokens: DEFAULT_CHAT_MAX_TOKENS });
 
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
