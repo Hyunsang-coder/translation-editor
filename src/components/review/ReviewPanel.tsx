@@ -427,7 +427,7 @@ export function ReviewPanel(): JSX.Element {
   const allChecked = allIssues.length > 0 && allIssues.every((i) => i.checked);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-editor-bg">
+    <div className="h-full flex min-h-0 flex-col bg-editor-bg">
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
         {results.length === 0 && !isReviewing ? (

@@ -31,7 +31,7 @@ export function SettingsContent(): JSX.Element {
   const settingsKey = project?.id ?? 'none';
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
+    <div className="h-full min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translator Persona */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">

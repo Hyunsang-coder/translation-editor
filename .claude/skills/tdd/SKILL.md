@@ -128,56 +128,9 @@ Time:   1.23s
 ═══════════════════════════════════════════════════════════
 ```
 
-## Mocking Guide
+## Mocking & Tips
 
-### Tauri API 모킹
-```typescript
-import { vi } from 'vitest';
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue('mocked result'),
-}));
-```
-
-### Zustand Store 모킹
-```typescript
-import { useProjectStore } from '@stores/projectStore';
-
-vi.mock('@stores/projectStore', () => ({
-  useProjectStore: vi.fn(() => ({
-    project: mockProject,
-    setProject: vi.fn(),
-  })),
-}));
-```
-
-### 타이머 모킹
-```typescript
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-```
-
-## Coverage Targets
-
-| 영역 | 목표 |
-|------|------|
-| Utilities (`src/utils/`) | 80%+ |
-| AI Logic (`src/ai/`) | 70%+ |
-| Stores (`src/stores/`) | 60%+ |
-| Components | 선택적 |
-
-## TDD Tips
-
-1. **작은 단위로 시작**: 하나의 함수/동작에 집중
-2. **명확한 테스트명**: 한글로 "무엇을 한다" 형식
-3. **AAA 패턴**: Arrange-Act-Assert 구조 유지
-4. **경계값 테스트**: 빈 값, null, 최대값 등
-5. **독립적 테스트**: 테스트 간 의존성 없이
+모킹 패턴, 커버리지 목표, TDD 팁은 `.claude/testing.md` 참조.
 
 ## Related Skills
 

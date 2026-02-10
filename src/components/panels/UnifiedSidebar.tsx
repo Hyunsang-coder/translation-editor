@@ -286,8 +286,8 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-h-0">
+      {/* Content: 패널 내부 스크롤이 동작하도록 높이 전달 */}
+      <div className="flex-1 min-h-0 flex flex-col">
         {renderContent()}
       </div>
 

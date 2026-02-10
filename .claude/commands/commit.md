@@ -1,7 +1,7 @@
 ---
 description: Git commit 작성 및 push (Haiku 모델 사용)
 model: claude-haiku-4-5-20251001
-allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(npx tsc:*)
+allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(npx tsc:*), AskUserQuestion
 ---
 
 # Git Commit & Push
@@ -29,32 +29,37 @@ Identify:
 - Scope: which module/component
 - Summary: one-line description in Korean
 
-### Step 4: Execute Commit & Push
+### Step 4: Stage & Commit
 
 **IMPORTANT**: Use simple `-m` flag for commit messages. Do NOT use HEREDOC or temp files.
 
-For single-line commits:
+**IMPORTANT**: Stage specific files by name. NEVER use `git add -A` or `git add .`.
+- Exclude `.env`, credentials, large binaries, and other sensitive files.
+- Review `git status` output and only add the relevant changed files.
+
+Example:
 ```bash
-git add -A && git commit -m "fix: 버그 수정 내용" && git push
+git add src/stores/chatStore.ts src/components/chat/ChatContent.tsx
+git commit -m "fix: 채팅 세션 격리 버그 수정" -m "Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
 ```
 
-For multi-line commits, use multiple `-m` flags:
-```bash
-git add -A && git commit -m "fix: 제목" -m "상세 설명" -m "Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>" && git push
-```
+### Step 5: Push (confirm first)
+
+After commit succeeds, ask the user whether to push using AskUserQuestion:
+- Push now
+- Skip push
+
+Only run `git push` if the user confirms.
 
 ### Commit Message Format
 - **Title**: `type: 한글 설명` (50자 이내)
 - **Types**: feat, fix, refactor, docs, chore, style, test
 - **Co-author**: Always include as last `-m` flag
 
-Example:
-```bash
-git add -A && git commit -m "feat: 채팅에서 전체 번역 지원" -m "Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>" && git push
-```
-
 ## Rules
 - ✅ Use `-m` flags only, never HEREDOC
-- ✅ Chain commands with `&&` for speed
+- ✅ Stage specific files by name (never `git add -A`)
+- ✅ Always include Co-Authored-By
 - ✅ Korean commit messages preferred
+- ✅ Confirm before push
 - ⚠️ Never force push
