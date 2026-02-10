@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
@@ -13,6 +13,24 @@ type NewProjectForm = {
   title: string;
   domain: ProjectDomain;
 };
+
+function mergeProjectListStable(
+  prev: RecentProjectInfo[],
+  next: RecentProjectInfo[],
+): RecentProjectInfo[] {
+  const nextById = new Map(next.map((item) => [item.id, item]));
+  const prevIds = new Set(prev.map((item) => item.id));
+
+  // 신규 프로젝트는 상단에 추가
+  const newcomers = next.filter((item) => !prevIds.has(item.id));
+
+  // 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환
+  const existing = prev
+    .map((item) => nextById.get(item.id))
+    .filter((item): item is RecentProjectInfo => item !== undefined);
+
+  return [...newcomers, ...existing];
+}
 
 
 export function ProjectSidebar(): JSX.Element {
@@ -48,15 +66,11 @@ export function ProjectSidebar(): JSX.Element {
 
   const selectedId = project?.id ?? null;
 
-  const sorted = useMemo(() => {
-    return [...items].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  }, [items]);
-
   const refresh = async (): Promise<void> => {
     setLoading(true);
     try {
       const list = await listRecentProjects();
-      setItems(list);
+      setItems((prev) => mergeProjectListStable(prev, list));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '프로젝트 목록 로드 실패';
       await message(msg, { title: 'Projects', kind: 'error' });
@@ -151,7 +165,7 @@ export function ProjectSidebar(): JSX.Element {
 
     if (isCurrent) {
       const remaining = items.filter((p) => p.id !== projectId);
-      const next = [...remaining].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
+      const next = remaining[0];
       if (next?.id) {
         nextProjectId = next.id;
         await switchProjectById(next.id);
@@ -317,7 +331,7 @@ export function ProjectSidebar(): JSX.Element {
           <div className="px-3 py-2 text-xs text-editor-muted">불러오는 중...</div>
         )}
         {!loading &&
-          sorted.map((p) => {
+          items.map((p) => {
             const active = selectedId === p.id;
             const isRenaming = renamingId === p.id;
 
