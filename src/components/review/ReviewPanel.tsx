@@ -50,17 +50,6 @@ function detectSourceLanguage(segments: AlignedSegment[]): string {
   return '원문';
 }
 
-/** 로딩 도트 애니메이션 */
-function LoadingDots() {
-  return (
-    <span className="inline-flex gap-1">
-      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce [animation-delay:-0.3s]" />
-      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce [animation-delay:-0.15s]" />
-      <span className="w-2 h-2 rounded-full bg-primary-500 animate-bounce" />
-    </span>
-  );
-}
-
 /**
  * Review Panel 컴포넌트
  * ChatPanel의 Review 탭에서 렌더링됩니다.
@@ -461,12 +450,11 @@ export function ReviewPanel(): JSX.Element {
               {/* 헤더: 도트 애니메이션 + 텍스트 + 경과 시간 */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <LoadingDots />
-                  <span className="text-sm font-medium text-editor-text">
+                  <span className="text-xs font-medium shimmer-text">
                     {t('review.analyzing', '번역을 분석하고 있습니다...')}
                   </span>
                 </div>
-                <span className="text-sm text-editor-muted tabular-nums">
+                <span className="text-xs text-editor-muted tabular-nums">
                   {t('review.elapsed', { seconds: elapsedSeconds })}
                 </span>
               </div>
