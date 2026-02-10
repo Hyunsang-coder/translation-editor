@@ -27,9 +27,7 @@ describe('ChatStore Selectors', () => {
 
     const { result } = renderHook(() => useChatComposerState());
 
-    // 그룹화된 상태 확인
-    expect(result.current).toHaveProperty('composerText');
-    expect(result.current).toHaveProperty('setComposerText');
+    // 그룹화된 상태 확인 (composerText/setComposerText는 ChatContent 로컬 관리로 이동)
     expect(result.current).toHaveProperty('composerAttachments');
     expect(result.current).toHaveProperty('addComposerAttachment');
     expect(result.current).toHaveProperty('removeComposerAttachment');

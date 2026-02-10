@@ -57,13 +57,50 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   // 스트리밍 상태: 항상 useSessionStreamingState를 호출 (Rules of Hooks 준수)
   const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = useSessionStreamingState(effectiveSessionId);
   const {
-    composerText,
-    setComposerText,
     composerAttachments,
     addComposerAttachment,
     removeComposerAttachment,
     focusNonce,
   } = useChatComposerState();
+
+  // 로컬 composerText — 듀얼 사이드바에서 각 인스턴스 독립
+  const [localComposerText, setLocalComposerText] = useState(
+    () => useChatStore.getState().composerText,
+  );
+  const localTextRef = useRef(localComposerText);
+  localTextRef.current = localComposerText;
+
+  // 외부 append 이벤트 subscribe (Cmd+L, DOM 선택 등)
+  useEffect(() => {
+    let lastNonce = useChatStore.getState().pendingComposerAppend?.nonce ?? 0;
+    return useChatStore.subscribe((state) => {
+      const pending = state.pendingComposerAppend;
+      if (!pending || pending.nonce === lastNonce) return;
+      lastNonce = pending.nonce;
+      if (pending.targetSessionId && pending.targetSessionId !== effectiveSessionId) return;
+      setLocalComposerText((prev) => {
+        if (!pending.text) return prev;
+        return prev.trim().length > 0
+          ? `${prev}${pending.separator}${pending.text}`
+          : pending.text;
+      });
+    });
+  }, [effectiveSessionId]);
+
+  // 디바운스 persistence sync (500ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      useChatStore.getState().setComposerText(localComposerText);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localComposerText]);
+
+  // 언마운트 시 즉시 flush
+  useEffect(() => {
+    return () => {
+      useChatStore.getState().setComposerText(localTextRef.current);
+    };
+  }, []);
   const {
     webSearchEnabled,
     setWebSearchEnabled,
@@ -430,16 +467,17 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [side, project?.id, isHydrating, chatSessions.length, createSession, t]);
 
   const sendCurrent = useCallback(async (): Promise<void> => {
-    if (!composerText.trim() || isLoading || !displaySession?.id) return;
+    if (!localComposerText.trim() || isLoading || !displaySession?.id) return;
 
-    const message = composerText.trim();
-    setComposerText('');
+    const message = localComposerText.trim();
+    setLocalComposerText('');
+    useChatStore.getState().setComposerText(''); // persistence 즉시 반영
     // TipTap 에디터 초기화
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editorRef.current as any)?.clearComposerContent?.();
 
     await sendMessage(message, sessionId);
-  }, [composerText, isLoading, displaySession?.id, sendMessage, setComposerText, sessionId]);
+  }, [localComposerText, isLoading, displaySession?.id, sendMessage, sessionId]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
@@ -645,8 +683,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             onPaste={handlePaste}
           >
             <ChatComposerEditor
-              content={composerText}
-              onChange={setComposerText}
+              content={localComposerText}
+              onChange={setLocalComposerText}
               onSubmit={() => void sendCurrent()}
               disabled={isLoading}
               placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
@@ -784,7 +822,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               />
               <button
                 type="submit"
-                disabled={isLoading || !composerText.trim()}
+                disabled={isLoading || !localComposerText.trim()}
                 className="w-7 h-7 rounded-full bg-primary-500 text-white
                            hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                            transition-colors flex items-center justify-center"

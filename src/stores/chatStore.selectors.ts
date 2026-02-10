@@ -18,8 +18,6 @@ export { useChatStore } from './chatStore';
 export function useChatComposerState() {
   return useBaseStore(
     useShallow((s) => ({
-      composerText: s.composerText,
-      setComposerText: s.setComposerText,
       composerAttachments: s.composerAttachments,
       addComposerAttachment: s.addComposerAttachment,
       removeComposerAttachment: s.removeComposerAttachment,

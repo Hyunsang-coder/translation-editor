@@ -174,6 +174,13 @@ interface ChatState {
   // Chat composer
   composerText: string;
   composerFocusNonce: number;
+  /** 외부 append 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
+  pendingComposerAppend: {
+    text: string;
+    separator: string;
+    targetSessionId: string | null;
+    nonce: number;
+  } | null;
   translatorPersona: string;
   translationRules: string;
   projectContext: string;
@@ -626,6 +633,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     summarySuggestionDismissedBySessionId: {},
     composerText: '',
     composerFocusNonce: 0,
+    pendingComposerAppend: null,
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     projectContext: '',
@@ -1075,15 +1083,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     appendComposerText: (text: string, opts?: { separator?: string }): void => {
       const incoming = text.trim();
       if (!incoming) return;
-      const sep = opts?.separator ?? '\n\n';
-      set((state) => {
-        const next = state.composerText.trim().length > 0 ? `${state.composerText}${sep}${incoming}` : incoming;
-        return {
-          composerText: next,
-          composerFocusNonce: state.composerFocusNonce + 1,
-        };
-      });
-      schedulePersist();
+      set((state) => ({
+        pendingComposerAppend: {
+          text: incoming,
+          separator: opts?.separator ?? '\n\n',
+          targetSessionId: state.currentSessionId,
+          nonce: (state.pendingComposerAppend?.nonce ?? 0) + 1,
+        },
+        composerFocusNonce: state.composerFocusNonce + 1,
+      }));
     },
 
     requestComposerFocus: (): void => {
