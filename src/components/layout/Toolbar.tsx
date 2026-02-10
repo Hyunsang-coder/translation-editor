@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Wrench, Settings, Search, MessageSquare, Cog } from 'lucide-react';
+import { Settings, Search, MessageSquare, Cog } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
@@ -100,13 +100,13 @@ export function Toolbar(): JSX.Element {
             type="button"
             onClick={() => setDropdownOpen((v) => !v)}
             className={`
-              p-2 rounded-md flex items-center gap-1
+              p-1.5 rounded-md flex items-center gap-1
               hover:bg-editor-border transition-colors
               ${dropdownOpen ? 'bg-editor-border' : ''}
             `}
             title={t('toolbar.tools')}
           >
-            <Wrench size={18} className="text-editor-text" />
+            <img src="/app-icon-64.png" alt="" className="w-6 h-6" />
             <span className="text-xs text-editor-muted">▼</span>
           </button>
 
