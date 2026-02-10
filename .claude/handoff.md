@@ -5,56 +5,101 @@
 
 ## 작업 요약
 
-듀얼 사이드바에서 **채팅 세션 격리 문제를 분석하고 수정 계획을 수립**했다. 양쪽 사이드바에 서로 다른 채팅 세션이 열릴 때 `chatStore`의 전역 상태(`currentSessionId`, 스트리밍, 컴포저)가 공유되어 잘못된 세션에 메시지가 전송되는 버그. 코드 변경은 없으며, 구현 계획서가 완성되어 있다.
+**듀얼 사이드바 채팅 세션 격리 — 구현 + 버그 수정 완료**.
+
+3개 세션에 걸쳐 분석→구현→코드 리뷰→버그 수정까지 완료.
+양쪽 사이드바에 서로 다른 채팅 세션이 열릴 때 메시지가 잘못된 세션으로 전송되던 문제 해결.
 
 ## 현재 상태
 
-### 변경된 파일
-- Working tree clean (코드 변경 없음)
-- `.claude/plans/jazzy-puzzling-emerson.md` — 구현 계획서 (신규 생성, untracked)
+- Working tree: **clean**
+- 모든 타입 체크 통과, 339 tests passed
 
 ### 커밋 이력 (이번 세션)
-- 없음 (분석 및 계획 수립만 진행)
+
+| 커밋 | 내용 |
+|------|------|
+| `a32ae25` | 채팅 세션 격리 문제 분석 및 구현 계획 |
+| `1a918b3` | Phase 1-3: streamingSessionId, targetSessionId, 셀렉터 |
+| `888daa2` | Phase 4: ChatContent 세션별 렌더링 |
+| `7ae8239` | 코드 리뷰 후 버그 수정 6건 (Rules of Hooks, 리셋 누락, as any 제거 등) |
 
 ## 미완료 작업
 
-- [ ] **계획 구현**: `.claude/plans/jazzy-puzzling-emerson.md`에 따라 3개 파일 수정
-  - [ ] `chatStore.ts` — `streamingSessionId` 추가, 헬퍼 함수 추가, 메시지 액션에 `targetSessionId?` 파라미터 추가
-  - [ ] `chatStore.selectors.ts` — 세션별 셀렉터 추가 (`useSessionStreamingState`, `useSessionMessages`, `useSessionSearchState`)
-  - [ ] `ChatContent.tsx` — `switchSession()` 마운트 제거, 로컬 컴포저, 세션별 렌더링
-- [ ] `/typecheck` — 타입 에러 없음 확인
-- [ ] `npm run test:run` — 기존 테스트 통과 확인
-- [ ] 듀얼 패널 수동 테스트 (7개 시나리오, 계획서 "검증 방법" 섹션 참조)
+### 수동 테스트 (듀얼 사이드바)
+- [ ] 양쪽 사이드바에 서로 다른 세션 열고 각각 메시지 전송
+- [ ] 한쪽에서 스트리밍 중 다른 쪽 세션 전환
+- [ ] 한쪽에서 메시지 편집(edit) → 올바른 세션에서 truncation 확인
+- [ ] 한쪽에서 메시지 재전송(replay) → 올바른 세션에서 동작 확인
+- [ ] 외부 "채팅에 추가" 버튼 (Cmd+L) → currentSessionId로 전송 확인
+- [ ] 프로젝트 전환 → 양쪽 세션 상태 정상 초기화
 
-## 핵심 결정 사항
+---
 
-- **Hybrid 접근 (Option C)**: chatStore 구조 대폭 변경 대신, ChatContent가 `sessionId` prop으로 세션을 직접 조회 + 액션에 optional `targetSessionId` 추가 (대안: A-전체 per-session state map 리팩터링/diff 너무 큼, B-세션 직접 조회만/스트리밍·컴포저 미해결)
-- **`currentSessionId` 유지**: 삭제하지 않고 "마지막 상호작용 세션" 용도로 보존. 외부 "채팅에 추가" 버튼(`DomSelectionAddToChat`, `TipTapEditor` 등)이 이 값에 의존
-- **컴포저 로컬화**: `composerText`를 chatStore에서 제거하지 않고, ChatContent에서 `useState` 로컬 관리. 글로벌 `appendComposerText`는 subscribe로 흡수, 언마운트 시 flush
-- **단일 패널 사이드이펙트 0**: `targetSessionId` 미지정 시 `currentSessionId` 폴백 → 기존 동작 완전 보존
+## 남은 기술 부채 (우선순위순)
 
-## 주의사항
+### Immediate — 다음 작업 권장
 
-- **`sendMessage` / `replayMessage`가 가장 복잡**: 100줄+ 함수. `resolvedSessionId` 도입 시 내부의 모든 `currentSession` / `get().currentSession` 참조를 빠짐없이 교체해야 함
-- **`addComposerAttachment` 로직 추출**: 현재 chatStore 액션에 파일→AttachmentDto 변환 포함. 로컬 컴포저로 이동 시 순수 함수 추출이 필요할 수 있음 (`createAttachmentFromPath` 같은 형태)
-- **스트리밍 동시 1개**: API 제약으로 양쪽 동시 스트리밍 불가. `streamingSessionId`로 어느 패널인지만 추적
-- **persistence**: `composerText`는 프로젝트 레벨 영속 필드. 로컬화해도 언마운트 시 글로벌로 flush 필수
-- **`streamingSessionId: null` 리셋**: `streamingMessageId: null`을 설정하는 **모든** 에러 핸들러에 같이 추가해야 함 (5곳+)
+#### 1. HI-01: sendMessage/replayMessage ~80% 코드 중복
+- **영향**: 버그 수정이 양쪽에 모두 필요, 유지보수 부담 최대
+- **규모**: sendMessage ~408줄, replayMessage ~286줄, 공통 로직 ~500줄
+- **중복 영역**: Ghost masking, glossary search, context block building, streaming callbacks, abort controller, error handling
+- **해결**: `executeAIChat()` 내부 헬퍼 추출
+- **참고**: `docs/CODE_REVIEW_2026-02-09.md` HI-01 항목
+
+#### 2. MD-13: TipTapEditor Source/Target ~90% 중복
+- **영향**: 에디터 수정 시 양쪽 동기화 필요
+- **규모**: Source 37-210줄, Target 216-395줄. 차이는 Cmd+H, placeholder, excerptField뿐
+- **해결**: `panelType` prop으로 통합
+
+#### 3. HI-05: chatStore.ts 1,817줄 단일 파일
+- **영향**: 탐색 어려움, 7개 관심사 혼재
+- **해결**: Zustand slice 패턴 또는 서비스 레이어 추출
+- **주의**: HI-01 해결 후 진행이 효율적 (sendMessage/replayMessage 통합 후 구조 정리)
+
+### Short-term
+
+#### 4. HI-04: 셀렉터 미적용 8개 파일
+- App.tsx, SegmentGroupRow.tsx, SourcePanel/TargetPanel, MainLayout, Toolbar, AppSettingsModal, SettingsSidebar
+- 불필요한 리렌더링 원인
+- `useShallow` 또는 개별 셀렉터 적용
+
+#### 5. 컴포저 로컬화 (계획 미구현)
+- 원래 계획서(`.claude/plans/jazzy-puzzling-emerson.md`)에 포함되었으나 미구현
+- `composerText`를 ChatContent 로컬 `useState`로 이동
+- `appendComposerText` subscribe 패턴 + 언마운트 시 글로벌 flush
+- 현재는 양쪽 사이드바가 컴포저 텍스트를 공유 (기능적으로 문제없지만 UX 개선 여지)
+
+### Long-term (기술 부채)
+- LO-01/02: 접근성 (Modal focus trap, 키보드 탐색)
+- LO-03: Confluence pageCache 무한 증가
+- LO-07: Rust lock boilerplate 20회 반복
+- LO-14: ChatContent.tsx 816줄 모놀리스
+- Review audit 보류 7건 (실무 영향 낮음)
+
+## 핵심 결정 사항 (유지)
+
+- **Hybrid 접근**: chatStore 구조 최소 변경 + `targetSessionId` 폴백으로 하위 호환 100% 보존
+- **`currentSessionId` 유지**: 외부 "채팅에 추가" 버튼이 의존
+- **스트리밍 동시 1개**: API 제약. `streamingSessionId`로 어느 패널인지 추적
+- **`targetSessionId` 미지정 시 `currentSessionId` 폴백**: 기존 단일 패널 동작 완전 보존
 
 ## 핵심 파일
 
-- `src/stores/chatStore.ts` — 채팅 상태 관리 (수정 대상: streamingSessionId, targetSessionId, 헬퍼)
-- `src/stores/chatStore.selectors.ts` — 그룹 셀렉터 (수정 대상: 세션별 셀렉터 3개 추가)
-- `src/components/chat/ChatContent.tsx` — 채팅 UI (수정 대상: 세션 격리 렌더링, 로컬 컴포저)
-- `src/stores/uiStore.ts` — 사이드바 상태 (참조만, 변경 없음)
-- `src/types/index.ts` — PanelType, chatPanelId 등 (참조만, 변경 없음)
+- `src/stores/chatStore.ts` — 채팅 상태 관리 (sendMessage, replayMessage, finalizeStreaming)
+- `src/stores/chatStore.selectors.ts` — 그룹 셀렉터 (useSessionStreamingState)
+- `src/components/chat/ChatContent.tsx` — 채팅 UI (effectiveSessionId, displaySession)
+- `src/stores/uiStore.ts` — 사이드바 상태 (도킹 모델)
+- `src/types/index.ts` — PanelType, chatPanelId 등
 
 ## 다음 세션 가이드
 
-1. **계획서 필독**: `.claude/plans/jazzy-puzzling-emerson.md` — 전체 구현 명세가 Phase 1~8로 정리되어 있음
-2. **구현 순서** (Phase별 `/typecheck` 실행 권장):
-   - Phase 1: `chatStore.ts`에 `streamingSessionId` 필드 + `resolveSession`/`patchSession` 헬퍼 추가
-   - Phase 2: 메시지 액션에 `targetSessionId?` 파라미터 추가 (addMessage → updateMessage → editMessage → deleteMessageFrom → clearMessages → sendMessage → replayMessage 순)
-   - Phase 3: `chatStore.selectors.ts`에 `useSessionStreamingState`, `useSessionMessages`, `useSessionSearchState` 추가
-   - Phase 4: `ChatContent.tsx` — switchSession 제거 → 세션별 셀렉터 사용 → 로컬 컴포저 → 액션에 sessionId 전달
-3. **최종 검증**: 계획서 "검증 방법" 섹션의 7개 시나리오 수동 테스트
+### 권장: HI-01 (sendMessage/replayMessage 중복 제거)
+
+1. 두 함수를 나란히 읽고 공통 부분 식별
+2. `executeAIChat(params)` 내부 헬퍼 설계:
+   - 입력: session, content, priorMessages, attachments, maskSession
+   - 출력: Promise<void> (스트리밍 완료까지)
+   - 공통 로직: abortController, addMessage(assistant), streamAssistantReply, finalizeStreaming, error handling
+3. sendMessage/replayMessage는 각자 고유 로직(사용자 메시지 추가, truncation 등)만 유지
+4. `/typecheck` → `npm run test:run` → 수동 테스트
