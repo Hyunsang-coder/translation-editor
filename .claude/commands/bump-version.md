@@ -1,5 +1,5 @@
 ---
-description: 버전 업데이트 (package.json, Cargo.toml, tauri.conf.json 동기화)
+description: 버전 업데이트 (package.json, Cargo.toml, Cargo.lock, tauri.conf.json 동기화)
 allowed-tools: Read, Edit, Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git tag:*), Bash(git push:*), Bash(git status:*), Bash(git branch:*), Bash(gh release:*), Bash(grep:*), AskUserQuestion
 ---
 
@@ -9,10 +9,11 @@ allowed-tools: Read, Edit, Bash(git diff:*), Bash(git log:*), Bash(git add:*), B
 
 ## Version Files
 
-다음 3개 파일의 버전을 동시에 관리:
-- `package.json` → `"version": "x.y.z"`
-- `src-tauri/Cargo.toml` → `version = "x.y.z"`
-- `src-tauri/tauri.conf.json` → `"version": "x.y.z"`
+다음 4개 파일의 버전을 동기화:
+- `package.json` → `"version": "x.y.z"` (직접 수정)
+- `src-tauri/Cargo.toml` → `version = "x.y.z"` (직접 수정)
+- `src-tauri/tauri.conf.json` → `"version": "x.y.z"` (직접 수정)
+- `src-tauri/Cargo.lock` → Cargo.toml 변경 후 `cargo check`로 자동 갱신됨 (커밋에 포함 필수)
 
 ## Process
 
@@ -54,7 +55,8 @@ allowed-tools: Read, Edit, Bash(git diff:*), Bash(git log:*), Bash(git add:*), B
 
 ### Step 4: 파일 수정
 
-3개 파일 모두 새 버전으로 수정.
+1. `package.json`, `Cargo.toml`, `tauri.conf.json`에 새 버전 적용
+2. `cd src-tauri && cargo check` 실행 → Cargo.lock 자동 갱신
 
 ### Step 5: 커밋 + 태그 + 푸시 여부 확인
 
@@ -93,6 +95,7 @@ git push && git push origin v1.1.0
 
    ✓ package.json
    ✓ src-tauri/Cargo.toml
+   ✓ src-tauri/Cargo.lock
    ✓ src-tauri/tauri.conf.json
    ✓ Committed: "chore: bump version to 1.1.0"
    ✓ Tagged: v1.1.0

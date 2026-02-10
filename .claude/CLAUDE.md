@@ -35,6 +35,7 @@ src-tauri/src/    # Rust backend (commands/, mcp/)
 ### Version Files (Keep in Sync)
 - `package.json`
 - `src-tauri/Cargo.toml`
+- `src-tauri/Cargo.lock` (Cargo.toml 변경 시 `cargo check`로 자동 갱신)
 - `src-tauri/tauri.conf.json`
 
 ## Documentation Structure
