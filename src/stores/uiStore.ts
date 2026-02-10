@@ -108,6 +108,7 @@ interface UIActions {
   openPanelOnSide: (side: SidebarSide, panel: PanelType) => void;
   openReviewPanel: () => void;
   movePanel: (panel: PanelType, from: SidebarSide, to: SidebarSide) => void;
+  reorderPanel: (side: SidebarSide, panel: PanelType, toIndex: number) => void;
   findPanelSide: (panel: PanelType) => SidebarSide | null;
 
   // === Chat Session Panel Actions ===
@@ -439,6 +440,17 @@ export const useUIStore = create<UIStore>()(
           [fromKey]: { ...fromSb, panels: newFromPanels, activePanel: fromActive, collapsed: fromCollapsed },
           [toKey]: { ...toSb, panels: newToPanels, activePanel: panel, collapsed: false },
         });
+      },
+
+      reorderPanel: (side: SidebarSide, panel: PanelType, toIndex: number): void => {
+        const key = sidebarKey(side);
+        const sb = get()[key];
+        const fromIndex = sb.panels.indexOf(panel);
+        if (fromIndex === -1 || fromIndex === toIndex) return;
+        const newPanels = sb.panels.filter((p) => p !== panel);
+        const clampedIndex = Math.max(0, Math.min(newPanels.length, toIndex));
+        newPanels.splice(clampedIndex, 0, panel);
+        set({ [key]: { ...sb, panels: newPanels } });
       },
 
       findPanelSide: (panel: PanelType): SidebarSide | null => {

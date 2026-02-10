@@ -7,7 +7,8 @@ import { SettingsContent } from '@/components/panels/SettingsContent';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
 import { ChatContent } from '@/components/chat/ChatContent';
 import { useResizeHandle } from '@/hooks/useResizeHandle';
-import type { SidebarSide, PanelType, PanelDragData } from '@/types';
+import { usePanelDrag } from '@/hooks/usePanelDrag';
+import type { SidebarSide, PanelType } from '@/types';
 import { isChatPanel, getChatSessionId, chatPanelId } from '@/types';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
@@ -35,14 +36,6 @@ function getPanelLabel(panel: PanelType, t: (key: string) => string, sessions: {
   return meta ? t(meta.labelKey) : panel;
 }
 
-const DRAG_MIME = 'text/x-panel-dock';
-
-/**
- * 모듈 레벨 드래그 상태 — 좌/우 사이드바 인스턴스 간 공유
- * React state로는 별도 인스턴스라 서로 안 보이므로 모듈 변수 사용
- */
-let activeDrag: PanelDragData | null = null;
-
 interface ContextMenuState {
   visible: boolean;
   x: number;
@@ -53,7 +46,7 @@ interface ContextMenuState {
 /**
  * 통합 사이드바 컴포넌트 (Docking Model)
  * panels 배열에 도킹된 패널만 탭으로 표시
- * HTML5 DnD로 패널 이동, 우클릭 컨텍스트 메뉴 지원
+ * 마우스 이벤트 기반 커스텀 드래그로 패널 이동/재배열, 우클릭 컨텍스트 메뉴 지원
  */
 export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   const { t } = useTranslation();
@@ -88,47 +81,10 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   const borderClass = side === 'left' ? 'border-r' : 'border-l';
   const resizeHandlePosition = side === 'left' ? 'right-0' : 'left-0';
 
-  // --- DnD state ---
-  const [dragOverActive, setDragOverActive] = useState(false);
-  const [draggingPanel, setDraggingPanel] = useState<PanelType | null>(null);
+  // --- Mouse-based drag ---
+  const { handleTabMouseDown, sidebarRef, draggingPanel, dropIndicator, dragOverSide, isClickSuppressed } = usePanelDrag({ side });
 
-  const handleDragStart = useCallback((panel: PanelType, e: React.DragEvent) => {
-    const data: PanelDragData = { panelType: panel, sourceSide: side };
-    activeDrag = data;
-    e.dataTransfer.setData(DRAG_MIME, JSON.stringify(data));
-    e.dataTransfer.effectAllowed = 'move';
-    setDraggingPanel(panel);
-  }, [side]);
-
-  const handleDragEnd = useCallback(() => {
-    activeDrag = null;
-    setDraggingPanel(null);
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!activeDrag) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverActive(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    const related = e.relatedTarget as HTMLElement | null;
-    if (related && target.contains(related)) return;
-    setDragOverActive(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOverActive(false);
-    const data = activeDrag;
-    activeDrag = null;
-    if (!data) return;
-    if (data.sourceSide !== side) {
-      movePanel(data.panelType, data.sourceSide, side);
-    }
-  }, [side, movePanel]);
+  const isDragOverThis = dragOverSide === side;
 
   // --- Context menu ---
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, panel: 'settings' });
@@ -189,14 +145,18 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   // 채팅 탭이 있는지 확인 (+ 버튼 표시 여부)
   const hasChatPanels = panels.some(isChatPanel);
 
+  // Tab click handler with drag suppression
+  const handleTabClick = useCallback((panel: PanelType) => {
+    if (isClickSuppressed()) return;
+    setActivePanel_side(side, panel);
+  }, [isClickSuppressed, setActivePanel_side, side]);
+
   // --- Empty sidebar: thin drop zone ---
   if (panels.length === 0) {
     return (
       <div
-        className={`w-4 h-full ${borderClass} border-editor-border border-dashed bg-editor-surface/30 transition-colors ${dragOverActive ? 'ring-2 ring-primary-500/30 bg-primary-50/10' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        ref={sidebarRef}
+        className={`w-4 h-full ${borderClass} border-editor-border border-dashed bg-editor-surface/30 transition-colors ${isDragOverThis ? 'ring-2 ring-primary-500/30 bg-primary-50/10' : ''}`}
       />
     );
   }
@@ -205,10 +165,8 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   if (collapsed) {
     return (
       <div
-        className={`w-12 h-full flex flex-col items-center py-2 gap-1 bg-editor-surface ${borderClass} border-editor-border ${dragOverActive ? 'ring-2 ring-primary-500/30' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        ref={sidebarRef}
+        className={`w-12 h-full flex flex-col items-center py-2 gap-1 bg-editor-surface ${borderClass} border-editor-border ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
       >
         {panels.map((panel) => {
           const Icon = getPanelIcon(panel);
@@ -244,13 +202,17 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     return null;
   };
 
+  // --- Insertion indicator helper ---
+  const renderInsertionIndicator = (index: number) => {
+    if (!dropIndicator || dropIndicator.side !== side || dropIndicator.index !== index) return null;
+    return <div className="w-0.5 h-6 bg-primary-500 rounded-full shrink-0 self-center" />;
+  };
+
   return (
     <aside
-      className={`shrink-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${dragOverActive ? 'ring-2 ring-primary-500/30' : ''}`}
+      ref={sidebarRef}
+      className={`shrink-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
       style={{ width }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
       {/* Tab Header */}
       <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none shrink-0">
@@ -268,43 +230,47 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
         </button>
 
         <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
-          {panels.map((panel) => {
+          {panels.map((panel, idx) => {
             const label = getPanelLabel(panel, t, chatSessions);
             const isChat = isChatPanel(panel);
             return (
-              <div
-                key={panel}
-                draggable
-                onDragStart={(e) => handleDragStart(panel, e)}
-                onDragEnd={handleDragEnd}
-                onClick={() => setActivePanel_side(side, panel)}
-                onContextMenu={(e) => handleContextMenu(panel, e)}
-                className={`
-                  group relative h-10 px-3 flex items-center gap-1.5 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[60px] max-w-[140px]
-                  ${activePanel === panel
-                    ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                    : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-                  }
-                  ${draggingPanel === panel ? 'opacity-50' : ''}
-                `}
-                title={label}
-              >
-                <span className="truncate flex-1">{label}</span>
-                {isChat && (
-                  <button
-                    className={`
-                      opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50 text-[10px] leading-none
-                      ${activePanel === panel ? 'opacity-100' : ''}
-                    `}
-                    onClick={(e) => void handleCloseChatTab(panel, e)}
-                    title={t('common.close')}
-                  >
-                    ✕
-                  </button>
-                )}
+              <div key={panel} className="flex items-center shrink-0">
+                {renderInsertionIndicator(idx)}
+                <div
+                  data-panel-tab={panel}
+                  onMouseDown={(e) => handleTabMouseDown(panel, label, e)}
+                  onClick={() => handleTabClick(panel)}
+                  onContextMenu={(e) => handleContextMenu(panel, e)}
+                  className={`
+                    group relative h-10 px-3 flex items-center gap-1.5 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[60px] max-w-[140px]
+                    ${activePanel === panel
+                      ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
+                      : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
+                    }
+                    ${draggingPanel === panel ? 'opacity-50' : ''}
+                  `}
+                  title={label}
+                >
+                  <span className="truncate flex-1">{label}</span>
+                  {isChat && (
+                    <button
+                      className={`
+                        opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50 text-[10px] leading-none
+                        ${activePanel === panel ? 'opacity-100' : ''}
+                      `}
+                      onClick={(e) => void handleCloseChatTab(panel, e)}
+                      title={t('common.close')}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
+
+          {/* Insertion indicator at end */}
+          {renderInsertionIndicator(panels.length)}
 
           {/* + 버튼: 새 채팅 추가 */}
           {hasChatPanels && !isSessionLimitReached() && (
