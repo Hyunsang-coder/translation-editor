@@ -15,9 +15,19 @@ function categorizeIssueType(typeText: string): IssueType {
     return 'addition';
   }
 
-  if (normalized.includes('nuance') || normalized.includes('뉘앙스') || normalized.includes('shift') ||
-    normalized.includes('톤') || normalized.includes('강조')) {
-    return 'nuance_shift';
+  if (normalized.includes('mistranslation') || normalized.includes('오역') ||
+    normalized.includes('error') || normalized.includes('왜곡') || normalized.includes('distortion')) {
+    return 'mistranslation';
+  }
+
+  if (normalized.includes('grammar') || normalized.includes('문법') ||
+    normalized.includes('단복수') || normalized.includes('관사') || normalized.includes('시제')) {
+    return 'grammar';
+  }
+
+  if (normalized.includes('awkward') || normalized.includes('직역') || normalized.includes('어색') ||
+    normalized.includes('부자연') || normalized.includes('unnatural')) {
+    return 'awkward';
   }
 
   if (normalized.includes('terminology') || normalized.includes('용어') ||
@@ -25,9 +35,10 @@ function categorizeIssueType(typeText: string): IssueType {
     return 'terminology';
   }
 
-  if (normalized.includes('mistranslation') || normalized.includes('오역') ||
-    normalized.includes('error') || normalized.includes('왜곡') || normalized.includes('distortion')) {
-    return 'mistranslation';
+  // nuance_shift → awkward로 매핑 (하위 호환)
+  if (normalized.includes('nuance') || normalized.includes('뉘앙스') || normalized.includes('shift') ||
+    normalized.includes('톤') || normalized.includes('강조')) {
+    return 'awkward';
   }
 
   // 기본값

@@ -22,12 +22,14 @@ function getIssueTypeLabel(type: IssueType): string {
       return '누락';
     case 'addition':
       return '추가';
-    case 'nuance_shift':
-      return '뉘앙스';
-    case 'terminology':
-      return '용어';
     case 'mistranslation':
       return '오역';
+    case 'grammar':
+      return '문법';
+    case 'awkward':
+      return '직역투';
+    case 'terminology':
+      return '용어';
     default:
       return type;
   }
@@ -41,8 +43,10 @@ function getIssueTypeColor(type: IssueType): string {
       return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
     case 'addition':
       return 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
-    case 'nuance_shift':
+    case 'grammar':
       return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400';
+    case 'awkward':
+      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
     case 'terminology':
       return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
     default:
@@ -213,9 +217,14 @@ export function ReviewResultsTable({
               {t('review.typeAddition', '추가')} {counts.addition}
             </span>
           )}
-          {counts.nuance_shift && (
+          {counts.grammar && (
             <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-              {t('review.typeNuanceShift', '뉘앙스')} {counts.nuance_shift}
+              {t('review.typeGrammar', '문법')} {counts.grammar}
+            </span>
+          )}
+          {counts.awkward && (
+            <span className="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              {t('review.typeAwkward', '직역투')} {counts.awkward}
             </span>
           )}
           {counts.terminology && (

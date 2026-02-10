@@ -385,9 +385,10 @@ export function ReviewTestPanel(): JSX.Element {
                     <span className="font-medium">#{idx + 1}</span>
                     <span className={`px-1.5 py-0.5 rounded ${issue.type === 'mistranslation' ? 'bg-red-500/10 text-red-500' :
                         issue.type === 'omission' ? 'bg-orange-500/10 text-orange-500' :
-                          issue.type === 'nuance_shift' ? 'bg-yellow-500/10 text-yellow-500' :
-                            issue.type === 'terminology' ? 'bg-blue-500/10 text-blue-500' :
-                              'bg-purple-500/10 text-purple-500'
+                          issue.type === 'grammar' ? 'bg-yellow-500/10 text-yellow-500' :
+                            issue.type === 'awkward' ? 'bg-amber-500/10 text-amber-500' :
+                              issue.type === 'terminology' ? 'bg-blue-500/10 text-blue-500' :
+                                'bg-purple-500/10 text-purple-500'
                       }`}>
                       {issue.type}
                     </span>

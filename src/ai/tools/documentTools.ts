@@ -162,7 +162,7 @@ export const getTargetDocumentTool = tool(
 const ReviewResultsArgsSchema = z.object({
   severityFilter: z.enum(['all', 'critical', 'major', 'minor']).optional()
     .describe('심각도 필터 (기본: all)'),
-  typeFilter: z.enum(['all', 'omission', 'addition', 'nuance_shift', 'terminology', 'mistranslation']).optional()
+  typeFilter: z.enum(['all', 'omission', 'addition', 'mistranslation', 'grammar', 'awkward', 'terminology']).optional()
     .describe('이슈 유형 필터 (기본: all)'),
   uncheckedOnly: z.boolean().optional()
     .describe('체크되지 않은 이슈만 (기본: false)'),
@@ -179,9 +179,10 @@ const SEVERITY_LABELS: Record<IssueSeverity, string> = {
 const TYPE_LABELS: Record<IssueType, string> = {
   omission: '누락',
   addition: '추가',
-  nuance_shift: '뉘앙스 변형',
-  terminology: '용어 불일치',
   mistranslation: '오역',
+  grammar: '문법 오류',
+  awkward: '직역투',
+  terminology: '용어 불일치',
 };
 
 function formatReviewIssue(issue: ReviewIssue, index: number): string {

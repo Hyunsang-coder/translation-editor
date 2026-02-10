@@ -165,80 +165,48 @@ export async function buildAlignedChunksAsync(
 // ============================================
 
 /**
- * Two-Pass Review 방법론
- * Pass 1: Segment-Based Detection - 과검출 허용하며 모든 의심 항목 기록
- * Pass 2: Critical Filtering - False Positive 제거, 최종 이슈 확정
+ * Translation Review Prompt
+ * 전문 번역가 시각으로 실질적 문제만 보고
  */
 
-const TWO_PASS_REVIEW_PROMPT = `# Translation Review System
+const TWO_PASS_REVIEW_PROMPT = `# Translation Review
 
-## Core Methodology: Two-Pass Review
+당신은 경력 10년차 전문 번역 검수자입니다.
+번역의 완성도가 아닌 **실질적 오류**만 지적합니다.
 
-**Pass 1: Segment-Based Detection**
-1. 원문을 의미 단위(문장/절)로 분할
-2. 각 세그먼트에 대응하는 번역 부분 식별
-3. 1:1 대조하며 잠재 이슈 검출
-4. 모든 의심 항목 기록 (과검출 허용)
+## 판단 기준
 
-**Pass 2: Critical Filtering**
-1. Pass 1 이슈 각각 재검토
-2. 필터링 질문 적용:
-   - 실제 의미 손실이 있는가?
-   - 타겟 언어에서 자연스러운 생략/변형인가?
-   - 문화적 적응으로 정당화되는가?
-3. 오탐(False Positive) 제거
-4. 최종 이슈 목록 확정
+이슈를 보고하기 전 스스로 물어보세요:
+> "이 번역을 읽는 독자가 원문과 다르게 이해하거나, 어색함을 느끼는가?"
+> **아니라면 이슈가 아닙니다.**
 
----
+## 보고 대상 (이것만 보고하세요)
 
-## Issue Types
+- **오역**: 의미가 틀림, 수치/날짜/고유명사 불일치
+- **누락**: 원문의 의미가 빠져서 독자가 정보를 잃음 (특정 단어가 없는 것 ≠ 누락)
+- **문법 오류**: 명백한 문법 실수
+- **직역투**: 원문 구조를 그대로 옮겨서 타겟 언어로 부자연스러운 표현
+- **용어 불일치**: 프로젝트 글로서리와 다른 용어 사용
 
-| Type | Description |
-|------|-------------|
-| Omission | 원문 정보가 번역에서 누락 |
-| Addition | 원문에 없는 내용 추가 |
-| Nuance Shift | 톤, 강조점, 긴급성, 확신도 변형 |
-| Terminology | 프로젝트 글로서리/표준 용어와 불일치 |
-| Mistranslation | 명백한 의미 오역 |
+## 보고하지 마세요
 
----
+- 의미가 같은 다른 표현 ("진행하다" vs "수행하다")
+- 자연스러운 의역/생략 (한국어 주어 생략 등)
+- 이미 자연스러운 번역의 "더 나은" 대안
+- 스타일 선호 차이
 
-## Severity Levels
-
-| Level | Criteria |
-|-------|----------|
-| Critical | 핵심 정보 누락, 의미 왜곡, 비즈니스 영향 |
-| Major | 중요 세부사항 누락, 명확한 톤 변형, 명백한 문법 오류(단복수, 관사, 수일치, 시제 등) |
-| Minor | 맞다/틀리다 판단이 어려운 뉘앙스 차이, 스타일 선호 수준 |
-
----
-
-## False Positive Prevention
-
-**이슈 아님으로 판정하는 경우:**
-- 타겟 언어에서 자연스러운 생략 (예: 한국어 주어 생략)
-- 문화적 적응으로 정당화되는 변형
-- 동일 의미의 다른 표현
-- 타겟 독자에게 더 명확한 의역
-
-**실제 이슈로 판정하는 경우:**
-- 정보 손실 발생
-- 독자가 다른 행동/이해를 하게 될 가능성
-- 기술적 정확성 훼손
-- 프로젝트 글로서리 위반`;
+이슈가 없으면 없다고 보고하세요. 억지로 찾지 마세요.`;
 
 // ============================================
-// 검출 기준 프롬프트 (항상 모든 이슈 검출)
+// Severity 기준
 // ============================================
 
-const REVIEW_DETECTION_PROMPT = `## 검출 기준: 모든 이슈
+const REVIEW_DETECTION_PROMPT = `## Severity
 
-검출 대상:
-- Critical, Major, Minor 모두 보고
-- 미세한 뉘앙스 차이도 포함
-- 스타일 선호 수준까지 검토
+- **Critical**: 오역, 핵심 정보 누락, 수치/고유명사 오류
+- **Major**: 문법 오류, 직역투, 세부 정보 누락
 
-단, False Positive는 여전히 제거`;
+Minor는 보고하지 마세요.`;
 
 // ============================================
 // 출력 형식 (Markdown 기반)
@@ -252,10 +220,10 @@ const OUTPUT_FORMAT = `## Output Format
 ### Issue #1
 - **Source**: "[원문 해당 부분]"
 - **Target**: "[번역문 해당 부분]" 또는 (missing)
-- **Type**: [Omission/Addition/Nuance Shift/Terminology/Mistranslation]
-- **Severity**: [Critical/Major/Minor]
+- **Type**: [Omission/Addition/Mistranslation/Grammar/Awkward/Terminology]
+- **Severity**: [Critical/Major]
 - **SegmentGroupId**: [세그먼트 ID]
-- **Explanation**: [1~2문장으로 간결하게]
+- **Explanation**: [1줄, 20자 이내로 핵심만]
 - **Suggestion**: [수정된 번역문 - 필수!]
 
 ---
@@ -263,7 +231,6 @@ const OUTPUT_FORMAT = `## Output Format
 ## Summary
 - Critical: [N]
 - Major: [N]
-- Minor: [N]
 ---REVIEW_END---
 
 **출력 예시 (반드시 이 형식을 따르세요):**
@@ -276,7 +243,7 @@ const OUTPUT_FORMAT = `## Output Format
 - **Type**: Mistranslation
 - **Severity**: Critical
 - **SegmentGroupId**: seg-001
-- **Explanation**: 'stealth(은밀함)' 핵심 개념 누락
+- **Explanation**: '은밀함' 의미 누락
 - **Suggestion**: 완전히 은밀하게 강도를 진행
 
 ---
@@ -303,8 +270,7 @@ Review complete. No issues found.
 // ============================================
 
 /**
- * 검수 프롬프트 생성 (항상 모든 이슈 검출)
- * Two-Pass Review 방법론 기반
+ * 검수 프롬프트 생성 (실질적 오류만 보고)
  */
 export function buildReviewPrompt(): string {
   return [

@@ -12,11 +12,12 @@ import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewToo
 
 /** 이슈 타입 (Two-Pass Review) */
 export type IssueType =
-  | 'omission'       // 원문 정보가 번역에서 누락
+  | 'omission'       // 원문 의미가 번역에서 온전히 전달되지 않음
   | 'addition'       // 원문에 없는 내용 추가
-  | 'nuance_shift'   // 톤, 강조점, 긴급성, 확신도 변형
-  | 'terminology'    // 프로젝트 글로서리/표준 용어와 불일치
-  | 'mistranslation'; // 명백한 의미 오역
+  | 'mistranslation' // 의미 오역, 수치/고유명사 오류
+  | 'grammar'        // 문법 오류 (단복수, 관사, 시제 등)
+  | 'awkward'        // 직역투 부자연스러운 표현
+  | 'terminology';   // 프로젝트 글로서리/표준 용어와 불일치
 
 /** 이슈 심각도 */
 export type IssueSeverity = 'critical' | 'major' | 'minor';

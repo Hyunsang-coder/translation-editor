@@ -125,9 +125,19 @@ Some text after
       expect(parseReviewResult(response)[0]?.type).toBe('addition');
     });
 
-    it('뉘앙스 → nuance_shift', () => {
+    it('뉘앙스 → awkward (하위 호환)', () => {
       const response = `{"issues": [{"type": "뉘앙스 변형", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('nuance_shift');
+      expect(parseReviewResult(response)[0]?.type).toBe('awkward');
+    });
+
+    it('문법 → grammar', () => {
+      const response = `{"issues": [{"type": "Grammar", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
+      expect(parseReviewResult(response)[0]?.type).toBe('grammar');
+    });
+
+    it('직역투 → awkward', () => {
+      const response = `{"issues": [{"type": "Awkward", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
+      expect(parseReviewResult(response)[0]?.type).toBe('awkward');
     });
 
     it('용어 → terminology', () => {

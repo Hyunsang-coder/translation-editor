@@ -194,9 +194,10 @@ function buildTranslationSetup(params: {
     const typeLabels: Record<string, string> = {
       omission: '누락',
       addition: '추가',
-      nuance_shift: '뉘앙스 변형',
-      terminology: '용어 불일치',
       mistranslation: '오역',
+      grammar: '문법 오류',
+      awkward: '직역투',
+      terminology: '용어 불일치',
     };
     const issuesContext = params.reviewIssues.map((issue, idx) => {
       return [
