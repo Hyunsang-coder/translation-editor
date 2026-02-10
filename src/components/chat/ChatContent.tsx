@@ -15,7 +15,6 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { pickChatAttachmentFile } from '@/tauri/dialog';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { saveTempImage } from '@/tauri/attachments';
-import { confirm } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
@@ -25,14 +24,22 @@ import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
-import type { ChatMessageMetadata } from '@/types';
+import type { ChatMessageMetadata, SidebarSide } from '@/types';
+import { chatPanelId } from '@/types';
 import type { Editor } from '@tiptap/react';
+
+interface ChatContentProps {
+  /** 어느 사이드바에 렌더링되는지 (없으면 legacy DockedChatPanel 모드) */
+  side?: SidebarSide;
+  /** 표시할 채팅 세션 ID (UnifiedSidebar에서 전달) */
+  sessionId?: string;
+}
 
 /**
  * 채팅 콘텐츠 컴포넌트
- * 플로팅 패널 내부에 렌더링되는 채팅 기능
+ * UnifiedSidebar 또는 DockedChatPanel 내부에 렌더링되는 채팅 기능
  */
-export function ChatContent(): JSX.Element {
+export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Element {
   const { t } = useTranslation();
 
   // 그룹화된 선택자로 리렌더링 최적화
@@ -117,7 +124,15 @@ export function ChatContent(): JSX.Element {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const chatPanelOpen = useUIStore((s) => s.chatPanelOpen);
+  // side+sessionId가 있으면 해당 sidebar의 collapsed+activePanel로 판단
+  const chatPanelOpen = useUIStore((s) => {
+    if (side && sessionId) {
+      const sb = side === 'left' ? s.leftSidebar : s.rightSidebar;
+      const panelId = chatPanelId(sessionId);
+      return !sb.collapsed && sb.activePanel === panelId;
+    }
+    return s.chatPanelOpen;
+  });
 
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());
 
@@ -356,6 +371,15 @@ export function ChatContent(): JSX.Element {
     }
   }, [addComposerAttachment]);
 
+  // sessionId prop이 변경되면 해당 세션으로 전환
+  useEffect(() => {
+    if (!sessionId) return;
+    const { currentSessionId, switchSession } = useChatStore.getState();
+    if (currentSessionId !== sessionId) {
+      switchSession(sessionId);
+    }
+  }, [sessionId]);
+
   // 프로젝트 전환 시 채팅 세션 복원
   const lastHydratedId = useRef<string | null>(null);
   useEffect(() => {
@@ -371,14 +395,19 @@ export function ChatContent(): JSX.Element {
     if (focusNonce === 0) return;
 
     // Chat 패널이 닫혀있다면 열기
-    const { chatPanelOpen, setChatPanelOpen } = useUIStore.getState();
-    if (!chatPanelOpen) setChatPanelOpen(true);
+    if (side && sessionId) {
+      const { openPanelOnSide } = useUIStore.getState();
+      openPanelOnSide(side, chatPanelId(sessionId));
+    } else {
+      const { openActiveChat } = useUIStore.getState();
+      openActiveChat();
+    }
 
     const timer = setTimeout(() => {
       editorRef.current?.commands.focus('end');
     }, 100);
     return () => clearTimeout(timer);
-  }, [focusNonce]);
+  }, [focusNonce, side, sessionId]);
 
   // 기본 채팅 세션 1개는 자동 생성
   useEffect(() => {
@@ -458,64 +487,6 @@ export function ChatContent(): JSX.Element {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Session Tabs */}
-      <div className="h-9 border-b border-editor-border flex items-center bg-editor-bg select-none shrink-0">
-        <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
-          {chatSessions.map((session) => (
-            <div
-              key={session.id}
-              onClick={() => {
-                useChatStore.getState().switchSession(session.id);
-              }}
-              className={`
-                group relative h-9 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[140px]
-                ${currentSession?.id === session.id
-                  ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                  : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-                }
-              `}
-              title={session.name}
-            >
-              <span className="truncate flex-1">{session.name}</span>
-              {(chatSessions.length > 0) && (
-                <button
-                  className={`
-                     opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50
-                     ${currentSession?.id === session.id ? 'opacity-100' : ''}
-                   `}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void (async () => {
-                      const ok = await confirm(t('chat.deleteSessionConfirm'), { title: t('chat.deleteSessionTitle'), kind: 'warning' });
-                      if (ok) {
-                        useChatStore.getState().deleteSession(session.id);
-                      }
-                    })();
-                  }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
-
-          {chatSessions.length < 5 && (
-            <button
-              onClick={() => {
-                const id = useChatStore.getState().createSession();
-                if (id) {
-                  useChatStore.getState().switchSession(id);
-                }
-              }}
-              className="h-9 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
-              title={t('chat.newChat')}
-            >
-              +
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* 대화 길이 알림 */}
       {shouldShowSummarySuggestion && (
         <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2 shrink-0">

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast as sonnerToast } from 'sonner';
-import type { EditorUIState, Toast } from '@/types';
+import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType } from '@/types';
+import { isChatPanel, chatPanelId } from '@/types';
 import { useReviewStore } from '@/stores/reviewStore';
 
 // ============================================
@@ -15,12 +16,16 @@ interface UIState extends EditorUIState {
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
   devTestPanelOpen: boolean; // 개발자 테스트 패널 (검수 디버그용)
 
-  // Docked Chat Panel state
+  // === Dual Sidebar State (Docking Model) ===
+  leftSidebar: DockingSidebarState;
+  rightSidebar: DockingSidebarState;
+
+  // === Legacy (deprecated - kept for backward compat during migration) ===
   sidebarActiveTab: 'settings' | 'review';
   chatPanelOpen: boolean;
-  chatPanelPinned: boolean; // 고정 시 외부 클릭으로 닫히지 않음
+  chatPanelPinned: boolean;
 
-  // Sidebar widths (resizable)
+  // Legacy sidebar widths
   settingsSidebarWidth: number;
   chatPanelWidth: number;
 
@@ -49,7 +54,7 @@ interface UIActions {
   setActivePanel: (panel: 'source' | 'target' | 'chat') => void;
   setSelectedBlockId: (blockId: string | null) => void;
 
-  // Sidebar
+  // Sidebar (legacy)
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
@@ -77,23 +82,39 @@ interface UIActions {
   clearToasts: () => void;
 
   // Review Panel
-  openReviewPanel: () => void;
   closeReviewPanel: () => void;
 
   // Dev Test Panel
   toggleDevTestPanel: () => void;
   setDevTestPanelOpen: (open: boolean) => void;
 
-  // Floating Chat Panel
+  // Legacy Chat Panel
   setSidebarActiveTab: (tab: 'settings' | 'review') => void;
   setChatPanelOpen: (open: boolean) => void;
   toggleChatPanel: () => void;
   setChatPanelPinned: (pinned: boolean) => void;
   toggleChatPanelPinned: () => void;
 
-  // Sidebar widths
+  // Legacy sidebar widths
   setSettingsSidebarWidth: (width: number) => void;
   setChatPanelWidth: (width: number) => void;
+
+  // === Docking Sidebar Actions ===
+  setActivePanel_side: (side: SidebarSide, panel: PanelType) => void;
+  toggleSidebarCollapse: (side: SidebarSide) => void;
+  setSidebarCollapsedSide: (side: SidebarSide, collapsed: boolean) => void;
+  setSidebarWidthSide: (side: SidebarSide, width: number) => void;
+  openPanel: (panel: PanelType) => void;
+  openPanelOnSide: (side: SidebarSide, panel: PanelType) => void;
+  openReviewPanel: () => void;
+  movePanel: (panel: PanelType, from: SidebarSide, to: SidebarSide) => void;
+  findPanelSide: (panel: PanelType) => SidebarSide | null;
+
+  // === Chat Session Panel Actions ===
+  addChatPanel: (sessionId: string) => void;
+  removeChatPanel: (sessionId: string) => void;
+  syncChatPanels: (sessionIds: string[]) => void;
+  openActiveChat: () => void;
 
   // Editor typography (Source/Target 패널별 독립 설정)
   setSourceFontSize: (size: number) => void;
@@ -118,6 +139,13 @@ interface UIActions {
 type UIStore = UIState & UIActions;
 
 // ============================================
+// Helpers
+// ============================================
+
+const sidebarKey = (side: SidebarSide): 'leftSidebar' | 'rightSidebar' =>
+  side === 'left' ? 'leftSidebar' : 'rightSidebar';
+
+// ============================================
 // Store Implementation
 // ============================================
 
@@ -138,12 +166,16 @@ export const useUIStore = create<UIStore>()(
       reviewPanelOpen: false,
       devTestPanelOpen: false,
 
-      // Docked Chat Panel - 기본값
-      sidebarActiveTab: 'settings',
-      chatPanelOpen: true, // 기본: 열림 (UX: 사용자가 바로 인지)
-      chatPanelPinned: true, // 도킹 모드에서는 기본 고정
+      // === Docking Sidebar - 기본값 ===
+      leftSidebar: { collapsed: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
+      rightSidebar: { collapsed: false, panels: [], activePanel: null, width: 250 },
 
-      // Sidebar widths
+      // Legacy (deprecated - backward compat)
+      sidebarActiveTab: 'settings',
+      chatPanelOpen: true,
+      chatPanelPinned: true,
+
+      // Legacy sidebar widths
       settingsSidebarWidth: 250,
       chatPanelWidth: 250,
 
@@ -180,7 +212,7 @@ export const useUIStore = create<UIStore>()(
         set({ selectedBlockId: blockId });
       },
 
-      // Sidebar
+      // Sidebar (legacy)
       toggleSidebar: (): void => {
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed }));
       },
@@ -254,26 +286,46 @@ export const useUIStore = create<UIStore>()(
         sonnerToast.dismiss();
       },
 
-      // Review Panel
+      // Review Panel (delegates to docking model)
       openReviewPanel: (): void => {
-        const { sidebarCollapsed, sidebarActiveTab } = get();
+        const state = get();
+        // review 패널이 어느 사이드에 있는지 찾기
+        const side: SidebarSide | null =
+          state.leftSidebar.panels.includes('review') ? 'left'
+            : state.rightSidebar.panels.includes('review') ? 'right'
+              : null;
 
-        // 이미 Review 탭이 열려있으면 검수 시작 트리거
-        if (!sidebarCollapsed && sidebarActiveTab === 'review') {
-          useReviewStore.getState().triggerReview();
-          return;
+        if (side) {
+          const key = sidebarKey(side);
+          const sb = state[key];
+          // 이미 열려있으면 triggerReview
+          if (!sb.collapsed && sb.activePanel === 'review') {
+            useReviewStore.getState().triggerReview();
+            return;
+          }
+          set({ [key]: { ...sb, collapsed: false, activePanel: 'review' as PanelType } });
+        } else {
+          // 어디에도 없으면 left에 추가
+          const sb = state.leftSidebar;
+          set({ leftSidebar: { ...sb, collapsed: false, panels: [...sb.panels, 'review'], activePanel: 'review' } });
         }
-
-        // 사이드바가 닫혀있으면 열기 + Review 탭으로 전환
-        if (sidebarCollapsed) {
-          set({ sidebarCollapsed: false });
-        }
-        set({ sidebarActiveTab: 'review' });
       },
 
       closeReviewPanel: (): void => {
-        // 더 이상 reviewPanelOpen 상태를 사용하지 않지만, 하위 호환성을 위해 유지
-        set({ sidebarActiveTab: 'settings' });
+        // review → settings로 전환 (review가 있는 사이드에서)
+        const state = get();
+        const side: SidebarSide | null =
+          state.leftSidebar.panels.includes('review') ? 'left'
+            : state.rightSidebar.panels.includes('review') ? 'right'
+              : null;
+        if (side) {
+          const key = sidebarKey(side);
+          const sb = state[key];
+          if (sb.activePanel === 'review' && sb.panels.length > 0) {
+            const next = sb.panels.find((p) => p !== 'review') ?? sb.panels[0] ?? null;
+            set({ [key]: { ...sb, activePanel: next } });
+          }
+        }
       },
 
       // Dev Test Panel
@@ -285,7 +337,7 @@ export const useUIStore = create<UIStore>()(
         set({ devTestPanelOpen: open });
       },
 
-      // Floating Chat Panel
+      // Legacy Chat Panel
       setSidebarActiveTab: (tab: 'settings' | 'review'): void => {
         set({ sidebarActiveTab: tab });
       },
@@ -306,19 +358,196 @@ export const useUIStore = create<UIStore>()(
         set((state) => ({ chatPanelPinned: !state.chatPanelPinned }));
       },
 
-      // Sidebar widths
+      // Legacy sidebar widths
       setSettingsSidebarWidth: (width: number): void => {
-        set({ settingsSidebarWidth: Math.max(200, Math.min(600, width)) }); // min 200, max 600
+        set({ settingsSidebarWidth: Math.max(200, Math.min(600, width)) });
       },
 
-      // Chat panel width (도킹 모드)
       setChatPanelWidth: (width: number): void => {
-        set({ chatPanelWidth: Math.max(200, Math.min(600, width)) }); // min 200, max 600
+        set({ chatPanelWidth: Math.max(200, Math.min(600, width)) });
+      },
+
+      // === Docking Sidebar Actions ===
+      setActivePanel_side: (side: SidebarSide, panel: PanelType): void => {
+        const key = sidebarKey(side);
+        set((state) => ({ [key]: { ...state[key], activePanel: panel } }));
+      },
+
+      toggleSidebarCollapse: (side: SidebarSide): void => {
+        const key = sidebarKey(side);
+        set((state) => ({ [key]: { ...state[key], collapsed: !state[key].collapsed } }));
+      },
+
+      setSidebarCollapsedSide: (side: SidebarSide, collapsed: boolean): void => {
+        const key = sidebarKey(side);
+        set((state) => ({ [key]: { ...state[key], collapsed } }));
+      },
+
+      setSidebarWidthSide: (side: SidebarSide, width: number): void => {
+        const key = sidebarKey(side);
+        const clamped = Math.max(200, Math.min(600, width));
+        set((state) => ({ [key]: { ...state[key], width: clamped } }));
+      },
+
+      openPanel: (panel: PanelType): void => {
+        const state = get();
+        // 패널이 도킹된 사이드를 찾아서 열기
+        const side: SidebarSide | null =
+          state.leftSidebar.panels.includes(panel) ? 'left'
+            : state.rightSidebar.panels.includes(panel) ? 'right'
+              : null;
+        if (side) {
+          const key = sidebarKey(side);
+          set({ [key]: { ...state[key], collapsed: false, activePanel: panel } });
+        }
+      },
+
+      openPanelOnSide: (side: SidebarSide, panel: PanelType): void => {
+        const key = sidebarKey(side);
+        const sb = get()[key];
+        if (sb.panels.includes(panel)) {
+          set({ [key]: { ...sb, collapsed: false, activePanel: panel } });
+        } else {
+          // 패널이 없으면 추가
+          set({ [key]: { ...sb, collapsed: false, panels: [...sb.panels, panel], activePanel: panel } });
+        }
+      },
+
+      movePanel: (panel: PanelType, from: SidebarSide, to: SidebarSide): void => {
+        if (from === to) return;
+        const state = get();
+        const fromKey = sidebarKey(from);
+        const toKey = sidebarKey(to);
+        const fromSb = state[fromKey];
+        const toSb = state[toKey];
+
+        // 모든 패널 동일 처리: from에서 제거
+        const newFromPanels = fromSb.panels.filter((p) => p !== panel);
+
+        // to에 추가 (이미 있으면 추가하지 않음)
+        const newToPanels = toSb.panels.includes(panel) ? toSb.panels : [...toSb.panels, panel];
+
+        // from의 activePanel 조정
+        const fromActive = fromSb.activePanel === panel
+          ? (newFromPanels[0] ?? null)
+          : fromSb.activePanel;
+
+        // from이 비면 자동 collapse
+        const fromCollapsed = newFromPanels.length === 0 ? true : fromSb.collapsed;
+
+        set({
+          [fromKey]: { ...fromSb, panels: newFromPanels, activePanel: fromActive, collapsed: fromCollapsed },
+          [toKey]: { ...toSb, panels: newToPanels, activePanel: panel, collapsed: false },
+        });
+      },
+
+      findPanelSide: (panel: PanelType): SidebarSide | null => {
+        const state = get();
+        if (state.leftSidebar.panels.includes(panel)) return 'left';
+        if (state.rightSidebar.panels.includes(panel)) return 'right';
+        return null;
+      },
+
+      // === Chat Session Panel Actions ===
+      addChatPanel: (sessionId: string): void => {
+        const panel: ChatPanelType = chatPanelId(sessionId);
+        const state = get();
+        // 이미 어느 쪽에든 있으면 무시
+        if (state.leftSidebar.panels.includes(panel) || state.rightSidebar.panels.includes(panel)) return;
+        // 기본: right sidebar에 추가
+        const sb = state.rightSidebar;
+        set({ rightSidebar: { ...sb, panels: [...sb.panels, panel], activePanel: panel, collapsed: false } });
+      },
+
+      removeChatPanel: (sessionId: string): void => {
+        const panel: ChatPanelType = chatPanelId(sessionId);
+        const state = get();
+        const updates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
+        for (const side of ['leftSidebar', 'rightSidebar'] as const) {
+          const sb = state[side];
+          if (sb.panels.includes(panel)) {
+            const newPanels = sb.panels.filter((p) => p !== panel);
+            const newActive = sb.activePanel === panel ? (newPanels[0] ?? null) : sb.activePanel;
+            updates[side] = { ...sb, panels: newPanels, activePanel: newActive, collapsed: newPanels.length === 0 ? true : sb.collapsed };
+          }
+        }
+        if (Object.keys(updates).length > 0) set(updates);
+      },
+
+      syncChatPanels: (sessionIds: string[]): void => {
+        const state = get();
+        const validPanels = new Set<PanelType>(sessionIds.map(chatPanelId));
+        const updates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
+
+        for (const side of ['leftSidebar', 'rightSidebar'] as const) {
+          const sb = state[side];
+          // stale chat 패널 제거
+          const cleaned = sb.panels.filter((p) => !isChatPanel(p) || validPanels.has(p));
+          if (cleaned.length !== sb.panels.length) {
+            const newActive = sb.activePanel && !cleaned.includes(sb.activePanel)
+              ? (cleaned[0] ?? null)
+              : sb.activePanel;
+            updates[side] = { ...sb, panels: cleaned, activePanel: newActive };
+          }
+        }
+
+        // 세션이 있지만 어디에도 패널이 없으면, right에 첫 번째 세션 추가
+        const allPanels = [...(updates.leftSidebar?.panels ?? state.leftSidebar.panels), ...(updates.rightSidebar?.panels ?? state.rightSidebar.panels)];
+        const hasChatPanel = allPanels.some(isChatPanel);
+        if (!hasChatPanel && sessionIds.length > 0) {
+          const firstPanel = chatPanelId(sessionIds[0]!);
+          const rsb = updates.rightSidebar ?? state.rightSidebar;
+          updates.rightSidebar = { ...rsb, panels: [...rsb.panels, firstPanel], activePanel: firstPanel, collapsed: false };
+        }
+
+        if (Object.keys(updates).length > 0) set(updates);
+      },
+
+      openActiveChat: (): void => {
+        const state = get();
+        // 이미 열려있는 chat 패널 찾기 (어느 사이드든)
+        for (const side of ['rightSidebar', 'leftSidebar'] as const) {
+          const sb = state[side];
+          // 현재 activePanel이 chat이면 열기
+          if (sb.activePanel && isChatPanel(sb.activePanel)) {
+            set({ [side]: { ...sb, collapsed: false } });
+            return;
+          }
+        }
+        // activePanel은 chat이 아니지만 panels에 chat이 있으면 전환
+        for (const side of ['rightSidebar', 'leftSidebar'] as const) {
+          const sb = state[side];
+          const chatPanel = sb.panels.find(isChatPanel);
+          if (chatPanel) {
+            set({ [side]: { ...sb, collapsed: false, activePanel: chatPanel } });
+            return;
+          }
+        }
+        // 어디에도 chat 패널이 없으면 — chatStore에서 세션을 생성/복구
+        // 순환 참조 방지: dynamic import (fire-and-forget)
+        void import('@/stores/chatStore').then(({ useChatStore }) => {
+          const chatState = useChatStore.getState();
+          if (chatState.sessions.length > 0) {
+            // 세션은 있지만 패널이 없는 경우 → syncChatPanels로 복구 후 열기
+            get().syncChatPanels(chatState.sessions.map((s) => s.id));
+            const refreshed = get();
+            for (const s of ['rightSidebar', 'leftSidebar'] as const) {
+              const chatPanel = refreshed[s].panels.find(isChatPanel);
+              if (chatPanel) {
+                set({ [s]: { ...refreshed[s], collapsed: false, activePanel: chatPanel } });
+                return;
+              }
+            }
+          } else {
+            // 세션 자체가 없으면 새로 생성 (createSession → addChatPanel 자동 호출)
+            chatState.createSession();
+          }
+        });
       },
 
       // Editor typography (Source/Target 패널별 독립 설정)
       setSourceFontSize: (size: number): void => {
-        set({ sourceFontSize: Math.max(10, Math.min(24, size)) }); // 10-24px
+        set({ sourceFontSize: Math.max(10, Math.min(24, size)) });
       },
 
       adjustSourceFontSize: (delta: number): void => {
@@ -328,7 +557,7 @@ export const useUIStore = create<UIStore>()(
       },
 
       setSourceLineHeight: (height: number): void => {
-        set({ sourceLineHeight: Math.max(1.0, Math.min(2.5, height)) }); // 1.0-2.5
+        set({ sourceLineHeight: Math.max(1.0, Math.min(2.5, height)) });
       },
 
       adjustSourceLineHeight: (delta: number): void => {
@@ -338,7 +567,7 @@ export const useUIStore = create<UIStore>()(
       },
 
       setTargetFontSize: (size: number): void => {
-        set({ targetFontSize: Math.max(10, Math.min(24, size)) }); // 10-24px
+        set({ targetFontSize: Math.max(10, Math.min(24, size)) });
       },
 
       adjustTargetFontSize: (delta: number): void => {
@@ -348,7 +577,7 @@ export const useUIStore = create<UIStore>()(
       },
 
       setTargetLineHeight: (height: number): void => {
-        set({ targetLineHeight: Math.max(1.0, Math.min(2.5, height)) }); // 1.0-2.5
+        set({ targetLineHeight: Math.max(1.0, Math.min(2.5, height)) });
       },
 
       adjustTargetLineHeight: (delta: number): void => {
@@ -381,8 +610,62 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
-      version: 1,
-      migrate: (persisted) => persisted as Record<string, unknown>,
+      version: 4,
+      migrate: (persisted, version) => {
+        const data = persisted as Record<string, unknown>;
+
+        if (version === 0 || version === 1) {
+          // v0/v1 → v4: 기존 sidebar/chat 상태를 docking 모델로 마이그레이션
+          const settingsWidth = (data.settingsSidebarWidth as number) || 250;
+          const chatWidth = (data.chatPanelWidth as number) || 250;
+          const collapsed = (data.sidebarCollapsed as boolean) ?? false;
+
+          data.leftSidebar = {
+            collapsed,
+            panels: ['settings', 'review'],
+            activePanel: 'settings',
+            width: settingsWidth,
+          };
+          // chat 패널은 hydration 시 syncChatPanels로 채워짐
+          data.rightSidebar = {
+            collapsed: false,
+            panels: [],
+            activePanel: null,
+            width: chatWidth,
+          };
+        } else if (version === 2) {
+          // v2 → v4: activeTab → activePanel + panels 배열 추가
+          const left = data.leftSidebar as Record<string, unknown> | undefined;
+          const right = data.rightSidebar as Record<string, unknown> | undefined;
+
+          data.leftSidebar = {
+            collapsed: left?.collapsed ?? false,
+            panels: ['settings', 'review'],
+            activePanel: (left?.activeTab as string) || 'settings',
+            width: (left?.width as number) || 250,
+          };
+          data.rightSidebar = {
+            collapsed: right?.collapsed ?? false,
+            panels: [],
+            activePanel: null,
+            width: (right?.width as number) || 250,
+          };
+        } else if (version === 3) {
+          // v3 → v4: 'chat' 리터럴 제거 — hydration 시 실제 세션 ID로 대체
+          for (const side of ['leftSidebar', 'rightSidebar'] as const) {
+            const sb = data[side] as Record<string, unknown> | undefined;
+            if (sb) {
+              const panels = (sb.panels as string[]) ?? [];
+              sb.panels = panels.filter((p) => p !== 'chat');
+              if (sb.activePanel === 'chat') {
+                sb.activePanel = (sb.panels as string[])[0] ?? null;
+              }
+            }
+          }
+        }
+
+        return data;
+      },
       partialize: (state) => ({
         theme: state.theme,
         language: state.language,
@@ -390,21 +673,22 @@ export const useUIStore = create<UIStore>()(
         sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
         isPanelsSwapped: state.isPanelsSwapped,
-        // Docked Chat Panel persist
+        // Dual sidebar persist
+        leftSidebar: state.leftSidebar,
+        rightSidebar: state.rightSidebar,
+        // Legacy (kept for potential rollback)
         sidebarActiveTab: state.sidebarActiveTab,
         chatPanelOpen: state.chatPanelOpen,
         chatPanelPinned: state.chatPanelPinned,
-        // Settings sidebar & chat panel width
         settingsSidebarWidth: state.settingsSidebarWidth,
         chatPanelWidth: state.chatPanelWidth,
-        // Editor typography (Source/Target 패널별 독립 설정)
+        // Editor typography
         sourceFontSize: state.sourceFontSize,
         sourceLineHeight: state.sourceLineHeight,
         targetFontSize: state.targetFontSize,
         targetLineHeight: state.targetLineHeight,
-        // Responsive layout (windowWidth는 persist 안함 - 세션마다 새로 측정)
+        // Responsive layout (windowWidth는 persist 안함)
         autoLayoutEnabled: state.autoLayoutEnabled,
-        // projectSidebarHidden은 persist 안함 - 세션마다 윈도우 크기에 따라 결정
         // Paste settings
         pasteImageMode: state.pasteImageMode,
         pasteLinkPreserve: state.pasteLinkPreserve,
@@ -412,4 +696,3 @@ export const useUIStore = create<UIStore>()(
     }
   )
 );
-

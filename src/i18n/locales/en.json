@@ -343,5 +343,8 @@
     "skipVersion": "Skip This Version",
     "cancel": "Cancel",
     "downloadFailed": "Download failed. Please try again later."
+  },
+  "sidebar": {
+    "openOnOtherSide": "Open on Other Side"
   }
 }

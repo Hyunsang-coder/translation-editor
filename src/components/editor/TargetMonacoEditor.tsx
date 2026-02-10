@@ -470,10 +470,10 @@ export function TargetMonacoEditor({
             const selectedText = model.getValueInRange(sel).trim();
             if (!selectedText) return;
 
-            const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+            const { openActiveChat, setActivePanel } = useUIStore.getState();
             const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-            if (sidebarCollapsed) toggleSidebar();
+            openActiveChat();
             setActivePanel('chat');
             appendComposerText(selectedText);
             requestComposerFocus();
@@ -554,10 +554,10 @@ export function TargetMonacoEditor({
           const text = (el.getAttribute('data-text') ?? '').trim();
           if (!text) return;
 
-          const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+          const { openActiveChat, setActivePanel } = useUIStore.getState();
           const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-          if (sidebarCollapsed) toggleSidebar();
+          openActiveChat();
           setActivePanel('chat');
           appendComposerText(text);
           requestComposerFocus();

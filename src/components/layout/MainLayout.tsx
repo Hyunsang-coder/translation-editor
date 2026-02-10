@@ -1,10 +1,9 @@
-import { useCallback, useRef, useEffect, lazy, Suspense } from 'react';
+import { useCallback, useEffect, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useShallow } from 'zustand/shallow';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
-import { SettingsSidebar } from '@/components/panels/SettingsSidebar';
-import { DockedChatPanel } from '@/components/panels/DockedChatPanel';
+import { UnifiedSidebar } from '@/components/panels/UnifiedSidebar';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
@@ -19,25 +18,23 @@ const ReviewTestPanel = lazy(() =>
 
 /**
  * 메인 레이아웃 컴포넌트
- * Panel Layout: [ProjectSidebar] + [SettingsSidebar] + Editor + [DockedChat]
+ * Panel Layout: [ProjectSidebar] | [LeftSidebar] | Editor | [RightSidebar]
  * 각 패널은 자체적으로 접힌 상태(아이콘만)와 펼친 상태를 가짐
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, sidebarCollapsed, devTestPanelOpen, toggleDevTestPanel } = useUIStore(
-    useShallow((s) => ({ focusMode: s.focusMode, sidebarCollapsed: s.sidebarCollapsed, devTestPanelOpen: s.devTestPanelOpen, toggleDevTestPanel: s.toggleDevTestPanel }))
+  const { focusMode, devTestPanelOpen, toggleDevTestPanel } = useUIStore(
+    useShallow((s) => ({
+      focusMode: s.focusMode,
+      devTestPanelOpen: s.devTestPanelOpen,
+      toggleDevTestPanel: s.toggleDevTestPanel,
+    }))
   );
-  const settingsSidebarWidth = useUIStore((s) => s.settingsSidebarWidth);
-  const setSettingsSidebarWidth = useUIStore((s) => s.setSettingsSidebarWidth);
   const setDevTestPanelOpen = useUIStore((s) => s.setDevTestPanelOpen);
   const project = useProjectStore((s) => s.project);
   const loadProject = useProjectStore((s) => s.loadProject);
 
   // 반응형 레이아웃 훅 활성화
   useResponsiveLayout();
-
-  const isResizing = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
 
   const handleCreateProject = useCallback(async () => {
     try {
@@ -50,42 +47,6 @@ export function MainLayout(): JSX.Element {
       console.error('Failed to create project:', e);
     }
   }, [loadProject]);
-
-  // 사이드바 리사이즈 핸들러
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizing.current = true;
-    startX.current = e.clientX;
-    startWidth.current = settingsSidebarWidth;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [settingsSidebarWidth]);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return;
-      // 오른쪽으로 드래그하면 너비 증가 (사이드바는 왼쪽에 있으므로)
-      const delta = e.clientX - startX.current;
-      const newWidth = startWidth.current + delta;
-      setSettingsSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [setSettingsSidebarWidth]);
 
   // 개발자 테스트 패널 단축키 (Ctrl+Shift+D / Cmd+Shift+D)
   useEffect(() => {
@@ -110,23 +71,11 @@ export function MainLayout(): JSX.Element {
         {/* 프로젝트 사이드바 (항상 렌더링, 자체적으로 접힘 처리) */}
         <ProjectSidebar />
 
-        {/* Settings/Review 사이드바 (프로젝트 있을 때만, 자체적으로 접힘 처리) */}
+        {/* 좌측 사이드바 (프로젝트 있을 때만) */}
         {project && (
-          <aside
-            className={`shrink-0 border-r border-editor-border bg-editor-bg overflow-hidden relative ${sidebarCollapsed ? '' : ''}`}
-            style={{ width: sidebarCollapsed ? 48 : settingsSidebarWidth }}
-          >
-            <ErrorBoundary name="Settings">
-              <SettingsSidebar />
-            </ErrorBoundary>
-            {/* 리사이즈 핸들 (펼친 상태에서만) */}
-            {!sidebarCollapsed && (
-              <div
-                className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary-500 transition-colors z-10"
-                onMouseDown={handleResizeStart}
-              />
-            )}
-          </aside>
+          <ErrorBoundary name="LeftSidebar">
+            <UnifiedSidebar side="left" />
+          </ErrorBoundary>
         )}
 
         {/* 에디터 캔버스 (TipTap) */}
@@ -158,10 +107,10 @@ export function MainLayout(): JSX.Element {
           )}
         </div>
 
-        {/* 도킹된 채팅 패널 (프로젝트 있을 때만, 자체적으로 접힘 처리) */}
+        {/* 우측 사이드바 (프로젝트 있을 때만) */}
         {project && (
-          <ErrorBoundary name="Chat">
-            <DockedChatPanel />
+          <ErrorBoundary name="RightSidebar">
+            <UnifiedSidebar side="right" />
           </ErrorBoundary>
         )}
       </main>

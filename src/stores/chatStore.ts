@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
+import { useUIStore } from '@/stores/uiStore';
 import { streamAssistantReply } from '@/ai/chat';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
@@ -514,6 +515,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
 
         set(nextState);
+
+        // uiStore 동기화: 실제 세션 ID로 chat 패널 갱신
+        const sessionIds = migratedSessions.map((s) => s.id);
+        useUIStore.getState().syncChatPanels(sessionIds);
       } catch (e) {
         if (requestId !== hydrateRequestId) {
           return;
@@ -562,6 +567,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
         currentSession: newSession,
       }));
 
+      // uiStore 동기화: 새 채팅 패널 추가
+      useUIStore.getState().addChatPanel(sessionId);
+
       schedulePersist();
 
       return sessionId;
@@ -600,6 +608,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           summarySuggestionDismissedBySessionId: nextDismissMap,
         };
       });
+
+      // uiStore 동기화: 채팅 패널 제거
+      useUIStore.getState().removeChatPanel(sessionId);
 
       schedulePersist();
     },

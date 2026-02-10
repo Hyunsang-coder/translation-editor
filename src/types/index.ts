@@ -301,6 +301,69 @@ export interface Glossary {
 // ============================================
 
 /**
+ * 고정 패널 타입 (settings, review)
+ */
+export type FixedPanelType = 'settings' | 'review';
+
+/**
+ * 채팅 패널 타입 — 세션 ID를 포함하는 template literal
+ * e.g. 'chat:abc-123-def'
+ */
+export type ChatPanelType = `chat:${string}`;
+
+/**
+ * 패널 타입 (도킹 모델)
+ * 고정 패널 또는 채팅 세션 패널
+ */
+export type PanelType = FixedPanelType | ChatPanelType;
+
+// --- PanelType Runtime Helpers ---
+
+export function isFixedPanel(panel: PanelType): panel is FixedPanelType {
+  return panel === 'settings' || panel === 'review';
+}
+
+export function isChatPanel(panel: PanelType): panel is ChatPanelType {
+  return panel.startsWith('chat:');
+}
+
+export function getChatSessionId(panel: PanelType): string | null {
+  if (!isChatPanel(panel)) return null;
+  return panel.slice(5); // 'chat:'.length === 5
+}
+
+export function chatPanelId(sessionId: string): ChatPanelType {
+  return `chat:${sessionId}`;
+}
+
+/**
+ * 사이드바 위치 타입
+ */
+export type SidebarSide = 'left' | 'right';
+
+/**
+ * 도킹 사이드바 상태
+ * panels 배열에 도킹된 패널 목록을 순서대로 유지
+ */
+export interface DockingSidebarState {
+  collapsed: boolean;
+  panels: PanelType[];          // 이 사이드에 도킹된 패널 목록 (순서 유지)
+  activePanel: PanelType | null; // 현재 보이는 패널
+  width: number;                // px, 200-600
+}
+
+/**
+ * DnD dataTransfer용
+ */
+export interface PanelDragData {
+  panelType: PanelType;
+  sourceSide: SidebarSide;
+}
+
+/** @deprecated Use PanelType instead */
+export type SidebarTab = PanelType;
+
+/**
  * 에디터 UI 상태
  */
 export interface EditorUIState {

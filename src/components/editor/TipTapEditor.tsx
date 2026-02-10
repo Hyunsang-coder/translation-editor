@@ -136,11 +136,11 @@ export function SourceTipTapEditor({
           event.preventDefault();
           const selected = editor.state.doc.textBetween(from, to, ' ').trim();
 
-          const { setChatPanelOpen } = useUIStore.getState();
+          const { openActiveChat } = useUIStore.getState();
           const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-          // 플로팅 Chat 패널 열기
-          setChatPanelOpen(true);
+          // Chat 패널 열기
+          openActiveChat();
           if (selected.length > 0) {
             appendComposerText(selected);
           }
@@ -311,11 +311,11 @@ export function TargetTipTapEditor({
           event.preventDefault();
           const selected = editor.state.doc.textBetween(from, to, ' ').trim();
 
-          const { setChatPanelOpen } = useUIStore.getState();
+          const { openActiveChat } = useUIStore.getState();
           const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
-          // 플로팅 Chat 패널 열기
-          setChatPanelOpen(true);
+          // Chat 패널 열기
+          openActiveChat();
           if (selected.length > 0) {
             appendComposerText(selected);
           }

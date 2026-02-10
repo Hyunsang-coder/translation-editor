@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Wrench, Settings, Search, MessageSquare, Cog } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
+import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
-import { useShallow } from 'zustand/shallow';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 
 /**
@@ -11,9 +11,12 @@ import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { setSidebarCollapsed, setSidebarActiveTab, openReviewPanel, chatPanelOpen, toggleChatPanel } = useUIStore(
-    useShallow((s) => ({ setSidebarCollapsed: s.setSidebarCollapsed, setSidebarActiveTab: s.setSidebarActiveTab, openReviewPanel: s.openReviewPanel, chatPanelOpen: s.chatPanelOpen, toggleChatPanel: s.toggleChatPanel }))
-  );
+  const openPanel = useUIStore((s) => s.openPanel);
+  const openActiveChat = useUIStore((s) => s.openActiveChat);
+  const openReviewPanel = useUIStore((s) => s.openReviewPanel);
+  const toggleSidebarCollapse = useUIStore((s) => s.toggleSidebarCollapse);
+  const leftSidebar = useUIStore((s) => s.leftSidebar);
+  const rightSidebar = useUIStore((s) => s.rightSidebar);
   const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
@@ -42,8 +45,7 @@ export function Toolbar(): JSX.Element {
   }, [dropdownOpen]);
 
   const handleProjectSettings = () => {
-    setSidebarCollapsed(false);
-    setSidebarActiveTab('settings');
+    openPanel('settings');
     setDropdownOpen(false);
   };
 
@@ -53,7 +55,26 @@ export function Toolbar(): JSX.Element {
   };
 
   const handleChat = () => {
-    toggleChatPanel();
+    // 현재 열린 chat 패널이 있으면 토글, 없으면 열기
+    let chatSide: 'left' | 'right' | null = null;
+    for (const side of ['leftSidebar', 'rightSidebar'] as const) {
+      const sb = side === 'leftSidebar' ? leftSidebar : rightSidebar;
+      if (sb.panels.some(isChatPanel)) {
+        chatSide = side === 'leftSidebar' ? 'left' : 'right';
+        break;
+      }
+    }
+    if (chatSide) {
+      const sb = chatSide === 'left' ? leftSidebar : rightSidebar;
+      const activeChatPanel = sb.panels.find(isChatPanel);
+      if (!sb.collapsed && activeChatPanel && sb.activePanel === activeChatPanel) {
+        toggleSidebarCollapse(chatSide);
+      } else {
+        openActiveChat();
+      }
+    } else {
+      openActiveChat();
+    }
     setDropdownOpen(false);
   };
 
@@ -95,7 +116,7 @@ export function Toolbar(): JSX.Element {
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleChat}
-                aria-pressed={chatPanelOpen}
+                aria-pressed={!rightSidebar.collapsed && !!rightSidebar.activePanel && isChatPanel(rightSidebar.activePanel)}
               >
                 <MessageSquare size={16} />
                 <span>{t('toolbar.aiChat')}</span>

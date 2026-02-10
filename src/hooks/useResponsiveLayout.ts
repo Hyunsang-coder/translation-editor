@@ -7,17 +7,17 @@ import { useUIStore } from '@/stores/uiStore';
  *
  * 패널 너비 기준:
  * - ProjectSidebar: 210px (축소: 48px)
- * - SettingsSidebar: 250px
- * - ChatPanel: 250px
+ * - LeftSidebar: 250px (축소: 48px)
+ * - RightSidebar: 250px (축소: 48px)
  * - Editor 최소: 400px
  */
 export const BREAKPOINTS = {
   /** ProjectSidebar 축소 (210px → 48px) - 모든 패널 열림 상태 기준 */
   PROJECT_SIDEBAR_COLLAPSE: 1200,
-  /** SettingsSidebar 닫힘 */
-  SETTINGS_SIDEBAR_CLOSE: 1000,
-  /** ChatPanel 닫힘 */
-  CHAT_PANEL_CLOSE: 800,
+  /** LeftSidebar 접힘 */
+  LEFT_SIDEBAR_CLOSE: 1000,
+  /** RightSidebar 접힘 */
+  RIGHT_SIDEBAR_CLOSE: 800,
   /** ProjectSidebar 완전 숨김 (48px → 0px) */
   PROJECT_SIDEBAR_HIDE: 600,
 } as const;
@@ -29,8 +29,8 @@ export const BREAKPOINTS = {
  *
  * 축소 우선순위 (너비 감소 시):
  * 1. ProjectSidebar → 축소 → 숨김
- * 2. SettingsSidebar → 닫힘
- * 3. ChatPanel → 닫힘
+ * 2. LeftSidebar → 접힘
+ * 3. RightSidebar → 접힘
  * 4. Editor → 마지막에 줄어듦 (항상 보호)
  *
  * 주요 특성:
@@ -57,8 +57,7 @@ export function useResponsiveLayout(): void {
       const {
         setProjectSidebarCollapsed,
         setProjectSidebarHidden,
-        setChatPanelOpen,
-        setSidebarCollapsed,
+        setSidebarCollapsedSide,
       } = useUIStore.getState();
 
       // 1순위: ProjectSidebar
@@ -69,14 +68,14 @@ export function useResponsiveLayout(): void {
         setProjectSidebarCollapsed(true);
       }
 
-      // 2순위: SettingsSidebar
-      if (width < BREAKPOINTS.SETTINGS_SIDEBAR_CLOSE) {
-        setSidebarCollapsed(true);
+      // 2순위: LeftSidebar
+      if (width < BREAKPOINTS.LEFT_SIDEBAR_CLOSE) {
+        setSidebarCollapsedSide('left', true);
       }
 
-      // 3순위: ChatPanel
-      if (width < BREAKPOINTS.CHAT_PANEL_CLOSE) {
-        setChatPanelOpen(false);
+      // 3순위: RightSidebar
+      if (width < BREAKPOINTS.RIGHT_SIDEBAR_CLOSE) {
+        setSidebarCollapsedSide('right', true);
       }
     };
 

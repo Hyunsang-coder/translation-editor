@@ -80,12 +80,12 @@ export function useBlockEditor({
 
             // getState()를 사용하여 stale closure 문제 방지
             const { addContextBlock } = useChatStore.getState();
-            const { sidebarCollapsed, toggleSidebar, setActivePanel } = useUIStore.getState();
+            const { openActiveChat, setActivePanel } = useUIStore.getState();
             const { appendComposerText, requestComposerFocus } = useChatStore.getState();
 
             // 현재 블록을 컨텍스트로 등록 (Context Injection)
             addContextBlock(blockId);
-            if (sidebarCollapsed) toggleSidebar();
+            openActiveChat();
             setActivePanel('chat');
             if (selected.length > 0) {
               appendComposerText(selected);

@@ -1,26 +1,18 @@
 import { useTranslation } from 'react-i18next';
-import { Settings, Search } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
-import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { useShallow } from 'zustand/shallow';
 import { pickGlossaryFile, pickDocumentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
-import { ReviewPanel } from '@/components/review/ReviewPanel';
 
 /**
- * Settings & Review 사이드바 컴포넌트
- * 접힌 상태: 아이콘만 표시 (Settings/Review 아이콘)
- * 펼친 상태: Settings 또는 Review 탭 표시
+ * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
+ * SettingsSidebar에서 추출한 순수 콘텐츠 컴포넌트
  */
-export function SettingsSidebar(): JSX.Element {
+export function SettingsContent(): JSX.Element {
   const { t } = useTranslation();
-  const { sidebarCollapsed, toggleSidebar, sidebarActiveTab, setSidebarActiveTab } = useUIStore(
-    useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, sidebarActiveTab: s.sidebarActiveTab, setSidebarActiveTab: s.setSidebarActiveTab }))
-  );
 
   const translatorPersona = useChatStore((s) => s.translatorPersona);
   const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
@@ -37,40 +29,7 @@ export function SettingsSidebar(): JSX.Element {
   const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
   const removeGlossaryPath = useProjectStore((s) => s.removeGlossaryPath);
 
-  // 접힌 상태: 아이콘만 표시
-  if (sidebarCollapsed) {
-    return (
-      <div className="w-12 h-full flex flex-col items-center py-2 gap-1 bg-editor-surface border-r border-editor-border">
-        {/* Settings 아이콘 */}
-        <button
-          type="button"
-          onClick={() => {
-            toggleSidebar();
-            setSidebarActiveTab('settings');
-          }}
-          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('chat.settings')}
-        >
-          <Settings size={20} />
-        </button>
-
-        {/* Review 아이콘 */}
-        <button
-          type="button"
-          onClick={() => {
-            toggleSidebar();
-            setSidebarActiveTab('review');
-          }}
-          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('review.title', '검수')}
-        >
-          <Search size={20} />
-        </button>
-      </div>
-    );
-  }
-
-  const renderSettings = (): JSX.Element => (
+  return (
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translator Persona */}
       <section className="space-y-2">
@@ -316,58 +275,6 @@ export function SettingsSidebar(): JSX.Element {
           </div>
         )}
       </section>
-    </div>
-  );
-
-  return (
-    <div className="h-full flex flex-col min-h-0">
-      {/* Tab Header */}
-      <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none">
-        {/* 접기 버튼 */}
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="p-2 hover:bg-editor-border transition-colors text-editor-muted"
-          title={t('common.collapse', '접기')}
-        >
-          {sidebarActiveTab === 'settings' ? <Settings size={18} /> : <Search size={18} />}
-        </button>
-
-        <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
-          {/* Settings 탭 */}
-          <div
-            onClick={() => setSidebarActiveTab('settings')}
-            className={`
-              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[100px] max-w-[160px]
-              ${sidebarActiveTab === 'settings'
-                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-              }
-            `}
-            title={t('chat.settings')}
-          >
-            <span className="truncate flex-1">{t('chat.settings')}</span>
-          </div>
-
-          {/* Review 탭 - 항상 표시 */}
-          <div
-            onClick={() => setSidebarActiveTab('review')}
-            className={`
-              group relative h-10 px-3 flex items-center gap-2 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[80px] max-w-[120px]
-              ${sidebarActiveTab === 'review'
-                ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
-                : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
-              }
-            `}
-            title={t('review.title', '검수')}
-          >
-            <span className="truncate flex-1">{t('review.title', '검수')}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      {sidebarActiveTab === 'settings' ? renderSettings() : <ReviewPanel />}
     </div>
   );
 }

@@ -343,5 +343,8 @@
     "skipVersion": "이 버전 건너뛰기",
     "cancel": "취소",
     "downloadFailed": "다운로드에 실패했습니다. 나중에 다시 시도해주세요."
+  },
+  "sidebar": {
+    "openOnOtherSide": "반대편에도 열기"
   }
 }
