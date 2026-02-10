@@ -14,6 +14,7 @@ import {
   markdownToTipTapJsonForTranslation,
   htmlToTipTapJson,
   fixMisalignedBoldMarks,
+  parseTranslationResponseToTipTap,
 } from './markdownConverter';
 
 describe('markdownConverter - 기존 함수 (html: false)', () => {
@@ -197,6 +198,32 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     expect(markdown).toContain('Line 1');
     expect(markdown).toContain('Line 2');
     expect(markdown).not.toContain('[table]');
+  });
+
+  it('parseTranslationResponseToTipTap: AI가 HTML(ul/li) 반환 시 raw HTML 그대로 표시되지 않고 파싱되어야 함', () => {
+    const htmlList = '<ul><li><p>Regarding performance, you just need to meet the console criteria we proposed.</p></li><li><p>2025-10-23 Weekly Meeting</p></li></ul>';
+    const json = parseTranslationResponseToTipTap(htmlList);
+
+    expect(json.type).toBe('doc');
+    const jsonStr = JSON.stringify(json);
+    // raw HTML이 그대로 나오면 안 됨 (문제의 원인)
+    expect(jsonStr).not.toContain('<ul>');
+    expect(jsonStr).not.toContain('<li>');
+    // 텍스트 내용은 보존되어야 함
+    expect(jsonStr).toContain('Regarding performance');
+    expect(jsonStr).toContain('2025-10-23 Weekly Meeting');
+  });
+
+  it('parseTranslationResponseToTipTap: 마크다운이면 markdownToTipTapJsonForTranslation과 동일하게 동작', () => {
+    const markdown = '- Item 1\n- Item 2';
+    const json = parseTranslationResponseToTipTap(markdown);
+
+    expect(json.type).toBe('doc');
+    const bulletList = (json.content as unknown[]).find(
+      (node: unknown) => (node as { type?: string }).type === 'bulletList'
+    );
+    expect(bulletList).toBeDefined();
+    expect(JSON.stringify(json)).toContain('Item 1');
   });
 
   it('markdownToTipTapJsonForTranslation: HTML 테이블이 TipTap JSON으로 파싱되어야 함', () => {

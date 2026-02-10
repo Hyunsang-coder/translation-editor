@@ -12,7 +12,7 @@ import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { stripHtml } from '@/utils/hash';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
-import { htmlToTipTapJson, tipTapJsonToHtml } from '@/utils/markdownConverter';
+import { tipTapJsonToHtml } from '@/utils/markdownConverter';
 
 /**
  * Source 텍스트의 언어를 감지
@@ -284,8 +284,8 @@ export function ReviewPanel(): JSX.Element {
     const checkedIssues = getCheckedIssues();
     if (checkedIssues.length === 0 || !project) return;
 
-    const sourceDocument = useProjectStore.getState().sourceDocument;
-    if (!sourceDocument) {
+    const sourceDocJson = useProjectStore.getState().sourceDocJson;
+    if (!sourceDocJson) {
       useUIStore.getState().addToast({
         type: 'warning',
         message: t('review.retranslate.noSegments', '재번역할 세그먼트가 없습니다. 먼저 검수를 실행해주세요.'),
@@ -305,8 +305,8 @@ export function ReviewPanel(): JSX.Element {
     const checkedIssues = getCheckedIssues();
     if (checkedIssues.length === 0 || !project) return;
 
-    const sourceDocument = useProjectStore.getState().sourceDocument;
-    if (!sourceDocument) return;
+    const sourceDocJson = useProjectStore.getState().sourceDocJson;
+    if (!sourceDocJson) return;
 
     // 중간 모달 닫기
     setRetranslateModalOpen(false);
@@ -323,12 +323,12 @@ export function ReviewPanel(): JSX.Element {
 
     try {
       const { translationRules, projectContext, translatorPersona } = useChatStore.getState();
-      const sourceDocJson = htmlToTipTapJson(sourceDocument);
 
       // 용어집 검색
       let glossary = '';
       try {
-        const query = sourceDocument.slice(0, 2000);
+        const sourceDocument = useProjectStore.getState().sourceDocument;
+        const query = (sourceDocument || '').slice(0, 2000);
         if (query.trim() && project.id) {
           const hits = await searchGlossary({
             projectId: project.id,

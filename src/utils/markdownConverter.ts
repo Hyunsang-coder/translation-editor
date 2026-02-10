@@ -595,6 +595,100 @@ export function htmlToTipTapJson(html: string): TipTapDocJson {
 }
 
 /**
+ * 콘텐츠가 블록 레벨 HTML인지 감지 (AI가 마크다운 대신 HTML 반환한 경우)
+ */
+function looksLikeBlockHtml(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('<') || !trimmed.includes('</')) return false;
+  return /^<(ul|ol|li|p|div|table|tr|td|th)[\s>]/i.test(trimmed);
+}
+
+/**
+ * AI가 반환한 HTML(ul/ol/li/p)을 마크다운으로 변환
+ * htmlToTipTapJson은 Markdown extension(html: false)으로 HTML을 파싱하지 못해
+ * raw 텍스트로 처리하므로, HTML → 마크다운 변환 후 파싱
+ */
+function convertHtmlListsToMarkdown(html: string): string {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const lines: string[] = [];
+
+    function walk(el: Element, indent = ''): void {
+      if (el.tagName === 'UL' || el.tagName === 'OL') {
+        for (const child of el.children) {
+          if (child.tagName === 'LI') walk(child as Element, indent);
+        }
+        return;
+      }
+      if (el.tagName === 'LI') {
+        const parts: string[] = [];
+        for (const node of el.childNodes) {
+          if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+            parts.push(`${indent}- ${node.textContent.trim()}`);
+          } else if (node instanceof Element) {
+            if (node.tagName === 'UL' || node.tagName === 'OL') {
+              walk(node, indent + '  ');
+            } else if (node.tagName === 'P') {
+              const t = node.textContent?.trim();
+              if (t) parts.push(`${indent}- ${t}`);
+            } else {
+              walk(node, indent);
+            }
+          }
+        }
+        if (parts.length === 0) {
+          const t = el.textContent?.trim();
+          if (t) lines.push(`${indent}- ${t}`);
+        } else {
+          lines.push(...parts);
+        }
+        return;
+      }
+      if (el.tagName === 'P') {
+        const t = el.textContent?.trim();
+        if (t) lines.push(`${indent}${t}`);
+        return;
+      }
+      if (el.tagName === 'TABLE') {
+        // 테이블은 HTML 그대로 유지 (markdownToTipTapJsonForTranslation이 html: true로 파싱)
+        lines.push((el as HTMLElement).outerHTML);
+        return;
+      }
+      for (const child of el.children) {
+        walk(child as Element, indent);
+      }
+    }
+
+    for (const child of doc.body.children) {
+      walk(child as Element);
+    }
+    return lines.join('\n').trim() || html;
+  } catch {
+    return html;
+  }
+}
+
+/**
+ * 번역 응답 후처리: HTML/마크다운 구분 후 TipTap JSON 변환
+ * AI가 마크다운 대신 HTML(ul, ol, li, p 등)을 반환하면 raw로 표시되는 문제 해결
+ */
+export function parseTranslationResponseToTipTap(content: string): TipTapDocJson {
+  const trimmed = content.trim();
+  const toParse = looksLikeBlockHtml(trimmed)
+    ? convertHtmlListsToMarkdown(trimmed)
+    : trimmed;
+  const normalized = normalizeHorizontalRules(toParse);
+  const editor = new Editor({
+    extensions: getExtensionsForTranslation(),
+  });
+  editor.commands.setContent(normalized);
+  const json = editor.getJSON() as TipTapDocJson;
+  editor.destroy();
+  return json;
+}
+
+/**
  * 번역 응답에서 Markdown 추출 (구분자 사용)
  *
  * @param response - LLM 응답 텍스트

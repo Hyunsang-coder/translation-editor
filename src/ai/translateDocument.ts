@@ -16,7 +16,7 @@ import {
 } from './chunking';
 import {
   tipTapJsonToMarkdownForTranslation,
-  markdownToTipTapJsonForTranslation,
+  parseTranslationResponseToTipTap,
   estimateMarkdownTokens,
   detectMarkdownTruncation,
   extractTranslationMarkdown,
@@ -288,7 +288,7 @@ function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
   }
 
   const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
-  const translatedDoc = markdownToTipTapJsonForTranslation(translatedMarkdown);
+  const translatedDoc = parseTranslationResponseToTipTap(translatedMarkdown);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
