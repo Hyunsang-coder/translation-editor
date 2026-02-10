@@ -5,114 +5,56 @@
 
 ## 작업 요약
 
-**2가지 작업 완료:**
-
-1. **Dual Sidebar v2 도킹 모델** — 이전 세션에서 완성 (미커밋 상태 유지)
-2. **Chat Sessions as Independent Tabs** — 이번 세션에서 구현 완료. 채팅 세션을 Settings/Review와 같은 층위의 독립 탭으로 승격. `PanelType`을 template literal 기반(`chat:${sessionId}`)으로 변경하고, chatStore↔uiStore 간 자동 동기화 구현.
-
-> **중요**: 전체 변경사항이 미커밋 상태. `npx tsc --noEmit` 통과 확인됨.
+듀얼 사이드바에서 **채팅 세션 격리 문제를 분석하고 수정 계획을 수립**했다. 양쪽 사이드바에 서로 다른 채팅 세션이 열릴 때 `chatStore`의 전역 상태(`currentSessionId`, 스트리밍, 컴포저)가 공유되어 잘못된 세션에 메시지가 전송되는 버그. 코드 변경은 없으며, 구현 계획서가 완성되어 있다.
 
 ## 현재 상태
 
-### 변경된 파일 (unstaged, 미커밋)
-
-**수정 (16개):**
-- `src/types/index.ts` — `PanelType = FixedPanelType | ChatPanelType` + runtime helpers
-- `src/stores/uiStore.ts` — 도킹 모델 + chat panel 액션 (addChatPanel, removeChatPanel, syncChatPanels, openActiveChat), v4 migration
-- `src/stores/chatStore.ts` — createSession/deleteSession/hydrateForProject에 uiStore 동기화 추가
-- `src/components/chat/ChatContent.tsx` — sessionId prop 추가, 내부 세션 탭 바 제거
-- `src/components/panels/UnifiedSidebar.tsx` — 함수 기반 PANEL_META, chat 탭 x/+/세션명 표시
-- `src/components/layout/Toolbar.tsx` — openActiveChat 마이그레이션
-- `src/components/layout/MainLayout.tsx` — Dual Sidebar 레이아웃
-- `src/components/editor/EditorCanvasTipTap.tsx` — openActiveChat 마이그레이션
-- `src/components/editor/TipTapEditor.tsx` — openActiveChat 마이그레이션
-- `src/components/editor/TargetMonacoEditor.tsx` — openActiveChat 마이그레이션
-- `src/components/editor/DomSelectionAddToChat.tsx` — openActiveChat 마이그레이션
-- `src/hooks/useBlockEditor.ts` — openActiveChat 마이그레이션
-- `src/hooks/useResponsiveLayout.ts` — 이전 세션 수정
-- `src/i18n/locales/en.json` — sidebar.openOnOtherSide
-- `src/i18n/locales/ko.json` — sidebar.openOnOtherSide
-
-**삭제:**
-- `src/components/panels/DockedChatPanel.tsx`
-- `src/components/panels/SettingsSidebar.tsx`
-
-**신규 (untracked):**
-- `src/components/panels/UnifiedSidebar.tsx` — 통합 사이드바
-- `src/components/panels/SettingsContent.tsx` — Settings 패널 콘텐츠
-- `src/hooks/useResizeHandle.ts` — 양방향 리사이즈 핸들 훅
-- `.claude/plans/` — 계획서들
+### 변경된 파일
+- Working tree clean (코드 변경 없음)
+- `.claude/plans/jazzy-puzzling-emerson.md` — 구현 계획서 (신규 생성, untracked)
 
 ### 커밋 이력 (이번 세션)
-
-없음 (모든 변경사항 미커밋)
+- 없음 (분석 및 계획 수립만 진행)
 
 ## 미완료 작업
 
-### 작업 A: DnD 전환 (도킹 모델 잔여)
-- [ ] HTML5 DnD → 마우스 이벤트 기반 DnD 전환
-  - `src/hooks/usePanelDrag.ts` 신규 생성
-  - `src/components/panels/UnifiedSidebar.tsx` 수정
-
-### 수동 테스트
-- [ ] `npm run tauri:dev`로 실행하여 기능 동작 검증
-  - 채팅 탭이 사이드바에 세션별로 표시되는지
-  - `+` 버튼으로 새 세션 생성
-  - `✕` 버튼으로 세션 삭제
-  - 프로젝트 전환 시 syncChatPanels 동작
-  - localStorage v3→v4 마이그레이션 (기존 'chat' 리터럴 제거)
-  - Cmd+L/K 단축키로 openActiveChat 동작
-
-### 커밋
-- [ ] 전체 변경사항 커밋
+- [ ] **계획 구현**: `.claude/plans/jazzy-puzzling-emerson.md`에 따라 3개 파일 수정
+  - [ ] `chatStore.ts` — `streamingSessionId` 추가, 헬퍼 함수 추가, 메시지 액션에 `targetSessionId?` 파라미터 추가
+  - [ ] `chatStore.selectors.ts` — 세션별 셀렉터 추가 (`useSessionStreamingState`, `useSessionMessages`, `useSessionSearchState`)
+  - [ ] `ChatContent.tsx` — `switchSession()` 마운트 제거, 로컬 컴포저, 세션별 렌더링
+- [ ] `/typecheck` — 타입 에러 없음 확인
+- [ ] `npm run test:run` — 기존 테스트 통과 확인
+- [ ] 듀얼 패널 수동 테스트 (7개 시나리오, 계획서 "검증 방법" 섹션 참조)
 
 ## 핵심 결정 사항
 
-### PanelType = FixedPanelType | ChatPanelType
-- **`ChatPanelType = \`chat:${string}\``**: template literal로 세션 ID 인코딩
-- **Runtime helpers**: `isFixedPanel()`, `isChatPanel()`, `getChatSessionId()`, `chatPanelId()` — types 파일에 함께 배치
-- **이유**: static Record 불가 → 함수 기반으로 전환
-
-### Cross-store 조율
-- **chatStore가 uiStore를 호출**: createSession → addChatPanel, deleteSession → removeChatPanel, hydrateForProject → syncChatPanels
-- **이유**: chatStore가 이미 projectStore/connectorStore를 호출하는 기존 패턴과 일치
-
-### Chat dual-presence 제거
-- movePanel에서 chat 패널도 동일 처리 (from에서 제거 → to에 추가)
-- **이유**: 한 세션 = 한 사이드. template literal 타입에서 양쪽 동시 표시는 불필요
-
-### rightSidebar 초기값 panels: []
-- chatStore hydration 시 syncChatPanels로 실제 세션 ID 기반 패널 채움
-- **이유**: 앱 시작 시 세션 ID를 모르므로 빈 배열로 시작
-
-### localStorage Migration v3→v4
-- v3의 'chat' 리터럴을 panels에서 제거
-- hydration 시 실제 세션 ID로 대체
-
-### ChatContent 내부 세션 탭 바 완전 제거
-- UnifiedSidebar 탭이 세션 관리를 담당하므로 중복 제거
-- sessionId prop으로 특정 세션 표시
+- **Hybrid 접근 (Option C)**: chatStore 구조 대폭 변경 대신, ChatContent가 `sessionId` prop으로 세션을 직접 조회 + 액션에 optional `targetSessionId` 추가 (대안: A-전체 per-session state map 리팩터링/diff 너무 큼, B-세션 직접 조회만/스트리밍·컴포저 미해결)
+- **`currentSessionId` 유지**: 삭제하지 않고 "마지막 상호작용 세션" 용도로 보존. 외부 "채팅에 추가" 버튼(`DomSelectionAddToChat`, `TipTapEditor` 등)이 이 값에 의존
+- **컴포저 로컬화**: `composerText`를 chatStore에서 제거하지 않고, ChatContent에서 `useState` 로컬 관리. 글로벌 `appendComposerText`는 subscribe로 흡수, 언마운트 시 flush
+- **단일 패널 사이드이펙트 0**: `targetSessionId` 미지정 시 `currentSessionId` 폴백 → 기존 동작 완전 보존
 
 ## 주의사항
 
-- `UnifiedSidebar.tsx`의 HTML5 DnD 코드는 작업 A에서 전면 교체 대상
-- `currentSession` desync 위험: 여러 ChatContent 인스턴스가 동시 존재 가능하지만 `currentSession`은 하나. 탭 전환 시 `switchSession` 호출로 동기화 (sessionId useEffect)
-- 프로젝트 전환 시 stale chat panel 위험 → `syncChatPanels(sessionIds)`로 전체 동기화
-- `composerText`는 v1에서 세션 간 공유 유지 (추후 per-session 분리 가능)
+- **`sendMessage` / `replayMessage`가 가장 복잡**: 100줄+ 함수. `resolvedSessionId` 도입 시 내부의 모든 `currentSession` / `get().currentSession` 참조를 빠짐없이 교체해야 함
+- **`addComposerAttachment` 로직 추출**: 현재 chatStore 액션에 파일→AttachmentDto 변환 포함. 로컬 컴포저로 이동 시 순수 함수 추출이 필요할 수 있음 (`createAttachmentFromPath` 같은 형태)
+- **스트리밍 동시 1개**: API 제약으로 양쪽 동시 스트리밍 불가. `streamingSessionId`로 어느 패널인지만 추적
+- **persistence**: `composerText`는 프로젝트 레벨 영속 필드. 로컬화해도 언마운트 시 글로벌로 flush 필수
+- **`streamingSessionId: null` 리셋**: `streamingMessageId: null`을 설정하는 **모든** 에러 핸들러에 같이 추가해야 함 (5곳+)
 
 ## 핵심 파일
 
-- `src/types/index.ts` — PanelType, runtime helpers (isFixedPanel, isChatPanel, getChatSessionId, chatPanelId)
-- `src/stores/uiStore.ts` — 도킹 모델 상태 + chat panel 액션 + v4 migration
-- `src/stores/chatStore.ts` — 세션 CRUD + uiStore 동기화
-- `src/components/panels/UnifiedSidebar.tsx` — 통합 사이드바 (getPanelIcon/Label, chat 탭 UI)
-- `src/components/chat/ChatContent.tsx` — 채팅 콘텐츠 (sessionId prop, 탭 바 제거)
+- `src/stores/chatStore.ts` — 채팅 상태 관리 (수정 대상: streamingSessionId, targetSessionId, 헬퍼)
+- `src/stores/chatStore.selectors.ts` — 그룹 셀렉터 (수정 대상: 세션별 셀렉터 3개 추가)
+- `src/components/chat/ChatContent.tsx` — 채팅 UI (수정 대상: 세션 격리 렌더링, 로컬 컴포저)
+- `src/stores/uiStore.ts` — 사이드바 상태 (참조만, 변경 없음)
+- `src/types/index.ts` — PanelType, chatPanelId 등 (참조만, 변경 없음)
 
 ## 다음 세션 가이드
 
-### 권장 순서
-
-1. `npm run tauri:dev`로 실행 → 수동 테스트 (위 체크리스트 참조)
-2. 이슈 발견 시 수정
-3. 작업 A (DnD 전환) 진행 — `usePanelDrag.ts` 생성, UnifiedSidebar 수정
-4. 전체 변경사항 커밋
+1. **계획서 필독**: `.claude/plans/jazzy-puzzling-emerson.md` — 전체 구현 명세가 Phase 1~8로 정리되어 있음
+2. **구현 순서** (Phase별 `/typecheck` 실행 권장):
+   - Phase 1: `chatStore.ts`에 `streamingSessionId` 필드 + `resolveSession`/`patchSession` 헬퍼 추가
+   - Phase 2: 메시지 액션에 `targetSessionId?` 파라미터 추가 (addMessage → updateMessage → editMessage → deleteMessageFrom → clearMessages → sendMessage → replayMessage 순)
+   - Phase 3: `chatStore.selectors.ts`에 `useSessionStreamingState`, `useSessionMessages`, `useSessionSearchState` 추가
+   - Phase 4: `ChatContent.tsx` — switchSession 제거 → 세션별 셀렉터 사용 → 로컬 컴포저 → 액션에 sessionId 전달
+3. **최종 검증**: 계획서 "검증 방법" 섹션의 7개 시나리오 수동 테스트
