@@ -31,7 +31,7 @@ describe('ChatStore Selectors', () => {
     expect(result.current).toHaveProperty('composerAttachments');
     expect(result.current).toHaveProperty('addComposerAttachment');
     expect(result.current).toHaveProperty('removeComposerAttachment');
-    expect(result.current).toHaveProperty('focusNonce');
+    expect(result.current).toHaveProperty('pendingComposerFocus');
   });
 
   it('useChatSessionState가 세션 관련 상태를 반환해야 함', async () => {

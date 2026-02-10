@@ -21,7 +21,7 @@ export function useChatComposerState() {
       composerAttachments: s.composerAttachments,
       addComposerAttachment: s.addComposerAttachment,
       removeComposerAttachment: s.removeComposerAttachment,
-      focusNonce: s.composerFocusNonce,
+      pendingComposerFocus: s.pendingComposerFocus,
     }))
   );
 }
@@ -60,12 +60,14 @@ export function useChatStreamingState() {
 /**
  * 검색(Web Search, Confluence) 관련 상태 그룹
  */
-export function useChatSearchState() {
+export function useChatSearchState(sessionId?: string) {
   return useBaseStore(
     useShallow((s) => ({
       webSearchEnabled: s.webSearchEnabled,
       setWebSearchEnabled: s.setWebSearchEnabled,
-      confluenceSearchEnabled: s.currentSession?.confluenceSearchEnabled ?? false,
+      confluenceSearchEnabled: (
+        (sessionId ? s.sessions.find((ses) => ses.id === sessionId) : s.currentSession)
+      )?.confluenceSearchEnabled ?? false,
       setConfluenceSearchEnabled: s.setConfluenceSearchEnabled,
     }))
   );
@@ -92,15 +94,18 @@ export function useChatMessageActions() {
  * 요약 제안 관련 상태 그룹
  * 파생 상태(shouldShow)를 포함하여 컴포넌트 로직 간소화
  */
-export function useSummarySuggestionState() {
+export function useSummarySuggestionState(sessionId?: string) {
   return useBaseStore(
     useShallow((s) => {
-      const currentSessionId = s.currentSessionId;
-      const messageCount = s.currentSession?.messages.length ?? 0;
+      const targetSessionId = sessionId ?? s.currentSessionId;
+      const targetSession = targetSessionId
+        ? s.sessions.find((ses) => ses.id === targetSessionId)
+        : null;
+      const messageCount = targetSession?.messages.length ?? 0;
       const dismissedMap = s.summarySuggestionDismissedBySessionId;
       const shouldShow =
-        currentSessionId !== null &&
-        !dismissedMap[currentSessionId] &&
+        targetSessionId !== null &&
+        !dismissedMap[targetSessionId] &&
         messageCount >= 30;
 
       return {
@@ -141,4 +146,3 @@ export function useSessionStreamingState(sessionId: string) {
     }))
   );
 }
-

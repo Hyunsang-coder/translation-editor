@@ -16,7 +16,7 @@ import type { ChatSet, ChatGet } from './chatStore.types';
 
 export function createComposerActions(
   set: ChatSet,
-  _get: ChatGet,
+  get: ChatGet,
   helpers: { schedulePersist: () => void },
 ) {
   const { schedulePersist } = helpers;
@@ -36,12 +36,23 @@ export function createComposerActions(
         targetSessionId: state.currentSessionId,
         nonce: (state.pendingComposerAppend?.nonce ?? 0) + 1,
       },
+      pendingComposerFocus: {
+        targetSessionId: state.currentSessionId,
+        nonce: (state.pendingComposerFocus?.nonce ?? 0) + 1,
+      },
       composerFocusNonce: state.composerFocusNonce + 1,
     }));
   };
 
-  const requestComposerFocus = (): void => {
-    set((state) => ({ composerFocusNonce: state.composerFocusNonce + 1 }));
+  const requestComposerFocus = (targetSessionId?: string): void => {
+    const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+    set((state) => ({
+      pendingComposerFocus: {
+        targetSessionId: resolvedSessionId ?? null,
+        nonce: (state.pendingComposerFocus?.nonce ?? 0) + 1,
+      },
+      composerFocusNonce: state.composerFocusNonce + 1,
+    }));
   };
 
   return {
@@ -112,14 +123,18 @@ export function createSettingsActions(
     schedulePersist();
   };
 
-  const setConfluenceSearchEnabled = (enabled: boolean): void => {
-    const { currentSession, sessions } = get();
-    if (!currentSession) return;
+  const setConfluenceSearchEnabled = (enabled: boolean, targetSessionId?: string): void => {
+    const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+    if (!resolvedSessionId) return;
 
-    const updated: ChatSession = { ...currentSession, confluenceSearchEnabled: enabled };
+    const { currentSession, sessions } = get();
+    const targetSession = sessions.find((s) => s.id === resolvedSessionId);
+    if (!targetSession) return;
+
+    const updated: ChatSession = { ...targetSession, confluenceSearchEnabled: enabled };
     set({
-      currentSession: updated,
-      sessions: sessions.map((s) => (s.id === currentSession.id ? updated : s)),
+      currentSession: currentSession?.id === resolvedSessionId ? updated : currentSession,
+      sessions: sessions.map((s) => (s.id === resolvedSessionId ? updated : s)),
     });
     schedulePersist();
   };

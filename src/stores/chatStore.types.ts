@@ -48,6 +48,11 @@ export interface ChatState {
   /** Chat composer */
   composerText: string;
   composerFocusNonce: number;
+  /** 외부 focus 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
+  pendingComposerFocus: {
+    targetSessionId: string | null;
+    nonce: number;
+  } | null;
   /** 외부 append 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
   pendingComposerAppend: {
     text: string;
@@ -103,7 +108,7 @@ export interface ChatActions {
   // Composer
   setComposerText: (text: string) => void;
   appendComposerText: (text: string, opts?: { separator?: string }) => void;
-  requestComposerFocus: () => void;
+  requestComposerFocus: (targetSessionId?: string) => void;
 
   // 컨텍스트 블록 관리
   setContextBlocks: (blockIds: string[]) => void;
@@ -112,8 +117,8 @@ export interface ChatActions {
 
   // 대화 길이 알림
   shouldShowSummarySuggestion: () => boolean;
-  dismissSummarySuggestion: () => void;
-  startNewSessionFromSuggestion: () => void;
+  dismissSummarySuggestion: (targetSessionId?: string) => void;
+  startNewSessionFromSuggestion: (targetSessionId?: string) => void;
 
   // 세션 제한 헬퍼
   isSessionLimitReached: () => boolean;
@@ -129,7 +134,7 @@ export interface ChatActions {
   setProjectContext: (memory: string) => void;
   appendToProjectContext: (snippet: string) => void;
   setWebSearchEnabled: (enabled: boolean) => void;
-  setConfluenceSearchEnabled: (enabled: boolean) => void;
+  setConfluenceSearchEnabled: (enabled: boolean, targetSessionId?: string) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
 
   // 첨부 파일 관리 (4.2)

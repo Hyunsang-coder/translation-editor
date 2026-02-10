@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type RefObject } from 'react';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { saveTempImage } from '@/tauri/attachments';
@@ -8,12 +8,32 @@ import { fileToBytes, isImageFile } from '@/utils/fileUtils';
 /**
  * Tauri 드래그 앤 드롭 + HTML5 fallback + 클립보드 이미지 붙여넣기
  */
-export function useChatDragDrop(addComposerAttachment: (path: string) => Promise<void>) {
+interface UseChatDragDropOptions {
+  enabled?: boolean;
+  dropZoneRef?: RefObject<HTMLElement>;
+}
+
+export function useChatDragDrop(
+  addComposerAttachment: (path: string) => Promise<void>,
+  options: UseChatDragDropOptions = {},
+) {
+  const { enabled = true, dropZoneRef } = options;
   const [isDragging, setIsDragging] = useState(false);
+
+  const isInsideDropZone = useCallback((position: { x: number; y: number }): boolean => {
+    if (!dropZoneRef?.current) return true;
+    const rect = dropZoneRef.current.getBoundingClientRect();
+    const scale = window.devicePixelRatio || 1;
+    const scaledX = position.x / scale;
+    const scaledY = position.y / scale;
+    const inScaled = scaledX >= rect.left && scaledX <= rect.right && scaledY >= rect.top && scaledY <= rect.bottom;
+    const inRaw = position.x >= rect.left && position.x <= rect.right && position.y >= rect.top && position.y <= rect.bottom;
+    return inScaled || inRaw;
+  }, [dropZoneRef]);
 
   // Tauri 드래그 앤 드롭 이벤트 리스너
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!enabled || !isTauriRuntime()) return;
 
     let unlisten: (() => void) | undefined;
     let cancelled = false;
@@ -24,10 +44,11 @@ export function useChatDragDrop(addComposerAttachment: (path: string) => Promise
         const unlistenFn = await webview.onDragDropEvent(async (event) => {
           if (cancelled) return;
 
-          if (event.payload.type === 'over') {
-            setIsDragging(true);
+          if (event.payload.type === 'over' || event.payload.type === 'enter') {
+            setIsDragging(isInsideDropZone(event.payload.position));
           } else if (event.payload.type === 'drop') {
             setIsDragging(false);
+            if (!isInsideDropZone(event.payload.position)) return;
             const paths = event.payload.paths;
 
             for (const path of paths) {
@@ -62,25 +83,28 @@ export function useChatDragDrop(addComposerAttachment: (path: string) => Promise
         unlisten();
       }
     };
-  }, [addComposerAttachment]);
+  }, [addComposerAttachment, enabled, isInsideDropZone]);
 
   // HTML5 드래그 앤 드롭 핸들러 (브라우저 fallback)
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
-  }, []);
+  }, [enabled]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
     const related = e.relatedTarget as HTMLElement | null;
     if (related && target.contains(related)) return;
     setIsDragging(false);
-  }, []);
+  }, [enabled]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -109,7 +133,7 @@ export function useChatDragDrop(addComposerAttachment: (path: string) => Promise
         break;
       }
     }
-  }, [addComposerAttachment]);
+  }, [addComposerAttachment, enabled]);
 
   return { isDragging, handleDragOver, handleDragLeave, handleDrop };
 }

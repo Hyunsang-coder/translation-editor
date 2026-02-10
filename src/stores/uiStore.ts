@@ -504,12 +504,25 @@ export const useUIStore = create<UIStore>()(
         }
 
         // 세션이 있지만 어디에도 패널이 없으면, right에 첫 번째 세션 추가
-        const allPanels = [...(updates.leftSidebar?.panels ?? state.leftSidebar.panels), ...(updates.rightSidebar?.panels ?? state.rightSidebar.panels)];
-        const hasChatPanel = allPanels.some(isChatPanel);
-        if (!hasChatPanel && sessionIds.length > 0) {
-          const firstPanel = chatPanelId(sessionIds[0]!);
+        const leftPanels = updates.leftSidebar?.panels ?? state.leftSidebar.panels;
+        const rightPanels = updates.rightSidebar?.panels ?? state.rightSidebar.panels;
+        const allPanels = [...leftPanels, ...rightPanels];
+        const existingChatPanels = new Set(allPanels.filter(isChatPanel));
+
+        // 누락된 세션 패널 복구: session은 있는데 탭이 없는 경우 right에 추가
+        const missingPanels = sessionIds
+          .map(chatPanelId)
+          .filter((panel) => !existingChatPanels.has(panel));
+
+        if (missingPanels.length > 0) {
           const rsb = updates.rightSidebar ?? state.rightSidebar;
-          updates.rightSidebar = { ...rsb, panels: [...rsb.panels, firstPanel], activePanel: firstPanel, collapsed: false };
+          const nextPanels = [...rsb.panels, ...missingPanels];
+          updates.rightSidebar = {
+            ...rsb,
+            panels: nextPanels,
+            activePanel: rsb.activePanel ?? missingPanels[0] ?? null,
+            collapsed: false,
+          };
         }
 
         if (Object.keys(updates).length > 0) set(updates);

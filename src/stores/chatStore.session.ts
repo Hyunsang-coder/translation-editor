@@ -72,6 +72,9 @@ export function createSessionActions(
         isFinalizingStreaming: false,
         loadedProjectId: null,
         composerText: '',
+        composerFocusNonce: 0,
+        pendingComposerFocus: null,
+        pendingComposerAppend: null,
         translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
         translationRules: '',
         projectContext: '',
@@ -95,6 +98,9 @@ export function createSessionActions(
       lastInjectedGlossary: [],
       summarySuggestionDismissedBySessionId: {},
       composerText: '',
+      composerFocusNonce: 0,
+      pendingComposerFocus: null,
+      pendingComposerAppend: null,
       translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
       translationRules: '',
       projectContext: '',
@@ -298,8 +304,9 @@ export function createSessionActions(
     return session.messages.length >= CHAT_LENGTH_THRESHOLD;
   };
 
-  const dismissSummarySuggestion = (): void => {
-    const session = get().currentSession;
+  const dismissSummarySuggestion = (targetSessionId?: string): void => {
+    const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+    const session = get().sessions.find((s) => s.id === resolvedSessionId);
     if (!session) return;
     set((state) => ({
       summarySuggestionDismissedBySessionId: {
@@ -309,9 +316,9 @@ export function createSessionActions(
     }));
   };
 
-  const startNewSessionFromSuggestion = (): void => {
+  const startNewSessionFromSuggestion = (targetSessionId?: string): void => {
     // 현재 세션 dismiss 후 새 세션 생성
-    get().dismissSummarySuggestion();
+    get().dismissSummarySuggestion(targetSessionId);
     get().createSession();
   };
 

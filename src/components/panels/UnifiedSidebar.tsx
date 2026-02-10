@@ -142,9 +142,6 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     }
   }, [side]);
 
-  // 채팅 탭이 있는지 확인 (+ 버튼 표시 여부)
-  const hasChatPanels = panels.some(isChatPanel);
-
   // Tab click handler with drag suppression
   const handleTabClick = useCallback((panel: PanelType) => {
     if (isClickSuppressed()) return;
@@ -273,7 +270,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
           {renderInsertionIndicator(panels.length)}
 
           {/* + 버튼: 새 채팅 추가 */}
-          {hasChatPanels && !isSessionLimitReached() && (
+          {!isSessionLimitReached() && (
             <button
               type="button"
               onClick={handleAddChatSession}

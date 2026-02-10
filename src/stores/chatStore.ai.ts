@@ -66,12 +66,8 @@ export function createAiActions(
     const maskSession = createGhostMaskSession();
     const maskedUserContent = maskGhostChips(content, maskSession);
 
-    // AbortController: 이전 요청 취소 후 새 컨트롤러를 원자적으로 설정
-    const prevAbortController = get().abortController;
+    // AbortController: 단일 in-flight 요청 추적
     const abortController = new AbortController();
-    if (prevAbortController) {
-      prevAbortController.abort();
-    }
     set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
     try {
@@ -308,6 +304,11 @@ export function createAiActions(
       }
     }
 
+    // 동시 2개 스트리밍은 지원하지 않음: 진행 중이면 새 요청을 무시
+    if (get().isLoading || get().abortController) {
+      return;
+    }
+
     const resolvedSessionId = targetSessionId ?? get().currentSessionId;
     const { createSession, addMessage, updateMessage } = get();
 
@@ -353,13 +354,6 @@ export function createAiActions(
     // 명시적 웹검색 트리거: /web 명령어로 내장 웹검색을 직접 실행
     const webQuery = tryExtractWebSearchQuery(content);
     if (webQuery) {
-      // 기존 진행 중인 요청이 있으면 abort
-      const prevAbortController = get().abortController;
-      if (prevAbortController) {
-        prevAbortController.abort();
-        set({ abortController: null });
-      }
-
       if (!get().webSearchEnabled) {
         addMessage({
           role: 'assistant',
@@ -458,6 +452,11 @@ export function createAiActions(
   // ── replayMessage ────────────────────────────────────────────────────
 
   const replayMessage = async (messageId: string, targetSessionId?: string): Promise<void> => {
+    // 동시 2개 스트리밍은 지원하지 않음: 진행 중이면 새 요청을 무시
+    if (get().isLoading || get().abortController) {
+      return;
+    }
+
     const resolvedSessionId = targetSessionId ?? get().currentSessionId;
     const session = get().sessions.find((s) => s.id === resolvedSessionId);
     if (!session) return;

@@ -54,11 +54,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   // 스트리밍 상태: 항상 useSessionStreamingState를 호출 (Rules of Hooks 준수)
   const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = useSessionStreamingState(effectiveSessionId);
+  const globalIsLoading = useChatStore((s) => s.isLoading);
+  const addToast = useUIStore((s) => s.addToast);
   const {
     composerAttachments,
     addComposerAttachment,
     removeComposerAttachment,
-    focusNonce,
   } = useChatComposerState();
 
   // 로컬 composerText — 듀얼 사이드바에서 각 인스턴스 독립
@@ -104,7 +105,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     setWebSearchEnabled,
     confluenceSearchEnabled,
     setConfluenceSearchEnabled,
-  } = useChatSearchState();
+  } = useChatSearchState(effectiveSessionId);
   const {
     sendMessage,
     editMessage,
@@ -118,11 +119,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     shouldShow: shouldShowSummarySuggestion,
     dismiss: dismissSummarySuggestion,
     startNewSession: startNewSessionFromSuggestion,
-  } = useSummarySuggestionState();
+  } = useSummarySuggestionState(effectiveSessionId);
 
   // 개별 선택자 (그룹에 포함되지 않는 것들)
   const createSession = useChatStore((s) => s.createSession);
   const editorRef = useRef<Editor | null>(null);
+  const composerFormRef = useRef<HTMLFormElement | null>(null);
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
@@ -191,7 +193,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, []);
 
   // 드래그 앤 드롭 (Tauri + HTML5 fallback)
-  const { isDragging, handleDragOver, handleDragLeave, handleDrop } = useChatDragDrop(addComposerAttachment);
+  const { isDragging, handleDragOver, handleDragLeave, handleDrop } = useChatDragDrop(addComposerAttachment, {
+    enabled: chatPanelOpen,
+    dropZoneRef: composerFormRef,
+  });
 
   const notionEnabled = useConnectorStore((s) => s.enabledMap['notion'] ?? false);
   const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
@@ -272,8 +277,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [appendToProjectContext]);
 
   const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
-    updateMessage(messageId, { metadata });
-  }, [updateMessage]);
+    updateMessage(messageId, { metadata }, sessionId);
+  }, [updateMessage, sessionId]);
 
   // 붙여넣기/첨부 핸들러
   const { handlePaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
@@ -297,24 +302,28 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     void hydrateForProject(projectId);
   }, [project?.id, hydrateForProject]);
 
-  // focusNonce 변경 시 Chat 패널 열기 + 포커스
+  // 외부 focus 이벤트 subscribe (Cmd+L 등)
   useEffect(() => {
-    if (focusNonce === 0) return;
+    let lastNonce = useChatStore.getState().pendingComposerFocus?.nonce ?? 0;
+    return useChatStore.subscribe((state) => {
+      const pending = state.pendingComposerFocus;
+      if (!pending || pending.nonce === lastNonce) return;
+      lastNonce = pending.nonce;
+      if (pending.targetSessionId && pending.targetSessionId !== effectiveSessionId) return;
 
-    // Chat 패널이 닫혀있다면 열기
-    if (side && sessionId) {
-      const { openPanelOnSide } = useUIStore.getState();
-      openPanelOnSide(side, chatPanelId(sessionId));
-    } else {
-      const { openActiveChat } = useUIStore.getState();
-      openActiveChat();
-    }
+      if (side && sessionId) {
+        const { openPanelOnSide } = useUIStore.getState();
+        openPanelOnSide(side, chatPanelId(sessionId));
+      } else {
+        const { openActiveChat } = useUIStore.getState();
+        openActiveChat();
+      }
 
-    const timer = setTimeout(() => {
-      editorRef.current?.commands.focus('end');
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [focusNonce, side, sessionId]);
+      window.setTimeout(() => {
+        editorRef.current?.commands.focus('end');
+      }, 100);
+    });
+  }, [effectiveSessionId, side, sessionId]);
 
   // 기본 채팅 세션 1개는 자동 생성 (side가 없을 때만, dual sidebar에서는 각 세션이 독립적)
   useEffect(() => {
@@ -326,7 +335,16 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [side, project?.id, isHydrating, chatSessions.length, createSession, t]);
 
   const sendCurrent = useCallback(async (): Promise<void> => {
-    if (!localComposerText.trim() || isLoading || !displaySession?.id) return;
+    if (!localComposerText.trim() || !displaySession?.id) return;
+    if (globalIsLoading) {
+      if (!isLoading) {
+        addToast({
+          type: 'info',
+          message: t('chat.busyElsewhere', '다른 채팅 세션에서 응답 생성 중입니다. 완료 후 다시 시도해주세요.'),
+        });
+      }
+      return;
+    }
 
     const message = localComposerText.trim();
     setLocalComposerText('');
@@ -336,7 +354,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     (editorRef.current as any)?.clearComposerContent?.();
 
     await sendMessage(message, sessionId);
-  }, [localComposerText, isLoading, displaySession?.id, sendMessage, sessionId]);
+  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, addToast, t]);
 
   // 스크롤 관리
   const { messagesEndRef, messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
@@ -385,14 +403,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             <button
               type="button"
               className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600"
-              onClick={startNewSessionFromSuggestion}
+              onClick={() => startNewSessionFromSuggestion(effectiveSessionId)}
             >
               {t('chat.startNewSession')}
             </button>
             <button
               type="button"
               className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
-              onClick={dismissSummarySuggestion}
+              onClick={() => dismissSummarySuggestion(effectiveSessionId)}
             >
               {t('common.ignore')}
             </button>
@@ -455,6 +473,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
       {/* 입력창 */}
       <form
+        ref={composerFormRef}
         onSubmit={handleSubmit}
         className="px-2 py-1 bg-editor-bg shrink-0"
         onDragOver={handleDragOver}
@@ -567,7 +586,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                       type="checkbox"
                       className="accent-primary-500"
                       checked={confluenceSearchEnabled}
-                      onChange={(e) => setConfluenceSearchEnabled(e.target.checked)}
+                      onChange={(e) => setConfluenceSearchEnabled(e.target.checked, effectiveSessionId)}
                       disabled={isLoading}
                     />
                     <span className="flex-1">{t('chat.confluenceSearch')}</span>
@@ -659,7 +678,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               />
               <button
                 type="submit"
-                disabled={isLoading || !localComposerText.trim()}
+                disabled={globalIsLoading || !localComposerText.trim()}
                 className="w-7 h-7 rounded-full bg-primary-500 text-white
                            hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                            transition-colors flex items-center justify-center"

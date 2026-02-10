@@ -60,6 +60,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     summarySuggestionDismissedBySessionId: {},
     composerText: '',
     composerFocusNonce: 0,
+    pendingComposerFocus: null,
     pendingComposerAppend: null,
     translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
