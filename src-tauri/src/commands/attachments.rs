@@ -6,6 +6,7 @@ use std::fs;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use super::AcquireDb;
 use crate::models::{Attachment, AttachmentDto};
 use crate::utils::validate_path;
 
@@ -100,11 +101,7 @@ pub async fn attach_file(
         updated_at: now,
     };
 
-    let db = db_state.0.lock().map_err(|_| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: "Failed to acquire database lock".to_string(),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.save_attachment(&attachment).map_err(CommandError::from)?;
 
@@ -193,11 +190,7 @@ pub fn list_attachments(
     project_id: String,
     db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<AttachmentDto>> {
-    let db = db_state.0.lock().map_err(|_| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: "Failed to acquire database lock".to_string(),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let attachments = db.list_attachments(&project_id).map_err(CommandError::from)?;
     
@@ -218,11 +211,7 @@ pub fn delete_attachment(
     id: String,
     db_state: State<'_, DbState>,
 ) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|_| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: "Failed to acquire database lock".to_string(),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.delete_attachment(&id).map_err(CommandError::from)?;
     Ok(())

@@ -26,6 +26,7 @@ export type IssueSeverity = 'critical' | 'major' | 'minor';
  * 결정적 ID 생성 (중복 제거 + 체크 상태 유지용)
  * 간단한 해시 구현 - 브라우저에서 동작
  */
+// djb2 32-bit: collision probability negligible at review scale (~100 issues)
 function hashContent(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
@@ -73,7 +74,7 @@ export interface ReviewResult {
 
 interface ReviewState {
   // severity 필터 (기본: Critical + Major 표시)
-  severityFilter: Set<IssueSeverity>;
+  severityFilter: IssueSeverity[];
 
   // 검수 실행 상태
   chunks: AlignedChunk[];
@@ -202,7 +203,7 @@ let cachedNonce: number = -1;
 
 const initialState: ReviewState = {
   // severity 필터 기본값: Critical + Major 표시
-  severityFilter: new Set<IssueSeverity>(['critical', 'major']),
+  severityFilter: ['critical', 'major'] as IssueSeverity[],
 
   // 검수 실행 상태 기본값
   chunks: [],
@@ -397,19 +398,16 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
 
   toggleSeverityFilter: (severity: IssueSeverity) => {
     const { severityFilter } = get();
-    const next = new Set(severityFilter);
-    if (next.has(severity)) {
-      next.delete(severity);
-    } else {
-      next.add(severity);
-    }
+    const next = severityFilter.includes(severity)
+      ? severityFilter.filter((s) => s !== severity)
+      : [...severityFilter, severity];
     set({ severityFilter: next });
   },
 
   getFilteredIssues: () => {
     const { severityFilter } = get();
     const allIssues = get().getAllIssues();
-    return allIssues.filter((issue) => severityFilter.has(issue.severity));
+    return allIssues.filter((issue) => severityFilter.includes(issue.severity));
   },
 
   setStreamingText: (text: string) => {

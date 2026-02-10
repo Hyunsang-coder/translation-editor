@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Modal } from '@/components/ui/Modal';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { generateText } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -268,26 +269,14 @@ export function TranslatePreviewModal(props: {
     editor.commands.setContent(docJson);
   }, [editor, open, docJson]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-6">
+    <Modal open={open} onClose={onClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
       <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
-            <div className="text-sm font-medium text-editor-text">
+            <div id="translate-preview-title" className="text-sm font-medium text-editor-text">
               {title ?? t('editor.previewDefaultTitle')}
             </div>
             {originalText.trim().length > 0 && !isLoading && !error && (
@@ -518,8 +507,6 @@ export function TranslatePreviewModal(props: {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
-
-

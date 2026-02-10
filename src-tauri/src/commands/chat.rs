@@ -7,6 +7,7 @@ use tauri::State;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult, IteError};
+use super::AcquireDb;
 use crate::models::ChatSession;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,11 +68,7 @@ pub fn save_current_chat_session(
     args: SaveCurrentChatSessionArgs,
     db_state: State<DbState>,
 ) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.save_current_chat_session(&args.project_id, &args.session)
         .map_err(CommandError::from)?;
@@ -84,11 +81,7 @@ pub fn load_current_chat_session(
     args: LoadCurrentChatSessionArgs,
     db_state: State<DbState>,
 ) -> CommandResult<Option<ChatSession>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.load_current_chat_session(&args.project_id)
         .map_err(CommandError::from)
@@ -100,11 +93,7 @@ pub fn save_chat_sessions(
     args: SaveChatSessionsArgs,
     db_state: State<DbState>,
 ) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.save_chat_sessions(&args.project_id, &args.sessions)
         .map_err(CommandError::from)?;
@@ -117,11 +106,7 @@ pub fn load_chat_sessions(
     args: LoadChatSessionsArgs,
     db_state: State<DbState>,
 ) -> CommandResult<Vec<ChatSession>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.load_chat_sessions(&args.project_id)
         .map_err(CommandError::from)
@@ -133,11 +118,7 @@ pub fn save_chat_project_settings(
     args: SaveChatSettingsArgs,
     db_state: State<DbState>,
 ) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::to_string(&args.settings).map_err(|e| CommandError::from(IteError::from(e)))?;
@@ -152,11 +133,7 @@ pub fn load_chat_project_settings(
     args: LoadChatSettingsArgs,
     db_state: State<DbState>,
 ) -> CommandResult<Option<ChatProjectSettings>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let json = db
         .load_chat_project_settings(&args.project_id)

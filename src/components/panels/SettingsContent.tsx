@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useShallow } from 'zustand/shallow';
 import { pickGlossaryFile, pickDocumentFile } from '@/tauri/dialog';
 import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -14,23 +15,23 @@ import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 export function SettingsContent(): JSX.Element {
   const { t } = useTranslation();
 
-  const translatorPersona = useChatStore((s) => s.translatorPersona);
-  const setTranslatorPersona = useChatStore((s) => s.setTranslatorPersona);
-  const translationRules = useChatStore((s) => s.translationRules);
-  const setTranslationRules = useChatStore((s) => s.setTranslationRules);
-  const projectContext = useChatStore((s) => s.projectContext);
-  const setProjectContext = useChatStore((s) => s.setProjectContext);
-  const attachments = useChatStore((s) => s.attachments);
-  const attachFile = useChatStore((s) => s.attachFile);
-  const deleteAttachment = useChatStore((s) => s.deleteAttachment);
+  const { translatorPersona, setTranslatorPersona, translationRules, setTranslationRules,
+          projectContext, setProjectContext, attachments, attachFile, deleteAttachment } =
+    useChatStore(useShallow((s) => ({
+      translatorPersona: s.translatorPersona, setTranslatorPersona: s.setTranslatorPersona,
+      translationRules: s.translationRules, setTranslationRules: s.setTranslationRules,
+      projectContext: s.projectContext, setProjectContext: s.setProjectContext,
+      attachments: s.attachments, attachFile: s.attachFile, deleteAttachment: s.deleteAttachment,
+    })));
 
-  const project = useProjectStore((s) => s.project);
+  const { project, addGlossaryPath, removeGlossaryPath } =
+    useProjectStore(useShallow((s) => ({
+      project: s.project, addGlossaryPath: s.addGlossaryPath, removeGlossaryPath: s.removeGlossaryPath,
+    })));
   const settingsKey = project?.id ?? 'none';
-  const addGlossaryPath = useProjectStore((s) => s.addGlossaryPath);
-  const removeGlossaryPath = useProjectStore((s) => s.removeGlossaryPath);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 bg-editor-bg">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translator Persona */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">

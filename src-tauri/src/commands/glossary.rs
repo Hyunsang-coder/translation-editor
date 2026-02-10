@@ -7,6 +7,7 @@ use tauri::State;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use super::AcquireDb;
 use crate::utils::validate_path;
 
 #[derive(Debug, Deserialize)]
@@ -46,11 +47,7 @@ pub fn import_glossary_csv(
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
-    let mut db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let mut db = db_state.acquire()?;
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
@@ -73,11 +70,7 @@ pub fn import_glossary_excel(
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
-    let mut db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let mut db = db_state.acquire()?;
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
@@ -119,11 +112,7 @@ pub fn search_glossary(
     args: SearchGlossaryArgs,
     db_state: State<DbState>,
 ) -> CommandResult<Vec<GlossaryEntryDto>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let limit = args.limit.unwrap_or(12).min(50);
     let rows = db

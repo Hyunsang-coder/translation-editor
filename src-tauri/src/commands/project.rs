@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use super::AcquireDb;
 use crate::models::IteProject;
 
 #[derive(Debug, Deserialize)]
@@ -103,11 +104,7 @@ pub fn create_project(
         history: Vec::new(),
     };
 
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.save_project(&project).map_err(CommandError::from)?;
 
@@ -117,11 +114,7 @@ pub fn create_project(
 /// 프로젝트 로드
 #[tauri::command]
 pub fn load_project(args: LoadProjectArgs, db_state: State<DbState>) -> CommandResult<IteProject> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.load_project(&args.project_id).map_err(CommandError::from)
 }
@@ -129,11 +122,7 @@ pub fn load_project(args: LoadProjectArgs, db_state: State<DbState>) -> CommandR
 /// 프로젝트 저장
 #[tauri::command]
 pub fn save_project(project: IteProject, db_state: State<DbState>) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.save_project(&project).map_err(CommandError::from)
 }
@@ -150,11 +139,7 @@ pub fn duplicate_project(
     args: DuplicateProjectArgs,
     db_state: State<DbState>,
 ) -> CommandResult<IteProject> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let original = db.load_project(&args.project_id).map_err(CommandError::from)?;
     let now = chrono::Utc::now().timestamp_millis();

@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
+import { Modal } from '@/components/ui/Modal';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -44,20 +44,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     }))
   );
 
-  // 모달 외부 클릭 시 닫기
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
-  // ESC 키로 닫기
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
-
   // 언어 변경 핸들러
   const handleLanguageChange = (newLanguage: 'ko' | 'en') => {
     setLanguage(newLanguage);
@@ -70,14 +56,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={handleOverlayClick}
-    >
+    <Modal open onClose={onClose} labelId="app-settings-title" className="bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-editor-surface border border-editor-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="h-14 px-5 flex items-center justify-between border-b border-editor-border bg-editor-bg shrink-0">
-          <h2 className="text-lg font-bold text-editor-text">{t('appSettings.title')}</h2>
+          <h2 id="app-settings-title" className="text-lg font-bold text-editor-text">{t('appSettings.title')}</h2>
           <button 
             onClick={onClose}
             className="p-2 rounded-md hover:bg-editor-border text-editor-muted hover:text-editor-text transition-colors"
@@ -364,6 +347,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

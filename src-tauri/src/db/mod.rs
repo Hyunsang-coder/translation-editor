@@ -46,7 +46,7 @@ pub struct McpServerRow {
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
 pub struct DbState(pub Mutex<Database>);
 
-/// 데이터베이스 래퍼
+/// 데이터베이스 래퍼 (commands::AcquireDb trait에서 MutexGuard<Database> 반환용으로 pub)
 pub struct Database {
     conn: Connection,
 }

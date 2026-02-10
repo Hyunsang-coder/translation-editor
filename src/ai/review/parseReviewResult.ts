@@ -183,6 +183,8 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const severity = categorizeSeverity(severityStr);
 
       issues.push({
+        // Known limitation: segmentOrder always 0 — AI output doesn't include order;
+        // deduplication relies on segmentGroupId + type + excerpt instead.
         id: generateIssueId(0, typeStr, sourceExcerpt, targetExcerpt),
         segmentOrder: 0,
         segmentGroupId,

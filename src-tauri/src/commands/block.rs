@@ -6,6 +6,7 @@ use tauri::State;
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use super::AcquireDb;
 use crate::models::EditorBlock;
 
 /// 블록 조회
@@ -15,11 +16,7 @@ pub fn get_block(
     project_id: String,
     db_state: State<DbState>,
 ) -> CommandResult<EditorBlock> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.get_block(&block_id, &project_id)
         .map_err(CommandError::from)
@@ -32,11 +29,7 @@ pub fn update_block(
     project_id: String,
     db_state: State<DbState>,
 ) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.update_block(&block, &project_id)
         .map_err(CommandError::from)
@@ -50,11 +43,7 @@ pub fn split_block(
     project_id: String,
     db_state: State<DbState>,
 ) -> CommandResult<(EditorBlock, EditorBlock)> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     // 기존 블록 로드
     let original_block = db
@@ -133,11 +122,7 @@ pub fn merge_blocks(
         });
     }
 
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     // 모든 블록 로드
     let mut blocks = Vec::new();

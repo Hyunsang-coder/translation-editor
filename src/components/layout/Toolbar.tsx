@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, Search, MessageSquare, Cog } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
+import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
@@ -11,12 +12,15 @@ import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const openPanel = useUIStore((s) => s.openPanel);
-  const openActiveChat = useUIStore((s) => s.openActiveChat);
-  const openReviewPanel = useUIStore((s) => s.openReviewPanel);
-  const toggleSidebarCollapse = useUIStore((s) => s.toggleSidebarCollapse);
-  const leftSidebar = useUIStore((s) => s.leftSidebar);
-  const rightSidebar = useUIStore((s) => s.rightSidebar);
+  const { openPanel, openActiveChat, openReviewPanel, toggleSidebarCollapse, leftSidebar, rightSidebar } =
+    useUIStore(useShallow((s) => ({
+      openPanel: s.openPanel,
+      openActiveChat: s.openActiveChat,
+      openReviewPanel: s.openReviewPanel,
+      toggleSidebarCollapse: s.toggleSidebarCollapse,
+      leftSidebar: s.leftSidebar,
+      rightSidebar: s.rightSidebar,
+    })));
   const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);

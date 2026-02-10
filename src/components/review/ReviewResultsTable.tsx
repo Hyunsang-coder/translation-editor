@@ -12,7 +12,7 @@ interface ReviewResultsTableProps {
   onCopy?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
-  severityFilter?: Set<IssueSeverity>;
+  severityFilter?: IssueSeverity[];
   onToggleSeverity?: (severity: IssueSeverity) => void;
 }
 
@@ -108,7 +108,7 @@ export function ReviewResultsTable({
 
   // severity 필터 적용
   const filteredIssues = useMemo(
-    () => severityFilter ? issues.filter((issue) => severityFilter.has(issue.severity)) : issues,
+    () => severityFilter ? issues.filter((issue) => severityFilter.includes(issue.severity)) : issues,
     [issues, severityFilter],
   );
 
@@ -164,7 +164,7 @@ export function ReviewResultsTable({
                 type="button"
                 onClick={() => onToggleSeverity?.('critical')}
                 className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                  !severityFilter || severityFilter.has('critical')
+                  !severityFilter || severityFilter.includes('critical')
                     ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
@@ -177,7 +177,7 @@ export function ReviewResultsTable({
                 type="button"
                 onClick={() => onToggleSeverity?.('major')}
                 className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                  !severityFilter || severityFilter.has('major')
+                  !severityFilter || severityFilter.includes('major')
                     ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
@@ -190,7 +190,7 @@ export function ReviewResultsTable({
                 type="button"
                 onClick={() => onToggleSeverity?.('minor')}
                 className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                  !severityFilter || severityFilter.has('minor')
+                  !severityFilter || severityFilter.includes('minor')
                     ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}

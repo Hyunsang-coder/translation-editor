@@ -12,10 +12,6 @@ import {
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
-import { pickChatAttachmentFile } from '@/tauri/dialog';
-import { isTauriRuntime } from '@/tauri/invoke';
-import { saveTempImage } from '@/tauri/attachments';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
 import { MODEL_PRESETS } from '@/ai/config';
@@ -23,7 +19,9 @@ import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useConnectorStore } from '@/stores/connectorStore';
-import { fileToBytes, isImageMimeType, isImageFile } from '@/utils/fileUtils';
+import { useChatDragDrop } from '@/components/chat/useChatDragDrop';
+import { useChatScroll } from '@/components/chat/useChatScroll';
+import { useChatComposerHandlers } from '@/components/chat/useChatComposerHandlers';
 import type { ChatMessageMetadata, SidebarSide } from '@/types';
 import { chatPanelId } from '@/types';
 import type { Editor } from '@tiptap/react';
@@ -125,7 +123,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   // 개별 선택자 (그룹에 포함되지 않는 것들)
   const createSession = useChatStore((s) => s.createSession);
   const editorRef = useRef<Editor | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
@@ -168,9 +165,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const project = useProjectStore((s) => s.project);
 
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   // side+sessionId가 있으면 해당 sidebar의 collapsed+activePanel로 판단
   const chatPanelOpen = useUIStore((s) => {
@@ -196,58 +190,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     };
   }, []);
 
-  // Tauri 드래그 앤 드롭 이벤트 리스너
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-
-    const setupListener = async () => {
-      try {
-        const webview = getCurrentWebview();
-        const unlistenFn = await webview.onDragDropEvent(async (event) => {
-          if (cancelled) return;
-
-          if (event.payload.type === 'over') {
-            setIsDragging(true);
-          } else if (event.payload.type === 'drop') {
-            setIsDragging(false);
-            const paths = event.payload.paths;
-
-            for (const path of paths) {
-              try {
-                await addComposerAttachment(path);
-              } catch (error) {
-                console.error('Failed to add dropped file:', error);
-              }
-            }
-          } else {
-            // cancelled
-            setIsDragging(false);
-          }
-        });
-
-        // cleanup이 이미 호출된 경우 즉시 unlisten
-        if (cancelled) {
-          unlistenFn();
-        } else {
-          unlisten = unlistenFn;
-        }
-      } catch (error) {
-        console.error('Failed to setup drag drop listener:', error);
-      }
-    };
-
-    void setupListener();
-
-    return () => {
-      cancelled = true;
-      if (unlisten) {
-        unlisten();
-      }
-    };
-  }, [addComposerAttachment]);
+  // 드래그 앤 드롭 (Tauri + HTML5 fallback)
+  const { isDragging, handleDragOver, handleDragLeave, handleDrop } = useChatDragDrop(addComposerAttachment);
 
   const notionEnabled = useConnectorStore((s) => s.enabledMap['notion'] ?? false);
   const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
@@ -331,93 +275,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage(messageId, { metadata });
   }, [updateMessage]);
 
-  // 드래그 앤 드롭 핸들러 (HTML5 fallback - Tauri에서는 onDragDropEvent 사용)
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    const related = e.relatedTarget as HTMLElement | null;
-    if (related && target.contains(related)) return;
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    // Tauri에서는 onDragDropEvent를 사용하므로 여기서는 처리하지 않음
-    if (isTauriRuntime()) return;
-
-    // 브라우저 환경 fallback (개발 모드 등)
-
-    const files = e.dataTransfer.files;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file) continue;
-
-      // 이미지 파일인 경우 직접 처리 (MIME 타입 + 확장자 모두 체크)
-      if (isImageFile(file)) {
-        try {
-          const bytes = await fileToBytes(file);
-          const path = await saveTempImage(bytes, file.name);
-          await addComposerAttachment(path);
-        } catch (error) {
-          console.error('Failed to process dropped image:', error);
-        }
-      } else {
-        // 이미지가 아닌 파일은 파일 다이얼로그로 안내
-        const path = await pickChatAttachmentFile();
-        if (path) {
-          await addComposerAttachment(path);
-        }
-        break; // 다이얼로그는 한 번만 열기
-      }
-    }
-  }, [addComposerAttachment]);
-
-  // 클립보드 붙여넣기 핸들러 (이미지)
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-
-    for (const item of items) {
-      if (isImageMimeType(item.type)) {
-        e.preventDefault();
-
-        const blob = item.getAsFile();
-        if (!blob) continue;
-
-        // 파일명 생성 (클립보드 이미지는 이름이 없음)
-        const ext = item.type.split('/')[1] || 'png';
-        const filename = `clipboard-${Date.now()}.${ext}`;
-
-        try {
-          const bytes = await fileToBytes(blob);
-          const path = await saveTempImage(bytes, filename);
-          await addComposerAttachment(path);
-        } catch (error) {
-          console.error('Failed to process pasted image:', error);
-        }
-        return;
-      }
-    }
-    // 텍스트 붙여넣기는 기본 동작 유지
-  }, [addComposerAttachment]);
-
-  // 파일 첨부 버튼 클릭 핸들러
-  const handleAttachClick = useCallback(async () => {
-    if (!isTauriRuntime()) return;
-    const path = await pickChatAttachmentFile();
-    if (path) {
-      await addComposerAttachment(path);
-    }
-  }, [addComposerAttachment]);
+  // 붙여넣기/첨부 핸들러
+  const { handlePaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
 
   // sessionId prop이 변경되면 해당 세션으로 전환
   useEffect(() => {
@@ -479,37 +338,15 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     await sendMessage(message, sessionId);
   }, [localComposerText, isLoading, displaySession?.id, sendMessage, sessionId]);
 
+  // 스크롤 관리
+  const { messagesEndRef, messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
+    useChatScroll(chatPanelOpen, displaySession?.messages.length);
+
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
     if (!chatPanelOpen) return;
     editorRef.current?.commands.focus('end');
-    const timer = setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-    return () => clearTimeout(timer);
   }, [chatPanelOpen]);
-
-  // 메시지 추가 시 자동 스크롤
-  useEffect(() => {
-    if (chatPanelOpen && displaySession?.messages.length) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [displaySession?.messages.length, chatPanelOpen]);
-
-  // 스크롤 위치 감지 (맨 아래가 아니면 버튼 표시)
-  const handleMessagesScroll = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-    setShowScrollToBottom(!isAtBottom);
-  }, []);
-
-  // 최신 메시지로 스크롤
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();

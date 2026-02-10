@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Modal } from '@/components/ui/Modal';
 
 interface UpdateModalProps {
   isOpen: boolean;
@@ -29,12 +30,10 @@ export function UpdateModal({
 }: UpdateModalProps) {
   const { t } = useTranslation();
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Modal open={isOpen} onClose={onDismiss} labelId="update-modal-title" className="bg-black/50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[400px] p-6">
-        <h2 className="text-lg font-semibold mb-4">
+        <h2 id="update-modal-title" className="text-lg font-semibold mb-4">
           {t('update.newVersionAvailable', '새로운 버전이 있습니다')}
         </h2>
 
@@ -101,6 +100,6 @@ export function UpdateModal({
           </div>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

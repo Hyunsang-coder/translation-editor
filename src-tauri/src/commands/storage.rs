@@ -8,6 +8,7 @@ use tauri::{State, AppHandle, Manager};
 
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
+use super::AcquireDb;
 use crate::utils::validate_path;
 
 #[derive(Debug, Deserialize)]
@@ -50,11 +51,7 @@ pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> Comm
     // utils::validate_path (Blocklist 적용)
     let out_path = validate_path(&args.path)?;
 
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.export_db_to_file(&out_path).map_err(CommandError::from)?;
     Ok(())
@@ -63,11 +60,7 @@ pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> Comm
 /// 프로젝트 삭제(연관 데이터 포함)
 #[tauri::command]
 pub fn delete_project(args: DeleteProjectArgs, db_state: State<DbState>) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.delete_project(&args.project_id).map_err(CommandError::from)?;
     Ok(())
@@ -76,11 +69,7 @@ pub fn delete_project(args: DeleteProjectArgs, db_state: State<DbState>) -> Comm
 /// 전체 프로젝트 삭제(연관 데이터 포함)
 #[tauri::command]
 pub fn delete_all_projects(db_state: State<DbState>) -> CommandResult<()> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.delete_all_projects().map_err(CommandError::from)?;
     Ok(())
@@ -93,11 +82,7 @@ pub fn import_project_file(args: ImportDbArgs, db_state: State<DbState>) -> Comm
     // utils::validate_path (Blocklist 적용)
     let in_path = validate_path(&args.path)?;
 
-    let mut db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let mut db = db_state.acquire()?;
 
     db.import_db_from_file(&in_path).map_err(CommandError::from)?;
     db.initialize().map_err(CommandError::from)?;
@@ -129,11 +114,7 @@ pub fn import_project_file_safe(
     let ts = chrono::Utc::now().timestamp_millis();
     let backup_path = backup_dir.join(format!("backup-before-import-{}.ite", ts));
 
-    let mut db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let mut db = db_state.acquire()?;
 
     // backup current DB
     db.export_db_to_file(&backup_path).map_err(CommandError::from)?;
@@ -152,11 +133,7 @@ pub fn import_project_file_safe(
 /// DB에 저장된 프로젝트 ID 목록 조회
 #[tauri::command]
 pub fn list_project_ids(db_state: State<DbState>) -> CommandResult<Vec<String>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     db.list_project_ids().map_err(CommandError::from)
 }
@@ -164,11 +141,7 @@ pub fn list_project_ids(db_state: State<DbState>) -> CommandResult<Vec<String>> 
 /// 최근 프로젝트 목록(간단 메타 포함)
 #[tauri::command]
 pub fn list_recent_projects(db_state: State<DbState>) -> CommandResult<Vec<RecentProjectInfo>> {
-    let db = db_state.0.lock().map_err(|e| CommandError {
-        code: "LOCK_ERROR".to_string(),
-        message: format!("Failed to acquire database lock: {}", e),
-        details: None,
-    })?;
+    let db = db_state.acquire()?;
 
     let rows = db.list_recent_projects(20).map_err(CommandError::from)?;
     Ok(rows

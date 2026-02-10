@@ -102,12 +102,10 @@ export function ReviewPanel(): JSX.Element {
   // 청크 캐시 (검수/재번역에서 사용)
   const chunksRef = useRef<AlignedChunk[]>([]);
 
-  // 경과 시간 타이머
+  // 경과 시간 타이머 — 검수 완료 후에도 최종 경과 시간 보존
+  // (리셋은 startReview 호출 시 수행)
   useEffect(() => {
-    if (!isReviewing) {
-      setElapsedSeconds(0);
-      return;
-    }
+    if (!isReviewing) return;
 
     const interval = setInterval(() => {
       setElapsedSeconds((s) => s + 1);
@@ -137,6 +135,8 @@ export function ReviewPanel(): JSX.Element {
   }, [reviewTrigger]);
 
   const handleRunReview = useCallback(async () => {
+    // Snapshot: deps에 project?.id만 사용하므로 콜백 내에서 최신 project 참조
+    const project = useProjectStore.getState().project;
     if (!project) return;
 
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
@@ -149,9 +149,10 @@ export function ReviewPanel(): JSX.Element {
 
     const controller = new AbortController();
     setAbortController(controller);
+    setElapsedSeconds(0);
     startReview(freshChunks);
 
-    // Glossary 검색 (첫 청크 기반)
+    // Trade-off: glossary lookup uses only the first chunk (same as reviewTool.ts).
     let glossaryText = '';
     try {
       if (project.id && freshChunks[0]) {
@@ -225,7 +226,7 @@ export function ReviewPanel(): JSX.Element {
       setAbortController(null);
     }
   }, [
-    project,
+    project?.id,
     startReview,
     finishReview,
     addResult,
@@ -284,6 +285,7 @@ export function ReviewPanel(): JSX.Element {
     const checkedIssues = getCheckedIssues();
     if (checkedIssues.length === 0 || !project) return;
 
+    // Snapshot: avoid subscribing to sourceDocJson — only needed at click time
     const sourceDocJson = useProjectStore.getState().sourceDocJson;
     if (!sourceDocJson) {
       useUIStore.getState().addToast({
@@ -305,6 +307,7 @@ export function ReviewPanel(): JSX.Element {
     const checkedIssues = getCheckedIssues();
     if (checkedIssues.length === 0 || !project) return;
 
+    // Snapshot: sourceDocJson/chatStore state read at execute time, not subscribed
     const sourceDocJson = useProjectStore.getState().sourceDocJson;
     if (!sourceDocJson) return;
 
@@ -426,7 +429,7 @@ export function ReviewPanel(): JSX.Element {
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-editor-bg">
       {/* 콘텐츠 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
         {results.length === 0 && !isReviewing ? (
           // 검수 시작 전 초기 상태
           <div className="space-y-6">
@@ -609,6 +612,7 @@ export function ReviewPanel(): JSX.Element {
       </div>
 
       {/* 재번역 미리보기 모달 (기존 번역 diff UI 사용) */}
+      {/* Snapshot: sourceDocument/targetDocument read at render — fresh on every modal open */}
       <TranslatePreviewModal
         open={retranslatePreviewOpen}
         title={t('review.retranslate.preview', '재번역 미리보기')}

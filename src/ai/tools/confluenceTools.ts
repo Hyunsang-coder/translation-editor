@@ -159,6 +159,7 @@ interface CachedPage {
   cachedAt: number;
 }
 const PAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+const MAX_PAGE_CACHE_SIZE = 50;
 const pageCache = new Map<string, CachedPage>();
 
 /**
@@ -202,6 +203,12 @@ function getFromCache(pageId: string, preferredFormat: PageContentFormat = 'adf'
  * 페이지 캐시에 저장 (형식별 분리)
  */
 function saveToCache(pageId: string, content: string | AdfDocument, format: PageContentFormat): void {
+  // 캐시 크기 제한: 오래된 항목부터 제거 (Map은 삽입 순서 유지)
+  if (pageCache.size >= MAX_PAGE_CACHE_SIZE && !pageCache.has(pageId)) {
+    const oldestKey = pageCache.keys().next().value;
+    if (oldestKey) pageCache.delete(oldestKey);
+  }
+
   const existing = pageCache.get(pageId);
   const now = Date.now();
 

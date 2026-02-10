@@ -313,7 +313,8 @@ export const reviewTranslationTool = tool(
     // Translation Rules, Project Context, Attachments 가져오기
     const { translationRules, projectContext, attachments } = useChatStore.getState();
 
-    // Glossary 검색 (첫 번째 청크 기반)
+    // Trade-off: glossary lookup uses only the first chunk to keep prompt size manageable.
+    // Multi-chunk glossary would require per-chunk search or merging, adding latency with diminishing returns.
     let glossaryText = '';
     try {
       if (project.id) {

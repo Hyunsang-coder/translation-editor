@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Modal } from '@/components/ui/Modal';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
@@ -154,18 +155,11 @@ ${segmentsText}
   const hasErrors = results.some((r) => r.error);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isReviewing) {
-          handleClose();
-        }
-      }}
-    >
+    <Modal open={open} onClose={handleClose} labelId="review-modal-title" className="bg-black/50" closeOnOverlay={!isReviewing}>
       <div className="bg-editor-surface rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col mx-4">
         {/* Header */}
         <div className="px-6 py-4 border-b border-editor-border flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-editor-text">
+          <h2 id="review-modal-title" className="text-lg font-semibold text-editor-text">
             {t('review.title', '번역 검수 결과')}
           </h2>
           <button
@@ -251,6 +245,6 @@ ${segmentsText}
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
