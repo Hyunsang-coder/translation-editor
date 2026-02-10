@@ -21,11 +21,8 @@ import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
-/**
- * Source 패널용 편집 가능 에디터
- * ReviewHighlight Extension이 포함되어 검수 이슈 하이라이트 지원 (sourceExcerpt 기반)
- */
-export interface SourceTargetEditorProps {
+export interface TipTapEditorProps {
+  panelType: 'source' | 'target';
   content: string;
   onChange?: (content: string) => void;
   onJsonChange?: (json: Record<string, unknown>) => void;
@@ -35,14 +32,16 @@ export interface SourceTargetEditorProps {
   onSearchOpenWithReplace?: () => void;
 }
 
-export function SourceTipTapEditor({
+function TipTapEditor({
+  panelType,
   content,
   onChange,
   onJsonChange,
   className = '',
   onEditorReady,
   onSearchOpen,
-}: SourceTargetEditorProps): JSX.Element {
+  onSearchOpenWithReplace,
+}: TipTapEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
   const pasteImageMode = useUIStore((s) => s.pasteImageMode);
@@ -66,7 +65,7 @@ export function SourceTipTapEditor({
         history: { depth: 100, newGroupDelay: 500 },
       }),
       Placeholder.configure({
-        placeholder: t('editor.sourcePlaceholder'),
+        placeholder: t(panelType === 'source' ? 'editor.sourcePlaceholder' : 'editor.targetPlaceholder'),
         emptyEditorClass: 'tiptap-empty',
       }),
       Table.configure({ resizable: true }),
@@ -80,7 +79,7 @@ export function SourceTipTapEditor({
       Superscript,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
-        excerptField: 'sourceExcerpt',
+        excerptField: panelType === 'source' ? 'sourceExcerpt' : 'targetExcerpt',
       }),
       SearchHighlight.configure({
         searchClass: 'search-match',
@@ -96,174 +95,7 @@ export function SourceTipTapEditor({
       }));
     }
     return base;
-  }, [imageExtension, pasteLinkPreserve, t]);
-
-  const lastContentRef = useRef<string>(content);
-
-  const editor = useEditor({
-    extensions,
-    content,
-    editable: true,
-    editorProps: {
-      attributes: {
-        class: 'tiptap-editor focus:outline-none',
-      },
-      transformPastedHTML: (html) => {
-        // 항상 최신 설정값을 읽어서 stale closure 문제 방지
-        const { pasteImageMode: imgMode } = useUIStore.getState();
-        const removeImages = imgMode === 'ignore';
-        if (removeImages) {
-          return normalizePastedHtml(html, { removeImages });
-        }
-        return normalizePastedHtml(html);
-      },
-      handleKeyDown: (_view, event) => {
-        // Cmd+F: 검색 열기
-        const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
-        if (isSearchShortcut) {
-          event.preventDefault();
-          onSearchOpen?.();
-          return true;
-        }
-
-        const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
-          (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
-
-        if (isSelectionShortcut && editor) {
-          const { from, to } = editor.state.selection;
-          if (from === to) return false;
-
-          event.preventDefault();
-          const selected = editor.state.doc.textBetween(from, to, ' ').trim();
-
-          const { openActiveChat } = useUIStore.getState();
-          const { appendComposerText, requestComposerFocus } = useChatStore.getState();
-
-          // Chat 패널 열기
-          openActiveChat();
-          if (selected.length > 0) {
-            appendComposerText(selected);
-          }
-          requestComposerFocus();
-          return true;
-        }
-
-        return false;
-      },
-    },
-    onCreate: ({ editor: ed }) => {
-      lastContentRef.current = ed.getHTML();
-      if (onJsonChange) {
-        onJsonChange(ed.getJSON() as Record<string, unknown>);
-      }
-    },
-    onUpdate: ({ editor: ed }) => {
-      const html = ed.getHTML();
-      lastContentRef.current = html;
-      if (onChange) {
-        onChange(html);
-      }
-      if (onJsonChange) {
-        onJsonChange(ed.getJSON() as Record<string, unknown>);
-      }
-    },
-  }, [extensions]);
-
-  // 외부 content 변경 시 에디터 업데이트 (lastContentRef로 비교하여 false positive 방지)
-  useEffect(() => {
-    if (!editor) return;
-    if (content === lastContentRef.current) return;
-    replaceDocContent(editor, content, { addToHistory: false });
-  }, [editor, content]);
-
-  // 에디터 준비 완료 콜백
-  useEffect(() => {
-    if (editor && onEditorReady) {
-      onEditorReady(editor);
-    }
-  }, [editor, onEditorReady]);
-
-  // highlightNonce 변경 시 decoration 새로고침
-  useEffect(() => {
-    if (editor && highlightNonce > 0) {
-      refreshEditorHighlight(editor);
-    }
-  }, [editor, highlightNonce]);
-
-  if (!editor) {
-    return <div className="h-full animate-pulse bg-editor-surface rounded-md" />;
-  }
-
-  return (
-    <div className={`tiptap-wrapper source-editor ${className}`}>
-      <EditorContent editor={editor} className="h-full" />
-    </div>
-  );
-}
-
-/**
- * Target 패널용 편집 가능 에디터
- * ReviewHighlight Extension이 포함되어 검수 이슈 하이라이트 지원
- */
-export function TargetTipTapEditor({
-  content,
-  onChange,
-  onJsonChange,
-  className = '',
-  onEditorReady,
-  onSearchOpen,
-  onSearchOpenWithReplace,
-}: SourceTargetEditorProps): JSX.Element {
-  const { t } = useTranslation();
-  const highlightNonce = useReviewStore((s) => s.highlightNonce);
-  const pasteImageMode = useUIStore((s) => s.pasteImageMode);
-  const pasteLinkPreserve = useUIStore((s) => s.pasteLinkPreserve);
-
-  const imageExtension = useMemo(() => {
-    if (pasteImageMode === 'original') {
-      return ImageOriginal.configure({ inline: true, allowBase64: true });
-    }
-    return ImagePlaceholder.configure({ inline: true, allowBase64: true });
-  }, [pasteImageMode]);
-
-  const extensions = useMemo(() => {
-    const base = [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-        history: { depth: 100, newGroupDelay: 500 },
-      }),
-      Placeholder.configure({
-        placeholder: t('editor.targetPlaceholder'),
-        emptyEditorClass: 'tiptap-empty',
-      }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      imageExtension,
-      Underline,
-      Highlight.configure({ multicolor: false }),
-      Subscript,
-      Superscript,
-      ReviewHighlight.configure({
-        highlightClass: 'review-highlight',
-        excerptField: 'targetExcerpt',
-      }),
-      SearchHighlight.configure({
-        searchClass: 'search-match',
-        currentClass: 'search-current',
-      }),
-    ];
-    if (pasteLinkPreserve) {
-      base.splice(1, 0, Link.configure({
-        openOnClick: false,
-        autolink: false,
-        linkOnPaste: false,
-        HTMLAttributes: { class: 'tiptap-link' },
-      }));
-    }
-    return base;
-  }, [imageExtension, pasteLinkPreserve, t]);
+  }, [imageExtension, pasteLinkPreserve, t, panelType]);
 
   const lastContentRef = useRef<string>(content);
 
@@ -294,11 +126,13 @@ export function TargetTipTapEditor({
         }
 
         // Cmd+H: 검색+치환 열기 (target 패널 전용)
-        const isReplaceShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'h';
-        if (isReplaceShortcut) {
-          event.preventDefault();
-          onSearchOpenWithReplace?.();
-          return true;
+        if (panelType === 'target') {
+          const isReplaceShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'h';
+          if (isReplaceShortcut) {
+            event.preventDefault();
+            onSearchOpenWithReplace?.();
+            return true;
+          }
         }
 
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
@@ -370,9 +204,19 @@ export function TargetTipTapEditor({
   }
 
   return (
-    <div className={`tiptap-wrapper target-editor ${className}`}>
+    <div className={`tiptap-wrapper ${panelType}-editor ${className}`}>
       <EditorContent editor={editor} className="h-full" />
     </div>
   );
 }
 
+// 하위 호환 래퍼
+type PanellessProps = Omit<TipTapEditorProps, 'panelType'>;
+
+export function SourceTipTapEditor(props: PanellessProps): JSX.Element {
+  return TipTapEditor({ ...props, panelType: 'source' });
+}
+
+export function TargetTipTapEditor(props: PanellessProps): JSX.Element {
+  return TipTapEditor({ ...props, panelType: 'target' });
+}
