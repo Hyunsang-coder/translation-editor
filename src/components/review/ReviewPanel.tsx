@@ -447,17 +447,16 @@ export function ReviewPanel(): JSX.Element {
           <div className="space-y-4">
             {/* 상태 표시 영역 */}
             <div className="p-4 bg-editor-surface rounded-lg border border-editor-border space-y-3">
-              {/* 헤더: 도트 애니메이션 + 텍스트 + 경과 시간 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium shimmer-text">
-                    {t('review.analyzing', '번역을 분석하고 있습니다...')}
-                  </span>
-                </div>
-                <span className="text-xs text-editor-muted tabular-nums">
-                  {t('review.elapsed', { seconds: elapsedSeconds })}
+              {/* 헤더: 분석 중 텍스트 */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium shimmer-text">
+                  {t('review.analyzing', '번역을 분석하고 있습니다...')}
                 </span>
               </div>
+              {/* 경과 시간 */}
+              <span className="text-xs text-editor-muted tabular-nums">
+                {t('review.elapsed', { seconds: elapsedSeconds })}
+              </span>
 
               {/* 진행률 바 */}
               {progress.total > 0 && (
