@@ -111,7 +111,7 @@ interface UIActions {
   findPanelSide: (panel: PanelType) => SidebarSide | null;
 
   // === Chat Session Panel Actions ===
-  addChatPanel: (sessionId: string) => void;
+  addChatPanel: (sessionId: string, preferSide?: SidebarSide) => void;
   removeChatPanel: (sessionId: string) => void;
   syncChatPanels: (sessionIds: string[]) => void;
   openActiveChat: () => void;
@@ -449,14 +449,14 @@ export const useUIStore = create<UIStore>()(
       },
 
       // === Chat Session Panel Actions ===
-      addChatPanel: (sessionId: string): void => {
+      addChatPanel: (sessionId: string, preferSide?: SidebarSide): void => {
         const panel: ChatPanelType = chatPanelId(sessionId);
         const state = get();
         // 이미 어느 쪽에든 있으면 무시
         if (state.leftSidebar.panels.includes(panel) || state.rightSidebar.panels.includes(panel)) return;
-        // 기본: right sidebar에 추가
-        const sb = state.rightSidebar;
-        set({ rightSidebar: { ...sb, panels: [...sb.panels, panel], activePanel: panel, collapsed: false } });
+        const key = sidebarKey(preferSide ?? 'right');
+        const sb = state[key];
+        set({ [key]: { ...sb, panels: [...sb.panels, panel], activePanel: panel, collapsed: false } });
       },
 
       removeChatPanel: (sessionId: string): void => {

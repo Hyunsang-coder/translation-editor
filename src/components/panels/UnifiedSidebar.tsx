@@ -8,7 +8,7 @@ import { ReviewPanel } from '@/components/review/ReviewPanel';
 import { ChatContent } from '@/components/chat/ChatContent';
 import { useResizeHandle } from '@/hooks/useResizeHandle';
 import type { SidebarSide, PanelType, PanelDragData } from '@/types';
-import { isChatPanel, getChatSessionId } from '@/types';
+import { isChatPanel, getChatSessionId, chatPanelId } from '@/types';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
 interface UnifiedSidebarProps {
@@ -175,12 +175,16 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     }
   }, [t]);
 
-  // + 버튼: 새 채팅 세션 추가
+  // + 버튼: 새 채팅 세션 추가 (현재 사이드에 생성)
   const handleAddChatSession = useCallback(() => {
     const store = useChatStore.getState();
     if (store.isSessionLimitReached()) return;
-    store.createSession();
-  }, []);
+    const sessionId = store.createSession();
+    if (sessionId && side !== 'right') {
+      // createSession → addChatPanel이 기본 right에 추가하므로, left면 이동
+      useUIStore.getState().movePanel(chatPanelId(sessionId), 'right', side);
+    }
+  }, [side]);
 
   // 채팅 탭이 있는지 확인 (+ 버튼 표시 여부)
   const hasChatPanels = panels.some(isChatPanel);
