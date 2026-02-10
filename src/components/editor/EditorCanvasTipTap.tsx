@@ -427,14 +427,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleFocusMode}
-            className="px-2 py-1 rounded text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-            title={t('toolbar.focusMode')}
-          >
-            {focusMode ? t('editor.showSource', '원문 보이기') : t('editor.hideSource', '원문 숨기기')}
-          </button>
           <Select
             value={translationModel}
             onChange={setTranslationModel}
@@ -485,9 +477,19 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 } as CSSProperties}
               >
                 <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
-                  <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
-                    {t('editor.source').toUpperCase()}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                      {t('editor.source').toUpperCase()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={toggleFocusMode}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-amber-600 hover:bg-amber-500/10 transition-colors"
+                      title={t('editor.hideSource')}
+                    >
+                      {t('editor.hideSource')}
+                    </button>
+                  </div>
                   <span className="text-[10px] text-editor-muted">
                     {sourceWordCount.toLocaleString()} {t('editor.words')}
                   </span>
@@ -541,6 +543,16 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                   {t('editor.target').toUpperCase()}
                 </span>
+                {focusMode && (
+                  <button
+                    type="button"
+                    onClick={toggleFocusMode}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-amber-600 hover:bg-amber-500/10 transition-colors"
+                    title={t('editor.showSource')}
+                  >
+                    {t('editor.showSource')}
+                  </button>
+                )}
                 <Select
                   value={project.metadata.targetLanguage || ''}
                   onChange={setTargetLanguage}

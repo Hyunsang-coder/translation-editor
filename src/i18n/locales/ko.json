@@ -173,8 +173,8 @@
     },
     "review": "검수",
     "reviewTitle": "번역 검수",
-    "hideSource": "원문 숨기기",
-    "showSource": "원문 보이기",
+    "hideSource": "숨기기",
+    "showSource": "원문 표시",
     "chunks": "섹션",
     "completedIn": "완료",
     "search": {
