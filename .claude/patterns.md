@@ -323,7 +323,7 @@ resizeImageForApi()   // Progressive resize for API limits
 // Results Table: src/components/review/ReviewResultsTable.tsx
 // Layout: table-fixed with 1:2:3 column ratio
 // Combined column: checkbox, #, severity, type (vertical flex layout)
-// Columns: combined (16.67%), suggestedFix (33.33%), description (50%)
+// Columns: combined (16.67%), suggestedFix (50%), description (33.33%)
 // Container: flex-1 overflow-y-auto for full-height usage
 ```
 

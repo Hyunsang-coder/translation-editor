@@ -163,7 +163,7 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('critical')}
-                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.has('critical')
                     ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
@@ -176,7 +176,7 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('major')}
-                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.has('major')
                     ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
@@ -189,7 +189,7 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('minor')}
-                className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.has('minor')
                     ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
@@ -203,32 +203,32 @@ export function ReviewResultsTable({
         {/* 유형별 요약 */}
         <div className="flex items-center gap-2 flex-wrap">
           {counts.mistranslation && (
-            <span className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 dark:text-red-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-600 dark:text-red-400">
               {t('review.typeMistranslation', '오역')} {counts.mistranslation}
             </span>
           )}
           {counts.omission && (
-            <span className="px-2 py-0.5 rounded text-xs bg-orange-500/10 text-orange-600 dark:text-orange-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-orange-500/10 text-orange-600 dark:text-orange-400">
               {t('review.typeOmission', '누락')} {counts.omission}
             </span>
           )}
           {counts.addition && (
-            <span className="px-2 py-0.5 rounded text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400">
               {t('review.typeAddition', '추가')} {counts.addition}
             </span>
           )}
           {counts.grammar && (
-            <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
               {t('review.typeGrammar', '문법')} {counts.grammar}
             </span>
           )}
           {counts.awkward && (
-            <span className="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400">
               {t('review.typeAwkward', '직역투')} {counts.awkward}
             </span>
           )}
           {counts.terminology && (
-            <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <span className="px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400">
               {t('review.typeTerminology', '용어')} {counts.terminology}
             </span>
           )}
@@ -240,7 +240,7 @@ export function ReviewResultsTable({
         <table className="w-full text-xs table-fixed">
           <thead className="sticky top-0 bg-editor-surface z-10">
             <tr className="border-b border-editor-border">
-              {/* 통합 컬럼 헤더 (1:2:3 비율 중 1) */}
+              {/* 통합 컬럼 헤더 (16.67%) */}
               <th className="px-2 py-2 text-center font-medium text-editor-muted w-[16.67%] min-w-[80px]">
                 <input
                   type="checkbox"
@@ -250,12 +250,12 @@ export function ReviewResultsTable({
                   aria-label={t('review.selectAll', '전체 선택')}
                 />
               </th>
-              {/* 수정 제안 (1:2:3 비율 중 2) */}
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[33.33%] min-w-[180px]">
+              {/* 수정 제안 (50%) */}
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[50%] min-w-[180px]">
                 {t('review.suggestedFix', '수정 제안')}
               </th>
-              {/* 설명 (1:2:3 비율 중 3) */}
-              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[50%] min-w-[200px]">
+              {/* 설명 (33.33%) */}
+              <th className="px-3 py-2 text-left font-medium text-editor-muted w-[33.33%] min-w-[180px]">
                 {t('review.description', '설명')}
               </th>
             </tr>
@@ -281,21 +281,21 @@ export function ReviewResultsTable({
                       aria-label={t('review.selectIssue', '이슈 선택')}
                     />
                     {/* 번호 */}
-                    <span className="text-editor-muted font-medium text-xs">
+                    <span className="text-editor-muted font-medium text-[10px]">
                       {idx + 1}
                     </span>
                     {/* 심각도 */}
-                    <span className={`text-xs font-medium ${getSeverityColor(issue.severity)}`}>
+                    <span className={`text-[10px] font-medium ${getSeverityColor(issue.severity)}`}>
                       {getSeverityLabel(issue.severity)}
                     </span>
                     {/* 유형 */}
-                    <span className={`px-1.5 py-0.5 rounded text-xs whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
                       {getIssueTypeLabel(issue.type)}
                     </span>
                   </div>
                 </td>
-                {/* 수정 제안 (1:2:3 비율 중 2) */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top w-[33.33%] min-w-[180px]">
+                {/* 수정 제안 */}
+                <td className="px-3 py-2 text-editor-text text-xs align-top w-[50%] min-w-[180px]">
                   <div className="flex flex-col gap-1.5">
                     <span className="break-words">
                       {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
@@ -324,14 +324,14 @@ export function ReviewResultsTable({
                     </div>
                   </div>
                 </td>
-                {/* 설명 (1:2:3 비율 중 3) */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top w-[50%] min-w-[200px]">
+                {/* 설명 (bullet 없음) */}
+                <td className="px-3 py-2 text-editor-text text-xs align-top w-[33.33%] min-w-[180px]">
                   {issue.description ? (
-                    <ul className="list-disc list-inside space-y-0.5">
+                    <div className="space-y-0.5">
                       {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
-                        <li key={`${issue.id}-desc-${i}`} className="break-words">{item}</li>
+                        <div key={`${issue.id}-desc-${i}`} className="break-words">{item}</div>
                       ))}
-                    </ul>
+                    </div>
                   ) : '-'}
                 </td>
               </tr>
