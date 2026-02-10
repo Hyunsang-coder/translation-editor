@@ -126,3 +126,52 @@ export function useChatCoreState() {
     }))
   );
 }
+
+/**
+ * 특정 세션의 스트리밍 상태 (듀얼 사이드바용)
+ * sessionId가 현재 스트리밍 세션과 일치할 때만 스트리밍 상태 반환
+ */
+export function useSessionStreamingState(sessionId: string) {
+  return useBaseStore(
+    useShallow((s) => ({
+      isStreaming: s.streamingSessionId === sessionId && s.streamingMessageId !== null,
+      streamingMessageId: s.streamingSessionId === sessionId ? s.streamingMessageId : null,
+      streamingContent: s.streamingSessionId === sessionId ? s.streamingContent : null,
+      streamingMetadata: s.streamingSessionId === sessionId ? s.streamingMetadata : null,
+      statusMessage: s.streamingSessionId === sessionId ? s.statusMessage : null,
+      isLoading: s.streamingSessionId === sessionId ? s.isLoading : false,
+    }))
+  );
+}
+
+/**
+ * 특정 세션의 메시지 목록
+ */
+export function useSessionMessages(sessionId: string) {
+  return useBaseStore(
+    useShallow((s) => {
+      const session = s.sessions.find((ss) => ss.id === sessionId);
+      return {
+        messages: session?.messages ?? [],
+        sessionExists: !!session,
+      };
+    })
+  );
+}
+
+/**
+ * 특정 세션의 검색 관련 상태
+ */
+export function useSessionSearchState(sessionId: string) {
+  return useBaseStore(
+    useShallow((s) => {
+      const session = s.sessions.find((ss) => ss.id === sessionId);
+      return {
+        webSearchEnabled: s.webSearchEnabled,
+        confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
+        setWebSearchEnabled: s.setWebSearchEnabled,
+        setConfluenceSearchEnabled: s.setConfluenceSearchEnabled,
+      };
+    })
+  );
+}

@@ -146,6 +146,8 @@ interface ChatState {
   /** finalization 진행 중 여부 (Race Condition 방지) */
   isFinalizingStreaming: boolean;
   streamingMessageId: string | null;
+  /** 스트리밍 중인 메시지가 속한 세션 ID (듀얼 사이드바 격리용) */
+  streamingSessionId: string | null;
   /** 스트리밍 중인 메시지 콘텐츠 (배열 갱신 없이 단일 필드만 업데이트) */
   streamingContent: string | null;
   /** 스트리밍 중인 메시지의 메타데이터 */
@@ -187,25 +189,26 @@ interface ChatActions {
   renameSession: (sessionId: string, name: string) => void;
 
   // 메시지 관리
-  sendMessage: (content: string) => Promise<void>;
-  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string | null;
+  sendMessage: (content: string, targetSessionId?: string) => Promise<void>;
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, targetSessionId?: string) => string | null;
   updateMessage: (
     messageId: string,
     patch: Partial<Omit<ChatMessage, 'id' | 'timestamp'>>,
+    targetSessionId?: string,
   ) => void;
   /**
    * 메시지 수정: 해당 메시지 이후 대화는 truncate됩니다.
    */
-  editMessage: (messageId: string, nextContent: string) => void;
+  editMessage: (messageId: string, nextContent: string, targetSessionId?: string) => void;
   /**
    * 메시지 수정 후 같은 내용으로 다시 호출
    */
-  replayMessage: (messageId: string) => Promise<void>;
+  replayMessage: (messageId: string, targetSessionId?: string) => Promise<void>;
   /**
    * 메시지 삭제: 해당 메시지(포함) 이후 대화는 truncate됩니다.
    */
-  deleteMessageFrom: (messageId: string) => void;
-  clearMessages: () => void;
+  deleteMessageFrom: (messageId: string, targetSessionId?: string) => void;
+  clearMessages: (targetSessionId?: string) => void;
 
   // Composer
   setComposerText: (text: string) => void;
@@ -342,6 +345,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     isLoading: false,
     isFinalizingStreaming: false,
     streamingMessageId: null,
+    streamingSessionId: null,
     streamingContent: null,
     streamingMetadata: null,
     error: null,
@@ -416,6 +420,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           composerAttachments: [],
           attachments: [],
           streamingMessageId: null,
+          streamingSessionId: null,
           streamingContent: null,
           streamingMetadata: null,
           isLoading: false,
@@ -438,6 +443,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
         attachments: [],
         composerAttachments: [],
         streamingMessageId: null,
+        streamingSessionId: null,
         streamingContent: null,
         streamingMetadata: null,
         isLoading: false,
@@ -860,7 +866,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           metadata: { model: cfg.model, toolCallsInProgress: [] },
         });
         if (assistantId) {
-          set({ streamingMessageId: assistantId });
+          set({ streamingMessageId: assistantId, streamingSessionId: get().currentSessionId });
         }
 
         const replyMasked = await streamAssistantReply(
@@ -995,6 +1001,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           set({
             isLoading: false,
             streamingMessageId: null,
+            streamingSessionId: null,
             streamingContent: null,
             streamingMetadata: null,
             statusMessage: null,
@@ -1022,6 +1029,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          streamingSessionId: null,
           streamingContent: null,
           streamingMetadata: null,
           statusMessage: null,
@@ -1092,9 +1100,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
 
     // 메시지 추가
-    addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>): string | null => {
-      const { currentSession, currentSessionId } = get();
-      if (!currentSession || !currentSessionId) return null;
+    addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, targetSessionId?: string): string | null => {
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
+      if (!session || !resolvedSessionId) return null;
 
       const { metadata, ...rest } = message;
       const newMessage: ChatMessage = {
@@ -1105,23 +1114,29 @@ export const useChatStore = create<ChatStore>((set, get) => {
       } as ChatMessage;
 
       // 메시지 제한 초과 시 오래된 메시지 삭제
-      let existingMessages = currentSession.messages;
+      let existingMessages = session.messages;
       if (existingMessages.length >= MAX_MESSAGES_PER_SESSION) {
         // 오래된 메시지 1개 삭제 (FIFO)
         existingMessages = existingMessages.slice(1);
       }
 
       const updatedSession: ChatSession = {
-        ...currentSession,
+        ...session,
         messages: [...existingMessages, newMessage],
       };
 
-      set((state) => ({
-        sessions: state.sessions.map((s) =>
-          s.id === currentSessionId ? updatedSession : s
-        ),
-        currentSession: updatedSession,
-      }));
+      set((state) => {
+        const newState = {
+          sessions: state.sessions.map((s) =>
+            s.id === resolvedSessionId ? updatedSession : s
+          ),
+        } as any;
+        // currentSession만 업데이트하는 경우: 현재 활성 세션이면 업데이트
+        if (resolvedSessionId === state.currentSessionId) {
+          newState.currentSession = updatedSession;
+        }
+        return newState;
+      });
       schedulePersist();
       return newMessage.id;
     },
@@ -1129,11 +1144,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
     updateMessage: (
       messageId: string,
       patch: Partial<Omit<ChatMessage, 'id' | 'timestamp'>>,
+      targetSessionId?: string,
     ): void => {
-      const { currentSession, currentSessionId } = get();
-      if (!currentSession || !currentSessionId) return;
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
+      if (!session || !resolvedSessionId) return;
 
-      const updatedMessages = currentSession.messages.map((m) => {
+      const updatedMessages = session.messages.map((m) => {
         if (m.id !== messageId) return m;
         const { metadata, ...rest } = patch;
         return {
@@ -1143,31 +1160,37 @@ export const useChatStore = create<ChatStore>((set, get) => {
         };
       });
 
-      const updatedSession: ChatSession = { ...currentSession, messages: updatedMessages };
+      const updatedSession: ChatSession = { ...session, messages: updatedMessages };
 
-      set((state) => ({
-        sessions: state.sessions.map((s) =>
-          s.id === currentSessionId ? updatedSession : s
-        ),
-        currentSession: updatedSession,
-      }));
+      set((state) => {
+        const newState = {
+          sessions: state.sessions.map((s) =>
+            s.id === resolvedSessionId ? updatedSession : s
+          ),
+        } as any;
+        if (resolvedSessionId === state.currentSessionId) {
+          newState.currentSession = updatedSession;
+        }
+        return newState;
+      });
       schedulePersist();
     },
 
-    editMessage: (messageId: string, nextContent: string): void => {
-      const { currentSession, currentSessionId } = get();
-      if (!currentSession || !currentSessionId) return;
+    editMessage: (messageId: string, nextContent: string, targetSessionId?: string): void => {
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
+      if (!session || !resolvedSessionId) return;
 
-      const idx = currentSession.messages.findIndex((m) => m.id === messageId);
+      const idx = session.messages.findIndex((m) => m.id === messageId);
       if (idx < 0) return;
 
-      const target = currentSession.messages[idx];
+      const target = session.messages[idx];
       if (!target) return;
 
       const trimmed = nextContent.trim();
       if (!trimmed) return;
 
-      const updatedMessages = currentSession.messages.slice(0, idx + 1).map((m) => {
+      const updatedMessages = session.messages.slice(0, idx + 1).map((m) => {
         if (m.id !== messageId) return m;
         return {
           ...m,
@@ -1180,18 +1203,24 @@ export const useChatStore = create<ChatStore>((set, get) => {
         };
       });
 
-      const updatedSession: ChatSession = { ...currentSession, messages: updatedMessages };
-      set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === currentSessionId ? updatedSession : s)),
-        currentSession: updatedSession,
-        streamingMessageId: null,
-        isLoading: false,
-      }));
+      const updatedSession: ChatSession = { ...session, messages: updatedMessages };
+      set((state) => {
+        const newState: any = {
+          sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
+          streamingMessageId: null,
+          isLoading: false,
+        };
+        if (resolvedSessionId === state.currentSessionId) {
+          newState.currentSession = updatedSession;
+        }
+        return newState;
+      });
       schedulePersist();
     },
 
-    replayMessage: async (messageId: string): Promise<void> => {
-      const session = get().currentSession;
+    replayMessage: async (messageId: string, targetSessionId?: string): Promise<void> => {
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
       if (!session) return;
 
       const targetMessage = session.messages.find((m) => m.id === messageId);
@@ -1298,7 +1327,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           metadata: { model: cfg.model, toolCallsInProgress: [] },
         });
         if (assistantId) {
-          set({ streamingMessageId: assistantId });
+          set({ streamingMessageId: assistantId, streamingSessionId: get().currentSessionId });
         }
 
         const replyMasked = await streamAssistantReply(
@@ -1439,6 +1468,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           set({
             isLoading: false,
             streamingMessageId: null,
+            streamingSessionId: null,
             streamingContent: null,
             streamingMetadata: null,
             statusMessage: null,
@@ -1464,6 +1494,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           error: errText,
           isLoading: false,
           streamingMessageId: null,
+          streamingSessionId: null,
           streamingContent: null,
           streamingMetadata: null,
           statusMessage: null,
@@ -1473,9 +1504,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
       }
     },
 
-    deleteMessageFrom: (messageId: string): void => {
-      const { currentSession, currentSessionId } = get();
-      if (!currentSession || !currentSessionId) return;
+    deleteMessageFrom: (messageId: string, targetSessionId?: string): void => {
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
+      if (!session || !resolvedSessionId) return;
 
       // 진행 중인 API 요청 취소
       const abortController = get().abortController;
@@ -1483,37 +1515,48 @@ export const useChatStore = create<ChatStore>((set, get) => {
         abortController.abort();
       }
 
-      const idx = currentSession.messages.findIndex((m) => m.id === messageId);
+      const idx = session.messages.findIndex((m) => m.id === messageId);
       if (idx < 0) return;
 
-      const updatedMessages = currentSession.messages.slice(0, idx);
-      const updatedSession: ChatSession = { ...currentSession, messages: updatedMessages };
-      set((state) => ({
-        sessions: state.sessions.map((s) => (s.id === currentSessionId ? updatedSession : s)),
-        currentSession: updatedSession,
-        streamingMessageId: null,
-        isLoading: false,
-        abortController: null,
-      }));
+      const updatedMessages = session.messages.slice(0, idx);
+      const updatedSession: ChatSession = { ...session, messages: updatedMessages };
+      set((state) => {
+        const newState: any = {
+          sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
+          streamingMessageId: null,
+          isLoading: false,
+          abortController: null,
+        };
+        if (resolvedSessionId === state.currentSessionId) {
+          newState.currentSession = updatedSession;
+        }
+        return newState;
+      });
       schedulePersist();
     },
 
     // 메시지 초기화
-    clearMessages: (): void => {
-      const { currentSession, currentSessionId } = get();
-      if (!currentSession || !currentSessionId) return;
+    clearMessages: (targetSessionId?: string): void => {
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const session = get().sessions.find((s) => s.id === resolvedSessionId);
+      if (!session || !resolvedSessionId) return;
 
       const updatedSession: ChatSession = {
-        ...currentSession,
+        ...session,
         messages: [],
       };
 
-      set((state) => ({
-        sessions: state.sessions.map((s) =>
-          s.id === currentSessionId ? updatedSession : s
-        ),
-        currentSession: updatedSession,
-      }));
+      set((state) => {
+        const newState: any = {
+          sessions: state.sessions.map((s) =>
+            s.id === resolvedSessionId ? updatedSession : s
+          ),
+        };
+        if (resolvedSessionId === state.currentSessionId) {
+          newState.currentSession = updatedSession;
+        }
+        return newState;
+      });
       schedulePersist();
     },
 
@@ -1767,6 +1810,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           streamingContent: null,
           streamingMetadata: null,
           streamingMessageId: null,
+          streamingSessionId: null,
           isLoading: false,
           statusMessage: null,
           isFinalizingStreaming: false,
