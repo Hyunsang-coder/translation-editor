@@ -1,23 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 import pkg from './package.json';
 
 // package.json에서 버전 정보를 가져옴
 const appVersion = pkg.version;
 
 const host = process.env.TAURI_DEV_HOST;
-const monacoPlugin =
-  // vite-plugin-monaco-editor는 CJS로 배포되며 exports.default에 실제 플러그인 함수가 들어있습니다.
-  // ESM 환경(vite.config.ts)에서는 default import가 exports 객체로 들어올 수 있어 안전하게 처리합니다.
-  ((monacoEditorPlugin as unknown as { default?: typeof monacoEditorPlugin }).default ??
-    (monacoEditorPlugin as unknown)) as unknown as (options?: {
-    languageWorkers?: string[];
-    publicPath?: string;
-    globalAPI?: boolean;
-    forceBuildCDN?: boolean;
-  }) => unknown;
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -44,13 +33,6 @@ export default defineConfig(({ command }) => {
 
     plugins: [
       react(),
-      monacoPlugin({
-        // 문서 편집(plaintext) 중심이라 우선 최소 worker만 포함합니다.
-        // editorWorkerService는 Monaco의 기본 worker로 필수입니다.
-        languageWorkers: ['editorWorkerService'],
-        // worker도 Tauri build에서는 상대 경로로 로드되도록 맞춥니다.
-        publicPath: isBuild ? './' : '/',
-      }),
     ],
 
   // Path aliases

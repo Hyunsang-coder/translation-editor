@@ -228,14 +228,6 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
 }
 
 /**
- * 캐시 초기화 (테스트 또는 수동 리셋용)
- */
-export function clearPageCache(): void {
-  pageCache.clear();
-  console.log('[confluence_word_count] Page cache cleared');
-}
-
-/**
  * Atlassian cloudId 가져오기 (MCP tool로 조회)
  */
 async function getCloudId(): Promise<string> {
