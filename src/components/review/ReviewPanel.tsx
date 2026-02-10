@@ -226,7 +226,6 @@ export function ReviewPanel(): JSX.Element {
       setAbortController(null);
     }
   }, [
-    project?.id,
     startReview,
     finishReview,
     addResult,
@@ -421,8 +420,8 @@ export function ReviewPanel(): JSX.Element {
     resetReview(); // 내부에서 하이라이트 비활성화 + nonce 증가 처리
   }, [isReviewing, handleCancel, resetReview]);
 
-  const allIssues = useMemo(() => getAllIssues(), [results]);
-  const checkedIssues = useMemo(() => getCheckedIssues(), [results]);
+  const allIssues = useMemo(() => getAllIssues(), [getAllIssues]);
+  const checkedIssues = useMemo(() => getCheckedIssues(), [getCheckedIssues]);
   const hasErrors = results.some((r) => r.error);
   const allChecked = allIssues.length > 0 && allIssues.every((i) => i.checked);
 

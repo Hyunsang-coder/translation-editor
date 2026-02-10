@@ -619,7 +619,7 @@ export const useProjectStore = create<ProjectStore>()(
 
         const { project, targetDocument, sourceDocument, targetDocHandle } = get();
 
-        console.debug('[saveProject] called, projectId:', project?.id);
+        console.warn('[saveProject] called, projectId:', project?.id);
 
         if (!project) {
           console.warn('[saveProject] No project, returning');
@@ -636,7 +636,7 @@ export const useProjectStore = create<ProjectStore>()(
           // 저장 직전: Target/Source 단일 문서 내용을 blocks로 역투영
           // 1) 가능하면 tracked ranges 기반(정확)
           // 2) 실패/미설정 시 segment/ids 기반 fallback(저장 누락 방지)
-          let nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
+          const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
 
           const applyTargetByTrackedRanges = (): boolean => {
             // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
@@ -759,9 +759,9 @@ export const useProjectStore = create<ProjectStore>()(
           };
 
           const okTracked = applyTargetByTrackedRanges();
-          console.log('[saveProject] applyTargetByTrackedRanges result:', okTracked);
+          console.warn('[saveProject] applyTargetByTrackedRanges result:', okTracked);
           if (!okTracked) {
-            console.log('[saveProject] Using applyTargetFallback');
+            console.warn('[saveProject] Using applyTargetFallback');
             applyTargetFallback();
           }
           // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
@@ -776,11 +776,11 @@ export const useProjectStore = create<ProjectStore>()(
             },
           };
 
-          console.debug('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
+          console.warn('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
 
           await tauriSaveProject(projectToSave);
 
-          console.debug('[saveProject] success:', projectToSave.id);
+          console.warn('[saveProject] success:', projectToSave.id);
 
           set({
             project: projectToSave,
@@ -848,7 +848,7 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       setTargetDocument: (next: string): void => {
-        console.log('[setTargetDocument] called, length:', next?.length);
+        console.warn('[setTargetDocument] called, length:', next?.length);
         set({ targetDocument: next, isDirty: true, lastChangeAt: Date.now() });
         scheduleWriteThroughSave(set, get);
       },
@@ -1562,4 +1562,3 @@ function replaceFirst(haystack: string, needle: string, replacement: string): st
   }
   return haystack.slice(0, idx) + replacement + haystack.slice(idx + needle.length);
 }
-

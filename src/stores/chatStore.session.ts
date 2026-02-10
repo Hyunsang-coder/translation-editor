@@ -39,7 +39,7 @@ export function createSessionActions(
       return;
     }
 
-    console.log(`[chatStore] hydrateForProject starting for: ${projectId} (current: ${currentLoadedId})`);
+    console.warn(`[chatStore] hydrateForProject starting for: ${projectId} (current: ${currentLoadedId})`);
 
     // Issue #3 수정: 프로젝트 전환 시 진행 중인 API 요청 취소
     const prevAbortController = get().abortController;
@@ -137,11 +137,11 @@ export function createSessionActions(
       // 비동기 로드 중 프로젝트가 전환되었으면 이 결과를 무시
       const activeProjectId = useProjectStore.getState().project?.id ?? null;
       if (requestId !== getHydrateRequestId()) {
-        console.log(`[chatStore] hydrateForProject aborted: newer request exists (current: ${getHydrateRequestId()}, this: ${requestId})`);
+        console.warn(`[chatStore] hydrateForProject aborted: newer request exists (current: ${getHydrateRequestId()}, this: ${requestId})`);
         return;
       }
       if (activeProjectId !== projectId) {
-        console.log(`[chatStore] hydrateForProject aborted: project changed during load (expected: ${projectId}, active: ${activeProjectId})`);
+        console.warn(`[chatStore] hydrateForProject aborted: project changed during load (expected: ${projectId}, active: ${activeProjectId})`);
         set({ isHydrating: false });
         return;
       }

@@ -124,9 +124,9 @@ export function ReviewTestPanel(): JSX.Element {
       setEditorRawText(editorText);
       const { normalizedText: normalizedEditorText } = buildNormalizedTextWithMapping(editorText);
 
-      console.log('[ReviewTestPanel] editorText length:', editorText.length);
-      console.log('[ReviewTestPanel] normalizedEditorText length:', normalizedEditorText.length);
-      console.log('[ReviewTestPanel] editorText sample:', editorText.slice(0, 500));
+      console.warn('[ReviewTestPanel] editorText length:', editorText.length);
+      console.warn('[ReviewTestPanel] normalizedEditorText length:', normalizedEditorText.length);
+      console.warn('[ReviewTestPanel] editorText sample:', editorText.slice(0, 500));
 
       const results: SearchTestResult[] = issues.map((issue) => {
         const normalizedExcerpt = normalizeForSearch(issue.targetExcerpt);

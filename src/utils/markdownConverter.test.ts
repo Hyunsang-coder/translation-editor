@@ -25,7 +25,7 @@ describe('markdownConverter - 기존 함수 (html: false)', () => {
 
     const json = markdownToTipTapJson(mdTable);
 
-    console.log('Markdown table JSON:', JSON.stringify(json, null, 2));
+    console.warn('Markdown table JSON:', JSON.stringify(json, null, 2));
 
     expect(json.type).toBe('doc');
     const tableNode = (json.content as unknown[]).find(
@@ -86,7 +86,7 @@ describe('markdownConverter - 기존 함수 (html: false)', () => {
 
     const markdown = tipTapJsonToMarkdown(complexTableJson);
 
-    console.log('Complex table to Markdown:', markdown);
+    console.warn('Complex table to Markdown:', markdown);
 
     // 현재 html: false이므로 [table]로 변환됨
     expect(markdown).toContain('[table]');
@@ -141,7 +141,7 @@ describe('markdownConverter - 기존 함수 (html: false)', () => {
 
     const markdown = tipTapJsonToMarkdown(simpleTableJson);
 
-    console.log('Simple table to Markdown:', markdown);
+    console.warn('Simple table to Markdown:', markdown);
 
     // 단순 테이블은 Markdown 테이블로 변환되어야 함
     expect(markdown).toContain('|');
@@ -189,7 +189,7 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
 
     const markdown = tipTapJsonToMarkdownForTranslation(complexTableJson);
 
-    console.log('ForTranslation - Complex table:', markdown);
+    console.warn('ForTranslation - Complex table:', markdown);
 
     // HTML 테이블로 변환되어야 함 (not [table])
     // TipTap은 style 속성을 포함한 <table style="..."> 형태로 출력
@@ -234,7 +234,7 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
 
     const json = markdownToTipTapJsonForTranslation(htmlTable);
 
-    console.log('ForTranslation - HTML to JSON:', JSON.stringify(json, null, 2));
+    console.warn('ForTranslation - HTML to JSON:', JSON.stringify(json, null, 2));
 
     expect(json.type).toBe('doc');
     const tableNode = (json.content as unknown[]).find(
@@ -295,11 +295,11 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
 
     // JSON → Markdown (HTML 형식)
     const markdown = tipTapJsonToMarkdownForTranslation(originalJson);
-    console.log('Roundtrip - Markdown:', markdown);
+    console.warn('Roundtrip - Markdown:', markdown);
 
     // Markdown (HTML) → JSON
     const restoredJson = markdownToTipTapJsonForTranslation(markdown);
-    console.log('Roundtrip - Restored JSON:', JSON.stringify(restoredJson, null, 2));
+    console.warn('Roundtrip - Restored JSON:', JSON.stringify(restoredJson, null, 2));
 
     // 테이블 구조가 보존되어야 함
     expect(restoredJson.type).toBe('doc');
@@ -384,7 +384,7 @@ describe('markdownConverter - 검수(Review) 파이프라인 시나리오', () =
     // Step 2: TipTap JSON → Markdown (번역용, HTML 테이블 보존)
     const markdown = tipTapJsonToMarkdownForTranslation(json);
 
-    console.log('Review pipeline - Markdown output:', markdown);
+    console.warn('Review pipeline - Markdown output:', markdown);
 
     // 테이블이 HTML로 보존되어야 함 (NOT [table])
     expect(markdown).toContain('<table');
@@ -441,7 +441,7 @@ describe('markdownConverter - 검수(Review) 파이프라인 시나리오', () =
 
     const markdown = tipTapJsonToMarkdownForTranslation(tableWithList);
 
-    console.log('Table with list - Markdown output:', markdown);
+    console.warn('Table with list - Markdown output:', markdown);
 
     // HTML 테이블로 변환되어야 함
     expect(markdown).toContain('<table');

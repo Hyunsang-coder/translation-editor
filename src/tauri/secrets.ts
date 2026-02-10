@@ -48,7 +48,7 @@ export async function initializeSecrets(): Promise<SecretsInitResult> {
 
   try {
     const result = await invoke<SecretsInitResult>('secrets_initialize');
-    console.log('[Secrets] Initialized, cached secrets:', result.cachedCount);
+    console.warn('[Secrets] Initialized, cached secrets:', result.cachedCount);
     return result;
   } catch (error) {
     console.error('[Secrets] Initialization failed:', error);

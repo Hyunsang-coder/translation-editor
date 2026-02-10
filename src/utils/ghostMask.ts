@@ -21,7 +21,6 @@ export function createGhostMaskSession(): GhostMaskSession {
     tokenToValue: {},
     valueToToken: new Map<string, string>(),
     // sessionId는 token 생성 시에만 사용하므로 클로저로 숨깁니다.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as unknown as GhostMaskSession & { __sessionId?: string };
 }
 
@@ -82,5 +81,4 @@ export function diffMissingGhostChips(required: Set<string>, text: string): stri
   }
   return missing;
 }
-
 

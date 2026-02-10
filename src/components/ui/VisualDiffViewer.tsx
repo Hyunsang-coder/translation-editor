@@ -218,7 +218,7 @@ function LineCell({ side, num, content, type }: {
   
   // 배경색 결정 (스크린샷 스타일 반영)
   let bgClass = '';
-  let numClass = 'text-editor-muted bg-gray-50 dark:bg-gray-800/30'; // 기본 줄번호 배경
+  const numClass = 'text-editor-muted bg-gray-50 dark:bg-gray-800/30'; // 기본 줄번호 배경
 
   if (type === 'delete') {
     bgClass = 'bg-red-50/50 dark:bg-red-900/10'; // 연한 빨강

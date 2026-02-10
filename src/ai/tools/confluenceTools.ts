@@ -178,21 +178,21 @@ function getFromCache(pageId: string, preferredFormat: PageContentFormat = 'adf'
 
   // 선호 형식 먼저 확인
   if (preferredFormat === 'adf' && cached.adf) {
-    console.log(`[confluence_word_count] Cache HIT for page ${pageId} (format: adf)`);
+    console.warn(`[confluence_word_count] Cache HIT for page ${pageId} (format: adf)`);
     return { format: 'adf', content: cached.adf };
   }
   if (preferredFormat === 'markdown' && cached.markdown) {
-    console.log(`[confluence_word_count] Cache HIT for page ${pageId} (format: markdown)`);
+    console.warn(`[confluence_word_count] Cache HIT for page ${pageId} (format: markdown)`);
     return { format: 'markdown', content: cached.markdown };
   }
 
   // 선호 형식이 없으면 다른 형식 반환
   if (cached.adf) {
-    console.log(`[confluence_word_count] Cache HIT for page ${pageId} (format: adf, fallback)`);
+    console.warn(`[confluence_word_count] Cache HIT for page ${pageId} (format: adf, fallback)`);
     return { format: 'adf', content: cached.adf };
   }
   if (cached.markdown) {
-    console.log(`[confluence_word_count] Cache HIT for page ${pageId} (format: markdown, fallback)`);
+    console.warn(`[confluence_word_count] Cache HIT for page ${pageId} (format: markdown, fallback)`);
     return { format: 'markdown', content: cached.markdown };
   }
 
@@ -220,7 +220,7 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
       existing.markdown = content as string;
     }
     existing.cachedAt = now;
-    console.log(`[confluence_word_count] Updated cache for page ${pageId} (added ${format})`);
+    console.warn(`[confluence_word_count] Updated cache for page ${pageId} (added ${format})`);
   } else {
     // 새 캐시 생성
     const newCache: CachedPage = { cachedAt: now };
@@ -230,7 +230,7 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
       newCache.markdown = content as string;
     }
     pageCache.set(pageId, newCache);
-    console.log(`[confluence_word_count] Cached page ${pageId} (format: ${format}, cache size: ${pageCache.size})`);
+    console.warn(`[confluence_word_count] Cached page ${pageId} (format: ${format}, cache size: ${pageCache.size})`);
   }
 }
 
@@ -289,7 +289,7 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
 
   // 2a. ADF 형식 먼저 시도
   try {
-    console.log('[confluence_word_count] Trying ADF format first...');
+    console.warn('[confluence_word_count] Trying ADF format first...');
     const adfResult = await invoke<McpToolResult>('mcp_call_tool', {
       name: 'getConfluencePage',
       arguments: { cloudId, pageId, contentFormat: 'adf' },
@@ -307,7 +307,7 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
         const adfDoc = parsed.body ?? parsed;
 
         if (isValidAdfDocument(adfDoc)) {
-          console.log('[confluence_word_count] ADF format success');
+          console.warn('[confluence_word_count] ADF format success');
           saveToCache(pageId, adfDoc, 'adf');
           return { format: 'adf', content: adfDoc };
         }
@@ -320,7 +320,7 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
   }
 
   // 2b. Markdown 폴백
-  console.log('[confluence_word_count] Falling back to Markdown format...');
+  console.warn('[confluence_word_count] Falling back to Markdown format...');
   const result = await invoke<McpToolResult>('mcp_call_tool', {
     name: 'getConfluencePage',
     arguments: { cloudId, pageId, contentFormat: 'markdown' },
@@ -340,7 +340,7 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
     const parsed = JSON.parse(rawText);
     if (parsed.body && typeof parsed.body === 'string') {
       markdown = parsed.body;
-      console.log('[confluence_word_count] Extracted body from JSON response');
+      console.warn('[confluence_word_count] Extracted body from JSON response');
     }
   } catch {
     // JSON이 아니면 그대로 사용 (순수 markdown)
@@ -436,13 +436,13 @@ async function processPage(
 
     if (pageContent.format === 'adf') {
       // ADF 형식: 구조적 필터링 후 텍스트 추출
-      console.log('[confluence_word_count] Processing ADF document');
+      console.warn('[confluence_word_count] Processing ADF document');
 
       // 사용 가능한 섹션 목록 추출
       availableSectionNames = listAvailableSections(pageContent.content) as string[];
       if (import.meta.env.DEV) {
-        console.log('[confluence_word_count] Available sections:', JSON.stringify(availableSectionNames, null, 2));
-        console.log('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
+        console.warn('[confluence_word_count] Available sections:', JSON.stringify(availableSectionNames, null, 2));
+        console.warn('[confluence_word_count] Top-level node types:', pageContent.content.content.map(n => n.type).slice(0, 20));
       }
 
       const filterOptions: {
@@ -465,7 +465,7 @@ async function processPage(
         };
       } else {
         if (import.meta.env.DEV) {
-          console.log('[confluence_word_count] Extracted text length:', text.length);
+          console.warn('[confluence_word_count] Extracted text length:', text.length);
         }
 
         // ADF에서 추출한 텍스트에 countWords 적용 (섹션/콘텐츠 타입 필터는 이미 적용됨)
@@ -479,8 +479,8 @@ async function processPage(
       // Markdown 형식: 기존 로직 사용
       const markdown = pageContent.content;
       if (import.meta.env.DEV) {
-        console.log('[confluence_word_count] Processing Markdown document');
-        console.log('[confluence_word_count] Markdown length:', markdown.length);
+        console.warn('[confluence_word_count] Processing Markdown document');
+        console.warn('[confluence_word_count] Markdown length:', markdown.length);
       }
 
       countResult = countWords(markdown, {
@@ -497,7 +497,7 @@ async function processPage(
     }
 
     if (import.meta.env.DEV) {
-      console.log('[confluence_word_count] Count result:', countResult);
+      console.warn('[confluence_word_count] Count result:', countResult);
     }
 
     // 섹션 필터 적용 시 섹션을 찾지 못한 경우 note 추가

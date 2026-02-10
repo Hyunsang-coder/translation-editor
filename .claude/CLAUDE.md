@@ -27,7 +27,7 @@ cd src-tauri && cargo test  # Rust tests
 ```
 src/ai/           # AI integration (chat.ts, translateDocument.ts, review/)
 src/editor/       # TipTap extensions
-src/stores/       # Zustand stores
+src/stores/       # Zustand stores (chatStore: 7 슬라이스)
 src/components/   # React components
 src-tauri/src/    # Rust backend (commands/, mcp/)
 ```
@@ -42,7 +42,7 @@ src-tauri/src/    # Rust backend (commands/, mcp/)
 This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
-- `gotchas.md` - Critical implementation warnings (129 items)
+- `gotchas.md` - Critical implementation warnings (131 items)
 - `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 

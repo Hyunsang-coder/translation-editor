@@ -90,6 +90,7 @@ export function TranslatePreviewModal(props: {
   const [finalElapsedSeconds, setFinalElapsedSeconds] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedSecondsRef = useRef(0);
+  const wasOpenRef = useRef(false);
 
   // elapsedSeconds가 변경될 때마다 ref도 업데이트
   useEffect(() => {
@@ -156,12 +157,13 @@ export function TranslatePreviewModal(props: {
   // Apply로 targetDocument가 바뀌어도 DiffEditor의 모델이 갈아끼워지지 않게 해서
   // "TextModel got disposed before ... reset" 레이스를 피합니다.
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setDiffOriginalHtmlSnapshot(originalHtml ?? '');
-    } else {
+    } else if (!open) {
       setDiffOriginalHtmlSnapshot(null);
     }
-  }, [open]);
+    wasOpenRef.current = open;
+  }, [open, originalHtml]);
 
   // 모달이 닫힐 때 상태 초기화
   useEffect(() => {

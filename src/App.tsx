@@ -98,7 +98,7 @@ function App(): JSX.Element {
     cleanupTempImages()
       .then((count) => {
         if (count > 0) {
-          console.log(`[App] Cleaned up ${count} old temp images`);
+          console.warn(`[App] Cleaned up ${count} old temp images`);
         }
       })
       .catch((error) => {

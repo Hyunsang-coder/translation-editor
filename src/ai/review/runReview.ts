@@ -32,7 +32,10 @@ function extractChunkContent(chunk: AIMessageChunk): string {
     return content
       .map((c) => {
         if (typeof c === 'string') return c;
-        if (typeof c === 'object' && c && 'text' in c) return String((c as any).text ?? '');
+        if (typeof c === 'object' && c && 'text' in c) {
+          const text = (c as { text?: unknown }).text;
+          return String(text ?? '');
+        }
         return '';
       })
       .join('');
@@ -95,8 +98,8 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   ];
 
   // 도구 없이 직접 스트리밍 (1회 호출)
-  const stream = await (model as any).stream(messages, {
-    signal: params.abortSignal,
+  const stream = await model.stream(messages, {
+    ...(params.abortSignal && { signal: params.abortSignal }),
   });
 
   let result = '';

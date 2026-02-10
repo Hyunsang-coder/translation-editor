@@ -348,12 +348,12 @@ export function ConnectorsSection(): JSX.Element {
 
   // 빌트인 커넥터 연결 (TODO: OAuth 구현 후 활성화)
   const handleBuiltinConnect = useCallback((connectorId: string) => {
-    console.log(`[Connectors] Connect ${connectorId} - OAuth not implemented yet`);
+    console.warn(`[Connectors] Connect ${connectorId} - OAuth not implemented yet`);
     // TODO: startConnectorOAuth(connectorId)
   }, []);
 
   const handleBuiltinDisconnect = useCallback((connectorId: string) => {
-    console.log(`[Connectors] Disconnect ${connectorId}`);
+    console.warn(`[Connectors] Disconnect ${connectorId}`);
     // TODO: deleteConnectorToken(connectorId)
   }, []);
 

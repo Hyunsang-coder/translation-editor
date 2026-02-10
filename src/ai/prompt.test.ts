@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { detectRequestType, buildBlockContextText } from './prompt';
-import type { EditorBlock } from '@/types';
+import type { BlockType, EditorBlock } from '@/types';
 
 describe('detectRequestType', () => {
   describe('질문 감지 (question)', () => {
@@ -125,7 +125,7 @@ describe('buildBlockContextText', () => {
   it('최대 20개 블록까지만 처리', () => {
     const blocks: EditorBlock[] = Array.from({ length: 25 }, (_, i) => ({
       id: String(i),
-      type: (i % 2 === 0 ? 'source' : 'target') as any,
+      type: (i % 2 === 0 ? 'source' : 'target') as BlockType,
       content: `<p>블록 ${i}</p>`,
       hash: `hash${i}`,
       metadata: { createdAt: 0, updatedAt: 0, tags: [] },

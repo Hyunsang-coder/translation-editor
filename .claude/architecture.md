@@ -79,11 +79,21 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 | Store | Purpose |
 |-------|---------|
 | `projectStore.ts` | Project metadata, documents, glossary, attachments |
-| `chatStore.ts` | Multi-tab chat sessions, messages, tool calls |
+| `chatStore.ts` | Multi-tab chat sessions, messages, tool calls (composed from 7 slices) |
 | `aiConfigStore.ts` | Provider flags, model selection, system prompts |
 | `connectorStore.ts` | MCP connector states |
 | `uiStore.ts` | Layout state, Focus Mode, panel positions |
 | `reviewStore.ts` | Review state, chunks, results, highlights |
+
+**chatStore 슬라이스 구조** (1,600줄+ → 7개 파일):
+- `chatStore.ts` — 메인 컴포지션 + 내보내기
+- `chatStore.types.ts` — 타입, 인터페이스, 상수
+- `chatStore.helpers.ts` — 순수 헬퍼
+- `chatStore.persist.ts` — 영속성 (schedulePersist, persistNow)
+- `chatStore.session.ts` — 세션/메시지 CRUD, hydration
+- `chatStore.ai.ts` — AI 상호작용 (executeAiReply, sendMessage, replayMessage, streaming)
+- `chatStore.settings.ts` — 설정, 첨부, 컴포저, 컨텍스트 블록
+- `chatStore.selectors.ts` — 세션별 그룹 셀렉터 (useChatSessionState, useChatComposerState)
 
 **Important**: `sourceDocJson`/`targetDocJson` in projectStore are TipTap JSON caches for AI tools.
 
@@ -140,10 +150,12 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
   - Tab drag: Mouse-event based tab reordering (HTML5 DnD replaced)
   - Responsive layout: `useResponsiveLayout` hook auto-collapses panels on narrow screens
   - Panel state persists across sessions (localStorage via Zustand)
-- **Chat Composer**:
+  - **Chat Composer**:
   - `+` button for attachments/web search toggle
   - Enter to send, Shift+Enter for newline
   - IME-aware Enter handling
+- **Modal 통합**: `Modal.tsx` 공통 래퍼 (Focus trap, ESC/오버레이 닫기). ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용.
+- **Modal 통합**: `Modal.tsx` 공통 래퍼 (Focus trap, ESC/오버레이 닫기). ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용.
 
 ## Token Limits
 

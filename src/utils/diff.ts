@@ -152,7 +152,7 @@ export function computeSideBySideDiff(text1: string, text2: string): SideBySideR
   const processDiffPart = (part: Diff.Change) => {
     // 마지막 줄바꿈 처리가 까다로울 수 있음. 
     // 단순하게 split('\n') 하면 마지막 빈 문자열이 생길 수 있음.
-    let lines = part.value.split('\n');
+    const lines = part.value.split('\n');
     // 마지막이 빈 문자열이면 제거 (단, 원래 텍스트가 빈 줄로 끝나는 경우 등 고려 필요)
     if (lines.length > 0 && lines[lines.length - 1] === '') {
       lines.pop();

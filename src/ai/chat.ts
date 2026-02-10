@@ -370,7 +370,7 @@ async function runToolCallingLoop(params: {
 
     // 실시간 스트리밍: .stream() 사용
     let accumulatedText = '';
-    let accumulatedToolCallChunks: ToolCallChunk[] = [];
+    const accumulatedToolCallChunks: ToolCallChunk[] = [];
     let finalAiMessage: AIMessageChunk | null = null;
 
     try {
@@ -428,7 +428,7 @@ async function runToolCallingLoop(params: {
       if (!toolsUsed.includes(t)) toolsUsed.push(t);
     }
     if (builtIns.length > 0) {
-      console.info('[AI builtin_tools_used]', builtIns);
+      console.warn('[AI builtin_tools_used]', builtIns);
     }
 
     // 도구 호출 처리
@@ -451,7 +451,7 @@ async function runToolCallingLoop(params: {
       const tool = toolMap.get(call.name);
       const toolCallId = getToolCallId(call);
       if (!toolsUsed.includes(call.name)) toolsUsed.push(call.name);
-      console.info('[AI tool_call]', { name: call.name, args: call.args ?? {} });
+      console.warn('[AI tool_call]', { name: call.name, args: call.args ?? {} });
 
       if (!tool) {
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
@@ -790,7 +790,10 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
   const MAX_IMAGE_BYTES = isAnthropic ? 5_000_000 : 20_000_000; // Anthropic: 5MB, OpenAI: 20MB
   const providerName = isAnthropic ? 'Claude' : 'OpenAI';
 
-  const blocks: any[] = [{ type: 'text', text: params.userText }];
+  const blocks: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  > = [{ type: 'text', text: params.userText }];
   const warnings: string[] = [];
   let usedImages = false;
 

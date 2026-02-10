@@ -220,6 +220,31 @@ fn run_migrations(&self) -> Result<(), IteError> {
 
 No formal migration framework — uses idempotent `SELECT LIMIT 0` probe per column. Add new migrations to `run_migrations()`.
 
+## chatStore Slice Structure
+
+```typescript
+// chatStore.ts — 7개 슬라이스 조합
+createPersistHelpers() → schedulePersist, persistNow
+createSessionActions() + createMessageActions()
+createAiActions() + createStreamingActions()
+createComposerActions() + createSettingsActions() + createContextBlockActions() + createAttachmentActions() + createUtilityActions()
+```
+
+새 AI/세션 로직 추가 시 해당 슬라이스 파일(`chatStore.ai.ts`, `chatStore.session.ts` 등)에 구현.
+
+## Modal Component
+
+```typescript
+// src/components/ui/Modal.tsx
+<Modal open={open} onClose={onClose} closeOnOverlay closeOnEsc>
+  {children}
+</Modal>
+```
+
+- Focus trap (Tab/Shift+Tab 순환), 초기 포커스 → 첫 focusable 요소
+- ESC, 오버레이 클릭으로 닫기
+- ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용
+
 ## Save Concurrency Guard
 
 ```typescript
@@ -340,9 +365,11 @@ resizeImageForApi()   // Progressive resize for API limits
 ```typescript
 // src/stores/chatStore.selectors.ts
 useChatComposerState()   // Composer-related state
-useChatSessionState()    // Session-related state
+useChatSessionState()    // Session-related state (streamingSessionId 기반 세션별 격리)
 // Uses useShallow to minimize re-renders
 ```
+
+세션별 스트리밍 격리: `streamingSessionId`로 현재 스트리밍 중인 세션만 `isLoading`/`streamingContent` 표시. 다른 세션 탭은 스트리밍 상태가 아닌 것으로 렌더링.
 
 ## Dual Sidebar & Responsive Layout
 

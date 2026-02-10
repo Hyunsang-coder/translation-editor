@@ -379,7 +379,11 @@ export function createAiActions(
         let text = '';
         const toolsUsed: string[] = [];
 
-        const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
+        type ToolEnabledModel = {
+          invoke: (input: string) => Promise<unknown>;
+          bindTools?: (tools: Array<Record<string, unknown>>) => { invoke: (input: string) => Promise<unknown> };
+        };
+        const modelAny = createChatModel(undefined, { useFor: 'chat' }) as unknown as ToolEnabledModel;
 
         if (cfg.provider === 'openai') {
           set({ statusMessage: 'OpenAI 웹 검색 중...' });

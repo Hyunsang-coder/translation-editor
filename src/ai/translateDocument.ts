@@ -139,7 +139,7 @@ function buildTranslationSetup(params: {
   const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
 
   if (imageCount > 0) {
-    console.log(`[Translation] Stripped ${imageCount} images from source`);
+    console.warn(`[Translation] Stripped ${imageCount} images from source`);
   }
 
   const srcLang = 'Source';

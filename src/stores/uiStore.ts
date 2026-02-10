@@ -490,6 +490,19 @@ export const useUIStore = create<UIStore>()(
         const state = get();
         const validPanels = new Set<PanelType>(sessionIds.map(chatPanelId));
         const updates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
+        const preLeftChatCount = state.leftSidebar.panels.filter(isChatPanel).length;
+        const preRightChatCount = state.rightSidebar.panels.filter(isChatPanel).length;
+        const preActiveChatSide: SidebarSide | null =
+          state.leftSidebar.activePanel && isChatPanel(state.leftSidebar.activePanel)
+            ? 'left'
+            : state.rightSidebar.activePanel && isChatPanel(state.rightSidebar.activePanel)
+              ? 'right'
+              : null;
+        const preferredRestoreSide: SidebarSide =
+          preActiveChatSide
+          ?? (preLeftChatCount > preRightChatCount ? 'left'
+            : preRightChatCount > preLeftChatCount ? 'right'
+              : 'right');
 
         for (const side of ['leftSidebar', 'rightSidebar'] as const) {
           const sb = state[side];
@@ -509,18 +522,27 @@ export const useUIStore = create<UIStore>()(
         const allPanels = [...leftPanels, ...rightPanels];
         const existingChatPanels = new Set(allPanels.filter(isChatPanel));
 
-        // 누락된 세션 패널 복구: session은 있는데 탭이 없는 경우 right에 추가
+        // 누락된 세션 패널 복구:
+        // 1) 기존 chat이 한쪽에 있으면 그쪽에 복구
+        // 2) 양쪽 모두 없으면, 정리 전(chat stale 포함) 선호 사이드로 복구
         const missingPanels = sessionIds
           .map(chatPanelId)
           .filter((panel) => !existingChatPanels.has(panel));
 
         if (missingPanels.length > 0) {
-          const rsb = updates.rightSidebar ?? state.rightSidebar;
-          const nextPanels = [...rsb.panels, ...missingPanels];
-          updates.rightSidebar = {
-            ...rsb,
+          const leftHasChat = leftPanels.some(isChatPanel);
+          const rightHasChat = rightPanels.some(isChatPanel);
+          const restoreSide: SidebarSide =
+            leftHasChat && !rightHasChat ? 'left'
+              : rightHasChat && !leftHasChat ? 'right'
+                : preferredRestoreSide;
+          const restoreKey = sidebarKey(restoreSide);
+          const restoreSidebar = updates[restoreKey] ?? state[restoreKey];
+          const nextPanels = [...restoreSidebar.panels, ...missingPanels];
+          updates[restoreKey] = {
+            ...restoreSidebar,
             panels: nextPanels,
-            activePanel: rsb.activePanel ?? missingPanels[0] ?? null,
+            activePanel: restoreSidebar.activePanel ?? missingPanels[0] ?? null,
             collapsed: false,
           };
         }

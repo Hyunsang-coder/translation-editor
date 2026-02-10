@@ -142,7 +142,7 @@ export function isNonWordToken(word: string): boolean {
   if (/^[\d.,]+$/.test(trimmed)) return true;
 
   // 순수 기호 (/, ->, &, →, x 등 - 단독 사용 시)
-  if (/^[\/\-\>\<\&\→\×xX]+$/.test(trimmed)) return true;
+  if (/^[/<>&→×xX-]+$/.test(trimmed)) return true;
 
   return false;
 }

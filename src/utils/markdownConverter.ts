@@ -286,8 +286,8 @@ function normalizeHorizontalRules(markdown: string): string {
   // 1단계: 이미지 뒤에 바로 붙은 --- 분리
   // 예: "![](url)---" → "![](url)\n\n---"
   // 예: "![alt](url)---" → "![alt](url)\n\n---"
-  let normalized = markdown.replace(
-    /(\!\[[^\]]*\]\([^)]*\))[\s]*([-*_]{3,})/g,
+  const normalized = markdown.replace(
+    /(!\[[^\]]*\]\([^)]*\))\s*([-*_]{3,})/g,
     '$1\n\n$2'
   );
 

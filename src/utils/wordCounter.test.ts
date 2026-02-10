@@ -50,7 +50,7 @@ describe('preprocessContent', () => {
   });
 
   it('인라인 코드를 제거한다', () => {
-    const content = 'Use `console.log()` for debugging';
+    const content = 'Use `console.warn()` for debugging';
     expect(preprocessContent(content)).toBe('Use for debugging');
   });
 

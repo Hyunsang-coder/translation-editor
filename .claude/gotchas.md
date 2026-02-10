@@ -277,3 +277,7 @@ Critical implementation warnings learned from past issues.
 128. **System Theme OS Change Listener**: `App.tsx`에서 `theme === 'system'`일 때 `matchMedia('prefers-color-scheme: dark').addEventListener('change', ...)` 구독 필수. 미등록 시 OS 다크/라이트 전환이 앱에 반영되지 않음.
 
 129. **Vault AAD Not Used**: `secrets/vault.rs`의 XChaCha20-Poly1305 암호화에서 AAD(Associated Data)를 사용하지 않음. Poly1305 태그로 ciphertext 무결성은 보장되지만, vault magic 바인딩은 없음. AAD 추가 시 기존 vault 파일 호환이 깨지므로 마이그레이션 필요.
+
+130. **ProjectSidebar mergeProjectListStable**: `listRecentProjects()` 갱신 시 `setItems(list)` 대신 `setItems((prev) => mergeProjectListStable(prev, list))` 사용. 신규 프로젝트는 상단에 추가, 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환. updatedAt 정렬 제거로 리스트 점프 방지.
+
+131. **streamingSessionId 세션별 격리**: `chatStore.selectors.ts`의 `useChatSessionState`는 `streamingSessionId`로 현재 스트리밍 중인 세션만 `isLoading`/`streamingContent` 표시. 다른 세션 탭은 스트리밍 상태가 아닌 것으로 렌더링. 동시 다중 스트리밍 방지.

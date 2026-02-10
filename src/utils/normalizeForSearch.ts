@@ -66,7 +66,7 @@ export function normalizeForSearch(text: string): string {
       .replace(UNICODE_NORMALIZE_PATTERNS.cjkDoubleCornerBrackets, '"')
       .replace(UNICODE_NORMALIZE_PATTERNS.dashes, '-')
       // 4. 마크다운 이스케이프 제거 (AI가 \~ \* \_ 등으로 이스케이프할 수 있음)
-      .replace(/\\([~*_`\[\]()#>+\-!|])/g, '$1') // \~ → ~, \* → * 등
+      .replace(/\\([~*_`[\]()#>+!|-])/g, '$1') // \~ → ~, \* → * 등
       // 5. 마크다운 서식 제거 (순서 중요: ** 먼저 처리 후 * 처리)
       .replace(/\*\*(.+?)\*\*/g, '$1') // **bold** → bold
       .replace(/\*(.+?)\*/g, '$1') // *italic* → italic

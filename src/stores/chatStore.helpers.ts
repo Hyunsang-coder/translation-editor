@@ -14,13 +14,16 @@ export function tryExtractWebSearchQuery(raw: string): string | null {
 }
 
 export function extractTextFromAiMessage(ai: unknown): string {
-  const content = (ai as any)?.content;
+  const content = (ai as { content?: unknown })?.content;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
       .map((c) => {
         if (typeof c === 'string') return c;
-        if (c && typeof c === 'object' && 'text' in c) return String((c as any).text ?? '');
+        if (c && typeof c === 'object' && 'text' in c) {
+          const text = (c as { text?: unknown }).text;
+          return String(text ?? '');
+        }
         return '';
       })
       .join('');

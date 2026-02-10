@@ -253,7 +253,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             glossary = hits
               .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
               .join('\n');
-            console.log(`[Translation] Glossary injected: ${hits.length} terms`);
+            console.warn(`[Translation] Glossary injected: ${hits.length} terms`);
           }
         }
       } catch (glossaryError) {
@@ -324,7 +324,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     // Flash 효과 트리거 (1초 동안 지속)
     setTargetFlash(true);
     setTimeout(() => setTargetFlash(false), 1000);
-  }, [translatePreviewDoc, setTargetDocument, addToast, t]);
+  }, [translatePreviewDoc, setTargetDocument, setTargetDocJson, addToast, t]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {

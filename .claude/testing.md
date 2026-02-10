@@ -127,7 +127,13 @@ src/
 │   └── editorRegistry.ts
 ├── stores/           # Zustand stores
 │   ├── projectStore.ts
-│   ├── chatStore.ts
+│   ├── chatStore.ts          # 메인 컴포지션
+│   ├── chatStore.types.ts
+│   ├── chatStore.helpers.ts
+│   ├── chatStore.persist.ts
+│   ├── chatStore.session.ts
+│   ├── chatStore.ai.ts
+│   ├── chatStore.settings.ts
 │   ├── chatStore.selectors.ts
 │   ├── aiConfigStore.ts
 │   ├── connectorStore.ts
@@ -136,7 +142,7 @@ src/
 ├── components/
 │   ├── panels/       # SettingsSidebar, DockedChatPanel, Source/TargetPanel
 │   ├── chat/         # ChatContent, ChatComposerEditor
-│   ├── ui/           # Select, UpdateModal
+│   ├── ui/           # Modal, Select, UpdateModal
 │   ├── editor/       # TipTapMenuBar, SearchBar
 │   └── review/       # ReviewPanel, ReviewResultsTable
 ├── utils/

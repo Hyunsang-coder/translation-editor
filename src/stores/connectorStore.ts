@@ -179,7 +179,7 @@ export async function initializeConnectors(): Promise<void> {
     // 2. MCP 커넥터 상태는 mcpClientManager에서 관리
     // (이미 App.tsx에서 mcpClientManager.initialize() 호출)
     
-    console.log('[ConnectorStore] Initialized, synced', builtinStatuses.length, 'connector statuses');
+    console.warn('[ConnectorStore] Initialized, synced', builtinStatuses.length, 'connector statuses');
   } catch (error) {
     // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
     const message = error instanceof Error ? error.message : String(error);

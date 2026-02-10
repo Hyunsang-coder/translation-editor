@@ -288,7 +288,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
 
           // 디버깅: 검색 결과 로그
-          console.log('[SearchHighlight:setSearchTerm]', {
+          console.warn('[SearchHighlight:setSearchTerm]', {
             term,
             normalizedTerm: normalizeForSearch(term),
             matchCount: storage.matches.length,
