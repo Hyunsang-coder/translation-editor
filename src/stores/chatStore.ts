@@ -636,7 +636,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
 
     // 메시지 전송
-    sendMessage: async (content: string): Promise<void> => {
+    sendMessage: async (content: string, targetSessionId?: string): Promise<void> => {
       // Race Condition 방지: finalization 진행 중이면 완료 대기
       if (get().isFinalizingStreaming) {
         // 최대 1초 대기 (100ms 간격으로 체크)
@@ -646,20 +646,27 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }
         // 여전히 진행 중이면 강제 완료
         if (get().isFinalizingStreaming) {
-          set({ isFinalizingStreaming: false, streamingMessageId: null, streamingContent: null, streamingMetadata: null });
+          set({ isFinalizingStreaming: false, streamingMessageId: null, streamingSessionId: null, streamingContent: null, streamingMetadata: null });
         }
       }
 
-      const { currentSession, createSession, addMessage, updateMessage } = get();
+      const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+      const { createSession, addMessage, updateMessage } = get();
 
       // 세션이 없으면 생성
-      if (!currentSession) {
+      if (!resolvedSessionId || !get().sessions.find((s) => s.id === resolvedSessionId)) {
         createSession();
       }
 
+      // 실제 사용할 세션 ID (createSession 직후일 수 있으므로 다시 resolve)
+      const effectiveSessionId = resolvedSessionId && get().sessions.find((s) => s.id === resolvedSessionId)
+        ? resolvedSessionId
+        : get().currentSessionId!;
+
       // 최근 채팅 히스토리를 모델 컨텍스트에 포함
       const maxRecent = getAiConfig().maxRecentMessages;
-      const priorMessages = (get().currentSession?.messages ?? []).slice(-maxRecent);
+      const targetSession = get().sessions.find((s) => s.id === effectiveSessionId);
+      const priorMessages = (targetSession?.messages ?? []).slice(-maxRecent);
 
       // request 단위 Ghost mask (무결성 보호)
       const maskSession = createGhostMaskSession();
@@ -680,14 +687,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
         ...(imageAttachmentsForMessage.length > 0
           ? { metadata: { imageAttachments: imageAttachmentsForMessage } }
           : {}),
-      });
+      }, effectiveSessionId);
 
       // [Auto-Title] 첫 메시지인 경우 세션 이름 자동 변경
-      const updatedSession = get().currentSession;
-      if (updatedSession && updatedSession.messages.length === 1) {
+      const sessionAfterAdd = get().sessions.find((s) => s.id === effectiveSessionId);
+      if (sessionAfterAdd && sessionAfterAdd.messages.length === 1) {
         // 간단한 규칙: 첫 20자 + ...
         const newTitle = content.trim().slice(0, 20) + (content.length > 20 ? '...' : '');
-        get().renameSession(updatedSession.id, newTitle);
+        get().renameSession(sessionAfterAdd.id, newTitle);
       }
 
       // 명시적 웹검색 트리거: /web 명령어로 내장 웹검색을 직접 실행
@@ -704,8 +711,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
           addMessage({
             role: 'assistant',
             content: '웹 검색이 꺼져 있어 실행하지 않았습니다. 채팅 입력창의 + 메뉴에서 "웹 검색"을 켜면 사용할 수 있어요.',
-          });
-          set({ isLoading: false, streamingMessageId: null, error: null });
+          }, effectiveSessionId);
+          set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: null });
           schedulePersist();
           return;
         }
@@ -720,7 +727,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           role: 'assistant',
           content: '',
           metadata: { model: 'web_search', toolCallsInProgress: initialToolsInProgress, toolsUsed: [] },
-        });
+        }, effectiveSessionId);
 
         try {
           let text = '';
@@ -770,20 +777,20 @@ export const useChatStore = create<ChatStore>((set, get) => {
           }
 
           if (assistantId) {
-            updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [], toolsUsed } });
+            updateMessage(assistantId, { content: text, metadata: { toolCallsInProgress: [], toolsUsed } }, effectiveSessionId);
           } else {
-            addMessage({ role: 'assistant', content: text });
+            addMessage({ role: 'assistant', content: text }, effectiveSessionId);
           }
-          set({ isLoading: false, streamingMessageId: null, error: null, statusMessage: null });
+          set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: null, statusMessage: null });
           schedulePersist();
         } catch (e) {
           const errText = e instanceof Error ? e.message : '웹 검색 실패';
           if (assistantId) {
-            updateMessage(assistantId, { content: `⚠️ ${errText}`, metadata: { toolCallsInProgress: [] } });
+            updateMessage(assistantId, { content: `⚠️ ${errText}`, metadata: { toolCallsInProgress: [] } }, effectiveSessionId);
           } else {
-            addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
+            addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, effectiveSessionId);
           }
-          set({ isLoading: false, streamingMessageId: null, error: errText, statusMessage: null });
+          set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: errText, statusMessage: null });
         }
         return;
       }
@@ -792,7 +799,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       try {
         const cfg = getAiConfig();
-        const session = get().currentSession;
+        const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
         const project = useProjectStore.getState().project;
         const translatorPersona = get().translatorPersona;
         const webSearchEnabled = get().webSearchEnabled;
@@ -864,9 +871,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           role: 'assistant',
           content: '',
           metadata: { model: cfg.model, toolCallsInProgress: [] },
-        });
+        }, effectiveSessionId);
         if (assistantId) {
-          set({ streamingMessageId: assistantId, streamingSessionId: get().currentSessionId });
+          set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
         }
 
         const replyMasked = await streamAssistantReply(
@@ -890,7 +897,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled,
-            confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
+            confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
             // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
             notionSearchEnabled: (() => {
               const { enabledMap, tokenMap } = useConnectorStore.getState();
@@ -1018,10 +1025,10 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().updateMessage(assistantId, {
             content: `⚠️ ${errText}`,
             metadata: { toolCallsInProgress: [] },
-          });
+          }, effectiveSessionId);
         } else {
           // assistant 버블이 생성되기 전에 실패한 경우(매우 드묾)에도 에러를 남깁니다.
-          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
+          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, effectiveSessionId);
         }
         // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
         // composerAttachments는 sendMessage 시작 시 이미 초기화됨
@@ -1125,18 +1132,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
         messages: [...existingMessages, newMessage],
       };
 
-      set((state) => {
-        const newState = {
-          sessions: state.sessions.map((s) =>
-            s.id === resolvedSessionId ? updatedSession : s
-          ),
-        } as any;
-        // currentSession만 업데이트하는 경우: 현재 활성 세션이면 업데이트
-        if (resolvedSessionId === state.currentSessionId) {
-          newState.currentSession = updatedSession;
-        }
-        return newState;
-      });
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === resolvedSessionId ? updatedSession : s
+        ),
+        ...(resolvedSessionId === state.currentSessionId
+          ? { currentSession: updatedSession }
+          : {}),
+      }));
       schedulePersist();
       return newMessage.id;
     },
@@ -1162,17 +1165,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       const updatedSession: ChatSession = { ...session, messages: updatedMessages };
 
-      set((state) => {
-        const newState = {
-          sessions: state.sessions.map((s) =>
-            s.id === resolvedSessionId ? updatedSession : s
-          ),
-        } as any;
-        if (resolvedSessionId === state.currentSessionId) {
-          newState.currentSession = updatedSession;
-        }
-        return newState;
-      });
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === resolvedSessionId ? updatedSession : s
+        ),
+        ...(resolvedSessionId === state.currentSessionId
+          ? { currentSession: updatedSession }
+          : {}),
+      }));
       schedulePersist();
     },
 
@@ -1204,17 +1204,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
       });
 
       const updatedSession: ChatSession = { ...session, messages: updatedMessages };
-      set((state) => {
-        const newState: any = {
-          sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
-          streamingMessageId: null,
-          isLoading: false,
-        };
-        if (resolvedSessionId === state.currentSessionId) {
-          newState.currentSession = updatedSession;
-        }
-        return newState;
-      });
+      set((state) => ({
+        sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
+        streamingMessageId: null,
+        streamingSessionId: null,
+        isLoading: false,
+        ...(resolvedSessionId === state.currentSessionId
+          ? { currentSession: updatedSession }
+          : {}),
+      }));
       schedulePersist();
     },
 
@@ -1235,14 +1233,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - maxRecent), idx) : [];
 
       // 재전송 시 해당 메시지 이후의 응답 삭제 (편집 후 저장과 동일한 동작)
-      const currentSessionId = get().currentSessionId;
-      if (currentSessionId && idx >= 0) {
+      if (resolvedSessionId && idx >= 0) {
         const truncatedMessages = session.messages.slice(0, idx + 1);
         const updatedSession: ChatSession = { ...session, messages: truncatedMessages };
         set((state) => ({
-          sessions: state.sessions.map((s) => (s.id === currentSessionId ? updatedSession : s)),
-          currentSession: updatedSession,
+          sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
           streamingMessageId: null,
+          streamingSessionId: null,
+          ...(resolvedSessionId === state.currentSessionId
+            ? { currentSession: updatedSession }
+            : {}),
         }));
       }
 
@@ -1325,9 +1325,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           role: 'assistant',
           content: '',
           metadata: { model: cfg.model, toolCallsInProgress: [] },
-        });
+        }, resolvedSessionId ?? undefined);
         if (assistantId) {
-          set({ streamingMessageId: assistantId, streamingSessionId: get().currentSessionId });
+          set({ streamingMessageId: assistantId, streamingSessionId: resolvedSessionId });
         }
 
         const replyMasked = await streamAssistantReply(
@@ -1350,7 +1350,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
               .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
             webSearchEnabled: get().webSearchEnabled,
-            confluenceSearchEnabled: get().currentSession?.confluenceSearchEnabled ?? false,
+            confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
             // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
             notionSearchEnabled: (() => {
               const { enabledMap, tokenMap } = useConnectorStore.getState();
@@ -1484,9 +1484,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().updateMessage(assistantId, {
             content: `⚠️ ${errText}`,
             metadata: { toolCallsInProgress: [] },
-          });
+          }, resolvedSessionId ?? undefined);
         } else {
-          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` });
+          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, resolvedSessionId ?? undefined);
         }
         // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
         // composerAttachments는 replayMessage 시작 시 이미 초기화됨
@@ -1520,18 +1520,16 @@ export const useChatStore = create<ChatStore>((set, get) => {
 
       const updatedMessages = session.messages.slice(0, idx);
       const updatedSession: ChatSession = { ...session, messages: updatedMessages };
-      set((state) => {
-        const newState: any = {
-          sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
-          streamingMessageId: null,
-          isLoading: false,
-          abortController: null,
-        };
-        if (resolvedSessionId === state.currentSessionId) {
-          newState.currentSession = updatedSession;
-        }
-        return newState;
-      });
+      set((state) => ({
+        sessions: state.sessions.map((s) => (s.id === resolvedSessionId ? updatedSession : s)),
+        streamingMessageId: null,
+        streamingSessionId: null,
+        isLoading: false,
+        abortController: null,
+        ...(resolvedSessionId === state.currentSessionId
+          ? { currentSession: updatedSession }
+          : {}),
+      }));
       schedulePersist();
     },
 
@@ -1546,17 +1544,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
         messages: [],
       };
 
-      set((state) => {
-        const newState: any = {
-          sessions: state.sessions.map((s) =>
-            s.id === resolvedSessionId ? updatedSession : s
-          ),
-        };
-        if (resolvedSessionId === state.currentSessionId) {
-          newState.currentSession = updatedSession;
-        }
-        return newState;
-      });
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === resolvedSessionId ? updatedSession : s
+        ),
+        ...(resolvedSessionId === state.currentSessionId
+          ? { currentSession: updatedSession }
+          : {}),
+      }));
       schedulePersist();
     },
 
@@ -1785,7 +1780,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     },
 
     finalizeStreaming: (): void => {
-      const { streamingMessageId, streamingContent, streamingMetadata, isFinalizingStreaming } = get();
+      const { streamingMessageId, streamingSessionId, streamingContent, streamingMetadata, isFinalizingStreaming } = get();
       if (!streamingMessageId) return;
 
       // Race Condition 방지: 이미 finalization 진행 중이면 스킵
@@ -1802,7 +1797,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
           get().updateMessage(streamingMessageId, {
             content: streamingContent,
             metadata: { ...preservedMetadata, toolCallsInProgress: [] },
-          });
+          }, streamingSessionId ?? undefined);
         }
       } finally {
         // 스트리밍 상태 초기화 (항상 실행 보장)

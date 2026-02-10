@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
-import { useShallow } from 'zustand/shallow';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import {
@@ -44,9 +43,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const { t } = useTranslation();
 
   // 그룹화된 선택자로 리렌더링 최적화
-  const { currentSession, sessions: chatSessions, isHydrating, hydrateForProject } = useChatSessionState();
+  const { currentSession, currentSessionId, sessions: chatSessions, isHydrating, hydrateForProject } = useChatSessionState();
 
   // sessionId prop이 있으면 해당 세션 직접 조회, 없으면 currentSession 사용
+  const effectiveSessionId = sessionId ?? currentSessionId ?? '';
   const displaySession = useMemo(() => {
     if (sessionId) {
       return chatSessions.find((s) => s.id === sessionId) ?? null;
@@ -54,17 +54,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     return currentSession;
   }, [sessionId, chatSessions, currentSession]);
 
-  // 스트리밍 상태: sessionId prop이 있으면 해당 세션의 스트리밍만 표시
-  const sessionStreamingState = sessionId ? useSessionStreamingState(sessionId) : useChatStore(useShallow((s) => ({
-    isStreaming: s.streamingMessageId !== null,
-    streamingMessageId: s.streamingMessageId,
-    streamingContent: s.streamingContent,
-    streamingMetadata: s.streamingMetadata,
-    statusMessage: s.statusMessage,
-    isLoading: s.isLoading,
-  })));
-
-  const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = sessionStreamingState;
+  // 스트리밍 상태: 항상 useSessionStreamingState를 호출 (Rules of Hooks 준수)
+  const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = useSessionStreamingState(effectiveSessionId);
   const {
     composerText,
     setComposerText,
@@ -447,13 +438,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editorRef.current as any)?.clearComposerContent?.();
 
-    // sessionId prop이 있으면 현재 활성 세션으로 switchSession 후 전송
-    // (sendMessage는 currentSessionId를 사용하므로)
-    if (sessionId && sessionId !== useChatStore.getState().currentSessionId) {
-      useChatStore.getState().switchSession(sessionId);
-    }
-
-    await sendMessage(message);
+    await sendMessage(message, sessionId);
   }, [composerText, isLoading, displaySession?.id, sendMessage, setComposerText, sessionId]);
 
   // Chat 패널 열릴 때 포커스

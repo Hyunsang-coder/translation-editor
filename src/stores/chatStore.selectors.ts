@@ -144,34 +144,3 @@ export function useSessionStreamingState(sessionId: string) {
   );
 }
 
-/**
- * 특정 세션의 메시지 목록
- */
-export function useSessionMessages(sessionId: string) {
-  return useBaseStore(
-    useShallow((s) => {
-      const session = s.sessions.find((ss) => ss.id === sessionId);
-      return {
-        messages: session?.messages ?? [],
-        sessionExists: !!session,
-      };
-    })
-  );
-}
-
-/**
- * 특정 세션의 검색 관련 상태
- */
-export function useSessionSearchState(sessionId: string) {
-  return useBaseStore(
-    useShallow((s) => {
-      const session = s.sessions.find((ss) => ss.id === sessionId);
-      return {
-        webSearchEnabled: s.webSearchEnabled,
-        confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
-        setWebSearchEnabled: s.setWebSearchEnabled,
-        setConfluenceSearchEnabled: s.setConfluenceSearchEnabled,
-      };
-    })
-  );
-}
