@@ -8,7 +8,7 @@
 | Editor | TipTap (ProseMirror) - dual instances |
 | State | Zustand with persistence |
 | AI | LangChain.js (OpenAI + Anthropic) |
-| UI Layout | Hybrid Panel (Settings sidebar + Docked Chat panel) |
+| UI Layout | Dual Sidebar (Left + Right, independently collapsible) |
 | Toast | Sonner (position: top-center) |
 | Backend | Tauri 2 + Rust |
 | Storage | SQLite (`.ite` project files) |
@@ -89,10 +89,12 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 
 ### 6. Security
 
-#### API Key Storage
-- OS keychain (macOS Keychain, Windows Credential Manager, Linux keyring)
-- Unified JSON bundle, no environment variable fallbacks
-- Commands: `src-tauri/src/commands/secure_store.rs`
+#### Secret Management (Two-Tier)
+- **Tier 1 — Keychain**: OS keychain stores a single master key (`ite:master_key_v1`), accessed once at app startup
+- **Tier 2 — Vault**: Encrypted file (`secrets.vault`) in app data dir, ChaCha20-Poly1305 with random nonce
+- Secrets cached in memory after vault decryption; no further Keychain prompts at runtime
+- Commands: `src-tauri/src/commands/secrets.rs`, `src-tauri/src/secrets/manager.rs`
+- Legacy: `secure_store.rs` wraps SecretManager with key prefixing (`ai:openai`, etc.)
 
 #### XSS Prevention
 - DOMPurify sanitization for pasted HTML
@@ -128,11 +130,16 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 - **Preview-First**: Translation results shown in modal before applying
 - **Keyboard-First**: All core actions have shortcuts (Cmd+L for Add to Chat)
 - **Focus Mode**: Source panel can be hidden (3-panel → 2-panel)
-- **Hybrid Panel Layout**:
-  - Settings/Review sidebar: Fixed right, draggable width (280-600px)
-  - Docked Chat panel: Fixed bottom, resizable height (min 200px)
-  - Responsive layout: `useResponsiveLayout` hook auto-collapses panels on narrow screens (< 1200px)
-  - Panel state persists across sessions
+- **Dual Sidebar Layout (v2)**:
+  - `[ProjectSidebar] | [LeftSidebar] | Editor | [RightSidebar]`
+  - Both sidebars share `UnifiedSidebar.tsx` component with `side` prop
+  - Each sidebar independently shows Settings / Review / Chat tabs
+  - State: `uiStore.leftSidebar` / `rightSidebar` (`SidebarState: { collapsed, activeTab, width }`)
+  - Defaults: Left=Settings, Right=Chat
+  - Resize: `useResizeHandle` hook handles both directions
+  - Tab drag: Mouse-event based tab reordering (HTML5 DnD replaced)
+  - Responsive layout: `useResponsiveLayout` hook auto-collapses panels on narrow screens
+  - Panel state persists across sessions (localStorage via Zustand)
 - **Chat Composer**:
   - `+` button for attachments/web search toggle
   - Enter to send, Shift+Enter for newline

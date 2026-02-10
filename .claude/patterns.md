@@ -178,12 +178,33 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
 
 All async Tauri commands use `async fn`. State passed via Tauri's State management.
 
-## SQLite Migration Pattern
+## SQLite Pragma & Migration Pattern
 
 ```rust
-// db/mod.rs — initialize() calls run_migrations() after CREATE_SCHEMA
-// Pattern: check column existence, then ALTER TABLE if missing
+// db/mod.rs — apply_pragmas() sets WAL, synchronous, foreign_keys
+// Called in new() AND initialize() (import resets pragmas)
 
+fn apply_pragmas(&self) -> Result<(), IteError> {
+    self.conn.pragma_update(None, "journal_mode", "WAL")?;
+    self.conn.pragma_update(None, "synchronous", "NORMAL")?;
+    self.conn.pragma_update(None, "foreign_keys", true)?;
+    Ok(())
+}
+
+pub fn initialize(&self) -> Result<(), IteError> {
+    self.apply_pragmas()?;           // import 후 pragma 복원
+    self.conn.execute_batch(schema::CREATE_SCHEMA)?;
+    self.run_migrations()?;
+    Ok(())
+}
+```
+
+**Critical**: `import_db_from_file()` (SQLite backup API) resets all pragmas. Always call `initialize()` after import to restore them.
+
+### Column Migration
+
+```rust
+// Pattern: check column existence, then ALTER TABLE if missing
 fn run_migrations(&self) -> Result<(), IteError> {
     let has_column = self.conn
         .prepare("SELECT new_column FROM table LIMIT 0")
@@ -323,9 +344,21 @@ useChatSessionState()    // Session-related state
 // Uses useShallow to minimize re-renders
 ```
 
-## Responsive Layout
+## Dual Sidebar & Responsive Layout
 
 ```typescript
+// src/components/panels/UnifiedSidebar.tsx
+// 양쪽 사이드바가 동일 컴포넌트를 side prop으로 공유
+<UnifiedSidebar side="left" />   // Settings (default)
+<UnifiedSidebar side="right" />  // Chat (default)
+
+// 각 사이드바는 독립적으로 Settings / Review / Chat 탭 표시
+// State: uiStore.leftSidebar / rightSidebar (SidebarState)
+// Actions: setSidebarTab(side, tab), toggleSidebarCollapse(side),
+//          openSidebarTab(side, tab), openReviewInSidebar(side)
+
+// 탭 드래그: src/hooks/usePanelDrag.ts (마우스 이벤트 기반, HTML5 DnD 대체)
+
 // src/hooks/useResponsiveLayout.ts
 // 자동 패널 접기/닫기 (윈도우 너비 감소 시만)
 
@@ -333,14 +366,9 @@ useResponsiveLayout()  // MainLayout에서 호출
 
 // 브레이크포인트:
 // - 1200px: ProjectSidebar 축소 (210px → 48px)
-// - 1000px: SettingsSidebar 닫힘
-// - 800px: ChatPanel 닫힘
+// - 1000px: RightSidebar 닫힘
+// - 800px: LeftSidebar 닫힘
 // - 600px: ProjectSidebar 완전 숨김 (48px → 0px)
-
-// 특성:
-// - 윈도우 크기 감소 시에만 자동 적용
-// - 사용자 수동 조작 시 자동 레이아웃 비활성화
-// - 패널 상태는 세션 간 유지
 ```
 
 ## MCP Direct Invocation Pattern

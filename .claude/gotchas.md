@@ -269,3 +269,11 @@ Critical implementation warnings learned from past issues.
 124. **Review Glossary First Chunk Only**: `ReviewPanel.tsx`에서 glossary 검색이 첫 번째 청크(4000자)만 대상. 긴 문서 후반부의 용어 불일치 누락 가능. 상세: `.claude/review-audit.md` 이슈 #6.
 
 125. **Review severityFilter Set Re-render**: `reviewStore.ts`의 `severityFilter`가 `Set<IssueSeverity>` 타입. `toggleSeverityFilter()`에서 매번 `new Set()` 생성 → Zustand shallow 비교 시 항상 새 참조 → 전체 구독자 리렌더. `Record<IssueSeverity, boolean>`으로 변경 권장. 상세: `.claude/review-audit.md` 이슈 #7.
+
+126. **DB Import Pragma Reset**: `import_db_from_file()` (SQLite backup API)은 커넥션 프래그마(`foreign_keys`, `journal_mode`, `synchronous`)를 리셋함. import 후 반드시 `initialize()` 호출 필요 — 내부에서 `apply_pragmas()`로 복원. `foreign_keys=OFF`가 되면 CASCADE DELETE 미작동 → 고아 레코드 발생.
+
+127. **History Commands Not Implemented**: `commands/history.rs`의 `create_snapshot`, `restore_snapshot`, `list_history`는 `NOT_IMPLEMENTED` 에러를 반환. 프론트엔드에서 현재 호출하지 않지만, 향후 연동 시 주의.
+
+128. **System Theme OS Change Listener**: `App.tsx`에서 `theme === 'system'`일 때 `matchMedia('prefers-color-scheme: dark').addEventListener('change', ...)` 구독 필수. 미등록 시 OS 다크/라이트 전환이 앱에 반영되지 않음.
+
+129. **Vault AAD Not Used**: `secrets/vault.rs`의 XChaCha20-Poly1305 암호화에서 AAD(Associated Data)를 사용하지 않음. Poly1305 태그로 ciphertext 무결성은 보장되지만, vault magic 바인딩은 없음. AAD 추가 시 기존 vault 파일 호환이 깨지므로 마이그레이션 필요.
