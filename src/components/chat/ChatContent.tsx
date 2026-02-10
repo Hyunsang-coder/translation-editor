@@ -1,13 +1,14 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useShallow } from 'zustand/shallow';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import {
   useChatComposerState,
   useChatSessionState,
-  useChatStreamingState,
   useChatSearchState,
   useChatMessageActions,
   useSummarySuggestionState,
+  useSessionStreamingState,
 } from '@/stores/chatStore.selectors';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -44,7 +45,26 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   // 그룹화된 선택자로 리렌더링 최적화
   const { currentSession, sessions: chatSessions, isHydrating, hydrateForProject } = useChatSessionState();
-  const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = useChatStreamingState();
+
+  // sessionId prop이 있으면 해당 세션 직접 조회, 없으면 currentSession 사용
+  const displaySession = useMemo(() => {
+    if (sessionId) {
+      return chatSessions.find((s) => s.id === sessionId) ?? null;
+    }
+    return currentSession;
+  }, [sessionId, chatSessions, currentSession]);
+
+  // 스트리밍 상태: sessionId prop이 있으면 해당 세션의 스트리밍만 표시
+  const sessionStreamingState = sessionId ? useSessionStreamingState(sessionId) : useChatStore(useShallow((s) => ({
+    isStreaming: s.streamingMessageId !== null,
+    streamingMessageId: s.streamingMessageId,
+    streamingContent: s.streamingContent,
+    streamingMetadata: s.streamingMetadata,
+    statusMessage: s.statusMessage,
+    isLoading: s.isLoading,
+  })));
+
+  const { isLoading, streamingMessageId, streamingContent, streamingMetadata, statusMessage } = sessionStreamingState;
   const {
     composerText,
     setComposerText,
@@ -219,8 +239,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   const streamingMessage = useMemo(() => {
     if (!streamingMessageId) return null;
-    return currentSession?.messages.find((m) => m.id === streamingMessageId) ?? null;
-  }, [currentSession?.messages, streamingMessageId]);
+    return displaySession?.messages.find((m) => m.id === streamingMessageId) ?? null;
+  }, [displaySession?.messages, streamingMessageId]);
 
   const streamingBubbleExists = !!streamingMessage;
 
@@ -258,18 +278,18 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     );
   }, [statusMessage]);
 
-  // 메모이제이션된 메시지 이벤트 핸들러
+  // 메모이제이션된 메시지 이벤트 핸들러 (sessionId 전달)
   const handleEditMessage = useCallback((messageId: string, content: string) => {
-    editMessage(messageId, content);
-  }, [editMessage]);
+    editMessage(messageId, content, sessionId);
+  }, [editMessage, sessionId]);
 
   const handleReplayMessage = useCallback((messageId: string) => {
-    void replayMessage(messageId);
-  }, [replayMessage]);
+    void replayMessage(messageId, sessionId);
+  }, [replayMessage, sessionId]);
 
   const handleDeleteMessage = useCallback((messageId: string) => {
-    deleteMessageFrom(messageId);
-  }, [deleteMessageFrom]);
+    deleteMessageFrom(messageId, sessionId);
+  }, [deleteMessageFrom, sessionId]);
 
   const handleAppendToRules = useCallback((content: string) => {
     appendToTranslationRules(content);
@@ -409,24 +429,32 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     return () => clearTimeout(timer);
   }, [focusNonce, side, sessionId]);
 
-  // 기본 채팅 세션 1개는 자동 생성
+  // 기본 채팅 세션 1개는 자동 생성 (side가 없을 때만, dual sidebar에서는 각 세션이 독립적)
   useEffect(() => {
+    if (side) return; // dual sidebar면 스킵
     if (!project?.id) return;
     if (isHydrating) return;
     if (chatSessions.length > 0) return;
     createSession(t('chat.title'));
-  }, [project?.id, isHydrating, chatSessions.length, createSession, t]);
+  }, [side, project?.id, isHydrating, chatSessions.length, createSession, t]);
 
   const sendCurrent = useCallback(async (): Promise<void> => {
-    if (!composerText.trim() || isLoading) return;
+    if (!composerText.trim() || isLoading || !displaySession?.id) return;
 
     const message = composerText.trim();
     setComposerText('');
     // TipTap 에디터 초기화
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editorRef.current as any)?.clearComposerContent?.();
+
+    // sessionId prop이 있으면 현재 활성 세션으로 switchSession 후 전송
+    // (sendMessage는 currentSessionId를 사용하므로)
+    if (sessionId && sessionId !== useChatStore.getState().currentSessionId) {
+      useChatStore.getState().switchSession(sessionId);
+    }
+
     await sendMessage(message);
-  }, [composerText, isLoading, sendMessage, setComposerText]);
+  }, [composerText, isLoading, displaySession?.id, sendMessage, setComposerText, sessionId]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
@@ -440,10 +468,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   // 메시지 추가 시 자동 스크롤
   useEffect(() => {
-    if (chatPanelOpen && currentSession?.messages.length) {
+    if (chatPanelOpen && displaySession?.messages.length) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [currentSession?.messages.length, chatPanelOpen]);
+  }, [displaySession?.messages.length, chatPanelOpen]);
 
   // 스크롤 위치 감지 (맨 아래가 아니면 버튼 표시)
   const handleMessagesScroll = useCallback(() => {
@@ -519,7 +547,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           className="h-full overflow-y-auto p-4 space-y-4"
           onScroll={handleMessagesScroll}
         >
-        {currentSession?.messages.map((message) => (
+        {displaySession?.messages.map((message) => (
           <ChatMessageItem
             key={message.id}
             message={message}
