@@ -38,16 +38,28 @@ function App(): JSX.Element {
     }
   }, [available, update]);
 
-  // 테마 적용
+  // 테마 적용 (system 모드일 때 OS 변경도 실시간 반영)
   useEffect(() => {
     const root = document.documentElement;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const applyTheme = () => {
+      if (theme === 'system') {
+        root.classList.toggle('dark', mediaQuery.matches);
+      } else {
+        root.classList.toggle('dark', theme === 'dark');
+      }
+    };
+
+    applyTheme();
 
     if (theme === 'system') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', prefersDark);
-    } else {
-      root.classList.toggle('dark', theme === 'dark');
+      mediaQuery.addEventListener('change', applyTheme);
     }
+
+    return () => {
+      mediaQuery.removeEventListener('change', applyTheme);
+    };
   }, [theme]);
 
   // 초기 프로젝트 설정

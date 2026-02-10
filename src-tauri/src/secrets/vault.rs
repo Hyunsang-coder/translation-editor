@@ -5,7 +5,7 @@
 //! - nonce: 24 bytes (XChaCha20-Poly1305)
 //! - ciphertext: AEAD 결과 (= 암호문 + 태그)
 //!
-//! AAD: magic를 AAD로 사용 (포맷 바인딩)
+//! AAD: 미사용 (향후 포맷 바인딩 시 magic을 AAD로 추가 가능)
 
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
@@ -87,7 +87,7 @@ pub fn encrypt_and_write(
     // XChaCha20-Poly1305 cipher 생성
     let cipher = XChaCha20Poly1305::new(master_key.into());
 
-    // AAD로 매직 사용
+    // NOTE: AAD 미사용. Poly1305 태그로 ciphertext 무결성은 보장됨.
     let ciphertext = cipher
         .encrypt(XNonce::from_slice(&nonce), plaintext.as_ref())
         .map_err(|e| VaultError::EncryptionFailed(e.to_string()))?;

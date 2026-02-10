@@ -55,17 +55,28 @@ impl Database {
     /// 새 데이터베이스 연결 생성
     pub fn new(path: &Path) -> Result<Self, IteError> {
         let conn = Connection::open(path)?;
+        let db = Self { conn };
+        db.apply_pragmas()?;
+        Ok(db)
+    }
+
+    /// 커넥션 프래그마 설정
+    /// - new() 시 최초 적용
+    /// - import_db_from_file() 후 재적용 (backup API가 프래그마를 리셋하므로)
+    fn apply_pragmas(&self) -> Result<(), IteError> {
         // WAL 모드: 동시 읽기/쓰기 성능 향상, 크래시 복구 개선
-        conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        self.conn.pragma_update(None, "journal_mode", "WAL")?;
+        self.conn.pragma_update(None, "synchronous", "NORMAL")?;
         // SQLite는 기본적으로 foreign_keys가 OFF일 수 있어, ON DELETE CASCADE가 동작하지 않을 수 있습니다.
         // (프로젝트 삭제/정리 안정성을 위해 명시적으로 활성화)
-        conn.pragma_update(None, "foreign_keys", true)?;
-        Ok(Self { conn })
+        self.conn.pragma_update(None, "foreign_keys", true)?;
+        Ok(())
     }
 
     /// 데이터베이스 스키마 초기화
+    /// import 후에도 호출되므로 프래그마도 재적용합니다.
     pub fn initialize(&self) -> Result<(), IteError> {
+        self.apply_pragmas()?;
         self.conn.execute_batch(schema::CREATE_SCHEMA)?;
         self.run_migrations()?;
         Ok(())
