@@ -1,21 +1,19 @@
 # Session Handoff
 
-> Generated: 2026-02-10
+> Updated: 2026-02-10
 > Branch: main
 
 ## 작업 요약
 
-**듀얼 사이드바 채팅 세션 격리 — 구현 + 버그 수정 완료**.
-
-3개 세션에 걸쳐 분석→구현→코드 리뷰→버그 수정까지 완료.
-양쪽 사이드바에 서로 다른 채팅 세션이 열릴 때 메시지가 잘못된 세션으로 전송되던 문제 해결.
+1. **듀얼 사이드바 채팅 세션 격리** — 구현 + 버그 수정 완료
+2. **MD-13: TipTapEditor Source/Target 통합** — 완료
 
 ## 현재 상태
 
-- Working tree: **clean**
-- 모든 타입 체크 통과, 339 tests passed
+- Working tree: chatStore.ts 변경 있음 (HI-01 진행 중)
+- 타입 체크 통과, 339 tests passed
 
-### 커밋 이력 (이번 세션)
+### 커밋 이력
 
 | 커밋 | 내용 |
 |------|------|
@@ -23,6 +21,7 @@
 | `1a918b3` | Phase 1-3: streamingSessionId, targetSessionId, 셀렉터 |
 | `888daa2` | Phase 4: ChatContent 세션별 렌더링 |
 | `7ae8239` | 코드 리뷰 후 버그 수정 6건 (Rules of Hooks, 리셋 누락, as any 제거 등) |
+| `3f3ca8d` | MD-13: TipTapEditor Source/Target 통합 (panelType prop) |
 
 ## 미완료 작업
 
@@ -47,10 +46,9 @@
 - **해결**: `executeAIChat()` 내부 헬퍼 추출
 - **참고**: `docs/CODE_REVIEW_2026-02-09.md` HI-01 항목
 
-#### 2. MD-13: TipTapEditor Source/Target ~90% 중복
-- **영향**: 에디터 수정 시 양쪽 동기화 필요
-- **규모**: Source 37-210줄, Target 216-395줄. 차이는 Cmd+H, placeholder, excerptField뿐
-- **해결**: `panelType` prop으로 통합
+#### ~~2. MD-13: TipTapEditor Source/Target ~90% 중복~~ ✅ 해결 (`3f3ca8d`)
+- 통합 `TipTapEditor` + `panelType` prop으로 377줄 → 223줄 (-154줄)
+- 하위 호환 래퍼 (`SourceTipTapEditor`, `TargetTipTapEditor`) 유지
 
 #### 3. HI-05: chatStore.ts 1,817줄 단일 파일
 - **영향**: 탐색 어려움, 7개 관심사 혼재

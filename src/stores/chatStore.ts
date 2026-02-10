@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
-import { streamAssistantReply } from '@/ai/chat';
+import { streamAssistantReply, type StreamCallbacks } from '@/ai/chat';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
@@ -47,6 +47,19 @@ const DEFAULT_TRANSLATOR_PERSONA = '';
 const MAX_CHAT_SESSIONS = 5;
 const MAX_MESSAGES_PER_SESSION = 1000;
 const CHAT_LENGTH_THRESHOLD = 30;
+
+// 도구 이름 → 한국어 표시명 매핑 (sendMessage/replayMessage 공용)
+const TOOL_NAME_MAP: Record<string, string> = {
+  'web_search': '웹 검색',
+  'web_search_preview': '웹 검색',
+  'get_source_document': '원문 문서 조회',
+  'get_target_document': '번역문 문서 조회',
+  'suggest_translation_rule': '번역 규칙 생성',
+  'suggest_project_context': '프로젝트 맥락 분석',
+  'notion_search': 'Notion 검색',
+  'notion_get_page': 'Notion 페이지 조회',
+  'notion_query_database': 'Notion 데이터베이스 조회',
+};
 
 function tryExtractWebSearchQuery(raw: string): string | null {
   const t = (raw ?? '').trim();
@@ -335,6 +348,263 @@ export const useChatStore = create<ChatStore>((set, get) => {
           }
         });
     }, CHAT_PERSIST_DEBOUNCE_MS);
+  };
+
+  // ── 공통 AI 응답 파이프라인 (sendMessage / replayMessage 공용) ──────────
+
+  interface ExecuteAiReplyParams {
+    /** 이미 resolve된 세션 ID */
+    effectiveSessionId: string;
+    /** 원본 사용자 메시지 (unmasked) */
+    content: string;
+    /** 이미 slice된 이전 메시지 */
+    priorMessages: ChatMessage[];
+    /** 캡처된 첨부파일 */
+    capturedAttachments: AttachmentDto[];
+    /** replayMessage의 onModelRun 등 추가 콜백 (spread로 머지) */
+    extraCallbacks?: Partial<StreamCallbacks>;
+    /** 성공 시 schedulePersist() 호출 여부 (replayMessage: true) */
+    persistOnSuccess?: boolean;
+  }
+
+  const executeAiReply = async (params: ExecuteAiReplyParams): Promise<void> => {
+    const {
+      effectiveSessionId,
+      content,
+      priorMessages,
+      capturedAttachments,
+      extraCallbacks,
+      persistOnSuccess = false,
+    } = params;
+
+    // Ghost mask (request 단위 무결성 보호)
+    const maskSession = createGhostMaskSession();
+    const maskedUserContent = maskGhostChips(content, maskSession);
+
+    // AbortController: 이전 요청 취소 후 새 컨트롤러를 원자적으로 설정
+    const prevAbortController = get().abortController;
+    const abortController = new AbortController();
+    if (prevAbortController) {
+      prevAbortController.abort();
+    }
+    set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
+
+    try {
+      const cfg = getAiConfig();
+      // fresh session 읽기 (caller가 truncation 등으로 변경했을 수 있음)
+      const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
+      const project = useProjectStore.getState().project;
+      const translatorPersona = get().translatorPersona;
+      const webSearchEnabled = get().webSearchEnabled;
+
+      const contextBlockIds = session?.contextBlockIds ?? [];
+      const contextBlocks =
+        project
+          ? contextBlockIds
+            .map((id) => project.blocks[id])
+            .filter((b): b is NonNullable<typeof b> => b !== undefined)
+          : [];
+      const translationRulesRaw = get().translationRules;
+      const projectContextRaw = get().projectContext;
+
+      const translationRules = translationRulesRaw
+        ? maskGhostChips(translationRulesRaw, maskSession)
+        : '';
+      const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
+
+      // 로컬 글로서리 주입 (on-demand)
+      let glossaryInjected = '';
+      try {
+        if (project?.id) {
+          const plainContext = contextBlocks
+            .map((b) => stripHtml(b.content))
+            .join('\n')
+            .slice(0, 1200);
+          const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
+          const hits = q.trim().length
+            ? await searchGlossary({
+              projectId: project.id,
+              query: q,
+              domain: project.metadata.domain,
+              limit: 12,
+            })
+            : [];
+          set({ lastInjectedGlossary: hits });
+          if (hits.length > 0) {
+            const raw = hits
+              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
+              .join('\n');
+            glossaryInjected = maskGhostChips(raw, maskSession);
+          }
+        } else {
+          set({ lastInjectedGlossary: [] });
+        }
+      } catch {
+        // 글로서리 검색 실패는 조용히 무시 (모델 호출 UX 방해 최소화)
+        set({ lastInjectedGlossary: [] });
+      }
+
+      const recent: ChatMessage[] = priorMessages;
+
+      // Assistant 빈 메시지 추가 (스트리밍 버블)
+      const assistantId = get().addMessage({
+        role: 'assistant',
+        content: '',
+        metadata: { model: cfg.model, toolCallsInProgress: [] },
+      }, effectiveSessionId);
+      if (assistantId) {
+        set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
+      }
+
+      // 기본 콜백 + extraCallbacks 머지
+      const callbacks: StreamCallbacks = {
+        onToken: (full) => {
+          if (get().statusMessage !== '답변 생성 중...') {
+            set({ statusMessage: '답변 생성 중...' });
+          }
+          set({ streamingContent: restoreGhostChips(full, maskSession) });
+        },
+        onToolCall: (evt) => {
+          if (!assistantId) return;
+          const currentMetadata = get().streamingMetadata ?? {};
+
+          if (evt.phase === 'start') {
+            const friendlyName = TOOL_NAME_MAP[evt.toolName] || evt.toolName;
+            set({ statusMessage: `${friendlyName} 진행 중...` });
+          } else {
+            set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+          }
+
+          // 1. Tool Call Badge (Running state)
+          const prev = currentMetadata.toolCallsInProgress ?? [];
+          const next =
+            evt.phase === 'start'
+              ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
+              : prev.filter((n) => n !== evt.toolName);
+
+          // 2. Suggestion Handling (Smart Buttons)
+          let nextMetadata = { ...currentMetadata };
+          if (evt.phase === 'start' && evt.args) {
+            if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+              const prev = nextMetadata.suggestedRule ?? '';
+              const cleaned = cleanSuggestionContent(String(evt.args.rule));
+              nextMetadata = {
+                ...nextMetadata,
+                suggestedRule: prev ? `${prev}; ${cleaned}` : cleaned,
+              };
+            } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
+              const prev = nextMetadata.suggestedContext ?? '';
+              const cleaned = cleanSuggestionContent(String(evt.args.context));
+              nextMetadata = {
+                ...nextMetadata,
+                suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
+              };
+            }
+          }
+
+          set({
+            streamingMetadata: {
+              ...nextMetadata,
+              toolCallsInProgress: next,
+            },
+          });
+        },
+        onToolsUsed: (toolsUsed) => {
+          const currentMetadata = get().streamingMetadata ?? {};
+          set({
+            streamingMetadata: { ...currentMetadata, toolsUsed },
+          });
+        },
+        ...extraCallbacks,
+      };
+
+      const replyMasked = await streamAssistantReply(
+        {
+          project,
+          contextBlocks,
+          recentMessages: recent,
+          userMessage: maskedUserContent,
+          translatorPersona,
+          translationRules,
+          ...(glossaryInjected ? { glossaryInjected } : {}),
+          projectContext,
+          requestType: 'question',
+          abortSignal: abortController.signal,
+          attachments: capturedAttachments
+            .filter((a) => a.extractedText)
+            .map((a) => ({ filename: a.filename, text: a.extractedText! })),
+          imageAttachments: capturedAttachments
+            .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
+            .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
+          webSearchEnabled,
+          confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
+          notionSearchEnabled: (() => {
+            const { enabledMap, tokenMap } = useConnectorStore.getState();
+            return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
+          })(),
+        },
+        callbacks,
+      );
+
+      // Finalization
+      if (assistantId) {
+        const restored = restoreGhostChips(replyMasked, maskSession);
+
+        // Tool-call 누락 시 텍스트 기반 폴백 (Smart Buttons)
+        const currentMetadata = get().streamingMetadata ?? {};
+        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
+          const inferred = inferSuggestionFromAssistantText(restored);
+          if (inferred) {
+            set({ streamingMetadata: { ...currentMetadata, ...inferred } });
+          }
+        }
+
+        set({ streamingContent: restored });
+        get().finalizeStreaming();
+      }
+
+      set({ abortController: null });
+      if (persistOnSuccess) {
+        schedulePersist();
+      }
+    } catch (error) {
+      // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
+      if (error instanceof Error && error.name === 'AbortError') {
+        set({
+          isLoading: false,
+          streamingMessageId: null,
+          streamingSessionId: null,
+          streamingContent: null,
+          streamingMetadata: null,
+          statusMessage: null,
+          abortController: null,
+          isFinalizingStreaming: false,
+        });
+        return;
+      }
+
+      const assistantId = get().streamingMessageId;
+      const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
+      if (assistantId) {
+        get().updateMessage(assistantId, {
+          content: `⚠️ ${errText}`,
+          metadata: { toolCallsInProgress: [] },
+        }, effectiveSessionId);
+      } else {
+        get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, effectiveSessionId);
+      }
+      set({
+        error: errText,
+        isLoading: false,
+        streamingMessageId: null,
+        streamingSessionId: null,
+        streamingContent: null,
+        streamingMetadata: null,
+        statusMessage: null,
+        abortController: null,
+        isFinalizingStreaming: false,
+      });
+    }
   };
 
   return {
@@ -668,10 +938,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
       const targetSession = get().sessions.find((s) => s.id === effectiveSessionId);
       const priorMessages = (targetSession?.messages ?? []).slice(-maxRecent);
 
-      // request 단위 Ghost mask (무결성 보호)
-      const maskSession = createGhostMaskSession();
-      const maskedUserContent = maskGhostChips(content, maskSession);
-
       // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
       const capturedAttachments = get().composerAttachments;
       set({ composerAttachments: [] });
@@ -692,7 +958,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
       // [Auto-Title] 첫 메시지인 경우 세션 이름 자동 변경
       const sessionAfterAdd = get().sessions.find((s) => s.id === effectiveSessionId);
       if (sessionAfterAdd && sessionAfterAdd.messages.length === 1) {
-        // 간단한 규칙: 첫 20자 + ...
         const newTitle = content.trim().slice(0, 20) + (content.length > 20 ? '...' : '');
         get().renameSession(sessionAfterAdd.id, newTitle);
       }
@@ -720,7 +985,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
         set({ isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
         const cfg = getAiConfig();
-        // 모든 provider가 내장 웹검색 사용 (OpenAI: web_search_preview, Anthropic: web_search)
         const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['web_search'];
 
         const assistantId = addMessage({
@@ -733,7 +997,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
           let text = '';
           const toolsUsed: string[] = [];
 
-          // 내장 웹검색 사용 (OpenAI: web_search_preview, Anthropic: web_search_20250305)
           const modelAny = createChatModel(undefined, { useFor: 'chat' }) as any;
 
           if (cfg.provider === 'openai') {
@@ -795,255 +1058,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
         return;
       }
 
-      set({ isLoading: true, error: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
-
-      try {
-        const cfg = getAiConfig();
-        const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
-        const project = useProjectStore.getState().project;
-        const translatorPersona = get().translatorPersona;
-        const webSearchEnabled = get().webSearchEnabled;
-
-        const contextBlockIds = session?.contextBlockIds ?? [];
-        const contextBlocks =
-          project
-            ? contextBlockIds
-              .map((id) => project.blocks[id])
-              .filter((b): b is NonNullable<typeof b> => b !== undefined)
-            : [];
-        const translationRulesRaw = get().translationRules;
-        const projectContextRaw = get().projectContext;
-        // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
-
-        const translationRules = translationRulesRaw
-          ? maskGhostChips(translationRulesRaw, maskSession)
-          : '';
-        const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
-
-        // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
-        let glossaryInjected = '';
-        try {
-          if (project?.id) {
-            const plainContext = contextBlocks
-              .map((b) => stripHtml(b.content))
-              .join('\n')
-              .slice(0, 1200);
-            const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
-            const hits = q.trim().length
-              ? await searchGlossary({
-                projectId: project.id,
-                query: q,
-                domain: project.metadata.domain,
-                limit: 12,
-              })
-              : [];
-            set({ lastInjectedGlossary: hits });
-            if (hits.length > 0) {
-              const raw = hits
-                .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-                .join('\n');
-              glossaryInjected = maskGhostChips(raw, maskSession);
-            }
-          } else {
-            set({ lastInjectedGlossary: [] });
-          }
-        } catch {
-          // 글로서리 검색 실패는 조용히 무시(모델 호출 UX 방해 최소화)
-          set({ lastInjectedGlossary: [] });
-        }
-
-        // 질문(question) 모드: 최근 히스토리(최대 10개) 포함
-        const recent: ChatMessage[] = priorMessages;
-
-        // Issue #2 Fix: 이전 요청이 있으면 취소 (race condition 방지를 위해 새 컨트롤러를 먼저 생성)
-        const prevAbortController = get().abortController;
-        const abortController = new AbortController();
-
-        // 이전 요청 취소
-        if (prevAbortController) {
-          prevAbortController.abort();
-        }
-
-        // 새 컨트롤러를 원자적으로 설정 (null 갭 없음)
-        set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
-
-        const assistantId = addMessage({
-          role: 'assistant',
-          content: '',
-          metadata: { model: cfg.model, toolCallsInProgress: [] },
-        }, effectiveSessionId);
-        if (assistantId) {
-          set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
-        }
-
-        const replyMasked = await streamAssistantReply(
-          {
-            project,
-            contextBlocks,
-            recentMessages: recent,
-            userMessage: maskedUserContent,
-            translatorPersona,
-            translationRules,
-            ...(glossaryInjected ? { glossaryInjected } : {}),
-            projectContext,
-            // 채팅은 항상 "question"으로 호출 (자동 번역 모드 진입 방지)
-            requestType: 'question',
-            abortSignal: abortController.signal,
-            // 채팅 컴포저 전용 첨부만 payload에 포함 (캡처된 값 사용)
-            attachments: capturedAttachments
-              .filter((a) => a.extractedText)
-              .map((a) => ({ filename: a.filename, text: a.extractedText! })),
-            imageAttachments: capturedAttachments
-              .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
-              .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
-            webSearchEnabled,
-            confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
-            // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
-            notionSearchEnabled: (() => {
-              const { enabledMap, tokenMap } = useConnectorStore.getState();
-              return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
-            })(),
-          },
-          {
-            onToken: (full) => {
-              if (get().statusMessage !== '답변 생성 중...') {
-                set({ statusMessage: '답변 생성 중...' });
-              }
-              // 성능 최적화: 배열 갱신 없이 단일 필드만 업데이트
-              set({ streamingContent: restoreGhostChips(full, maskSession) });
-            },
-            onToolCall: (evt) => {
-              if (!assistantId) return;
-              // 성능 최적화: 스트리밍 메타데이터 사용 (배열 갱신 없음)
-              const currentMetadata = get().streamingMetadata ?? {};
-
-              if (evt.phase === 'start') {
-                const toolNameMap: Record<string, string> = {
-                  'web_search': '웹 검색',
-                  'web_search_preview': '웹 검색',
-                                    'get_source_document': '원문 문서 조회',
-                  'get_target_document': '번역문 문서 조회',
-                  'suggest_translation_rule': '번역 규칙 생성',
-                  'suggest_project_context': '프로젝트 맥락 분석',
-                  'notion_search': 'Notion 검색',
-                  'notion_get_page': 'Notion 페이지 조회',
-                  'notion_query_database': 'Notion 데이터베이스 조회',
-                };
-                const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
-                set({ statusMessage: `${friendlyName} 진행 중...` });
-              } else {
-                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
-              }
-
-              // 1. Tool Call Badge (Running state)
-              const prev = currentMetadata.toolCallsInProgress ?? [];
-              const next =
-                evt.phase === 'start'
-                  ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
-                  : prev.filter((n) => n !== evt.toolName);
-
-              // 2. Suggestion Handling (Smart Buttons)
-              let nextMetadata = { ...currentMetadata };
-
-              // suggest_* 툴이 호출되면 해당 내용을 메타데이터에 기록 (분리 필드로 누적)
-              if (evt.phase === 'start' && evt.args) {
-                if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
-                  const prev = nextMetadata.suggestedRule ?? '';
-                  const cleaned = cleanSuggestionContent(String(evt.args.rule));
-                  nextMetadata = {
-                    ...nextMetadata,
-                    suggestedRule: prev ? `${prev}; ${cleaned}` : cleaned,
-                  };
-                } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
-                  const prev = nextMetadata.suggestedContext ?? '';
-                  const cleaned = cleanSuggestionContent(String(evt.args.context));
-                  nextMetadata = {
-                    ...nextMetadata,
-                    suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
-                  };
-                }
-              }
-
-              // 성능 최적화: 스트리밍 메타데이터만 업데이트 (배열 갱신 없음)
-              set({
-                streamingMetadata: {
-                  ...nextMetadata,
-                  toolCallsInProgress: next,
-                },
-              });
-            },
-            onToolsUsed: (toolsUsed) => {
-              // 성능 최적화: 스트리밍 메타데이터만 업데이트
-              const currentMetadata = get().streamingMetadata ?? {};
-              set({
-                streamingMetadata: { ...currentMetadata, toolsUsed },
-              });
-            },
-          },
-        );
-        // composerAttachments는 sendMessage 시작 시 이미 초기화됨
-
-        if (assistantId) {
-          const restored = restoreGhostChips(replyMasked, maskSession);
-
-          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
-          const currentMetadata = get().streamingMetadata ?? {};
-          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
-          if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
-            const inferred = inferSuggestionFromAssistantText(restored);
-            if (inferred) {
-              set({ streamingMetadata: { ...currentMetadata, ...inferred } });
-            }
-          }
-
-          // 최종 콘텐츠 설정 후 한 번에 messages 배열에 반영
-          set({ streamingContent: restored });
-          get().finalizeStreaming();
-        }
-
-        set({ abortController: null });
-      } catch (error) {
-        // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
-        if (error instanceof Error && error.name === 'AbortError') {
-          set({
-            isLoading: false,
-            streamingMessageId: null,
-            streamingSessionId: null,
-            streamingContent: null,
-            streamingMetadata: null,
-            statusMessage: null,
-            abortController: null,
-            isFinalizingStreaming: false,
-          });
-          return;
-        }
-
-        const assistantId = get().streamingMessageId;
-        const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
-        if (assistantId) {
-          // 사용자가 "왜 안 되는지" 바로 알 수 있도록 버블에 에러를 표시합니다.
-          get().updateMessage(assistantId, {
-            content: `⚠️ ${errText}`,
-            metadata: { toolCallsInProgress: [] },
-          }, effectiveSessionId);
-        } else {
-          // assistant 버블이 생성되기 전에 실패한 경우(매우 드묾)에도 에러를 남깁니다.
-          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, effectiveSessionId);
-        }
-        // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
-        // composerAttachments는 sendMessage 시작 시 이미 초기화됨
-        set({
-          error: errText,
-          isLoading: false,
-          streamingMessageId: null,
-          streamingSessionId: null,
-          streamingContent: null,
-          streamingMetadata: null,
-          statusMessage: null,
-          abortController: null,
-          isFinalizingStreaming: false,
-        });
-      }
+      // 공통 AI 응답 파이프라인 위임
+      await executeAiReply({
+        effectiveSessionId,
+        content,
+        priorMessages,
+        capturedAttachments,
+      });
     },
 
     setComposerText: (text: string): void => {
@@ -1246,262 +1267,28 @@ export const useChatStore = create<ChatStore>((set, get) => {
         }));
       }
 
-      // request 단위 Ghost mask (무결성 보호)
-      const maskSession = createGhostMaskSession();
-      const maskedUserContent = maskGhostChips(content, maskSession);
-
-      // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
+      // 첨부 파일 캡처 후 즉시 초기화
       const capturedAttachments = get().composerAttachments;
       set({ composerAttachments: [] });
 
-      // Issue #2 Fix: 이전 요청이 있으면 취소 (race condition 방지를 위해 새 컨트롤러를 먼저 생성)
-      const prevAbortController = get().abortController;
-      const abortController = new AbortController();
-
-      // 이전 요청 취소
-      if (prevAbortController) {
-        prevAbortController.abort();
-      }
-
-      // 새 컨트롤러를 원자적으로 설정 (null 갭 없음)
-      set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
-
-      try {
-        const cfg = getAiConfig();
-        const project = useProjectStore.getState().project;
-        const translatorPersona = get().translatorPersona;
-
-        const contextBlockIds = session.contextBlockIds ?? [];
-        const contextBlocks =
-          project
-            ? contextBlockIds
-              .map((id) => project.blocks[id])
-              .filter((b): b is NonNullable<typeof b> => b !== undefined)
-            : [];
-        const translationRulesRaw = get().translationRules;
-        const projectContextRaw = get().projectContext;
-        // 채팅(Question): 문서는 기본적으로 payload에 인라인 포함하지 않고, 필요 시 Tool로 on-demand 조회합니다.
-
-        const translationRules = translationRulesRaw
-          ? maskGhostChips(translationRulesRaw, maskSession)
-          : '';
-        const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
-
-        // 로컬 글로서리 주입(on-demand: 모델 호출 시에만)
-        let glossaryInjected = '';
-        try {
-          if (project?.id) {
-            const plainContext = contextBlocks
-              .map((b) => stripHtml(b.content))
-              .join('\n')
-              .slice(0, 1200);
-            const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
-            const hits = q.trim().length
-              ? await searchGlossary({
-                projectId: project.id,
-                query: q,
-                domain: project.metadata.domain,
-                limit: 12,
-              })
-              : [];
-            set({ lastInjectedGlossary: hits });
-            if (hits.length > 0) {
-              const raw = hits
-                .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-                .join('\n');
-              glossaryInjected = maskGhostChips(raw, maskSession);
+      // 공통 AI 응답 파이프라인 위임
+      await executeAiReply({
+        effectiveSessionId: resolvedSessionId!,
+        content,
+        priorMessages,
+        capturedAttachments,
+        extraCallbacks: {
+          onModelRun: (step) => {
+            if (step > 0) {
+              set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+            } else {
+              const isWeb = get().webSearchEnabled;
+              set({ statusMessage: isWeb ? '답변 생성 및 웹 검색 확인 중...' : '답변 생성 및 도구 확인 중...' });
             }
-          } else {
-            set({ lastInjectedGlossary: [] });
-          }
-        } catch {
-          set({ lastInjectedGlossary: [] });
-        }
-
-        // 질문(question) 모드: 최근 히스토리(최대 10개) 포함
-        const recent: ChatMessage[] = priorMessages;
-
-        const assistantId = get().addMessage({
-          role: 'assistant',
-          content: '',
-          metadata: { model: cfg.model, toolCallsInProgress: [] },
-        }, resolvedSessionId ?? undefined);
-        if (assistantId) {
-          set({ streamingMessageId: assistantId, streamingSessionId: resolvedSessionId });
-        }
-
-        const replyMasked = await streamAssistantReply(
-          {
-            project,
-            contextBlocks,
-            recentMessages: recent,
-            userMessage: maskedUserContent,
-            translatorPersona,
-            translationRules,
-            ...(glossaryInjected ? { glossaryInjected } : {}),
-            projectContext,
-            requestType: 'question',
-            abortSignal: abortController.signal,
-            // 채팅 컴포저 전용 첨부만 payload에 포함 (캡처된 값 사용)
-            attachments: capturedAttachments
-              .filter((a) => a.extractedText)
-              .map((a) => ({ filename: a.filename, text: a.extractedText! })),
-            imageAttachments: capturedAttachments
-              .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
-              .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
-            webSearchEnabled: get().webSearchEnabled,
-            confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
-            // Notion 커넥터 활성화 여부 (connectorStore에서 확인)
-            notionSearchEnabled: (() => {
-              const { enabledMap, tokenMap } = useConnectorStore.getState();
-              return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
-            })(),
           },
-          {
-            onToken: (full) => {
-              if (get().statusMessage !== '답변 생성 중...') {
-                set({ statusMessage: '답변 생성 중...' });
-              }
-              // 성능 최적화: 배열 갱신 없이 단일 필드만 업데이트
-              set({ streamingContent: restoreGhostChips(full, maskSession) });
-            },
-            onToolCall: (evt) => {
-              if (!assistantId) return;
-              // 성능 최적화: 스트리밍 메타데이터 사용 (배열 갱신 없음)
-              const currentMetadata = get().streamingMetadata ?? {};
-
-              if (evt.phase === 'start') {
-                const toolNameMap: Record<string, string> = {
-                  'web_search': '웹 검색',
-                  'web_search_preview': '웹 검색',
-                                    'get_source_document': '원문 문서 조회',
-                  'get_target_document': '번역문 문서 조회',
-                  'suggest_translation_rule': '번역 규칙 생성',
-                  'suggest_project_context': '프로젝트 맥락 분석',
-                  'notion_search': 'Notion 검색',
-                  'notion_get_page': 'Notion 페이지 조회',
-                  'notion_query_database': 'Notion 데이터베이스 조회',
-                };
-                const friendlyName = toolNameMap[evt.toolName] || evt.toolName;
-                set({ statusMessage: `${friendlyName} 진행 중...` });
-              } else {
-                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
-              }
-
-              // 1) Tool Call Badge
-              const prev = currentMetadata.toolCallsInProgress ?? [];
-              const next =
-                evt.phase === 'start'
-                  ? prev.includes(evt.toolName) ? prev : [...prev, evt.toolName]
-                  : prev.filter((n) => n !== evt.toolName);
-
-              // 2) Suggestion Handling (Smart Buttons)
-              let nextMetadata = { ...currentMetadata };
-              if (evt.phase === 'start' && evt.args) {
-                if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
-                  const prevRule = nextMetadata.suggestedRule ?? '';
-                  const cleaned = cleanSuggestionContent(String(evt.args.rule));
-                  nextMetadata = {
-                    ...nextMetadata,
-                    suggestedRule: prevRule ? `${prevRule}; ${cleaned}` : cleaned,
-                  };
-                } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
-                  const prevCtx = nextMetadata.suggestedContext ?? '';
-                  const cleaned = cleanSuggestionContent(String(evt.args.context));
-                  nextMetadata = {
-                    ...nextMetadata,
-                    suggestedContext: prevCtx ? `${prevCtx}; ${cleaned}` : cleaned,
-                  };
-                }
-              }
-
-              // 성능 최적화: 스트리밍 메타데이터만 업데이트 (배열 갱신 없음)
-              set({
-                streamingMetadata: {
-                  ...nextMetadata,
-                  toolCallsInProgress: next,
-                },
-              });
-            },
-            onModelRun: (step) => {
-              if (step > 0) {
-                set({ statusMessage: '결과 처리 및 답변 생성 중...' });
-              } else {
-                // 초기 단계: 웹 검색 활성화 여부에 따라 메시지 차별화
-                const isWeb = get().webSearchEnabled;
-                set({ statusMessage: isWeb ? '답변 생성 및 웹 검색 확인 중...' : '답변 생성 및 도구 확인 중...' });
-              }
-            },
-            onToolsUsed: (toolsUsed) => {
-              // 성능 최적화: 스트리밍 메타데이터만 업데이트
-              const currentMetadata = get().streamingMetadata ?? {};
-              set({
-                streamingMetadata: { ...currentMetadata, toolsUsed },
-              });
-            },
-          },
-        );
-        // composerAttachments는 replayMessage 시작 시 이미 초기화됨
-
-        if (assistantId) {
-          const restored = restoreGhostChips(replyMasked, maskSession);
-
-          // Tool-call이 누락되더라도, "버튼으로 추가" 안내가 포함된 응답이면 버튼을 띄울 수 있게 폴백 처리
-          const currentMetadata = get().streamingMetadata ?? {};
-          if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
-            const inferred = inferSuggestionFromAssistantText(restored);
-            if (inferred) {
-              set({ streamingMetadata: { ...currentMetadata, ...inferred } });
-            }
-          }
-
-          // 최종 콘텐츠 설정 후 한 번에 messages 배열에 반영
-          set({ streamingContent: restored });
-          get().finalizeStreaming();
-        }
-
-        set({ abortController: null });
-        schedulePersist();
-      } catch (error) {
-        // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
-        if (error instanceof Error && error.name === 'AbortError') {
-          set({
-            isLoading: false,
-            streamingMessageId: null,
-            streamingSessionId: null,
-            streamingContent: null,
-            streamingMetadata: null,
-            statusMessage: null,
-            abortController: null,
-            isFinalizingStreaming: false,
-          });
-          return;
-        }
-
-        const assistantId = get().streamingMessageId;
-        const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
-        if (assistantId) {
-          get().updateMessage(assistantId, {
-            content: `⚠️ ${errText}`,
-            metadata: { toolCallsInProgress: [] },
-          }, resolvedSessionId ?? undefined);
-        } else {
-          get().addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, resolvedSessionId ?? undefined);
-        }
-        // Issue #7 수정: 에러 시에도 모든 상태를 완전히 정리 (statusMessage 포함)
-        // composerAttachments는 replayMessage 시작 시 이미 초기화됨
-        set({
-          error: errText,
-          isLoading: false,
-          streamingMessageId: null,
-          streamingSessionId: null,
-          streamingContent: null,
-          streamingMetadata: null,
-          statusMessage: null,
-          abortController: null,
-          isFinalizingStreaming: false,
-        });
-      }
+        },
+        persistOnSuccess: true,
+      });
     },
 
     deleteMessageFrom: (messageId: string, targetSessionId?: string): void => {
