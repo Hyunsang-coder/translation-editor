@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { ITEProject } from '@/types';
+import { describe, it, expect, vi } from 'vitest';
 import type { TipTapDocJson } from '@/utils/markdownConverter';
 import {
   isTimeoutError,
@@ -128,18 +127,7 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     // 🔴 Red: 테스트 먼저 작성 (구현 검증 필요)
 
     it('Spanish → English 번역 성공', async () => {
-      // Arrange: 테스트용 프로젝트 및 문서
-      const mockProject: ITEProject = {
-        id: 'test-proj-1',
-        name: 'API Integration Guide Translation',
-        sourceLanguage: 'Spanish',
-        targetLanguage: 'English',
-        metadata: {
-          domain: 'technical',
-          targetLanguage: 'English',
-        },
-      } as any;
-
+      // Arrange: 테스트용 문서
       const sourceDocJson: TipTapDocJson = {
         type: 'doc',
         content: [
@@ -155,9 +143,6 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
         ],
       };
 
-      // Arrange: 번역 결과 콜백
-      const onToken = vi.fn();
-
       // Act: 번역 실행 (Phase 5.1)
       // const { translateWithStreaming } = await import('@/ai/translateDocument');
       // const result = await translateWithStreaming({
@@ -169,20 +154,17 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       // Assert: 입력값이 유효한지 확인
       expect(sourceDocJson.type).toBe('doc');
       expect(sourceDocJson.content).toBeDefined();
-      expect(sourceDocJson.content?.length).toBeGreaterThan(0);
+      expect(Array.isArray(sourceDocJson.content)).toBe(true);
 
       // TODO: 실제 번역 결과 검증
       // expect(result).toHaveProperty('doc');
       // expect(result.doc.type).toBe('doc');
       // expect(result.doc.content).toBeDefined();
-      // expect(onToken).toHaveBeenCalled(); // 스트리밍 콜백
     });
 
     it.skip('번역 중 취소 (AbortSignal)', async () => {
-      // Arrange
-      const abortController = new AbortController();
-
       // Act: 번역 시작 후 즉시 취소
+      // const abortController = new AbortController();
       // const translatePromise = translateWithStreaming({
       //   sourceDocJson: mockSourceDoc,
       //   abortSignal: abortController.signal,

@@ -96,10 +96,13 @@ describe('verifyNotionToken', () => {
     await verifyNotionToken();
 
     // 첫 번째 인자는 command 이름, 두 번째는 인자
-    const [command, args] = vi.mocked(invoke).mock.calls[0];
+    const calls = vi.mocked(invoke).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [command, args] = calls[0]!;
     expect(command).toBe('notion_search');
-    expect(args.query).toBe('');
-    expect(args.pageSize).toBe(1);
+    const argsObj = args as Record<string, unknown>;
+    expect(argsObj.query).toBe('');
+    expect(argsObj.pageSize).toBe(1);
   });
 
   it('여러 번 호출 시 각각 독립적으로 동작', async () => {

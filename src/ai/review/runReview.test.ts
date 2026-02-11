@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';
 
 /**
@@ -13,18 +13,14 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
     {
       sourceText: 'This guide provides detailed instructions',
       targetText: 'Esta guía proporciona instrucciones detalladas',
-      sourceLanguage: 'English',
-      targetLanguage: 'Spanish',
-      segmentIndex: 0,
-      segmentGroupId: 'seg-0',
+      groupId: 'seg-0',
+      order: 0,
     },
     {
       sourceText: 'Basic knowledge of JavaScript',
       targetText: 'Conocimiento básico de JavaScript',
-      sourceLanguage: 'English',
-      targetLanguage: 'Spanish',
-      segmentIndex: 1,
-      segmentGroupId: 'seg-1',
+      groupId: 'seg-1',
+      order: 1,
     },
   ];
 
@@ -34,13 +30,13 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(mockSegments).toHaveLength(2);
       expect(mockSegments[0]).toHaveProperty('sourceText');
       expect(mockSegments[0]).toHaveProperty('targetText');
-      expect(mockSegments[0]).toHaveProperty('segmentGroupId');
+      expect(mockSegments[0]).toHaveProperty('groupId');
     });
 
-    it('segmentGroupId가 모든 세그먼트에 존재해야 함', () => {
+    it('groupId가 모든 세그먼트에 존재해야 함', () => {
       mockSegments.forEach((segment) => {
-        expect(segment.segmentGroupId).toBeDefined();
-        expect(segment.segmentGroupId).toMatch(/^seg-\d+$/);
+        expect(segment.groupId).toBeDefined();
+        expect(segment.groupId).toMatch(/^seg-\d+$/);
       });
     });
 
@@ -48,14 +44,14 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       // Act: 세그먼트별 처리
       const processed = mockSegments.map((segment, index) => ({
         chunkIndex: 0,
-        segmentIndex: index,
+        order: index,
         text: segment.targetText,
       }));
 
       // Assert: 모든 세그먼트 처리됨
       expect(processed).toHaveLength(2);
-      expect(processed[0].segmentIndex).toBe(0);
-      expect(processed[1].segmentIndex).toBe(1);
+      expect(processed[0]!.order).toBe(0);
+      expect(processed[1]!.order).toBe(1);
     });
   });
 
