@@ -290,6 +290,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
 
           // 디버깅: 검색 결과 로그 (개발 환경에서만)
           if (process.env.NODE_ENV === 'development') {
+            // eslint-disable-next-line no-console
             console.debug('[SearchHighlight:setSearchTerm]', {
               term,
               normalizedTerm: normalizeForSearch(term),
