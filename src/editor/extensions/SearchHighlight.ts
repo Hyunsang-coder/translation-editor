@@ -288,13 +288,15 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           storage.matches = findMatches(editor.state.doc, term, storage.caseSensitive);
           storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
 
-          // 디버깅: 검색 결과 로그
-          console.warn('[SearchHighlight:setSearchTerm]', {
-            term,
-            normalizedTerm: normalizeForSearch(term),
-            matchCount: storage.matches.length,
-            caseSensitive: storage.caseSensitive,
-          });
+          // 디버깅: 검색 결과 로그 (개발 환경에서만)
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[SearchHighlight:setSearchTerm]', {
+              term,
+              normalizedTerm: normalizeForSearch(term),
+              matchCount: storage.matches.length,
+              caseSensitive: storage.caseSensitive,
+            });
+          }
 
           if (dispatch) {
             // 트랜잭션에 메타 정보 추가하여 decoration 갱신
