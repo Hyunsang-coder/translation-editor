@@ -24,7 +24,7 @@ pub struct SearchResult {
     #[serde(default)]
     pub properties: Option<serde_json::Value>,
     #[serde(default)]
-    pub title: Option<Vec<RichText>>,
+    pub title: Option<serde_json::Value>,
     #[serde(default)]
     pub parent: Option<Parent>,
 }

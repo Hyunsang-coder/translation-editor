@@ -25,7 +25,7 @@ const NotionSearchResultItemSchema = z.object({
   object: z.enum(["page", "database"]),
   url: z.string().optional(),
   properties: z.record(z.unknown()).optional(),
-  title: z.array(NotionRichTextSchema).optional(),
+  title: z.unknown().optional(),
 }).passthrough();
 
 const NotionSearchResponseSchema = z.object({
@@ -199,9 +199,11 @@ function extractTitle(item: z.infer<typeof NotionSearchResultItemSchema>): strin
     }
   }
 
-  // 데이터베이스의 경우 title 필드 확인
-  if (item.title && item.title.length > 0) {
-    return item.title.map((t) => t.plain_text).join("");
+  // 데이터베이스의 경우 title 필드 확인 (배열일 경우)
+  if (item.title && Array.isArray(item.title) && item.title.length > 0) {
+    return (item.title as Array<{ plain_text: string }>)
+      .map((t) => t.plain_text)
+      .join("");
   }
 
   return "(Untitled)";
@@ -241,5 +243,35 @@ export async function setNotionToken(token: string): Promise<void> {
  */
 export async function clearNotionToken(): Promise<void> {
   await invoke("notion_clear_token");
+}
+
+/**
+ * Notion 토큰 유효성 검증
+ * 빈 쿼리로 notion_search를 호출해서 토큰이 유효한지 확인합니다.
+ *
+ * @returns 토큰이 유효하면 true, 무효하거나 에러가 발생하면 false
+ */
+export async function verifyNotionToken(): Promise<boolean> {
+  try {
+    // 빈 쿼리로 검색을 시도 - 토큰이 유효한지만 확인
+    // 실제 검색 결과는 필요 없으므로, 토큰이 유효하면 true 반환
+    const result = await invoke<string>("notion_search", {
+      query: "",  // 빈 쿼리
+      filter: undefined,
+      pageSize: 1,
+    });
+
+    // 응답이 있으면 토큰이 유효
+    return !!result;
+  } catch (error) {
+    // 에러가 발생하면 토큰이 무효 (API 오류, 인증 실패 등)
+    if (import.meta.env.DEV) {
+      console.warn(
+        "[notionTools] Token verification failed:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+    return false;
+  }
 }
 
