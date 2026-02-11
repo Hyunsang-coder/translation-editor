@@ -55,6 +55,7 @@ coverage/
 #tauri
 # Tauri build artifacts
 src-tauri/target/
+src-tauri/src-tauri/target/
 
 
 # Rust compiled files

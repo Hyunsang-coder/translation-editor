@@ -37,8 +37,6 @@ struct ConfluenceApiStorage {
 #[derive(Debug, Deserialize)]
 struct AccessibleResource {
     id: String,
-    url: String,
-    name: String,
 }
 
 /// Confluence 페이지 HTML(storage format) 가져오기

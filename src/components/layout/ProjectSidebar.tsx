@@ -2,7 +2,12 @@ import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
-import { createProject, duplicateProject } from '@/tauri/project';
+import {
+  createProject,
+  duplicateProject,
+  loadProject as tauriLoadProject,
+  saveProject as tauriSaveProject,
+} from '@/tauri/project';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -223,8 +228,7 @@ export function ProjectSidebar(): JSX.Element {
         });
         await saveProject();
       } else {
-        const { loadProject: tauriLoad, saveProject: tauriSave } = await import('@/tauri/project');
-        const loaded = await tauriLoad(projectId);
+        const loaded = await tauriLoadProject(projectId);
         const updated = {
           ...loaded,
           metadata: {
@@ -233,7 +237,7 @@ export function ProjectSidebar(): JSX.Element {
             updatedAt: Date.now(),
           },
         };
-        await tauriSave(updated);
+        await tauriSaveProject(updated);
       }
       await refresh();
     } catch (e) {

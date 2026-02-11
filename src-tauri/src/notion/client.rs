@@ -93,15 +93,6 @@ impl NotionClient {
         println!("[Notion] Token cleared");
     }
 
-    /// API 요청 공통 헤더 설정
-    fn build_request(&self, token: &str) -> reqwest::RequestBuilder {
-        self.http
-            .get("") // placeholder, will be overwritten
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Notion-Version", NOTION_VERSION)
-            .header("Content-Type", "application/json")
-    }
-
     /// 검색 API 호출
     pub async fn search(
         &self,

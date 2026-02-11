@@ -10,6 +10,7 @@ import { initializeConnectors } from '@/stores/connectorStore';
 import { cleanupTempImages } from '@/tauri/attachments';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { UpdateModal } from '@/components/ui/UpdateModal';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 function App(): JSX.Element {
   const theme = useUIStore((s) => s.theme);
@@ -115,8 +116,6 @@ function App(): JSX.Element {
   // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
   useEffect(() => {
     const initCloseListener = async () => {
-      // Dynamic import to avoid SSR/build issues if any, though standard import is fine
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
         const { isDirty, saveProject } = useProjectStore.getState();
         if (isDirty) {
