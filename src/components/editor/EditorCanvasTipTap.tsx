@@ -7,7 +7,6 @@ import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { SearchBar } from './SearchBar';
-// ReviewModal은 더 이상 사용하지 않음 (ChatPanel의 Review 탭으로 대체)
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Editor } from '@tiptap/react';
 import {

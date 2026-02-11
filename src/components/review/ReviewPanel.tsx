@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -420,8 +420,8 @@ export function ReviewPanel(): JSX.Element {
     resetReview(); // 내부에서 하이라이트 비활성화 + nonce 증가 처리
   }, [isReviewing, handleCancel, resetReview]);
 
-  const allIssues = useMemo(() => getAllIssues(), [getAllIssues]);
-  const checkedIssues = useMemo(() => getCheckedIssues(), [getCheckedIssues]);
+  const allIssues = getAllIssues();
+  const checkedIssues = getCheckedIssues();
   const hasErrors = results.some((r) => r.error);
   const allChecked = allIssues.length > 0 && allIssues.every((i) => i.checked);
 
