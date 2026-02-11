@@ -6,7 +6,10 @@
 export { TranslationBlockExtension } from './TranslationBlock';
 export { GhostChipExtension } from './GhostChip';
 export { DiffMarkExtension } from './DiffMark';
-export { SearchHighlight, getSearchState, searchHighlightPluginKey } from './SearchHighlight';
+export { SearchHighlight, getSearchState } from './SearchHighlight';
 export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
 export { ImagePlaceholder, ImageOriginal } from './ImagePlaceholder';
+export { pluginKeys } from '@/editor/plugins/pluginKeys';
+// Backward compatibility: searchHighlightPluginKey는 pluginKeys.searchHighlight로 접근
+export { searchHighlightPluginKey } from './SearchHighlight';
 

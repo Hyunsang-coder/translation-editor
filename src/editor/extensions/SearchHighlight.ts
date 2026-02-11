@@ -1,11 +1,12 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import {
   normalizeForSearch,
   buildNormalizedTextWithMapping,
 } from '@/utils/normalizeForSearch';
+import { pluginKeys } from '@/editor/plugins/pluginKeys';
 
 // ============================================
 // Types
@@ -39,7 +40,7 @@ export interface SearchHighlightStorage {
 // Plugin Key
 // ============================================
 
-export const searchHighlightPluginKey = new PluginKey<DecorationSet>('searchHighlight');
+export const searchHighlightPluginKey = pluginKeys.searchHighlight;
 
 // ============================================
 // Helper Functions

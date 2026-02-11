@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
@@ -10,13 +10,14 @@ import {
 } from '@/utils/normalizeForSearch';
 import { findSegmentRange, buildTextWithPositions } from '@/editor/extensions/SearchHighlight';
 import { hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
+import { pluginKeys } from '@/editor/plugins/pluginKeys';
 
 export interface ReviewHighlightOptions {
   highlightClass: string;
   excerptField: 'sourceExcerpt' | 'targetExcerpt';
 }
 
-const reviewHighlightPluginKey = new PluginKey('reviewHighlight');
+const reviewHighlightPluginKey = pluginKeys.reviewHighlight;
 
 /**
  * 문서에서 텍스트를 찾아 Decoration 생성
