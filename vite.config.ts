@@ -61,6 +61,52 @@ export default defineConfig(({ command }) => {
     // Node.js 모듈 외부화 (빌드 시 브라우저 번들에 포함하지 않음)
     // - MCP SDK가 Node 모듈을 참조하더라도, 브라우저에서 실행될 때(Tauri) 무시되도록 함
     rollupOptions: {
+        output: {
+            manualChunks(id) {
+                if (!id.includes('node_modules')) return undefined;
+
+                if (
+                    id.includes('/@tiptap/') ||
+                    id.includes('/tiptap-markdown/')
+                ) {
+                    return 'tiptap-vendor';
+                }
+
+                if (id.includes('/prosemirror-')) {
+                    return 'prosemirror-vendor';
+                }
+
+                if (
+                    id.includes('/@langchain/') ||
+                    id.includes('/langchain/')
+                ) {
+                    return 'langchain-vendor';
+                }
+
+                if (id.includes('/@modelcontextprotocol/')) {
+                    return 'mcp-vendor';
+                }
+
+                if (id.includes('/openai/')) {
+                    return 'openai-vendor';
+                }
+
+                if (id.includes('/zod/')) {
+                    return 'zod-vendor';
+                }
+
+                if (
+                    id.includes('/react/') ||
+                    id.includes('/react-dom/') ||
+                    id.includes('/scheduler/') ||
+                    id.includes('/zustand/')
+                ) {
+                    return 'react-vendor';
+                }
+
+                return undefined;
+            },
+        },
         external: [
             // Node.js built-ins that shouldn't be bundled for browser
             'child_process',

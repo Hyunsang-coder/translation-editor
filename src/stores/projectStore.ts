@@ -19,6 +19,7 @@ import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { htmlToTipTapJson } from '@/utils/markdownConverter';
 import { clearEditorRegistry } from '@/editor/editorRegistry';
+import { useChatStore } from '@/stores/chatStore';
 
 // ============================================
 // Store State Interface
@@ -131,7 +132,7 @@ interface ProjectActions {
   // 프로젝트 관리
   initializeProject: () => void;
   loadProject: (project: ITEProject) => void;
-  createNewProject: (metadata: Partial<ProjectMetadata>) => void;
+  createNewProject: (metadata: Partial<ProjectMetadata>) => Promise<void>;
   saveProject: () => Promise<void>;
   switchProjectById: (projectId: string) => Promise<void>;
   updateGlossaryPaths: (paths: string[]) => void;
@@ -364,7 +365,6 @@ export const useProjectStore = create<ProjectStore>()(
                   targetDocJson: htmlToTipTapJson(td.text),
                 });
                 // chatStore 하이드레이션 (프로젝트별 설정 로드)
-                const { useChatStore } = await import('@/stores/chatStore');
                 await useChatStore.getState().hydrateForProject(loaded.id);
                 return;
               } catch (err) {
@@ -393,7 +393,6 @@ export const useProjectStore = create<ProjectStore>()(
                   targetDocJson: htmlToTipTapJson(td.text),
                 });
                 // chatStore 하이드레이션 (프로젝트별 설정 로드)
-                const { useChatStore } = await import('@/stores/chatStore');
                 await useChatStore.getState().hydrateForProject(loaded.id);
                 return;
               }
@@ -412,7 +411,6 @@ export const useProjectStore = create<ProjectStore>()(
               targetDocJson: null,
             });
             // chatStore 초기화 (프로젝트 없음)
-            const { useChatStore } = await import('@/stores/chatStore');
             await useChatStore.getState().hydrateForProject(null);
           } catch (err) {
             console.error('[initializeProject] Unhandled error:', err);
@@ -563,27 +561,23 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       // 새 프로젝트 생성
-      createNewProject: (metadata: Partial<ProjectMetadata>): void => {
+      createNewProject: async (metadata: Partial<ProjectMetadata>): Promise<void> => {
         const { project, isDirty, stopAutoSave, startAutoSave } = get();
 
         // 기존 프로젝트가 있고 변경사항이 있으면 먼저 저장
         if (project && isDirty) {
           stopAutoSave();
-          void (async () => {
-            try {
-              await get().saveProject();
-            } catch (e) {
-              const message = e instanceof Error ? e.message : String(e);
-              console.warn('[createNewProject] Failed to save previous project:', message);
-              set({ saveStatus: 'error', lastSaveError: message });
-            }
-            // 저장 후 새 프로젝트 생성 진행
-            createAndSetNewProject();
+          try {
+            await get().saveProject();
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.warn('[createNewProject] Failed to save previous project:', message);
+            throw e;
+          } finally {
             startAutoSave();
-          })();
-        } else {
-          createAndSetNewProject();
+          }
         }
+        createAndSetNewProject();
 
         function createAndSetNewProject(): void {
           const initialProject = createInitialProject();
@@ -612,198 +606,201 @@ export const useProjectStore = create<ProjectStore>()(
 
       // 프로젝트 저장 (Tauri 백엔드 호출 예정)
       saveProject: async (): Promise<void> => {
-        // 동시 실행 방지: 이전 save가 완료될 때까지 대기
         if (saveInFlight) {
-          await saveInFlight;
+          return saveInFlight;
         }
 
-        const { project, targetDocument, sourceDocument, targetDocHandle } = get();
+        const savePromise = (async (): Promise<void> => {
+          const { project, targetDocument, sourceDocument, targetDocHandle } = get();
 
-        console.warn('[saveProject] called, projectId:', project?.id);
+          console.warn('[saveProject] called, projectId:', project?.id);
 
-        if (!project) {
-          console.warn('[saveProject] No project, returning');
-          return;
-        }
-
-        set({ isLoading: true, saveStatus: 'saving', lastSaveError: null });
-
-        let resolve: () => void;
-        saveInFlight = new Promise<void>((r) => { resolve = r; });
-
-        try {
-          const now = Date.now();
-          // 저장 직전: Target/Source 단일 문서 내용을 blocks로 역투영
-          // 1) 가능하면 tracked ranges 기반(정확)
-          // 2) 실패/미설정 시 segment/ids 기반 fallback(저장 누락 방지)
-          const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
-
-          const applyTargetByTrackedRanges = (): boolean => {
-            // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
-            if (!targetDocument || targetDocument.length === 0) return false;
-            if (!targetDocHandle) return false;
-            const ranges = targetDocHandle.getBlockOffsets();
-            const entries = Object.entries(ranges);
-            if (entries.length === 0) return false;
-
-            let touched = 0;
-            for (const [blockId, r] of entries) {
-              const block = nextBlocks[blockId];
-              if (!block || block.type !== 'target') continue;
-              const start = Math.max(0, Math.min(r.startOffset, targetDocument.length));
-              const end = Math.max(start, Math.min(r.endOffset, targetDocument.length));
-              const plain = targetDocument.slice(start, end);
-              const html = toParagraphHtml(plain);
-              nextBlocks[blockId] = {
-                ...block,
-                content: html,
-                hash: hashContent(html),
-                metadata: { ...block.metadata, updatedAt: now },
-              };
-              touched++;
-            }
-            return touched > 0;
-          };
-
-          const applyTargetFallback = (): void => {
-            // targetDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
-            // (기존 blocks 내용 유지)
-            if (!targetDocument || targetDocument.length === 0) {
-              return;
-            }
-
-            // 원본 blocks 기준으로 초기 offset을 계산하고,
-            // 현재 targetDocument 길이와의 차이를 마지막 블록에 적용합니다.
-            // 이렇게 하면 사용자가 추가한 줄바꿈이 잘못된 세그먼트로 매핑되는 문제를 방지합니다.
-            const initialBuild = buildTargetDocument(project);
-            const initialLength = initialBuild.text.length;
-            const currentLength = targetDocument.length;
-            const delta = currentLength - initialLength;
-
-            const blockIds = Object.keys(initialBuild.blockRanges);
-            if (blockIds.length === 0) return; // 블록이 없으면 스킵
-
-            const lastBlockId = blockIds[blockIds.length - 1];
-
-            for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
-              const block = nextBlocks[blockId];
-              if (!block || block.type !== 'target') continue;
-
-              let start = r.startOffset;
-              let end = r.endOffset;
-
-              // 마지막 블록이면 길이 변화(delta)를 반영
-              if (blockId === lastBlockId) {
-                end = Math.max(start, Math.min(end + delta, currentLength));
-              }
-
-              // 범위 안전 체크
-              start = Math.max(0, Math.min(start, currentLength));
-              end = Math.max(start, Math.min(end, currentLength));
-
-              const plain = targetDocument.slice(start, end);
-              const html = toParagraphHtml(plain);
-              nextBlocks[blockId] = {
-                ...block,
-                content: html,
-                hash: hashContent(html),
-                metadata: { ...block.metadata, updatedAt: now },
-              };
-            }
-          };
-
-          const applySourceFallback = (): void => {
-            // sourceDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
-            // (기존 blocks 내용 유지)
-            if (!sourceDocument || sourceDocument.length === 0) {
-              return;
-            }
-
-            // 원본 blocks 기준으로 초기 offset을 계산하고,
-            // 현재 sourceDocument 길이와의 차이를 마지막 블록에 적용합니다.
-            const initialBuild = buildSourceDocument(project);
-            const initialLength = initialBuild.text.length;
-            const currentLength = sourceDocument.length;
-            const delta = currentLength - initialLength;
-
-            const blockIds = Object.keys(initialBuild.blockRanges);
-            if (blockIds.length === 0) return; // 블록이 없으면 스킵
-
-            const lastBlockId = blockIds[blockIds.length - 1];
-
-            for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
-              const block = nextBlocks[blockId];
-              if (!block || block.type !== 'source') continue;
-
-              let start = r.startOffset;
-              let end = r.endOffset;
-
-              // 마지막 블록이면 길이 변화(delta)를 반영
-              if (blockId === lastBlockId) {
-                end = Math.max(start, Math.min(end + delta, currentLength));
-              }
-
-              // 범위 안전 체크
-              start = Math.max(0, Math.min(start, currentLength));
-              end = Math.max(start, Math.min(end, currentLength));
-
-              const plain = sourceDocument.slice(start, end);
-              const html = toParagraphHtml(plain);
-              nextBlocks[blockId] = {
-                ...block,
-                content: html,
-                hash: hashContent(html),
-                metadata: { ...block.metadata, updatedAt: now },
-              };
-            }
-          };
-
-          const okTracked = applyTargetByTrackedRanges();
-          console.warn('[saveProject] applyTargetByTrackedRanges result:', okTracked);
-          if (!okTracked) {
-            console.warn('[saveProject] Using applyTargetFallback');
-            applyTargetFallback();
+          if (!project) {
+            console.warn('[saveProject] No project, returning');
+            return;
           }
-          // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
-          applySourceFallback();
 
-          const projectToSave: ITEProject = {
-            ...project,
-            blocks: nextBlocks,
-            metadata: {
-              ...project.metadata,
-              updatedAt: now,
-            },
-          };
+          set({ isLoading: true, saveStatus: 'saving', lastSaveError: null });
 
-          console.warn('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
+          try {
+            const now = Date.now();
+            // 저장 직전: Target/Source 단일 문서 내용을 blocks로 역투영
+            // 1) 가능하면 tracked ranges 기반(정확)
+            // 2) 실패/미설정 시 segment/ids 기반 fallback(저장 누락 방지)
+            const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
 
-          await tauriSaveProject(projectToSave);
+            const applyTargetByTrackedRanges = (): boolean => {
+              // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
+              if (!targetDocument || targetDocument.length === 0) return false;
+              if (!targetDocHandle) return false;
+              const ranges = targetDocHandle.getBlockOffsets();
+              const entries = Object.entries(ranges);
+              if (entries.length === 0) return false;
 
-          console.warn('[saveProject] success:', projectToSave.id);
+              let touched = 0;
+              for (const [blockId, r] of entries) {
+                const block = nextBlocks[blockId];
+                if (!block || block.type !== 'target') continue;
+                const start = Math.max(0, Math.min(r.startOffset, targetDocument.length));
+                const end = Math.max(start, Math.min(r.endOffset, targetDocument.length));
+                const plain = targetDocument.slice(start, end);
+                const html = toParagraphHtml(plain);
+                nextBlocks[blockId] = {
+                  ...block,
+                  content: html,
+                  hash: hashContent(html),
+                  metadata: { ...block.metadata, updatedAt: now },
+                };
+                touched++;
+              }
+              return touched > 0;
+            };
 
-          set({
-            project: projectToSave,
-            isDirty: false,
-            isLoading: false,
-            saveStatus: 'idle',
-            lastSavedAt: Date.now(),
-            lastProjectId: projectToSave.id,
-          });
-        } catch (error) {
-          // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
-          const errorMessage = error instanceof Error ? error.message : 'Failed to save project';
-          console.error('[saveProject] FAILED:', errorMessage);
-          set({
-            error: errorMessage,
-            isLoading: false,
-            saveStatus: 'error',
-            lastSaveError: error instanceof Error ? error.message : 'Failed to save project',
-          });
-        } finally {
+            const applyTargetFallback = (): void => {
+              // targetDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+              // (기존 blocks 내용 유지)
+              if (!targetDocument || targetDocument.length === 0) {
+                return;
+              }
+
+              // 원본 blocks 기준으로 초기 offset을 계산하고,
+              // 현재 targetDocument 길이와의 차이를 마지막 블록에 적용합니다.
+              // 이렇게 하면 사용자가 추가한 줄바꿈이 잘못된 세그먼트로 매핑되는 문제를 방지합니다.
+              const initialBuild = buildTargetDocument(project);
+              const initialLength = initialBuild.text.length;
+              const currentLength = targetDocument.length;
+              const delta = currentLength - initialLength;
+
+              const blockIds = Object.keys(initialBuild.blockRanges);
+              if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+              const lastBlockId = blockIds[blockIds.length - 1];
+
+              for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+                const block = nextBlocks[blockId];
+                if (!block || block.type !== 'target') continue;
+
+                let start = r.startOffset;
+                let end = r.endOffset;
+
+                // 마지막 블록이면 길이 변화(delta)를 반영
+                if (blockId === lastBlockId) {
+                  end = Math.max(start, Math.min(end + delta, currentLength));
+                }
+
+                // 범위 안전 체크
+                start = Math.max(0, Math.min(start, currentLength));
+                end = Math.max(start, Math.min(end, currentLength));
+
+                const plain = targetDocument.slice(start, end);
+                const html = toParagraphHtml(plain);
+                nextBlocks[blockId] = {
+                  ...block,
+                  content: html,
+                  hash: hashContent(html),
+                  metadata: { ...block.metadata, updatedAt: now },
+                };
+              }
+            };
+
+            const applySourceFallback = (): void => {
+              // sourceDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+              // (기존 blocks 내용 유지)
+              if (!sourceDocument || sourceDocument.length === 0) {
+                return;
+              }
+
+              // 원본 blocks 기준으로 초기 offset을 계산하고,
+              // 현재 sourceDocument 길이와의 차이를 마지막 블록에 적용합니다.
+              const initialBuild = buildSourceDocument(project);
+              const initialLength = initialBuild.text.length;
+              const currentLength = sourceDocument.length;
+              const delta = currentLength - initialLength;
+
+              const blockIds = Object.keys(initialBuild.blockRanges);
+              if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+              const lastBlockId = blockIds[blockIds.length - 1];
+
+              for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+                const block = nextBlocks[blockId];
+                if (!block || block.type !== 'source') continue;
+
+                let start = r.startOffset;
+                let end = r.endOffset;
+
+                // 마지막 블록이면 길이 변화(delta)를 반영
+                if (blockId === lastBlockId) {
+                  end = Math.max(start, Math.min(end + delta, currentLength));
+                }
+
+                // 범위 안전 체크
+                start = Math.max(0, Math.min(start, currentLength));
+                end = Math.max(start, Math.min(end, currentLength));
+
+                const plain = sourceDocument.slice(start, end);
+                const html = toParagraphHtml(plain);
+                nextBlocks[blockId] = {
+                  ...block,
+                  content: html,
+                  hash: hashContent(html),
+                  metadata: { ...block.metadata, updatedAt: now },
+                };
+              }
+            };
+
+            const okTracked = applyTargetByTrackedRanges();
+            console.warn('[saveProject] applyTargetByTrackedRanges result:', okTracked);
+            if (!okTracked) {
+              console.warn('[saveProject] Using applyTargetFallback');
+              applyTargetFallback();
+            }
+            // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
+            applySourceFallback();
+
+            const projectToSave: ITEProject = {
+              ...project,
+              blocks: nextBlocks,
+              metadata: {
+                ...project.metadata,
+                updatedAt: now,
+              },
+            };
+
+            console.warn('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
+
+            await tauriSaveProject(projectToSave);
+
+            console.warn('[saveProject] success:', projectToSave.id);
+
+            set({
+              project: projectToSave,
+              isDirty: false,
+              isLoading: false,
+              saveStatus: 'idle',
+              lastSavedAt: Date.now(),
+              lastProjectId: projectToSave.id,
+            });
+          } catch (error) {
+            // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+            const errorMessage = error instanceof Error ? error.message : 'Failed to save project';
+            const normalizedError = error instanceof Error ? error : new Error(errorMessage);
+            console.error('[saveProject] FAILED:', errorMessage);
+            set({
+              error: errorMessage,
+              isLoading: false,
+              saveStatus: 'error',
+              lastSaveError: errorMessage,
+            });
+            throw normalizedError;
+          }
+        })();
+
+        saveInFlight = savePromise.finally(() => {
           saveInFlight = null;
-          resolve!();
-        }
+        });
+
+        return saveInFlight;
       },
 
       // 프로젝트 전환(auto-save-and-switch)
@@ -823,11 +820,6 @@ export const useProjectStore = create<ProjectStore>()(
         try {
           if (isDirty) {
             await saveProject();
-            // saveProject는 내부에서 catch를 삼키므로, 상태로 실패 여부를 확인
-            const { saveStatus, lastSaveError } = get();
-            if (saveStatus === 'error') {
-              throw new Error(lastSaveError || 'Failed to save project before switching');
-            }
           }
 
           const loaded = await tauriLoadProject(projectId);
@@ -835,13 +827,14 @@ export const useProjectStore = create<ProjectStore>()(
 
           // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출
           // React useEffect 의존 대신 직접 호출하여 race condition 방지
-          const { useChatStore } = await import('@/stores/chatStore');
           await useChatStore.getState().hydrateForProject(loaded.id);
         } catch (e) {
+          const switchError = e instanceof Error ? e : new Error('Failed to switch project');
           set({
-            error: e instanceof Error ? e.message : 'Failed to switch project',
+            error: switchError.message,
             isLoading: false,
           });
+          throw switchError;
         } finally {
           startAutoSave();
         }

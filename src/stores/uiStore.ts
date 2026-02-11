@@ -4,6 +4,7 @@ import { toast as sonnerToast } from 'sonner';
 import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType } from '@/types';
 import { isChatPanel, chatPanelId } from '@/types';
 import { useReviewStore } from '@/stores/reviewStore';
+import { useChatStore } from '@/stores/chatStore';
 
 // ============================================
 // Store State Interface
@@ -571,25 +572,22 @@ export const useUIStore = create<UIStore>()(
           }
         }
         // 어디에도 chat 패널이 없으면 — chatStore에서 세션을 생성/복구
-        // 순환 참조 방지: dynamic import (fire-and-forget)
-        void import('@/stores/chatStore').then(({ useChatStore }) => {
-          const chatState = useChatStore.getState();
-          if (chatState.sessions.length > 0) {
-            // 세션은 있지만 패널이 없는 경우 → syncChatPanels로 복구 후 열기
-            get().syncChatPanels(chatState.sessions.map((s) => s.id));
-            const refreshed = get();
-            for (const s of ['rightSidebar', 'leftSidebar'] as const) {
-              const chatPanel = refreshed[s].panels.find(isChatPanel);
-              if (chatPanel) {
-                set({ [s]: { ...refreshed[s], collapsed: false, activePanel: chatPanel } });
-                return;
-              }
+        const chatState = useChatStore.getState();
+        if (chatState.sessions.length > 0) {
+          // 세션은 있지만 패널이 없는 경우 → syncChatPanels로 복구 후 열기
+          get().syncChatPanels(chatState.sessions.map((s) => s.id));
+          const refreshed = get();
+          for (const s of ['rightSidebar', 'leftSidebar'] as const) {
+            const chatPanel = refreshed[s].panels.find(isChatPanel);
+            if (chatPanel) {
+              set({ [s]: { ...refreshed[s], collapsed: false, activePanel: chatPanel } });
+              return;
             }
-          } else {
-            // 세션 자체가 없으면 새로 생성 (createSession → addChatPanel 자동 호출)
-            chatState.createSession();
           }
-        });
+        } else {
+          // 세션 자체가 없으면 새로 생성 (createSession → addChatPanel 자동 호출)
+          chatState.createSession();
+        }
       },
 
       // Editor typography (Source/Target 패널별 독립 설정)

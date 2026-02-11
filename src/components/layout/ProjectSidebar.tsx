@@ -142,21 +142,31 @@ export function ProjectSidebar(): JSX.Element {
       try {
         await doSave();
       } catch (e) {
-        console.warn('[handleNewProject] Failed to save previous project:', e);
+        const reason = e instanceof Error ? e.message : String(e);
+        console.warn('[handleNewProject] Failed to save previous project:', reason);
+        await message(`기존 프로젝트 저장에 실패해 새 프로젝트 생성을 중단했습니다.\n${reason}`, {
+          title: 'New Project',
+          kind: 'error',
+        });
+        return;
       }
     }
 
     const baseTitle = form.title.trim() || 'New Project';
     const uniqueTitle = getUniqueTitle(baseTitle);
+    try {
+      const created = await createProject({
+        title: uniqueTitle,
+        domain: 'general',
+      });
 
-    const created = await createProject({
-      title: uniqueTitle,
-      domain: 'general',
-    });
-
-    loadProject(created);
-    setShowNew(false);
-    await refresh();
+      loadProject(created);
+      setShowNew(false);
+      await refresh();
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : '새 프로젝트 생성 실패';
+      await message(reason, { title: 'New Project', kind: 'error' });
+    }
   };
 
   const handleDelete = async (projectId: string): Promise<void> => {
@@ -172,9 +182,17 @@ export function ProjectSidebar(): JSX.Element {
       const remaining = items.filter((p) => p.id !== projectId);
       const next = remaining[0];
       if (next?.id) {
-        nextProjectId = next.id;
-        await switchProjectById(next.id);
-        await useChatStore.getState().hydrateForProject(next.id);
+        try {
+          await switchProjectById(next.id);
+          nextProjectId = next.id;
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : '프로젝트 전환 실패';
+          await message(`현재 프로젝트 저장/전환에 실패해 삭제를 중단했습니다.\n${reason}`, {
+            title: '프로젝트 삭제',
+            kind: 'error',
+          });
+          return;
+        }
       }
     }
 
@@ -350,8 +368,12 @@ export function ProjectSidebar(): JSX.Element {
                 onClick={() => {
                   if (!isRenaming) {
                     void (async () => {
-                      await switchProjectById(p.id);
-                      await useChatStore.getState().hydrateForProject(p.id);
+                      try {
+                        await switchProjectById(p.id);
+                      } catch (e) {
+                        const reason = e instanceof Error ? e.message : String(e);
+                        console.warn('[ProjectSidebar] switchProjectById failed:', reason);
+                      }
                     })();
                   }
                 }}

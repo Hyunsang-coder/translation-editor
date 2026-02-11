@@ -116,18 +116,22 @@ function App(): JSX.Element {
   // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
   useEffect(() => {
     const initCloseListener = async () => {
-      const unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
+      const appWindow = getCurrentWindow();
+      let allowClose = false;
+      const unlisten = await appWindow.onCloseRequested(async (event) => {
+        if (allowClose) return;
         const { isDirty, saveProject } = useProjectStore.getState();
         if (isDirty) {
           // Prevent closing immediately
           event.preventDefault();
           try {
             await saveProject();
+            allowClose = true;
+            await appWindow.close();
           } catch (e) {
             console.error('Failed to save on close:', e);
-          } finally {
-            // Force close after save attempt
-            await getCurrentWindow().destroy();
+            const message = e instanceof Error ? e.message : 'Failed to save project before exit';
+            useProjectStore.getState().setError(`저장 실패로 종료가 취소되었습니다: ${message}`);
           }
         }
       });
