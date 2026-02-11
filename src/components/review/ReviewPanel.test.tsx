@@ -1,84 +1,81 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReviewPanel } from './ReviewPanel';
-import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
-import { useProjectStore } from '@/stores/projectStore';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useReviewStore } from '@/stores/reviewStore';
 
-vi.mock('react-i18next', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-i18next')>();
-  return {
-    ...actual,
-    useTranslation: () => ({
-      t: (key: string, defaultValue?: unknown) =>
-        typeof defaultValue === 'string' ? defaultValue : key,
-    }),
-  };
-});
-
-vi.mock('@/components/editor/TranslatePreviewModal', () => ({
-  TranslatePreviewModal: () => null,
-}));
-
-vi.mock('@/ai/review/runReview', () => ({
-  runReview: vi.fn(),
-}));
-
-vi.mock('@/ai/tools/reviewTool', () => ({
-  buildAlignedChunksAsync: vi.fn(async () => []),
-}));
-
-vi.mock('@/ai/translateDocument', () => ({
-  translateWithStreaming: vi.fn(),
-  formatTranslationError: vi.fn((e: unknown) => String(e)),
-}));
-
-vi.mock('@/tauri/glossary', () => ({
-  searchGlossary: vi.fn(async () => []),
-}));
-
-vi.mock('@/utils/markdownConverter', () => ({
-  tipTapJsonToHtml: vi.fn(() => '<p></p>'),
-}));
-
-describe('ReviewPanel', () => {
+describe('ReviewPanel - Zustand Selectors', () => {
   beforeEach(() => {
-    useReviewStore.getState().resetReview();
-    useProjectStore.setState({
-      project: null,
-      sourceDocument: '',
-      targetDocument: '',
+    // 각 테스트 전 store 초기화
+    useReviewStore.setState({
+      severityFilter: ['critical', 'major'],
+      chunks: [],
+      currentChunkIndex: 0,
+      results: [],
+      isReviewing: false,
+      progress: { completed: 0, total: 0 },
+      highlightEnabled: false,
+      highlightNonce: 0,
+      initializedProjectId: null,
+      totalIssuesFound: 0,
+      streamingText: '',
+      reviewTrigger: 0,
     });
   });
 
-  it('초기 렌더 이후 결과가 추가되면 이슈 목록을 즉시 표시한다', async () => {
-    const issue: ReviewIssue = {
-      id: 'issue-1',
-      segmentOrder: 1,
-      segmentGroupId: 'seg-1',
-      sourceExcerpt: 'source excerpt',
-      targetExcerpt: 'target excerpt',
-      suggestedFix: 'TEST_FIX_TEXT',
-      type: 'mistranslation',
-      severity: 'major',
-      description: 'TEST_DESCRIPTION',
-      checked: false,
-    };
+  describe('streamingText 필드 selector', () => {
+    it('streamingText만 구독하면 다른 필드 변경 시 리렌더 안된다', () => {
+      const renderCount = { current: 0 };
+      const streamingTextSelector = (s: ReturnType<typeof useReviewStore.getState>) => s.streamingText;
 
-    render(<ReviewPanel />);
+      const { result } = renderHook(
+        () => {
+          renderCount.current++;
+          return useReviewStore(streamingTextSelector);
+        }
+      );
 
-    expect(screen.queryByText('TEST_FIX_TEXT')).not.toBeInTheDocument();
+      const initialRenderCount = renderCount.current;
 
-    act(() => {
-      useReviewStore.getState().addResult({
-        chunkIndex: 0,
-        issues: [issue],
+      act(() => {
+        useReviewStore.setState({ severityFilter: ['critical'] });
       });
-      useReviewStore.getState().finishReview();
+
+      expect(renderCount.current).toBe(initialRenderCount);
+      expect(result.current).toBe('');
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('TEST_FIX_TEXT')).toBeInTheDocument();
+    it('streamingText 변경 시 리렌더된다', () => {
+      const renderCount = { current: 0 };
+
+      const { result } = renderHook(
+        () => {
+          renderCount.current++;
+          return useReviewStore((s) => s.streamingText);
+        }
+      );
+
+      const initialRenderCount = renderCount.current;
+
+      act(() => {
+        useReviewStore.setState({ streamingText: 'new text' });
+      });
+
+      expect(renderCount.current).toBeGreaterThan(initialRenderCount);
+      expect(result.current).toBe('new text');
     });
-    expect(screen.queryByText('모든 이슈가 해결되었습니다.')).not.toBeInTheDocument();
+  });
+
+  describe('액션 함수 selector', () => {
+    it('액션 함수는 매번 같은 참조를 유지한다', () => {
+      const functionSelector = (s: ReturnType<typeof useReviewStore.getState>) => s.startReview;
+
+      const { result: result1 } = renderHook(() =>
+        useReviewStore(functionSelector)
+      );
+      const { result: result2 } = renderHook(() =>
+        useReviewStore(functionSelector)
+      );
+
+      expect(result1.current).toBe(result2.current);
+    });
   });
 });

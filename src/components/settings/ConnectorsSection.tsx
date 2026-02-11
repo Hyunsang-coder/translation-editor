@@ -250,7 +250,7 @@ function ConnectorItem({
 
 export function ConnectorsSection(): JSX.Element {
   const { t } = useTranslation();
-  const { setTokenStatus } = useConnectorStore();
+  const setTokenStatus = useConnectorStore((s) => s.setTokenStatus);
   
   // MCP 상태 (Atlassian)
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>({

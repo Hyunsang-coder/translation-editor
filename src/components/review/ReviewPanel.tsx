@@ -60,30 +60,31 @@ export function ReviewPanel(): JSX.Element {
   // Note: translationRules/projectContext는 useCallback 내에서 getState()로 직접 가져옴
   // 검수 중 규칙이 변경되어도 각 청크 처리 시 최신 값 사용 (Issue #13 Fix)
 
-  const {
-    // severity 필터
-    severityFilter,
-    toggleSeverityFilter,
-    // 검수 실행 상태
-    results,
-    isReviewing,
-    totalIssuesFound,
-    progress,
-    streamingText,
-    reviewTrigger,
-    initializeReview,
-    addResult,
-    handleChunkError,
-    startReview,
-    finishReview,
-    resetReview,
-    getAllIssues,
-    toggleIssueCheck,
-    deleteIssue,
-    setAllIssuesChecked,
-    getCheckedIssues,
-    setStreamingText,
-  } = useReviewStore();
+  // 자주 변경되는 필드 → 별도 selector (리렌더 최소화)
+  const streamingText = useReviewStore((s) => s.streamingText);
+  const reviewTrigger = useReviewStore((s) => s.reviewTrigger);
+
+  // 덜 변경되는 필드 + 필터 → 개별 selector (무한 루프 방지)
+  const severityFilter = useReviewStore((s) => s.severityFilter);
+  const toggleSeverityFilter = useReviewStore((s) => s.toggleSeverityFilter);
+  const results = useReviewStore((s) => s.results);
+  const isReviewing = useReviewStore((s) => s.isReviewing);
+  const totalIssuesFound = useReviewStore((s) => s.totalIssuesFound);
+  const progress = useReviewStore((s) => s.progress);
+
+  // 액션 함수들 (참조 항상 동일)
+  const initializeReview = useReviewStore((s) => s.initializeReview);
+  const addResult = useReviewStore((s) => s.addResult);
+  const handleChunkError = useReviewStore((s) => s.handleChunkError);
+  const startReview = useReviewStore((s) => s.startReview);
+  const finishReview = useReviewStore((s) => s.finishReview);
+  const resetReview = useReviewStore((s) => s.resetReview);
+  const getAllIssues = useReviewStore((s) => s.getAllIssues);
+  const toggleIssueCheck = useReviewStore((s) => s.toggleIssueCheck);
+  const deleteIssue = useReviewStore((s) => s.deleteIssue);
+  const setAllIssuesChecked = useReviewStore((s) => s.setAllIssuesChecked);
+  const getCheckedIssues = useReviewStore((s) => s.getCheckedIssues);
+  const setStreamingText = useReviewStore((s) => s.setStreamingText);
 
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);

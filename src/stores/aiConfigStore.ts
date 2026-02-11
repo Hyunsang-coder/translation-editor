@@ -60,7 +60,7 @@ async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
   }
 }
 
-let keysLoaded = false;
+let keysLoaded: boolean | 'loading' = false;
 
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
@@ -93,13 +93,17 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         anthropicEnabled: false,
 
         loadSecureKeys: async () => {
-          if (keysLoaded) return;
-          keysLoaded = true;
+          // 이미 성공했으면 캐시 사용
+          if (keysLoaded === true) return;
+          // 이미 로딩 중이면 중복 호출 방지
+          if (keysLoaded === 'loading') return;
+
+          keysLoaded = 'loading';
 
           try {
             // 1. 번들 로드 시도
             const bundleJson = await getSecureSecret(API_KEYS_BUNDLE_ID);
-            
+
             if (bundleJson) {
               // 번들이 있으면 파싱해서 적용 (brave 키는 무시 - 제거됨)
               try {
@@ -108,6 +112,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                   openaiApiKey: bundle.openai,
                   anthropicApiKey: bundle.anthropic,
                 });
+                keysLoaded = true;  // ✅ 성공 후에만 true
                 return; // 로드 완료
               } catch (e) {
                 // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
@@ -143,10 +148,12 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               await persistAllKeys(newBundle);
             }
 
+            keysLoaded = true;  // ✅ 마이그레이션도 성공
           } catch (err) {
             // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
             const message = err instanceof Error ? err.message : String(err);
             console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
+            keysLoaded = false;  // ✅ 실패 시 false → 재시도 가능
           }
         },
 
