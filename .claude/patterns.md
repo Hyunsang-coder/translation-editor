@@ -20,11 +20,45 @@ src/editor/extensions/ReviewHighlight.ts
 // Search/Replace
 src/components/editor/SearchBar.tsx
 
-// Cross-component access
-src/editor/editorRegistry.ts → getSourceEditor(), getTargetEditor()
+// Editor instance management (Zustand)
+useEditorStore.getState().setSourceEditor(editor)
+useEditorStore.getState().setTargetEditor(editor)
+useEditorStore.getState().clearEditors()  // 메모리 누수 방지
 ```
 
 **Key Principle**: TipTap JSON is the canonical format. Never bypass JSON format when saving/loading.
+
+### Editor Store (Zustand)
+```typescript
+// src/stores/editorStore.ts — TipTap 에디터 인스턴스 관리
+useEditorStore.getState().setSourceEditor(editor)
+useEditorStore.getState().setTargetEditor(editor)
+useEditorStore.getState().clearEditors()  // 메모리 누수 방지
+
+// 호출 위치:
+// - EditorCanvasTipTap에서 에디터 생성 후 store에 등록
+// - projectStore.switchProjectById()에서 에디터 초기화 시 clearEditors() 호출
+
+// ❌ 구식 패턴 (제거됨):
+// src/editor/editorRegistry.ts (모놀리스 전역 변수)
+```
+
+### Plugin Keys (중앙화)
+```typescript
+// src/editor/plugins/pluginKeys.ts — 모든 TipTap Plugin Key 중앙화
+export const pluginKeys = {
+  reviewHighlight: Key.create(),
+  searchHighlight: Key.create(),
+  // ... 다른 플러그인들
+};
+
+// 외부 접근:
+// src/editor/extensions/index.ts에서 export
+import { pluginKeys } from './pluginKeys';
+
+// ❌ 구식 패턴 (분산 관리):
+// 각 extension 파일 내부에 Key 정의
+```
 
 ### Content Sync (lastContentRef + replaceDocContent)
 ```typescript
@@ -219,6 +253,67 @@ fn run_migrations(&self) -> Result<(), IteError> {
 ```
 
 No formal migration framework — uses idempotent `SELECT LIMIT 0` probe per column. Add new migrations to `run_migrations()`.
+
+## Zustand Store Patterns
+
+### Store Selectors (최적화)
+```typescript
+// ✅ 권장: 필드별 개별 selector (리렌더 최소화)
+const streamingText = useReviewStore((s) => s.streamingText);
+const reviewTrigger = useReviewStore((s) => s.reviewTrigger);
+const severityFilter = useReviewStore((s) => s.severityFilter);
+
+// ❌ 회피: 전체 store 구독 (과도한 리렌더)
+const { streamingText, reviewTrigger, ...} = useReviewStore();
+
+// ⚠️ 객체 구조 주의: 매번 새 객체 생성 → 무한 리렌더 루프
+const { results, isReviewing } = useReviewStore((s) => ({
+  results: s.results,
+  isReviewing: s.isReviewing,
+})); // ❌ useShallow 없이 사용 금지
+```
+
+### 액션 함수 구독
+```typescript
+// ✅ 권장: selector로 함수만 추출 (불변 참조 유지)
+const setTokenStatus = useConnectorStore((s) => s.setTokenStatus);
+
+// ❌ 회피: 함수를 객체에 포함 (불필요한 참조 생성)
+const { setTokenStatus } = useConnectorStore((s) => ({
+  setTokenStatus: s.setTokenStatus
+}));
+```
+
+### 비동기 상태 플래그 (동시 호출 방지)
+```typescript
+// aiConfigStore.ts — Zustand 모듈 레벨 변수로 관리
+let keysLoaded: boolean | 'loading' = false;
+
+loadSecureKeys: async () => {
+  if (keysLoaded === true) return;      // ✅ 성공 후 캐시
+  if (keysLoaded === 'loading') return; // ✅ 동시 호출 방지
+
+  keysLoaded = 'loading';
+  try {
+    // ... 로드 로직
+    keysLoaded = true;  // ✅ 성공 후에만 true
+  } catch (err) {
+    keysLoaded = false; // ✅ 실패 시 false → 재시도 가능
+  }
+}
+```
+
+### Cross-Store 접근 (구독 금지)
+```typescript
+// ✅ 권장: getState()로 현재값만 읽기 (구독 없음)
+const project = useProjectStore.getState().project;
+
+// ❌ 회피: 다른 store 구독 (순환 참조, 메모리 누수)
+useEffect(() => {
+  const unsubscribe = useProjectStore.subscribe(...);
+  return unsubscribe;
+});
+```
 
 ## chatStore Slice Structure
 

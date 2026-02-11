@@ -27,22 +27,81 @@ git diff HEAD~5..HEAD --stat
 git log --oneline -10
 ```
 
-### Step 2: Identify Target Files
-변경된 코드에 따라 관련 문서 선택:
+### Step 2: Identify Target Files (자동 감지)
 
-- **새 기능/아키텍처 변경** → `architecture.md`
-- **새 구현 패턴** → `patterns.md`
-- **버그/주의사항 발견** → `gotchas.md` (카테고리에 맞게 추가)
-- **테스트/파일 구조 변경** → `testing.md`
-- **명령어/퀵 레퍼런스 변경** → `CLAUDE.md`
+```bash
+# 변경된 파일 목록 분석
+git diff HEAD~N..HEAD --name-only | tee /tmp/changed_files.txt
+
+# 자동 매핑 규칙
+# 규칙 1: Editor/TipTap 변경 → patterns.md
+grep -E "^src/editor/|^src/stores/editorStore" /tmp/changed_files.txt
+
+# 규칙 2: AI/Tauri 아키텍처 변경 → architecture.md
+grep -E "^src/ai/|^src-tauri/src/mcp/|^src-tauri/src/commands/" /tmp/changed_files.txt
+
+# 규칙 3: 테스트 추가/변경 → testing.md
+grep -E "\.test\.ts$|^src-tauri/.*\.rs$" /tmp/changed_files.txt
+
+# 규칙 4: Store/상태 관리 변경 → patterns.md + gotchas.md
+grep -E "^src/stores/" /tmp/changed_files.txt
+
+# 규칙 5: 명령어/참조 변경 → CLAUDE.md
+grep -E "package.json|Cargo.toml|tauri.conf" /tmp/changed_files.txt
+```
+
+**선택 결과 예시:**
+```
+patterns.md      ← src/editor/*, src/stores/*
+architecture.md  ← src/ai/*, src-tauri/src/mcp/*
+testing.md       ← *.test.ts, src-tauri/**/*.rs
+gotchas.md       ← 버그/주의사항 키워드 있을 시 (fix:, refactor:, chore:)
+CLAUDE.md        ← 버전/명령어 변경 시
+```
+
+**자동으로 감지된 대상 문서 확인 후 아래 Step 3 진행**
 
 ### Step 3: Update Documents
-- 기존 구조와 스타일 유지
-- gotchas는 번호 순서 유지하며 끝에 추가
-- 구현된 기능만 문서화 (계획/임시 코드 제외)
+
+**Step 2에서 감지된 각 문서에 대해:**
+
+#### patterns.md 업데이트
+- **변경 대상**: TipTap/Editor, 상태 관리 (Zustand) 패턴
+- **작업**:
+  1. 제거된 파일 참조 → 최신 파일 경로로 변경
+  2. 새 패턴 추가 (예: `useEditorStore`, Plugin Keys)
+  3. 구식 패턴 표시 (❌ 구식 패턴)
+- **검증**: Dead link 감지 (`src/` 경로가 실제로 존재하는지)
+
+#### architecture.md 업데이트
+- **변경 대상**: AI 파이프라인, Tauri 커맨드, MCP 통합
+- **작업**: 새로운 기능/아키텍처 결정사항 추가
+
+#### testing.md 업데이트
+- **변경 대상**: 테스트 추가/구조 변경
+- **작업**: 테스트 케이스 명시, 디버깅 팁 추가
+
+#### gotchas.md 업데이트
+- **변경 대상**: 버그/주의사항 (커밋 메시지 키워드: fix:, chore:, refactor:)
+- **작업**: 적절한 카테고리에 추가 (번호 순서 유지)
+
+#### CLAUDE.md 업데이트
+- **변경 대상**: 버전, 명령어, 퀵 레퍼런스
+- **작업**: 필요시 업데이트
 
 ### Step 4: Summarize
-업데이트한 내용 요약.
+업데이트한 각 문서별 변경 사항 요약:
+```
+✅ patterns.md
+   - editorRegistry.ts → useEditorStore (2건)
+   - Plugin Key 중앙화 추가 (1건)
+
+✅ gotchas.md
+   - [카테고리명] 새 항목 추가 (N건)
+
+✅ architecture.md
+   - (변경 없음)
+```
 
 ## Gotchas 카테고리
 

@@ -281,3 +281,9 @@ Critical implementation warnings learned from past issues.
 130. **ProjectSidebar mergeProjectListStable**: `listRecentProjects()` 갱신 시 `setItems(list)` 대신 `setItems((prev) => mergeProjectListStable(prev, list))` 사용. 신규 프로젝트는 상단에 추가, 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환. updatedAt 정렬 제거로 리스트 점프 방지.
 
 131. **streamingSessionId 세션별 격리**: `chatStore.selectors.ts`의 `useChatSessionState`는 `streamingSessionId`로 현재 스트리밍 중인 세션만 `isLoading`/`streamingContent` 표시. 다른 세션 탭은 스트리밍 상태가 아닌 것으로 렌더링. 동시 다중 스트리밍 방지.
+
+132. **Zustand Store Selector 필수**: 컴포넌트에서 `useStore()`로 전체 store를 구독하면, 어느 필드든 변경 시 전체 리렌더 발생. 필드별 개별 selector 사용: `useStore((s) => s.field)`. 객체 구조 사용 시 매번 새 객체 생성되어 무한 리렌더 루프 가능 → 개별 selector로 분산.
+
+133. **Zustand 비동기 상태 플래그 (동시 호출 방지)**: 비동기 로드 함수에서 `keysLoaded: boolean | 'loading'` 상태 사용. `'loading'` 체크로 진행 중인 호출 방지, 성공/실패 여부로 캐시/재시도 제어. ❌ 금지: `keysLoaded = true`를 try 시작에 설정 (에러 시 영구 실패, 재시도 불가).
+
+134. **Cross-Store 접근 (getState 사용)**: 한 store에서 다른 store의 값이 필요할 때 `useOtherStore.subscribe()`로 구독하지 말 것 (순환 참조, 메모리 누수). 대신 콜백 내에서 `useOtherStore.getState().field` 사용하여 현재값만 읽기.
