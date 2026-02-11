@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
@@ -20,7 +21,6 @@ import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
-import { setTargetEditor as setTargetEditorRegistry } from '@/editor/editorRegistry';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -342,8 +342,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const handleTargetEditorReady = useCallback((editor: Editor) => {
     targetEditorRef.current = editor;
     setTargetEditor(editor);
-    // 글로벌 레지스트리에도 저장 (ReviewPanel 등에서 접근용)
-    setTargetEditorRegistry(editor);
+    // Zustand 상태에도 저장 (검색/하이라이트 등에서 접근용)
+    useEditorStore.getState().setTargetEditor(editor);
   }, []);
 
   // 검색바 핸들러
