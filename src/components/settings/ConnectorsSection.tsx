@@ -131,6 +131,7 @@ interface ConnectorItemProps {
   isConnected: boolean;
   isConnecting?: boolean;
   error?: string | null | undefined;
+  elapsedSeconds?: number;
   onConnect: () => void;
   onDisconnect: () => void | Promise<void>;
   onClearAll?: (() => void | Promise<void>) | undefined;
@@ -145,6 +146,7 @@ function ConnectorItem({
   isConnected,
   isConnecting,
   error,
+  elapsedSeconds,
   onConnect,
   onDisconnect,
   onClearAll,
@@ -154,13 +156,15 @@ function ConnectorItem({
 
   const statusText = error
     ? t('appSettings.connectors.error')
-    : isConnecting
-      ? t('appSettings.connectors.connecting')
-      : isConnected
-        ? t('appSettings.connectors.connected')
-        : hasToken
-          ? t('appSettings.connectors.authenticated')
-          : t('appSettings.connectors.notConnected');
+    : isConnecting && elapsedSeconds !== undefined
+      ? `${t('appSettings.connectors.connecting')} (${elapsedSeconds}초...)`
+      : isConnecting
+        ? t('appSettings.connectors.connecting')
+        : isConnected
+          ? t('appSettings.connectors.connected')
+          : hasToken
+            ? t('appSettings.connectors.authenticated')
+            : t('appSettings.connectors.notConnected');
 
   const statusColor = error
     ? 'text-red-500'
@@ -214,6 +218,26 @@ function ConnectorItem({
                 >
                   {t('appSettings.connectors.disconnect')}
                 </button>
+              ) : error ? (
+                <>
+                  <button
+                    onClick={onConnect}
+                    disabled={isConnecting}
+                    className="px-2 py-1 text-xs rounded bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                  >
+                    {isConnecting ? '...' : t('appSettings.connectors.retry')}
+                  </button>
+                  {onClearAll && (
+                    <button
+                      onClick={onClearAll}
+                      disabled={isConnecting}
+                      className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      title={t('appSettings.connectors.clearAllTooltip')}
+                    >
+                      {t('appSettings.connectors.clearAll')}
+                    </button>
+                  )}
+                </>
               ) : (
                 <button
                   onClick={onConnect}
@@ -223,13 +247,13 @@ function ConnectorItem({
                   {isConnecting ? '...' : t('appSettings.connectors.connect')}
                 </button>
               )}
-              {/* 연결 해제 상태에서 에러가 있거나 토큰이 있을 때 초기화 버튼 표시 */}
-              {!isConnected && (error || hasToken) && onClearAll && (
+              {/* 미연결 상태(에러 아님)에서 토큰이 있을 때 초기화 버튼 표시 */}
+              {!isConnected && !error && hasToken && onClearAll && (
                 <button
                   onClick={onClearAll}
                   disabled={isConnecting}
                   className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                  title={error || t('appSettings.connectors.clearAllTooltip')}
+                  title={t('appSettings.connectors.clearAllTooltip')}
                 >
                   {t('appSettings.connectors.clearAll')}
                 </button>
@@ -244,6 +268,22 @@ function ConnectorItem({
           {error}
         </p>
       )}
+      {/* 연결 지연 경고 */}
+      {isConnecting && elapsedSeconds !== undefined && (
+        <p className={`mt-2 text-xs ${
+          elapsedSeconds >= 60
+            ? 'text-red-400'
+            : elapsedSeconds >= 30
+              ? 'text-yellow-400'
+              : 'text-editor-muted'
+        }`}>
+          {elapsedSeconds >= 60
+            ? `⏱️ 연결이 오래 걸리고 있습니다 (${elapsedSeconds}초). 문제가 지속되면 '초기화'를 시도하세요.`
+            : elapsedSeconds >= 30
+              ? `⏳ 연결이 지연 중입니다 (${elapsedSeconds}초...). 최대 60초까지 기다릴 수 있습니다.`
+              : `연결 중... (${elapsedSeconds}초)`}
+        </p>
+      )}
     </div>
   );
 }
@@ -251,7 +291,7 @@ function ConnectorItem({
 export function ConnectorsSection(): JSX.Element {
   const { t } = useTranslation();
   const setTokenStatus = useConnectorStore((s) => s.setTokenStatus);
-  
+
   // MCP 상태 (Atlassian)
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>({
     isConnected: false,
@@ -266,6 +306,52 @@ export function ConnectorsSection(): JSX.Element {
 
   // Notion 토큰 다이얼로그
   const [showNotionDialog, setShowNotionDialog] = useState(false);
+
+  // 연결 시작 시점 추적 (타이머용)
+  const [connectionStartedAt, setConnectionStartedAt] = useState<{
+    atlassian: number | null;
+    notion: number | null;
+  }>({ atlassian: null, notion: null });
+
+  // 경과 시간 (초)
+  const [elapsedSeconds, setElapsedSeconds] = useState<{
+    atlassian: number;
+    notion: number;
+  }>({ atlassian: 0, notion: 0 });
+
+  // 연결 중일 때 타이머
+  useEffect(() => {
+    if (!mcpStatus.isConnecting && !notionStatus.isConnecting) return;
+
+    const interval = setInterval(() => {
+      setElapsedSeconds({
+        atlassian: connectionStartedAt.atlassian
+          ? Math.floor((Date.now() - connectionStartedAt.atlassian) / 1000)
+          : 0,
+        notion: connectionStartedAt.notion
+          ? Math.floor((Date.now() - connectionStartedAt.notion) / 1000)
+          : 0,
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [mcpStatus.isConnecting, notionStatus.isConnecting, connectionStartedAt]);
+
+  // Atlassian 연결 완료/실패 → 타이머 초기화
+  useEffect(() => {
+    if (!mcpStatus.isConnecting) {
+      setConnectionStartedAt((prev) => ({ ...prev, atlassian: null }));
+      setElapsedSeconds((prev) => ({ ...prev, atlassian: 0 }));
+    }
+  }, [mcpStatus.isConnecting]);
+
+  // Notion 연결 완료/실패 → 타이머 초기화
+  useEffect(() => {
+    if (!notionStatus.isConnecting) {
+      setConnectionStartedAt((prev) => ({ ...prev, notion: null }));
+      setElapsedSeconds((prev) => ({ ...prev, notion: 0 }));
+    }
+  }, [notionStatus.isConnecting]);
 
   // MCP 상태 구독 (Atlassian + Notion 통합)
   useEffect(() => {
@@ -285,6 +371,7 @@ export function ConnectorsSection(): JSX.Element {
 
   // Atlassian MCP 연결
   const handleAtlassianConnect = useCallback(async () => {
+    setConnectionStartedAt((prev) => ({ ...prev, atlassian: Date.now() }));
     try {
       await mcpClientManager.connectAtlassian();
     } catch (error) {
@@ -308,6 +395,7 @@ export function ConnectorsSection(): JSX.Element {
 
   // Notion 토큰 제출 및 연결
   const handleNotionTokenSubmit = useCallback(async (token: string | null) => {
+    setConnectionStartedAt((prev) => ({ ...prev, notion: Date.now() }));
     try {
       // token이 null이면 기존 토큰 사용 (setNotionToken 스킵)
       if (token) {
@@ -365,6 +453,7 @@ export function ConnectorsSection(): JSX.Element {
         isConnected: mcpStatus.isConnected,
         isConnecting: mcpStatus.isConnecting,
         error: mcpStatus.error,
+        elapsedSeconds: elapsedSeconds.atlassian,
         onConnect: handleAtlassianConnect,
         onDisconnect: handleAtlassianDisconnect,
         onClearAll: handleAtlassianClearAll,
@@ -377,6 +466,7 @@ export function ConnectorsSection(): JSX.Element {
         isConnected: notionStatus.isConnected,
         isConnecting: notionStatus.isConnecting,
         error: notionStatus.error,
+        elapsedSeconds: elapsedSeconds.notion,
         onConnect: handleNotionConnect,
         onDisconnect: handleNotionDisconnect,
         onClearAll: handleNotionClearAll,
@@ -388,12 +478,13 @@ export function ConnectorsSection(): JSX.Element {
       isConnected: false,
       isConnecting: false,
       error: null,
+      elapsedSeconds: 0,
       onConnect: () => {},
       onDisconnect: () => {},
       onClearAll: undefined,
       comingSoon: true,
     };
-  }, [mcpStatus, notionStatus, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll, handleNotionConnect, handleNotionDisconnect, handleNotionClearAll]);
+  }, [mcpStatus, notionStatus, elapsedSeconds, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll, handleNotionConnect, handleNotionDisconnect, handleNotionClearAll]);
 
   return (
     <section className="space-y-4">

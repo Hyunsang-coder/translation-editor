@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken } from "../tools/notionTools";
+import { createNotionTools, hasNotionToken, setNotionToken, clearNotionToken, verifyNotionToken } from "../tools/notionTools";
 import { clearAllMcpServer } from "@/tauri/mcpRegistry";
 import { truncateToolOutput } from "@/ai/utils";
 
@@ -497,8 +497,8 @@ class McpClientManager {
   }
 
   /**
-   * Notion "연결" - 실제로는 토큰 검증만 수행
-   * REST API 방식이므로 별도의 연결 과정이 없음
+   * Notion "연결" - 토큰 검증 포함
+   * REST API 방식이므로 별도의 연결 과정이 없지만, 토큰 유효성을 확인합니다.
    */
   async connectNotion(): Promise<void> {
     if (this._notionStatus.isConnected || this._notionStatus.isConnecting) {
@@ -511,13 +511,24 @@ class McpClientManager {
     this.updateNotionStatus({ isConnecting: true, error: null });
 
     try {
-      // 토큰 존재 여부 확인
+      // 1. 토큰 존재 여부 확인
       const hasToken = await hasNotionToken();
       if (!hasToken) {
         throw new Error("No Notion token. Please set your Integration Token first.");
       }
 
-      // 도구 생성
+      // 2. 토큰 유효성 검증 (API 호출)
+      if (import.meta.env.DEV) {
+        console.warn("[McpClientManager] Verifying Notion token...");
+      }
+      const isTokenValid = await verifyNotionToken();
+      if (!isTokenValid) {
+        throw new Error(
+          "Invalid or expired Notion token. Please check your Integration Token and try again."
+        );
+      }
+
+      // 3. 도구 생성
       this.notionToolsCache = createNotionTools();
 
       this.updateNotionStatus({

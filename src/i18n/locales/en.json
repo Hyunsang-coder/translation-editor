@@ -100,6 +100,7 @@
       "connecting": "Connecting...",
       "connect": "Connect",
       "disconnect": "Disconnect",
+      "retry": "Retry",
       "clearAll": "Clear All",
       "clearAllTooltip": "Delete all tokens and authentication info",
       "error": "Error",
