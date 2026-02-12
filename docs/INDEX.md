@@ -29,6 +29,12 @@
 | Phase 6 | `/tasks/phase-6.md` | 외부 연동 ✅ |
 | Phase 7 | `/tasks/phase-7.md` | UX 개선 🚧 |
 
+## 테스트/배포 운영
+
+| 문서 | 경로 | 설명 |
+|------|------|------|
+| **Tauri 테스트 가이드** | `/docs/TAURI_TESTING.md` | Tauri 중심 테스트 명령 및 릴리즈 전 스모크 절차 |
+
 ## 코드 리뷰
 
 | 문서 | 경로 | 설명 |

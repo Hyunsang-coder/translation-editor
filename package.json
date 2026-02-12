@@ -17,8 +17,11 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
+    "test:tauri": "npm run lint && npm run test:run && npm run test:e2e && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --release --manifest-path src-tauri/Cargo.toml",
+    "test:e2e": "npm run test:e2e:tauri",
+    "test:e2e:tauri": "node scripts/tauri-smoke.mjs",
+    "test:e2e:web": "playwright test -c playwright.web.config.ts",
+    "test:e2e:web:ui": "playwright test -c playwright.web.config.ts --ui",
     "test:harness": "vite --open /test-harness.html --port 1421",
     "release:copy": "cp -r release/* ../oddeyes-release/ && cp src-tauri/target/release/bundle/dmg/*.dmg ../oddeyes-release/ && echo '✅ Copied to oddeyes-release'",
     "release:docs": "cp release/README.md release/CHANGELOG.md ../oddeyes-release/ && echo '✅ Docs copied'"

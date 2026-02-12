@@ -46,7 +46,12 @@ npm run lint:fix      # 자동 수정
 npm test              # Watch mode
 npm run test:run      # Single run
 npm run test:coverage # Coverage report
+npm run test:tauri    # Tauri release gate (lint+unit+smoke+rust)
+npm run test:e2e      # Tauri smoke test (debug/no-bundle)
+npm run test:e2e:web  # 웹 하네스(Playwright, 선택)
 ```
+
+`test:e2e`는 데스크톱 앱(Tauri) 기준 검증이며, 웹 서버 기반 Playwright 테스트는 `test:e2e:web`로 분리되어 있습니다.
 
 ## 빌드 및 배포
 
