@@ -11,7 +11,7 @@ use rusqlite::Connection;
 use rusqlite::backup::Backup;
 
 use crate::error::IteError;
-use crate::models::{ChatSession, EditorBlock, IteProject, SegmentGroup};
+use crate::models::{ChatSession, EditorBlock, HistorySnapshot, HistorySnapshotMeta, IteProject, SegmentGroup};
 
 #[derive(Debug, Clone)]
 pub struct GlossaryEntryRow {
@@ -93,6 +93,16 @@ impl Database {
             self.conn.execute_batch(
                 "ALTER TABLE chat_sessions ADD COLUMN confluence_search_enabled INTEGER NOT NULL DEFAULT 1;"
             )?;
+        }
+
+        // history.snapshot_json 컬럼 추가 (풀 스냅샷 저장용)
+        let has_snapshot_json: bool = self
+            .conn
+            .prepare("SELECT snapshot_json FROM history LIMIT 0")
+            .is_ok();
+        if !has_snapshot_json {
+            self.conn
+                .execute_batch("ALTER TABLE history ADD COLUMN snapshot_json TEXT;")?;
         }
         Ok(())
     }
@@ -278,6 +288,122 @@ impl Database {
         }
 
         tx.commit()?;
+        Ok(())
+    }
+
+    /// 히스토리 스냅샷 생성 (풀 blocks JSON 저장)
+    pub fn create_history_snapshot(
+        &self,
+        project_id: &str,
+        description: &str,
+        snapshot_json: &str,
+        chat_summary: Option<&str>,
+    ) -> Result<String, IteError> {
+        let snapshot_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp_millis();
+
+        self.conn.execute(
+            "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            (
+                &snapshot_id,
+                project_id,
+                now,
+                description,
+                "[]",
+                snapshot_json,
+                chat_summary,
+            ),
+        )?;
+
+        self.prune_old_snapshots(project_id, 50)?;
+        Ok(snapshot_id)
+    }
+
+    /// 히스토리 메타데이터 목록 조회 (최신순, 최대 50개)
+    pub fn list_history_metadata(&self, project_id: &str) -> Result<Vec<HistorySnapshotMeta>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, timestamp, description, chat_summary
+             FROM history
+             WHERE project_id = ?1
+             ORDER BY timestamp DESC
+             LIMIT 50",
+        )?;
+
+        let iter = stmt.query_map([project_id], |row| {
+            Ok(HistorySnapshotMeta {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                description: row.get(2)?,
+                chat_summary: row.get(3)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// 단일 히스토리 스냅샷 조회
+    pub fn get_history_snapshot(
+        &self,
+        snapshot_id: &str,
+        project_id: &str,
+    ) -> Result<HistorySnapshot, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, timestamp, description, changes_json, chat_summary, snapshot_json
+             FROM history
+             WHERE id = ?1 AND project_id = ?2",
+        )?;
+
+        let row = stmt.query_row([snapshot_id, project_id], |row| {
+            let changes_json: String = row.get(3)?;
+            let block_changes =
+                serde_json::from_str::<Vec<crate::models::BlockChange>>(&changes_json).unwrap_or_default();
+
+            Ok(HistorySnapshot {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                description: row.get(2)?,
+                block_changes,
+                chat_summary: row.get(4)?,
+                snapshot_json: row.get(5)?,
+            })
+        });
+
+        match row {
+            Ok(snapshot) => Ok(snapshot),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(IteError::InvalidOperation(format!(
+                "History snapshot not found: {}",
+                snapshot_id
+            ))),
+            Err(e) => Err(IteError::Database(e)),
+        }
+    }
+
+    /// 히스토리 스냅샷 삭제
+    pub fn delete_history_snapshot(&self, snapshot_id: &str, project_id: &str) -> Result<(), IteError> {
+        self.conn.execute(
+            "DELETE FROM history WHERE id = ?1 AND project_id = ?2",
+            [snapshot_id, project_id],
+        )?;
+        Ok(())
+    }
+
+    /// 프로젝트별 오래된 스냅샷 정리
+    pub fn prune_old_snapshots(&self, project_id: &str, max_snapshots: usize) -> Result<(), IteError> {
+        self.conn.execute(
+            "DELETE FROM history
+             WHERE id IN (
+               SELECT id FROM history
+               WHERE project_id = ?1
+               ORDER BY timestamp DESC
+               LIMIT -1 OFFSET ?2
+             )",
+            (project_id, max_snapshots as i64),
+        )?;
         Ok(())
     }
 

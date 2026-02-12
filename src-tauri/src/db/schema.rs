@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS history (
     timestamp INTEGER NOT NULL,
     description TEXT NOT NULL,
     changes_json TEXT NOT NULL,
+    snapshot_json TEXT,
     chat_summary TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
@@ -140,4 +141,3 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
     updated_at INTEGER NOT NULL
 );
 "#;
-

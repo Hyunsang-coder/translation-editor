@@ -124,6 +124,17 @@ export interface HistorySnapshot {
   description: string;
   blockChanges: BlockChange[];
   chatSummary?: string; // 해당 시점의 AI 대화 요약
+  snapshotJson?: string;
+}
+
+/**
+ * 히스토리 메타데이터 (목록용 경량 타입)
+ */
+export interface HistorySnapshotMeta {
+  id: string;
+  timestamp: number;
+  description: string;
+  chatSummary?: string;
 }
 
 /**
@@ -384,4 +395,3 @@ export interface Toast {
   message: string;
   duration?: number;
 }
-

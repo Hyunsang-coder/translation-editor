@@ -19,6 +19,8 @@ import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
+import { useProjectStore } from '@/stores/projectStore';
+import { useHistoryStore } from '@/stores/historyStore';
 
 /**
  * 경과 시간을 포맷팅 (mm:ss)
@@ -75,12 +77,30 @@ export function TranslatePreviewModal(props: {
   /** 스트리밍 중 실시간 Markdown 텍스트 */
   streamingText?: string | null;
   onClose: () => void;
-  onApply: () => void;
+  onApply: () => void | Promise<void>;
   onCancel?: () => void;
   onRetry?: () => void;
+  autoSnapshotDescription?: string;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const { open, title, docJson, sourceHtml, originalHtml, isLoading, error, progress, streamingText, onClose, onApply, onCancel, onRetry } = props;
+  const {
+    open,
+    title,
+    docJson,
+    sourceHtml,
+    originalHtml,
+    isLoading,
+    error,
+    progress,
+    streamingText,
+    onClose,
+    onApply,
+    onCancel,
+    onRetry,
+    autoSnapshotDescription,
+  } = props;
+  const project = useProjectStore((s) => s.project);
+  const createSnapshot = useHistoryStore((s) => s.createSnapshot);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
@@ -176,8 +196,26 @@ export function TranslatePreviewModal(props: {
   const handleApply = (): void => {
     if (isApplying) return;
     setIsApplying(true);
-    onApply();
-    // onApply 호출 후 부모 컴포넌트가 open=false로 만들면 모달이 닫힘
+    void (async () => {
+      try {
+        if (project) {
+          try {
+            await createSnapshot({
+              projectId: project.id,
+              description:
+                autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate'),
+              blocks: project.blocks,
+            });
+          } catch (snapshotError) {
+            // 자동 스냅샷 실패는 메인 동작(적용)을 막지 않음
+            console.warn('[history] auto snapshot before apply failed:', snapshotError);
+          }
+        }
+        await onApply();
+      } finally {
+        setIsApplying(false);
+      }
+    })();
   };
 
   // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.

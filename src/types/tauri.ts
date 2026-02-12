@@ -3,7 +3,7 @@
  * Rust 백엔드와 통신하기 위한 타입 정의
  */
 
-import type { ITEProject, EditorBlock, SegmentGroup, HistorySnapshot } from './index';
+import type { ITEProject, EditorBlock, SegmentGroup, HistorySnapshot, HistorySnapshotMeta } from './index';
 
 // ============================================
 // Command Response Types
@@ -98,6 +98,7 @@ export interface MergeBlocksRequest {
 export interface CreateSnapshotRequest {
   projectId: string;
   description: string;
+  blocksJson: string;
   chatSummary?: string;
 }
 
@@ -113,6 +114,11 @@ export interface RestoreSnapshotRequest {
  * 히스토리 목록 응답
  */
 export type ListHistoryResponse = TauriResponse<HistorySnapshot[]>;
+
+/**
+ * 히스토리 목록 응답 (메타데이터)
+ */
+export type ListHistoryMetaResponse = TauriResponse<HistorySnapshotMeta[]>;
 
 // ============================================
 // File Commands
@@ -166,4 +172,3 @@ export interface DbStatus {
   path: string;
   version: string;
 }
-

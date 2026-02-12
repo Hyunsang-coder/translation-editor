@@ -624,6 +624,7 @@ export function ReviewPanel(): JSX.Element {
         streamingText={retranslateStreamingText}
         onClose={handleRetranslateClose}
         onApply={handleApplyRetranslation}
+        autoSnapshotDescription={t('history.autoSnapshotBeforeReviewApply')}
         onCancel={handleRetranslateCancel}
         onRetry={handleRetranslateExecute}
       />

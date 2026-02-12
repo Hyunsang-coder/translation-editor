@@ -104,6 +104,18 @@ pub struct HistorySnapshot {
     pub block_changes: Vec<BlockChange>,
     #[serde(rename = "chatSummary")]
     pub chat_summary: Option<String>,
+    #[serde(rename = "snapshotJson")]
+    pub snapshot_json: Option<String>,
+}
+
+/// 히스토리 스냅샷 메타데이터(목록용 경량 응답)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistorySnapshotMeta {
+    pub id: String,
+    pub timestamp: i64,
+    pub description: String,
+    #[serde(rename = "chatSummary")]
+    pub chat_summary: Option<String>,
 }
 
 /// 블록 변경 기록
@@ -186,4 +198,3 @@ pub struct AttachmentDto {
 
 // NOTE: 과거에는 ChatMessageMetadata를 Rust struct로 고정했지만,
 // TS 메타데이터가 확장되면서 유실 위험이 커져 JSON(Value)로 변경했습니다.
-

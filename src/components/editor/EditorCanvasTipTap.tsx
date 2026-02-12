@@ -620,6 +620,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslatePreviewOpen(false);
         }}
         onApply={applyTranslatePreview}
+        autoSnapshotDescription={t('history.autoSnapshotBeforeTranslate')}
         onCancel={handleTranslateCancel}
         {...(translatePreviewError ? { onRetry: handleTranslateRetry } : {})}
       />

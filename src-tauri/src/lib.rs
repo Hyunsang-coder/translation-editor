@@ -256,6 +256,8 @@ pub fn run() {
             commands::history::create_snapshot,
             commands::history::restore_snapshot,
             commands::history::list_history,
+            commands::history::get_snapshot,
+            commands::history::delete_snapshot,
             commands::storage::export_project_file,
             commands::storage::delete_project,
             commands::storage::delete_all_projects,

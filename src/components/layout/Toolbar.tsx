@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare, Cog } from 'lucide-react';
+import { Settings, Search, MessageSquare, Cog, Clock3 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 
 /**
  * 상단 툴바 컴포넌트
@@ -24,6 +25,7 @@ export function Toolbar(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAppSettings, setShowAppSettings] = useState(false);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 드롭다운 외부 클릭 시 닫기
@@ -87,6 +89,12 @@ export function Toolbar(): JSX.Element {
     setDropdownOpen(false);
   };
 
+  const handleHistory = () => {
+    if (!project) return;
+    setHistoryDrawerOpen(true);
+    setDropdownOpen(false);
+  };
+
   return (
     <header className="h-14 border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
       {/* 프로젝트 정보 */}
@@ -137,6 +145,16 @@ export function Toolbar(): JSX.Element {
               <div className="h-px bg-editor-border" />
               <button
                 type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleHistory}
+                disabled={!project}
+              >
+                <Clock3 size={16} />
+                <span>{t('history.title')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
+              <button
+                type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleProjectSettings}
               >
@@ -161,6 +179,7 @@ export function Toolbar(): JSX.Element {
       {showAppSettings && (
         <AppSettingsModal onClose={() => setShowAppSettings(false)} />
       )}
+      <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />
     </header>
   );
 }
