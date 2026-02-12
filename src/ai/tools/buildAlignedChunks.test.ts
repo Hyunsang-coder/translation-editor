@@ -60,7 +60,6 @@ function createTestProject(segmentCount: number): ITEProject {
     },
     blocks,
     segments,
-    history: [],
   };
 }
 
@@ -115,7 +114,6 @@ describe('buildAlignedChunksAsync', () => {
       },
       blocks: {},
       segments: [],
-      history: [],
     };
 
     const chunks = await buildAlignedChunksAsync(emptyProject);

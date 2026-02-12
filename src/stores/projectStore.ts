@@ -311,7 +311,6 @@ const createInitialProject = (): ITEProject => {
     },
     segments,
     blocks,
-    history: [],
   };
 };
 

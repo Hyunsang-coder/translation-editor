@@ -299,6 +299,9 @@ impl Database {
         snapshot_json: &str,
         chat_summary: Option<&str>,
     ) -> Result<String, IteError> {
+        // 저장 시점에 스냅샷 JSON 구조를 검증해, 복원/비교 시점의 지연 실패를 줄인다.
+        let _: std::collections::HashMap<String, EditorBlock> = serde_json::from_str(snapshot_json)?;
+
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
 
@@ -704,7 +707,6 @@ impl Database {
             metadata,
             segments,
             blocks,
-            history: Vec::new(), // TODO: 히스토리 로드 구현
         })
     }
 
@@ -1309,6 +1311,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use super::Database;
+    use crate::error::IteError;
     use crate::models::{BlockMetadata, EditorBlock, IteProject, ProjectMetadata, ProjectSettings, SegmentGroup};
 
     fn build_test_project(project_id: &str) -> IteProject {
@@ -1377,7 +1380,6 @@ mod tests {
                 order: 0,
             }],
             blocks,
-            history: vec![],
         }
     }
 
@@ -1515,5 +1517,28 @@ mod tests {
             )
             .expect("failed to count legacy rows");
         assert_eq!(legacy_count, 10);
+    }
+
+    #[test]
+    fn create_history_snapshot_rejects_invalid_snapshot_json() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-history-invalid-json-test");
+        db.save_project(&project).expect("failed to save project");
+
+        let err = db
+            .create_history_snapshot(&project.id, "invalid snapshot", "not-a-json", None)
+            .expect_err("invalid snapshot json should fail");
+        assert!(
+            matches!(err, IteError::Serialization(_)),
+            "expected serialization error, got: {err:?}"
+        );
+
+        let list = db
+            .list_history_metadata(&project.id)
+            .expect("failed to list history metadata");
+        assert!(list.is_empty(), "invalid snapshot should not be inserted");
     }
 }

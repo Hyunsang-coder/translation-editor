@@ -101,7 +101,6 @@ pub fn create_project(
         },
         segments,
         blocks,
-        history: Vec::new(),
     };
 
     let db = db_state.acquire()?;
@@ -201,7 +200,6 @@ pub fn duplicate_project(
         },
         segments: new_segments,
         blocks: new_blocks,
-        history: Vec::new(),
     };
 
     db.save_project(&new_project).map_err(CommandError::from)?;

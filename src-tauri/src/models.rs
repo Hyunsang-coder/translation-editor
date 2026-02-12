@@ -13,7 +13,6 @@ pub struct IteProject {
     pub metadata: ProjectMetadata,
     pub segments: Vec<SegmentGroup>,
     pub blocks: std::collections::HashMap<String, EditorBlock>,
-    pub history: Vec<HistorySnapshot>,
 }
 
 /// 프로젝트 메타데이터

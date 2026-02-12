@@ -18,7 +18,6 @@ export interface ITEProject {
   metadata: ProjectMetadata;
   segments: SegmentGroup[]; // N:M 매핑의 핵심 단위
   blocks: Record<string, EditorBlock>; // 실제 텍스트 데이터 보관소 (ID 기반)
-  history: HistorySnapshot[];
 }
 
 /**
