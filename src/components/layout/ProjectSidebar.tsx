@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Cog } from 'lucide-react';
+import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import {
   createProject,
@@ -63,6 +64,7 @@ export function ProjectSidebar(): JSX.Element {
   const [renameTitle, setRenameTitle] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -114,6 +116,18 @@ export function ProjectSidebar(): JSX.Element {
         >
           <FolderOpen size={20} />
         </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setShowAppSettings(true)}
+          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
+          title={t('projectSidebar.appSettings')}
+        >
+          <Cog size={20} />
+        </button>
+        {showAppSettings && (
+          <AppSettingsModal onClose={() => setShowAppSettings(false)} />
+        )}
       </div>
     );
   }
@@ -409,6 +423,22 @@ export function ProjectSidebar(): JSX.Element {
             );
           })}
       </div>
+
+      {/* App Settings */}
+      <div className="px-3 py-2 border-t border-editor-border shrink-0">
+        <button
+          type="button"
+          className="w-full px-2 py-1.5 rounded-md text-left text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors flex items-center gap-2"
+          onClick={() => setShowAppSettings(true)}
+        >
+          <Cog size={14} />
+          <span>{t('projectSidebar.appSettings')}</span>
+        </button>
+      </div>
+
+      {showAppSettings && (
+        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
+      )}
 
       {/* Context Menu */}
       {contextMenu && (

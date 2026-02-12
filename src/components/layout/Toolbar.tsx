@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare, Cog, Clock3 } from 'lucide-react';
+import { Settings, Search, MessageSquare, Clock3 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
-import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 
 /**
@@ -24,7 +23,6 @@ export function Toolbar(): JSX.Element {
     })));
   const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [showAppSettings, setShowAppSettings] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -81,11 +79,6 @@ export function Toolbar(): JSX.Element {
     } else {
       openActiveChat();
     }
-    setDropdownOpen(false);
-  };
-
-  const handleAppSettings = () => {
-    setShowAppSettings(true);
     setDropdownOpen(false);
   };
 
@@ -161,24 +154,11 @@ export function Toolbar(): JSX.Element {
                 <Settings size={16} />
                 <span>{t('toolbar.projectSettings')}</span>
               </button>
-              <div className="h-px bg-editor-border" />
-              <button
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
-                onClick={handleAppSettings}
-              >
-                <Cog size={16} />
-                <span>{t('projectSidebar.appSettings')}</span>
-              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* App Settings Modal */}
-      {showAppSettings && (
-        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
-      )}
       <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />
     </header>
   );
