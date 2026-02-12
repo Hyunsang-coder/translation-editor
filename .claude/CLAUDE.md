@@ -27,6 +27,14 @@ npm run test:e2e         # Tauri smoke test (Playwright)
 cd src-tauri && cargo test  # Rust tests only
 ```
 
+### Dev Environment Setup
+```bash
+# Keychain 암호 프롬프트 우회 (.gitignore 포함, 한 번만 설정)
+# 기존 vault 호환: security find-generic-password -s "com.ite.app" -a "ite:master_key_v1" -w
+# 새 환경: 아무 문자열 가능 (SHA-256 해싱)
+echo 'ITE_DEV_MASTER_KEY=mypassword' > .env.local
+```
+
 ### Key Directories
 ```
 src/ai/           # AI integration (chat.ts, translateDocument.ts, review/)

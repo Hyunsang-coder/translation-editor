@@ -106,9 +106,48 @@ impl SecretManager {
         *self.app_data_dir.write().await = Some(path);
     }
 
+    /// 환경변수에서 마스터키 로드 (개발/CI 자동화용)
+    ///
+    /// `ITE_DEV_MASTER_KEY` 환경변수로 Keychain 접근을 우회합니다.
+    ///
+    /// - **Base64 값** (기존 vault 호환): Keychain에서 추출한 값 그대로 사용
+    ///   `security find-generic-password -s "com.ite.app" -a "ite:master_key_v1" -w`
+    /// - **일반 문자열** (새 환경): 아무 문자열이나 입력하면 SHA-256 해싱으로 키 생성
+    fn dev_master_key() -> Option<[u8; MASTER_KEY_LEN]> {
+        let val = std::env::var("ITE_DEV_MASTER_KEY").ok()?;
+        if val.is_empty() {
+            return None;
+        }
+        // Base64 디코딩 시도 → 실패하면 SHA-256 해싱 fallback
+        let key = if let Ok(bytes) = BASE64.decode(&val) {
+            if bytes.len() == MASTER_KEY_LEN {
+                let mut k = [0u8; MASTER_KEY_LEN];
+                k.copy_from_slice(&bytes);
+                println!("[SecretManager] Using Base64 master key from ITE_DEV_MASTER_KEY (keychain bypassed)");
+                k
+            } else {
+                Self::hash_to_master_key(&val)
+            }
+        } else {
+            Self::hash_to_master_key(&val)
+        };
+        Some(key)
+    }
+
+    /// 일반 문자열을 SHA-256 해싱하여 마스터키 생성
+    fn hash_to_master_key(passphrase: &str) -> [u8; MASTER_KEY_LEN] {
+        use sha2::{Sha256, Digest};
+        let hash = Sha256::digest(passphrase.as_bytes());
+        let mut key = [0u8; MASTER_KEY_LEN];
+        key.copy_from_slice(&hash[..MASTER_KEY_LEN]);
+        println!("[SecretManager] Using hashed master key from ITE_DEV_MASTER_KEY (keychain bypassed)");
+        key
+    }
+
     /// 초기화 (앱 시작 시 1회 호출)
     ///
     /// 1. Keychain에서 마스터키 로드 (없으면 생성하고 저장)
+    ///    - `ITE_DEV_MASTER_KEY` 환경변수가 있으면 Keychain 대신 사용
     /// 2. vault 파일이 있으면 복호화하여 캐시에 로드
     pub async fn initialize(&self) -> Result<(), SecretManagerError> {
         // 이미 초기화되었는지 확인 (동시 호출 시 대기)
@@ -150,28 +189,33 @@ impl SecretManager {
         println!("[SecretManager] Initializing...");
 
         // 1. 마스터키 로드 또는 생성
-        let master_key = match self.load_master_key_from_keychain() {
-            Ok(key) => {
-                println!("[SecretManager] Master key loaded from keychain");
-                key
-            }
-            Err(SecretManagerError::KeychainNoEntry) => {
-                // 마스터키가 없으면 새로 생성
-                println!("[SecretManager] No master key found, generating new one...");
-                let new_key = Self::generate_master_key();
-                if let Err(e) = self.save_master_key_to_keychain(&new_key) {
-                    // 키체인 저장 실패 시 Failed 상태로 전환
-                    let error_msg = format!("Failed to save master key to keychain: {}", e);
-                    eprintln!("[SecretManager] {}", error_msg);
-                    *self.state.write().await = InitState::Failed(error_msg);
+        //    ITE_DEV_MASTER_KEY 환경변수가 있으면 Keychain 우회
+        let master_key = if let Some(dev_key) = Self::dev_master_key() {
+            dev_key
+        } else {
+            match self.load_master_key_from_keychain() {
+                Ok(key) => {
+                    println!("[SecretManager] Master key loaded from keychain");
+                    key
+                }
+                Err(SecretManagerError::KeychainNoEntry) => {
+                    // 마스터키가 없으면 새로 생성
+                    println!("[SecretManager] No master key found, generating new one...");
+                    let new_key = Self::generate_master_key();
+                    if let Err(e) = self.save_master_key_to_keychain(&new_key) {
+                        // 키체인 저장 실패 시 Failed 상태로 전환
+                        let error_msg = format!("Failed to save master key to keychain: {}", e);
+                        eprintln!("[SecretManager] {}", error_msg);
+                        *self.state.write().await = InitState::Failed(error_msg);
+                        return Err(e);
+                    }
+                    println!("[SecretManager] New master key saved to keychain");
+                    new_key
+                }
+                Err(e) => {
+                    *self.state.write().await = InitState::Failed(e.to_string());
                     return Err(e);
                 }
-                println!("[SecretManager] New master key saved to keychain");
-                new_key
-            }
-            Err(e) => {
-                *self.state.write().await = InitState::Failed(e.to_string());
-                return Err(e);
             }
         };
 
