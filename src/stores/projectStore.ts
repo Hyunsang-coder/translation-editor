@@ -146,6 +146,7 @@ interface ProjectActions {
   setSourceDocument: (next: string) => void;
   setTargetDocJson: (json: TipTapDocJson | null) => void;
   setSourceDocJson: (json: TipTapDocJson | null) => void;
+  materializeBlocksForSnapshot: () => Record<string, EditorBlock> | null;
   setTargetLanguage: (lang: string) => void;
   rebuildTargetDocument: () => void;
   rebuildSourceDocument: () => void;
@@ -624,139 +625,13 @@ export const useProjectStore = create<ProjectStore>()(
 
           try {
             const now = Date.now();
-            // 저장 직전: Target/Source 단일 문서 내용을 blocks로 역투영
-            // 1) 가능하면 tracked ranges 기반(정확)
-            // 2) 실패/미설정 시 segment/ids 기반 fallback(저장 누락 방지)
-            const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
-
-            const applyTargetByTrackedRanges = (): boolean => {
-              // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
-              if (!targetDocument || targetDocument.length === 0) return false;
-              if (!targetDocHandle) return false;
-              const ranges = targetDocHandle.getBlockOffsets();
-              const entries = Object.entries(ranges);
-              if (entries.length === 0) return false;
-
-              let touched = 0;
-              for (const [blockId, r] of entries) {
-                const block = nextBlocks[blockId];
-                if (!block || block.type !== 'target') continue;
-                const start = Math.max(0, Math.min(r.startOffset, targetDocument.length));
-                const end = Math.max(start, Math.min(r.endOffset, targetDocument.length));
-                const plain = targetDocument.slice(start, end);
-                const html = toParagraphHtml(plain);
-                nextBlocks[blockId] = {
-                  ...block,
-                  content: html,
-                  hash: hashContent(html),
-                  metadata: { ...block.metadata, updatedAt: now },
-                };
-                touched++;
-              }
-              return touched > 0;
-            };
-
-            const applyTargetFallback = (): void => {
-              // targetDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
-              // (기존 blocks 내용 유지)
-              if (!targetDocument || targetDocument.length === 0) {
-                return;
-              }
-
-              // 원본 blocks 기준으로 초기 offset을 계산하고,
-              // 현재 targetDocument 길이와의 차이를 마지막 블록에 적용합니다.
-              // 이렇게 하면 사용자가 추가한 줄바꿈이 잘못된 세그먼트로 매핑되는 문제를 방지합니다.
-              const initialBuild = buildTargetDocument(project);
-              const initialLength = initialBuild.text.length;
-              const currentLength = targetDocument.length;
-              const delta = currentLength - initialLength;
-
-              const blockIds = Object.keys(initialBuild.blockRanges);
-              if (blockIds.length === 0) return; // 블록이 없으면 스킵
-
-              const lastBlockId = blockIds[blockIds.length - 1];
-
-              for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
-                const block = nextBlocks[blockId];
-                if (!block || block.type !== 'target') continue;
-
-                let start = r.startOffset;
-                let end = r.endOffset;
-
-                // 마지막 블록이면 길이 변화(delta)를 반영
-                if (blockId === lastBlockId) {
-                  end = Math.max(start, Math.min(end + delta, currentLength));
-                }
-
-                // 범위 안전 체크
-                start = Math.max(0, Math.min(start, currentLength));
-                end = Math.max(start, Math.min(end, currentLength));
-
-                const plain = targetDocument.slice(start, end);
-                const html = toParagraphHtml(plain);
-                nextBlocks[blockId] = {
-                  ...block,
-                  content: html,
-                  hash: hashContent(html),
-                  metadata: { ...block.metadata, updatedAt: now },
-                };
-              }
-            };
-
-            const applySourceFallback = (): void => {
-              // sourceDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
-              // (기존 blocks 내용 유지)
-              if (!sourceDocument || sourceDocument.length === 0) {
-                return;
-              }
-
-              // 원본 blocks 기준으로 초기 offset을 계산하고,
-              // 현재 sourceDocument 길이와의 차이를 마지막 블록에 적용합니다.
-              const initialBuild = buildSourceDocument(project);
-              const initialLength = initialBuild.text.length;
-              const currentLength = sourceDocument.length;
-              const delta = currentLength - initialLength;
-
-              const blockIds = Object.keys(initialBuild.blockRanges);
-              if (blockIds.length === 0) return; // 블록이 없으면 스킵
-
-              const lastBlockId = blockIds[blockIds.length - 1];
-
-              for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
-                const block = nextBlocks[blockId];
-                if (!block || block.type !== 'source') continue;
-
-                let start = r.startOffset;
-                let end = r.endOffset;
-
-                // 마지막 블록이면 길이 변화(delta)를 반영
-                if (blockId === lastBlockId) {
-                  end = Math.max(start, Math.min(end + delta, currentLength));
-                }
-
-                // 범위 안전 체크
-                start = Math.max(0, Math.min(start, currentLength));
-                end = Math.max(start, Math.min(end, currentLength));
-
-                const plain = sourceDocument.slice(start, end);
-                const html = toParagraphHtml(plain);
-                nextBlocks[blockId] = {
-                  ...block,
-                  content: html,
-                  hash: hashContent(html),
-                  metadata: { ...block.metadata, updatedAt: now },
-                };
-              }
-            };
-
-            const okTracked = applyTargetByTrackedRanges();
-            console.warn('[saveProject] applyTargetByTrackedRanges result:', okTracked);
-            if (!okTracked) {
-              console.warn('[saveProject] Using applyTargetFallback');
-              applyTargetFallback();
-            }
-            // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
-            applySourceFallback();
+            const nextBlocks = materializeBlocksFromDocuments({
+              project,
+              targetDocument,
+              sourceDocument,
+              targetDocHandle,
+              now,
+            });
 
             const projectToSave: ITEProject = {
               ...project,
@@ -801,6 +676,18 @@ export const useProjectStore = create<ProjectStore>()(
         });
 
         return saveInFlight;
+      },
+
+      materializeBlocksForSnapshot: (): Record<string, EditorBlock> | null => {
+        const { project, targetDocument, sourceDocument, targetDocHandle } = get();
+        if (!project) return null;
+        return materializeBlocksFromDocuments({
+          project,
+          targetDocument,
+          sourceDocument,
+          targetDocHandle,
+          now: Date.now(),
+        });
       },
 
       // 프로젝트 전환(auto-save-and-switch)
@@ -1497,6 +1384,146 @@ export const useProjectStore = create<ProjectStore>()(
     },
   ),
 );
+
+function materializeBlocksFromDocuments(params: {
+  project: ITEProject;
+  targetDocument: string;
+  sourceDocument: string;
+  targetDocHandle: ProjectState['targetDocHandle'];
+  now: number;
+}): Record<string, EditorBlock> {
+  const { project, targetDocument, sourceDocument, targetDocHandle, now } = params;
+  const nextBlocks: Record<string, EditorBlock> = { ...project.blocks };
+
+  const applyTargetByTrackedRanges = (): boolean => {
+    // targetDocument가 비어있으면 기존 blocks 유지 (데이터 손실 방지)
+    if (!targetDocument || targetDocument.length === 0) return false;
+    if (!targetDocHandle) return false;
+    const ranges = targetDocHandle.getBlockOffsets();
+    const entries = Object.entries(ranges);
+    if (entries.length === 0) return false;
+
+    let touched = 0;
+    for (const [blockId, r] of entries) {
+      const block = nextBlocks[blockId];
+      if (!block || block.type !== 'target') continue;
+      const start = Math.max(0, Math.min(r.startOffset, targetDocument.length));
+      const end = Math.max(start, Math.min(r.endOffset, targetDocument.length));
+      const plain = targetDocument.slice(start, end);
+      const html = toParagraphHtml(plain);
+      nextBlocks[blockId] = {
+        ...block,
+        content: html,
+        hash: hashContent(html),
+        metadata: { ...block.metadata, updatedAt: now },
+      };
+      touched++;
+    }
+    return touched > 0;
+  };
+
+  const applyTargetFallback = (): void => {
+    // targetDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+    // (기존 blocks 내용 유지)
+    if (!targetDocument || targetDocument.length === 0) {
+      return;
+    }
+
+    // 원본 blocks 기준으로 초기 offset을 계산하고,
+    // 현재 targetDocument 길이와의 차이를 마지막 블록에 적용합니다.
+    // 이렇게 하면 사용자가 추가한 줄바꿈이 잘못된 세그먼트로 매핑되는 문제를 방지합니다.
+    const initialBuild = buildTargetDocument(project);
+    const initialLength = initialBuild.text.length;
+    const currentLength = targetDocument.length;
+    const delta = currentLength - initialLength;
+
+    const blockIds = Object.keys(initialBuild.blockRanges);
+    if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+    const lastBlockId = blockIds[blockIds.length - 1];
+
+    for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+      const block = nextBlocks[blockId];
+      if (!block || block.type !== 'target') continue;
+
+      let start = r.startOffset;
+      let end = r.endOffset;
+
+      // 마지막 블록이면 길이 변화(delta)를 반영
+      if (blockId === lastBlockId) {
+        end = Math.max(start, Math.min(end + delta, currentLength));
+      }
+
+      // 범위 안전 체크
+      start = Math.max(0, Math.min(start, currentLength));
+      end = Math.max(start, Math.min(end, currentLength));
+
+      const plain = targetDocument.slice(start, end);
+      const html = toParagraphHtml(plain);
+      nextBlocks[blockId] = {
+        ...block,
+        content: html,
+        hash: hashContent(html),
+        metadata: { ...block.metadata, updatedAt: now },
+      };
+    }
+  };
+
+  const applySourceFallback = (): void => {
+    // sourceDocument가 비어있거나 초기화되지 않았으면 blocks 역투영 스킵
+    // (기존 blocks 내용 유지)
+    if (!sourceDocument || sourceDocument.length === 0) {
+      return;
+    }
+
+    // 원본 blocks 기준으로 초기 offset을 계산하고,
+    // 현재 sourceDocument 길이와의 차이를 마지막 블록에 적용합니다.
+    const initialBuild = buildSourceDocument(project);
+    const initialLength = initialBuild.text.length;
+    const currentLength = sourceDocument.length;
+    const delta = currentLength - initialLength;
+
+    const blockIds = Object.keys(initialBuild.blockRanges);
+    if (blockIds.length === 0) return; // 블록이 없으면 스킵
+
+    const lastBlockId = blockIds[blockIds.length - 1];
+
+    for (const [blockId, r] of Object.entries(initialBuild.blockRanges)) {
+      const block = nextBlocks[blockId];
+      if (!block || block.type !== 'source') continue;
+
+      let start = r.startOffset;
+      let end = r.endOffset;
+
+      // 마지막 블록이면 길이 변화(delta)를 반영
+      if (blockId === lastBlockId) {
+        end = Math.max(start, Math.min(end + delta, currentLength));
+      }
+
+      // 범위 안전 체크
+      start = Math.max(0, Math.min(start, currentLength));
+      end = Math.max(start, Math.min(end, currentLength));
+
+      const plain = sourceDocument.slice(start, end);
+      const html = toParagraphHtml(plain);
+      nextBlocks[blockId] = {
+        ...block,
+        content: html,
+        hash: hashContent(html),
+        metadata: { ...block.metadata, updatedAt: now },
+      };
+    }
+  };
+
+  const okTracked = applyTargetByTrackedRanges();
+  if (!okTracked) {
+    applyTargetFallback();
+  }
+  // Source는 tracked ranges 브릿지가 없으므로 항상 fallback으로 매핑
+  applySourceFallback();
+
+  return nextBlocks;
+}
 
 function scheduleWriteThroughSave(
   set: (partial: Partial<ProjectStore>) => void,

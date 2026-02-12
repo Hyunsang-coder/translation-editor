@@ -100,6 +100,7 @@ export function TranslatePreviewModal(props: {
     autoSnapshotDescription,
   } = props;
   const project = useProjectStore((s) => s.project);
+  const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
   const createSnapshot = useHistoryStore((s) => s.createSnapshot);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
@@ -200,11 +201,15 @@ export function TranslatePreviewModal(props: {
       try {
         if (project) {
           try {
+            const blocksForSnapshot = materializeBlocksForSnapshot();
+            if (!blocksForSnapshot) {
+              throw new Error('Project blocks are unavailable for snapshot');
+            }
             await createSnapshot({
               projectId: project.id,
               description:
                 autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate'),
-              blocks: project.blocks,
+              blocks: blocksForSnapshot,
             });
           } catch (snapshotError) {
             // 자동 스냅샷 실패는 메인 동작(적용)을 막지 않음

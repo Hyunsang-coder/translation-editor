@@ -26,6 +26,7 @@ export function HistoryRestoreDialog({
   const { t } = useTranslation();
   const [isRestoring, setIsRestoring] = useState(false);
   const project = useProjectStore((s) => s.project);
+  const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
   const loadProject = useProjectStore((s) => s.loadProject);
   const saveProject = useProjectStore((s) => s.saveProject);
   const createSnapshot = useHistoryStore((s) => s.createSnapshot);
@@ -42,10 +43,14 @@ export function HistoryRestoreDialog({
     setIsRestoring(true);
     try {
       try {
+        const blocksForSnapshot = materializeBlocksForSnapshot();
+        if (!blocksForSnapshot) {
+          throw new Error('Project blocks are unavailable for snapshot');
+        }
         await createSnapshot({
           projectId,
           description: t('history.autoSnapshotBeforeRestore'),
-          blocks: project.blocks,
+          blocks: blocksForSnapshot,
         });
       } catch (e) {
         console.warn('[history] auto snapshot before restore failed:', e);

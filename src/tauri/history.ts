@@ -58,3 +58,17 @@ export async function deleteSnapshot(params: {
     },
   });
 }
+
+export async function renameSnapshot(params: {
+  projectId: string;
+  snapshotId: string;
+  description: string;
+}): Promise<void> {
+  await invoke<void>('rename_snapshot', {
+    args: {
+      projectId: params.projectId,
+      snapshotId: params.snapshotId,
+      description: params.description,
+    },
+  });
+}

@@ -7,6 +7,7 @@ interface HistoryTimelineProps {
   isLoading?: boolean;
   onCompare: (snapshotId: string) => void;
   onRestore: (snapshotId: string) => void;
+  onRename: (snapshotId: string) => void;
   onDelete: (snapshotId: string) => void;
 }
 
@@ -41,6 +42,7 @@ export function HistoryTimeline({
   isLoading = false,
   onCompare,
   onRestore,
+  onRename,
   onDelete,
 }: HistoryTimelineProps): JSX.Element {
   const { t, i18n } = useTranslation();
@@ -89,6 +91,13 @@ export function HistoryTimeline({
               className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
             >
               {t('history.restore')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onRename(snapshot.id)}
+              className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+            >
+              {t('history.rename')}
             </button>
             <button
               type="button"

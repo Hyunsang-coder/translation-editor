@@ -326,6 +326,7 @@ impl Database {
             "SELECT id, timestamp, description, chat_summary
              FROM history
              WHERE project_id = ?1
+               AND snapshot_json IS NOT NULL
              ORDER BY timestamp DESC
              LIMIT 50",
         )?;
@@ -389,6 +390,30 @@ impl Database {
             "DELETE FROM history WHERE id = ?1 AND project_id = ?2",
             [snapshot_id, project_id],
         )?;
+        Ok(())
+    }
+
+    /// 히스토리 스냅샷 이름(설명) 변경
+    pub fn update_history_snapshot_description(
+        &self,
+        snapshot_id: &str,
+        project_id: &str,
+        description: &str,
+    ) -> Result<(), IteError> {
+        let affected = self.conn.execute(
+            "UPDATE history
+             SET description = ?1
+             WHERE id = ?2 AND project_id = ?3",
+            (description, snapshot_id, project_id),
+        )?;
+
+        if affected == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "History snapshot not found: {}",
+                snapshot_id
+            )));
+        }
+
         Ok(())
     }
 
@@ -1265,5 +1290,144 @@ impl Default for crate::models::BlockMetadata {
             tags: Vec::new(),
             comments: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use tempfile::NamedTempFile;
+
+    use super::Database;
+    use crate::models::{BlockMetadata, EditorBlock, IteProject, ProjectMetadata, ProjectSettings, SegmentGroup};
+
+    fn build_test_project(project_id: &str) -> IteProject {
+        let now = chrono::Utc::now().timestamp_millis();
+        let source_id = "source-1".to_string();
+        let target_id = "target-1".to_string();
+
+        let mut blocks = HashMap::new();
+        blocks.insert(
+            source_id.clone(),
+            EditorBlock {
+                id: source_id.clone(),
+                block_type: "source".to_string(),
+                content: "<p>Hello</p>".to_string(),
+                hash: "hash-source".to_string(),
+                metadata: BlockMetadata {
+                    author: None,
+                    created_at: now,
+                    updated_at: now,
+                    tags: vec![],
+                    comments: None,
+                },
+            },
+        );
+        blocks.insert(
+            target_id.clone(),
+            EditorBlock {
+                id: target_id.clone(),
+                block_type: "target".to_string(),
+                content: "<p>안녕하세요</p>".to_string(),
+                hash: "hash-target".to_string(),
+                metadata: BlockMetadata {
+                    author: None,
+                    created_at: now,
+                    updated_at: now,
+                    tags: vec![],
+                    comments: None,
+                },
+            },
+        );
+
+        IteProject {
+            id: project_id.to_string(),
+            version: "1.0.0".to_string(),
+            metadata: ProjectMetadata {
+                title: "Test Project".to_string(),
+                description: None,
+                domain: "general".to_string(),
+                target_language: Some("ko".to_string()),
+                created_at: now,
+                updated_at: now,
+                author: None,
+                glossary_paths: None,
+                settings: ProjectSettings {
+                    strictness_level: 0.5,
+                    auto_save: true,
+                    auto_save_interval: 30_000,
+                    theme: "system".to_string(),
+                },
+            },
+            segments: vec![SegmentGroup {
+                group_id: "segment-1".to_string(),
+                source_ids: vec![source_id],
+                target_ids: vec![target_id],
+                is_aligned: true,
+                order: 0,
+            }],
+            blocks,
+            history: vec![],
+        }
+    }
+
+    #[test]
+    fn history_snapshot_lifecycle_filters_legacy_null_rows() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-history-test");
+        db.save_project(&project).expect("failed to save project");
+
+        let snapshot_json = serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
+        let snapshot_id = db
+            .create_history_snapshot(
+                &project.id,
+                "manual snapshot",
+                &snapshot_json,
+                Some("chat summary"),
+            )
+            .expect("failed to create snapshot");
+
+        db.update_history_snapshot_description(&snapshot_id, &project.id, "renamed snapshot")
+            .expect("failed to rename snapshot");
+
+        let legacy_id = uuid::Uuid::new_v4().to_string();
+        db.conn
+            .execute(
+                "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
+                 VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)",
+                (
+                    legacy_id,
+                    &project.id,
+                    chrono::Utc::now().timestamp_millis(),
+                    "legacy null snapshot",
+                    "[]",
+                    Option::<String>::None,
+                ),
+            )
+            .expect("failed to insert legacy history row");
+
+        let list = db
+            .list_history_metadata(&project.id)
+            .expect("failed to list history metadata");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, snapshot_id);
+        assert_eq!(list[0].description, "renamed snapshot");
+
+        let loaded_snapshot = db
+            .get_history_snapshot(&snapshot_id, &project.id)
+            .expect("failed to load snapshot");
+        assert_eq!(loaded_snapshot.snapshot_json.as_deref(), Some(snapshot_json.as_str()));
+        assert_eq!(loaded_snapshot.description, "renamed snapshot");
+
+        db.delete_history_snapshot(&snapshot_id, &project.id)
+            .expect("failed to delete snapshot");
+        let after_delete = db
+            .list_history_metadata(&project.id)
+            .expect("failed to list history after delete");
+        assert!(after_delete.is_empty());
     }
 }

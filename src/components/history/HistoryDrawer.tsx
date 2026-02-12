@@ -16,6 +16,7 @@ interface HistoryDrawerProps {
 export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Element | null {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
+  const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
   const addToast = useUIStore((s) => s.addToast);
 
   const snapshots = useHistoryStore((s) => s.snapshots);
@@ -23,6 +24,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const loadHistory = useHistoryStore((s) => s.loadHistory);
   const createSnapshot = useHistoryStore((s) => s.createSnapshot);
   const deleteSnapshot = useHistoryStore((s) => s.deleteSnapshot);
+  const renameSnapshot = useHistoryStore((s) => s.renameSnapshot);
   const reset = useHistoryStore((s) => s.reset);
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -60,10 +62,14 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const handleManualSave = async (description: string): Promise<void> => {
     setIsSaving(true);
     try {
+      const blocksForSnapshot = materializeBlocksForSnapshot();
+      if (!blocksForSnapshot) {
+        throw new Error('Project blocks are unavailable for snapshot');
+      }
       await createSnapshot({
         projectId,
         description: description || t('history.defaultManualDescription'),
-        blocks: project.blocks,
+        blocks: blocksForSnapshot,
       });
       addToast({
         type: 'success',
@@ -94,6 +100,43 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
       addToast({
         type: 'error',
         message: e instanceof Error ? e.message : t('history.deleteError'),
+      });
+    }
+  };
+
+  const handleRename = async (snapshotId: string): Promise<void> => {
+    const snapshot = snapshots.find((item) => item.id === snapshotId);
+    if (!snapshot) return;
+
+    const input = window.prompt(t('history.renamePrompt'), snapshot.description);
+    if (input === null) return;
+
+    const nextDescription = input.trim();
+    if (!nextDescription) {
+      addToast({
+        type: 'error',
+        message: t('history.renameRequired'),
+      });
+      return;
+    }
+    if (nextDescription === snapshot.description) {
+      return;
+    }
+
+    try {
+      await renameSnapshot({
+        projectId,
+        snapshotId,
+        description: nextDescription,
+      });
+      addToast({
+        type: 'success',
+        message: t('history.renameSuccess'),
+      });
+    } catch (e) {
+      addToast({
+        type: 'error',
+        message: e instanceof Error ? e.message : t('history.renameError'),
       });
     }
   };
@@ -135,6 +178,9 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
             onRestore={(snapshotId) => {
               setSelectedSnapshotId(snapshotId);
               setRestoreOpen(true);
+            }}
+            onRename={(snapshotId) => {
+              void handleRename(snapshotId);
             }}
             onDelete={(snapshotId) => {
               void handleDelete(snapshotId);
