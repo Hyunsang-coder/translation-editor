@@ -44,14 +44,19 @@ npm run tauri:build  # 프로덕션 빌드
 npm run lint          # ESLint 검사
 npm run lint:fix      # 자동 수정
 npm test              # Watch mode
-npm run test:run      # Single run
+npm run test:run      # Single run (388 unit tests)
 npm run test:coverage # Coverage report
-npm run test:tauri    # Tauri release gate (lint+unit+smoke+rust)
-npm run test:e2e      # Tauri smoke test (debug/no-bundle)
-npm run test:e2e:web  # 웹 하네스(Playwright, 선택)
+npm run test:tauri    # ⭐ Tauri 배포 전 테스트 (lint+unit+e2e+rust)
+npm run test:e2e      # Tauri smoke test (Playwright + Tauri app)
+npm run test:e2e:web  # 웹 하네스 (선택)
 ```
 
-`test:e2e`는 데스크톱 앱(Tauri) 기준 검증이며, 웹 서버 기반 Playwright 테스트는 `test:e2e:web`로 분리되어 있습니다.
+**배포 전 체크리스트**: `npm run test:tauri`로 모든 테스트를 한 번에 실행합니다.
+- ✅ ESLint (0 경고)
+- ✅ Unit Tests (388/388 통과)
+- ✅ E2E/Tauri Smoke (Playwright + 실제 앱)
+- ✅ Rust Tests (2/2 통과)
+- ✅ Release Build 검증
 
 ## 빌드 및 배포
 

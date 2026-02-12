@@ -83,6 +83,7 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 | `aiConfigStore.ts` | Provider flags, model selection, system prompts |
 | `connectorStore.ts` | MCP connector states |
 | `uiStore.ts` | Layout state, Focus Mode, panel positions |
+| `editorStore.ts` | TipTap editor instance management (Source/Target) |
 | `reviewStore.ts` | Review state, chunks, results, highlights |
 
 **chatStore 슬라이스 구조** (1,600줄+ → 7개 파일):
@@ -154,7 +155,6 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
   - `+` button for attachments/web search toggle
   - Enter to send, Shift+Enter for newline
   - IME-aware Enter handling
-- **Modal 통합**: `Modal.tsx` 공통 래퍼 (Focus trap, ESC/오버레이 닫기). ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용.
 - **Modal 통합**: `Modal.tsx` 공통 래퍼 (Focus trap, ESC/오버레이 닫기). ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용.
 
 ## Token Limits

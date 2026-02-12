@@ -435,8 +435,9 @@ resizeImageForApi()   // Progressive resize for API limits
 // Highlight: src/editor/extensions/ReviewHighlight.ts
 // ProseMirror Decoration-based, auto-recalculates on doc change
 
-// Severity Filter: reviewStore.severityFilter (Set<IssueSeverity>)
-// 기본값: new Set(['critical', 'major']) — Minor 숨김
+// Severity Filter: reviewStore.severityFilter (IssueSeverity[])
+// 기본값: ['critical', 'major'] — Minor 숨김
+// useShallow 호환을 위해 Set 대신 배열 사용
 // UI: ReviewResultsTable의 severity 배지가 클릭 가능한 토글 버튼
 // 필터링: ReviewResultsTable 내부에서 filteredIssues로 표시
 
@@ -452,7 +453,7 @@ resizeImageForApi()   // Progressive resize for API limits
 ```typescript
 // UI: src/components/editor/SearchBar.tsx
 // Search (Cmd+F) on Source panel, Replace (Cmd+H) on Target panel
-// Uses Monaco Editor's built-in search functionality
+// Uses TipTap SearchHighlight extension (src/editor/extensions/SearchHighlight.ts)
 ```
 
 ## Grouped Zustand Selectors

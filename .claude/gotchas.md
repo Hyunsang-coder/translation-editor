@@ -12,11 +12,11 @@ Critical implementation warnings learned from past issues.
 
 4. **TipTap Decoration Cross-Node Search**: Use `buildTextWithPositions()` to build full text/position mapping before searching. Simple `indexOf` on individual nodes fails for text spanning node boundaries.
 
-5. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `clearEditorRegistry()` when switching projects to prevent memory leaks from stale editor references.
+5. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `useEditorStore.getState().clearEditors()` when switching projects to prevent memory leaks from stale editor references.
 
 6. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
 
-7. **Editor Registry for Cross-Component Access**: Use `editorRegistry.ts` (`getSourceEditor`, `getTargetEditor`) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions).
+7. **Editor Store for Cross-Component Access**: Use `useEditorStore` (Zustand) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions). Access via `useEditorStore.getState().sourceEditor` / `.targetEditor`.
 
 8. **ProseMirror Base Style Override**: `.ProseMirror` base styles (`px-6 py-4`, `min-h-[200px]`) apply to all TipTap editors. For chat composer, explicitly override with `.chat-composer-tiptap` using `@apply px-0 py-0 min-h-0`. Check full CSS inheritance chain when modifying UI.
 

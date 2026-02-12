@@ -1,7 +1,8 @@
 # Session Handoff
 
-> Updated: 2026-02-10
+> Updated: 2026-02-12
 > Branch: main
+> Version: 1.7.3
 
 ## 작업 요약
 
@@ -11,11 +12,18 @@
 4. **컴포저 로컬화** — 완료
 5. **HI-05: chatStore.ts 파일 분할** — 완료
 6. **코드 리뷰 잔여 이슈 전체 처리** — 완료 (`4d5c98a`)
+7. **TipTap 개선** — Plugin Key 중앙화, Editor Registry → Zustand 마이그레이션, SearchHighlight 로그 정리
+8. **Zustand 이슈 3건 TDD 수정** — aiConfigStore latch, ReviewPanel selector, ConnectorsSection selector
+9. **TDD Phase 1-2** — translateDocument/runReview/chatStore 유닛 테스트 + E2E Tauri smoke 설정
+10. **Atlassian 연결 개선** — 경과 시간 타이머 + Notion 토큰 검증 (Option C)
 
 ## 현재 상태
 
-- Working tree: **clean** (commit.md, tdd/SKILL.md 미커밋 변경 제외)
-- 타입 체크 통과, 339 tests passed
+- Working tree: **clean**
+- 타입 체크 통과 (TypeScript 0 에러, Rust cargo check 통과)
+- **388 unit tests passed** (22 skipped), 23 test files
+- Rust tests: 2/2 passed
+- Release build check: passed
 - **CR+HI+MD 23건 전부 해결**, **LOW 12/17 해결**, 나머지 5건 수정 불필요
 - Review audit 7건 전부 처리
 

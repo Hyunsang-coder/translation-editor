@@ -18,9 +18,12 @@ This file provides guidance to Claude Code when working with this repository.
 npm install              # Install dependencies
 npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
+npm run lint             # ESLint
 npm test                 # Vitest watch mode
-npm run test:run         # Single test run
-cd src-tauri && cargo test  # Rust tests
+npm run test:run         # Single test run (388 tests)
+npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
+npm run test:e2e         # Tauri smoke test (Playwright)
+cd src-tauri && cargo test  # Rust tests only
 ```
 
 ### Key Directories

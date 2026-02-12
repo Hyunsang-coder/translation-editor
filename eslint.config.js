@@ -49,7 +49,7 @@ export default tseslint.config(
       '@typescript-eslint/no-non-null-assertion': 'off',
 
       // General
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': ['warn', { allow: ['warn', 'error', 'debug'] }],
       'prefer-const': 'warn',
     },
   },
