@@ -114,6 +114,8 @@ Critical implementation warnings learned from past issues.
 
 46. **Elapsed Timer Pattern**: Use `useEffect` with `setInterval` for elapsed time tracking during async operations. Clear interval on completion or unmount. Store `elapsedSeconds` in component state, not global store.
 
+47. **Tauri WebView Prompt Reliability**: `window.prompt()` can be inconsistent in Tauri WebView (no UI or immediate null in some environments). For user input flows like history snapshot rename, use app-native modal components (`Modal`) instead of browser prompt APIs.
+
 ## Chat Composer
 
 51. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese). The `event.isComposing` check alone is not reliable across all browsers.

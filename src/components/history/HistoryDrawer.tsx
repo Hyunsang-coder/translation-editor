@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HistoryTimeline } from '@/components/history/HistoryTimeline';
 import { SaveSnapshotDialog } from '@/components/history/SaveSnapshotDialog';
+import { HistoryRenameDialog } from '@/components/history/HistoryRenameDialog';
 import { HistoryCompareModal } from '@/components/history/HistoryCompareModal';
 import { HistoryRestoreDialog } from '@/components/history/HistoryRestoreDialog';
 import { useProjectStore } from '@/stores/projectStore';
@@ -28,10 +29,13 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const reset = useHistoryStore((s) => s.reset);
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renamingSnapshotId, setRenamingSnapshotId] = useState<string | null>(null);
 
   const projectId = project?.id ?? '';
 
@@ -47,6 +51,8 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
 
   useEffect(() => {
     reset();
+    setRenameDialogOpen(false);
+    setRenamingSnapshotId(null);
     setCompareOpen(false);
     setRestoreOpen(false);
     setSelectedSnapshotId(null);
@@ -107,37 +113,40 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const handleRename = async (snapshotId: string): Promise<void> => {
     const snapshot = snapshots.find((item) => item.id === snapshotId);
     if (!snapshot) return;
+    setRenamingSnapshotId(snapshot.id);
+    setRenameDialogOpen(true);
+  };
 
-    const input = window.prompt(t('history.renamePrompt'), snapshot.description);
-    if (input === null) return;
-
-    const nextDescription = input.trim();
-    if (!nextDescription) {
-      addToast({
-        type: 'error',
-        message: t('history.renameRequired'),
-      });
+  const handleRenameSubmit = async (description: string): Promise<void> => {
+    if (!renamingSnapshotId) return;
+    const snapshot = snapshots.find((item) => item.id === renamingSnapshotId);
+    if (!snapshot) return;
+    if (description === snapshot.description) {
+      setRenameDialogOpen(false);
+      setRenamingSnapshotId(null);
       return;
     }
-    if (nextDescription === snapshot.description) {
-      return;
-    }
 
+    setIsRenaming(true);
     try {
       await renameSnapshot({
         projectId,
-        snapshotId,
-        description: nextDescription,
+        snapshotId: renamingSnapshotId,
+        description,
       });
       addToast({
         type: 'success',
         message: t('history.renameSuccess'),
       });
+      setRenameDialogOpen(false);
+      setRenamingSnapshotId(null);
     } catch (e) {
       addToast({
         type: 'error',
         message: e instanceof Error ? e.message : t('history.renameError'),
       });
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -194,6 +203,18 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
         isSaving={isSaving}
         onClose={() => setSaveDialogOpen(false)}
         onSave={handleManualSave}
+      />
+
+      <HistoryRenameDialog
+        open={renameDialogOpen}
+        initialDescription={renamingSnapshotId ? snapshots.find((item) => item.id === renamingSnapshotId)?.description ?? '' : ''}
+        isSaving={isRenaming}
+        onClose={() => {
+          if (isRenaming) return;
+          setRenameDialogOpen(false);
+          setRenamingSnapshotId(null);
+        }}
+        onRename={handleRenameSubmit}
       />
 
       <HistoryCompareModal

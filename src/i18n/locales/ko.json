@@ -148,6 +148,8 @@
     "deleteSuccess": "스냅샷이 삭제되었습니다.",
     "deleteError": "스냅샷 삭제에 실패했습니다.",
     "rename": "이름 변경",
+    "renameTitle": "스냅샷 이름 변경",
+    "renamePlaceholder": "예: 번역 적용 직전 최종본",
     "renamePrompt": "스냅샷 이름을 입력하세요.",
     "renameRequired": "스냅샷 이름은 비워둘 수 없습니다.",
     "renameSuccess": "스냅샷 이름이 변경되었습니다.",

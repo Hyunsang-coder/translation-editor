@@ -51,7 +51,7 @@ npm run test:harness      # Editor test harness (manual testing)
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (23 files, 388 tests, 22 skipped)
+### Unit Test Files (24 files, 391 tests, 22 skipped)
 
 | File | Tests | Description |
 |------|-------|-------------|
@@ -66,6 +66,7 @@ npm run test:harness      # Editor test harness (manual testing)
 | `src/stores/aiConfigStore.test.ts` | 3 | Key loading latch, concurrent call prevention |
 | `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
 | `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
+| `src/stores/historyStore.test.ts` | 3 | History store snapshot create/list race/rename behavior |
 | `src/stores/connectorStore.test.ts` | 4 | ConnectorsSection selector optimization |
 | `src/stores/reviewStore.test.ts` | 2 | ReviewPanel selector optimization |
 | `src/stores/uiStore.test.ts` | 3 | UI state management |
@@ -83,6 +84,7 @@ cd src-tauri && cargo test
 ```
 
 - **Location**: `src-tauri/src/` with `#[cfg(test)]` modules
+- **Current focus**: `db/mod.rs` snapshot lifecycle test (create/list/get/delete + rename + legacy null filtering)
 
 ## Integration Testing
 

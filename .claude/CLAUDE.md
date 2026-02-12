@@ -8,6 +8,7 @@ This file provides guidance to Claude Code when working with this repository.
 - Notion-style dual editor (TipTap) for Source/Target documents
 - AI chat with LangChain (OpenAI + Anthropic)
 - MCP integration (Confluence, Notion, Web Search)
+- History snapshot workflow (save/compare/restore/rename)
 
 **Core Philosophy**: Translator-led workflow. AI assists only when requested.
 
@@ -20,7 +21,7 @@ npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
 npm run lint             # ESLint
 npm test                 # Vitest watch mode
-npm run test:run         # Single test run (388 tests)
+npm run test:run         # Single test run (391 tests)
 npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
 cd src-tauri && cargo test  # Rust tests only
@@ -32,6 +33,7 @@ src/ai/           # AI integration (chat.ts, translateDocument.ts, review/)
 src/editor/       # TipTap extensions
 src/stores/       # Zustand stores (chatStore: 7 슬라이스)
 src/components/   # React components
+src/components/history/  # History snapshot UI (timeline/compare/restore/rename)
 src-tauri/src/    # Rust backend (commands/, mcp/)
 ```
 

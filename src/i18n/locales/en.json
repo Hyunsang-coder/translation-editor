@@ -148,6 +148,8 @@
     "deleteSuccess": "Snapshot deleted.",
     "deleteError": "Failed to delete snapshot.",
     "rename": "Rename",
+    "renameTitle": "Rename Snapshot",
+    "renamePlaceholder": "e.g. Final before apply",
     "renamePrompt": "Enter a snapshot name.",
     "renameRequired": "Snapshot name cannot be empty.",
     "renameSuccess": "Snapshot name updated.",
