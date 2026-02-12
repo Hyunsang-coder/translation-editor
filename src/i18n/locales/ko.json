@@ -18,7 +18,7 @@
     "copyToClipboard": "복사"
   },
   "settings": {
-    "title": "프로젝트 설정",
+    "title": "설정",
     "translatorPersona": "번역가 페르소나",
     "translatorPersonaDescription": "번역 시 AI가 연기할 페르소나를 정의합니다.\n(채팅 답변 말투에는 영향을 주지 않고, 오직 번역 결과물에만 반영됩니다.)",
     "translatorPersonaPlaceholder": "예: 당신은 10년차 인하우스 번역가입니다.",
@@ -124,7 +124,7 @@
     "themeCurrent": "현재: {{theme}}",
     "tools": "도구",
     "settings": "설정",
-    "projectSettings": "프로젝트 설정",
+    "projectSettings": "설정",
     "review": "검수",
     "aiChat": "AI 채팅"
   },
@@ -307,7 +307,7 @@
   },
   "chat": {
     "title": "채팅",
-    "settings": "프로젝트 설정",
+    "settings": "설정",
     "openChat": "채팅 열기",
     "askAnything": "무엇이든 물어보세요",
     "newChat": "새 채팅",

@@ -18,7 +18,7 @@
     "copyToClipboard": "Copy"
   },
   "settings": {
-    "title": "Project Settings",
+    "title": "Settings",
     "translatorPersona": "Translator Persona",
     "translatorPersonaDescription": "Define the persona that AI will play when translating.\n(This only affects translation results, not chat response tone.)",
     "translatorPersonaPlaceholder": "e.g., You are a 10-year in-house translator.",
@@ -124,7 +124,7 @@
     "themeCurrent": "Current: {{theme}}",
     "tools": "Tools",
     "settings": "Settings",
-    "projectSettings": "Project Settings",
+    "projectSettings": "Settings",
     "review": "Review",
     "aiChat": "AI Chat"
   },
@@ -307,7 +307,7 @@
   },
   "chat": {
     "title": "Chat",
-    "settings": "Project Settings",
+    "settings": "Settings",
     "openChat": "Open Chat",
     "askAnything": "Ask anything",
     "newChat": "New Chat",
