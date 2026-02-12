@@ -2,12 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ITEProject } from '@/types';
+import type { EditorBlock, ITEProject } from '@/types';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 
 const stores = vi.hoisted(() => {
   const now = Date.now();
-  const blocks = {
+  const blocks: Record<string, EditorBlock> = {
     'target-1': {
       id: 'target-1',
       type: 'target',
@@ -134,9 +134,11 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
       expect(onApply).toHaveBeenCalledTimes(1);
     });
 
-    expect(
-      stores.historyStoreState.createSnapshot.mock.invocationCallOrder[0],
-    ).toBeLessThan(onApply.mock.invocationCallOrder[0]);
+    const [snapshotOrder] = stores.historyStoreState.createSnapshot.mock.invocationCallOrder;
+    const [applyOrder] = onApply.mock.invocationCallOrder;
+    expect(snapshotOrder).toBeDefined();
+    expect(applyOrder).toBeDefined();
+    expect(snapshotOrder!).toBeLessThan(applyOrder!);
   });
 
   it('자동 스냅샷이 실패해도 적용(onApply)은 계속 진행한다', async () => {

@@ -2,12 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ITEProject } from '@/types';
+import type { EditorBlock, ITEProject } from '@/types';
 import { HistoryRestoreDialog } from './HistoryRestoreDialog';
 
 const mocks = vi.hoisted(() => {
   const now = Date.now();
-  const baseBlocks = {
+  const baseBlocks: Record<string, EditorBlock> = {
     'target-1': {
       id: 'target-1',
       type: 'target',
@@ -40,21 +40,23 @@ const mocks = vi.hoisted(() => {
     blocks: baseBlocks,
   };
 
-  return {
-    baseBlocks,
-    restoredBlocks: {
-      'target-1': {
-        id: 'target-1',
-        type: 'target',
-        content: '<p>after restore</p>',
-        hash: 'hash-target-1-restored',
-        metadata: {
-          createdAt: now,
-          updatedAt: now + 1000,
-          tags: [],
-        },
+  const restoredBlocks: Record<string, EditorBlock> = {
+    'target-1': {
+      id: 'target-1',
+      type: 'target',
+      content: '<p>after restore</p>',
+      hash: 'hash-target-1-restored',
+      metadata: {
+        createdAt: now,
+        updatedAt: now + 1000,
+        tags: [],
       },
     },
+  };
+
+  return {
+    baseBlocks,
+    restoredBlocks,
     onClose: vi.fn(),
     tauriHistory: {
       restoreSnapshot: vi.fn(),

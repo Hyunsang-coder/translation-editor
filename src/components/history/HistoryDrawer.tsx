@@ -221,6 +221,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
         open={compareOpen}
         projectId={projectId}
         snapshotId={selectedSnapshotId}
+        snapshots={snapshots}
         onClose={() => setCompareOpen(false)}
       />
 

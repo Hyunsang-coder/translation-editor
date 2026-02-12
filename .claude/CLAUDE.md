@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with this repository.
 - Notion-style dual editor (TipTap) for Source/Target documents
 - AI chat with LangChain (OpenAI + Anthropic)
 - MCP integration (Confluence, Notion, Web Search)
-- History snapshot workflow (save/compare/restore/rename)
+- History snapshot workflow (save/compare/restore/rename, including snapshot↔snapshot diff)
 
 **Core Philosophy**: Translator-led workflow. AI assists only when requested.
 
@@ -21,7 +21,7 @@ npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
 npm run lint             # ESLint
 npm test                 # Vitest watch mode
-npm run test:run         # Single test run (391 tests)
+npm run test:run         # Single test run
 npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
 cd src-tauri && cargo test  # Rust tests only
@@ -58,6 +58,16 @@ This `.claude/` directory contains:
 2. **Preview-First**: Translation results shown in modal before applying
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
+
+## Recent Updates (2026-02-12)
+
+- History compare modal now supports both `snapshot vs current` and `snapshot vs snapshot`.
+- Snapshot creation validates `snapshot_json` at write time (prevents delayed restore/compare failures).
+- `ITEProject.history` field removed from Rust/TypeScript project models to avoid dual source-of-truth.
+- Added focused tests for:
+  - auto snapshot before apply/restore flows
+  - snapshot-vs-snapshot comparison
+  - history race/no-op/prune guards
 
 ## Adding New Features
 
