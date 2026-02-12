@@ -1,7 +1,7 @@
 # OddEyes.ai 사용자 스토리 (End-to-End)
 
 ## 목적
-실제 사용자가 앱을 설치하고 모든 기능을 활용하여 문서 번역, 리뷰, 협업까지 완료하는 전체 워크플로우.
+실제 사용자가 앱을 설치하고 모든 기능을 활용하여 문서 번역, 리뷰까지 완료하는 전체 워크플로우.
 
 ---
 
@@ -41,12 +41,12 @@
 
 **마리아가 하는 일:**
 1. 우측 설정 탭 → **"AI Providers"** 섹션
-2. **"OpenAI"** 상자에서 "Add API Key" 또는 "sk-..." 입력 필드 클릭
-3. OpenAI 대시보드 (https://platform.openai.com/api/keys) 접속
+2. **"OpenAI"** 상자에서 API Key 입력 필드 클릭
+3. OpenAI 대시보드 (https://platform.openai.com/api-keys) 접속
 4. API 키 생성 (또는 기존 키 복사)
    - 키 예시: `sk-proj-1a2b3c...` (52자)
 5. 마리아의 앱에 붙여넣기
-6. **"Verify"** 또는 자동 검증 대기 (2-3초)
+6. Enable 체크박스로 프로바이더 활성화
 
 **입력값:**
 ```
@@ -54,17 +54,16 @@ OpenAI API Key: sk-proj-abcdef123456...
 ```
 
 **예상 결과:**
-- ✅ 키 입력 필드 아래 녹색 체크마크 ✓ 표시
-- ✅ "Models available: GPT-4, GPT-4o, GPT-3.5-turbo" 표시
 - ✅ 키는 OS 키체인에 암호화되어 저장 (localStorage X)
+- ✅ 키 입력 필드에 별표(****) 마스킹 표시
+- ✅ Enable 체크박스로 프로바이더 활성화/비활성화
 
 **검증 포인트:**
 ```
-[ ] 키 검증 중 로딩 스피너 표시
-[ ] 검증 성공 시 녹색 아이콘 표시
-[ ] 검증 실패 시 에러 메시지 (예: "Invalid API key")
 [ ] 키 입력 필드에 별표(****) 마스킹 표시
 [ ] 키 값이 개발자 도구(DevTools)에서 노출되지 않음
+[ ] Enable/Disable 체크박스 정상 작동
+[ ] 키 지우기(Clear) 버튼 정상 작동
 ```
 
 ---
@@ -76,7 +75,7 @@ OpenAI API Key: sk-proj-abcdef123456...
 2. https://console.anthropic.com/api-keys 에서 API 키 복사
 3. 앱의 Anthropic 입력 필드에 붙여넣기
    - 키 예시: `sk-ant-1a2b3c...` (50+자)
-4. **"Verify"** 대기
+4. Enable 체크박스로 프로바이더 활성화
 
 **입력값:**
 ```
@@ -84,13 +83,13 @@ Anthropic API Key: sk-ant-xyz123...
 ```
 
 **예상 결과:**
-- ✅ 검증 완료 후 "Claude 3.5 Sonnet available" 메시지
+- ✅ 키는 OS 키체인에 암호화되어 저장
 - ✅ 두 프로바이더 모두 활성화 상태 표시
 
 **검증 포인트:**
 ```
-[ ] 두 API 키 모두 검증 완료 확인
-[ ] Provider 선택 드롭다운에 "OpenAI", "Anthropic" 옵션 표시
+[ ] 두 API 키 모두 입력 완료 확인
+[ ] Enable/Disable 체크박스 정상 작동
 [ ] 프로바이더 전환 시 모델 옵션도 함께 변경
 ```
 
@@ -168,42 +167,28 @@ Workspace: "Company Docs" 선택
 
 ---
 
-## Phase 3: 프로젝트 생성 및 설정
+## Phase 3: 프로젝트 생성
 
 ### Step 3.1: 새 프로젝트 생성
 
 **마리아가 하는 일:**
-1. 홈 화면에서 **"+ New Project"** 또는 **"Create Project"** 버튼 클릭
-2. 모달 팝업:
-
-```
-프로젝트 이름: "API Integration Guide Translation"
-설명 (선택사항): "Spanish to English technical translation"
-소스 언어: Spanish (español)
-타겟 언어: English (English, US)
-```
-
-3. **"Create"** 클릭
+1. 좌측 사이드바에서 **"+"** 버튼 클릭
+2. 프로젝트 이름 입력: "API Integration Guide Translation"
+3. **"Create"** 또는 엔터 키 클릭
 
 **입력값:**
 ```
 Name: API Integration Guide Translation
-Description: Spanish to English technical translation
-Source Lang: Spanish
-Target Lang: English (US)
 ```
 
 **예상 결과:**
 - ✅ 새 프로젝트 생성 후 **프로젝트 대시보드** 열림
-- ✅ 프로젝트명 + 소스/타겟 언어 표시
 - ✅ Source 에디터 (좌측) 및 Target 에디터 (우측) 빈 상태로 표시
 - ✅ 프로젝트 목록에 새 항목 추가
 - ✅ 프로젝트 정보 저장 (SQLite)
 
 **검증 포인트:**
 ```
-[ ] 프로젝트명 중복 불가
-[ ] 언어 선택 드롭다운 정상 작동
 [ ] 프로젝트 생성 성공 후 자동 열림
 [ ] 이전 프로젝트는 닫힘 (중복 열림 X)
 [ ] 프로젝트 목록 갱신
@@ -211,52 +196,7 @@ Target Lang: English (US)
 
 ---
 
-### Step 3.2: 프로젝트 설정
-
-**마리아가 하는 일:**
-1. 프로젝트 대시보드 우측 상단 **⚙️ Settings** 클릭
-2. 설정 패널 열림:
-
-**설정 1: 번역 모델**
-```
-AI Provider: OpenAI
-Model: GPT-4o
-Temperature: 0.7 (기본값)
-Max tokens: 4000
-```
-
-**설정 2: 번역 스타일**
-```
-Tone: "Formal, technical"
-Glossary (선택사항): [해당 없음]
-Preserve formatting: ON (체크)
-Preserve images: ON (체크)
-```
-
-**설정 3: 자동 저장**
-```
-Auto-save interval: 500ms (기본값)
-Auto-save on blur: ON
-```
-
-3. 설정 저장 (자동 또는 "Save" 클릭)
-
-**예상 결과:**
-- ✅ 모든 설정 프로젝트에 저장됨
-- ✅ 설정 변경 즉시 적용
-- ✅ 프로젝트 재열 후에도 설정 유지
-
-**검증 포인트:**
-```
-[ ] 설정 UI 반응성 (지연 없음)
-[ ] 설정 값 범위 검증 (예: temp 0-1)
-[ ] 설정 변경 후 Source/Target 에디터 상태 유지
-[ ] 설정값 SQLite에 저장
-```
-
----
-
-## Phase 4: 워문 입력
+## Phase 4: 원문 입력
 
 ### Step 4.1: Source 에디터에 문서 입력
 
@@ -282,43 +222,33 @@ Esta guía proporciona instrucciones detalladas para integrar nuestra API REST e
 
 ### Paso 1: Instalar la dependencia
 
-```bash
 npm install @mycompany/api-client
-```
 
 ### Paso 2: Configurar las credenciales
 
 Cree un archivo `.env` en la raíz del proyecto:
 
-```
 API_KEY=your_api_key_here
 API_ENDPOINT=https://api.example.com
-```
 
 ### Paso 3: Inicializar el cliente
 
-```javascript
 const ApiClient = require('@mycompany/api-client');
-
 const client = new ApiClient({
   apiKey: process.env.API_KEY,
   endpoint: process.env.API_ENDPOINT
 });
-```
 
 ## Ejemplos de Uso
 
 ### Obtener usuario
 
-```javascript
 client.users.get(userId).then(user => {
   console.log(user);
 });
-```
 
 ### Crear transacción
 
-```javascript
 client.transactions.create({
   amount: 100,
   currency: 'USD',
@@ -326,13 +256,11 @@ client.transactions.create({
 }).then(transaction => {
   console.log('Transacción creada:', transaction.id);
 });
-```
 
 ## Manejo de Errores
 
 Siempre maneje los errores de API:
 
-```javascript
 try {
   const result = await client.request(...);
 } catch (error) {
@@ -342,7 +270,6 @@ try {
     console.error('Límite de velocidad excedido');
   }
 }
-```
 
 ## Conclusión
 
@@ -355,7 +282,7 @@ Para más información, visite nuestra documentación: https://docs.example.com/
 **예상 결과:**
 - ✅ 텍스트 Source 에디터에 실시간 렌더링
 - ✅ 마크다운 포맷팅 감지 (## 제목 → 굵은 글씨 등)
-- ✅ 코드 블록 자동 감지 (```...``` → 회색 박스)
+- ✅ 코드 블록 자동 감지 (회색 박스)
 - ✅ 자동 저장 인디케이터 표시 (아이콘 변화)
 - ✅ 단어 수 표시 (우측 상단, 약 550단어)
 - ✅ 문서 내용 SQLite에 저장 (TipTap JSON 형식)
@@ -364,7 +291,7 @@ Para más información, visite nuestra documentación: https://docs.example.com/
 ```
 [ ] 텍스트 입력 지연 없음 (부드러운 타이핑)
 [ ] 마크다운 스타일링 정상 작동
-[ ] 코드 블록 구문 강조 (syntax highlighting)
+[ ] 코드 블록 표시 정상 (회색 박스)
 [ ] 자동 저장 중 UI 반응성 유지
 [ ] 단어 수 정확함
 [ ] 에디터 이미지 붙여넣기 가능 (선택적)
@@ -416,17 +343,11 @@ Para más información, visite nuestra documentación: https://docs.example.com/
 ### Step 5.1: Translate 버튼 클릭
 
 **마리아가 하는 일:**
-1. Source 에디터 상단 **"Translate"** 버튼 또는 메뉴 클릭
-2. 번역 옵션 확인 (선택사항):
-   - AI Provider: OpenAI (또는 변경)
-   - Model: GPT-4o (또는 변경)
-   - Temperature: 0.7
-
-3. **"Start Translation"** 또는 **"Translate"** 클릭
+1. Source 에디터 상단 **"Translate"** 버튼 클릭
+2. 앱 설정에서 지정한 AI Provider/Model로 번역 시작
 
 **예상 결과:**
 - ✅ 로딩 상태 시작 (스피너 표시, "Translating..." 메시지)
-- ✅ API 호출 진행 중 (실시간 토큰 사용량 표시, 선택사항)
 - ✅ 약 10-20초 대기 (문서 크기 및 AI 응답 속도에 따라)
 - ✅ 번역 완료 후 **Preview Modal** 팝업
 
@@ -435,97 +356,11 @@ Para más información, visite nuestra documentación: https://docs.example.com/
 [ ] 번역 중 UI 반응성 유지 (타이핑 가능, 취소 가능)
 [ ] 로딩 상태 명확히 표시
 [ ] 에러 발생 시 에러 메시지 + "Retry" 버튼
-[ ] API 비용 추정값 표시 (선택사항)
 ```
 
 ---
 
 ### Step 5.2: 번역 결과 미리보기
-
-**번역 결과 (English):**
-```
-# API Integration Guide
-
-## Introduction
-
-This guide provides detailed instructions for integrating our REST API into your application.
-
-## Prerequisites
-
-- Node.js 14.x or higher
-- npm 6.x or higher
-- Basic knowledge of JavaScript
-
-## Installation
-
-### Step 1: Install the dependency
-
-```bash
-npm install @mycompany/api-client
-```
-
-### Step 2: Configure credentials
-
-Create a `.env` file in your project root:
-
-```
-API_KEY=your_api_key_here
-API_ENDPOINT=https://api.example.com
-```
-
-### Step 3: Initialize the client
-
-```javascript
-const ApiClient = require('@mycompany/api-client');
-
-const client = new ApiClient({
-  apiKey: process.env.API_KEY,
-  endpoint: process.env.API_ENDPOINT
-});
-```
-
-## Usage Examples
-
-### Get user
-
-```javascript
-client.users.get(userId).then(user => {
-  console.log(user);
-});
-```
-
-### Create transaction
-
-```javascript
-client.transactions.create({
-  amount: 100,
-  currency: 'USD',
-  description: 'Payment for order #123'
-}).then(transaction => {
-  console.log('Transaction created:', transaction.id);
-});
-```
-
-## Error Handling
-
-Always handle API errors:
-
-```javascript
-try {
-  const result = await client.request(...);
-} catch (error) {
-  if (error.status === 401) {
-    console.error('Invalid API key');
-  } else if (error.status === 429) {
-    console.error('Rate limit exceeded');
-  }
-}
-```
-
-## Conclusion
-
-For more information, visit our documentation: https://docs.example.com/api
-```
 
 **마리아가 하는 일:**
 1. **Preview Modal** 검토:
@@ -542,13 +377,14 @@ For more information, visit our documentation: https://docs.example.com/api
 3. **"Apply"** 또는 **"Accept"** 클릭
 
 **대안 (품질 문제 발견 시):**
-- **"Retry"** 클릭 (다른 모델 또는 설정으로 재번역)
-- **"Decline"** 또는 **"Cancel"** 클릭 (번역 취소)
+- **"Retry"** 클릭 (재번역)
+- **"Cancel"** 클릭 (번역 취소)
 
 **예상 결과:**
 - ✅ Preview Modal 명확하고 읽기 쉬움
 - ✅ 원본과 번역 비교 용이
 - ✅ "Apply" 클릭 후 Target 에디터에 번역 텍스트 삽입
+- ✅ Apply 직전 자동 스냅샷 생성 ("번역 적용 전 자동 저장" — 히스토리에서 복원 가능)
 - ✅ Undo 가능 (Ctrl+Z로 이전 상태 복원)
 - ✅ 자동 저장 (번역 적용 후)
 
@@ -672,7 +508,7 @@ Suggestion: Add context: "Rate limit exceeded. Please retry after 60 seconds."
 - ✅ Suggestion 적용 시 Target 에디터 자동 업데이트
 - ✅ Dismiss 이슈는 테이블에서 제거 (옵션: 별도 섹션에 남기기)
 - ✅ Applied Suggestion 자동 저장
-- ✅ Review 결과 히스토리 보존 (선택사항)
+- ✅ 일괄 적용 직전 자동 스냅샷 생성 ("검수 재번역 적용 전 자동 저장" — 히스토리에서 복원 가능)
 
 **검증 포인트:**
 ```
@@ -681,16 +517,15 @@ Suggestion: Add context: "Rate limit exceeded. Please retry after 60 seconds."
 [ ] Suggestion 클릭 시 Target 에디터 자동 스크롤
 [ ] Applied Suggestion 즉시 반영
 [ ] Dismiss된 이슈 시각적으로 구분
-[ ] Review 이력 조회 가능 (선택사항)
 ```
 
 ---
 
-## Phase 7: 채팅 및 협업 기능
+## Phase 7: 채팅 기능
 
 ### Step 7.1: Chat 사이드바 열기
 
-**마리아가 하는 할 일:**
+**마리아가 하는 일:**
 1. 우측 사이드바 **"Chat"** 탭 클릭 (또는 우측 상단 Chat 아이콘)
 2. Chat Panel 열림
 
@@ -698,7 +533,6 @@ Suggestion: Add context: "Rate limit exceeded. Please retry after 60 seconds."
 - ✅ Chat 패널 우측에 표시
 - ✅ 채팅 히스토리 표시 (있을 경우, 지금은 비어있음)
 - ✅ 하단 메시지 입력 필드 활성화
-- ✅ "+ Tools" 또는 "+ Reference" 버튼 표시 (선택사항)
 
 ---
 
@@ -716,36 +550,9 @@ for consistency in technical documentation?"
 2. **"Send"** 또는 엔터 키 누름
 
 **예상 결과:**
-- ✅ 메시지 즉시 Chat 히스토리에 표시 (우측 정렬, 회색 배경)
+- ✅ 메시지 즉시 Chat 히스토리에 표시
 - ✅ 로딩 상태 (스피너) → AI 응답 대기 (3-5초)
 - ✅ AI 응답 스트리밍 표시 (토큰이 하나씩 들어오며 텍스트 증가)
-
-**AI 응답 (예시):**
-```
-Great question! In technical documentation, there's a subtle but important distinction:
-
-**API Endpoint**: Refers specifically to the URL path that handles requests
-(e.g., `/users`, `/transactions`). An endpoint is the entry point for a
-specific action or resource.
-
-**API URL**: The complete Uniform Resource Locator, including protocol,
-domain, and path (e.g., `https://api.example.com/users`).
-
-For consistency in your documentation, I recommend:
-- Use "API endpoint" when referring to the specific path or action
-- Use "API URL" when describing the complete address
-- Alternatively, if you want maximum clarity, use "API endpoint URL"
-
-This approach helps readers understand both the conceptual (endpoint)
-and literal (full URL) aspects of your API.
-
-Would you like me to review your document for API terminology consistency?
-```
-
-**마리아가 하는 일:**
-1. AI 응답 읽음
-2. 유용한 정보 확인
-3. 자동으로 Target 에디터의 "API key" 용어 확인할지 여부 결정
 
 **검증 포인트:**
 ```
@@ -771,52 +578,15 @@ API authentication in previous versions? I want to ensure consistency."
 2. AI가 Confluence 검색 도구 자동 호출
 3. 응답에 검색 결과 포함
 
-**AI 응답 (예시, 도구 호출 포함):**
-```
-[Searching Confluence for "API authentication"...]
-
-I found several relevant documents in your Confluence:
-
-1. **API Authentication Guide v1.5**
-   - Updated 2 weeks ago
-   - Key sections: OAuth 2.0 flow, API key management
-   - Found: "For secure API authentication, use OAuth 2.0 or API keys..."
-
-2. **Security Best Practices - API Integration**
-   - 1 month ago
-   - "Store API keys in environment variables, never in source code"
-   - Code examples in Python, Node.js, Java
-
-3. **Legacy API Documentation (Deprecated)**
-   - 6 months ago
-   - Shows older authentication methods (no longer recommended)
-
-For your English translation, I recommend following the approach in
-document #1, which uses modern OAuth 2.0 terminology. Here's the
-suggested phrasing for consistency:
-
-"For secure API authentication, configure OAuth 2.0 credentials in your
-environment variables..."
-
-Would you like me to apply this phrasing to your document?
-```
-
-**마리아가 하는 일:**
-1. 검색 결과 검토
-2. 제안된 용어 확인 ("OAuth 2.0 credentials" 일관성)
-3. **"Yes, apply this phrasing"** 또는 Target 에디터에서 수동 수정
-
 **예상 결과:**
 - ✅ Confluence 검색 자동 호출 (사용자 명시 X)
 - ✅ 검색 결과 대화에 포함
 - ✅ AI가 검색 결과 기반 제안 제공
-- ✅ 검색 결과 링크 클릭 가능 (Confluence로 이동)
 
 **검증 포인트:**
 ```
 [ ] Confluence 검색 자동 호출
 [ ] 검색 결과 대화에 포함
-[ ] 링크 클릭 가능 (Confluence 탭 또는 브라우저 열림)
 [ ] 검색 결과 최신 문서 우선
 [ ] 토큰 효율성 (전체 문서 아닌 요약만 포함)
 ```
@@ -836,32 +606,6 @@ guidelines."
 1. 메시지 전송
 2. AI가 Notion 검색 도구 호출
 
-**AI 응답 (예시):**
-```
-[Searching Notion glossary for "transacción"...]
-
-Found in our Glossary:
-
-**Spanish Term**: transacción
-**English Equivalent**: transaction (preferred) / transfer (in payment context)
-**Brand Style**: Always use "transaction" in technical API documentation
-**Example**: "Create a transaction using the transactions.create() method"
-
-Your document currently uses "Transaction created" which matches our
-brand guidelines. ✓
-
-Additional related terms from the glossary:
-- transacción fallida → failed transaction
-- límite de transacciones → transaction limit
-- estado de transacción → transaction status
-
-Your terminology is consistent! 🎉
-```
-
-**마리아가 하는 일:**
-1. AI 확인 메시지 검토
-2. 용어 일관성 확인됨
-
 **예상 결과:**
 - ✅ Notion 검색 자동 호출
 - ✅ 용어 검색 및 결과 제공
@@ -869,185 +613,160 @@ Your terminology is consistent! 🎉
 
 ---
 
-### Step 7.5: 최종 검수 요청
+## Phase 8: 히스토리 (스냅샷) 관리
 
-**마리아가 하는 질문:**
-```
-"Can you do a final quality check on my translated API integration
-guide? Check for:
-1. Technical terminology consistency
-2. Code block formatting preservation
-3. Sentence flow and readability
-4. Overall technical accuracy"
-```
+### Step 8.1: 히스토리 드로어 열기
 
 **마리아가 하는 일:**
-1. 메시지 전송
-2. AI가 Target 에디터의 전체 문서 자동 분석
-
-**AI 응답 (예시):**
-```
-[Analyzing your translated document...]
-
-✅ QUALITY ASSESSMENT COMPLETE
-
-1. Technical Terminology Consistency (95/100)
-   ✓ API terminology consistent throughout
-   ✓ "transaction" consistently used (verified against glossary)
-   ✓ Code placeholders clear and descriptive
-   Minor: Consider "credentials" instead of "API key" in one location
-           (Line 15: "Configure credentials in environment variables")
-
-2. Code Block Formatting (100/100)
-   ✓ All code blocks preserved with proper syntax highlighting
-   ✓ Markdown formatting intact
-   ✓ Placeholder variables properly formatted
-
-3. Sentence Flow & Readability (92/100)
-   ✓ Sentences are clear and concise
-   ✓ Technical concepts well-explained
-   Suggestions:
-   - "Basic knowledge of JavaScript" could be "JavaScript fundamentals"
-   - "Rate limit exceeded" could include retry guidance
-
-4. Technical Accuracy (98/100)
-   ✓ All technical content accurately translated
-   ✓ API examples functionally correct
-   ✓ Error handling scenarios properly explained
-
-OVERALL SCORE: 96/100
-
-Recommendation: Ready for publication with minor terminology
-adjustments in lines 12 and 47.
-
-Would you like me to apply the suggested adjustments?
-```
-
-**마리아가 하는 일:**
-1. 평가 검토
-2. 제안된 조정 확인
-3. **"Apply all suggestions"** 클릭
+1. 툴바 드롭다운 메뉴에서 **"히스토리"** (Clock 아이콘) 클릭
+2. 우측에서 히스토리 드로어 슬라이드인
 
 **예상 결과:**
-- ✅ AI가 전체 문서 분석
-- ✅ 구조화된 평가 제공 (카테고리별)
-- ✅ 구체적인 라인 번호 및 제안
-- ✅ 제안 적용 시 Target 에디터 자동 업데이트
+- ✅ 오른쪽 드로어 (w-96) 열림
+- ✅ 자동 스냅샷 목록 표시 (번역 적용 시 자동 생성된 것들)
+- ✅ 상단 "스냅샷 저장" 버튼 표시
+- ✅ 각 스냅샷에 설명 + 상대 시간 표시 (예: "2시간 전", "방금")
 
 **검증 포인트:**
 ```
-[ ] 전체 문서 분석 정확도
-[ ] 라인 번호 정확함
-[ ] 제안 명확하고 actionable
-[ ] 적용 후 자동 저장
-[ ] 점수/등급 시스템 명확
+[ ] 드로어 열기/닫기 애니메이션 부드러움
+[ ] 스냅샷 최신순 정렬
+[ ] 상대 시간 언어 감지 (한국어/영어)
+[ ] 프로젝트 전환 시 히스토리 초기화
 ```
 
 ---
 
-## Phase 8: 최종 저장 및 내보내기
-
-### Step 8.1: 프로젝트 저장 및 확인
+### Step 8.2: 수동 스냅샷 저장
 
 **마리아가 하는 일:**
-1. 프로젝트 대시보드 우측 상단 **"Save"** 또는 **"Finalize"** 버튼 클릭
-2. 저장 확인 대화 표시 (선택사항):
+1. 히스토리 드로어 상단 **"스냅샷 저장"** 버튼 클릭
+2. 설명 입력 다이얼로그:
    ```
-   Project: API Integration Guide Translation
-   Source: Spanish (550 words)
-   Target: English (552 words)
-   Status: Completed
-   Last saved: Just now
+   설명 (선택): "리뷰 반영 완료 후 최종본"
    ```
-
-3. **"Confirm"** 클릭
-
-**예상 결과:**
-- ✅ 모든 변경사항 SQLite에 저장
-- ✅ 저장 완료 메시지 또는 아이콘 표시
-- ✅ 프로젝트 목록에서 "Last edited" 업데이트
-
----
-
-### Step 8.2: 번역 내보내기 (선택사항)
-
-**마리아가 하는 일:**
-1. 프로젝트 대시보드 우측 상단 **"Export"** 또는 **"Download"** 버튼 클릭
-2. 내보내기 옵션 선택:
-
-```
-Format:
-  ○ Markdown (.md)
-  ○ HTML (.html)
-  ○ PDF (.pdf)
-  ○ Word (.docx)
-  ○ TipTap JSON (.json) [개발자용]
-
-Include:
-  ☑ Source document
-  ☑ Target document
-  ☑ Side-by-side comparison
-  ☑ Review history (선택사항)
-  ☑ Chat history (선택사항)
-
-File name: API_Integration_Guide_ES-EN_2024-02-11.md
-```
-
-3. **"Download"** 클릭
+3. **"저장"** 클릭
 
 **예상 결과:**
-- ✅ 선택한 형식으로 파일 생성
-- ✅ 파일 다운로드 (대부분의 브라우저)
-- ✅ 파일명 타임스탐프 포함
-- ✅ 이미지 등 모든 자산 포함
+- ✅ 스냅샷 생성 (전체 blocks 상태 JSON으로 저장)
+- ✅ "스냅샷이 저장되었습니다." 메시지
+- ✅ 타임라인에 새 스냅샷 즉시 추가
+- ✅ 설명 비워두면 "수동 스냅샷" 기본 문구 삽입
 
 **검증 포인트:**
 ```
-[ ] 내보내기 형식 다양성
-[ ] 파일 내용 정확함
-[ ] 이미지/코드블록 정상 렌더링
-[ ] 파일 크기 합리적
-[ ] 인코딩 (UTF-8) 정상
+[ ] 빈 설명 시 기본값 삽입
+[ ] 저장 후 목록 즉시 갱신
+[ ] 프로젝트당 최대 50개 제한 (초과 시 오래된 것 자동 삭제)
 ```
 
 ---
 
-### Step 8.3: 프로젝트 공유 (선택사항)
+### Step 8.3: 자동 스냅샷 확인
 
-**마리아가 하는 일:**
-1. 프로젝트 대시보드 우측 상단 **"Share"** 또는 **"Invite"** 버튼 클릭
-2. 공유 옵션 표시:
+**마리아가 확인하는 자동 스냅샷들:**
 
-```
-Share with:
-  Email: [동료 이메일 입력]
-  Permission:
-    ○ View only
-    ○ Comment
-    ○ Edit
-    ○ Admin
-
-Link:
-  Generate shareable link [복사 버튼]
-```
-
-3. 동료 이메일 입력 (예: `reviewer@company.com`)
-4. 권한 선택: **"Comment"** (검수만 가능, 수정 불가)
-5. **"Send Invite"** 클릭
+| 시점 | 설명 |
+|------|------|
+| 번역 적용 직전 | "번역 적용 전 자동 저장" |
+| 리뷰 일괄 적용 직전 | "검수 재번역 적용 전 자동 저장" |
+| 스냅샷 복원 직전 | "복원 전 자동 저장" |
 
 **예상 결과:**
-- ✅ 초대 이메일 전송
-- ✅ 공유 링크 생성 및 복사 가능
-- ✅ 동료가 링크로 프로젝트 접근 가능
-- ✅ 권한에 따라 기능 제한
+- ✅ Phase 5에서 번역 Apply 시 자동 스냅샷 생성됨
+- ✅ Phase 6에서 리뷰 일괄 적용 시 자동 스냅샷 생성됨
+- ✅ 자동 스냅샷 실패해도 메인 동작(번역/리뷰 적용) 차단하지 않음
+
+---
+
+### Step 8.4: 스냅샷 비교 (현재 상태 vs 과거)
+
+**마리아가 하는 일:**
+1. 타임라인에서 "번역 적용 전 자동 저장" 스냅샷의 **"비교"** 버튼 클릭
+2. 비교 모달 열림 (전체 화면 85vh)
+
+**비교 모달 내용:**
+```
+┌──────────────────────────────────────────────────┐
+│         스냅샷 vs 현재 상태 비교                    │
+├─────────────────────┬────────────────────────────┤
+│   Original (스냅샷)  │   Suggested (현재 상태)      │
+│                     │                            │
+│ 스냅샷 시점의 Target  │ 현재 Target 에디터 내용      │
+│ 문서 내용            │                            │
+│                     │                            │
+│ (삭제된 부분 빨간색)  │ (추가된 부분 초록색)          │
+└─────────────────────┴────────────────────────────┘
+```
+
+**예상 결과:**
+- ✅ VisualDiffViewer로 좌우 비교 표시
+- ✅ 변경된 부분 색상 강조 (삭제: 빨강, 추가: 초록)
+- ✅ 스크롤 동기화
+- ✅ 스냅샷끼리 비교는 미지원 (스냅샷 vs 현재 상태만)
 
 **검증 포인트:**
 ```
-[ ] 초대 이메일 정상 발송
-[ ] 공유 링크 유효
-[ ] 권한 정상 적용
-[ ] 초대된 사용자 프로젝트 접근 가능
+[ ] 비교 모달 레이아웃 정상
+[ ] Diff 강조 정확함
+[ ] 대용량 문서에서도 성능 유지
+[ ] 모달 닫기 정상
 ```
+
+---
+
+### Step 8.5: 스냅샷 복원
+
+**마리아가 하는 일:**
+1. 타임라인에서 "번역 적용 전 자동 저장" 스냅샷의 **"복원"** 버튼 클릭
+2. 확인 다이얼로그:
+   ```
+   스냅샷을 복원할까요?
+   복원 전에 현재 상태를 자동 스냅샷으로 저장한 뒤
+   선택한 시점으로 되돌립니다.
+   ```
+3. **"복원"** 클릭
+
+**복원 플로우:**
+1. 현재 상태 자동 스냅샷 ("복원 전 자동 저장")
+2. 선택한 스냅샷의 blocks 로드
+3. projectStore 업데이트
+4. Source/Target 에디터에 `replaceDocContent()` 적용
+5. 프로젝트 저장
+
+**예상 결과:**
+- ✅ "스냅샷이 복원되었습니다." 메시지
+- ✅ Source/Target 에디터 모두 스냅샷 시점으로 복원
+- ✅ 복원 전 현재 상태가 자동 스냅샷으로 남아있음 (되돌리기의 되돌리기 가능)
+- ✅ 히스토리 목록에 "복원 전 자동 저장" 추가됨
+
+**검증 포인트:**
+```
+[ ] 복원 확인 다이얼로그 표시
+[ ] 복원 전 자동 스냅샷 생성
+[ ] 에디터 내용 정확히 복원
+[ ] 복원 후 자동 저장
+[ ] 복원 후 되돌리기 가능 (복원 전 스냅샷 이용)
+```
+
+---
+
+### Step 8.6: 스냅샷 이름 변경 및 삭제
+
+**마리아가 하는 일 (이름 변경):**
+1. 스냅샷의 **"이름 변경"** 버튼 클릭
+2. 새 이름 입력: "최종 검수 완료본"
+3. **"저장"** 클릭
+
+**마리아가 하는 일 (삭제):**
+1. 불필요한 스냅샷의 **"삭제"** 버튼 클릭
+2. 확인: "이 스냅샷을 삭제하시겠습니까?"
+3. **"확인"** 클릭
+
+**예상 결과:**
+- ✅ 이름 변경 즉시 반영
+- ✅ 삭제 후 목록에서 제거
+- ✅ 빈 이름은 저장 불가 (버튼 비활성화)
 
 ---
 
@@ -1057,104 +776,31 @@ Link:
 
 **마리아가 하는 일:**
 1. 홈 화면으로 돌아감 (좌측 "Projects" 클릭 또는 Back 버튼)
-2. 프로젝트 목록 확인:
-
-```
-Projects:
-┌─────────────────────────────────────────────────┐
-│ API Integration Guide Translation           ✓    │
-│ Spanish → English | 550 → 552 words             │
-│ Completed | Last edited: 2 hours ago            │
-│ Actions: [ Open ] [ ⋯ ]                         │
-└─────────────────────────────────────────────────┘
-
-[ + New Project ]
-```
-
-3. 프로젝트 카드에서 **"⋯"** (더보기) 메뉴 클릭
+2. 프로젝트 목록 확인
 
 **예상 결과:**
 - ✅ 완료된 프로젝트 리스트 표시
-- ✅ 진행 상태 아이콘 (✓, ⏳, ⚠️ 등)
 - ✅ 마지막 편집 시간 표시
 
 ---
 
 ### Step 9.2: 프로젝트 메뉴 옵션
 
-**메뉴 옵션:**
+**메뉴 옵션 (우클릭):**
 ```
 [ ] Open
+[ ] Rename
 [ ] Duplicate
-[ ] Download
-[ ] Share
-[ ] Settings
 [ ] Delete
-[ ] Archive (선택사항)
 ```
 
 **마리아가 하는 일:**
 1. **"Duplicate"** 선택 → 프로젝트 복사 (다른 언어 쌍용)
-2. 또는 **"Archive"** 선택 → 프로젝트 보관 (리스트에서 숨김)
-3. 또는 **"Delete"** 선택 → 프로젝트 삭제 (확인 대화 필수)
+2. 또는 **"Delete"** 선택 → 프로젝트 삭제 (확인 대화 필수)
 
 **예상 결과:**
 - ✅ Duplicate 선택 시 새 프로젝트 생성 (복사본)
-- ✅ Archive 선택 시 "Archived" 섹션으로 이동
 - ✅ Delete 선택 시 확인 대화 + 실행
-
----
-
-## Phase 10: 추가 시나리오 (선택사항)
-
-### Step 10.1: 대용량 문서 번역
-
-**마리아가 하는 일:**
-1. 새 프로젝트 생성: "Complete API Documentation" (5,000+ 단어)
-2. Confluence에서 여러 페이지 병합하여 입력
-3. 자동 청킹 옵션 확인 (선택사항):
-   ```
-   Split into chunks:
-   [ ] By sections (## headings)
-   [ ] By word count (2,000 words per chunk)
-   [ ] By paragraph
-   ```
-4. 번역 실행 (대용량이므로 시간 추적)
-
-**예상 결과:**
-- ✅ 대용량 문서 성능 저하 없음
-- ✅ 청킹 옵션 정상 작동
-- ✅ 청크별 번역 진행 상황 표시
-- ✅ 전체 완료 시간 예상값 표시
-
----
-
-### Step 10.2: 여러 언어 쌍 관리
-
-**마리아가 하는 일:**
-1. Spanish → English 프로젝트 완료
-2. 같은 소스 문서로 Spanish → French 프로젝트 생성 (Duplicate 기능 사용)
-3. Target 언어만 French로 변경
-
-**예상 결과:**
-- ✅ 소스 복사, 타겟 모두 비움
-- ✅ 타겟 언어 변경 후 새 번역 실행
-- ✅ 여러 언어 쌍 동시 관리 가능
-
----
-
-### Step 10.3: 설정 변경 후 재번역
-
-**마리아가 하는 일:**
-1. 프로젝트 설정에서 Model 변경: GPT-4o → Claude 3.5 Sonnet
-2. Temperature 조정: 0.7 → 0.5 (더 결정적)
-3. 기존 Target 삭제 (또는 "Clear Target")
-4. 새 설정으로 재번역 실행
-
-**예상 결과:**
-- ✅ 모델 변경 후 다른 번역 결과 (상황에 따라)
-- ✅ Temperature 차이 반영 (낮을수록 일관성 높음)
-- ✅ 이전 버전과 비교 가능 (버전 히스토리, 선택사항)
 
 ---
 
@@ -1162,15 +808,15 @@ Projects:
 
 ### 설치 및 초기 설정
 - [ ] 앱 설치 성공
-- [ ] API 키 검증 정상
+- [ ] API 키 입력 및 저장 정상
 - [ ] 커넥터 연결 정상
 - [ ] 설정값 저장 (SQLite + 키체인)
 
 ### 프로젝트 관리
 - [ ] 프로젝트 생성 성공
-- [ ] 프로젝트 설정 변경 반영
 - [ ] 프로젝트 목록 갱신
-- [ ] 프로젝트 공유 정상
+- [ ] 프로젝트 복제 정상
+- [ ] 프로젝트 삭제 정상
 
 ### 에디터 기능
 - [ ] Source 입력 부드러운 동작
@@ -1188,7 +834,6 @@ Projects:
 - [ ] 리뷰 분석 정확도
 - [ ] Severity 필터 정상
 - [ ] 제안 적용 정상
-- [ ] 리뷰 히스토리 보존
 
 ### 채팅 기능
 - [ ] 메시지 입력/전송 정상
@@ -1197,10 +842,16 @@ Projects:
 - [ ] Notion 검색 자동 호출
 - [ ] 멀티턴 대화 일관성
 
-### 내보내기
-- [ ] 다양한 형식 지원
-- [ ] 파일 내용 정확
-- [ ] 이미지/코드블록 보존
+### 히스토리 (스냅샷)
+- [ ] 히스토리 드로어 열기/닫기 정상
+- [ ] 수동 스냅샷 저장 정상
+- [ ] 자동 스냅샷 생성 (번역 적용, 리뷰 적용, 복원 시)
+- [ ] 스냅샷 vs 현재 상태 비교 (VisualDiffViewer)
+- [ ] 스냅샷 복원 정상 (복원 전 자동 스냅샷 포함)
+- [ ] 스냅샷 이름 변경 정상
+- [ ] 스냅샷 삭제 정상
+- [ ] 프로젝트당 최대 50개 제한 동작
+- [ ] 상대 시간 표시 (Intl.RelativeTimeFormat)
 
 ### 성능
 - [ ] UI 반응성 (지연 < 100ms)
@@ -1216,13 +867,14 @@ Projects:
 |-------|------|---------|
 | 1 | 설치 및 초기 설정 | 5분 |
 | 2 | 커넥터 연결 | 5분 |
-| 3 | 프로젝트 생성 및 설정 | 3분 |
-| 4 | 워문 입력 (550단어) | 5분 |
+| 3 | 프로젝트 생성 | 2분 |
+| 4 | 원문 입력 (550단어) | 5분 |
 | 5 | 번역 실행 | 5분 |
 | 6 | 리뷰 실행 | 5분 |
-| 7 | 채팅 및 협업 | 10분 |
-| 8 | 최종 저장/내보내기 | 3분 |
-| **총계** | | **41분** |
+| 7 | 채팅 | 10분 |
+| 8 | 히스토리 (스냅샷) 관리 | 5분 |
+| 9 | 프로젝트 관리 | 2분 |
+| **총계** | | **44분** |
 
 ---
 
@@ -1237,11 +889,6 @@ Projects:
 - 두 개의 프로젝트 동시 열기 (듀얼 사이드바)
 - 탭 전환 시 상태 유지
 - 한 탭에서 채팅, 다른 탭에서 번역 동시 작업
-
-### 협업 시나리오
-- 동료가 초대 링크로 프로젝트 접근
-- 동료가 댓글 작성
-- 원본 작성자 댓글 반영
 
 ---
 

@@ -126,4 +126,51 @@ describe('historyStore', () => {
     });
     expect(useHistoryStore.getState().snapshots[0]?.description).toBe('after');
   });
+
+  it('createSnapshot은 reset 이후 늦게 도착한 목록 응답을 반영하지 않는다', async () => {
+    const deferredList = createDeferred<HistorySnapshotMeta[]>();
+    tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-1');
+    tauriHistoryMock.listHistory.mockImplementationOnce(() => deferredList.promise);
+
+    const createPromise = useHistoryStore.getState().createSnapshot({
+      projectId: 'project-1',
+      description: 'manual snapshot',
+      blocks: blockFixture,
+    });
+
+    useHistoryStore.getState().reset();
+    deferredList.resolve([
+      {
+        id: 'late-snapshot',
+        timestamp: 200,
+        description: 'late',
+      },
+    ]);
+
+    await expect(createPromise).resolves.toBe('snapshot-1');
+    expect(useHistoryStore.getState().snapshots).toEqual([]);
+  });
+
+  it('deleteSnapshot은 reset 이후 늦게 도착한 목록 응답을 반영하지 않는다', async () => {
+    const deferredList = createDeferred<HistorySnapshotMeta[]>();
+    tauriHistoryMock.deleteSnapshot.mockResolvedValue(undefined);
+    tauriHistoryMock.listHistory.mockImplementationOnce(() => deferredList.promise);
+
+    const deletePromise = useHistoryStore.getState().deleteSnapshot({
+      projectId: 'project-1',
+      snapshotId: 'snapshot-1',
+    });
+
+    useHistoryStore.getState().reset();
+    deferredList.resolve([
+      {
+        id: 'late-snapshot',
+        timestamp: 200,
+        description: 'late',
+      },
+    ]);
+
+    await expect(deletePromise).resolves.toBeUndefined();
+    expect(useHistoryStore.getState().snapshots).toEqual([]);
+  });
 });

@@ -44,13 +44,17 @@ const initialState: HistoryState = {
 
 let loadHistoryRequestSeq = 0;
 
+function isLatestRequest(requestSeq: number): boolean {
+  return requestSeq === loadHistoryRequestSeq;
+}
+
 export const useHistoryStore = create<HistoryStore>((set) => ({
   ...initialState,
 
   loadHistory: async (projectId): Promise<void> => {
     const requestSeq = ++loadHistoryRequestSeq;
     if (!projectId) {
-      if (requestSeq !== loadHistoryRequestSeq) return;
+      if (!isLatestRequest(requestSeq)) return;
       set({ snapshots: [], isLoading: false, error: null });
       return;
     }
@@ -58,10 +62,10 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const snapshots = await tauriListHistory(projectId);
-      if (requestSeq !== loadHistoryRequestSeq) return;
+      if (!isLatestRequest(requestSeq)) return;
       set({ snapshots, isLoading: false });
     } catch (error) {
-      if (requestSeq !== loadHistoryRequestSeq) return;
+      if (!isLatestRequest(requestSeq)) return;
       const message = toErrorMessage(error);
       set({ error: message, isLoading: false });
       throw error;
@@ -69,6 +73,7 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
   },
 
   createSnapshot: async ({ projectId, description, blocks, chatSummary }): Promise<string> => {
+    const requestSeq = loadHistoryRequestSeq;
     set({ error: null });
     let snapshotId = '';
     try {
@@ -76,9 +81,10 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
         projectId,
         description,
         blocksJson: JSON.stringify(blocks),
-        chatSummary,
+        ...(chatSummary !== undefined && { chatSummary }),
       });
     } catch (error) {
+      if (!isLatestRequest(requestSeq)) throw error;
       const message = toErrorMessage(error);
       set({ error: message });
       throw error;
@@ -86,8 +92,10 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
 
     try {
       const snapshots = await tauriListHistory(projectId);
+      if (!isLatestRequest(requestSeq)) return snapshotId;
       set({ snapshots });
     } catch (error) {
+      if (!isLatestRequest(requestSeq)) return snapshotId;
       console.warn('[history] snapshot created but list refresh failed:', error);
     }
 
@@ -108,12 +116,15 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
   },
 
   deleteSnapshot: async ({ projectId, snapshotId }): Promise<void> => {
+    const requestSeq = loadHistoryRequestSeq;
     set({ error: null });
     try {
       await tauriDeleteSnapshot({ projectId, snapshotId });
       const snapshots = await tauriListHistory(projectId);
+      if (!isLatestRequest(requestSeq)) return;
       set({ snapshots });
     } catch (error) {
+      if (!isLatestRequest(requestSeq)) throw error;
       const message = toErrorMessage(error);
       set({ error: message });
       throw error;
@@ -121,15 +132,18 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
   },
 
   renameSnapshot: async ({ projectId, snapshotId, description }): Promise<void> => {
+    const requestSeq = loadHistoryRequestSeq;
     set({ error: null });
     try {
       await tauriRenameSnapshot({ projectId, snapshotId, description });
+      if (!isLatestRequest(requestSeq)) return;
       set((state) => ({
         snapshots: state.snapshots.map((snapshot) =>
           snapshot.id === snapshotId ? { ...snapshot, description } : snapshot,
         ),
       }));
     } catch (error) {
+      if (!isLatestRequest(requestSeq)) throw error;
       const message = toErrorMessage(error);
       set({ error: message });
       throw error;

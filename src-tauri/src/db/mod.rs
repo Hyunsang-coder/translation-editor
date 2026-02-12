@@ -386,10 +386,16 @@ impl Database {
 
     /// 히스토리 스냅샷 삭제
     pub fn delete_history_snapshot(&self, snapshot_id: &str, project_id: &str) -> Result<(), IteError> {
-        self.conn.execute(
+        let affected = self.conn.execute(
             "DELETE FROM history WHERE id = ?1 AND project_id = ?2",
             [snapshot_id, project_id],
         )?;
+        if affected == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "History snapshot not found: {}",
+                snapshot_id
+            )));
+        }
         Ok(())
     }
 
@@ -424,9 +430,12 @@ impl Database {
              WHERE id IN (
                SELECT id FROM history
                WHERE project_id = ?1
+                 AND snapshot_json IS NOT NULL
                ORDER BY timestamp DESC
                LIMIT -1 OFFSET ?2
-             )",
+             )
+               AND project_id = ?1
+               AND snapshot_json IS NOT NULL",
             (project_id, max_snapshots as i64),
         )?;
         Ok(())
@@ -1425,9 +1434,86 @@ mod tests {
 
         db.delete_history_snapshot(&snapshot_id, &project.id)
             .expect("failed to delete snapshot");
+        assert!(
+            db.delete_history_snapshot(&snapshot_id, &project.id).is_err(),
+            "deleting a missing snapshot should return error"
+        );
         let after_delete = db
             .list_history_metadata(&project.id)
             .expect("failed to list history after delete");
         assert!(after_delete.is_empty());
+    }
+
+    #[test]
+    fn prune_old_snapshots_counts_only_real_snapshots() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-history-prune-test");
+        db.save_project(&project).expect("failed to save project");
+
+        let base_ts = chrono::Utc::now().timestamp_millis();
+        let snapshot_json = serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
+
+        // 레거시 row(NULL snapshot_json)는 prune 카운트에서 제외되어야 한다.
+        for i in 0..10 {
+            let legacy_id = uuid::Uuid::new_v4().to_string();
+            let description = format!("legacy-null-{}", i);
+            db.conn
+                .execute(
+                    "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
+                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)",
+                    (
+                        legacy_id,
+                        &project.id,
+                        base_ts + 1_000_000 + i as i64,
+                        description,
+                        "[]",
+                        Option::<String>::None,
+                    ),
+                )
+                .expect("failed to insert legacy history row");
+        }
+
+        for i in 0..55 {
+            let snapshot_id = uuid::Uuid::new_v4().to_string();
+            let description = format!("snapshot-{}", i);
+            db.conn
+                .execute(
+                    "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (
+                        snapshot_id,
+                        &project.id,
+                        base_ts + i as i64,
+                        description,
+                        "[]",
+                        &snapshot_json,
+                        Option::<String>::None,
+                    ),
+                )
+                .expect("failed to insert real snapshot row");
+        }
+
+        db.prune_old_snapshots(&project.id, 50)
+            .expect("failed to prune snapshots");
+
+        let list = db
+            .list_history_metadata(&project.id)
+            .expect("failed to list history metadata");
+        assert_eq!(list.len(), 50);
+        assert_eq!(list[0].description, "snapshot-54");
+        assert_eq!(list[49].description, "snapshot-5");
+
+        let legacy_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM history WHERE project_id = ?1 AND snapshot_json IS NULL",
+                [&project.id],
+                |row| row.get(0),
+            )
+            .expect("failed to count legacy rows");
+        assert_eq!(legacy_count, 10);
     }
 }
