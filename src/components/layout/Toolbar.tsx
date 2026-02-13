@@ -12,13 +12,11 @@ import { HistoryDrawer } from '@/components/history/HistoryDrawer';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, openActiveChat, openReviewPanel, toggleSidebarCollapse, leftSidebar, rightSidebar } =
+  const { openPanel, openReviewPanel, toggleChatVisibility, rightSidebar } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
-      openActiveChat: s.openActiveChat,
       openReviewPanel: s.openReviewPanel,
-      toggleSidebarCollapse: s.toggleSidebarCollapse,
-      leftSidebar: s.leftSidebar,
+      toggleChatVisibility: s.toggleChatVisibility,
       rightSidebar: s.rightSidebar,
     })));
   const project = useProjectStore((s) => s.project);
@@ -59,26 +57,7 @@ export function Toolbar(): JSX.Element {
   };
 
   const handleChat = () => {
-    // 현재 열린 chat 패널이 있으면 토글, 없으면 열기
-    let chatSide: 'left' | 'right' | null = null;
-    for (const side of ['leftSidebar', 'rightSidebar'] as const) {
-      const sb = side === 'leftSidebar' ? leftSidebar : rightSidebar;
-      if (sb.panels.some(isChatPanel)) {
-        chatSide = side === 'leftSidebar' ? 'left' : 'right';
-        break;
-      }
-    }
-    if (chatSide) {
-      const sb = chatSide === 'left' ? leftSidebar : rightSidebar;
-      const activeChatPanel = sb.panels.find(isChatPanel);
-      if (!sb.collapsed && activeChatPanel && sb.activePanel === activeChatPanel) {
-        toggleSidebarCollapse(chatSide);
-      } else {
-        openActiveChat();
-      }
-    } else {
-      openActiveChat();
-    }
+    toggleChatVisibility();
     setDropdownOpen(false);
   };
 

@@ -13,7 +13,7 @@ pub mod secrets;
 pub mod utils;
 
 use std::path::{Path, PathBuf};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
 
 fn is_valid_env_key(key: &str) -> bool {
@@ -120,6 +120,23 @@ fn load_env_for_tauri_dev() {
     }
 }
 
+#[tauri::command]
+fn set_view_chat_menu_checked(app: tauri::AppHandle, checked: bool) -> Result<(), String> {
+    let Some(menu) = app.menu() else {
+        return Ok(());
+    };
+
+    let Some(item) = menu.get("view-toggle-chat") else {
+        return Ok(());
+    };
+
+    let Some(check_item) = item.as_check_menuitem() else {
+        return Ok(());
+    };
+
+    check_item.set_checked(checked).map_err(|e| e.to_string())
+}
+
 /// Tauri 앱 실행
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -174,8 +191,16 @@ pub fn run() {
             }
 
             // 커스텀 메뉴 생성
+            let app_settings_item = MenuItemBuilder::with_id("app-settings", "App Settings")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?;
+            let check_updates_item = MenuItemBuilder::with_id("check-updates", "Check for Updates")
+                .build(app)?;
+
             let app_menu = SubmenuBuilder::new(app, "OddEyes")
                 .about(None)
+                .item(&app_settings_item)
+                .item(&check_updates_item)
                 .separator()
                 .services()
                 .separator()
@@ -199,9 +224,23 @@ pub fn run() {
             let reload_item = MenuItemBuilder::with_id("reload", "Reload This Page")
                 .accelerator("CmdOrCtrl+R")
                 .build(app)?;
+            let toggle_project_item = MenuItemBuilder::with_id("view-toggle-project", "Project Sidebar")
+                .build(app)?;
+            let toggle_settings_item = MenuItemBuilder::with_id("view-toggle-settings", "Settings")
+                .build(app)?;
+            let toggle_review_item = MenuItemBuilder::with_id("view-toggle-review", "Review")
+                .build(app)?;
+            let toggle_chat_item = CheckMenuItemBuilder::with_id("view-toggle-chat", "Chat")
+                .checked(false)
+                .build(app)?;
 
             let view_menu = SubmenuBuilder::new(app, "View")
                 .item(&reload_item)
+                .separator()
+                .item(&toggle_project_item)
+                .item(&toggle_settings_item)
+                .item(&toggle_review_item)
+                .item(&toggle_chat_item)
                 .build()?;
 
             let window_menu = SubmenuBuilder::new(app, "Window")
@@ -221,13 +260,22 @@ pub fn run() {
 
             app.set_menu(menu)?;
 
-            // 메뉴 이벤트 핸들러
+            // 메뉴 이벤트 핸들러 — webview.eval()로 직접 JS 호출
             app.on_menu_event(move |app_handle, event| {
-                if event.id().as_ref() == "reload" {
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        // 현재 URL을 가져오고, 실패 시 reload 스킵 (패닉 방지)
-                        if let Ok(url) = window.url() {
-                            let _ = window.navigate(url);
+                let id = event.id().as_ref();
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    match id {
+                        "reload" => {
+                            if let Ok(url) = window.url() {
+                                let _ = window.navigate(url);
+                            }
+                        }
+                        _ => {
+                            let js = format!(
+                                "window.dispatchEvent(new CustomEvent('tauri-menu', {{ detail: '{}' }}))",
+                                id
+                            );
+                            let _ = window.eval(&js);
                         }
                     }
                 }
@@ -322,6 +370,7 @@ pub fn run() {
             commands::secrets::secrets_has,
             commands::secrets::secrets_list_keys,
             commands::secrets::secrets_migrate_legacy,
+            set_view_chat_menu_checked,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

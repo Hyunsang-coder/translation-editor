@@ -25,7 +25,10 @@ export function useAutoUpdate() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const checkForUpdate = useCallback(async () => {
+  const checkForUpdate = useCallback(async (): Promise<{
+    update: Update | null;
+    error: string | null;
+  }> => {
     setState(prev => ({ ...prev, checking: true, error: null }));
 
     try {
@@ -36,7 +39,7 @@ export function useAutoUpdate() {
         const skippedVersion = localStorage.getItem(SKIPPED_VERSION_KEY);
         if (skippedVersion === update.version) {
           setState(prev => ({ ...prev, checking: false, available: false }));
-          return null;
+          return { update: null, error: null };
         }
 
         setState(prev => ({
@@ -45,18 +48,19 @@ export function useAutoUpdate() {
           available: true,
           update,
         }));
-        return update;
+        return { update, error: null };
       } else {
         setState(prev => ({ ...prev, checking: false, available: false }));
-        return null;
+        return { update: null, error: null };
       }
-    } catch (error) {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Update check failed';
       setState(prev => ({
         ...prev,
         checking: false,
-        error: error instanceof Error ? error.message : 'Update check failed',
+        error: msg,
       }));
-      return null;
+      return { update: null, error: msg };
     }
   }, []);
 

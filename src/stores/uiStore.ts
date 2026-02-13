@@ -108,6 +108,9 @@ interface UIActions {
   openPanel: (panel: PanelType) => void;
   openPanelOnSide: (side: SidebarSide, panel: PanelType) => void;
   openReviewPanel: () => void;
+  toggleSettingsPanel: () => void;
+  toggleReviewPanel: () => void;
+  toggleChatVisibility: () => void;
   movePanel: (panel: PanelType, from: SidebarSide, to: SidebarSide) => void;
   reorderPanel: (side: SidebarSide, panel: PanelType, toIndex: number) => void;
   findPanelSide: (panel: PanelType) => SidebarSide | null;
@@ -327,6 +330,92 @@ export const useUIStore = create<UIStore>()(
             const next = sb.panels.find((p) => p !== 'review') ?? sb.panels[0] ?? null;
             set({ [key]: { ...sb, activePanel: next } });
           }
+        }
+      },
+
+      toggleSettingsPanel: (): void => {
+        const state = get();
+        const side = state.findPanelSide('settings');
+        if (side) {
+          const key = sidebarKey(side);
+          const sb = state[key];
+          if (sb.collapsed) {
+            set({ [key]: { ...sb, collapsed: false, activePanel: 'settings' as PanelType } });
+          } else if (sb.activePanel === 'settings') {
+            set({ [key]: { ...sb, collapsed: true } });
+          } else {
+            set({ [key]: { ...sb, activePanel: 'settings' as PanelType } });
+          }
+        } else {
+          get().openPanelOnSide('left', 'settings');
+        }
+      },
+
+      toggleReviewPanel: (): void => {
+        const state = get();
+        const side = state.findPanelSide('review');
+        if (side) {
+          const key = sidebarKey(side);
+          const sb = state[key];
+          if (sb.collapsed) {
+            set({ [key]: { ...sb, collapsed: false, activePanel: 'review' as PanelType } });
+          } else if (sb.activePanel === 'review') {
+            set({ [key]: { ...sb, collapsed: true } });
+          } else {
+            set({ [key]: { ...sb, activePanel: 'review' as PanelType } });
+          }
+        } else {
+          get().openReviewPanel();
+        }
+      },
+
+      toggleChatVisibility: (): void => {
+        const state = get();
+        const chatSides = (['left', 'right'] as const).filter((side) => {
+          const sb = side === 'left' ? state.leftSidebar : state.rightSidebar;
+          return sb.panels.some(isChatPanel);
+        });
+
+        if (chatSides.length === 0) {
+          get().openActiveChat();
+          return;
+        }
+
+        const isChatVisibleOn = (side: SidebarSide): boolean => {
+          const sb = side === 'left' ? state.leftSidebar : state.rightSidebar;
+          return !sb.collapsed && sb.activePanel !== null && isChatPanel(sb.activePanel);
+        };
+
+        const anyVisibleChat = chatSides.some(isChatVisibleOn);
+        const updates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
+
+        if (anyVisibleChat) {
+          // Off: 보이는 chat 패널을 모두 숨김 (고정 패널이 있으면 전환, 없으면 collapse)
+          for (const side of chatSides) {
+            if (!isChatVisibleOn(side)) continue;
+            const key = sidebarKey(side);
+            const sb = state[key];
+            const fallbackPanel = sb.panels.find((panel) => !isChatPanel(panel)) ?? null;
+            updates[key] = fallbackPanel
+              ? { ...sb, activePanel: fallbackPanel, collapsed: false }
+              : { ...sb, collapsed: true };
+          }
+        } else {
+          // On: chat 패널이 있는 모든 사이드를 펼치고 chat 탭 활성화
+          for (const side of chatSides) {
+            const key = sidebarKey(side);
+            const sb = state[key];
+            const chatPanel =
+              (sb.activePanel !== null && isChatPanel(sb.activePanel) ? sb.activePanel : null)
+              ?? sb.panels.find(isChatPanel)
+              ?? null;
+            if (!chatPanel) continue;
+            updates[key] = { ...sb, collapsed: false, activePanel: chatPanel };
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          set(updates);
         }
       },
 

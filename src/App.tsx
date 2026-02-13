@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -6,14 +7,24 @@ import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
 import { initializeSecrets } from '@/tauri/secrets';
+import { isTauriRuntime } from '@/tauri/invoke';
+import { setViewChatMenuChecked } from '@/tauri/menu';
 import { initializeConnectors } from '@/stores/connectorStore';
 import { cleanupTempImages } from '@/tauri/attachments';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { UpdateModal } from '@/components/ui/UpdateModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+import { isChatPanel } from '@/types';
 
 function App(): JSX.Element {
+  const { t } = useTranslation();
   const theme = useUIStore((s) => s.theme);
+  const addToast = useUIStore((s) => s.addToast);
+  const { leftSidebar, rightSidebar } = useUIStore(useShallow((s) => ({
+    leftSidebar: s.leftSidebar,
+    rightSidebar: s.rightSidebar,
+  })));
   const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore(
     useShallow((s) => ({ initializeProject: s.initializeProject, startAutoSave: s.startAutoSave, stopAutoSave: s.stopAutoSave }))
   );
@@ -31,8 +42,14 @@ function App(): JSX.Element {
     skipVersion,
     dismissUpdate,
     setManualUpdate,
+    checkForUpdate,
   } = useAutoUpdate();
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showAppSettingsModal, setShowAppSettingsModal] = useState(false);
+  const isViewChatOn = (
+    (!leftSidebar.collapsed && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    || (!rightSidebar.collapsed && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
+  );
 
   useEffect(() => {
     if (available && update) {
@@ -52,6 +69,50 @@ function App(): JSX.Element {
     window.addEventListener('app:update-found', handler);
     return () => window.removeEventListener('app:update-found', handler);
   }, [setManualUpdate]);
+
+  // 메뉴바 이벤트 핸들러 (Rust에서 window.eval → CustomEvent 방식)
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const menuId = (e as CustomEvent<string>).detail;
+      switch (menuId) {
+        case 'app-settings':
+          setShowAppSettingsModal(true);
+          break;
+        case 'check-updates': {
+          const { update: u, error: err } = await checkForUpdate();
+          if (u) {
+            setShowUpdateModal(true);
+          } else if (err) {
+            addToast({ type: 'error', message: t('update.checkFailed', '업데이트 확인에 실패했습니다.') });
+          } else {
+            addToast({ type: 'success', message: t('update.upToDate', '최신 버전입니다.') });
+          }
+          break;
+        }
+        case 'view-toggle-project':
+          useUIStore.getState().toggleProjectSidebar();
+          break;
+        case 'view-toggle-settings':
+          useUIStore.getState().toggleSettingsPanel();
+          break;
+        case 'view-toggle-review':
+          useUIStore.getState().toggleReviewPanel();
+          break;
+        case 'view-toggle-chat':
+          useUIStore.getState().toggleChatVisibility();
+          break;
+      }
+    };
+    window.addEventListener('tauri-menu', handler);
+    return () => window.removeEventListener('tauri-menu', handler);
+  }, [checkForUpdate, addToast, t]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    void setViewChatMenuChecked(isViewChatOn).catch((error) => {
+      console.warn('[App] Failed to sync View > Chat menu state:', error);
+    });
+  }, [isViewChatOn]);
 
   // 테마 적용 (system 모드일 때 OS 변경도 실시간 반영)
   useEffect(() => {
@@ -165,6 +226,10 @@ function App(): JSX.Element {
   return (
     <div className="min-h-screen bg-editor-bg text-editor-text">
       <MainLayout />
+
+      {showAppSettingsModal && (
+        <AppSettingsModal onClose={() => setShowAppSettingsModal(false)} />
+      )}
 
       <UpdateModal
         isOpen={showUpdateModal}

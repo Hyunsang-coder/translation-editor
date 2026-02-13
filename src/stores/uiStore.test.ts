@@ -54,3 +54,46 @@ describe('uiStore syncChatPanels', () => {
     expect(state.rightSidebar.panels).not.toContain(chatPanelId('session-b'));
   });
 });
+
+describe('uiStore toggleChatVisibility', () => {
+  const leftChat = chatPanelId('left-chat');
+  const rightChat = chatPanelId('right-chat');
+
+  beforeEach(() => {
+    useUIStore.setState({
+      leftSidebar: {
+        collapsed: false,
+        panels: ['settings', leftChat],
+        activePanel: leftChat,
+        width: 250,
+      },
+      rightSidebar: {
+        collapsed: false,
+        panels: [rightChat],
+        activePanel: rightChat,
+        width: 250,
+      },
+    });
+  });
+
+  it('보이는 chat 패널을 모든 사이드에서 끈다', () => {
+    useUIStore.getState().toggleChatVisibility();
+
+    const state = useUIStore.getState();
+    expect(state.leftSidebar.collapsed).toBe(false);
+    expect(state.leftSidebar.activePanel).toBe('settings');
+    expect(state.rightSidebar.collapsed).toBe(true);
+    expect(state.rightSidebar.activePanel).toBe(rightChat);
+  });
+
+  it('꺼진 상태에서 다시 켜면 모든 사이드 chat 패널을 연다', () => {
+    useUIStore.getState().toggleChatVisibility();
+    useUIStore.getState().toggleChatVisibility();
+
+    const state = useUIStore.getState();
+    expect(state.leftSidebar.collapsed).toBe(false);
+    expect(state.leftSidebar.activePanel).toBe(leftChat);
+    expect(state.rightSidebar.collapsed).toBe(false);
+    expect(state.rightSidebar.activePanel).toBe(rightChat);
+  });
+});
