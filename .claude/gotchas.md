@@ -164,6 +164,8 @@ Critical implementation warnings learned from past issues.
 
 67. **Auto Update System**: `useAutoUpdate.ts` hook uses `@tauri-apps/plugin-updater` to check GitHub Releases for updates. Features: automatic check on app start (production only, 3s delay), download progress tracking, skip version (localStorage), cancel download (AbortController).
 
+68. **Manual Update Check via Custom Event**: `AppSettingsModal`에서 `check()`를 직접 호출하고, 업데이트 발견 시 `window.dispatchEvent(new CustomEvent('app:update-found'))` → `App.tsx`가 수신하여 `setManualUpdate()` → 기존 `UpdateModal` 재사용. 수동 체크는 `skipVersion` 필터를 우회함 (사용자 의도 존중). 더블클릭 방지: `checkState === 'checking'` 가드.
+
 ## Confluence / ADF
 
 69. **ADF Section Heading Matching**: Confluence 다국어 페이지에서 heading이 `"Title\n번역"` 형태로 저장됨. `extractSection()`과 `extractUntilSection()`은 첫 줄만 비교하여 매칭. 예: `"General Status\n전체 현황"` → `sectionHeading: "General Status"`로 검색 가능.

@@ -78,15 +78,12 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-02-12)
+## Recent Updates (2026-02-13)
 
+- **Manual update check**: AppSettingsModal Help & Info 섹션에 "업데이트 확인" 버튼 추가. `check()` 직접 호출 → custom event(`app:update-found`)로 기존 UpdateModal 재사용.
 - History compare modal now supports both `snapshot vs current` and `snapshot vs snapshot`.
 - Snapshot creation validates `snapshot_json` at write time (prevents delayed restore/compare failures).
 - `ITEProject.history` field removed from Rust/TypeScript project models to avoid dual source-of-truth.
-- Added focused tests for:
-  - auto snapshot before apply/restore flows
-  - snapshot-vs-snapshot comparison
-  - history race/no-op/prune guards
 
 ## Adding New Features
 
