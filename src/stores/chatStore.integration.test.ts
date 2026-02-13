@@ -1,5 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
+import { useConnectorStore } from '@/stores/connectorStore';
+
+const mocks = vi.hoisted(() => ({
+  streamAssistantReply: vi.fn(),
+  getAiConfig: vi.fn(),
+  createChatModel: vi.fn(),
+  searchGlossary: vi.fn(),
+  webInvoke: vi.fn(),
+}));
+
+vi.mock('@/ai/chat', () => ({
+  streamAssistantReply: mocks.streamAssistantReply,
+}));
+
+vi.mock('@/ai/config', () => ({
+  getAiConfig: mocks.getAiConfig,
+}));
+
+vi.mock('@/ai/client', () => ({
+  createChatModel: mocks.createChatModel,
+}));
+
+vi.mock('@/tauri/glossary', () => ({
+  searchGlossary: mocks.searchGlossary,
+}));
 
 /**
  * Phase 7: 채팅 기본 기능 테스트
@@ -8,11 +33,55 @@ import { useChatStore } from '@/stores/chatStore';
 
 describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.searchGlossary.mockResolvedValue([]);
+    mocks.getAiConfig.mockReturnValue({
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      maxRecentMessages: 20,
+      openaiApiKey: 'sk-test',
+    });
+    mocks.streamAssistantReply.mockImplementation(async (_input, callbacks) => {
+      callbacks?.onToken?.('AI 응답입니다.', 'AI 응답입니다.');
+      return 'AI 응답입니다.';
+    });
+    mocks.webInvoke.mockResolvedValue({
+      content: '웹 검색 결과',
+    });
+    mocks.createChatModel.mockReturnValue({
+      invoke: mocks.webInvoke,
+      bindTools: vi.fn().mockReturnThis(),
+    });
+
+    const connectorState = useConnectorStore.getState();
+    useConnectorStore.setState({
+      enabledMap: {
+        ...connectorState.enabledMap,
+        notion: false,
+      },
+      tokenMap: {
+        ...connectorState.tokenMap,
+        notion: false,
+      },
+    });
+
     // 각 테스트 전 스토어 초기화
     useChatStore.setState({
       sessions: [],
       currentSessionId: null,
       currentSession: null,
+      isLoading: false,
+      isFinalizingStreaming: false,
+      streamingMessageId: null,
+      streamingSessionId: null,
+      streamingContent: null,
+      streamingMetadata: null,
+      error: null,
+      statusMessage: null,
+      abortController: null,
+      composerAttachments: [],
+      webSearchEnabled: true,
     });
   });
 
@@ -187,38 +256,75 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
   });
 
   describe('AI 응답 스트리밍 (Phase 7.2)', () => {
-    // 🔴 Red: AI 응답 테스트 (스트리밍 콜백)
-
-    it.skip('메시지 송신 후 AI 응답 스트리밍', async () => {
+    it('메시지 송신 후 AI 응답 스트리밍', async () => {
       // Arrange: 세션 생성
-      // useChatStore.getState().createSession(...)
-      // const sessionId = ...
+      useChatStore.getState().createSession('Chat');
+      const sessionId = useChatStore.getState().currentSessionId!;
 
-      // Act: 메시지 전송 (실제로는 sendMessage 호출)
-      // await useChatStore.getState().sendMessage({
-      //   sessionId,
-      //   message: 'What is API?',
-      //   onToken: vi.fn(),
-      // });
+      // Act: 메시지 전송
+      await useChatStore.getState().sendMessage('What is API endpoint?', sessionId);
 
-      // Assert: AI 응답이 세션에 추가됨
-      // const session = useChatStore.getState().sessions[sessionId];
-      // const lastMessage = session?.messages[session.messages.length - 1];
-      // expect(lastMessage?.role).toBe('assistant');
-      // expect(lastMessage?.content).toBeDefined();
+      // Assert: 사용자/어시스턴트 메시지가 순서대로 저장되고 스트리밍이 finalize됨
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.messages).toHaveLength(2);
+      expect(session?.messages[0]?.role).toBe('user');
+      expect(session?.messages[1]?.role).toBe('assistant');
+      expect(session?.messages[1]?.content).toBe('AI 응답입니다.');
+      expect(useChatStore.getState().isLoading).toBe(false);
+      expect(useChatStore.getState().streamingMessageId).toBeNull();
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userMessage: 'What is API endpoint?',
+          confluenceSearchEnabled: true,
+          notionSearchEnabled: false,
+        }),
+        expect.any(Object),
+      );
     });
 
-    it.skip('Confluence 검색 도구 자동 호출 (Phase 7.3)', async () => {
-      // 사용자: "Confluence에서 찾아줘"
-      // → AI가 도구 호출
-      // → 검색 결과 반환
-      // → 대화에 포함
+    it('Confluence 검색 활성 여부가 AI 요청 옵션에 반영됨', async () => {
+      // Arrange
+      useChatStore.getState().createSession('Confluence Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      useChatStore.getState().setConfluenceSearchEnabled(false, sessionId);
+
+      // Act
+      await useChatStore.getState().sendMessage('Confluence에서 API 문서를 찾아줘', sessionId);
+
+      // Assert: 세션 설정이 모델 요청에 반영됨
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          confluenceSearchEnabled: false,
+        }),
+        expect.any(Object),
+      );
     });
 
-    it.skip('Notion 도구 호출 (Phase 7.4)', async () => {
-      // 사용자: "용어집에서 확인해줘"
-      // → AI가 Notion 도구 호출
-      // → 용어 정의 반환
+    it('Notion 토큰/활성 상태에 따라 도구 사용 가능 여부가 반영됨', async () => {
+      // Arrange
+      useConnectorStore.setState((state) => ({
+        enabledMap: {
+          ...state.enabledMap,
+          notion: true,
+        },
+        tokenMap: {
+          ...state.tokenMap,
+          notion: true,
+        },
+      }));
+      useChatStore.getState().createSession('Notion Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      // Act
+      await useChatStore.getState().sendMessage('용어집에서 endpoint 정의를 확인해줘', sessionId);
+
+      // Assert
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notionSearchEnabled: true,
+        }),
+        expect.any(Object),
+      );
     });
   });
 });

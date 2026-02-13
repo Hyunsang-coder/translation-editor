@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';
 import { runReview } from './runReview';
+import { parseReviewResult } from './parseReviewResult';
 
 const mocks = vi.hoisted(() => ({
   createChatModel: vi.fn(),
@@ -134,37 +135,60 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
   });
 
   describe('리뷰 결과 파싱 (Phase 6.1 → 6.2)', () => {
-    it.skip('리뷰 결과가 JSON으로 파싱됨', async () => {
-      // Arrange
-      // const mockResponse = `---REVIEW_START---
-      // [{"segmentGroupId": "seg-0", "type": "terminology", "severity": "major"}]
-      // ---REVIEW_END---`;
+    it('리뷰 결과가 파싱되어 이슈 목록으로 변환됨', async () => {
+      mocks.stream.mockImplementation(async function* () {
+        yield { content: '---REVIEW_START---\n' };
+        yield {
+          content: [
+            '### Issue #1',
+            '- **Source**: "API endpoint"',
+            '- **Target**: "URL de API"',
+            '- **Type**: Terminology',
+            '- **Severity**: Major',
+            '- **SegmentGroupId**: seg-0',
+            '- **Explanation**: Terminology mismatch',
+            '- **Suggestion**: API endpoint',
+          ].join('\n'),
+        };
+        yield { content: '\n---REVIEW_END---' };
+      });
 
-      // Act: 파싱
-      // const issues = parseReviewResult(mockResponse);
+      const response = await runReview({ segments: mockSegments });
+      const issues = parseReviewResult(response);
 
-      // Assert: 이슈 배열
-      // expect(issues).toHaveLength(1);
-      // expect(issues[0].segmentGroupId).toBe('seg-0');
+      expect(issues).toHaveLength(1);
+      expect(issues[0]?.segmentGroupId).toBe('seg-0');
+      expect(issues[0]?.type).toBe('terminology');
+      expect(issues[0]?.severity).toBe('major');
+      expect(issues[0]?.suggestedFix).toBe('API endpoint');
     });
   });
 
   describe('리뷰 하이라이트 (Phase 6.2)', () => {
-    it.skip('리뷰 이슈의 위치를 하이라이트 표시', () => {
-      // Arrange: 리뷰 이슈
-      // const issue = {
-      //   segmentGroupId: 'seg-0',
-      //   problem: 'Inconsistent terminology',
-      //   severity: 'major',
-      // };
+    it('파싱된 이슈가 segmentGroupId를 유지해 하이라이트 앵커로 사용 가능', async () => {
+      mocks.stream.mockImplementation(async function* () {
+        yield { content: '---REVIEW_START---\n' };
+        yield {
+          content: [
+            '### Issue #1',
+            '- **Source**: "This guide provides detailed instructions"',
+            '- **Target**: "Esta guía proporciona detalles"',
+            '- **Type**: Mistranslation',
+            '- **Severity**: Critical',
+            '- **SegmentGroupId**: seg-0',
+            '- **Explanation**: Meaning loss',
+            '- **Suggestion**: Esta guía proporciona instrucciones detalladas',
+          ].join('\n'),
+        };
+        yield { content: '\n---REVIEW_END---' };
+      });
 
-      // Act: 하이라이트 생성
-      // const decorations = createReviewDecorations([issue], editorDoc);
+      const response = await runReview({ segments: mockSegments });
+      const issues = parseReviewResult(response);
 
-      // Assert: 해당 범위에 데코레이션 추가됨
-      // expect(decorations).toHaveLength(1);
-      // expect(decorations[0].from).toBeDefined();
-      // expect(decorations[0].to).toBeDefined();
+      expect(issues[0]?.segmentGroupId).toBe('seg-0');
+      expect(issues[0]?.sourceExcerpt).toContain('detailed instructions');
+      expect(issues[0]?.targetExcerpt).toContain('detalles');
     });
   });
 

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ITEProject } from '@/types';
-import type { TipTapDocJson } from '@/utils/markdownConverter';
+import type { ReviewIssue } from '@/stores/reviewStore';
+import { isValidTipTapDocJson, type TipTapDocJson } from '@/utils/markdownConverter';
 import {
   isTimeoutError,
   isRetryableTranslationError,
   formatTranslationError,
   translateWithStreaming,
+  translateSourceDocWithChunking,
 } from '@/ai/translateDocument';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
@@ -207,17 +209,34 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(model.stream).not.toHaveBeenCalled();
     });
 
-    it.skip('대용량 문서는 자동 청킹', async () => {
-      // Arrange: 5,000단어 이상의 큰 문서
-      // const largeDoc = buildLargeDocument(5000);
+    it('대용량 문서는 청킹 경로로 분할 번역 가능', async () => {
+      const largeDoc: TipTapDocJson = {
+        type: 'doc',
+        content: Array.from({ length: 180 }, (_, index) => ({
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: `Section ${index}: ${'Este documento tecnico incluye multiples reglas y contexto detallado. '.repeat(20)}`,
+            },
+          ],
+        })),
+      };
+      const onProgress = vi.fn();
 
-      // Act: 번역 실행
-      // const result = await translateWithStreaming({
-      //   sourceDocJson: largeDoc,
-      // });
+      const result = await translateSourceDocWithChunking({
+        project: mockProject,
+        sourceDocJson: largeDoc,
+        onProgress,
+      });
 
-      // Assert: 청킹으로 분할 처리됨
-      // expect(result.chunkCount).toBeGreaterThan(1);
+      expect(result.wasChunked).toBe(true);
+      expect(result.totalChunks).toBeGreaterThan(1);
+      expect(result.successfulChunks).toBe(result.totalChunks);
+      expect(onProgress).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'translating' }),
+      );
+      expect(vi.mocked(createChatModel).mock.calls.length).toBeGreaterThan(1);
     });
 
     it('API 오류 시 에러 메시지 반환', async () => {
@@ -238,23 +257,60 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
   });
 
   describe('번역 결과 - Preview Modal (Phase 5.2)', () => {
-    it.skip('번역 결과가 TipTap JSON으로 반환됨', async () => {
-      // Assert: 결과가 TipTap JSON 형식
-      // const isValid = isValidTipTapDocJson(result.doc);
-      // expect(isValid).toBe(true);
+    it('번역 결과가 TipTap JSON으로 반환됨', async () => {
+      const onToken = vi.fn();
+
+      const result = await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson,
+        onToken,
+      });
+
+      expect(isValidTipTapDocJson(result.doc)).toBe(true);
+      expect(result.doc.type).toBe('doc');
+
+      const lastStreamText = String(onToken.mock.calls.at(-1)?.[0] ?? '');
+      expect(lastStreamText).toContain('API Integration Guide');
+      expect(lastStreamText).not.toContain('---TRANSLATION_START---');
+      expect(lastStreamText).not.toContain('---TRANSLATION_END---');
     });
 
-    it.skip('이미지 플레이스홀더가 복원됨', async () => {
-      // Arrange: 이미지 포함 문서
-      // const docWithImages = buildDocWithImages();
+    it('이미지 노드는 번역 프롬프트에서 제거됨', async () => {
+      const docWithImage: TipTapDocJson = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Texto antes de la imagen' }],
+          },
+          {
+            type: 'image',
+            attrs: {
+              src: 'https://example.com/cat.png',
+              alt: 'cat',
+            },
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Texto despues de la imagen' }],
+          },
+        ],
+      };
 
-      // Act: 번역 실행
-      // const result = await translateWithStreaming({
-      //   sourceDocJson: docWithImages,
-      // });
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
 
-      // Assert: 이미지가 복원됨
-      // expect(result.doc.content).toContainImageNode();
+      await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson: docWithImage,
+      });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const userPrompt = String(messages[1]?.content ?? '');
+      expect(userPrompt).toContain('Texto antes de la imagen');
+      expect(userPrompt).toContain('Texto despues de la imagen');
+      expect(userPrompt).not.toContain('![');
+      expect(userPrompt).not.toContain('https://example.com/cat.png');
     });
 
     it.skip('Diff 뷰에서 변경 부분 강조', () => {
@@ -292,8 +348,40 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       // Phase 5 완료 → Phase 6 리뷰 시작 가능
     });
 
-    it.skip('리뷰 이슈를 반영하여 재번역', () => {
-      // reviewIssues 파라미터 전달 → 이슈 맥락 포함 재번역
+    it('리뷰 이슈를 반영하여 재번역 컨텍스트를 프롬프트에 포함', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      const reviewIssues: ReviewIssue[] = [
+        {
+          id: 'issue-1',
+          segmentOrder: 0,
+          segmentGroupId: 'seg-0',
+          sourceExcerpt: 'API endpoint',
+          targetExcerpt: 'API URL',
+          suggestedFix: 'API endpoint',
+          type: 'terminology',
+          severity: 'major',
+          description: 'Terminology mismatch',
+          checked: true,
+        },
+      ];
+
+      await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson,
+        reviewIssues,
+        retranslateMessage: '검수 이슈를 반영해 다시 번역해줘',
+      });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content ?? '');
+      expect(systemPrompt).toContain('[검수 이슈 - 반드시 수정 필요!]');
+      expect(systemPrompt).toContain('용어 불일치');
+      expect(systemPrompt).toContain('API endpoint');
+      expect(systemPrompt).toContain('Terminology mismatch');
+      expect(systemPrompt).toContain('[사용자 추가 지시사항]');
+      expect(systemPrompt).toContain('검수 이슈를 반영해 다시 번역해줘');
     });
   });
 });

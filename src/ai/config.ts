@@ -47,6 +47,15 @@ function getEnvOptionalNumber(key: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function getProcessEnvString(key: string): string | undefined {
+  const v = process.env[key];
+  return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+}
+
+function isTestRuntime(): boolean {
+  return getEnvString('MODE') === 'test' || process.env.VITEST === 'true';
+}
+
 export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
@@ -63,9 +72,11 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiCo
   const presets = MODEL_PRESETS[presetKey];
   const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
 
-  // 5. API Key: Store의 사용자 입력 키만 사용 (환경 변수 지원 중단)
-  const openaiApiKey = store.openaiApiKey;
-  const anthropicApiKey = store.anthropicApiKey;
+  // 5. API Key 우선순위
+  // - 런타임 앱: Store 값만 사용
+  // - 테스트(vitest): Store 값이 없으면 process.env(.env.local 주입값)로 fallback
+  const openaiApiKey = store.openaiApiKey || (isTestRuntime() ? getProcessEnvString('OPENAI_API_KEY') : undefined);
+  const anthropicApiKey = store.anthropicApiKey || (isTestRuntime() ? getProcessEnvString('ANTHROPIC_API_KEY') : undefined);
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 

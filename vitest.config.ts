@@ -1,55 +1,67 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => {
+  // 테스트에서만 .env/.env.local 값을 process.env로 주입
+  const env = loadEnv(mode, process.cwd(), '');
 
-  test: {
-    // jsdom 환경에서 React 컴포넌트 테스트
-    environment: 'jsdom',
+  return {
+    plugins: [react()],
 
-    // 글로벌 테스트 API (describe, it, expect 등)
-    globals: true,
+    test: {
+      // jsdom 환경에서 React 컴포넌트 테스트
+      environment: 'jsdom',
 
-    // 테스트 셋업 파일
-    setupFiles: ['./src/test/setup.ts'],
+      // 글로벌 테스트 API (describe, it, expect 등)
+      globals: true,
 
-    // 테스트 파일 패턴
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      // 테스트 셋업 파일
+      setupFiles: ['./src/test/setup.ts'],
 
-    // node_modules 제외
-    exclude: ['node_modules', 'dist', 'src-tauri'],
+      // 테스트 파일 패턴
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
 
-    // 커버리지 설정
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'src/test/',
-        '**/*.d.ts',
-        '**/*.test.{ts,tsx}',
-        '**/*.spec.{ts,tsx}',
-        'src/mocks/',
-      ],
+      // node_modules 제외
+      exclude: ['node_modules', 'dist', 'src-tauri'],
+
+      // 테스트 환경 변수
+      env: {
+        ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
+        ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
+      },
+
+      // 커버리지 설정
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html'],
+        exclude: [
+          'node_modules/',
+          'src/test/',
+          '**/*.d.ts',
+          '**/*.test.{ts,tsx}',
+          '**/*.spec.{ts,tsx}',
+          'src/mocks/',
+        ],
+      },
+
+      // 타임아웃 설정
+      testTimeout: 10000,
+      hookTimeout: 10000,
     },
 
-    // 타임아웃 설정
-    testTimeout: 10000,
-    hookTimeout: 10000,
-  },
-
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@editor': path.resolve(__dirname, './src/editor'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@stores': path.resolve(__dirname, './src/stores'),
-      '@types': path.resolve(__dirname, './src/types'),
-      '@utils': path.resolve(__dirname, './src/utils'),
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+        '@components': path.resolve(__dirname, './src/components'),
+        '@editor': path.resolve(__dirname, './src/editor'),
+        '@hooks': path.resolve(__dirname, './src/hooks'),
+        '@stores': path.resolve(__dirname, './src/stores'),
+        '@types': path.resolve(__dirname, './src/types'),
+        '@utils': path.resolve(__dirname, './src/utils'),
+      },
     },
-  },
+  };
 });
