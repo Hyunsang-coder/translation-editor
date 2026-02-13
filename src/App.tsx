@@ -79,11 +79,13 @@ function App(): JSX.Element {
           setShowAppSettingsModal(true);
           break;
         case 'check-updates': {
-          const { update: u, error: err } = await checkForUpdate();
+          const { update: u, error: err, skipped } = await checkForUpdate();
           if (u) {
             setShowUpdateModal(true);
           } else if (err) {
             addToast({ type: 'error', message: t('update.checkFailed', '업데이트 확인에 실패했습니다.') });
+          } else if (skipped) {
+            addToast({ type: 'info', message: t('update.skipped', '이 버전은 건너뜀 처리되어 있습니다.') });
           } else {
             addToast({ type: 'success', message: t('update.upToDate', '최신 버전입니다.') });
           }

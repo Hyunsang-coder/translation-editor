@@ -387,7 +387,8 @@
     "checkForUpdate": "업데이트 확인",
     "checking": "확인 중...",
     "upToDate": "최신 버전입니다",
-    "checkFailed": "업데이트 확인에 실패했습니다"
+    "checkFailed": "업데이트 확인에 실패했습니다",
+    "skipped": "이 버전은 건너뜀 처리되어 있습니다"
   },
   "sidebar": {
     "openOnOtherSide": "반대편에도 열기"

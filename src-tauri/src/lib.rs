@@ -271,11 +271,13 @@ pub fn run() {
                             }
                         }
                         _ => {
-                            let js = format!(
-                                "window.dispatchEvent(new CustomEvent('tauri-menu', {{ detail: '{}' }}))",
-                                id
-                            );
-                            let _ = window.eval(&js);
+                            if let Ok(detail_json) = serde_json::to_string(id) {
+                                let js = format!(
+                                    "window.dispatchEvent(new CustomEvent('tauri-menu', {{ detail: {} }}))",
+                                    detail_json
+                                );
+                                let _ = window.eval(&js);
+                            }
                         }
                     }
                 }

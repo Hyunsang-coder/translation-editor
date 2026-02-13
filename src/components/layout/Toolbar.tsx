@@ -12,11 +12,12 @@ import { HistoryDrawer } from '@/components/history/HistoryDrawer';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, openReviewPanel, toggleChatVisibility, rightSidebar } =
+  const { openPanel, openReviewPanel, toggleChatVisibility, leftSidebar, rightSidebar } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
       openReviewPanel: s.openReviewPanel,
       toggleChatVisibility: s.toggleChatVisibility,
+      leftSidebar: s.leftSidebar,
       rightSidebar: s.rightSidebar,
     })));
   const project = useProjectStore((s) => s.project);
@@ -66,6 +67,10 @@ export function Toolbar(): JSX.Element {
     setHistoryDrawerOpen(true);
     setDropdownOpen(false);
   };
+  const isAnyChatVisible = (
+    (!leftSidebar.collapsed && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    || (!rightSidebar.collapsed && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
+  );
 
   return (
     <header className="h-[45px] border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
@@ -100,7 +105,7 @@ export function Toolbar(): JSX.Element {
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleChat}
-                aria-pressed={!rightSidebar.collapsed && !!rightSidebar.activePanel && isChatPanel(rightSidebar.activePanel)}
+                aria-pressed={isAnyChatVisible}
               >
                 <MessageSquare size={16} />
                 <span>{t('toolbar.aiChat')}</span>

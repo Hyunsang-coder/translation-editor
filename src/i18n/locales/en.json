@@ -387,7 +387,8 @@
     "checkForUpdate": "Check for Updates",
     "checking": "Checking...",
     "upToDate": "You're up to date",
-    "checkFailed": "Update check failed"
+    "checkFailed": "Update check failed",
+    "skipped": "This version is marked as skipped"
   },
   "sidebar": {
     "openOnOtherSide": "Open on Other Side"

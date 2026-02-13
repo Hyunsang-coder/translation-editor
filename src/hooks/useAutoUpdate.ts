@@ -28,6 +28,7 @@ export function useAutoUpdate() {
   const checkForUpdate = useCallback(async (): Promise<{
     update: Update | null;
     error: string | null;
+    skipped: boolean;
   }> => {
     setState(prev => ({ ...prev, checking: true, error: null }));
 
@@ -39,7 +40,7 @@ export function useAutoUpdate() {
         const skippedVersion = localStorage.getItem(SKIPPED_VERSION_KEY);
         if (skippedVersion === update.version) {
           setState(prev => ({ ...prev, checking: false, available: false }));
-          return { update: null, error: null };
+          return { update: null, error: null, skipped: true };
         }
 
         setState(prev => ({
@@ -48,10 +49,10 @@ export function useAutoUpdate() {
           available: true,
           update,
         }));
-        return { update, error: null };
+        return { update, error: null, skipped: false };
       } else {
         setState(prev => ({ ...prev, checking: false, available: false }));
-        return { update: null, error: null };
+        return { update: null, error: null, skipped: false };
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Update check failed';
@@ -60,7 +61,7 @@ export function useAutoUpdate() {
         checking: false,
         error: msg,
       }));
-      return { update: null, error: msg };
+      return { update: null, error: msg, skipped: false };
     }
   }, []);
 
@@ -142,7 +143,7 @@ export function useAutoUpdate() {
 
   // 앱 시작 시 자동 체크 (프로덕션만)
   useEffect(() => {
-if (import.meta.env.DEV) return;
+    if (import.meta.env.DEV) return;
 
     const timer = setTimeout(() => {
       checkForUpdate();
