@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HistoryTimeline } from '@/components/history/HistoryTimeline';
+import { HistoryTimeline, CURRENT_STATE_ID } from '@/components/history/HistoryTimeline';
 import { SaveSnapshotDialog } from '@/components/history/SaveSnapshotDialog';
 import { HistoryRenameDialog } from '@/components/history/HistoryRenameDialog';
 import { HistoryCompareModal } from '@/components/history/HistoryCompareModal';
@@ -37,6 +37,12 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const [isRenaming, setIsRenaming] = useState(false);
   const [renamingSnapshotId, setRenamingSnapshotId] = useState<string | null>(null);
 
+  // Checkbox selection state (max 2), default: current state checked
+  const [selectedIds, setSelectedIds] = useState<string[]>([CURRENT_STATE_ID]);
+
+  // Compare modal initial target snapshot
+  const [compareInitialTargetId, setCompareInitialTargetId] = useState<string | undefined>(undefined);
+
   const projectId = project?.id ?? '';
 
   useEffect(() => {
@@ -56,12 +62,46 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
     setCompareOpen(false);
     setRestoreOpen(false);
     setSelectedSnapshotId(null);
+    setSelectedIds([CURRENT_STATE_ID]);
   }, [projectId, reset]);
 
   const selectedDescription = useMemo(() => {
     if (!selectedSnapshotId) return '';
     return snapshots.find((s) => s.id === selectedSnapshotId)?.description ?? '';
   }, [selectedSnapshotId, snapshots]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((x) => x !== id);
+      }
+      if (prev.length >= 2) return prev;
+      return [...prev, id];
+    });
+  }, []);
+
+  const handleCompareSelected = useCallback(() => {
+    if (selectedIds.length !== 2) return;
+
+    const includesCurrent = selectedIds.includes(CURRENT_STATE_ID);
+
+    if (includesCurrent) {
+      // The non-current ID is the base snapshot
+      const snapshotId = selectedIds.find((id) => id !== CURRENT_STATE_ID)!;
+      setSelectedSnapshotId(snapshotId);
+      setCompareInitialTargetId(undefined); // compare with current
+    } else {
+      // Sort by timestamp: older = base, newer = target
+      const sorted = [...selectedIds].sort((a, b) => {
+        const tsA = snapshots.find((s) => s.id === a)?.timestamp ?? 0;
+        const tsB = snapshots.find((s) => s.id === b)?.timestamp ?? 0;
+        return tsA - tsB;
+      });
+      setSelectedSnapshotId(sorted[0] ?? null);
+      setCompareInitialTargetId(sorted[1]);
+    }
+    setCompareOpen(true);
+  }, [selectedIds, snapshots]);
 
   if (!open || !project) return null;
 
@@ -98,6 +138,8 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
 
     try {
       await deleteSnapshot({ projectId, snapshotId });
+      // Remove from selection if it was selected
+      setSelectedIds((prev) => prev.filter((id) => id !== snapshotId));
       addToast({
         type: 'success',
         message: t('history.deleteSuccess'),
@@ -150,6 +192,8 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
     }
   };
 
+  const canCompare = selectedIds.length === 2;
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} aria-hidden="true" />
@@ -166,7 +210,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
           </button>
         </div>
 
-        <div className="p-4 border-b border-editor-border">
+        <div className="p-4 border-b border-editor-border space-y-2">
           <button
             type="button"
             onClick={() => setSaveDialogOpen(true)}
@@ -174,16 +218,40 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
           >
             {t('history.saveSnapshot')}
           </button>
+
+          {/* Compare action bar */}
+          <div className="flex items-center gap-2">
+            {canCompare ? (
+              <button
+                type="button"
+                onClick={handleCompareSelected}
+                className="flex-1 px-3 py-2 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+              >
+                {t('history.compareSelected')}
+              </button>
+            ) : (
+              <span className="flex-1 text-xs text-editor-muted">
+                {t('history.selectToCompare')}
+              </span>
+            )}
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="px-2 py-1 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg transition-colors"
+              >
+                {t('history.clearSelection')}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           <HistoryTimeline
             snapshots={snapshots}
             isLoading={isLoading}
-            onCompare={(snapshotId) => {
-              setSelectedSnapshotId(snapshotId);
-              setCompareOpen(true);
-            }}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
             onRestore={(snapshotId) => {
               setSelectedSnapshotId(snapshotId);
               setRestoreOpen(true);
@@ -222,6 +290,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
         projectId={projectId}
         snapshotId={selectedSnapshotId}
         snapshots={snapshots}
+        initialTargetSnapshotId={compareInitialTargetId}
         onClose={() => setCompareOpen(false)}
       />
 

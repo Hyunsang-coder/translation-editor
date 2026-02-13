@@ -5,11 +5,14 @@ import type { HistorySnapshotMeta } from '@/types';
 interface HistoryTimelineProps {
   snapshots: HistorySnapshotMeta[];
   isLoading?: boolean;
-  onCompare: (snapshotId: string) => void;
+  selectedIds: string[];
+  onToggleSelect: (id: string) => void;
   onRestore: (snapshotId: string) => void;
   onRename: (snapshotId: string) => void;
   onDelete: (snapshotId: string) => void;
 }
+
+const CURRENT_STATE_ID = '__current__';
 
 function formatRelativeTime(
   timestamp: number,
@@ -37,10 +40,13 @@ function formatRelativeTime(
   return formatter.format(diffYear, 'year');
 }
 
+export { CURRENT_STATE_ID };
+
 export function HistoryTimeline({
   snapshots,
   isLoading = false,
-  onCompare,
+  selectedIds,
+  onToggleSelect,
   onRestore,
   onRename,
   onDelete,
@@ -50,6 +56,8 @@ export function HistoryTimeline({
     () => [...snapshots].sort((a, b) => b.timestamp - a.timestamp),
     [snapshots],
   );
+
+  const isMaxSelected = selectedIds.length >= 2;
 
   if (isLoading) {
     return (
@@ -67,48 +75,78 @@ export function HistoryTimeline({
     );
   }
 
+  const isCurrentSelected = selectedIds.includes(CURRENT_STATE_ID);
+
   return (
     <ul className="divide-y divide-editor-border">
-      {sorted.map((snapshot) => (
-        <li key={snapshot.id} className="p-4 space-y-2">
-          <div className="text-sm font-medium text-editor-text break-words">
-            {snapshot.description}
-          </div>
-          <div className="text-xs text-editor-muted">
-            {formatRelativeTime(snapshot.timestamp, i18n.language)}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onCompare(snapshot.id)}
-              className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
-            >
-              {t('history.compare')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onRestore(snapshot.id)}
-              className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-            >
-              {t('history.restore')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onRename(snapshot.id)}
-              className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
-            >
-              {t('history.rename')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(snapshot.id)}
-              className="px-2 py-1 text-xs rounded border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-colors"
-            >
-              {t('history.delete')}
-            </button>
-          </div>
-        </li>
-      ))}
+      {/* "현재 상태" 가상 항목 */}
+      <li
+        className={`p-4 space-y-1 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}
+      >
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isCurrentSelected}
+            disabled={!isCurrentSelected && isMaxSelected}
+            onChange={() => onToggleSelect(CURRENT_STATE_ID)}
+            className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500"
+          />
+          <span className="text-sm font-medium text-editor-text">
+            {t('history.currentState')}
+          </span>
+        </label>
+      </li>
+
+      {sorted.map((snapshot) => {
+        const isSelected = selectedIds.includes(snapshot.id);
+        return (
+          <li
+            key={snapshot.id}
+            className={`p-4 space-y-2 ${isSelected ? 'bg-primary-500/10' : ''}`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={!isSelected && isMaxSelected}
+                onChange={() => onToggleSelect(snapshot.id)}
+                className="w-4 h-4 mt-0.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500 cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-editor-text break-words">
+                  {snapshot.description}
+                </div>
+                <div className="text-xs text-editor-muted">
+                  {formatRelativeTime(snapshot.timestamp, i18n.language)}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pl-7">
+              <button
+                type="button"
+                onClick={() => onRestore(snapshot.id)}
+                className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+              >
+                {t('history.restore')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRename(snapshot.id)}
+                className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+              >
+                {t('history.rename')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(snapshot.id)}
+                className="px-2 py-1 text-xs rounded border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-colors"
+              >
+                {t('history.delete')}
+              </button>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -13,6 +13,7 @@ interface HistoryCompareModalProps {
   projectId: string;
   snapshotId: string | null;
   snapshots: HistorySnapshotMeta[];
+  initialTargetSnapshotId?: string | undefined;
   onClose: () => void;
 }
 
@@ -25,6 +26,7 @@ export function HistoryCompareModal({
   projectId,
   snapshotId,
   snapshots,
+  initialTargetSnapshotId,
   onClose,
 }: HistoryCompareModalProps): JSX.Element | null {
   const { t } = useTranslation();
@@ -41,11 +43,11 @@ export function HistoryCompareModal({
   useEffect(() => {
     if (!open) return;
     setBaseSnapshotId(snapshotId ?? '');
-    setTargetSnapshotId('');
+    setTargetSnapshotId(initialTargetSnapshotId ?? '');
     setBaseSnapshotBlocks(null);
     setTargetSnapshotBlocks(null);
     setError(null);
-  }, [open, snapshotId]);
+  }, [open, snapshotId, initialTargetSnapshotId]);
 
   useEffect(() => {
     if (!baseSnapshotId) return;

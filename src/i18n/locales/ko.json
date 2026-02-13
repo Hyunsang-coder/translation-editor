@@ -162,7 +162,11 @@
     "loadError": "히스토리 불러오기에 실패했습니다.",
     "autoSnapshotBeforeTranslate": "번역 적용 전 자동 저장",
     "autoSnapshotBeforeReviewApply": "검수 재번역 적용 전 자동 저장",
-    "autoSnapshotBeforeRestore": "복원 전 자동 저장"
+    "autoSnapshotBeforeRestore": "복원 전 자동 저장",
+    "currentState": "현재 상태",
+    "compareSelected": "선택 비교",
+    "clearSelection": "선택 해제",
+    "selectToCompare": "비교할 항목을 2개 선택하세요"
   },
   "projectSidebar": {
     "projects": "프로젝트",
