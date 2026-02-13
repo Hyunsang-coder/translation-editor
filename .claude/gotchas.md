@@ -291,3 +291,9 @@ Critical implementation warnings learned from past issues.
 133. **Zustand 비동기 상태 플래그 (동시 호출 방지)**: 비동기 로드 함수에서 `keysLoaded: boolean | 'loading'` 상태 사용. `'loading'` 체크로 진행 중인 호출 방지, 성공/실패 여부로 캐시/재시도 제어. ❌ 금지: `keysLoaded = true`를 try 시작에 설정 (에러 시 영구 실패, 재시도 불가).
 
 134. **Cross-Store 접근 (getState 사용)**: 한 store에서 다른 store의 값이 필요할 때 `useOtherStore.subscribe()`로 구독하지 말 것 (순환 참조, 메모리 누수). 대신 콜백 내에서 `useOtherStore.getState().field` 사용하여 현재값만 읽기.
+
+135. **Tauri Menu Event Bridge (window.eval)**: Rust `on_menu_event`에서 `window.eval()`로 `CustomEvent('tauri-menu')`를 디스패치. `serde_json::to_string(id)`로 JSON 이스케이프하여 특수문자 안전성 보장. `App.tsx`의 `useEffect` 리스너에서 `menuId`로 분기 처리. `reload`만 별도 분기 (URL 네비게이트), 나머지는 모두 CustomEvent로 통합.
+
+136. **View Menu Chat CheckMenuItem 동기화**: Chat 메뉴는 `CheckMenuItemBuilder`로 생성 (체크 상태 표시). React 측 `isViewChatOn` 상태 변경 시 `setViewChatMenuChecked()` Tauri command로 Rust 메뉴 상태 업데이트. `useEffect` deps에 `isViewChatOn`만 포함. 실패 시 `console.warn`으로 무시 (메뉴 동기화는 non-critical).
+
+137. **toggleChatVisibility 중앙화**: Chat 토글 로직이 `Toolbar.tsx`에 인라인으로 있었으나, View 메뉴에서도 동일 동작이 필요하여 `uiStore.toggleChatVisibility()`로 중앙화. `aria-pressed` 상태도 `isAnyChatVisible` (양쪽 사이드바 모두 검사)로 통합.

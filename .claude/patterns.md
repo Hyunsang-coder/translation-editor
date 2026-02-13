@@ -480,6 +480,11 @@ useChatSessionState()    // Session-related state (streamingSessionId 기반 세
 // Actions: setSidebarTab(side, tab), toggleSidebarCollapse(side),
 //          openSidebarTab(side, tab), openReviewInSidebar(side)
 
+// Chat 전역 토글: toggleChatVisibility() — 모든 사이드에 걸쳐 chat 패널 On/Off
+// - On: chat 패널이 있는 모든 사이드를 펼치고 chat 탭 활성화
+// - Off: 보이는 chat을 모두 숨김 (fallback 패널 전환 또는 collapse)
+// - Toolbar.tsx의 handleChat() + View 메뉴 모두 이 액션 호출
+
 // 탭 드래그: src/hooks/usePanelDrag.ts (마우스 이벤트 기반, HTML5 DnD 대체)
 
 // src/hooks/useResponsiveLayout.ts
@@ -582,6 +587,51 @@ const out = await withTimeout(
   `Tool ${call.name} timed out`
 );
 ```
+
+## Tauri Menu Event Bridge
+
+Rust 네이티브 메뉴 ↔ React 상태를 양방향 동기화하는 패턴.
+
+```typescript
+// === Rust → React (메뉴 클릭 → React 액션) ===
+// src-tauri/src/lib.rs: 메뉴 이벤트를 CustomEvent로 webview에 전달
+app.on_menu_event(move |app_handle, event| {
+  let id = event.id().as_ref();
+  // window.eval()로 CustomEvent('tauri-menu') 디스패치
+  let js = format!(
+    "window.dispatchEvent(new CustomEvent('tauri-menu', {{ detail: {} }}))",
+    serde_json::to_string(id)
+  );
+  window.eval(&js);
+});
+
+// App.tsx: 이벤트 리스너로 수신
+useEffect(() => {
+  const handler = async (e: Event) => {
+    const menuId = (e as CustomEvent<string>).detail;
+    switch (menuId) {
+      case 'app-settings': setShowAppSettingsModal(true); break;
+      case 'check-updates': /* ... */ break;
+      case 'view-toggle-chat': useUIStore.getState().toggleChatVisibility(); break;
+    }
+  };
+  window.addEventListener('tauri-menu', handler);
+  return () => window.removeEventListener('tauri-menu', handler);
+}, []);
+
+// === React → Rust (상태 변경 → 메뉴 체크 동기화) ===
+// src/tauri/menu.ts: CheckMenuItem 상태 업데이트 래퍼
+export async function setViewChatMenuChecked(checked: boolean): Promise<void> {
+  await invoke<void>('set_view_chat_menu_checked', { checked });
+}
+
+// App.tsx: chat 가시성 상태 변경 시 메뉴 체크 동기화
+useEffect(() => {
+  void setViewChatMenuChecked(isViewChatOn);
+}, [isViewChatOn]);
+```
+
+**View 메뉴 항목**: Project Sidebar, Settings, Review (일반 MenuItemBuilder), Chat (CheckMenuItemBuilder — 체크 상태 동기화)
 
 ## Build Commands
 

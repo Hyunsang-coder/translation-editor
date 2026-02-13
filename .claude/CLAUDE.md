@@ -67,7 +67,7 @@ src-tauri/src/    # Rust backend (commands/, mcp/)
 This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
-- `gotchas.md` - Critical implementation warnings (131 items)
+- `gotchas.md` - Critical implementation warnings (137 items)
 - `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 
@@ -78,12 +78,13 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-02-13)
+## Recent Updates (2026-02-14)
 
+- **View 메뉴 + 메뉴 이벤트 브리지**: Rust 네이티브 View 메뉴에 Project/Settings/Review/Chat 항목 추가. `CustomEvent('tauri-menu')` 기반 양방향 동기화 (Chat은 CheckMenuItem으로 체크 상태 반영).
+- **Chat 전역 토글 중앙화**: `uiStore.toggleChatVisibility()` — Toolbar + View 메뉴 모두 동일 액션 사용. 양쪽 사이드바 chat 패널 On/Off 통합 제어.
+- **tsconfig ES2022**: `lib: ES2020 → ES2022` 업그레이드 (`Array.at()`, `Object.hasOwn()` 등 사용 가능).
+- **E2E 테스트 확장**: `user-story.spec.ts` Phase 9 (프로젝트 Duplicate) 추가 (6→7 TC).
 - **Manual update check**: AppSettingsModal Help & Info 섹션에 "업데이트 확인" 버튼 추가. `check()` 직접 호출 → custom event(`app:update-found`)로 기존 UpdateModal 재사용.
-- History compare modal now supports both `snapshot vs current` and `snapshot vs snapshot`.
-- Snapshot creation validates `snapshot_json` at write time (prevents delayed restore/compare failures).
-- `ITEProject.history` field removed from Rust/TypeScript project models to avoid dual source-of-truth.
 
 ## Adding New Features
 

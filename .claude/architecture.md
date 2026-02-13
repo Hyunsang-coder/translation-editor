@@ -4,7 +4,7 @@
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | React 18 + TypeScript + Vite + TailwindCSS |
+| Frontend | React 18 + TypeScript (ES2022) + Vite + TailwindCSS |
 | Editor | TipTap (ProseMirror) - dual instances |
 | State | Zustand with persistence |
 | AI | LangChain.js (OpenAI + Anthropic) |
@@ -97,6 +97,16 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 - `chatStore.selectors.ts` — 세션별 그룹 셀렉터 (useChatSessionState, useChatComposerState)
 
 **Important**: `sourceDocJson`/`targetDocJson` in projectStore are TipTap JSON caches for AI tools.
+
+### 7. Tauri Menu ↔ React Event Bridge
+
+Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
+
+- **Rust → React**: `on_menu_event` → `window.eval(CustomEvent('tauri-menu'))` → `App.tsx` 리스너
+- **React → Rust**: `setViewChatMenuChecked()` Tauri command로 CheckMenuItem 상태 업데이트
+- **View 메뉴**: Project Sidebar / Settings / Review (MenuItemBuilder) + Chat (CheckMenuItemBuilder)
+- **OddEyes 메뉴**: App Settings (`Cmd+,`) / Check for Updates
+- 상세 패턴: `patterns.md` → Tauri Menu Event Bridge
 
 ### 6. Security
 

@@ -47,7 +47,7 @@ npm run test:harness      # Editor test harness (manual testing)
 
 | File | Tests |
 |------|-------|
-| `e2e/user-story.spec.ts` | 프로젝트 생성, 문서 입력, 번역/리뷰 UI 검증 (6 TC) |
+| `e2e/user-story.spec.ts` | 프로젝트 생성, 문서 입력, 번역/리뷰 UI, 히스토리, 컨텍스트 메뉴 (7 TC) |
 | `e2e/paste-normalizer.spec.ts` | HTML 붙여넣기 정규화 (Confluence, XSS, 테이블 등) |
 
 ### Test Harness
@@ -57,7 +57,7 @@ npm run test:harness      # Editor test harness (manual testing)
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (as of 2026-02-13: 28 files, 415 tests, 8 skipped)
+### Unit Test Files (as of 2026-02-14: 29 files, 428 tests, 8 skipped)
 
 | File | Tests | Description |
 |------|-------|-------------|
@@ -76,7 +76,7 @@ npm run test:harness      # Editor test harness (manual testing)
 | `src/stores/historyStore.test.ts` | 5 | History store snapshot create/list race/rename behavior |
 | `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |
 | `src/stores/reviewStore.test.ts` | 2 | ReviewPanel selector optimization |
-| `src/stores/uiStore.test.ts` | 3 | UI state management |
+| `src/stores/uiStore.test.ts` | 5 | syncChatPanels 복구 로직, toggleChatVisibility 양방향 토글 |
 | `src/utils/normalizeForSearch.test.ts` | 31 | `normalizeForSearch`, Unicode normalization |
 | `src/utils/imagePlaceholder.test.ts` | 27 | `extractImages`, `restoreImages`, token savings |
 | `src/utils/wordCounter.test.ts` | 79 | `countWords`, MS Word style word counting |
