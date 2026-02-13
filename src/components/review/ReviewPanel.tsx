@@ -557,7 +557,7 @@ export function ReviewPanel(): JSX.Element {
       </div>
 
       {/* 푸터 */}
-      <div className="px-4 py-3 border-t border-editor-border flex items-center justify-between gap-3 bg-editor-surface/50">
+      <div className="px-3 py-2 border-t border-editor-border shrink-0 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="text-xs text-editor-muted">
             {checkedIssues.length > 0 && (

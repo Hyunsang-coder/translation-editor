@@ -89,7 +89,7 @@ export function Toolbar(): JSX.Element {
   };
 
   return (
-    <header className="h-14 border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
+    <header className="h-[45px] border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
       {/* 프로젝트 정보 */}
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-editor-text">

@@ -130,6 +130,29 @@ describe('HistoryCompareModal', () => {
     );
   });
 
+  it('initialTargetSnapshotId가 전달되면 해당 스냅샷을 대상으로 초기 설정한다', async () => {
+    render(
+      <HistoryCompareModal
+        open
+        projectId="project-1"
+        snapshotId="s1"
+        snapshots={mocks.snapshots}
+        initialTargetSnapshotId="s2"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      const diff = screen.getByTestId('diff');
+      expect(diff).toHaveAttribute('data-original', 'snapshot one');
+      expect(diff).toHaveAttribute('data-suggested', 'snapshot two');
+    });
+
+    // target 드롭다운이 s2로 설정되어 있어야 함
+    const targetSelect = screen.getByLabelText('history.compareTarget') as HTMLSelectElement;
+    expect(targetSelect.value).toBe('s2');
+  });
+
   it('기본은 현재와 비교하고, 대상 스냅샷 선택 시 스냅샷끼리 비교한다', async () => {
     const user = userEvent.setup();
 

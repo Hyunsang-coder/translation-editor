@@ -20,7 +20,7 @@ interface TipTapMenuBarProps {
   panelType: 'source' | 'target';
 }
 
-const ICON_SIZE = 16;
+const ICON_SIZE = 13;
 
 /**
  * TipTap 에디터 포맷팅 메뉴바
@@ -97,7 +97,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
                     ${isActive('heading', { level }) ? 'bg-editor-bg font-medium' : ''}
                   `}
                 >
-                  <Heading size={14} />
+                  <Heading size={13} />
                   <span>{level}</span>
                 </button>
               ))}
@@ -198,7 +198,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         >
           <div className="flex items-center">
             <span className="text-xs font-medium">A</span>
-            <Minus size={12} />
+            <Minus size={10} />
           </div>
         </button>
         <span className="text-xs text-editor-muted w-7 text-center tabular-nums">{fontSize}</span>
@@ -211,7 +211,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         >
           <div className="flex items-center">
             <span className="text-xs font-medium">A</span>
-            <Plus size={12} />
+            <Plus size={10} />
           </div>
         </button>
       </div>
@@ -229,8 +229,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           aria-label="줄 높이 줄이기"
         >
           <div className="flex items-center">
-            <MoveVertical size={14} />
-            <Minus size={12} />
+            <MoveVertical size={13} />
+            <Minus size={10} />
           </div>
         </button>
         <span className="text-xs text-editor-muted w-7 text-center tabular-nums">{lineHeight.toFixed(1)}</span>
@@ -242,8 +242,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           aria-label="줄 높이 늘리기"
         >
           <div className="flex items-center">
-            <MoveVertical size={14} />
-            <Plus size={12} />
+            <MoveVertical size={13} />
+            <Plus size={10} />
           </div>
         </button>
       </div>
