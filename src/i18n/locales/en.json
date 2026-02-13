@@ -383,7 +383,11 @@
     "updateNow": "Update Now",
     "skipVersion": "Skip This Version",
     "cancel": "Cancel",
-    "downloadFailed": "Download failed. Please try again later."
+    "downloadFailed": "Download failed. Please try again later.",
+    "checkForUpdate": "Check for Updates",
+    "checking": "Checking...",
+    "upToDate": "You're up to date",
+    "checkFailed": "Update check failed"
   },
   "sidebar": {
     "openOnOtherSide": "Open on Other Side"

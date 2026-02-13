@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
+import { check } from '@tauri-apps/plugin-updater';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
@@ -43,6 +45,25 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
       setOpenaiEnabled: s.setOpenaiEnabled, setAnthropicEnabled: s.setAnthropicEnabled,
     }))
   );
+
+  // 업데이트 확인 상태
+  const [checkState, setCheckState] = useState<'idle' | 'checking' | 'latest' | 'error'>('idle');
+
+  const handleCheckForUpdate = async () => {
+    if (checkState === 'checking') return;
+    setCheckState('checking');
+    try {
+      const update = await check();
+      if (update) {
+        onClose();
+        window.dispatchEvent(new CustomEvent('app:update-found', { detail: update }));
+      } else {
+        setCheckState('latest');
+      }
+    } catch {
+      setCheckState('error');
+    }
+  };
 
   // 언어 변경 핸들러
   const handleLanguageChange = (newLanguage: 'ko' | 'en') => {
@@ -319,8 +340,40 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <span className="text-lg">ℹ️</span>
                     <h3 className="font-semibold text-editor-text">{t('appSettings.helpInfo')}</h3>
                 </div>
-                <div className="text-sm text-editor-muted pl-1 space-y-1">
-                    <p>{t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__}</p>
+                <div className="text-sm text-editor-muted pl-1 space-y-2">
+                    <div className="flex items-center gap-3">
+                        <p>{t('appSettings.helpInfoVersionLabel', 'Version')}: {__APP_VERSION__}</p>
+                        {checkState === 'idle' && (
+                            <button
+                                type="button"
+                                onClick={handleCheckForUpdate}
+                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-editor-bg border border-editor-border hover:bg-editor-border hover:text-editor-text transition-colors"
+                            >
+                                {t('update.checkForUpdate')}
+                            </button>
+                        )}
+                        {checkState === 'checking' && (
+                            <span className="text-xs text-editor-muted animate-pulse">{t('update.checking')}</span>
+                        )}
+                        {checkState === 'latest' && (
+                            <button
+                                type="button"
+                                onClick={() => setCheckState('idle')}
+                                className="text-xs text-green-600 dark:text-green-400 hover:underline cursor-pointer"
+                            >
+                                {t('update.upToDate')}
+                            </button>
+                        )}
+                        {checkState === 'error' && (
+                            <button
+                                type="button"
+                                onClick={() => setCheckState('idle')}
+                                className="text-xs text-red-500 hover:underline cursor-pointer"
+                            >
+                                {t('update.checkFailed')}
+                            </button>
+                        )}
+                    </div>
                     <p>
                       {t('appSettings.helpInfoHomepage', '홈페이지')}:{' '}
                       <button

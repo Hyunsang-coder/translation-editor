@@ -30,6 +30,7 @@ function App(): JSX.Element {
     cancelDownload,
     skipVersion,
     dismissUpdate,
+    setManualUpdate,
   } = useAutoUpdate();
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
@@ -38,6 +39,19 @@ function App(): JSX.Element {
       setShowUpdateModal(true);
     }
   }, [available, update]);
+
+  // 설정 모달에서 수동 업데이트 확인 시 custom event 수신
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setManualUpdate(detail);
+        setShowUpdateModal(true);
+      }
+    };
+    window.addEventListener('app:update-found', handler);
+    return () => window.removeEventListener('app:update-found', handler);
+  }, [setManualUpdate]);
 
   // 테마 적용 (system 모드일 때 OS 변경도 실시간 반영)
   useEffect(() => {

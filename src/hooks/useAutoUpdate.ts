@@ -132,6 +132,10 @@ export function useAutoUpdate() {
     setState(prev => ({ ...prev, available: false }));
   }, []);
 
+  const setManualUpdate = useCallback((manualUpdate: Update) => {
+    setState(prev => ({ ...prev, available: true, update: manualUpdate }));
+  }, []);
+
   // 앱 시작 시 자동 체크 (프로덕션만)
   useEffect(() => {
 if (import.meta.env.DEV) return;
@@ -150,5 +154,6 @@ if (import.meta.env.DEV) return;
     cancelDownload,
     skipVersion,
     dismissUpdate,
+    setManualUpdate,
   };
 }
