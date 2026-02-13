@@ -59,6 +59,12 @@ npm run test:tauri    # ⭐ 배포 전 전체 점검 (lint+unit+smoke+rust+relea
 - ✅ Rust Tests (`cargo test`)
 - ✅ Release Build 검증
 
+### 테스트 환경 API 키
+
+- **런타임 앱(Tauri)**: Settings에서 입력한 API 키를 secure store(OS keychain + 암호화 vault)에서 읽습니다.
+- **Vitest 테스트 실행 시에만**: `.env.local`의 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`를 fallback으로 참조할 수 있습니다.
+- Store에 키가 있으면 Store 값이 우선됩니다.
+
 ## 빌드 및 배포
 
 ```bash

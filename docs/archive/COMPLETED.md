@@ -4,12 +4,12 @@
 
 ## 요약
 
-### 1. Hybrid Panel Layout (FLOATING-CHAT-SPEC.md)
+### 1. Hybrid Panel Layout
 - **상태**: ✅ 완료
 - **내용**: Settings/Review 고정 사이드바 + 플로팅 Chat 패널
 - **주요 파일**: `SettingsSidebar.tsx`, `FloatingChatPanel.tsx`, `FloatingChatButton.tsx`
 
-### 2. Notion 연동 (notion-mcp-implementation.md)
+### 2. Notion 연동
 - **상태**: ✅ 완료
 - **내용**: Notion REST API 직접 호출 (MCP 우회)
 - **주요 파일**: `src-tauri/src/notion/`, `src/ai/tools/notionTools.ts`

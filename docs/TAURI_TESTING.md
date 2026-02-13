@@ -6,6 +6,7 @@ OddEyes는 데스크톱 앱(Tauri) 배포를 목표로 하므로, 기본 E2E 흐
 
 ```bash
 npm run test:tauri
+npm run test:ci:local
 npm run lint
 npm run test:run
 npm run test:e2e
@@ -17,6 +18,16 @@ cargo check --release --manifest-path src-tauri/Cargo.toml
 
 - `lint` + `vitest` + `Tauri smoke` + `cargo test/check`를 순차 실행합니다.
 - 릴리즈 전 기본 게이트로 사용합니다.
+
+### `npm run test:ci:local`가 하는 일
+
+- CI `verify` 게이트와 동일하게 `lint` → `test:run` → `test:e2e:web` → `cargo test`를 순차 실행합니다.
+- 로컬에서 CI 실패를 미리 재현할 때 사용합니다.
+
+## Vitest API 키 주입 정책
+
+- 테스트 실행 시에만 `.env.local`의 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`를 fallback으로 사용할 수 있습니다.
+- 런타임 앱(Tauri)에서는 fallback을 사용하지 않고, 설정 UI/secure store 키를 사용합니다.
 
 ### `npm run test:e2e`가 하는 일
 

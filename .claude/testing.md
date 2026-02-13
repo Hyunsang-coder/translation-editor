@@ -15,6 +15,12 @@ npm run test:coverage # Coverage report
 - **Config**: `vitest.config.ts`
 - **TDD Skill**: `/tdd` for Red-Green-Refactor workflow
 
+### Test Env API Key Fallback
+
+- `vitest.config.ts`가 테스트 실행 시 `.env.local`의 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`를 `test.env`로 주입합니다.
+- `getAiConfig()`는 **테스트 런타임에서만** `process.env` fallback을 허용합니다.
+- 런타임 앱(Tauri)에서는 fallback을 사용하지 않고, 설정 화면/secure store 키를 사용합니다.
+
 ## Pre-Deploy Test Gate
 
 ```bash
@@ -51,14 +57,15 @@ npm run test:harness      # Editor test harness (manual testing)
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (24 files, 391 tests, 22 skipped)
+### Unit Test Files (as of 2026-02-13: 28 files, 415 tests, 8 skipped)
 
 | File | Tests | Description |
 |------|-------|-------------|
 | `src/ai/prompt.test.ts` | 19 | `detectRequestType`, `buildBlockContextText` |
 | `src/ai/review/parseReviewResult.test.ts` | 32 | `parseReviewResult`, `deduplicateIssues` |
-| `src/ai/review/runReview.test.ts` | 11 (8 skip) | Review pipeline, chunk processing |
-| `src/ai/translateDocument.test.ts` | 28 (11 skip) | `isTimeoutError`, `isRetryableTranslationError`, `formatTranslationError` |
+| `src/ai/review/runReview.test.ts` | 11 (3 skip) | Review pipeline, chunk processing |
+| `src/ai/translateDocument.test.ts` | 28 (5 skip) | `isTimeoutError`, `isRetryableTranslationError`, `formatTranslationError` |
+| `src/ai/config.test.ts` | 3 | 테스트 환경 API 키 fallback 우선순위 검증 |
 | `src/ai/tools/buildAlignedChunks.test.ts` | 8 | `buildAlignedChunks`, `buildAlignedChunksAsync` |
 | `src/components/review/reviewApply.test.ts` | 8 | Review suggestion apply logic |
 | `src/editor/extensions/ReviewHighlight.test.ts` | 6 | ReviewHighlight decoration |
@@ -66,8 +73,8 @@ npm run test:harness      # Editor test harness (manual testing)
 | `src/stores/aiConfigStore.test.ts` | 3 | Key loading latch, concurrent call prevention |
 | `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
 | `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
-| `src/stores/historyStore.test.ts` | 3 | History store snapshot create/list race/rename behavior |
-| `src/stores/connectorStore.test.ts` | 4 | ConnectorsSection selector optimization |
+| `src/stores/historyStore.test.ts` | 5 | History store snapshot create/list race/rename behavior |
+| `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |
 | `src/stores/reviewStore.test.ts` | 2 | ReviewPanel selector optimization |
 | `src/stores/uiStore.test.ts` | 3 | UI state management |
 | `src/utils/normalizeForSearch.test.ts` | 31 | `normalizeForSearch`, Unicode normalization |

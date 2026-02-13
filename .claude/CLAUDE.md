@@ -22,6 +22,8 @@ npm run tauri:build      # Build release app
 npm run lint             # ESLint
 npm test                 # Vitest watch mode
 npm run test:run         # Single test run
+npm run test:e2e:web     # Playwright web E2E
+npm run test:ci:local    # CI verify equivalent (lint+unit+web e2e+cargo test)
 npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
 cd src-tauri && cargo test  # Rust tests only
@@ -33,7 +35,16 @@ cd src-tauri && cargo test  # Rust tests only
 # 기존 vault 호환: security find-generic-password -s "com.ite.app" -a "ite:master_key_v1" -w
 # 새 환경: 아무 문자열 가능 (SHA-256 해싱)
 echo 'ITE_DEV_MASTER_KEY=mypassword' > .env.local
+
+# (선택) 테스트(vitest)에서만 API 키 fallback 사용
+# 런타임 앱(Tauri)에서는 사용되지 않으며, 앱 설정/OS 보안저장소 키가 우선입니다.
+echo 'OPENAI_API_KEY=...' >> .env.local
+echo 'ANTHROPIC_API_KEY=...' >> .env.local
 ```
+
+주의:
+- `.env.local`은 로컬 전용 파일입니다. 실제 키를 저장소에 커밋하지 마세요.
+- 테스트가 아닌 실제 앱 실행에서는 Settings에서 입력한 API 키(secure store)가 사용됩니다.
 
 ### Key Directories
 ```

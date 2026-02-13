@@ -47,8 +47,6 @@
 | 문서 | 경로 | 설명 |
 |------|------|------|
 | 요약 | `/docs/archive/COMPLETED.md` | 완료된 스펙 요약 |
-| Floating Chat | `/docs/archive/FLOATING-CHAT-SPEC.md` | 플로팅 채팅 UI |
-| Notion 연동 | `/docs/archive/notion-mcp-implementation.md` | Notion API 연동 |
 | 검수 개선 | `/docs/archive/review_tool_improvement.md` | 번역 검수 기능 |
 | Secret Manager | `/docs/archive/secret_manager.md` | 보안 저장소 |
 | 시스템 이슈 | `/docs/archive/issues.md` | 채팅/에디터/검수/번역 연동 분석 (13개 이슈) |
