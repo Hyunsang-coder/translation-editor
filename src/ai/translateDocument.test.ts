@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ITEProject } from '@/types';
 import type { TipTapDocJson } from '@/utils/markdownConverter';
 import {
   isTimeoutError,
   isRetryableTranslationError,
   formatTranslationError,
+  translateWithStreaming,
 } from '@/ai/translateDocument';
+import { getAiConfig } from '@/ai/config';
+import { createChatModel } from '@/ai/client';
 import {
   createMockChatModel,
   createMockAiConfig,
@@ -27,6 +31,49 @@ vi.mock('@/ai/client', () => ({
  */
 
 describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAiConfig).mockReturnValue(createMockAiConfig());
+    vi.mocked(createChatModel).mockImplementation(
+      () => createMockChatModel(MOCK_TRANSLATION_RESPONSE) as never,
+    );
+  });
+
+  const mockProject: ITEProject = {
+    id: 'project-translation-test',
+    version: '1.0.0',
+    metadata: {
+      title: 'Translation Test Project',
+      domain: 'general',
+      targetLanguage: 'English',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      settings: {
+        strictnessLevel: 0.5,
+        autoSave: true,
+        autoSaveInterval: 30_000,
+        theme: 'system',
+      },
+    },
+    segments: [],
+    blocks: {},
+  };
+
+  const sourceDocJson: TipTapDocJson = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'Guía de Integración de API',
+          },
+        ],
+      },
+    ],
+  };
+
   // ===== 유틸리티 함수 테스트 (기본) =====
 
   describe('isTimeoutError', () => {
@@ -124,55 +171,40 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
   // ===== 번역 통합 테스트 (아직 구현 미완료) =====
 
   describe('translateWithStreaming - 번역 실행 (Phase 5.1)', () => {
-    // 🔴 Red: 테스트 먼저 작성 (구현 검증 필요)
-
     it('Spanish → English 번역 성공', async () => {
-      // Arrange: 테스트용 문서
-      const sourceDocJson: TipTapDocJson = {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: 'Guía de Integración de API',
-              },
-            ],
-          },
-        ],
-      };
+      const onToken = vi.fn();
 
-      // Act: 번역 실행 (Phase 5.1)
-      // const { translateWithStreaming } = await import('@/ai/translateDocument');
-      // const result = await translateWithStreaming({
-      //   project: mockProject,
-      //   sourceDocJson,
-      //   onToken,
-      // });
+      const result = await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson,
+        onToken,
+      });
 
-      // Assert: 입력값이 유효한지 확인
-      expect(sourceDocJson.type).toBe('doc');
-      expect(sourceDocJson.content).toBeDefined();
-      expect(Array.isArray(sourceDocJson.content)).toBe(true);
-
-      // TODO: 실제 번역 결과 검증
-      // expect(result).toHaveProperty('doc');
-      // expect(result.doc.type).toBe('doc');
-      // expect(result.doc.content).toBeDefined();
+      expect(result.doc.type).toBe('doc');
+      expect(result.raw).toContain('---TRANSLATION_START---');
+      expect(onToken).toHaveBeenCalled();
+      expect(vi.mocked(createChatModel)).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ useFor: 'translation' }),
+      );
     });
 
-    it.skip('번역 중 취소 (AbortSignal)', async () => {
-      // Act: 번역 시작 후 즉시 취소
-      // const abortController = new AbortController();
-      // const translatePromise = translateWithStreaming({
-      //   sourceDocJson: mockSourceDoc,
-      //   abortSignal: abortController.signal,
-      // });
-      // abortController.abort();
+    it('번역 중 취소 (AbortSignal)', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
 
-      // Assert: 취소되었는지 확인
-      // await expect(translatePromise).rejects.toThrow();
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await expect(
+        translateWithStreaming({
+          project: mockProject,
+          sourceDocJson,
+          abortSignal: abortController.signal,
+        }),
+      ).rejects.toThrow('번역이 취소되었습니다.');
+
+      expect(model.stream).not.toHaveBeenCalled();
     });
 
     it.skip('대용량 문서는 자동 청킹', async () => {
@@ -188,17 +220,20 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       // expect(result.chunkCount).toBeGreaterThan(1);
     });
 
-    it.skip('API 오류 시 에러 메시지 반환', async () => {
-      // Arrange: API 키 없음
-      // (beforeEach에서 API 설정 제거)
+    it('API 오류 시 에러 메시지 반환', async () => {
+      vi.mocked(getAiConfig).mockReturnValue({
+        ...createMockAiConfig(),
+        openaiApiKey: undefined,
+      });
 
-      // Act: 번역 실행
-      // const translatePromise = translateWithStreaming({
-      //   sourceDocJson: mockSourceDoc,
-      // });
+      await expect(
+        translateWithStreaming({
+          project: mockProject,
+          sourceDocJson,
+        }),
+      ).rejects.toThrow();
 
-      // Assert: 에러 메시지
-      // await expect(translatePromise).rejects.toThrow('API 키');
+      expect(vi.mocked(createChatModel)).not.toHaveBeenCalled();
     });
   });
 

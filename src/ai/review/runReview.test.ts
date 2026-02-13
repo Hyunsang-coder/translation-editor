@@ -1,5 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';
+import { runReview } from './runReview';
+
+const mocks = vi.hoisted(() => ({
+  createChatModel: vi.fn(),
+  stream: vi.fn(),
+}));
+
+vi.mock('@/ai/client', () => ({
+  createChatModel: mocks.createChatModel,
+}));
 
 /**
  * Phase 6: 리뷰 실행 테스트
@@ -7,6 +17,18 @@ import type { AlignedSegment } from '@/ai/tools/reviewTool';
  */
 
 describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.stream.mockImplementation(async function* () {
+      yield { content: '---REVIEW_START---\n' };
+      yield { content: 'Issues detected: 0\n' };
+      yield { content: '---REVIEW_END---' };
+    });
+    mocks.createChatModel.mockReturnValue({
+      stream: mocks.stream,
+    });
+  });
+
   // ===== 모의 데이터 =====
 
   const mockSegments: AlignedSegment[] = [
@@ -56,62 +78,58 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
   });
 
   describe('리뷰 API 호출 (Phase 6.1)', () => {
-    // 🔴 Red: API 호출 테스트 (아직 모킹 필요)
+    it('리뷰 API에 세그먼트 전달', async () => {
+      const result = await runReview({
+        segments: mockSegments,
+        translationRules: 'Keep technical terms consistent',
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
 
-    it.skip('리뷰 API에 세그먼트 전달', async () => {
-      // Arrange
-      // const mockRunReview = vi.fn().mockResolvedValue({
-      //   issues: [...]
-      // });
+      expect(result).toContain('---REVIEW_START---');
+      expect(mocks.createChatModel).toHaveBeenCalledWith(
+        undefined,
+        { useFor: 'translation', maxTokens: 4096 },
+      );
+      expect(mocks.stream).toHaveBeenCalledTimes(1);
 
-      // Act: API 호출
-      // const result = await runReview({
-      //   segments: mockSegments,
-      //   translationRules: 'Keep technical terms consistent',
-      //   sourceLanguage: 'English',
-      //   targetLanguage: 'Spanish',
-      // });
-
-      // Assert: 결과는 리뷰 이슈 배열
-      // expect(result).toContain('---REVIEW_START---');
-      // expect(mockRunReview).toHaveBeenCalledWith(
-      //   expect.objectContaining({
-      //     segments: mockSegments,
-      //   })
-      // );
+      const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      expect(messages).toHaveLength(2);
+      expect(String(messages[1]?.content)).toContain('Source (English): This guide provides detailed instructions');
+      expect(String(messages[1]?.content)).toContain('Target (Spanish): Esta guía proporciona instrucciones detalladas');
+      expect(String(messages[1]?.content)).toContain('## 번역 규칙');
     });
 
-    it.skip('여러 청크 순차 리뷰 (Phase 6.1 - Multiple chunks)', async () => {
-      // Arrange: 청크 0, 1, 2
-      // const chunk0 = [seg0, seg1];
-      // const chunk1 = [seg2, seg3];
-      // const chunk2 = [seg4];
+    it('여러 청크 순차 리뷰 (Phase 6.1 - Multiple chunks)', async () => {
+      const chunk0 = [mockSegments[0]!];
+      const chunk1 = [mockSegments[1]!];
+      const chunk2 = mockSegments;
 
-      // Act: 각 청크별 리뷰
-      // const results = [];
-      // for (const chunk of chunks) {
-      //   const result = await runReview({ segments: chunk });
-      //   results.push(result);
-      // }
+      const results = await Promise.all([
+        runReview({ segments: chunk0 }),
+        runReview({ segments: chunk1 }),
+        runReview({ segments: chunk2 }),
+      ]);
 
-      // Assert: 모든 청크 처리됨
-      // expect(results).toHaveLength(3);
-      // results.forEach((r) => expect(r).toContain('---REVIEW_START---'));
+      expect(results).toHaveLength(3);
+      results.forEach((r) => expect(r).toContain('---REVIEW_START---'));
+      expect(mocks.stream).toHaveBeenCalledTimes(3);
     });
 
-    it.skip('취소 신호(AbortSignal) 처리', async () => {
-      // Arrange
-      // const abortController = new AbortController();
+    it('취소 신호(AbortSignal) 처리', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
 
-      // Act: API 호출 중 취소
-      // const reviewPromise = runReview({
-      //   segments: mockSegments,
-      //   abortSignal: abortController.signal,
-      // });
-      // setTimeout(() => abortController.abort(), 100);
+      mocks.stream.mockImplementation(async function* () {
+        yield { content: 'partial result' };
+      });
 
-      // Assert: 취소됨
-      // await expect(reviewPromise).rejects.toThrow();
+      await expect(
+        runReview({
+          segments: mockSegments,
+          abortSignal: abortController.signal,
+        }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
     });
   });
 
