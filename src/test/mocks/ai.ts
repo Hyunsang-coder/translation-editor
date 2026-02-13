@@ -79,9 +79,8 @@ export function createMockAiConfig() {
     provider: 'openai' as const,
     model: 'gpt-4o',
     openaiApiKey: 'sk-test-key-123',
-    anthropicApiKey: undefined,
     temperature: 0.7,
-    maxTokens: 4000,
+    maxRecentMessages: 20,
   };
 }
 

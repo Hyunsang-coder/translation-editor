@@ -240,10 +240,8 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     });
 
     it('API 오류 시 에러 메시지 반환', async () => {
-      vi.mocked(getAiConfig).mockReturnValue({
-        ...createMockAiConfig(),
-        openaiApiKey: undefined,
-      });
+      const { openaiApiKey: _, ...configWithoutKey } = createMockAiConfig();
+      vi.mocked(getAiConfig).mockReturnValue(configWithoutKey);
 
       await expect(
         translateWithStreaming({
@@ -269,7 +267,8 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(isValidTipTapDocJson(result.doc)).toBe(true);
       expect(result.doc.type).toBe('doc');
 
-      const lastStreamText = String(onToken.mock.calls.at(-1)?.[0] ?? '');
+      const calls = onToken.mock.calls;
+      const lastStreamText = String(calls[calls.length - 1]?.[0] ?? '');
       expect(lastStreamText).toContain('API Integration Guide');
       expect(lastStreamText).not.toContain('---TRANSLATION_START---');
       expect(lastStreamText).not.toContain('---TRANSLATION_END---');
