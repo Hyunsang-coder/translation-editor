@@ -3,7 +3,7 @@ import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
-import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
+import { suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
@@ -594,7 +594,7 @@ interface BuildToolSpecsResult {
 }
 
 async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpecsResult> {
-  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext];
+  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona];
 
   // 문서 도구
   if (input.includeSource) toolSpecs.push(getSourceDocumentTool);
@@ -672,6 +672,9 @@ function buildToolGuideMessage(params: {
   }
   if (has('suggest_project_context')) {
     toolGuide.push('- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)');
+  }
+  if (has('suggest_translator_persona')) {
+    toolGuide.push('- suggest_translator_persona: Translator Persona 저장 제안 생성(번역가 정체성/전문분야/톤)');
   }
 
   // 웹 검색
@@ -753,6 +756,14 @@ function buildToolGuideMessage(params: {
     toolGuide.push(`${priority}. 프로젝트 배경지식/맥락 정보 발견`);
     toolGuide.push('   → suggest_project_context');
     toolGuide.push('   → 응답: "[Add to Context] 버튼을 눌러 추가하세요"');
+    toolGuide.push('');
+    priority++;
+  }
+
+  if (has('suggest_translator_persona')) {
+    toolGuide.push(`${priority}. 번역가 정체성/전문분야/톤/스타일 발견`);
+    toolGuide.push('   → suggest_translator_persona');
+    toolGuide.push('   → 응답: "[Add to Persona] 버튼을 눌러 추가하세요"');
   }
 
   return new SystemMessage(toolGuide.join('\n'));

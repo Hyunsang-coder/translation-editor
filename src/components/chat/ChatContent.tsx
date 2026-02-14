@@ -114,6 +114,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage,
     appendToTranslationRules,
     appendToProjectContext,
+    appendToTranslatorPersona,
   } = useChatMessageActions();
   const {
     shouldShow: shouldShowSummarySuggestion,
@@ -275,6 +276,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const handleAppendToContext = useCallback((content: string) => {
     appendToProjectContext(content);
   }, [appendToProjectContext]);
+
+  const handleAppendToPersona = useCallback((content: string) => {
+    appendToTranslatorPersona(content);
+  }, [appendToTranslatorPersona]);
 
   const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
     updateMessage(messageId, { metadata }, sessionId);
@@ -439,6 +444,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             onDelete={handleDeleteMessage}
             onAppendToRules={handleAppendToRules}
             onAppendToContext={handleAppendToContext}
+            onAppendToPersona={handleAppendToPersona}
             onUpdateMessageMetadata={handleUpdateMessageMetadata}
           />
         ))}

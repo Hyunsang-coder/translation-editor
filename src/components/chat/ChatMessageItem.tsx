@@ -28,6 +28,7 @@ interface ChatMessageItemProps {
   onDelete: (messageId: string) => void;
   onAppendToRules: (content: string) => void;
   onAppendToContext: (content: string) => void;
+  onAppendToPersona: (content: string) => void;
   onUpdateMessageMetadata: (messageId: string, metadata: Partial<ChatMessageMetadata>) => void;
 }
 
@@ -46,6 +47,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   onDelete,
   onAppendToRules,
   onAppendToContext,
+  onAppendToPersona,
   onUpdateMessageMetadata,
 }: ChatMessageItemProps) {
   const { t } = useTranslation();
@@ -120,6 +122,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           return '규칙 제안';
         case 'suggest_project_context':
           return '컨텍스트 제안';
+        case 'suggest_translator_persona':
+          return '페르소나 제안';
         default:
           return t;
       }
@@ -153,6 +157,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           return '규칙 제안';
         case 'suggest_project_context':
           return '컨텍스트 제안';
+        case 'suggest_translator_persona':
+          return '페르소나 제안';
         default:
           return t;
       }
@@ -180,6 +186,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         : toolName === 'get_target_document' ? '번역문 분석'
         : toolName === 'suggest_translation_rule' ? '번역 규칙 확인'
         : toolName === 'suggest_project_context' ? '프로젝트 맥락 확인'
+        : toolName === 'suggest_translator_persona' ? '페르소나 확인'
         : toolName;
       statusText = `${name} 진행 중...`;
     }
@@ -425,6 +432,36 @@ export const ChatMessageItem = memo(function ChatMessageItem({
               </button>
             </div>
           )}
+
+          {/* Suggested Persona 카드 */}
+          {message.metadata?.suggestedPersona && !message.metadata.personaAdded && (
+            <div className="mt-2">
+              <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-1 h-3 bg-primary-500 rounded-full" />
+                  <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
+                    Suggested Persona
+                  </span>
+                </div>
+                <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
+                  {message.metadata.suggestedPersona}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
+                onClick={() => {
+                  if (message.metadata?.suggestedPersona) {
+                    onAppendToPersona(message.metadata.suggestedPersona);
+                    onUpdateMessageMetadata(message.id, { personaAdded: true });
+                  }
+                }}
+                title={t('chat.addToPersona')}
+              >
+                Add to Persona
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -445,7 +482,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prev.message.metadata?.toolsUsed !== next.message.metadata?.toolsUsed) return false;
   if (prev.message.metadata?.suggestedRule !== next.message.metadata?.suggestedRule) return false;
   if (prev.message.metadata?.suggestedContext !== next.message.metadata?.suggestedContext) return false;
+  if (prev.message.metadata?.suggestedPersona !== next.message.metadata?.suggestedPersona) return false;
   if (prev.message.metadata?.rulesAdded !== next.message.metadata?.rulesAdded) return false;
   if (prev.message.metadata?.contextAdded !== next.message.metadata?.contextAdded) return false;
+  if (prev.message.metadata?.personaAdded !== next.message.metadata?.personaAdded) return false;
   return true;
 });

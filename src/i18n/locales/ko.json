@@ -339,6 +339,7 @@
     "deleteAfterEdit": "삭제 (이후 대화는 삭제됩니다)",
     "addToRules": "이 내용을 번역 규칙에 추가",
     "addToContext": "이 내용을 프로젝트 컨텍스트에 추가",
+    "addToPersona": "이 내용을 번역가 페르소나에 추가",
     "composerPlaceholder": "무엇이든 물어보세요 :)",
     "composerAttach": "첨부/옵션",
     "composerAttachAriaLabel": "첨부/옵션",

@@ -76,6 +76,22 @@ export function createSettingsActions(
     schedulePersist();
   };
 
+  const appendToTranslatorPersona = (snippet: string): void => {
+    const incoming = snippet.trim();
+    if (!incoming) return;
+    // 세미콜론 구분자를 불릿 포인트로 변환
+    const formatted = incoming
+      .split(';')
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((r) => `- ${r}`)
+      .join('\n');
+    const current = get().translatorPersona.trim();
+    const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
+    set({ translatorPersona: next });
+    schedulePersist();
+  };
+
   const setTranslationRules = (rules: string): void => {
     set({ translationRules: rules });
     schedulePersist();
@@ -146,6 +162,7 @@ export function createSettingsActions(
 
   return {
     setTranslatorPersona,
+    appendToTranslatorPersona,
     setTranslationRules,
     appendToTranslationRules,
     setProjectContext,
