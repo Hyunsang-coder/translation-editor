@@ -53,7 +53,10 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         .await
         .ok_or("Atlassian OAuth 토큰이 없습니다. Confluence에 먼저 연결해주세요.")?;
 
-    println!("[Confluence REST] Got OAuth token (length: {})", access_token.len());
+    println!(
+        "[Confluence REST] Got OAuth token (length: {})",
+        access_token.len()
+    );
 
     // 2. cloudId 가져오기 (accessible resources에서)
     let cloud_id = match get_cloud_id(&access_token).await {
@@ -90,10 +93,7 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         println!("[Confluence REST] Error response: {}", body);
-        return Err(format!(
-            "Confluence API 오류 ({}): {}",
-            status, body
-        ));
+        return Err(format!("Confluence API 오류 ({}): {}", status, body));
     }
 
     let api_response: ConfluenceApiPageResponse = response
@@ -107,7 +107,11 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         .map(|s| s.value)
         .unwrap_or_default();
 
-    println!("[Confluence REST] Success! Title: {}, Body length: {}", api_response.title, body.len());
+    println!(
+        "[Confluence REST] Success! Title: {}, Body length: {}",
+        api_response.title,
+        body.len()
+    );
 
     Ok(ConfluencePageContent {
         page_id: api_response.id,
@@ -132,10 +136,7 @@ async fn get_cloud_id(access_token: &str) -> Result<String, String> {
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!(
-            "Accessible resources 오류 ({}): {}",
-            status, body
-        ));
+        return Err(format!("Accessible resources 오류 ({}): {}", status, body));
     }
 
     let resources: Vec<AccessibleResource> = response

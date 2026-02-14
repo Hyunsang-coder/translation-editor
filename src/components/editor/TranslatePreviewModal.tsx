@@ -360,6 +360,7 @@ export function TranslatePreviewModal(props: {
               onClick={handleApply}
               disabled={isLoading || !docJson || isApplying}
               title={t('common.apply')}
+              data-testid="translate-preview-apply-button"
             >
               {isApplying ? (
                 <>

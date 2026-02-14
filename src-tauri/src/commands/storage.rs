@@ -4,11 +4,11 @@
 
 use serde::Deserialize;
 use serde::Serialize;
-use tauri::{State, AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use super::AcquireDb;
 use crate::utils::validate_path;
 
 #[derive(Debug, Deserialize)]
@@ -53,7 +53,8 @@ pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> Comm
 
     let db = db_state.acquire()?;
 
-    db.export_db_to_file(&out_path).map_err(CommandError::from)?;
+    db.export_db_to_file(&out_path)
+        .map_err(CommandError::from)?;
     Ok(())
 }
 
@@ -62,7 +63,8 @@ pub fn export_project_file(args: ExportDbArgs, db_state: State<DbState>) -> Comm
 pub fn delete_project(args: DeleteProjectArgs, db_state: State<DbState>) -> CommandResult<()> {
     let db = db_state.acquire()?;
 
-    db.delete_project(&args.project_id).map_err(CommandError::from)?;
+    db.delete_project(&args.project_id)
+        .map_err(CommandError::from)?;
     Ok(())
 }
 
@@ -78,13 +80,17 @@ pub fn delete_all_projects(db_state: State<DbState>) -> CommandResult<()> {
 /// .ite 파일을 현재 DB로 가져오기(현재 DB 내용을 덮어씀)
 /// 가져온 뒤, DB 안에 있는 projectId 리스트를 반환합니다.
 #[tauri::command]
-pub fn import_project_file(args: ImportDbArgs, db_state: State<DbState>) -> CommandResult<Vec<String>> {
+pub fn import_project_file(
+    args: ImportDbArgs,
+    db_state: State<DbState>,
+) -> CommandResult<Vec<String>> {
     // utils::validate_path (Blocklist 적용)
     let in_path = validate_path(&args.path)?;
 
     let mut db = db_state.acquire()?;
 
-    db.import_db_from_file(&in_path).map_err(CommandError::from)?;
+    db.import_db_from_file(&in_path)
+        .map_err(CommandError::from)?;
     db.initialize().map_err(CommandError::from)?;
     db.list_project_ids().map_err(CommandError::from)
 }
@@ -117,10 +123,12 @@ pub fn import_project_file_safe(
     let mut db = db_state.acquire()?;
 
     // backup current DB
-    db.export_db_to_file(&backup_path).map_err(CommandError::from)?;
+    db.export_db_to_file(&backup_path)
+        .map_err(CommandError::from)?;
 
     // import selected .ite into current DB
-    db.import_db_from_file(&in_path).map_err(CommandError::from)?;
+    db.import_db_from_file(&in_path)
+        .map_err(CommandError::from)?;
     db.initialize().map_err(CommandError::from)?;
 
     let project_ids = db.list_project_ids().map_err(CommandError::from)?;

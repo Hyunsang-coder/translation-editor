@@ -12,16 +12,94 @@ pub mod notion;
 pub mod secrets;
 pub mod utils;
 
+use crate::secrets::SECRETS;
 use std::path::{Path, PathBuf};
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct ApiKeysBundle {
+    openai: Option<String>,
+    anthropic: Option<String>,
+}
+
+fn get_non_empty_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+async fn seed_api_keys_bundle_from_env_if_missing() {
+    // Production에서는 env 주입 동작을 기본적으로 건너뜁니다.
+    let should_seed = cfg!(debug_assertions)
+        || std::env::var("TAURI_TESTING_ENABLED").ok().as_deref() == Some("1");
+    if !should_seed {
+        return;
+    }
+
+    let env_openai = get_non_empty_env("OPENAI_API_KEY");
+    let env_anthropic = get_non_empty_env("ANTHROPIC_API_KEY");
+    if env_openai.is_none() && env_anthropic.is_none() {
+        return;
+    }
+
+    let existing_bundle_json = match SECRETS.get("ai/api_keys_bundle").await {
+        Ok(v) => v,
+        Err(err) => {
+            eprintln!(
+                "[startup] Failed to read ai/api_keys_bundle from vault: {}",
+                err
+            );
+            return;
+        }
+    };
+
+    let mut bundle = existing_bundle_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<ApiKeysBundle>(json).ok())
+        .unwrap_or_default();
+
+    let mut changed = false;
+    if bundle.openai.as_deref().map_or(true, str::is_empty) {
+        if let Some(v) = env_openai {
+            bundle.openai = Some(v);
+            changed = true;
+        }
+    }
+    if bundle.anthropic.as_deref().map_or(true, str::is_empty) {
+        if let Some(v) = env_anthropic {
+            bundle.anthropic = Some(v);
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return;
+    }
+
+    match serde_json::to_string(&bundle) {
+        Ok(json) => {
+            if let Err(err) = SECRETS.set("ai/api_keys_bundle", &json).await {
+                eprintln!(
+                    "[startup] Failed to seed ai/api_keys_bundle from env: {}",
+                    err
+                );
+            }
+        }
+        Err(err) => {
+            eprintln!("[startup] Failed to serialize api_keys_bundle: {}", err);
+        }
+    }
+}
 
 fn is_valid_env_key(key: &str) -> bool {
     if key.is_empty() {
         return false;
     }
     // 관례적으로 ENV 키는 A-Z0-9_ 로 제한 (VITE_*, BRAVE_* 등)
-    key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    key.chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn try_load_env_lenient(path: &Path) -> std::io::Result<usize> {
@@ -57,7 +135,9 @@ fn try_load_env_lenient(path: &Path) -> std::io::Result<usize> {
 
         let mut value = v.trim().to_string();
         // 간단한 quote 제거 ("..." / '...')
-        if (value.starts_with('"') && value.ends_with('"')) || (value.starts_with('\'') && value.ends_with('\'')) {
+        if (value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\''))
+        {
             value = value[1..value.len().saturating_sub(1)].to_string();
         }
 
@@ -186,6 +266,7 @@ pub fn run() {
             // 동기 실행: 프론트엔드의 initializeSecrets()보다 먼저 완료되어야 함
             tauri::async_runtime::block_on(async {
                 secrets::SECRETS.set_app_data_dir(app_data_dir.clone()).await;
+                seed_api_keys_bundle_from_env_if_missing().await;
             });
 
             // MCP 모듈에 AppHandle 설정 (상태 변경 이벤트 발송용)

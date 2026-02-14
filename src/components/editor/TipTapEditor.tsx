@@ -204,7 +204,7 @@ function TipTapEditor({
   }
 
   return (
-    <div className={`tiptap-wrapper ${panelType}-editor ${className}`}>
+    <div className={`tiptap-wrapper ${panelType}-editor ${className}`} data-testid={`${panelType}-editor`}>
       <EditorContent editor={editor} className="h-full" />
     </div>
   );

@@ -85,6 +85,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
           <button 
             onClick={onClose}
             className="p-2 rounded-md hover:bg-editor-border text-editor-muted hover:text-editor-text transition-colors"
+            data-testid="app-settings-close-button"
           >
             ✕
           </button>

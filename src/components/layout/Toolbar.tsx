@@ -94,6 +94,7 @@ export function Toolbar(): JSX.Element {
               ${dropdownOpen ? 'bg-editor-border' : ''}
             `}
             title={t('toolbar.tools')}
+            data-testid="toolbar-tools-button"
           >
             <img src="/app-icon-64.png" alt="" className="w-6 h-6" />
             <span className="text-xs text-editor-muted">▼</span>
@@ -106,6 +107,7 @@ export function Toolbar(): JSX.Element {
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleChat}
                 aria-pressed={isAnyChatVisible}
+                data-testid="toolbar-menu-chat"
               >
                 <MessageSquare size={16} />
                 <span>{t('toolbar.aiChat')}</span>
@@ -115,6 +117,7 @@ export function Toolbar(): JSX.Element {
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleReview}
+                data-testid="toolbar-menu-review"
               >
                 <Search size={16} />
                 <span>{t('toolbar.review')}</span>
@@ -134,6 +137,7 @@ export function Toolbar(): JSX.Element {
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleProjectSettings}
+                data-testid="toolbar-menu-settings"
               >
                 <Settings size={16} />
                 <span>{t('toolbar.projectSettings')}</span>

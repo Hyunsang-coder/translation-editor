@@ -19,7 +19,7 @@ pub use client::{McpClient, MCP_CLIENT};
 pub use notion_client::{NotionMcpClient, NOTION_MCP_CLIENT};
 pub use notion_oauth::NotionOAuth;
 pub use oauth::AtlassianOAuth;
-pub use registry::{McpRegistry, McpServerId, McpServerInfo, McpRegistryStatus};
+pub use registry::{McpRegistry, McpRegistryStatus, McpServerId, McpServerInfo};
 pub use types::*;
 
 use once_cell::sync::OnceCell;
@@ -39,4 +39,3 @@ pub fn emit_mcp_status_changed(status: &McpConnectionStatus) {
         let _ = app.emit("mcp-status-changed", status);
     }
 }
-

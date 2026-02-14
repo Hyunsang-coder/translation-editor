@@ -30,6 +30,7 @@ export interface SelectProps {
   size?: 'sm' | 'md';
   /** 드롭다운 열림 방향: 'bottom' (기본) 또는 'top' */
   anchor?: 'bottom' | 'top';
+  'data-testid'?: string;
 }
 
 function isOptionGroup(item: SelectOption | SelectOptionGroup): item is SelectOptionGroup {
@@ -53,6 +54,7 @@ export function Select({
   title,
   size = 'md',
   anchor: anchorPosition = 'bottom',
+  'data-testid': dataTestId,
 }: SelectProps): JSX.Element {
   // 현재 선택된 옵션의 label 찾기
   const getSelectedLabel = (): string => {
@@ -88,6 +90,7 @@ export function Select({
                      hover:bg-editor-surface transition-colors`}
           aria-label={ariaLabel}
           title={title}
+          data-testid={dataTestId}
         >
           <span className="truncate">{getSelectedLabel()}</span>
           <svg

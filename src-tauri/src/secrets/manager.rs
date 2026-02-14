@@ -136,11 +136,13 @@ impl SecretManager {
 
     /// 일반 문자열을 SHA-256 해싱하여 마스터키 생성
     fn hash_to_master_key(passphrase: &str) -> [u8; MASTER_KEY_LEN] {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let hash = Sha256::digest(passphrase.as_bytes());
         let mut key = [0u8; MASTER_KEY_LEN];
         key.copy_from_slice(&hash[..MASTER_KEY_LEN]);
-        println!("[SecretManager] Using hashed master key from ITE_DEV_MASTER_KEY (keychain bypassed)");
+        println!(
+            "[SecretManager] Using hashed master key from ITE_DEV_MASTER_KEY (keychain bypassed)"
+        );
         key
     }
 
@@ -170,7 +172,8 @@ impl SecretManager {
                         return Err(SecretManagerError::PreviousInitFailed(
                             "Timeout waiting for initialization (60s). \
                             This may happen if Keychain prompt was not answered. \
-                            Retrying...".to_string(),
+                            Retrying..."
+                                .to_string(),
                         ));
                     }
                     tokio::time::sleep(tokio::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
@@ -219,9 +222,7 @@ impl SecretManager {
             }
         };
 
-        *self.master_key.write().await = Some(MasterKey {
-            bytes: master_key,
-        });
+        *self.master_key.write().await = Some(MasterKey { bytes: master_key });
 
         // 2. Vault 파일 로드 (있으면)
         let app_data_dir = self.app_data_dir.read().await.clone();
@@ -317,10 +318,7 @@ impl SecretManager {
     }
 
     /// 여러 시크릿 저장
-    pub async fn set_many(
-        &self,
-        entries: Vec<(String, String)>,
-    ) -> Result<(), SecretManagerError> {
+    pub async fn set_many(&self, entries: Vec<(String, String)>) -> Result<(), SecretManagerError> {
         self.ensure_initialized().await?;
 
         // 캐시 업데이트
@@ -375,7 +373,10 @@ impl SecretManager {
     }
 
     /// 특정 prefix로 시작하는 모든 키 조회
-    pub async fn list_keys_by_prefix(&self, prefix: &str) -> Result<Vec<String>, SecretManagerError> {
+    pub async fn list_keys_by_prefix(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<String>, SecretManagerError> {
         self.ensure_initialized().await?;
         let cache = self.cache.read().await;
         Ok(cache
@@ -484,7 +485,10 @@ impl SecretManager {
             Ok(value) => Some(value),
             Err(keyring::Error::NoEntry) => None,
             Err(e) => {
-                eprintln!("[SecretManager] Legacy keychain read error for {}: {}", key, e);
+                eprintln!(
+                    "[SecretManager] Legacy keychain read error for {}: {}",
+                    key, e
+                );
                 None
             }
         }
@@ -498,7 +502,7 @@ impl SecretManager {
     }
 
     /// 기존 Keychain 엔트리들을 Vault로 마이그레이션
-    /// 
+    ///
     /// 알려진 키 목록:
     /// - `ai:api_keys_bundle` → `ai/api_keys_bundle`
     /// - `mcp:oauth_token` → `mcp/atlassian/oauth_token_json`
@@ -506,7 +510,9 @@ impl SecretManager {
     /// - `notion:integration_token` → `notion/integration_token`
     /// - `mcp:notion_config` → `mcp/notion/config_json`
     /// - `connector:*` → `connector/*/token_json`
-    pub async fn migrate_from_legacy_keychain(&self) -> Result<MigrationResult, SecretManagerError> {
+    pub async fn migrate_from_legacy_keychain(
+        &self,
+    ) -> Result<MigrationResult, SecretManagerError> {
         self.ensure_initialized().await?;
 
         let mut migrated = 0;
@@ -555,7 +561,7 @@ impl SecretManager {
         for connector_id in known_connector_ids {
             let old_key = format!("connector:{}", connector_id);
             let new_key = format!("connector/{}/token_json", connector_id);
-            
+
             if let Some(value) = Self::read_legacy_keychain(&old_key) {
                 match self.set(&new_key, &value).await {
                     Ok(_) => {

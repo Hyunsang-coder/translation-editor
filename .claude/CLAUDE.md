@@ -26,6 +26,8 @@ npm run test:e2e:web     # Playwright web E2E
 npm run test:ci:local    # CI verify equivalent (lint+unit+web e2e+cargo test)
 npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
+npm run tauri-testing-mcp:build  # Build MCP bridge server
+npm run tauri-testing-mcp:start  # Start MCP bridge server (stdio)
 cd src-tauri && cargo test  # Rust tests only
 ```
 
@@ -54,6 +56,8 @@ src/stores/       # Zustand stores (chatStore: 7 슬라이스)
 src/components/   # React components
 src/components/history/  # History snapshot UI (timeline/compare/restore/rename)
 src-tauri/src/    # Rust backend (commands/, mcp/)
+crates/tauri-plugin-testing/  # Tauri runtime testing bridge plugin
+tauri-testing-mcp/            # MCP server for runtime control tools
 ```
 
 ### Version Files (Keep in Sync)
@@ -85,6 +89,19 @@ This `.claude/` directory contains:
 - **tsconfig ES2022**: `lib: ES2020 → ES2022` 업그레이드 (`Array.at()`, `Object.hasOwn()` 등 사용 가능).
 - **E2E 테스트 확장**: `user-story.spec.ts` Phase 9 (프로젝트 Duplicate) 추가 (6→7 TC).
 - **Manual update check**: AppSettingsModal Help & Info 섹션에 "업데이트 확인" 버튼 추가. `check()` 직접 호출 → custom event(`app:update-found`)로 기존 UpdateModal 재사용.
+- **Tauri Testing Bridge 보강**: `tauri-plugin-testing` + `tauri-testing-mcp` 연동 강화.
+  - DOM 메서드 허용 목록 확장 (`clickByText`, `fillByPlaceholder`, `typeContentEditable`, `typeContentEditableBySelector`, `waitForText`)
+  - dialog 제어 메서드 추가 (`dialog.getState`, `dialog.setAutoResponse`, `dialog.pushResponse`, `dialog.clear`)
+  - 브리지 클릭/입력/대기 안정화(가시성/disable/scroll/focus 체크, MutationObserver 기반 대기)
+- **Workflow MCP 시나리오 고정**: `scripts/tauri-testing-mcp-workflow.mjs`
+  - 원문 입력: 5줄 계층형 bullet(`-`) 한국어
+  - 번역 타깃 언어: 영어 강제 선택(실패 시 테스트 실패)
+  - 채팅 질문: `번여문 내용 간략히 요약해줘` 전송 후 assistant 응답 생성 확인
+
+### Tauri Testing Bridge Notes
+- 이 브리지는 **Playwright 전체 엔진 대체가 아니라**, Tauri 런타임 내부 제어를 위한 RPC 레이어입니다.
+- Native dialog는 DOM에 나타나지 않을 수 있으므로 `dialog.*` 도구를 먼저 사용해 응답 정책을 설정하세요.
+- WebSocket 서버는 localhost 단일 클라이언트 + 토큰 인증 방식입니다.
 
 ## Adding New Features
 

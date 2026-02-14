@@ -27,7 +27,11 @@ pub enum McpContent {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "image")]
-    Image { data: String, #[serde(rename = "mimeType")] mime_type: String },
+    Image {
+        data: String,
+        #[serde(rename = "mimeType")]
+        mime_type: String,
+    },
     #[serde(rename = "resource")]
     Resource { resource: McpResourceContent },
 }
@@ -52,7 +56,11 @@ pub struct JsonRpcRequest {
 }
 
 impl JsonRpcRequest {
-    pub fn new(id: impl Into<serde_json::Value>, method: &str, params: Option<serde_json::Value>) -> Self {
+    pub fn new(
+        id: impl Into<serde_json::Value>,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id: id.into(),
@@ -201,4 +209,3 @@ pub enum SseMessage {
     /// 오류
     Error(String),
 }
-

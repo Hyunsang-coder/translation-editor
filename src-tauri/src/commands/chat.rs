@@ -5,9 +5,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult, IteError};
-use super::AcquireDb;
 use crate::models::ChatSession;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +121,8 @@ pub fn save_chat_project_settings(
     let db = db_state.acquire()?;
 
     let now = chrono::Utc::now().timestamp_millis();
-    let json = serde_json::to_string(&args.settings).map_err(|e| CommandError::from(IteError::from(e)))?;
+    let json =
+        serde_json::to_string(&args.settings).map_err(|e| CommandError::from(IteError::from(e)))?;
     db.save_chat_project_settings(&args.project_id, &json, now)
         .map_err(CommandError::from)?;
     Ok(())
@@ -146,5 +147,3 @@ pub fn load_chat_project_settings(
         Ok(None)
     }
 }
-
-

@@ -92,6 +92,7 @@ export function ChatComposerEditor({
     editorProps: {
       attributes: {
         class: 'chat-composer-tiptap focus:outline-none',
+        'data-testid': 'chat-composer-editor',
       },
       handleKeyDown: (_view, event) => {
         // Enter 키 처리

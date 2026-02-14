@@ -1,12 +1,12 @@
 use serde::Deserialize;
+use std::fs;
+use std::path::Path;
 use tauri::State;
 use uuid::Uuid;
-use std::path::Path;
-use std::fs;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use super::AcquireDb;
 use crate::models::{Attachment, AttachmentDto};
 use crate::utils::validate_path;
 
@@ -65,12 +65,14 @@ pub async fn attach_file(
     // 파일 크기 검증 (100MB 제한)
     let file_size = validate_file_size(&path, MAX_ATTACHMENT_SIZE)? as i64;
 
-    let filename = path.file_name()
+    let filename = path
+        .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown")
         .to_string();
 
-    let extension = path.extension()
+    let extension = path
+        .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
@@ -103,7 +105,8 @@ pub async fn attach_file(
 
     let db = db_state.acquire()?;
 
-    db.save_attachment(&attachment).map_err(CommandError::from)?;
+    db.save_attachment(&attachment)
+        .map_err(CommandError::from)?;
 
     Ok(AttachmentDto {
         id: attachment.id,
@@ -192,25 +195,27 @@ pub fn list_attachments(
 ) -> CommandResult<Vec<AttachmentDto>> {
     let db = db_state.acquire()?;
 
-    let attachments = db.list_attachments(&project_id).map_err(CommandError::from)?;
-    
-    Ok(attachments.into_iter().map(|a| AttachmentDto {
-        id: a.id,
-        filename: a.filename,
-        file_type: a.file_type,
-        file_size: a.file_size,
-        extracted_text: a.extracted_text,
-        file_path: a.file_path,
-        created_at: a.created_at,
-        updated_at: a.updated_at,
-    }).collect())
+    let attachments = db
+        .list_attachments(&project_id)
+        .map_err(CommandError::from)?;
+
+    Ok(attachments
+        .into_iter()
+        .map(|a| AttachmentDto {
+            id: a.id,
+            filename: a.filename,
+            file_type: a.file_type,
+            file_size: a.file_size,
+            extracted_text: a.extracted_text,
+            file_path: a.file_path,
+            created_at: a.created_at,
+            updated_at: a.updated_at,
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub fn delete_attachment(
-    id: String,
-    db_state: State<'_, DbState>,
-) -> CommandResult<()> {
+pub fn delete_attachment(id: String, db_state: State<'_, DbState>) -> CommandResult<()> {
     let db = db_state.acquire()?;
 
     db.delete_attachment(&id).map_err(CommandError::from)?;
@@ -219,18 +224,14 @@ pub fn delete_attachment(
 
 fn extract_file_text(path: &Path, extension: &str) -> Result<String, String> {
     match extension {
-        "md" | "txt" => {
-            fs::read_to_string(path).map_err(|e| e.to_string())
-        },
+        "md" | "txt" => fs::read_to_string(path).map_err(|e| e.to_string()),
         // 이미지 파일은 텍스트 추출 대신 "첨부 허용"만 하고, 멀티모달(vision) 입력은 프론트에서 처리합니다.
         "png" | "jpg" | "jpeg" | "webp" | "gif" => Ok(String::new()),
-        "pdf" => {
-            pdf_extract::extract_text(path).map_err(|e| e.to_string())
-        },
+        "pdf" => pdf_extract::extract_text(path).map_err(|e| e.to_string()),
         "docx" => {
             let buf = fs::read(path).map_err(|e| e.to_string())?;
             let docx = docx_rs::read_docx(&buf).map_err(|e| e.to_string())?;
-            
+
             let mut text = String::new();
             for child in docx.document.children {
                 match child {
@@ -245,23 +246,21 @@ fn extract_file_text(path: &Path, extension: &str) -> Result<String, String> {
                             }
                         }
                         text.push('\n');
-                    },
+                    }
                     _ => {}
                 }
             }
             Ok(text)
-        },
-        "pptx" => {
-            extract_pptx_text(path)
-        },
+        }
+        "pptx" => extract_pptx_text(path),
         _ => Err(format!("Unsupported file type: {}", extension)),
     }
 }
 
 fn extract_pptx_text(path: &Path) -> Result<String, String> {
-    use std::io::Read;
-    use quick_xml::reader::Reader;
     use quick_xml::events::Event;
+    use quick_xml::reader::Reader;
+    use std::io::Read;
 
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -278,7 +277,9 @@ fn extract_pptx_text(path: &Path) -> Result<String, String> {
         };
 
         let mut content = String::new();
-        slide_file.read_to_string(&mut content).map_err(|e| e.to_string())?;
+        slide_file
+            .read_to_string(&mut content)
+            .map_err(|e| e.to_string())?;
 
         let mut reader = Reader::from_str(&content);
         let mut buf = Vec::new();
@@ -298,7 +299,11 @@ fn extract_pptx_text(path: &Path) -> Result<String, String> {
         }
 
         if !slide_text.trim().is_empty() {
-            all_text.push_str(&format!("[Slide {}]\n{}\n\n", slide_index, slide_text.trim()));
+            all_text.push_str(&format!(
+                "[Slide {}]\n{}\n\n",
+                slide_index,
+                slide_text.trim()
+            ));
         }
 
         slide_index += 1;

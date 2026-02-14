@@ -7,11 +7,13 @@ mod schema;
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
 use rusqlite::backup::Backup;
+use rusqlite::Connection;
 
 use crate::error::IteError;
-use crate::models::{ChatSession, EditorBlock, HistorySnapshot, HistorySnapshotMeta, IteProject, SegmentGroup};
+use crate::models::{
+    ChatSession, EditorBlock, HistorySnapshot, HistorySnapshotMeta, IteProject, SegmentGroup,
+};
 
 #[derive(Debug, Clone)]
 pub struct GlossaryEntryRow {
@@ -146,14 +148,20 @@ impl Database {
             "DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE project_id = ?1)",
             [project_id],
         )?;
-        tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
+        tx.execute(
+            "DELETE FROM chat_sessions WHERE project_id = ?1",
+            [project_id],
+        )?;
         tx.execute(
             "DELETE FROM chat_project_settings WHERE project_id = ?1",
             [project_id],
         )?;
 
         tx.execute("DELETE FROM history WHERE project_id = ?1", [project_id])?;
-        tx.execute("DELETE FROM glossary_entries WHERE project_id = ?1", [project_id])?;
+        tx.execute(
+            "DELETE FROM glossary_entries WHERE project_id = ?1",
+            [project_id],
+        )?;
         tx.execute("DELETE FROM segments WHERE project_id = ?1", [project_id])?;
         tx.execute("DELETE FROM blocks WHERE project_id = ?1", [project_id])?;
         tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
@@ -171,7 +179,10 @@ impl Database {
         tx.execute("DELETE FROM chat_sessions", [])?;
         tx.execute("DELETE FROM chat_project_settings", [])?;
         tx.execute("DELETE FROM history", [])?;
-        tx.execute("DELETE FROM glossary_entries WHERE project_id IS NOT NULL", [])?;
+        tx.execute(
+            "DELETE FROM glossary_entries WHERE project_id IS NOT NULL",
+            [],
+        )?;
         tx.execute("DELETE FROM segments", [])?;
         tx.execute("DELETE FROM blocks", [])?;
         tx.execute("DELETE FROM projects", [])?;
@@ -192,7 +203,9 @@ impl Database {
 
     /// 저장된 프로젝트 ID 목록 조회
     pub fn list_project_ids(&self) -> Result<Vec<String>, IteError> {
-        let mut stmt = self.conn.prepare("SELECT id FROM projects ORDER BY updated_at DESC LIMIT 1000")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM projects ORDER BY updated_at DESC LIMIT 1000")?;
         let iter = stmt.query_map([], |row| row.get::<_, String>(0))?;
         let mut ids = Vec::new();
         for id in iter {
@@ -215,10 +228,18 @@ impl Database {
             // metadata_json에서 title만 안전하게 추출
             let title = serde_json::from_str::<serde_json::Value>(&metadata_json)
                 .ok()
-                .and_then(|v| v.get("title").and_then(|t| t.as_str()).map(|s| s.to_string()))
+                .and_then(|v| {
+                    v.get("title")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
+                })
                 .unwrap_or_else(|| "Untitled Project".to_string());
 
-            Ok(RecentProjectRow { id, title, updated_at })
+            Ok(RecentProjectRow {
+                id,
+                title,
+                updated_at,
+            })
         })?;
 
         let mut out = Vec::new();
@@ -300,7 +321,8 @@ impl Database {
         chat_summary: Option<&str>,
     ) -> Result<String, IteError> {
         // 저장 시점에 스냅샷 JSON 구조를 검증해, 복원/비교 시점의 지연 실패를 줄인다.
-        let _: std::collections::HashMap<String, EditorBlock> = serde_json::from_str(snapshot_json)?;
+        let _: std::collections::HashMap<String, EditorBlock> =
+            serde_json::from_str(snapshot_json)?;
 
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
@@ -324,7 +346,10 @@ impl Database {
     }
 
     /// 히스토리 메타데이터 목록 조회 (최신순, 최대 50개)
-    pub fn list_history_metadata(&self, project_id: &str) -> Result<Vec<HistorySnapshotMeta>, IteError> {
+    pub fn list_history_metadata(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<HistorySnapshotMeta>, IteError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, timestamp, description, chat_summary
              FROM history
@@ -365,7 +390,8 @@ impl Database {
         let row = stmt.query_row([snapshot_id, project_id], |row| {
             let changes_json: String = row.get(3)?;
             let block_changes =
-                serde_json::from_str::<Vec<crate::models::BlockChange>>(&changes_json).unwrap_or_default();
+                serde_json::from_str::<Vec<crate::models::BlockChange>>(&changes_json)
+                    .unwrap_or_default();
 
             Ok(HistorySnapshot {
                 id: row.get(0)?,
@@ -388,7 +414,11 @@ impl Database {
     }
 
     /// 히스토리 스냅샷 삭제
-    pub fn delete_history_snapshot(&self, snapshot_id: &str, project_id: &str) -> Result<(), IteError> {
+    pub fn delete_history_snapshot(
+        &self,
+        snapshot_id: &str,
+        project_id: &str,
+    ) -> Result<(), IteError> {
         let affected = self.conn.execute(
             "DELETE FROM history WHERE id = ?1 AND project_id = ?2",
             [snapshot_id, project_id],
@@ -427,7 +457,11 @@ impl Database {
     }
 
     /// 프로젝트별 오래된 스냅샷 정리
-    pub fn prune_old_snapshots(&self, project_id: &str, max_snapshots: usize) -> Result<(), IteError> {
+    pub fn prune_old_snapshots(
+        &self,
+        project_id: &str,
+        max_snapshots: usize,
+    ) -> Result<(), IteError> {
         self.conn.execute(
             "DELETE FROM history
              WHERE id IN (
@@ -471,7 +505,10 @@ impl Database {
             "DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE project_id = ?1)",
             [project_id],
         )?;
-        tx.execute("DELETE FROM chat_sessions WHERE project_id = ?1", [project_id])?;
+        tx.execute(
+            "DELETE FROM chat_sessions WHERE project_id = ?1",
+            [project_id],
+        )?;
 
         // 최근 활동 기준으로 정렬 후 최대 5개만 저장
         let mut sorted: Vec<&ChatSession> = sessions.iter().collect();
@@ -542,7 +579,10 @@ impl Database {
     }
 
     /// 현재 채팅 세션(1개) 로드
-    pub fn load_current_chat_session(&self, project_id: &str) -> Result<Option<ChatSession>, IteError> {
+    pub fn load_current_chat_session(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<ChatSession>, IteError> {
         // 레거시 API: 가장 최근 활동 세션 1개만 반환
         let sessions = self.load_chat_sessions(project_id)?;
         Ok(sessions.into_iter().next())
@@ -571,7 +611,8 @@ impl Database {
 
         let mut sessions = Vec::new();
         for r in iter {
-            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled) = r?;
+            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled) =
+                r?;
             let context_block_ids: Vec<String> =
                 serde_json::from_str(&context_block_ids_json).unwrap_or_default();
 
@@ -630,9 +671,9 @@ impl Database {
 
     /// 프로젝트별 채팅 설정 로드(JSON)
     pub fn load_chat_project_settings(&self, project_id: &str) -> Result<Option<String>, IteError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT settings_json FROM chat_project_settings WHERE project_id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT settings_json FROM chat_project_settings WHERE project_id = ?1")?;
         let row = stmt.query_row([project_id], |row| row.get::<_, String>(0));
         match row {
             Ok(v) => Ok(Some(v)),
@@ -644,9 +685,9 @@ impl Database {
     /// 프로젝트 로드
     pub fn load_project(&self, project_id: &str) -> Result<IteProject, IteError> {
         // 프로젝트 메타데이터 로드
-        let mut stmt = self.conn.prepare(
-            "SELECT id, version, metadata_json FROM projects WHERE id = ?1",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, version, metadata_json FROM projects WHERE id = ?1")?;
 
         let (id, version, metadata_json): (String, String, String) = stmt
             .query_row([project_id], |row| {
@@ -993,24 +1034,21 @@ impl Database {
              LIMIT ?4",
         )?;
 
-        let iter = stmt.query_map(
-            (project_id, domain, q, limit as i64),
-            |row| {
-                Ok(GlossaryEntryRow {
-                    id: row.get(0)?,
-                    source: row.get(1)?,
-                    target: row.get(2)?,
-                    notes: row.get(3)?,
-                    domain: row.get(4)?,
-                    case_sensitive: {
-                        let v: i64 = row.get(5)?;
-                        v == 1
-                    },
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
-                })
-            },
-        )?;
+        let iter = stmt.query_map((project_id, domain, q, limit as i64), |row| {
+            Ok(GlossaryEntryRow {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                target: row.get(2)?,
+                notes: row.get(3)?,
+                domain: row.get(4)?,
+                case_sensitive: {
+                    let v: i64 = row.get(5)?;
+                    v == 1
+                },
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })?;
 
         let mut out = Vec::new();
         for r in iter {
@@ -1200,7 +1238,10 @@ impl Database {
     }
 
     /// 프로젝트별 첨부 파일 목록 조회
-    pub fn list_attachments(&self, project_id: &str) -> Result<Vec<crate::models::Attachment>, IteError> {
+    pub fn list_attachments(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<crate::models::Attachment>, IteError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, project_id, filename, file_type, file_path, extracted_text, file_size, created_at, updated_at
              FROM attachments WHERE project_id = ?1 ORDER BY created_at ASC",
@@ -1229,7 +1270,8 @@ impl Database {
 
     /// 첨부 파일 삭제
     pub fn delete_attachment(&self, id: &str) -> Result<(), IteError> {
-        self.conn.execute("DELETE FROM attachments WHERE id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM attachments WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -1287,7 +1329,8 @@ impl Database {
 
     /// MCP 서버 삭제
     pub fn delete_mcp_server(&self, id: &str) -> Result<(), IteError> {
-        self.conn.execute("DELETE FROM mcp_servers WHERE id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM mcp_servers WHERE id = ?1", [id])?;
         Ok(())
     }
 }
@@ -1312,7 +1355,9 @@ mod tests {
 
     use super::Database;
     use crate::error::IteError;
-    use crate::models::{BlockMetadata, EditorBlock, IteProject, ProjectMetadata, ProjectSettings, SegmentGroup};
+    use crate::models::{
+        BlockMetadata, EditorBlock, IteProject, ProjectMetadata, ProjectSettings, SegmentGroup,
+    };
 
     fn build_test_project(project_id: &str) -> IteProject {
         let now = chrono::Utc::now().timestamp_millis();
@@ -1392,7 +1437,8 @@ mod tests {
         let project = build_test_project("project-history-test");
         db.save_project(&project).expect("failed to save project");
 
-        let snapshot_json = serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
+        let snapshot_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
         let snapshot_id = db
             .create_history_snapshot(
                 &project.id,
@@ -1431,13 +1477,17 @@ mod tests {
         let loaded_snapshot = db
             .get_history_snapshot(&snapshot_id, &project.id)
             .expect("failed to load snapshot");
-        assert_eq!(loaded_snapshot.snapshot_json.as_deref(), Some(snapshot_json.as_str()));
+        assert_eq!(
+            loaded_snapshot.snapshot_json.as_deref(),
+            Some(snapshot_json.as_str())
+        );
         assert_eq!(loaded_snapshot.description, "renamed snapshot");
 
         db.delete_history_snapshot(&snapshot_id, &project.id)
             .expect("failed to delete snapshot");
         assert!(
-            db.delete_history_snapshot(&snapshot_id, &project.id).is_err(),
+            db.delete_history_snapshot(&snapshot_id, &project.id)
+                .is_err(),
             "deleting a missing snapshot should return error"
         );
         let after_delete = db
@@ -1456,7 +1506,8 @@ mod tests {
         db.save_project(&project).expect("failed to save project");
 
         let base_ts = chrono::Utc::now().timestamp_millis();
-        let snapshot_json = serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
+        let snapshot_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize snapshot");
 
         // 레거시 row(NULL snapshot_json)는 prune 카운트에서 제외되어야 한다.
         for i in 0..10 {

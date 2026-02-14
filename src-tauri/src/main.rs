@@ -7,4 +7,3 @@
 fn main() {
     ite_lib::run()
 }
-

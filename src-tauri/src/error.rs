@@ -60,4 +60,3 @@ impl From<IteError> for CommandError {
 
 /// Tauri 명령 결과 타입
 pub type CommandResult<T> = Result<T, CommandError>;
-

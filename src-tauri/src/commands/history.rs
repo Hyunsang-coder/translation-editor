@@ -6,10 +6,10 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tauri::State;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{EditorBlock, HistorySnapshot, HistorySnapshotMeta};
-use super::AcquireDb;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +70,10 @@ pub fn restore_snapshot(
 
     let snapshot_json = snapshot.snapshot_json.ok_or_else(|| CommandError {
         code: "INVALID_OPERATION".to_string(),
-        message: format!("Snapshot '{}' does not contain snapshotJson", args.snapshot_id),
+        message: format!(
+            "Snapshot '{}' does not contain snapshotJson",
+            args.snapshot_id
+        ),
         details: None,
     })?;
 
@@ -105,7 +108,10 @@ pub fn get_snapshot(
     if snapshot.snapshot_json.is_none() {
         return Err(CommandError {
             code: "INVALID_OPERATION".to_string(),
-            message: format!("Snapshot '{}' does not contain snapshotJson", args.snapshot_id),
+            message: format!(
+                "Snapshot '{}' does not contain snapshotJson",
+                args.snapshot_id
+            ),
             details: None,
         });
     }
@@ -114,10 +120,7 @@ pub fn get_snapshot(
 
 /// 스냅샷 삭제
 #[tauri::command]
-pub fn delete_snapshot(
-    args: ProjectSnapshotArgs,
-    db_state: State<DbState>,
-) -> CommandResult<()> {
+pub fn delete_snapshot(args: ProjectSnapshotArgs, db_state: State<DbState>) -> CommandResult<()> {
     let db = db_state.acquire()?;
     db.delete_history_snapshot(&args.snapshot_id, &args.project_id)
         .map_err(CommandError::from)
@@ -125,10 +128,7 @@ pub fn delete_snapshot(
 
 /// 스냅샷 이름(설명) 변경
 #[tauri::command]
-pub fn rename_snapshot(
-    args: RenameSnapshotArgs,
-    db_state: State<DbState>,
-) -> CommandResult<()> {
+pub fn rename_snapshot(args: RenameSnapshotArgs, db_state: State<DbState>) -> CommandResult<()> {
     let db = db_state.acquire()?;
     db.update_history_snapshot_description(&args.snapshot_id, &args.project_id, &args.description)
         .map_err(CommandError::from)

@@ -29,7 +29,7 @@ impl ConnectorToken {
             false
         }
     }
-    
+
     /// 갱신 가능 여부 (refresh_token 존재)
     pub fn can_refresh(&self) -> bool {
         self.refresh_token.is_some()
@@ -79,21 +79,26 @@ struct TokenRefreshResponse {
 }
 
 /// 토큰 갱신 시도
-async fn try_refresh_token(connector_id: &str, current_token: &ConnectorToken) -> Result<ConnectorToken, String> {
-    let refresh_token = current_token.refresh_token.as_ref()
+async fn try_refresh_token(
+    connector_id: &str,
+    current_token: &ConnectorToken,
+) -> Result<ConnectorToken, String> {
+    let refresh_token = current_token
+        .refresh_token
+        .as_ref()
         .ok_or("No refresh token available")?;
-    
+
     let config = get_oauth_config(connector_id)
         .ok_or_else(|| format!("No OAuth config for connector: {}", connector_id))?;
-    
+
     // 환경변수에서 클라이언트 자격증명 가져오기
     let client_id = std::env::var(config.client_id_env)
         .map_err(|_| format!("Missing env var: {}", config.client_id_env))?;
     let client_secret = std::env::var(config.client_secret_env)
         .map_err(|_| format!("Missing env var: {}", config.client_secret_env))?;
-    
+
     println!("[Connector] Attempting token refresh for {}", connector_id);
-    
+
     let client = reqwest::Client::new();
     let response = client
         .post(config.token_url)
@@ -106,29 +111,39 @@ async fn try_refresh_token(connector_id: &str, current_token: &ConnectorToken) -
         .send()
         .await
         .map_err(|e| format!("Token refresh request failed: {}", e))?;
-    
+
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Token refresh failed with status {}: {}", status, body));
+        return Err(format!(
+            "Token refresh failed with status {}: {}",
+            status, body
+        ));
     }
-    
+
     let refresh_response: TokenRefreshResponse = response
         .json()
         .await
         .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
-    
+
     // 새 토큰 생성 (expires_in을 expires_at으로 변환)
     let now = chrono::Utc::now().timestamp();
     let new_token = ConnectorToken {
         access_token: refresh_response.access_token,
         // 새 refresh_token이 있으면 사용, 없으면 기존 것 유지
-        refresh_token: refresh_response.refresh_token.or_else(|| current_token.refresh_token.clone()),
+        refresh_token: refresh_response
+            .refresh_token
+            .or_else(|| current_token.refresh_token.clone()),
         expires_at: refresh_response.expires_in.map(|exp| now + exp),
-        token_type: refresh_response.token_type.or_else(|| current_token.token_type.clone()),
+        token_type: refresh_response
+            .token_type
+            .or_else(|| current_token.token_type.clone()),
     };
-    
-    println!("[Connector] Token refreshed successfully for {}", connector_id);
+
+    println!(
+        "[Connector] Token refreshed successfully for {}",
+        connector_id
+    );
     Ok(new_token)
 }
 
@@ -153,8 +168,8 @@ pub async fn connector_set_token(
     token: ConnectorToken,
 ) -> Result<(), String> {
     let key = get_vault_key(&connector_id);
-    let token_json = serde_json::to_string(&token)
-        .map_err(|e| format!("Failed to serialize token: {}", e))?;
+    let token_json =
+        serde_json::to_string(&token).map_err(|e| format!("Failed to serialize token: {}", e))?;
 
     SECRETS
         .set(&key, &token_json)
@@ -166,7 +181,7 @@ pub async fn connector_set_token(
 }
 
 /// 커넥터 토큰 조회 (액세스 토큰만 반환)
-/// 
+///
 /// 토큰이 만료되었거나 곧 만료될 경우 자동으로 갱신을 시도합니다.
 #[tauri::command]
 pub async fn connector_get_token(connector_id: String) -> Result<Option<String>, String> {
@@ -179,31 +194,42 @@ pub async fn connector_get_token(connector_id: String) -> Result<Option<String>,
 
             // 만료 확인 및 자동 갱신
             if token.is_expired() {
-                println!("[Connector] Token expired or expiring soon for {}", connector_id);
-                
+                println!(
+                    "[Connector] Token expired or expiring soon for {}",
+                    connector_id
+                );
+
                 if token.can_refresh() {
                     // 자동 갱신 시도
                     match try_refresh_token(&connector_id, &token).await {
                         Ok(new_token) => {
                             // 갱신된 토큰을 vault에 저장
-                            let new_token_json = serde_json::to_string(&new_token)
-                                .map_err(|e| format!("Failed to serialize refreshed token: {}", e))?;
+                            let new_token_json =
+                                serde_json::to_string(&new_token).map_err(|e| {
+                                    format!("Failed to serialize refreshed token: {}", e)
+                                })?;
                             SECRETS
                                 .set(&key, &new_token_json)
                                 .await
                                 .map_err(|e| format!("Failed to save refreshed token: {}", e))?;
-                            
+
                             token = new_token;
                         }
                         Err(e) => {
-                            eprintln!("[Connector] Token refresh failed for {}: {}", connector_id, e);
+                            eprintln!(
+                                "[Connector] Token refresh failed for {}: {}",
+                                connector_id, e
+                            );
                             // 갱신 실패 시 만료된 토큰은 사용 불가
                             return Ok(None);
                         }
                     }
                 } else {
                     // refresh_token이 없으면 갱신 불가
-                    println!("[Connector] No refresh token available for {}", connector_id);
+                    println!(
+                        "[Connector] No refresh token available for {}",
+                        connector_id
+                    );
                     return Ok(None);
                 }
             }
@@ -230,10 +256,12 @@ pub async fn connector_delete_token(connector_id: String) -> Result<(), String> 
 }
 
 /// 커넥터 상태 목록 조회
-/// 
+///
 /// SecretManager 캐시에서 조회하므로 Keychain 프롬프트 없이 빠르게 조회됩니다.
 #[tauri::command]
-pub async fn connector_list_status(connector_ids: Vec<String>) -> Result<Vec<ConnectorStatus>, String> {
+pub async fn connector_list_status(
+    connector_ids: Vec<String>,
+) -> Result<Vec<ConnectorStatus>, String> {
     let mut statuses = Vec::new();
 
     for connector_id in connector_ids {

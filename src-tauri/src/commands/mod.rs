@@ -2,10 +2,10 @@
 //!
 //! 프론트엔드에서 호출 가능한 Tauri 명령어 정의
 
-use std::sync::MutexGuard;
-use tauri::State;
 use crate::db::{Database, DbState};
 use crate::error::{CommandError, CommandResult};
+use std::sync::MutexGuard;
+use tauri::State;
 
 /// DB lock 획득 헬퍼 — 5줄 보일러플레이트를 1줄로 축소
 pub trait AcquireDb {
@@ -22,16 +22,16 @@ impl AcquireDb for State<'_, DbState> {
     }
 }
 
+pub mod attachments;
 pub mod block;
 pub mod chat;
 pub mod confluence;
 pub mod connector;
 pub mod glossary;
 pub mod history;
-pub mod project;
-pub mod storage;
-pub mod attachments;
-pub mod secure_store;
-pub mod secrets;
 pub mod mcp;
 pub mod notion;
+pub mod project;
+pub mod secrets;
+pub mod secure_store;
+pub mod storage;

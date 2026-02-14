@@ -8,4 +8,3 @@ pub mod types;
 
 pub use client::NotionClient;
 pub use client::NOTION_CLIENT;
-

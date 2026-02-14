@@ -2,7 +2,7 @@
 
 프로젝트 전용 Claude Code Skills (공식 형식).
 
-> **최종 업데이트**: 2026-01
+> **최종 업데이트**: 2026-02
 
 ## 스킬 목록
 
@@ -13,16 +13,18 @@
 | `/dev` | Tauri 개발 서버 실행 + 로그 모니터링 |
 | `/test-ai` | AI 프롬프트/페이로드 dry-run 테스트 |
 | `/tdd` | TDD 워크플로우 (Red-Green-Refactor) |
+| `/record-demo` | AI 주도 데모 영상 녹화 (자연어 → Playwright → WebM) |
 
 ## 디렉토리 구조
 
 ```
 .claude/skills/
-├── typecheck/SKILL.md    # /typecheck
-├── sync-types/SKILL.md   # /sync-types
-├── dev/SKILL.md          # /dev
-├── test-ai/SKILL.md      # /test-ai
-├── tdd/SKILL.md          # /tdd
+├── typecheck/SKILL.md      # /typecheck
+├── sync-types/SKILL.md     # /sync-types
+├── dev/SKILL.md             # /dev
+├── test-ai/SKILL.md         # /test-ai
+├── tdd/SKILL.md             # /tdd
+├── record-demo/SKILL.md    # /record-demo
 └── README.md
 ```
 
@@ -36,6 +38,7 @@ Claude Code에서 슬래시 명령어로 실행:
 /dev                 # 개발 서버 실행
 /test-ai             # AI 페이로드 테스트
 /tdd                 # TDD 워크플로우
+/record-demo <설명>  # AI 주도 데모 영상 녹화
 ```
 
 ## 권장 워크플로우
@@ -60,6 +63,12 @@ Claude Code에서 슬래시 명령어로 실행:
 /test-ai --mode translate   # 페이로드 미리보기
 # 프롬프트 수정 후
 /test-ai --live             # 실제 테스트
+```
+
+### 데모 영상 제작
+```
+/record-demo 번역 기능을 보여줘. 기술 문서를 영어로 번역하는 시나리오.
+/record-demo 프로젝트 생성부터 번역, 리뷰까지 전체 흐름을 보여줘
 ```
 
 ### 커밋 전

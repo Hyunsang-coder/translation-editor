@@ -24,7 +24,7 @@ pub async fn notion_clear_token() -> Result<(), String> {
 }
 
 /// Notion 검색
-/// 
+///
 /// # Arguments
 /// * `query` - 검색어 (선택)
 /// * `filter` - 필터: "page" 또는 "database" (선택)
@@ -40,7 +40,7 @@ pub async fn notion_search(
 }
 
 /// Notion 페이지 조회
-/// 
+///
 /// # Arguments
 /// * `page_id` - 페이지 ID 또는 URL
 #[tauri::command]
@@ -50,7 +50,7 @@ pub async fn notion_get_page(page_id: String) -> Result<String, String> {
 }
 
 /// Notion 페이지 내용(블록) 조회
-/// 
+///
 /// # Arguments
 /// * `page_id` - 페이지 ID 또는 URL
 /// * `as_text` - true면 텍스트로 변환, false면 JSON
@@ -60,7 +60,7 @@ pub async fn notion_get_page_content(
     as_text: Option<bool>,
 ) -> Result<String, String> {
     let result = NOTION_CLIENT.get_blocks(&page_id, None).await?;
-    
+
     if as_text.unwrap_or(true) {
         // 블록을 읽기 쉬운 텍스트로 변환
         let text = crate::notion::NotionClient::blocks_to_text(&result.results);
@@ -71,7 +71,7 @@ pub async fn notion_get_page_content(
 }
 
 /// Notion 데이터베이스 쿼리
-/// 
+///
 /// # Arguments
 /// * `database_id` - 데이터베이스 ID 또는 URL
 /// * `filter` - 필터 JSON (선택)
@@ -86,11 +86,10 @@ pub async fn notion_query_database(
         .map(|f| serde_json::from_str(&f))
         .transpose()
         .map_err(|e| format!("Invalid filter JSON: {}", e))?;
-    
+
     let result = NOTION_CLIENT
         .query_database(&database_id, filter_value, page_size)
         .await?;
-    
+
     serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
 }
-

@@ -51,28 +51,21 @@ pub struct McpRegistryStatus {
 }
 
 /// MCP 레지스트리
-/// 
+///
 /// 모든 MCP 서버의 상태를 추적하고 통합 관리합니다.
 pub struct McpRegistry;
 
 impl McpRegistry {
     /// 지원되는 모든 MCP 서버 목록
     pub fn supported_servers() -> Vec<McpServerId> {
-        vec![
-            McpServerId::Atlassian,
-            McpServerId::Notion,
-        ]
+        vec![McpServerId::Atlassian, McpServerId::Notion]
     }
 
     /// 특정 MCP 서버에 연결
     pub async fn connect(server_id: McpServerId) -> Result<(), String> {
         match server_id {
-            McpServerId::Atlassian => {
-                MCP_CLIENT.connect().await
-            }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.connect().await
-            }
+            McpServerId::Atlassian => MCP_CLIENT.connect().await,
+            McpServerId::Notion => NOTION_MCP_CLIENT.connect().await,
         }
     }
 
@@ -116,12 +109,8 @@ impl McpRegistry {
     /// 특정 MCP 서버 상태 조회
     pub async fn get_status(server_id: McpServerId) -> McpConnectionStatus {
         match server_id {
-            McpServerId::Atlassian => {
-                MCP_CLIENT.get_status().await
-            }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.get_status().await
-            }
+            McpServerId::Atlassian => MCP_CLIENT.get_status().await,
+            McpServerId::Notion => NOTION_MCP_CLIENT.get_status().await,
         }
     }
 
@@ -133,7 +122,7 @@ impl McpRegistry {
 
         for server_id in Self::supported_servers() {
             let status = Self::get_status(server_id).await;
-            
+
             if status.is_connected {
                 connected_count += 1;
             }
@@ -166,12 +155,8 @@ impl McpRegistry {
     /// 특정 MCP 서버의 도구 목록 조회
     pub async fn get_tools(server_id: McpServerId) -> Vec<McpTool> {
         match server_id {
-            McpServerId::Atlassian => {
-                MCP_CLIENT.get_tools().await
-            }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.get_tools().await
-            }
+            McpServerId::Atlassian => MCP_CLIENT.get_tools().await,
+            McpServerId::Notion => NOTION_MCP_CLIENT.get_tools().await,
         }
     }
 
@@ -199,12 +184,8 @@ impl McpRegistry {
         arguments: Option<HashMap<String, serde_json::Value>>,
     ) -> Result<McpToolResult, String> {
         match server_id {
-            McpServerId::Atlassian => {
-                MCP_CLIENT.call_tool(name, arguments).await
-            }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.call_tool(name, arguments).await
-            }
+            McpServerId::Atlassian => MCP_CLIENT.call_tool(name, arguments).await,
+            McpServerId::Notion => NOTION_MCP_CLIENT.call_tool(name, arguments).await,
         }
     }
 
@@ -213,9 +194,7 @@ impl McpRegistry {
         mcp_url: Option<String>,
         auth_token: String,
     ) -> Result<(), String> {
-        NOTION_MCP_CLIENT
-            .set_config(mcp_url, auth_token)
-            .await
+        NOTION_MCP_CLIENT.set_config(mcp_url, auth_token).await
     }
 
     /// 도구 이름으로 해당 MCP 서버 찾기
@@ -229,4 +208,3 @@ impl McpRegistry {
         None
     }
 }
-

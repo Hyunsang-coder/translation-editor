@@ -4,9 +4,9 @@
 
 use tauri::State;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use super::AcquireDb;
 use crate::models::EditorBlock;
 
 /// 블록 조회
@@ -55,7 +55,8 @@ pub fn split_block(
 
     // 콘텐츠 분할
     let original_content = &original_block.content;
-    if split_position < original_content.len() && !original_content.is_char_boundary(split_position) {
+    if split_position < original_content.len() && !original_content.is_char_boundary(split_position)
+    {
         return Err(CommandError {
             code: "INVALID_POSITION".to_string(),
             message: format!(
@@ -159,4 +160,3 @@ pub fn merge_blocks(
 
     Ok(merged_block)
 }
-

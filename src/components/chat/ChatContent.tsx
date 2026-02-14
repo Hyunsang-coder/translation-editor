@@ -536,6 +536,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           <div
             className="w-full max-h-[200px] px-3 pt-2.5 pb-10 bg-transparent overflow-y-auto"
             data-ite-chat-composer
+            data-testid="chat-composer-container"
             onPaste={handlePaste}
           >
             <ChatComposerEditor
@@ -675,6 +676,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 title={t('chat.chatModelTitle')}
                 className="min-w-[100px]"
                 anchor="top"
+                data-testid="chat-model-select"
               />
               <button
                 type="submit"
@@ -684,6 +686,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                            transition-colors flex items-center justify-center"
                 title={t('chat.send')}
                 aria-label={t('chat.sendAriaLabel')}
+                data-testid="chat-send-button"
               >
                 <span className="text-xs leading-none">↑</span>
               </button>

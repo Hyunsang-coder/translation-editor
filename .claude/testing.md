@@ -43,6 +43,38 @@ npm run test:harness      # Editor test harness (manual testing)
 - **Location**: `e2e/*.spec.ts`
 - **Test Harness**: `src/test-harness/` - Tauri/API 키 없이 에디터만 독립 테스트
 
+### Tauri Runtime Automation (Testing Plugin + MCP)
+
+Tauri 런타임을 AI/MCP로 제어하려면 아래 2개를 함께 실행:
+
+```bash
+# 1) 앱 실행 (testing feature + env)
+TAURI_TESTING_ENABLED=1 \
+TAURI_TEST_TOKEN=tauri-testing-token \
+TAURI_TEST_PORT=9988 \
+npx tauri dev --features testing --no-watch --config src-tauri/tauri.conf.json --config '{"build":{"beforeDevCommand":""}}'
+
+# 2) MCP 서버 실행 (다른 터미널)
+TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-mcp:start
+```
+
+구성:
+- Runtime bridge plugin: `crates/tauri-plugin-testing/`
+- MCP server: `tauri-testing-mcp/`
+
+주요 도구:
+- DOM: `tauri_dom_query_selector`, `tauri_dom_click`, `tauri_dom_click_by_text`, `tauri_dom_fill`, `tauri_dom_fill_by_placeholder`, `tauri_dom_type_contenteditable`, `tauri_dom_type_contenteditable_by_selector`, `tauri_dom_wait_for_selector`, `tauri_dom_wait_for_text`
+- Dialog: `tauri_dialog_get_state`, `tauri_dialog_set_auto_response`, `tauri_dialog_push_response`, `tauri_dialog_clear`
+
+워크플로우 검증 스크립트:
+- 실행: `npm run test:e2e:tauri:mcp:workflow`
+- 파일: `scripts/tauri-testing-mcp-workflow.mjs`
+- 검증 기준:
+  - 원문 에디터에 5줄 계층형 bullet(`-`) 한국어 입력
+  - 타깃 언어를 영어로 명시 선택(선택 실패 시 즉시 실패)
+  - 채팅 패널에서 `번여문 내용 간략히 요약해줘` 전송
+  - assistant 메시지가 새로 생성되고 오류(`⚠️`)가 아닌 응답인지 확인
+
 ### E2E Test Files
 
 | File | Tests |
@@ -130,6 +162,31 @@ cd src-tauri && cargo check
 
 - **OAuth Failures**: Verify redirect URIs in MCP server config
 - **SSE Connection Drops**: Check network logs for event stream errors
+
+### Tauri Testing Bridge Issues
+
+- **`Method not found: dom.*`**
+  - 원인: Rust RPC 허용 목록 누락
+  - 확인: `crates/tauri-plugin-testing/src/lib.rs`의 `handle_rpc_request` match arm
+
+- **`failed to bind websocket server: Address already in use`**
+  - 원인: 포트 충돌
+  - 해결: `TAURI_TEST_PORT`를 다른 포트로 변경 (앱/MCP 동일 값 사용)
+
+- **`unauthorized` / 연결 직후 종료**
+  - 원인: 토큰 불일치
+  - 해결: 앱 실행 env의 `TAURI_TEST_TOKEN`과 MCP 실행 env를 동일하게 맞춤
+
+- **버튼/텍스트를 못 찾음**
+  - 단일 CSS selector보다 `tauri_dom_click_by_text` + `selector` 범위 지정 사용
+  - 다수 매치 시 `tauri_dom_query_selector`로 후보 수 확인 후 `index` 지정
+  - 동적 렌더링 UI는 `tauri_dom_wait_for_selector` 또는 `tauri_dom_wait_for_text` 선행
+
+- **확인 팝업 처리 실패**
+  - DOM에 안 보이는 native dialog일 수 있음
+  - `tauri_dialog_set_auto_response`로 기본 응답 정책 설정 후 실행
+  - 필요 시 `tauri_dialog_push_response`로 다음 confirm/prompt 1회 응답 주입
+  - 발생 이벤트는 `tauri_dialog_get_state`로 확인
 
 ## File Organization
 

@@ -21,6 +21,8 @@
     "test:tauri": "npm run lint && npm run test:run && npm run test:e2e && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --release --manifest-path src-tauri/Cargo.toml",
     "test:e2e": "npm run test:e2e:tauri",
     "test:e2e:tauri": "node scripts/tauri-smoke.mjs",
+    "test:e2e:tauri:mcp:new-project": "node scripts/tauri-testing-mcp-new-project.mjs",
+    "test:e2e:tauri:mcp:workflow": "node scripts/tauri-testing-mcp-workflow.mjs",
     "test:e2e:web": "playwright test -c playwright.web.config.ts",
     "test:e2e:web:ui": "playwright test -c playwright.web.config.ts --ui",
     "tauri-testing-mcp:build": "npm --prefix tauri-testing-mcp run build",

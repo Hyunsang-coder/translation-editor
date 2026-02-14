@@ -2,12 +2,12 @@
 //!
 //! 프로젝트 관리 관련 Tauri 명령어
 
-use tauri::State;
 use serde::Deserialize;
+use tauri::State;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use super::AcquireDb;
 use crate::models::IteProject;
 
 #[derive(Debug, Deserialize)]
@@ -40,36 +40,42 @@ pub fn create_project(
 
     // 블록 맵 생성 및 초기 빈 블록 추가
     let mut blocks = std::collections::HashMap::new();
-    
+
     // Source Block (Empty)
-    blocks.insert(source_block_id.clone(), crate::models::EditorBlock {
-        id: source_block_id.clone(),
-        block_type: "source".to_string(),
-        content: "<p></p>".to_string(),
-        hash: String::new(),
-        metadata: crate::models::BlockMetadata {
-            author: None,
-            created_at: now,
-            updated_at: now,
-            tags: Vec::new(),
-            comments: None,
+    blocks.insert(
+        source_block_id.clone(),
+        crate::models::EditorBlock {
+            id: source_block_id.clone(),
+            block_type: "source".to_string(),
+            content: "<p></p>".to_string(),
+            hash: String::new(),
+            metadata: crate::models::BlockMetadata {
+                author: None,
+                created_at: now,
+                updated_at: now,
+                tags: Vec::new(),
+                comments: None,
+            },
         },
-    });
+    );
 
     // Target Block (Empty)
-    blocks.insert(target_block_id.clone(), crate::models::EditorBlock {
-        id: target_block_id.clone(),
-        block_type: "target".to_string(),
-        content: "<p></p>".to_string(),
-        hash: String::new(),
-        metadata: crate::models::BlockMetadata {
-            author: None,
-            created_at: now,
-            updated_at: now,
-            tags: Vec::new(),
-            comments: None,
+    blocks.insert(
+        target_block_id.clone(),
+        crate::models::EditorBlock {
+            id: target_block_id.clone(),
+            block_type: "target".to_string(),
+            content: "<p></p>".to_string(),
+            hash: String::new(),
+            metadata: crate::models::BlockMetadata {
+                author: None,
+                created_at: now,
+                updated_at: now,
+                tags: Vec::new(),
+                comments: None,
+            },
         },
-    });
+    );
 
     // 세그먼트 생성 (1:1 매핑)
     let segments = vec![crate::models::SegmentGroup {
@@ -115,7 +121,8 @@ pub fn create_project(
 pub fn load_project(args: LoadProjectArgs, db_state: State<DbState>) -> CommandResult<IteProject> {
     let db = db_state.acquire()?;
 
-    db.load_project(&args.project_id).map_err(CommandError::from)
+    db.load_project(&args.project_id)
+        .map_err(CommandError::from)
 }
 
 /// 프로젝트 저장
@@ -140,12 +147,15 @@ pub fn duplicate_project(
 ) -> CommandResult<IteProject> {
     let db = db_state.acquire()?;
 
-    let original = db.load_project(&args.project_id).map_err(CommandError::from)?;
+    let original = db
+        .load_project(&args.project_id)
+        .map_err(CommandError::from)?;
     let now = chrono::Utc::now().timestamp_millis();
     let new_project_id = uuid::Uuid::new_v4().to_string();
 
     // 기존 block ID → 새 block ID 매핑
-    let mut block_id_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut block_id_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for old_id in original.blocks.keys() {
         block_id_map.insert(old_id.clone(), uuid::Uuid::new_v4().to_string());
     }
@@ -154,35 +164,44 @@ pub fn duplicate_project(
     let mut new_blocks = std::collections::HashMap::new();
     for (old_id, block) in &original.blocks {
         let new_id = block_id_map[old_id].clone();
-        new_blocks.insert(new_id.clone(), crate::models::EditorBlock {
-            id: new_id,
-            block_type: block.block_type.clone(),
-            content: block.content.clone(),
-            hash: block.hash.clone(),
-            metadata: crate::models::BlockMetadata {
-                author: block.metadata.author.clone(),
-                created_at: now,
-                updated_at: now,
-                tags: block.metadata.tags.clone(),
-                comments: block.metadata.comments.clone(),
+        new_blocks.insert(
+            new_id.clone(),
+            crate::models::EditorBlock {
+                id: new_id,
+                block_type: block.block_type.clone(),
+                content: block.content.clone(),
+                hash: block.hash.clone(),
+                metadata: crate::models::BlockMetadata {
+                    author: block.metadata.author.clone(),
+                    created_at: now,
+                    updated_at: now,
+                    tags: block.metadata.tags.clone(),
+                    comments: block.metadata.comments.clone(),
+                },
             },
-        });
+        );
     }
 
     // 세그먼트 복제 (새 ID + block ID 매핑)
-    let new_segments: Vec<crate::models::SegmentGroup> = original.segments.iter().map(|seg| {
-        crate::models::SegmentGroup {
+    let new_segments: Vec<crate::models::SegmentGroup> = original
+        .segments
+        .iter()
+        .map(|seg| crate::models::SegmentGroup {
             group_id: uuid::Uuid::new_v4().to_string(),
-            source_ids: seg.source_ids.iter().map(|id| {
-                block_id_map.get(id).cloned().unwrap_or_else(|| id.clone())
-            }).collect(),
-            target_ids: seg.target_ids.iter().map(|id| {
-                block_id_map.get(id).cloned().unwrap_or_else(|| id.clone())
-            }).collect(),
+            source_ids: seg
+                .source_ids
+                .iter()
+                .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
+                .collect(),
+            target_ids: seg
+                .target_ids
+                .iter()
+                .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
+                .collect(),
             is_aligned: seg.is_aligned,
             order: seg.order,
-        }
-    }).collect();
+        })
+        .collect();
 
     let new_project = IteProject {
         id: new_project_id,

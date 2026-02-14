@@ -440,6 +440,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
             disabled={translateLoading}
             title={t('editor.translateTitle')}
+            data-testid="editor-translate-button"
           >
             {translateLoading ? (
               <>
@@ -455,6 +456,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             onClick={() => openReviewPanel()}
             className="px-2 py-1 rounded text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
             title={t('editor.reviewTitle', '번역 검수')}
+            data-testid="editor-review-button"
           >
             {t('editor.review', '검수')}
           </button>
@@ -565,6 +567,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   placeholder={t('editor.selectLanguage')}
                   size="sm"
                   className="min-w-[80px]"
+                  data-testid="target-language-select"
                 />
               </div>
               <span className="text-[10px] text-editor-muted">

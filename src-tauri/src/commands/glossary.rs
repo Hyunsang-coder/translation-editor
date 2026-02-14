@@ -5,9 +5,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use super::AcquireDb;
 use crate::utils::validate_path;
 
 #[derive(Debug, Deserialize)]
@@ -51,7 +51,11 @@ pub fn import_glossary_csv(
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
-        .import_glossary_csv(&args.project_id, validated_path.to_string_lossy().as_ref(), replace)
+        .import_glossary_csv(
+            &args.project_id,
+            validated_path.to_string_lossy().as_ref(),
+            replace,
+        )
         .map_err(CommandError::from)?;
 
     Ok(ImportGlossaryResult {
@@ -74,7 +78,11 @@ pub fn import_glossary_excel(
 
     let replace = args.replace_project_scope.unwrap_or(false);
     let (inserted, updated, skipped) = db
-        .import_glossary_excel(&args.project_id, validated_path.to_string_lossy().as_ref(), replace)
+        .import_glossary_excel(
+            &args.project_id,
+            validated_path.to_string_lossy().as_ref(),
+            replace,
+        )
         .map_err(CommandError::from)?;
 
     Ok(ImportGlossaryResult {
@@ -133,5 +141,3 @@ pub fn search_glossary(
         })
         .collect())
 }
-
-

@@ -54,6 +54,7 @@ export function SettingsContent(): JSX.Element {
         </div>
         <DebouncedTextarea
           key={`translator-persona-${settingsKey}`}
+          data-testid="settings-translator-persona"
           className="w-full min-h-[3.5rem] text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
           value={translatorPersona}
           onDebouncedChange={setTranslatorPersona}
@@ -84,6 +85,7 @@ export function SettingsContent(): JSX.Element {
         </div>
         <DebouncedTextarea
           key={`translation-rules-${settingsKey}`}
+          data-testid="settings-translation-rules"
           className="w-full h-32 text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={translationRules}
           onDebouncedChange={setTranslationRules}
@@ -113,6 +115,7 @@ export function SettingsContent(): JSX.Element {
         </div>
         <DebouncedTextarea
           key={`project-context-${settingsKey}`}
+          data-testid="settings-project-context"
           className="w-full h-32 text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={projectContext}
           onDebouncedChange={setProjectContext}

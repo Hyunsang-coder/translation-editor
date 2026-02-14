@@ -42,7 +42,9 @@ impl NotionClient {
 
         // 토큰 형식 검증
         if !token.starts_with("ntn_") && !token.starts_with("secret_") {
-            return Err("Invalid token format. Token should start with 'ntn_' or 'secret_'".to_string());
+            return Err(
+                "Invalid token format. Token should start with 'ntn_' or 'secret_'".to_string(),
+            );
         }
 
         // vault에 저장
@@ -141,7 +143,10 @@ impl NotionClient {
 
         if !status.is_success() {
             if let Ok(error) = serde_json::from_str::<NotionError>(&body) {
-                return Err(format!("Notion API error: {} ({})", error.message, error.code));
+                return Err(format!(
+                    "Notion API error: {} ({})",
+                    error.message, error.code
+                ));
             }
             return Err(format!("Request failed with status {}: {}", status, body));
         }
@@ -179,7 +184,10 @@ impl NotionClient {
 
         if !status.is_success() {
             if let Ok(error) = serde_json::from_str::<NotionError>(&body) {
-                return Err(format!("Notion API error: {} ({})", error.message, error.code));
+                return Err(format!(
+                    "Notion API error: {} ({})",
+                    error.message, error.code
+                ));
             }
             return Err(format!("Request failed with status {}: {}", status, body));
         }
@@ -189,14 +197,23 @@ impl NotionClient {
     }
 
     /// 페이지 블록(내용) 조회 API 호출
-    pub async fn get_blocks(&self, block_id: &str, page_size: Option<u32>) -> Result<BlocksResponse, String> {
+    pub async fn get_blocks(
+        &self,
+        block_id: &str,
+        page_size: Option<u32>,
+    ) -> Result<BlocksResponse, String> {
         let token = self
             .load_token()
             .await
             .ok_or("No Notion token. Please set your Integration Token first.")?;
 
         let id = Self::normalize_id(block_id);
-        let url = format!("{}/blocks/{}/children?page_size={}", NOTION_API_BASE, id, page_size.unwrap_or(100));
+        let url = format!(
+            "{}/blocks/{}/children?page_size={}",
+            NOTION_API_BASE,
+            id,
+            page_size.unwrap_or(100)
+        );
 
         println!("[Notion] Getting blocks: {}", id);
 
@@ -217,7 +234,10 @@ impl NotionClient {
 
         if !status.is_success() {
             if let Ok(error) = serde_json::from_str::<NotionError>(&body) {
-                return Err(format!("Notion API error: {} ({})", error.message, error.code));
+                return Err(format!(
+                    "Notion API error: {} ({})",
+                    error.message, error.code
+                ));
             }
             return Err(format!("Request failed with status {}: {}", status, body));
         }
@@ -269,7 +289,10 @@ impl NotionClient {
 
         if !status.is_success() {
             if let Ok(error) = serde_json::from_str::<NotionError>(&body) {
-                return Err(format!("Notion API error: {} ({})", error.message, error.code));
+                return Err(format!(
+                    "Notion API error: {} ({})",
+                    error.message, error.code
+                ));
             }
             return Err(format!("Request failed with status {}: {}", status, body));
         }
@@ -322,12 +345,26 @@ impl NotionClient {
             "heading_1" => format!("# {}", Self::extract_rich_text(content.get("heading_1")?)),
             "heading_2" => format!("## {}", Self::extract_rich_text(content.get("heading_2")?)),
             "heading_3" => format!("### {}", Self::extract_rich_text(content.get("heading_3")?)),
-            "bulleted_list_item" => format!("• {}", Self::extract_rich_text(content.get("bulleted_list_item")?)),
-            "numbered_list_item" => format!("1. {}", Self::extract_rich_text(content.get("numbered_list_item")?)),
+            "bulleted_list_item" => format!(
+                "• {}",
+                Self::extract_rich_text(content.get("bulleted_list_item")?)
+            ),
+            "numbered_list_item" => format!(
+                "1. {}",
+                Self::extract_rich_text(content.get("numbered_list_item")?)
+            ),
             "to_do" => {
-                let checked = content.get("to_do")?.get("checked")?.as_bool().unwrap_or(false);
+                let checked = content
+                    .get("to_do")?
+                    .get("checked")?
+                    .as_bool()
+                    .unwrap_or(false);
                 let checkbox = if checked { "[x]" } else { "[ ]" };
-                format!("{} {}", checkbox, Self::extract_rich_text(content.get("to_do")?))
+                format!(
+                    "{} {}",
+                    checkbox,
+                    Self::extract_rich_text(content.get("to_do")?)
+                )
             }
             "toggle" => format!("> {}", Self::extract_rich_text(content.get("toggle")?)),
             "quote" => format!("> {}", Self::extract_rich_text(content.get("quote")?)),

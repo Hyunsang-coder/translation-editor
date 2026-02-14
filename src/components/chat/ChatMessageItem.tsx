@@ -207,6 +207,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     <div
       className={`chat-message group ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
         } ${isStreaming ? 'ring-1 ring-primary-300/70' : ''}`}
+      data-testid={message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}
+      data-message-id={message.id}
     >
       {/* Message toolbar */}
       <div className="flex items-start justify-between gap-2">

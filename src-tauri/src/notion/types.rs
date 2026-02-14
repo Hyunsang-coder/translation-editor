@@ -134,7 +134,7 @@ pub struct Annotations {
 /// 검색 필터
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchFilter {
-    pub value: String, // "page" or "database"
+    pub value: String,    // "page" or "database"
     pub property: String, // always "object"
 }
 
@@ -188,4 +188,3 @@ pub struct NotionError {
     pub code: String,
     pub message: String,
 }
-

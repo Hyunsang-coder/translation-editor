@@ -1,8 +1,11 @@
+use crate::db::{DbState, McpServerRow};
+use crate::mcp::{
+    McpConnectionStatus, McpRegistry, McpRegistryStatus, McpServerId, McpTool, McpToolResult,
+    MCP_CLIENT,
+};
+use std::collections::HashMap;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
-use std::collections::HashMap;
-use crate::db::{DbState, McpServerRow};
-use crate::mcp::{McpConnectionStatus, McpTool, McpToolResult, MCP_CLIENT, McpRegistry, McpServerId, McpRegistryStatus};
 
 #[tauri::command]
 pub async fn save_mcp_server(
@@ -15,7 +18,7 @@ pub async fn save_mcp_server(
     id: Option<String>,
 ) -> Result<String, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    
+
     let server_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -30,24 +33,19 @@ pub async fn save_mcp_server(
     };
 
     db.save_mcp_server(&server).map_err(|e| e.to_string())?;
-    
+
     Ok(server_id)
 }
 
 #[tauri::command]
-pub async fn list_mcp_servers(
-    state: State<'_, DbState>,
-) -> Result<Vec<McpServerRow>, String> {
+pub async fn list_mcp_servers(state: State<'_, DbState>) -> Result<Vec<McpServerRow>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let servers = db.list_mcp_servers().map_err(|e| e.to_string())?;
     Ok(servers)
 }
 
 #[tauri::command]
-pub async fn delete_mcp_server(
-    state: State<'_, DbState>,
-    id: String,
-) -> Result<(), String> {
+pub async fn delete_mcp_server(state: State<'_, DbState>, id: String) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db.delete_mcp_server(&id).map_err(|e| e.to_string())?;
     Ok(())
@@ -171,4 +169,3 @@ pub async fn mcp_set_notion_config(
 ) -> Result<(), String> {
     McpRegistry::set_notion_config(mcp_url, auth_token).await
 }
-

@@ -55,19 +55,13 @@ pub async fn set_secure_secret(args: SecureSecretArgs) -> CommandResult<()> {
 pub async fn get_secure_secret(key: String) -> CommandResult<Option<String>> {
     validate_key(&key)?;
     let vault_key = to_vault_key(&key);
-    SECRETS
-        .get(&vault_key)
-        .await
-        .map_err(map_secret_error)
+    SECRETS.get(&vault_key).await.map_err(map_secret_error)
 }
 
 #[tauri::command]
 pub async fn delete_secure_secret(key: String) -> CommandResult<()> {
     validate_key(&key)?;
     let vault_key = to_vault_key(&key);
-    SECRETS
-        .delete(&vault_key)
-        .await
-        .map_err(map_secret_error)?;
+    SECRETS.delete(&vault_key).await.map_err(map_secret_error)?;
     Ok(())
 }

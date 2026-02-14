@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use crate::error::{CommandError, CommandResult};
+use std::path::{Path, PathBuf};
 
 /// 시스템 중요 디렉토리 접근을 차단하는 Blocklist 검증 함수
 /// - canonicalize()로 경로 정규화 후, 차단 목록과 비교합니다.
@@ -50,15 +50,16 @@ pub fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
 
 fn is_blocked_path(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
-    
+
     // Windows Blocklist
     #[cfg(target_os = "windows")]
     {
         let lower = path_str.to_lowercase();
         // C:\Windows, C:\Program Files 등
-        if lower.contains(r"c:\windows") || 
-           lower.contains(r"c:\program files") || 
-           lower.contains(r"c:\program files (x86)") {
+        if lower.contains(r"c:\windows")
+            || lower.contains(r"c:\program files")
+            || lower.contains(r"c:\program files (x86)")
+        {
             return true;
         }
     }
@@ -67,22 +68,22 @@ fn is_blocked_path(path: &Path) -> bool {
     #[cfg(not(target_os = "windows"))]
     {
         // 정확한 접두사 매칭을 위해 starts_with 사용
-        // 단, /usr/local/bin 같은 사용자 툴 경로는 허용할 수도 있으나, 
+        // 단, /usr/local/bin 같은 사용자 툴 경로는 허용할 수도 있으나,
         // 보수적으로 시스템 영역(/usr, /etc, /var) 전체를 막는 것이 안전함.
         // /Users (macOS) 또는 /home (Linux) 은 허용해야 함.
-        if path_str.starts_with("/etc") || 
-           path_str.starts_with("/var") || 
-           path_str.starts_with("/root") || 
-           path_str.starts_with("/proc") || 
-           path_str.starts_with("/sys") ||
-           path_str.starts_with("/bin") ||
-           path_str.starts_with("/sbin") ||
-           path_str.starts_with("/usr/bin") ||
-           path_str.starts_with("/usr/sbin") {
+        if path_str.starts_with("/etc")
+            || path_str.starts_with("/var")
+            || path_str.starts_with("/root")
+            || path_str.starts_with("/proc")
+            || path_str.starts_with("/sys")
+            || path_str.starts_with("/bin")
+            || path_str.starts_with("/sbin")
+            || path_str.starts_with("/usr/bin")
+            || path_str.starts_with("/usr/sbin")
+        {
             return true;
         }
     }
 
     false
 }
-

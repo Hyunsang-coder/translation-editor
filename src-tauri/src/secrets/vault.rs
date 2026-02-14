@@ -51,7 +51,7 @@ pub enum VaultError {
 }
 
 /// Vault에 저장되는 시크릿 페이로드
-/// 
+///
 /// 키는 namespaced string으로 통일:
 /// - `ai/openai_api_key`
 /// - `ai/brave_api_key`
@@ -172,8 +172,12 @@ mod tests {
 
         // 페이로드 생성
         let mut payload = SecretsPayload::default();
-        payload.secrets.insert("ai/openai_api_key".to_string(), "sk-test123".to_string());
-        payload.secrets.insert("notion/token".to_string(), "ntn_xxx".to_string());
+        payload
+            .secrets
+            .insert("ai/openai_api_key".to_string(), "sk-test123".to_string());
+        payload
+            .secrets
+            .insert("notion/token".to_string(), "ntn_xxx".to_string());
 
         // 암호화 및 저장
         encrypt_and_write(&vault_path, &master_key, &payload).unwrap();
@@ -183,8 +187,14 @@ mod tests {
 
         // 복호화 및 검증
         let decrypted = read_and_decrypt(&vault_path, &master_key).unwrap();
-        assert_eq!(decrypted.secrets.get("ai/openai_api_key"), Some(&"sk-test123".to_string()));
-        assert_eq!(decrypted.secrets.get("notion/token"), Some(&"ntn_xxx".to_string()));
+        assert_eq!(
+            decrypted.secrets.get("ai/openai_api_key"),
+            Some(&"sk-test123".to_string())
+        );
+        assert_eq!(
+            decrypted.secrets.get("notion/token"),
+            Some(&"ntn_xxx".to_string())
+        );
     }
 
     #[test]
@@ -205,4 +215,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

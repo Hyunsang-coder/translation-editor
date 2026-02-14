@@ -94,7 +94,10 @@ impl NotionMcpClient {
                 s.error = Some("No Notion MCP config. Please set config first.".to_string());
             })
             .await;
-            return Err("No Notion MCP config available. Run the local MCP server and set the auth token.".to_string());
+            return Err(
+                "No Notion MCP config available. Run the local MCP server and set the auth token."
+                    .to_string(),
+            );
         }
 
         let mcp_url = self.config.get_mcp_url().await;
@@ -142,7 +145,10 @@ impl NotionMcpClient {
         };
 
         let response = self
-            .send_request("initialize", Some(serde_json::to_value(params).map_err(|e| e.to_string())?))
+            .send_request(
+                "initialize",
+                Some(serde_json::to_value(params).map_err(|e| e.to_string())?),
+            )
             .await?;
 
         if let Some(result) = response.result {
@@ -205,7 +211,10 @@ impl NotionMcpClient {
         let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
         let request_body = JsonRpcRequest::new(id, method, params);
 
-        println!("[NotionMCP] Sending request: {} (id: {}) to {}", method, id, mcp_url);
+        println!(
+            "[NotionMCP] Sending request: {} (id: {}) to {}",
+            method, id, mcp_url
+        );
 
         let client = reqwest::Client::builder()
             .build()
@@ -223,14 +232,13 @@ impl NotionMcpClient {
             request = request.header("mcp-session-id", sid.as_str());
         }
 
-        let response = request
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| {
-                eprintln!("[NotionMCP] HTTP request failed: {}", e);
-                format!("Failed to send request: {}. Is the local MCP server running?", e)
-            })?;
+        let response = request.json(&request_body).send().await.map_err(|e| {
+            eprintln!("[NotionMCP] HTTP request failed: {}", e);
+            format!(
+                "Failed to send request: {}. Is the local MCP server running?",
+                e
+            )
+        })?;
 
         println!("[NotionMCP] HTTP response status: {}", response.status());
 
@@ -248,10 +256,7 @@ impl NotionMcpClient {
             if status.as_u16() == 401 {
                 return Err("Authentication failed. Please check your auth token.".to_string());
             }
-            return Err(format!(
-                "Request failed with status {}: {}",
-                status, body
-            ));
+            return Err(format!("Request failed with status {}: {}", status, body));
         }
 
         // 응답 본문에서 JSON-RPC 응답 파싱
@@ -260,7 +265,10 @@ impl NotionMcpClient {
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
-        println!("[NotionMCP] Response: {}", &response_text[..response_text.len().min(200)]);
+        println!(
+            "[NotionMCP] Response: {}",
+            &response_text[..response_text.len().min(200)]
+        );
 
         // 응답이 비어있는 경우 (일부 알림 요청에 대한 응답)
         if response_text.is_empty() {
@@ -347,7 +355,10 @@ impl NotionMcpClient {
         };
 
         let response = self
-            .send_request("tools/call", Some(serde_json::to_value(params).map_err(|e| e.to_string())?))
+            .send_request(
+                "tools/call",
+                Some(serde_json::to_value(params).map_err(|e| e.to_string())?),
+            )
             .await?;
 
         if let Some(result) = response.result {

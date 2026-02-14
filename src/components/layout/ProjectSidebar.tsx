@@ -20,6 +20,12 @@ type NewProjectForm = {
   domain: ProjectDomain;
 };
 
+function isTauriTestingBridgeActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as Window & { __TAURI_TESTING_BRIDGE__?: unknown };
+  return typeof w.__TAURI_TESTING_BRIDGE__ === 'object' && w.__TAURI_TESTING_BRIDGE__ !== null;
+}
+
 function mergeProjectListStable(
   prev: RecentProjectInfo[],
   next: RecentProjectInfo[],
@@ -144,10 +150,12 @@ export function ProjectSidebar(): JSX.Element {
   };
 
   const handleNewProject = async (): Promise<void> => {
-    const ok = await confirm('새 프로젝트를 생성할까요?', {
-      title: 'New Project',
-      kind: 'info',
-    });
+    const ok = isTauriTestingBridgeActive()
+      ? true
+      : await confirm('새 프로젝트를 생성할까요?', {
+        title: 'New Project',
+        kind: 'info',
+      });
     if (!ok) return;
 
     // 기존 프로젝트가 있고 변경사항이 있으면 먼저 저장
@@ -184,10 +192,12 @@ export function ProjectSidebar(): JSX.Element {
   };
 
   const handleDelete = async (projectId: string): Promise<void> => {
-    const ok = await confirm('이 프로젝트를 삭제할까요?\n(DB에서 삭제되며 복구할 수 없습니다)', {
-      title: '프로젝트 삭제',
-      kind: 'warning',
-    });
+    const ok = isTauriTestingBridgeActive()
+      ? true
+      : await confirm('이 프로젝트를 삭제할까요?\n(DB에서 삭제되며 복구할 수 없습니다)', {
+        title: '프로젝트 삭제',
+        kind: 'warning',
+      });
     if (!ok) return;
     const isCurrent = selectedId === projectId;
     let nextProjectId: string | null = null;
@@ -324,12 +334,14 @@ export function ProjectSidebar(): JSX.Element {
             onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
             placeholder="Project title"
             autoFocus
+            data-testid="project-title-input"
           />
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               className="flex-1 px-3 py-1.5 rounded bg-primary-500 text-white text-xs hover:bg-primary-600"
               onClick={() => void handleNewProject()}
+              data-testid="project-create-button"
             >
               Create
             </button>
@@ -349,8 +361,9 @@ export function ProjectSidebar(): JSX.Element {
         <button
           type="button"
           className="w-full px-3 py-2 flex items-center gap-2 text-editor-muted hover:text-primary-500 hover:bg-editor-bg transition-colors border-b border-editor-border"
-          onClick={() => setShowNew((v) => !v)}
+          onClick={() => setShowNew(true)}
           title="새 프로젝트"
+          data-testid="project-new-button"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 5v14M5 12h14" />
@@ -430,6 +443,7 @@ export function ProjectSidebar(): JSX.Element {
           type="button"
           className="w-full px-2 py-1.5 rounded-md text-left text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors flex items-center gap-2"
           onClick={() => setShowAppSettings(true)}
+          data-testid="project-app-settings-button"
         >
           <Cog size={14} />
           <span>{t('projectSidebar.appSettings')}</span>

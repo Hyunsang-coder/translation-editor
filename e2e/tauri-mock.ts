@@ -266,6 +266,11 @@ function buildMockScript(seedProjects: MockProject[]): string {
     get_secure_secret: () => null,
     set_secure_secret: () => null,
     delete_secure_secret: () => null,
+
+    // ── Tauri dialog plugin (for flows guarded by confirm/message) ──
+    'plugin:dialog|confirm': () => true,
+    'plugin:dialog|ask': () => true,
+    'plugin:dialog|message': () => null,
   };
 
   // ── __TAURI_INTERNALS__ injection ──

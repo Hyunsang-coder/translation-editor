@@ -2,9 +2,9 @@
 //!
 //! Atlassian MCP 서버와 SSE(Server-Sent Events)로 통신합니다.
 
+use crate::mcp::emit_mcp_status_changed;
 use crate::mcp::oauth::AtlassianOAuth;
 use crate::mcp::types::*;
-use crate::mcp::emit_mcp_status_changed;
 use futures::StreamExt;
 use rand::Rng;
 use reqwest_eventsource::{Event, EventSource};
@@ -54,12 +54,12 @@ impl McpClient {
     /// 현재 연결 상태 가져오기 (토큰 정보 포함)
     pub async fn get_status(&self) -> McpConnectionStatus {
         let mut status = self.status.read().await.clone();
-        
+
         // OAuth 초기화 및 토큰 상태 조회
         let (has_token, expires_in) = self.oauth.get_token_info().await;
         status.has_stored_token = has_token;
         status.token_expires_in = expires_in;
-        
+
         status
     }
 
@@ -89,7 +89,8 @@ impl McpClient {
         self.update_status(|s| {
             s.is_connecting = true;
             s.error = None;
-        }).await;
+        })
+        .await;
 
         // OAuth 토큰 확인 (재시도 대상 아님 - 사용자 인터랙션 필요)
         println!("[MCP] Checking OAuth token...");
@@ -104,7 +105,8 @@ impl McpClient {
                     self.update_status(|s| {
                         s.is_connecting = false;
                         s.error = Some(e.clone());
-                    }).await;
+                    })
+                    .await;
                     return Err(e);
                 }
             }
@@ -121,7 +123,8 @@ impl McpClient {
                         s.is_connected = true;
                         s.is_connecting = false;
                         s.server_name = Some("Atlassian".to_string());
-                    }).await;
+                    })
+                    .await;
                     return Ok(());
                 }
                 Err(e) if attempt < MAX_RETRY_ATTEMPTS => {
@@ -141,16 +144,14 @@ impl McpClient {
                     attempt += 1;
                 }
                 Err(e) => {
-                    let error_msg = format!(
-                        "Connection failed after {} attempts: {}",
-                        attempt + 1,
-                        e
-                    );
+                    let error_msg =
+                        format!("Connection failed after {} attempts: {}", attempt + 1, e);
                     println!("[MCP] {}", error_msg);
                     self.update_status(|s| {
                         s.is_connecting = false;
                         s.error = Some(error_msg.clone());
-                    }).await;
+                    })
+                    .await;
                     return Err(error_msg);
                 }
             }
@@ -184,17 +185,23 @@ impl McpClient {
 
     /// SSE 연결 시작
     async fn start_sse_connection(&self) -> Result<(), String> {
-        let access_token = self.oauth.get_access_token().await
+        let access_token = self
+            .oauth
+            .get_access_token()
+            .await
             .ok_or("No access token available")?;
 
         println!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
-        println!("[MCP] Access token: [REDACTED] (length: {})", access_token.len());
+        println!(
+            "[MCP] Access token: [REDACTED] (length: {})",
+            access_token.len()
+        );
 
         // reqwest 클라이언트 빌드 (TLS 설정 포함)
         let client = reqwest::Client::builder()
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-        
+
         let request = client
             .get(MCP_SSE_URL)
             .header("Authorization", format!("Bearer {}", access_token))
@@ -323,21 +330,30 @@ impl McpClient {
             },
         };
 
-        let response = self.send_request("initialize", Some(serde_json::to_value(params).map_err(|e| e.to_string())?)).await?;
-        
+        let response = self
+            .send_request(
+                "initialize",
+                Some(serde_json::to_value(params).map_err(|e| e.to_string())?),
+            )
+            .await?;
+
         if let Some(result) = response.result {
             if let Ok(init_result) = serde_json::from_value::<InitializeResult>(result) {
                 *self.server_info.write().await = init_result.server_info;
-                
+
                 // initialized 알림 전송
-                self.send_notification("notifications/initialized", None).await?;
-                
+                self.send_notification("notifications/initialized", None)
+                    .await?;
+
                 return Ok(());
             }
         }
 
         if let Some(error) = response.error {
-            return Err(format!("Initialize failed: {} (code: {})", error.message, error.code));
+            return Err(format!(
+                "Initialize failed: {} (code: {})",
+                error.message, error.code
+            ));
         }
 
         Err("Initialize failed: unknown error".to_string())
@@ -346,7 +362,7 @@ impl McpClient {
     /// 도구 목록 가져오기
     async fn fetch_tools(&self) -> Result<(), String> {
         let response = self.send_request("tools/list", None).await?;
-        
+
         if let Some(result) = response.result {
             if let Ok(tools_result) = serde_json::from_value::<ListToolsResult>(result) {
                 *self.cached_tools.write().await = tools_result.tools;
@@ -355,21 +371,35 @@ impl McpClient {
         }
 
         if let Some(error) = response.error {
-            return Err(format!("List tools failed: {} (code: {})", error.message, error.code));
+            return Err(format!(
+                "List tools failed: {} (code: {})",
+                error.message, error.code
+            ));
         }
 
         Err("List tools failed: unknown error".to_string())
     }
 
     /// JSON-RPC 요청 전송
-    async fn send_request(&self, method: &str, params: Option<serde_json::Value>) -> Result<JsonRpcResponse, String> {
-        let endpoint = self.message_endpoint.read().await.clone()
+    async fn send_request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<JsonRpcResponse, String> {
+        let endpoint = self
+            .message_endpoint
+            .read()
+            .await
+            .clone()
             .ok_or("Not connected to MCP server")?;
 
         println!("[MCP] Sending request to endpoint: {}", endpoint);
         println!("[MCP] Method: {}", method);
 
-        let access_token = self.oauth.get_access_token().await
+        let access_token = self
+            .oauth
+            .get_access_token()
+            .await
             .ok_or("No access token available")?;
 
         let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
@@ -377,13 +407,16 @@ impl McpClient {
 
         // 응답 채널 등록
         let (tx, rx) = oneshot::channel();
-        self.pending_requests.lock().await.insert(id.to_string(), tx);
+        self.pending_requests
+            .lock()
+            .await
+            .insert(id.to_string(), tx);
 
         // HTTP POST로 요청 전송
         let client = reqwest::Client::builder()
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-        
+
         let response = client
             .post(&endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
@@ -412,11 +445,22 @@ impl McpClient {
     }
 
     /// JSON-RPC 알림 전송 (응답 없음)
-    async fn send_notification(&self, method: &str, params: Option<serde_json::Value>) -> Result<(), String> {
-        let endpoint = self.message_endpoint.read().await.clone()
+    async fn send_notification(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<(), String> {
+        let endpoint = self
+            .message_endpoint
+            .read()
+            .await
+            .clone()
             .ok_or("Not connected to MCP server")?;
 
-        let access_token = self.oauth.get_access_token().await
+        let access_token = self
+            .oauth
+            .get_access_token()
+            .await
             .ok_or("No access token available")?;
 
         let notification = JsonRpcNotification {
@@ -430,7 +474,7 @@ impl McpClient {
         let client = reqwest::Client::builder()
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-        
+
         let response = client
             .post(&endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
@@ -443,7 +487,10 @@ impl McpClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format!("Notification failed with status {}: {}", status, body));
+            return Err(format!(
+                "Notification failed with status {}: {}",
+                status, body
+            ));
         }
 
         Ok(())
@@ -455,13 +502,22 @@ impl McpClient {
     }
 
     /// 도구 호출
-    pub async fn call_tool(&self, name: &str, arguments: Option<HashMap<String, serde_json::Value>>) -> Result<McpToolResult, String> {
+    pub async fn call_tool(
+        &self,
+        name: &str,
+        arguments: Option<HashMap<String, serde_json::Value>>,
+    ) -> Result<McpToolResult, String> {
         let params = CallToolParams {
             name: name.to_string(),
             arguments,
         };
 
-        let response = self.send_request("tools/call", Some(serde_json::to_value(params).map_err(|e| e.to_string())?)).await?;
+        let response = self
+            .send_request(
+                "tools/call",
+                Some(serde_json::to_value(params).map_err(|e| e.to_string())?),
+            )
+            .await?;
 
         if let Some(result) = response.result {
             return serde_json::from_value(result)
@@ -469,7 +525,10 @@ impl McpClient {
         }
 
         if let Some(error) = response.error {
-            return Err(format!("Tool call failed: {} (code: {})", error.message, error.code));
+            return Err(format!(
+                "Tool call failed: {} (code: {})",
+                error.message, error.code
+            ));
         }
 
         Err("Tool call failed: unknown error".to_string())
@@ -498,7 +557,8 @@ impl McpClient {
             s.is_connected = false;
             s.is_connecting = false;
             s.server_name = None;
-        }).await;
+        })
+        .await;
     }
 
     /// 로그아웃 (토큰 삭제 포함)
@@ -525,4 +585,3 @@ impl Default for McpClient {
 use once_cell::sync::Lazy;
 
 pub static MCP_CLIENT: Lazy<McpClient> = Lazy::new(McpClient::new);
-
