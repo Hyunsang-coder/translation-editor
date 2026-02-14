@@ -100,6 +100,15 @@
 
   const isElementVisible = (el) => {
     if (!(el instanceof Element)) return false;
+
+    // Use native checkVisibility when available (checks ancestors too)
+    if (typeof el.checkVisibility === "function") {
+      if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }
+
+    // Fallback for older WebView engines
     const style = window.getComputedStyle(el);
     if (!style) return false;
     if (style.display === "none") return false;
@@ -223,7 +232,7 @@
       else target.value = value;
     }
 
-    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
     target.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
@@ -233,12 +242,14 @@
     target.focus();
 
     if (clear) {
-      target.innerHTML = "";
+      // Use execCommand so TipTap's ProseMirror transaction system stays in sync
+      document.execCommand("selectAll", false, null);
+      document.execCommand("delete", false, null);
     }
 
     // TipTap compatibility: execCommand still triggers internal observers on WKWebView/Chromium
     document.execCommand("insertText", false, value);
-    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
     target.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
@@ -710,6 +721,172 @@
 
       typeContentEditable(target, value, clear);
       return { typed: true, selector, index, matchCount: matches.length };
+    },
+
+    "dom.getAll": async (params) => {
+      const selector = params?.selector;
+      const limit = Number(params?.limit ?? 20);
+      const matches = queryAllDeep(selector);
+
+      const items = matches.slice(0, limit).map((el, i) => ({
+        index: i,
+        tagName: el.tagName,
+        textContent: textValue(el.textContent).substring(0, 200),
+        visible: isElementVisible(el),
+        disabled: isElementDisabled(el),
+        checked: typeof el.checked === "boolean" ? el.checked : undefined,
+      }));
+
+      return { selector, matchCount: matches.length, returned: items.length, items };
+    },
+
+    "dom.getValue": async (params) => {
+      const selector = params?.selector;
+      const index = Number(params?.index ?? 0);
+      const matches = queryAllDeep(selector);
+      const el = matches[index] ?? null;
+
+      if (!el) {
+        throw toBridgeError("Element not found", -32000, { selector, matchCount: matches.length });
+      }
+
+      if (el.tagName === "SELECT") {
+        const selectedOption = el.options?.[el.selectedIndex];
+        return {
+          selector, index,
+          tagName: "SELECT",
+          value: el.value,
+          text: selectedOption ? textValue(selectedOption.textContent) : "",
+          selectedIndex: el.selectedIndex,
+        };
+      }
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+        return {
+          selector, index,
+          tagName: el.tagName,
+          value: el.value,
+          type: el.type,
+          checked: typeof el.checked === "boolean" ? el.checked : undefined,
+        };
+      }
+      if (el.isContentEditable) {
+        return {
+          selector, index,
+          tagName: el.tagName,
+          value: textValue(el.textContent),
+          htmlLength: el.innerHTML.length,
+        };
+      }
+      return { selector, index, tagName: el.tagName, value: textValue(el.textContent) };
+    },
+
+    "dom.select": async (params) => {
+      const selector = params?.selector;
+      const index = Number(params?.index ?? 0);
+      const matches = queryAllDeep(selector);
+      const el = matches[index] ?? null;
+
+      if (!el) {
+        throw toBridgeError("Element not found", -32000, { selector, matchCount: matches.length });
+      }
+      if (el.tagName !== "SELECT") {
+        throw toBridgeError("Target is not a SELECT element", -32000, { selector, tagName: el.tagName });
+      }
+
+      const options = Array.from(el.options);
+      let option;
+
+      if (hasOwn(params, "value")) {
+        option = options.find((o) => o.value === String(params.value));
+      } else if (hasOwn(params, "text")) {
+        option = options.find((o) => includesText(o.textContent, params.text, Boolean(params?.exact)));
+      } else if (hasOwn(params, "optionIndex")) {
+        option = options[Number(params.optionIndex)] ?? null;
+      }
+
+      if (!option) {
+        throw toBridgeError("Option not found", -32000, {
+          value: params?.value, text: params?.text,
+          availableOptions: options.slice(0, 10).map((o) => ({ value: o.value, text: textValue(o.textContent) })),
+        });
+      }
+
+      el.value = option.value;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+
+      return { selected: true, value: option.value, text: textValue(option.textContent) };
+    },
+
+    "dom.keyboard": async (params) => {
+      const key = params?.key;
+      if (!key) {
+        throw toBridgeError("key is required", -32602);
+      }
+
+      const selector = params?.selector;
+      const target = selector ? queryFirstDeep(selector) : (document.activeElement ?? document.body);
+      if (selector && !target) {
+        throw toBridgeError("Target element not found", -32000, { selector });
+      }
+
+      const modifiers = Array.isArray(params?.modifiers) ? params.modifiers : [];
+      const eventInit = {
+        key,
+        code: params?.code ?? "",
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        ctrlKey: modifiers.some((m) => m === "ctrl" || m === "Control"),
+        metaKey: modifiers.some((m) => m === "meta" || m === "Meta" || m === "cmd"),
+        shiftKey: modifiers.some((m) => m === "shift" || m === "Shift"),
+        altKey: modifiers.some((m) => m === "alt" || m === "Alt"),
+      };
+
+      target.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+      target.dispatchEvent(new KeyboardEvent("keyup", eventInit));
+
+      return { dispatched: true, key, modifiers, target: selector ?? "activeElement" };
+    },
+
+    "dom.scrollTo": async (params) => {
+      const selector = params?.selector;
+      if (selector) {
+        const el = queryFirstDeep(selector);
+        if (!el) {
+          throw toBridgeError("Element not found", -32000, { selector });
+        }
+        const position = params?.position ?? "center";
+        el.scrollIntoView({ block: position, inline: "center", behavior: "instant" });
+        return { scrolled: true, target: selector };
+      }
+
+      const x = Number(params?.x ?? 0);
+      const y = Number(params?.y ?? 0);
+      window.scrollTo({ left: x, top: y, behavior: "instant" });
+      return { scrolled: true, x, y };
+    },
+
+    "dom.waitForHidden": async (params) => {
+      const selector = params?.selector;
+      if (!selector) {
+        throw toBridgeError("selector is required", -32602);
+      }
+      const timeoutMs = Number(params?.timeout ?? 5000);
+
+      const result = await waitForCondition(
+        () => {
+          const el = queryFirstDeep(selector);
+          if (!el || !isElementVisible(el)) {
+            return { hidden: true, selector };
+          }
+          return null;
+        },
+        timeoutMs,
+        "Timeout waiting for element to hide",
+      );
+
+      return result;
     },
 
     "dom.waitForText": async (params) => {

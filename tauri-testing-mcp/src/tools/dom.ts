@@ -116,10 +116,14 @@ export function registerDomTools(
     "tauri_dom_get_text",
     {
       description: "Get trimmed text content for an element.",
-      inputSchema: { selector: z.string(), label: z.string().optional() },
+      inputSchema: {
+        selector: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        label: z.string().optional(),
+      },
       annotations: { readOnlyHint: true },
     },
-    async ({ selector, label }) => textResult(await callBridge("dom.getText", { selector, label })),
+    async ({ selector, index, label }) => textResult(await callBridge("dom.getText", { selector, index, label })),
   );
 
   server.registerTool(
@@ -169,6 +173,101 @@ export function registerDomTools(
     },
     async ({ maxDepth, maxNodes, selector, label }) =>
       textResult(await callBridge("dom.getPageContent", { maxDepth, maxNodes, selector, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_get_all",
+    {
+      description: "Get info about all elements matching a CSS selector (tag, text, visible, disabled, checked).",
+      inputSchema: {
+        selector: z.string(),
+        limit: z.number().int().positive().max(100).optional(),
+        label: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ selector, limit, label }) =>
+      textResult(await callBridge("dom.getAll", { selector, limit, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_get_value",
+    {
+      description: "Get current value of an input, textarea, select, or contenteditable element.",
+      inputSchema: {
+        selector: z.string(),
+        index: z.number().int().nonnegative().optional(),
+        label: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ selector, index, label }) =>
+      textResult(await callBridge("dom.getValue", { selector, index, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_select",
+    {
+      description: "Select an option in a <select> element by value, text, or optionIndex.",
+      inputSchema: {
+        selector: z.string(),
+        value: z.string().optional(),
+        text: z.string().optional(),
+        optionIndex: z.number().int().nonnegative().optional(),
+        exact: z.boolean().optional(),
+        index: z.number().int().nonnegative().optional(),
+        label: z.string().optional(),
+      },
+    },
+    async ({ selector, value, text, optionIndex, exact, index, label }) =>
+      textResult(await callBridge("dom.select", { selector, value, text, optionIndex, exact, index, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_keyboard",
+    {
+      description: "Send keyboard event (keydown + keyup). Supports modifiers for shortcuts (e.g. Cmd+L).",
+      inputSchema: {
+        key: z.string().describe("Key value, e.g. 'Enter', 'Escape', 'a', 'l'"),
+        code: z.string().optional().describe("Physical key code, e.g. 'KeyL', 'Enter'"),
+        modifiers: z.array(z.enum(["ctrl", "meta", "cmd", "shift", "alt"])).optional(),
+        selector: z.string().optional().describe("Target element; defaults to active element"),
+        label: z.string().optional(),
+      },
+    },
+    async ({ key, code, modifiers, selector, label }) =>
+      textResult(await callBridge("dom.keyboard", { key, code, modifiers, selector, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_scroll_to",
+    {
+      description: "Scroll to an element (by selector) or to absolute coordinates.",
+      inputSchema: {
+        selector: z.string().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        position: z.enum(["start", "center", "end", "nearest"]).optional(),
+        label: z.string().optional(),
+      },
+    },
+    async ({ selector, x, y, position, label }) =>
+      textResult(await callBridge("dom.scrollTo", { selector, x, y, position, label })),
+  );
+
+  server.registerTool(
+    "tauri_dom_wait_for_hidden",
+    {
+      description: "Wait until an element disappears or becomes invisible.",
+      inputSchema: {
+        selector: z.string(),
+        timeout: z.number().int().positive().max(120000).optional(),
+        label: z.string().optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ selector, timeout, label }) =>
+      textResult(await callBridge("dom.waitForHidden", { selector, timeout, label })),
   );
 
   server.registerTool(
