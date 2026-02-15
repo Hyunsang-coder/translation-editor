@@ -11,7 +11,7 @@ import type { ReviewIssue } from '@/stores/reviewStore';
 
 export type ContentMode = 'source' | 'target' | 'bilingual';
 export type BilingualLayout = 'table' | 'interleaved' | 'sequential';
-export type ExportFormat = 'markdown' | 'html';
+export type ExportFormat = 'markdown' | 'html' | 'pdf' | 'docx';
 
 export interface ExportOptions {
   contentMode: ContentMode;
@@ -266,4 +266,91 @@ function escapeHtml(str: string): string {
 
 function escapeMdCell(str: string): string {
   return str.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+// ── PDF / DOCX Export ──
+
+/** IIFE 브라우저 빌드를 script 태그로 on-demand 로드 */
+function loadHtmlToDocx(): Promise<(html: string, header?: string | null, opts?: Record<string, unknown>) => Promise<Blob>> {
+  type HtmlToDocxFn = (html: string, header?: string | null, opts?: Record<string, unknown>) => Promise<Blob>;
+  const w = window as unknown as { HTMLToDOCX?: HtmlToDocxFn };
+  if (w.HTMLToDOCX) return Promise.resolve(w.HTMLToDOCX);
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `${import.meta.env.BASE_URL}lib/html-to-docx.browser.js`;
+    script.onload = () => {
+      if (w.HTMLToDOCX) resolve(w.HTMLToDOCX);
+      else reject(new Error('HTMLToDOCX not found after script load'));
+    };
+    script.onerror = () => reject(new Error('Failed to load html-to-docx'));
+    document.head.appendChild(script);
+  });
+}
+
+/**
+ * DOCX 내보내기: HTML 생성 → html-to-docx 변환 → Uint8Array 반환
+ */
+export async function exportToDocx(
+  input: ExportInput,
+  options: Omit<ExportOptions, 'format'>,
+): Promise<Uint8Array> {
+  const htmlContent = exportDocument(input, { ...options, format: 'html' });
+  const HtmlToDocx = await loadHtmlToDocx();
+  const blob = await HtmlToDocx(htmlContent, undefined, {
+    title: options.projectTitle,
+  });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+/**
+ * PDF 내보내기: html2canvas + jsPDF로 직접 PDF 파일 생성
+ */
+export async function exportToPdf(
+  input: ExportInput,
+  options: Omit<ExportOptions, 'format'>,
+): Promise<Uint8Array> {
+  const htmlContent = exportDocument(input, { ...options, format: 'html' });
+
+  const [html2canvasMod, jspdfMod] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+  const html2canvas = html2canvasMod.default;
+  const { jsPDF } = jspdfMod;
+
+  // Hidden container로 렌더링
+  const container = document.createElement('div');
+  container.innerHTML = htmlContent;
+  Object.assign(container.style, {
+    position: 'absolute',
+    left: '-9999px',
+    top: '0',
+    width: '800px',
+  });
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - 2 * margin;
+    const scaledHeight = (canvas.height * contentWidth) / canvas.width;
+    const pageContentHeight = pageHeight - 2 * margin;
+    const totalPages = Math.ceil(scaledHeight / pageContentHeight);
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    for (let i = 0; i < totalPages; i++) {
+      if (i > 0) pdf.addPage();
+      const yPosition = margin - i * pageContentHeight;
+      pdf.addImage(imgData, 'JPEG', margin, yPosition, contentWidth, scaledHeight);
+    }
+
+    return new Uint8Array(pdf.output('arraybuffer'));
+  } finally {
+    document.body.removeChild(container);
+  }
 }

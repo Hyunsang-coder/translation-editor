@@ -66,11 +66,13 @@ export async function pickDocumentFile(): Promise<string | null> {
 }
 
 export async function pickExportDocumentPath(
-  format: 'markdown' | 'html',
+  format: 'markdown' | 'html' | 'pdf' | 'docx',
   defaultName = 'document',
 ): Promise<string | null> {
-  const ext = format === 'markdown' ? 'md' : 'html';
-  const filterName = format === 'markdown' ? 'Markdown' : 'HTML';
+  const extMap = { markdown: 'md', html: 'html', pdf: 'pdf', docx: 'docx' } as const;
+  const nameMap = { markdown: 'Markdown', html: 'HTML', pdf: 'PDF', docx: 'Word Document' } as const;
+  const ext = extMap[format];
+  const filterName = nameMap[format];
   const path = await save({
     title: 'Export Document',
     defaultPath: `${defaultName}.${ext}`,

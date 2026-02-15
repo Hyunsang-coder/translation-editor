@@ -9,6 +9,8 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { useUIStore } from '@/stores/uiStore';
 import {
   exportDocument,
+  exportToDocx,
+  exportToPdf,
   copyToClipboard,
   type ContentMode,
   type BilingualLayout,
@@ -49,6 +51,8 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
     return { contentMode, bilingualLayout, format, includeReview, projectTitle: title };
   }, [contentMode, bilingualLayout, format, includeReview]);
 
+  const isBinaryFormat = format === 'pdf' || format === 'docx';
+
   const handleCopy = useCallback(async () => {
     const input = buildInput();
     if (!input) {
@@ -76,8 +80,41 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
     setBusy(true);
     try {
       const options = buildOptions();
-      const content = exportDocument(input, options);
       const defaultName = options.projectTitle.replace(/[/\\?%*:|"<>]/g, '_');
+
+      if (format === 'pdf' || format === 'docx') {
+        const data = format === 'pdf'
+          ? await exportToPdf(input, options)
+          : await exportToDocx(input, options);
+
+        if (isTauriRuntime()) {
+          const path = await pickExportDocumentPath(format, defaultName);
+          if (!path) {
+            setBusy(false);
+            return;
+          }
+          await invoke('write_binary_file', { path, data: Array.from(data) });
+        } else {
+          const mimeMap = {
+            pdf: 'application/pdf',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          } as const;
+          const blob = new Blob([data.buffer as ArrayBuffer], { type: mimeMap[format] });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${defaultName}.${format}`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        addToast({ type: 'success', message: t('export.success') });
+        onClose();
+        return;
+      }
+
+      // HTML / Markdown
+      const content = exportDocument(input, options);
 
       if (isTauriRuntime()) {
         const path = await pickExportDocumentPath(format, defaultName);
@@ -101,7 +138,8 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
 
       addToast({ type: 'success', message: t('export.success') });
       onClose();
-    } catch {
+    } catch (err) {
+      console.error('[Export] save failed:', err);
       addToast({ type: 'error', message: t('export.error') });
     } finally {
       setBusy(false);
@@ -190,8 +228,8 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
           <legend className="text-xs font-medium text-editor-muted uppercase tracking-wide mb-2">
             {t('export.formatSection')}
           </legend>
-          <div className="flex gap-4">
-            {(['html', 'markdown'] as const).map((fmt) => (
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {(['html', 'markdown', 'pdf', 'docx'] as const).map((fmt) => (
               <label key={fmt} className="flex items-center gap-1.5 text-sm text-editor-text cursor-pointer">
                 <input
                   type="radio"
@@ -229,7 +267,8 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
           <button
             type="button"
             onClick={handleCopy}
-            disabled={busy}
+            disabled={busy || isBinaryFormat}
+            title={isBinaryFormat ? t('export.binaryNoCopy') : undefined}
             className="px-4 py-2 text-sm rounded-lg border border-editor-border text-editor-text hover:bg-editor-border/60 transition-colors disabled:opacity-50"
           >
             {t('export.copyToClipboard')}

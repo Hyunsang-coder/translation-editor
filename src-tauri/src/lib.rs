@@ -466,6 +466,7 @@ pub fn run() {
             commands::notion::notion_query_database,
             // Export
             commands::export::write_text_file,
+            commands::export::write_binary_file,
             // Secret Manager
             commands::secrets::secrets_initialize,
             commands::secrets::secrets_get,
