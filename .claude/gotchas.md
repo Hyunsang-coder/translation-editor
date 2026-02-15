@@ -297,3 +297,11 @@ Critical implementation warnings learned from past issues.
 136. **View Menu Chat CheckMenuItem 동기화**: Chat 메뉴는 `CheckMenuItemBuilder`로 생성 (체크 상태 표시). React 측 `isViewChatOn` 상태 변경 시 `setViewChatMenuChecked()` Tauri command로 Rust 메뉴 상태 업데이트. `useEffect` deps에 `isViewChatOn`만 포함. 실패 시 `console.warn`으로 무시 (메뉴 동기화는 non-critical).
 
 137. **toggleChatVisibility 중앙화**: Chat 토글 로직이 `Toolbar.tsx`에 인라인으로 있었으나, View 메뉴에서도 동일 동작이 필요하여 `uiStore.toggleChatVisibility()`로 중앙화. `aria-pressed` 상태도 `isAnyChatVisible` (양쪽 사이드바 모두 검사)로 통합.
+
+138. **Review Empty Document Pre-Check (HTML Direct)**: `ReviewPanel.tsx`의 `handleStartReview()`에서 `buildAlignedChunksAsync` 전에 `stripHtml(sourceDocument).trim()` / `stripHtml(targetDocument).trim()`으로 빈 문서 직접 검증. Markdown 변환 파이프라인이 `<p></p>`를 빈 문자열로 정확히 변환하지 못하는 문제 방지.
+
+139. **Project Creation Double-Click Prevention**: `MainLayout.tsx`의 `handleCreateProject()`에서 `isCreating` 상태로 중복 클릭 방지. `disabled` 속성 + "생성 중..." 텍스트 피드백. `finally` 블록에서 상태 리셋.
+
+140. **Toolbar Project Null Guard**: `Toolbar.tsx`의 Settings/Review/Chat 메뉴 버튼에 `disabled={!project}` 가드 + 핸들러 `if (!project) return` 얼리 리턴. 프로젝트 없는 상태에서 패널 열기 시도 방지.
+
+141. **createSnapshotIfChanged Dedup**: `historyStore.ts`의 `createSnapshotIfChanged()`는 `latestBlocksHash` 캐시로 중복 스냅샷 방지. Fast path (캐시 비교) → Slow path (스냅샷 로드 비교) → 변경 감지 시만 새 스냅샷 생성. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 `createSnapshot` 대신 사용.

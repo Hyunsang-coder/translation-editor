@@ -71,7 +71,7 @@ tauri-testing-mcp/            # MCP server for runtime control tools
 This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
-- `gotchas.md` - Critical implementation warnings (137 items)
+- `gotchas.md` - Critical implementation warnings (141 items)
 - `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 
@@ -82,21 +82,13 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-02-14)
+## Recent Updates (2026-02-16)
 
-- **View 메뉴 + 메뉴 이벤트 브리지**: Rust 네이티브 View 메뉴에 Project/Settings/Review/Chat 항목 추가. `CustomEvent('tauri-menu')` 기반 양방향 동기화 (Chat은 CheckMenuItem으로 체크 상태 반영).
-- **Chat 전역 토글 중앙화**: `uiStore.toggleChatVisibility()` — Toolbar + View 메뉴 모두 동일 액션 사용. 양쪽 사이드바 chat 패널 On/Off 통합 제어.
-- **tsconfig ES2022**: `lib: ES2020 → ES2022` 업그레이드 (`Array.at()`, `Object.hasOwn()` 등 사용 가능).
-- **E2E 테스트 확장**: `user-story.spec.ts` Phase 9 (프로젝트 Duplicate) 추가 (6→7 TC).
-- **Manual update check**: AppSettingsModal Help & Info 섹션에 "업데이트 확인" 버튼 추가. `check()` 직접 호출 → custom event(`app:update-found`)로 기존 UpdateModal 재사용.
-- **Tauri Testing Bridge 보강**: `tauri-plugin-testing` + `tauri-testing-mcp` 연동 강화.
-  - DOM 메서드 허용 목록 확장 (`clickByText`, `fillByPlaceholder`, `typeContentEditable`, `typeContentEditableBySelector`, `waitForText`)
-  - dialog 제어 메서드 추가 (`dialog.getState`, `dialog.setAutoResponse`, `dialog.pushResponse`, `dialog.clear`)
-  - 브리지 클릭/입력/대기 안정화(가시성/disable/scroll/focus 체크, MutationObserver 기반 대기)
-- **Workflow MCP 시나리오 고정**: `scripts/tauri-testing-mcp-workflow.mjs`
-  - 원문 입력: 5줄 계층형 bullet(`-`) 한국어
-  - 번역 타깃 언어: 영어 강제 선택(실패 시 테스트 실패)
-  - 채팅 질문: `번여문 내용 간략히 요약해줘` 전송 후 assistant 응답 생성 확인
+- **스냅샷 변경 감지**: `createSnapshotIfChanged()` — `latestBlocksHash` 캐시 비교로 중복 스냅샷 방지. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 사용.
+- **수정 상태 표시**: HistoryTimeline에 "수정됨" 배지 (amber-500) — `currentBlocksHash ≠ latestBlocksHash` 시 표시.
+- **빈 문서 검증 강화**: 원문/번역문 분리 검증 + HTML 직접 확인 (`stripHtml`). 검수 전 Markdown 변환 파이프라인 우회하여 정확한 빈 문서 감지.
+- **프로젝트 생성 UI 안정성**: `isCreating` 상태로 더블클릭 방지 + Toolbar 메뉴 버튼에 `disabled={!project}` 가드.
+- **히스토리 버튼 레이아웃 개선**: 드로어 UI 리팩터링.
 
 ### Tauri Testing Bridge Notes
 - 이 브리지는 **Playwright 전체 엔진 대체가 아니라**, Tauri 런타임 내부 제어를 위한 RPC 레이어입니다.

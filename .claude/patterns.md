@@ -327,6 +327,24 @@ createComposerActions() + createSettingsActions() + createContextBlockActions() 
 
 새 AI/세션 로직 추가 시 해당 슬라이스 파일(`chatStore.ai.ts`, `chatStore.session.ts` 등)에 구현.
 
+## History Snapshot Change Detection
+
+```typescript
+// src/stores/historyStore.ts — createSnapshotIfChanged()
+// 실제 변경이 있을 때만 스냅샷 생성 (중복 스냅샷 방지)
+
+// latestBlocksHash: 최신 스냅샷의 해시를 상태에 캐시 (비용 큰 getSnapshot 호출 1회만)
+// loadHistory() 완료 후 백그라운드로 최신 스냅샷 로드 → hashContent() → 캐시
+
+createSnapshotIfChanged({ projectId, description, blocks, chatSummary })
+  // Fast path: 캐시된 해시와 비교 → 변경 없으면 즉시 return null
+  // Slow path (캐시 없음): 최신 스냅샷 load → 비교 → 변경 감지 후 새 스냅샷 생성
+  // 호출처: TranslatePreviewModal (번역 적용 전 자동 스냅샷)
+  //         HistoryRestoreDialog (복원 전 자동 스냅샷)
+```
+
+**UI 표시**: HistoryTimeline에 "수정됨" 배지 (amber-500) — `currentBlocksHash ≠ latestBlocksHash`
+
 ## Modal Component
 
 ```typescript

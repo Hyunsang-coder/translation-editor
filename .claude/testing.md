@@ -89,7 +89,7 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (as of 2026-02-14: 29 files, 428 tests, 8 skipped)
+### Unit Test Files (as of 2026-02-16: 31 files, 458 tests, 8 skipped)
 
 | File | Tests | Description |
 |------|-------|-------------|
@@ -105,7 +105,7 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/stores/aiConfigStore.test.ts` | 3 | Key loading latch, concurrent call prevention |
 | `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
 | `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
-| `src/stores/historyStore.test.ts` | 5 | History store snapshot create/list race/rename behavior |
+| `src/stores/historyStore.test.ts` | 12 | History store snapshot create/list race/rename/createSnapshotIfChanged behavior |
 | `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |
 | `src/stores/reviewStore.test.ts` | 2 | ReviewPanel selector optimization |
 | `src/stores/uiStore.test.ts` | 5 | syncChatPanels 복구 로직, toggleChatVisibility 양방향 토글 |
@@ -115,6 +115,15 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/utils/htmlContentExtractor.test.ts` | 25 | `extractContent`, Confluence HTML parsing |
 | `src/utils/markdownConverter.test.ts` | varies | TipTap ↔ Markdown conversion |
 | `src/utils/cleanSuggestionContent.test.ts` | 12 | Suggestion content cleanup |
+| `src/utils/adfParser.test.ts` | 54 | ADF document parsing, section extraction |
+| `src/ai/tools/notionTools.test.ts` | 9 | Notion token verification, error handling |
+| `src/stores/chatStore.helpers.test.ts` | 10 | Chat store pure helper functions |
+| `src/stores/layoutResolver.test.ts` | 13 | Layout resolver responsive breakpoints |
+| `src/components/history/HistoryCompareModal.test.tsx` | 2 | History compare modal diff display |
+| `src/components/history/HistoryTimeline.test.tsx` | 10 | History timeline snapshot list/modified badge |
+| `src/components/history/HistoryRestoreDialog.autoSnapshot.test.tsx` | 2 | Auto-snapshot before restore |
+| `src/components/editor/TranslatePreviewModal.history.test.tsx` | 2 | Auto-snapshot before translation apply |
+| `src/components/review/ReviewPanel.test.tsx` | 3 | ReviewPanel empty document validation |
 
 ## Backend Testing (Rust)
 
