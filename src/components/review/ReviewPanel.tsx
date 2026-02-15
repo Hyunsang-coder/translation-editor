@@ -140,25 +140,28 @@ export function ReviewPanel(): JSX.Element {
     const project = useProjectStore.getState().project;
     if (!project) return;
 
+    // Pre-check: 변환 파이프라인 거치기 전에 원본 HTML로 직접 빈 문서 검증
+    // buildAlignedChunksAsync의 markdown 변환은 <p></p> 등을 빈 문자열로 정확히 변환하지 못할 수 있음
+    const { sourceDocument, targetDocument } = useProjectStore.getState();
+    const sourceText = stripHtml(sourceDocument || '').trim();
+    const targetText = stripHtml(targetDocument || '').trim();
+    if (!sourceText || !targetText) {
+      useUIStore.getState().addToast({
+        type: 'warning',
+        message: !sourceText
+          ? t('review.emptySource', '원문이 비어있습니다. 원문을 먼저 입력해주세요.')
+          : t('review.emptyTarget', '번역문이 비어있습니다. 번역을 먼저 실행해주세요.'),
+      });
+      return;
+    }
+
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
-    // 빈 문서 검증: 원문 또는 번역문이 비어있으면 검수 불가
     if (freshChunks.length === 0) {
       useUIStore.getState().addToast({
         type: 'warning',
         message: t('review.emptyDocument', '검수할 내용이 없습니다. 원문과 번역문을 먼저 입력해주세요.'),
-      });
-      return;
-    }
-    const hasSource = freshChunks.some((c) => c.segments.some((s) => s.sourceText.trim().length > 0));
-    const hasTarget = freshChunks.some((c) => c.segments.some((s) => s.targetText.trim().length > 0));
-    if (!hasSource || !hasTarget) {
-      useUIStore.getState().addToast({
-        type: 'warning',
-        message: !hasSource
-          ? t('review.emptySource', '원문이 비어있습니다. 원문을 먼저 입력해주세요.')
-          : t('review.emptyTarget', '번역문이 비어있습니다. 번역을 먼저 실행해주세요.'),
       });
       return;
     }
