@@ -110,7 +110,7 @@
         "dialogDescription": "Notion Integration Token을 입력하세요. 토큰은 Notion 설정에서 생성할 수 있습니다.",
         "tokenLabel": "Integration Token",
         "tokenRequired": "토큰을 입력해주세요",
-        "invalidTokenFormat": "올바르지 않은 토큰 형식입니다. 토큰은 'ntn_' 또는 'secret_'로 시작해야 합니다.",
+        "invalidTokenFormat": "잘못된 형식. 'ntn_' 또는 'secret_'로 시작해야 합니다.",
         "helpText": "Integration Token은 Notion 설정에서 생성할 수 있습니다:",
         "useExistingToken": "기존 토큰을 사용하려면 그대로 연결을 누르세요"
       }
@@ -198,7 +198,7 @@
     "targetPlaceholder": "번역문을 입력하세요...",
     "selectLanguage": "언어 선택",
     "previewDefaultTitle": "번역 미리보기",
-    "previewTitleFull": "번역 미리보기 (Source 전체 → Target 전체)",
+    "previewTitleFull": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "generatingTranslation": "번역 생성 중… 잠시만요.",
     "generatingTranslationAria": "번역 생성 중",
     "preview": "Preview",
@@ -282,7 +282,7 @@
     "settings": "검수 설정",
     "mode": "검수 모드",
     "categories": "검수 항목",
-    "category.comparison": "대조 검수 (원문↔번역문)",
+    "category.comparison": "대조 (원문↔번역문)",
     "category.polishing": "폴리싱 (번역문만)",
     "category.mistranslation": "오역",
     "category.mistranslation.desc": "의미가 다르게 번역된 경우",
@@ -301,14 +301,14 @@
     "copyError": "클립보드 복사에 실패했습니다.",
     "applyError": {
       "missingData": "수정 제안 데이터가 없습니다.",
-      "notFound": "해당 텍스트를 번역문에서 찾을 수 없습니다. 문서가 변경되었을 수 있습니다."
+      "notFound": "텍스트를 찾을 수 없습니다. 문서가 변경되었을 수 있어요."
     },
     "applyConfirm": {
       "delete": "수정 제안이 비어있습니다. 해당 텍스트를 삭제하시겠습니까?",
       "fuzzyMatch": "유사한 텍스트를 찾았습니다 (유사도 {{similarity}}%). 적용하시겠습니까?\n\n찾은 텍스트: \"{{matchedText}}\""
     },
     "fuzzyMatchApplied": "유사 매칭으로 수정 제안이 적용되었습니다.",
-    "clipboardFallback": "텍스트를 찾을 수 없어 클립보드에 복사되었습니다. 직접 수정해 주세요.",
+    "clipboardFallback": "텍스트를 찾지 못해 복사됨. 직접 붙여넣기 해주세요.",
     "retranslation": {
       "note": "선택한 이슈의 검수 결과를 반영하여 재번역합니다."
     },
@@ -342,10 +342,10 @@
     "unpinPanel": "채팅창 고정 해제",
     "editMessage": "메시지 편집...",
     "editMessagePlaceholder": "메시지 편집...",
-    "saveAfterEdit": "저장 (이후 대화는 삭제됩니다)",
-    "editAfterEdit": "편집 (이후 대화는 삭제됩니다)",
+    "saveAfterEdit": "저장 (이후 대화 삭제)",
+    "editAfterEdit": "편집 (이후 대화 삭제)",
     "replay": "재전송",
-    "deleteAfterEdit": "삭제 (이후 대화는 삭제됩니다)",
+    "deleteAfterEdit": "삭제 (이후 대화 삭제)",
     "addToRules": "이 내용을 번역 규칙에 추가",
     "addToRulesButton": "규칙에 추가",
     "addToContext": "이 내용을 프로젝트 컨텍스트에 추가",
@@ -401,7 +401,7 @@
     "startNewSession": "새 세션 시작",
     "deleteSessionConfirm": "이 채팅 세션을 삭제하시겠습니까?",
     "deleteSessionTitle": "세션 삭제",
-    "sessionLimitReachedConfirm": "세션이 최대 개수({{maxSessions}}개)에 도달했습니다. 가장 오래된 세션 \"{{sessionName}}\"을(를) 삭제하고 새 세션을 시작할까요?",
+    "sessionLimitReachedConfirm": "최대 {{maxSessions}}개에 도달. \"{{sessionName}}\" 삭제 후 새 세션을 시작할까요?",
     "sessionLimitReachedTitle": "세션 제한",
     "addFileOrImage": "파일 또는 이미지 추가",
     "webSearch": "웹 검색",
@@ -450,8 +450,8 @@
     "copyToClipboard": "클립보드 복사",
     "saveToFile": "파일로 저장",
     "binaryNoCopy": "PDF/DOCX는 클립보드 복사를 지원하지 않습니다.",
-    "success": "문서가 내보내기되었습니다.",
-    "error": "내보내기에 실패했습니다.",
+    "success": "내보내기 완료.",
+    "error": "내보내기 실패.",
     "copied": "클립보드에 복사되었습니다.",
     "noDocument": "내보낼 문서가 없습니다."
   },

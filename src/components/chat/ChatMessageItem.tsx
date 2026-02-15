@@ -90,7 +90,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     if (ok) {
       onDelete(message.id);
     }
-  }, [message.id, onDelete]);
+  }, [message.id, onDelete, t]);
 
   const handleCopy = useCallback(async () => {
     try {
