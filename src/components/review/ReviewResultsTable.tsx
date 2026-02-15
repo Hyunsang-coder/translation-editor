@@ -16,24 +16,14 @@ interface ReviewResultsTableProps {
   onToggleSeverity?: (severity: IssueSeverity) => void;
 }
 
-function getIssueTypeLabel(type: IssueType): string {
-  switch (type) {
-    case 'omission':
-      return '누락';
-    case 'addition':
-      return '추가';
-    case 'mistranslation':
-      return '오역';
-    case 'grammar':
-      return '문법';
-    case 'awkward':
-      return '직역투';
-    case 'terminology':
-      return '용어';
-    default:
-      return type;
-  }
-}
+const issueTypeLabelKeys: Record<IssueType, string> = {
+  omission: 'review.typeOmission',
+  addition: 'review.typeAddition',
+  mistranslation: 'review.typeMistranslation',
+  grammar: 'review.typeGrammar',
+  awkward: 'review.typeAwkward',
+  terminology: 'review.typeTerminology',
+};
 
 function getIssueTypeColor(type: IssueType): string {
   switch (type) {
@@ -54,18 +44,11 @@ function getIssueTypeColor(type: IssueType): string {
   }
 }
 
-function getSeverityLabel(severity: IssueSeverity): string {
-  switch (severity) {
-    case 'critical':
-      return 'Critical';
-    case 'major':
-      return 'Major';
-    case 'minor':
-      return 'Minor';
-    default:
-      return severity;
-  }
-}
+const severityLabelKeys: Record<IssueSeverity, string> = {
+  critical: 'review.severityCritical',
+  major: 'review.severityMajor',
+  minor: 'review.severityMinor',
+};
 
 function getSeverityColor(severity: IssueSeverity): string {
   switch (severity) {
@@ -169,7 +152,7 @@ export function ReviewResultsTable({
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
               >
-                Critical {severityCounts.critical}
+                {t(severityLabelKeys.critical)} {severityCounts.critical}
               </button>
             ) : null}
             {severityCounts.major ? (
@@ -182,7 +165,7 @@ export function ReviewResultsTable({
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
               >
-                Major {severityCounts.major}
+                {t(severityLabelKeys.major)} {severityCounts.major}
               </button>
             ) : null}
             {severityCounts.minor ? (
@@ -195,7 +178,7 @@ export function ReviewResultsTable({
                     : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
                 }`}
               >
-                Minor {severityCounts.minor}
+                {t(severityLabelKeys.minor)} {severityCounts.minor}
               </button>
             ) : null}
           </div>
@@ -286,11 +269,11 @@ export function ReviewResultsTable({
                     </span>
                     {/* 심각도 */}
                     <span className={`text-[10px] font-medium ${getSeverityColor(issue.severity)}`}>
-                      {getSeverityLabel(issue.severity)}
+                      {t(severityLabelKeys[issue.severity])}
                     </span>
                     {/* 유형 */}
                     <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
-                      {getIssueTypeLabel(issue.type)}
+                      {t(issueTypeLabelKeys[issue.type])}
                     </span>
                   </div>
                 </td>
