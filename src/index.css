@@ -72,10 +72,18 @@
     min-height: 100vh;
   }
 
-  /* Scrollbar Styling */
+  /* Scrollbar Styling — 표준 CSS로 전역 통일
+     scrollbar-width: thin → 모든 브라우저에서 동일한 thin 스크롤바
+     scrollbar-color: thumb track → 앱 테마 색상 적용
+     ::-webkit-scrollbar는 fallback (Safari 18 미만용) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--editor-border) var(--editor-surface);
+  }
+
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -265,6 +273,7 @@
 
   .scrollbar-none {
     scrollbar-width: none;
+    scrollbar-color: transparent transparent;
   }
 
   .scrollbar-none::-webkit-scrollbar {
@@ -281,6 +290,7 @@
   @apply h-full w-full rounded-md border border-editor-border bg-editor-bg;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 .tiptap-wrapper.source-editor {
