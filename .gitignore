@@ -58,6 +58,8 @@ test-results/
 # Tauri build artifacts
 src-tauri/target/
 src-tauri/src-tauri/target/
+crates/*/target/
+crates/*/Cargo.lock
 
 
 # Rust compiled files
