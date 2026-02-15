@@ -91,6 +91,37 @@ function App(): JSX.Element {
           }
           break;
         }
+        case 'file-export':
+          window.dispatchEvent(new Event('app:open-export-modal'));
+          break;
+        case 'file-copy-translation': {
+          // 직접 클립보드 복사 (target only, html format)
+          const copyExport = async () => {
+            const { sourceDocJson, targetDocJson, project } = useProjectStore.getState();
+            if (!project || !targetDocJson) {
+              addToast({ type: 'warning', message: t('export.noDocument') });
+              return;
+            }
+            try {
+              const { copyToClipboard } = await import('@/utils/exportDocument');
+              await copyToClipboard(
+                { sourceJson: sourceDocJson, targetJson: targetDocJson },
+                {
+                  contentMode: 'target',
+                  bilingualLayout: 'sequential',
+                  format: 'html',
+                  includeReview: false,
+                  projectTitle: project.metadata.title,
+                },
+              );
+              addToast({ type: 'success', message: t('export.copied') });
+            } catch {
+              addToast({ type: 'error', message: t('export.error') });
+            }
+          };
+          void copyExport();
+          break;
+        }
         case 'view-toggle-project':
           useUIStore.getState().toggleProjectSidebar();
           break;

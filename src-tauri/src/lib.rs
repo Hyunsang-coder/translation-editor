@@ -300,6 +300,18 @@ pub fn run() {
                 .quit()
                 .build()?;
 
+            let file_export_item = MenuItemBuilder::with_id("file-export", "Export Document…")
+                .accelerator("CmdOrCtrl+Shift+E")
+                .build(app)?;
+            let file_copy_translation_item = MenuItemBuilder::with_id("file-copy-translation", "Copy Translation")
+                .accelerator("CmdOrCtrl+Shift+C")
+                .build(app)?;
+
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&file_export_item)
+                .item(&file_copy_translation_item)
+                .build()?;
+
             let edit_menu = SubmenuBuilder::new(app, "Edit")
                 .undo()
                 .redo()
@@ -342,6 +354,7 @@ pub fn run() {
 
             let menu = MenuBuilder::new(app)
                 .item(&app_menu)
+                .item(&file_menu)
                 .item(&edit_menu)
                 .item(&view_menu)
                 .item(&window_menu)
@@ -451,6 +464,8 @@ pub fn run() {
             commands::notion::notion_get_page,
             commands::notion::notion_get_page_content,
             commands::notion::notion_query_database,
+            // Export
+            commands::export::write_text_file,
             // Secret Manager
             commands::secrets::secrets_initialize,
             commands::secrets::secrets_get,

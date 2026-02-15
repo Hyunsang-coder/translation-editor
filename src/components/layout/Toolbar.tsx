@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare, Clock3 } from 'lucide-react';
+import { Settings, Search, MessageSquare, Clock3, Download } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
+import { ExportModal } from '@/components/export/ExportModal';
 
 /**
  * 상단 툴바 컴포넌트
@@ -23,7 +24,15 @@ export function Toolbar(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // File 메뉴에서 Export 열기 이벤트 수신
+  useEffect(() => {
+    const handler = () => setExportModalOpen(true);
+    window.addEventListener('app:open-export-modal', handler);
+    return () => window.removeEventListener('app:open-export-modal', handler);
+  }, []);
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -59,6 +68,12 @@ export function Toolbar(): JSX.Element {
 
   const handleChat = () => {
     toggleChatVisibility();
+    setDropdownOpen(false);
+  };
+
+  const handleExport = () => {
+    if (!project) return;
+    setExportModalOpen(true);
     setDropdownOpen(false);
   };
 
@@ -135,6 +150,17 @@ export function Toolbar(): JSX.Element {
               <div className="h-px bg-editor-border" />
               <button
                 type="button"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleExport}
+                disabled={!project}
+                data-testid="toolbar-menu-export"
+              >
+                <Download size={16} />
+                <span>{t('export.title')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
+              <button
+                type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
                 onClick={handleProjectSettings}
                 data-testid="toolbar-menu-settings"
@@ -148,6 +174,7 @@ export function Toolbar(): JSX.Element {
       </div>
 
       <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />
+      <ExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
     </header>
   );
 }

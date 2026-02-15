@@ -27,6 +27,7 @@ pub mod block;
 pub mod chat;
 pub mod confluence;
 pub mod connector;
+pub mod export;
 pub mod glossary;
 pub mod history;
 pub mod mcp;

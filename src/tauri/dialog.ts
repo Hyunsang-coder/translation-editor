@@ -65,6 +65,20 @@ export async function pickDocumentFile(): Promise<string | null> {
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
 
+export async function pickExportDocumentPath(
+  format: 'markdown' | 'html',
+  defaultName = 'document',
+): Promise<string | null> {
+  const ext = format === 'markdown' ? 'md' : 'html';
+  const filterName = format === 'markdown' ? 'Markdown' : 'HTML';
+  const path = await save({
+    title: 'Export Document',
+    defaultPath: `${defaultName}.${ext}`,
+    filters: [{ name: filterName, extensions: [ext] }],
+  });
+  return path ?? null;
+}
+
 export async function pickChatAttachmentFile(): Promise<string | null> {
   const file = await open({
     title: '첨부할 파일/이미지 선택',

@@ -422,6 +422,27 @@
     "checkFailed": "Update check failed",
     "skipped": "This version is marked as skipped"
   },
+  "export": {
+    "title": "Export Document",
+    "contentSection": "Content",
+    "source": "Source only",
+    "target": "Target only",
+    "bilingual": "Source + Target",
+    "layoutSection": "Bilingual Layout",
+    "table": "2-Column Table",
+    "interleaved": "Interleaved",
+    "sequential": "Sequential",
+    "formatSection": "Format",
+    "markdown": "Markdown (.md)",
+    "html": "HTML (.html)",
+    "includeReview": "Include review results",
+    "copyToClipboard": "Copy to Clipboard",
+    "saveToFile": "Save to File",
+    "success": "Document exported successfully.",
+    "error": "Export failed.",
+    "copied": "Copied to clipboard.",
+    "noDocument": "No document to export."
+  },
   "sidebar": {
     "openOnOtherSide": "Open on Other Side"
   }
