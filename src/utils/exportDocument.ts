@@ -261,7 +261,9 @@ function escapeHtml(str: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;');
 }
 
 function escapeMdCell(str: string): string {
@@ -270,20 +272,31 @@ function escapeMdCell(str: string): string {
 
 // ── PDF / DOCX Export ──
 
-/** IIFE 브라우저 빌드를 script 태그로 on-demand 로드 */
+/** IIFE 브라우저 빌드를 script 태그로 on-demand 로드 (15초 타임아웃) */
 function loadHtmlToDocx(): Promise<(html: string, header?: string | null, opts?: Record<string, unknown>) => Promise<Blob>> {
   type HtmlToDocxFn = (html: string, header?: string | null, opts?: Record<string, unknown>) => Promise<Blob>;
   const w = window as unknown as { HTMLToDOCX?: HtmlToDocxFn };
   if (w.HTMLToDOCX) return Promise.resolve(w.HTMLToDOCX);
 
   return new Promise((resolve, reject) => {
+    const scriptUrl = `${import.meta.env.BASE_URL}lib/html-to-docx.browser.js`;
     const script = document.createElement('script');
-    script.src = `${import.meta.env.BASE_URL}lib/html-to-docx.browser.js`;
+    script.src = scriptUrl;
+
+    const timeout = setTimeout(() => {
+      reject(new Error(`html-to-docx 로드 타임아웃 (15초 초과, url: ${scriptUrl})`));
+    }, 15_000);
+
     script.onload = () => {
+      clearTimeout(timeout);
       if (w.HTMLToDOCX) resolve(w.HTMLToDOCX);
-      else reject(new Error('HTMLToDOCX not found after script load'));
+      else reject(new Error(`html-to-docx 스크립트 로드 성공했으나 HTMLToDOCX 전역 함수를 찾을 수 없음 (url: ${scriptUrl})`));
     };
-    script.onerror = () => reject(new Error('Failed to load html-to-docx'));
+    script.onerror = (event) => {
+      clearTimeout(timeout);
+      const detail = event instanceof ErrorEvent ? event.message : 'network/CORS error';
+      reject(new Error(`html-to-docx 로드 실패: ${detail} (url: ${scriptUrl})`));
+    };
     document.head.appendChild(script);
   });
 }
@@ -347,6 +360,15 @@ function findSafeBreakY(
   return bestY;
 }
 
+/** 캔버스 메모리를 명시적으로 해제 (GC 대기 없이 즉시 VRAM/RAM 반환) */
+function releaseCanvas(c: HTMLCanvasElement): void {
+  c.width = 0;
+  c.height = 0;
+}
+
+/** PDF 렌더링용 컨테이너의 최대 허용 높이 (px). 이를 초과하면 OOM 방지를 위해 중단. */
+const MAX_CONTAINER_HEIGHT_PX = 40_000;
+
 /**
  * PDF 내보내기: html2canvas + jsPDF로 직접 PDF 파일 생성.
  * 페이지 경계에서 텍스트가 잘리지 않도록 행간 빈 줄을 탐색하여 분할한다.
@@ -358,8 +380,8 @@ export async function exportToPdf(
   const htmlContent = exportDocument(input, { ...options, format: 'html' });
 
   const [html2canvasMod, jspdfMod] = await Promise.all([
-    import('html2canvas'),
-    import('jspdf'),
+    import('html2canvas').catch(() => { throw new Error('html2canvas 라이브러리 로드 실패'); }),
+    import('jspdf').catch(() => { throw new Error('jsPDF 라이브러리 로드 실패'); }),
   ]);
   const html2canvas = html2canvasMod.default;
   const { jsPDF } = jspdfMod;
@@ -375,8 +397,20 @@ export async function exportToPdf(
   });
   document.body.appendChild(container);
 
+  // C3: 대형 문서 OOM 방지 — 컨테이너 높이 기준 사전 검사
+  const containerHeight = container.scrollHeight;
+  if (containerHeight > MAX_CONTAINER_HEIGHT_PX) {
+    document.body.removeChild(container);
+    const approxPages = Math.ceil(containerHeight / 1100);
+    throw new Error(
+      `문서가 너무 커서 PDF로 변환할 수 없습니다 (약 ${approxPages}페이지). HTML 또는 DOCX 형식을 이용해 주세요.`,
+    );
+  }
+
+  let mainCanvas: HTMLCanvasElement | null = null;
+
   try {
-    const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+    mainCanvas = await html2canvas(container, { scale: 2, useCORS: true });
 
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -386,39 +420,43 @@ export async function exportToPdf(
     const pageContentHeight = pageHeight - 2 * margin;
 
     // 캔버스 px ↔ PDF mm 변환 비율
-    const pxPerMm = canvas.width / contentWidth;
+    const pxPerMm = mainCanvas.width / contentWidth;
     const pageContentHeightPx = pageContentHeight * pxPerMm;
     // 텍스트 행간 높이의 ~2배 범위 내에서 안전한 분할점 탐색
-    const breakSearchRange = Math.round(80 * (canvas.width / 800));
+    const breakSearchRange = Math.round(80 * (mainCanvas.width / 800));
 
     let currentY = 0;
     let pageIndex = 0;
 
-    while (currentY < canvas.height) {
+    while (currentY < mainCanvas.height) {
       if (pageIndex > 0) pdf.addPage();
 
       let nextBreakY = currentY + pageContentHeightPx;
 
-      if (nextBreakY < canvas.height) {
+      if (nextBreakY < mainCanvas.height) {
         // 페이지 경계 근처에서 텍스트가 없는 안전한 행 탐색
-        nextBreakY = findSafeBreakY(canvas, nextBreakY, breakSearchRange);
+        nextBreakY = findSafeBreakY(mainCanvas, nextBreakY, breakSearchRange);
       } else {
-        nextBreakY = canvas.height;
+        nextBreakY = mainCanvas.height;
       }
 
       const srcH = nextBreakY - currentY;
 
       const slice = document.createElement('canvas');
-      slice.width = canvas.width;
+      slice.width = mainCanvas.width;
       slice.height = Math.ceil(srcH);
-      const ctx = slice.getContext('2d')!;
-      ctx.drawImage(canvas, 0, currentY, canvas.width, srcH, 0, 0, canvas.width, Math.ceil(srcH));
+      const ctx = slice.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D 컨텍스트를 생성할 수 없습니다 (메모리 부족 가능)');
+      ctx.drawImage(mainCanvas, 0, currentY, mainCanvas.width, srcH, 0, 0, mainCanvas.width, Math.ceil(srcH));
 
       const sliceHeightMm = srcH / pxPerMm;
       pdf.addImage(
         slice.toDataURL('image/jpeg', 0.92),
         'JPEG', margin, margin, contentWidth, sliceHeightMm,
       );
+
+      // C1: 슬라이스 캔버스 즉시 해제
+      releaseCanvas(slice);
 
       currentY = nextBreakY;
       pageIndex++;
@@ -427,5 +465,7 @@ export async function exportToPdf(
     return new Uint8Array(pdf.output('arraybuffer'));
   } finally {
     document.body.removeChild(container);
+    // C1: 메인 캔버스 메모리 해제
+    if (mainCanvas) releaseCanvas(mainCanvas);
   }
 }

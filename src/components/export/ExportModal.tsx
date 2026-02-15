@@ -19,6 +19,17 @@ import {
   type ExportOptions,
 } from '@/utils/exportDocument';
 
+/** Blob → 다운로드 트리거 후 Object URL 안전하게 해제 */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  // 클릭 이벤트 처리 후 비동기로 해제 (일부 브라우저에서 동기 revoke 시 다운로드 실패)
+  setTimeout(() => URL.revokeObjectURL(url), 200);
+}
+
 interface ExportModalProps {
   open: boolean;
   onClose: () => void;
@@ -99,13 +110,10 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
             pdf: 'application/pdf',
             docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           } as const;
-          const blob = new Blob([data.buffer as ArrayBuffer], { type: mimeMap[format] });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${defaultName}.${format}`;
-          a.click();
-          URL.revokeObjectURL(url);
+          triggerBlobDownload(
+            new Blob([data.buffer as ArrayBuffer], { type: mimeMap[format] }),
+            `${defaultName}.${format}`,
+          );
         }
 
         addToast({ type: 'success', message: t('export.success') });
@@ -127,13 +135,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
         // Web fallback: download via blob
         const ext = format === 'markdown' ? 'md' : 'html';
         const mime = format === 'markdown' ? 'text/markdown' : 'text/html';
-        const blob = new Blob([content], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${defaultName}.${ext}`;
-        a.click();
-        URL.revokeObjectURL(url);
+        triggerBlobDownload(new Blob([content], { type: mime }), `${defaultName}.${ext}`);
       }
 
       addToast({ type: 'success', message: t('export.success') });
