@@ -166,7 +166,8 @@
     "currentState": "현재 상태",
     "compareSelected": "비교",
     "clearSelection": "선택 해제",
-    "selectToCompare": "비교할 항목을 2개 선택하세요"
+    "selectToCompare": "비교할 항목을 2개 선택하세요",
+    "modified": "수정됨"
   },
   "projectSidebar": {
     "projects": "프로젝트",

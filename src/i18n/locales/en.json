@@ -166,7 +166,8 @@
     "currentState": "Current State",
     "compareSelected": "Compare",
     "clearSelection": "Clear",
-    "selectToCompare": "Select 2 items to compare"
+    "selectToCompare": "Select 2 items to compare",
+    "modified": "Modified"
   },
   "projectSidebar": {
     "projects": "Projects",

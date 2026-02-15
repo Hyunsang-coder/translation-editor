@@ -143,10 +143,22 @@ export function ReviewPanel(): JSX.Element {
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
+    // 빈 문서 검증: 원문 또는 번역문이 비어있으면 검수 불가
     if (freshChunks.length === 0) {
       useUIStore.getState().addToast({
         type: 'warning',
         message: t('review.emptyDocument', '검수할 내용이 없습니다. 원문과 번역문을 먼저 입력해주세요.'),
+      });
+      return;
+    }
+    const hasSource = freshChunks.some((c) => c.segments.some((s) => s.sourceText.trim().length > 0));
+    const hasTarget = freshChunks.some((c) => c.segments.some((s) => s.targetText.trim().length > 0));
+    if (!hasSource || !hasTarget) {
+      useUIStore.getState().addToast({
+        type: 'warning',
+        message: !hasSource
+          ? t('review.emptySource', '원문이 비어있습니다. 원문을 먼저 입력해주세요.')
+          : t('review.emptyTarget', '번역문이 비어있습니다. 번역을 먼저 실행해주세요.'),
       });
       return;
     }
