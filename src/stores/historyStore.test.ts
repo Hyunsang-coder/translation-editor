@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EditorBlock, HistorySnapshotMeta } from '@/types';
+import type { EditorBlock, HistorySnapshot, HistorySnapshotMeta } from '@/types';
+import { hashContent } from '@/utils/hash';
 
 const tauriHistoryMock = vi.hoisted(() => ({
   createSnapshot: vi.fn(),
@@ -37,6 +38,20 @@ const blockFixture: Record<string, EditorBlock> = {
   },
 };
 
+const blockFixture2: Record<string, EditorBlock> = {
+  'target-1': {
+    id: 'target-1',
+    type: 'target',
+    content: '<p>Hello World</p>',
+    hash: 'hash-target-2',
+    metadata: {
+      createdAt: 2,
+      updatedAt: 2,
+      tags: [],
+    },
+  },
+};
+
 describe('historyStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,6 +82,7 @@ describe('historyStore', () => {
     const oldRequest = createDeferred<HistorySnapshotMeta[]>();
     const latestRequest = createDeferred<HistorySnapshotMeta[]>();
 
+    tauriHistoryMock.getSnapshot.mockResolvedValue({ snapshotJson: '{}' });
     tauriHistoryMock.listHistory
       .mockImplementationOnce(() => oldRequest.promise)
       .mockImplementationOnce(() => latestRequest.promise);
@@ -172,5 +188,140 @@ describe('historyStore', () => {
 
     await expect(deletePromise).resolves.toBeUndefined();
     expect(useHistoryStore.getState().snapshots).toEqual([]);
+  });
+
+  it('createSnapshot은 성공 후 latestBlocksHash를 갱신한다', async () => {
+    tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-1');
+    tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+    await useHistoryStore.getState().createSnapshot({
+      projectId: 'project-1',
+      description: 'test',
+      blocks: blockFixture,
+    });
+
+    expect(useHistoryStore.getState().latestBlocksHash).toBe(
+      hashContent(JSON.stringify(blockFixture)),
+    );
+  });
+
+  describe('createSnapshotIfChanged', () => {
+    it('캐시된 해시와 동일하면 스냅샷을 생성하지 않고 null을 반환한다', async () => {
+      // Pre-set latestBlocksHash to match blockFixture
+      useHistoryStore.setState({
+        latestBlocksHash: hashContent(JSON.stringify(blockFixture)),
+      });
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture,
+      });
+
+      expect(result).toBeNull();
+      expect(tauriHistoryMock.createSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('캐시된 해시와 다르면 스냅샷을 생성하고 ID를 반환한다', async () => {
+      useHistoryStore.setState({
+        latestBlocksHash: hashContent(JSON.stringify(blockFixture)),
+      });
+      tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-new');
+      tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture2,
+      });
+
+      expect(result).toBe('snapshot-new');
+      expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('캐시가 null이고 스냅샷이 없으면 새 스냅샷을 생성한다', async () => {
+      useHistoryStore.setState({ latestBlocksHash: null, snapshots: [] });
+      tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-first');
+      tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture,
+      });
+
+      expect(result).toBe('snapshot-first');
+      expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('캐시가 null이고 최신 스냅샷과 동일하면 스킵한다', async () => {
+      useHistoryStore.setState({
+        latestBlocksHash: null,
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+      });
+      tauriHistoryMock.getSnapshot.mockResolvedValue({
+        id: 'snap-1',
+        timestamp: 100,
+        description: 'prev',
+        blockChanges: [],
+        snapshotJson: JSON.stringify(blockFixture),
+      } satisfies HistorySnapshot);
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture,
+      });
+
+      expect(result).toBeNull();
+      expect(tauriHistoryMock.createSnapshot).not.toHaveBeenCalled();
+      // Hash cache should be populated after comparison
+      expect(useHistoryStore.getState().latestBlocksHash).toBe(
+        hashContent(JSON.stringify(blockFixture)),
+      );
+    });
+
+    it('캐시가 null이고 최신 스냅샷과 다르면 새 스냅샷을 생성한다', async () => {
+      useHistoryStore.setState({
+        latestBlocksHash: null,
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+      });
+      tauriHistoryMock.getSnapshot.mockResolvedValue({
+        id: 'snap-1',
+        timestamp: 100,
+        description: 'prev',
+        blockChanges: [],
+        snapshotJson: JSON.stringify(blockFixture),
+      } satisfies HistorySnapshot);
+      tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-new');
+      tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture2,
+      });
+
+      expect(result).toBe('snapshot-new');
+      expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('getSnapshot 실패 시에도 스냅샷을 생성한다', async () => {
+      useHistoryStore.setState({
+        latestBlocksHash: null,
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+      });
+      tauriHistoryMock.getSnapshot.mockRejectedValue(new Error('load failed'));
+      tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-fallback');
+      tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+      const result = await useHistoryStore.getState().createSnapshotIfChanged({
+        projectId: 'project-1',
+        description: 'auto snapshot',
+        blocks: blockFixture,
+      });
+
+      expect(result).toBe('snapshot-fallback');
+    });
   });
 });

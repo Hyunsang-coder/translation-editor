@@ -29,7 +29,7 @@ export function HistoryRestoreDialog({
   const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
   const loadProject = useProjectStore((s) => s.loadProject);
   const saveProject = useProjectStore((s) => s.saveProject);
-  const createSnapshot = useHistoryStore((s) => s.createSnapshot);
+  const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
   const loadHistory = useHistoryStore((s) => s.loadHistory);
   const sourceEditor = useEditorStore((s) => s.sourceEditor);
   const targetEditor = useEditorStore((s) => s.targetEditor);
@@ -47,7 +47,7 @@ export function HistoryRestoreDialog({
         if (!blocksForSnapshot) {
           throw new Error('Project blocks are unavailable for snapshot');
         }
-        await createSnapshot({
+        await createSnapshotIfChanged({
           projectId,
           description: t('history.autoSnapshotBeforeRestore'),
           blocks: blocksForSnapshot,

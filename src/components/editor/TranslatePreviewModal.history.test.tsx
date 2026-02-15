@@ -48,7 +48,7 @@ const stores = vi.hoisted(() => {
       materializeBlocksForSnapshot: vi.fn<() => typeof blocks | null>(),
     },
     historyStoreState: {
-      createSnapshot: vi.fn(),
+      createSnapshotIfChanged: vi.fn(),
     },
   };
 });
@@ -103,7 +103,7 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
     vi.clearAllMocks();
     stores.projectStoreState.project = stores.project;
     stores.projectStoreState.materializeBlocksForSnapshot.mockReturnValue(stores.blocks);
-    stores.historyStoreState.createSnapshot.mockResolvedValue('snapshot-1');
+    stores.historyStoreState.createSnapshotIfChanged.mockResolvedValue('snapshot-1');
   });
 
   it('적용 클릭 시 자동 스냅샷을 먼저 생성한 뒤 onApply를 호출한다', async () => {
@@ -126,7 +126,7 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
     await user.click(screen.getByRole('button', { name: 'common.apply' }));
 
     await waitFor(() => {
-      expect(stores.historyStoreState.createSnapshot).toHaveBeenCalledWith({
+      expect(stores.historyStoreState.createSnapshotIfChanged).toHaveBeenCalledWith({
         projectId: 'project-1',
         description: 'custom auto snapshot',
         blocks: stores.blocks,
@@ -134,7 +134,7 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
       expect(onApply).toHaveBeenCalledTimes(1);
     });
 
-    const [snapshotOrder] = stores.historyStoreState.createSnapshot.mock.invocationCallOrder;
+    const [snapshotOrder] = stores.historyStoreState.createSnapshotIfChanged.mock.invocationCallOrder;
     const [applyOrder] = onApply.mock.invocationCallOrder;
     expect(snapshotOrder).toBeDefined();
     expect(applyOrder).toBeDefined();
@@ -164,7 +164,7 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
     await waitFor(() => {
       expect(onApply).toHaveBeenCalledTimes(1);
     });
-    expect(stores.historyStoreState.createSnapshot).not.toHaveBeenCalled();
+    expect(stores.historyStoreState.createSnapshotIfChanged).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();

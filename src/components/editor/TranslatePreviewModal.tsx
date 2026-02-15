@@ -101,7 +101,7 @@ export function TranslatePreviewModal(props: {
   } = props;
   const project = useProjectStore((s) => s.project);
   const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
-  const createSnapshot = useHistoryStore((s) => s.createSnapshot);
+  const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
@@ -205,7 +205,7 @@ export function TranslatePreviewModal(props: {
             if (!blocksForSnapshot) {
               throw new Error('Project blocks are unavailable for snapshot');
             }
-            await createSnapshot({
+            await createSnapshotIfChanged({
               projectId: project.id,
               description:
                 autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate'),

@@ -5,6 +5,7 @@ import type { HistorySnapshotMeta } from '@/types';
 interface HistoryTimelineProps {
   snapshots: HistorySnapshotMeta[];
   isLoading?: boolean;
+  isCurrentModified?: boolean;
   selectedIds: string[];
   onToggleSelect: (id: string) => void;
   onRestore: (snapshotId: string) => void;
@@ -45,6 +46,7 @@ export { CURRENT_STATE_ID };
 export function HistoryTimeline({
   snapshots,
   isLoading = false,
+  isCurrentModified = false,
   selectedIds,
   onToggleSelect,
   onRestore,
@@ -94,6 +96,11 @@ export function HistoryTimeline({
           <span className="text-sm font-medium text-editor-text">
             {t('history.currentState')}
           </span>
+          {isCurrentModified && (
+            <span className="ml-2 text-xs text-amber-500">
+              {t('history.modified')}
+            </span>
+          )}
         </label>
       </li>
 

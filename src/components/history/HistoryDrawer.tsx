@@ -9,6 +9,7 @@ import { HistoryRestoreDialog } from '@/components/history/HistoryRestoreDialog'
 import { useProjectStore } from '@/stores/projectStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useUIStore } from '@/stores/uiStore';
+import { hashContent } from '@/utils/hash';
 
 function isTauriTestingBridgeActive(): boolean {
   if (typeof window === 'undefined') return false;
@@ -24,16 +25,28 @@ interface HistoryDrawerProps {
 export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Element | null {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
+  const blocks = useProjectStore((s) => s.project?.blocks);
   const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
   const addToast = useUIStore((s) => s.addToast);
 
   const snapshots = useHistoryStore((s) => s.snapshots);
   const isLoading = useHistoryStore((s) => s.isLoading);
+  const latestBlocksHash = useHistoryStore((s) => s.latestBlocksHash);
   const loadHistory = useHistoryStore((s) => s.loadHistory);
   const createSnapshot = useHistoryStore((s) => s.createSnapshot);
   const deleteSnapshot = useHistoryStore((s) => s.deleteSnapshot);
   const renameSnapshot = useHistoryStore((s) => s.renameSnapshot);
   const reset = useHistoryStore((s) => s.reset);
+
+  const currentBlocksHash = useMemo(() => {
+    if (!blocks) return null;
+    return hashContent(JSON.stringify(blocks));
+  }, [blocks]);
+
+  const isCurrentModified =
+    latestBlocksHash !== null &&
+    currentBlocksHash !== null &&
+    currentBlocksHash !== latestBlocksHash;
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -254,6 +267,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
           <HistoryTimeline
             snapshots={snapshots}
             isLoading={isLoading}
+            isCurrentModified={isCurrentModified}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
             onRestore={(snapshotId) => {

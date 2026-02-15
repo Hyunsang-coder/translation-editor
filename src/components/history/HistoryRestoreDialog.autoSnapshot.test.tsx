@@ -68,7 +68,7 @@ const mocks = vi.hoisted(() => {
       saveProject: vi.fn(),
     },
     historyStoreState: {
-      createSnapshot: vi.fn(),
+      createSnapshotIfChanged: vi.fn(),
       loadHistory: vi.fn(),
     },
     editorStoreState: {
@@ -140,7 +140,7 @@ describe('HistoryRestoreDialog auto snapshot integration', () => {
     mocks.projectStoreState.materializeBlocksForSnapshot.mockReturnValue(mocks.baseBlocks);
     mocks.projectStoreState.saveProject.mockResolvedValue(undefined);
     mocks.projectStoreState.loadProject.mockImplementation(() => {});
-    mocks.historyStoreState.createSnapshot.mockResolvedValue('snapshot-auto');
+    mocks.historyStoreState.createSnapshotIfChanged.mockResolvedValue('snapshot-auto');
     mocks.historyStoreState.loadHistory.mockResolvedValue(undefined);
     mocks.tauriHistory.restoreSnapshot.mockResolvedValue(mocks.restoredBlocks);
     mocks.uiStoreState.addToast.mockImplementation(() => {});
@@ -163,7 +163,7 @@ describe('HistoryRestoreDialog auto snapshot integration', () => {
     await user.click(screen.getByRole('button', { name: 'history.restore' }));
 
     await waitFor(() => {
-      expect(mocks.historyStoreState.createSnapshot).toHaveBeenCalledWith({
+      expect(mocks.historyStoreState.createSnapshotIfChanged).toHaveBeenCalledWith({
         projectId: 'project-1',
         description: 'history.autoSnapshotBeforeRestore',
         blocks: mocks.baseBlocks,
@@ -186,7 +186,7 @@ describe('HistoryRestoreDialog auto snapshot integration', () => {
   it('자동 스냅샷이 실패해도 복원은 계속 진행한다', async () => {
     const user = userEvent.setup();
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.historyStoreState.createSnapshot.mockRejectedValue(new Error('snapshot failed'));
+    mocks.historyStoreState.createSnapshotIfChanged.mockRejectedValue(new Error('snapshot failed'));
 
     render(
       <HistoryRestoreDialog

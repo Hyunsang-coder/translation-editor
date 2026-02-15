@@ -7,12 +7,14 @@ import {
   listHistory as tauriListHistory,
   renameSnapshot as tauriRenameSnapshot,
 } from '@/tauri/history';
+import { hashContent } from '@/utils/hash';
 
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
   isLoading: boolean;
   isLoadingSnapshot: boolean;
   error: string | null;
+  latestBlocksHash: string | null;
 }
 
 interface HistoryActions {
@@ -23,6 +25,12 @@ interface HistoryActions {
     blocks: Record<string, EditorBlock>;
     chatSummary?: string;
   }) => Promise<string>;
+  createSnapshotIfChanged: (params: {
+    projectId: string;
+    description: string;
+    blocks: Record<string, EditorBlock>;
+    chatSummary?: string;
+  }) => Promise<string | null>;
   getSnapshot: (params: { projectId: string; snapshotId: string }) => Promise<HistorySnapshot>;
   deleteSnapshot: (params: { projectId: string; snapshotId: string }) => Promise<void>;
   renameSnapshot: (params: { projectId: string; snapshotId: string; description: string }) => Promise<void>;
@@ -40,6 +48,7 @@ const initialState: HistoryState = {
   isLoading: false,
   isLoadingSnapshot: false,
   error: null,
+  latestBlocksHash: null,
 };
 
 let loadHistoryRequestSeq = 0;
@@ -48,14 +57,14 @@ function isLatestRequest(requestSeq: number): boolean {
   return requestSeq === loadHistoryRequestSeq;
 }
 
-export const useHistoryStore = create<HistoryStore>((set) => ({
+export const useHistoryStore = create<HistoryStore>((set, get) => ({
   ...initialState,
 
   loadHistory: async (projectId): Promise<void> => {
     const requestSeq = ++loadHistoryRequestSeq;
     if (!projectId) {
       if (!isLatestRequest(requestSeq)) return;
-      set({ snapshots: [], isLoading: false, error: null });
+      set({ snapshots: [], isLoading: false, error: null, latestBlocksHash: null });
       return;
     }
 
@@ -64,6 +73,20 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
       const snapshots = await tauriListHistory(projectId);
       if (!isLatestRequest(requestSeq)) return;
       set({ snapshots, isLoading: false });
+
+      // Pre-compute latest snapshot hash in background
+      if (snapshots.length > 0) {
+        const latest = [...snapshots].sort((a, b) => b.timestamp - a.timestamp)[0];
+        if (latest) {
+          tauriGetSnapshot({ projectId, snapshotId: latest.id })
+            .then((s) => {
+              if (s.snapshotJson && isLatestRequest(requestSeq)) {
+                set({ latestBlocksHash: hashContent(s.snapshotJson) });
+              }
+            })
+            .catch(() => {});
+        }
+      }
     } catch (error) {
       if (!isLatestRequest(requestSeq)) return;
       const message = toErrorMessage(error);
@@ -75,12 +98,13 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
   createSnapshot: async ({ projectId, description, blocks, chatSummary }): Promise<string> => {
     const requestSeq = loadHistoryRequestSeq;
     set({ error: null });
+    const blocksJson = JSON.stringify(blocks);
     let snapshotId = '';
     try {
       snapshotId = await tauriCreateSnapshot({
         projectId,
         description,
-        blocksJson: JSON.stringify(blocks),
+        blocksJson,
         ...(chatSummary !== undefined && { chatSummary }),
       });
     } catch (error) {
@@ -89,6 +113,9 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
       set({ error: message });
       throw error;
     }
+
+    // Update hash cache after successful creation
+    set({ latestBlocksHash: hashContent(blocksJson) });
 
     try {
       const snapshots = await tauriListHistory(projectId);
@@ -100,6 +127,33 @@ export const useHistoryStore = create<HistoryStore>((set) => ({
     }
 
     return snapshotId;
+  },
+
+  createSnapshotIfChanged: async ({ projectId, description, blocks, chatSummary }): Promise<string | null> => {
+    const { latestBlocksHash, snapshots, getSnapshot, createSnapshot } = get();
+    const currentHash = hashContent(JSON.stringify(blocks));
+
+    // Cached hash available — fast path comparison
+    if (latestBlocksHash !== null && currentHash === latestBlocksHash) {
+      return null; // No change → skip
+    }
+
+    // No cached hash (session first call) — load latest snapshot and compare
+    if (latestBlocksHash === null && snapshots.length > 0) {
+      const latest = [...snapshots].sort((a, b) => b.timestamp - a.timestamp)[0];
+      if (!latest) return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
+      try {
+        const snapshot = await getSnapshot({ projectId, snapshotId: latest.id });
+        if (snapshot.snapshotJson && hashContent(snapshot.snapshotJson) === currentHash) {
+          set({ latestBlocksHash: currentHash });
+          return null; // No change
+        }
+      } catch {
+        // Load failed — proceed with snapshot creation
+      }
+    }
+
+    return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
   },
 
   getSnapshot: async ({ projectId, snapshotId }): Promise<HistorySnapshot> => {
