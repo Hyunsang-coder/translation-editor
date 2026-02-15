@@ -83,8 +83,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   }, [editDraft, message.id, onEdit, onReplay]);
 
   const handleDelete = useCallback(async () => {
-    const ok = await confirm('이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?', {
-      title: '대화 삭제',
+    const ok = await confirm(t('chat.deleteConfirmMessage'), {
+      title: t('chat.deleteConfirmTitle'),
       kind: 'warning',
     });
     if (ok) {
@@ -106,93 +106,70 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     onReplay(message.id);
   }, [message.id, onReplay]);
 
+  const humanizeToolName = useCallback((name: string): string => {
+    const map: Record<string, string> = {
+      'web_search': t('chat.toolName.webSearch'),
+      'web_search_preview': t('chat.toolName.webSearch'),
+      'get_source_document': t('chat.toolName.getSourceDocument'),
+      'get_target_document': t('chat.toolName.getTargetDocument'),
+      'suggest_translation_rule': t('chat.toolName.suggestTranslationRule'),
+      'suggest_project_context': t('chat.toolName.suggestProjectContext'),
+      'suggest_translator_persona': t('chat.toolName.suggestTranslatorPersona'),
+    };
+    return map[name] ?? name;
+  }, [t]);
+
   const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
     const tools = toolNames.filter(Boolean);
     if (tools.length === 0) return null;
-    const humanize = (t: string): string => {
-      switch (t) {
-        case 'web_search':
-        case 'web_search_preview':
-          return '웹검색';
-        case 'get_source_document':
-          return '원문 조회';
-        case 'get_target_document':
-          return '번역문 조회';
-        case 'suggest_translation_rule':
-          return '규칙 제안';
-        case 'suggest_project_context':
-          return '컨텍스트 제안';
-        case 'suggest_translator_persona':
-          return '페르소나 제안';
-        default:
-          return t;
-      }
-    };
 
     const label =
-      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
+      tools.length === 1 ? humanizeToolName(tools[0]!) : t('chat.toolAndMore', { name: humanizeToolName(tools[0]!), count: tools.length - 1 });
     return (
       <div className="mt-2">
         <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
           <span className="inline-block w-3 h-3 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
-          <span className="truncate">툴 실행 중: {label}</span>
+          <span className="truncate">{t('chat.toolRunning', { label })}</span>
         </div>
       </div>
     );
-  }, []);
+  }, [humanizeToolName, t]);
 
   const renderToolsUsedBadge = useCallback((toolNames: string[]): JSX.Element | null => {
     const tools = toolNames.filter(Boolean);
     if (tools.length === 0) return null;
-    const humanize = (t: string): string => {
-      switch (t) {
-        case 'web_search':
-        case 'web_search_preview':
-          return '웹검색';
-        case 'get_source_document':
-          return '원문 조회';
-        case 'get_target_document':
-          return '번역문 조회';
-        case 'suggest_translation_rule':
-          return '규칙 제안';
-        case 'suggest_project_context':
-          return '컨텍스트 제안';
-        case 'suggest_translator_persona':
-          return '페르소나 제안';
-        default:
-          return t;
-      }
-    };
     const label =
-      tools.length === 1 ? humanize(tools[0]!) : `${humanize(tools[0]!)} 외 ${tools.length - 1}개`;
+      tools.length === 1 ? humanizeToolName(tools[0]!) : t('chat.toolAndMore', { name: humanizeToolName(tools[0]!), count: tools.length - 1 });
     return (
       <div className="mt-2">
         <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500" />
-          <span className="truncate">도구 사용됨: {label}</span>
+          <span className="truncate">{t('chat.toolUsed', { label })}</span>
         </div>
       </div>
     );
-  }, []);
+  }, [humanizeToolName, t]);
 
   const renderAssistantSkeleton = useCallback((toolsInProgress?: string[]): JSX.Element => {
     let statusText = statusMessage;
 
     if (!statusText && toolsInProgress && toolsInProgress.length > 0) {
       const toolName = toolsInProgress[0];
-      const name =
-          (toolName === 'web_search' || toolName === 'web_search_preview') ? '웹 검색'
-        : toolName === 'get_source_document' ? '원문 분석'
-        : toolName === 'get_target_document' ? '번역문 분석'
-        : toolName === 'suggest_translation_rule' ? '번역 규칙 확인'
-        : toolName === 'suggest_project_context' ? '프로젝트 맥락 확인'
-        : toolName === 'suggest_translator_persona' ? '페르소나 확인'
-        : toolName;
-      statusText = `${name} 진행 중...`;
+      const progressMap: Record<string, string> = {
+        'web_search': t('chat.toolProgressName.webSearch'),
+        'web_search_preview': t('chat.toolProgressName.webSearch'),
+        'get_source_document': t('chat.toolProgressName.getSourceDocument'),
+        'get_target_document': t('chat.toolProgressName.getTargetDocument'),
+        'suggest_translation_rule': t('chat.toolProgressName.suggestTranslationRule'),
+        'suggest_project_context': t('chat.toolProgressName.suggestProjectContext'),
+        'suggest_translator_persona': t('chat.toolProgressName.suggestTranslatorPersona'),
+      };
+      const name = (toolName ? progressMap[toolName] : undefined) ?? toolName;
+      statusText = t('chat.toolInProgress', { name });
     }
 
     if (!statusText) {
-      statusText = '답변 생성 중...';
+      statusText = t('chat.generatingResponse');
     }
 
     return (
@@ -208,7 +185,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         </span>
       </div>
     );
-  }, [statusMessage]);
+  }, [statusMessage, t]);
 
   return (
     <div
@@ -306,9 +283,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
           {message.metadata?.editedAt && (
             <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
-              (edited)
+              ({t('chat.edited')})
               <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
-                <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">Original Content:</div>
+                <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">{t('chat.originalContent')}:</div>
                 <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
               </div>
             </span>
@@ -380,7 +357,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-1 h-3 bg-primary-500 rounded-full" />
                   <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                    Suggested Rule
+                    {t('chat.suggestedRule')}
                   </span>
                 </div>
                 <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
@@ -398,7 +375,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 }}
                 title={t('chat.addToRules')}
               >
-                Add to Rules
+                {t('chat.addToRulesButton')}
               </button>
             </div>
           )}
@@ -410,7 +387,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-1 h-3 bg-primary-500 rounded-full" />
                   <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                    Suggested Context
+                    {t('chat.suggestedContext')}
                   </span>
                 </div>
                 <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
@@ -428,7 +405,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 }}
                 title={t('chat.addToContext')}
               >
-                Add to Context
+                {t('chat.addToContextButton')}
               </button>
             </div>
           )}
@@ -440,7 +417,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-1 h-3 bg-primary-500 rounded-full" />
                   <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                    Suggested Persona
+                    {t('chat.suggestedPersona')}
                   </span>
                 </div>
                 <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
@@ -458,7 +435,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 }}
                 title={t('chat.addToPersona')}
               >
-                Add to Persona
+                {t('chat.addToPersonaButton')}
               </button>
             </div>
           )}
