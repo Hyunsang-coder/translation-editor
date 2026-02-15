@@ -304,7 +304,52 @@ export async function exportToDocx(
 }
 
 /**
- * PDF 내보내기: html2canvas + jsPDF로 직접 PDF 파일 생성
+ * 캔버스에서 페이지 경계 근처의 안전한 분할 지점(행간 빈 줄)을 탐색.
+ * targetY 기준 위아래 searchRange 범위에서 가장 "흰색"에 가까운 행을 반환한다.
+ */
+function findSafeBreakY(
+  canvas: HTMLCanvasElement,
+  targetY: number,
+  searchRange: number,
+): number {
+  const ctx = canvas.getContext('2d')!;
+  const width = canvas.width;
+  // 위쪽을 더 넓게 탐색 (일찍 끊는 것이 넘치는 것보다 안전)
+  const minY = Math.max(0, Math.floor(targetY - searchRange));
+  const maxY = Math.min(canvas.height - 1, Math.ceil(targetY + searchRange * 0.3));
+
+  let bestY = Math.round(targetY);
+  let bestScore = -1;
+
+  // 매 행마다 전체 폭을 읽는 대신 12px 간격으로 샘플링 (성능)
+  const sampleStep = 12;
+  const samplesPerRow = Math.ceil(width / sampleStep);
+
+  for (let y = minY; y <= maxY; y++) {
+    const rowData = ctx.getImageData(0, y, width, 1).data;
+    let whiteCount = 0;
+    for (let sx = 0; sx < width; sx += sampleStep) {
+      const off = sx * 4;
+      const r = rowData[off] ?? 0;
+      const g = rowData[off + 1] ?? 0;
+      const b = rowData[off + 2] ?? 0;
+      if (r > 240 && g > 240 && b > 240) whiteCount++;
+    }
+    const score = whiteCount / samplesPerRow;
+    if (score > bestScore) {
+      bestScore = score;
+      bestY = y;
+    }
+    // 거의 완전히 흰 행 발견 → 즉시 채택
+    if (score > 0.97) break;
+  }
+
+  return bestY;
+}
+
+/**
+ * PDF 내보내기: html2canvas + jsPDF로 직접 PDF 파일 생성.
+ * 페이지 경계에서 텍스트가 잘리지 않도록 행간 빈 줄을 탐색하여 분할한다.
  */
 export async function exportToPdf(
   input: ExportInput,
@@ -338,15 +383,45 @@ export async function exportToPdf(
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 15;
     const contentWidth = pageWidth - 2 * margin;
-    const scaledHeight = (canvas.height * contentWidth) / canvas.width;
     const pageContentHeight = pageHeight - 2 * margin;
-    const totalPages = Math.ceil(scaledHeight / pageContentHeight);
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
-    for (let i = 0; i < totalPages; i++) {
-      if (i > 0) pdf.addPage();
-      const yPosition = margin - i * pageContentHeight;
-      pdf.addImage(imgData, 'JPEG', margin, yPosition, contentWidth, scaledHeight);
+    // 캔버스 px ↔ PDF mm 변환 비율
+    const pxPerMm = canvas.width / contentWidth;
+    const pageContentHeightPx = pageContentHeight * pxPerMm;
+    // 텍스트 행간 높이의 ~2배 범위 내에서 안전한 분할점 탐색
+    const breakSearchRange = Math.round(80 * (canvas.width / 800));
+
+    let currentY = 0;
+    let pageIndex = 0;
+
+    while (currentY < canvas.height) {
+      if (pageIndex > 0) pdf.addPage();
+
+      let nextBreakY = currentY + pageContentHeightPx;
+
+      if (nextBreakY < canvas.height) {
+        // 페이지 경계 근처에서 텍스트가 없는 안전한 행 탐색
+        nextBreakY = findSafeBreakY(canvas, nextBreakY, breakSearchRange);
+      } else {
+        nextBreakY = canvas.height;
+      }
+
+      const srcH = nextBreakY - currentY;
+
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = Math.ceil(srcH);
+      const ctx = slice.getContext('2d')!;
+      ctx.drawImage(canvas, 0, currentY, canvas.width, srcH, 0, 0, canvas.width, Math.ceil(srcH));
+
+      const sliceHeightMm = srcH / pxPerMm;
+      pdf.addImage(
+        slice.toDataURL('image/jpeg', 0.92),
+        'JPEG', margin, margin, contentWidth, sliceHeightMm,
+      );
+
+      currentY = nextBreakY;
+      pageIndex++;
     }
 
     return new Uint8Array(pdf.output('arraybuffer'));
