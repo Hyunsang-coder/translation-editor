@@ -222,39 +222,31 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
           </button>
         </div>
 
-        <div className="p-4 border-b border-editor-border space-y-2">
-          <button
-            type="button"
-            onClick={() => setSaveDialogOpen(true)}
-            className="w-full px-3 py-2 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-          >
-            {t('history.saveSnapshot')}
-          </button>
-
-          {/* Compare action bar */}
+        <div className="px-4 py-3 border-b border-editor-border">
           <div className="flex items-center gap-2">
-            {canCompare ? (
-              <button
-                type="button"
-                onClick={handleCompareSelected}
-                className="flex-1 px-3 py-2 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-              >
-                {t('history.compareSelected')}
-              </button>
-            ) : (
-              <span className="flex-1 text-xs text-editor-muted">
-                {t('history.selectToCompare')}
-              </span>
-            )}
-            {selectedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIds([])}
-                className="px-2 py-1 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg transition-colors"
-              >
-                {t('history.clearSelection')}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setSaveDialogOpen(true)}
+              className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+            >
+              {t('history.saveSnapshot')}
+            </button>
+            <button
+              type="button"
+              disabled={!canCompare}
+              onClick={handleCompareSelected}
+              className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t('history.compareSelected')}
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.length === 0}
+              onClick={() => setSelectedIds([])}
+              className="px-2 py-1.5 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {t('history.clearSelection')}
+            </button>
           </div>
         </div>
 

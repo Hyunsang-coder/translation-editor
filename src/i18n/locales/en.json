@@ -164,7 +164,7 @@
     "autoSnapshotBeforeReviewApply": "Auto snapshot before review retranslation apply",
     "autoSnapshotBeforeRestore": "Auto snapshot before restore",
     "currentState": "Current State",
-    "compareSelected": "Compare Selected",
+    "compareSelected": "Compare",
     "clearSelection": "Clear",
     "selectToCompare": "Select 2 items to compare"
   },
