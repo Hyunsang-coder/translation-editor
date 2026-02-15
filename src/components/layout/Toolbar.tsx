@@ -57,16 +57,19 @@ export function Toolbar(): JSX.Element {
   }, [dropdownOpen]);
 
   const handleProjectSettings = () => {
+    if (!project) return;
     openPanel('settings');
     setDropdownOpen(false);
   };
 
   const handleReview = () => {
+    if (!project) return;
     openReviewPanel();
     setDropdownOpen(false);
   };
 
   const handleChat = () => {
+    if (!project) return;
     toggleChatVisibility();
     setDropdownOpen(false);
   };
@@ -119,8 +122,9 @@ export function Toolbar(): JSX.Element {
             <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50">
               <button
                 type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleChat}
+                disabled={!project}
                 aria-pressed={isAnyChatVisible}
                 data-testid="toolbar-menu-chat"
               >
@@ -130,8 +134,9 @@ export function Toolbar(): JSX.Element {
               <div className="h-px bg-editor-border" />
               <button
                 type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleReview}
+                disabled={!project}
                 data-testid="toolbar-menu-review"
               >
                 <Search size={16} />
@@ -161,8 +166,9 @@ export function Toolbar(): JSX.Element {
               <div className="h-px bg-editor-border" />
               <button
                 type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleProjectSettings}
+                disabled={!project}
                 data-testid="toolbar-menu-settings"
               >
                 <Settings size={16} />

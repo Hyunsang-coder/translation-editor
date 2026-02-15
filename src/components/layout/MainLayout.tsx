@@ -1,4 +1,4 @@
-import { useCallback, useEffect, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useShallow } from 'zustand/shallow';
@@ -36,7 +36,11 @@ export function MainLayout(): JSX.Element {
   // 반응형 레이아웃 훅 활성화
   useResponsiveLayout();
 
+  const [isCreating, setIsCreating] = useState(false);
+
   const handleCreateProject = useCallback(async () => {
+    if (isCreating) return;
+    setIsCreating(true);
     try {
       const created = await createProject({
         title: 'New Project',
@@ -45,8 +49,10 @@ export function MainLayout(): JSX.Element {
       loadProject(created);
     } catch (e) {
       console.error('Failed to create project:', e);
+    } finally {
+      setIsCreating(false);
     }
-  }, [loadProject]);
+  }, [loadProject, isCreating]);
 
   // 개발자 테스트 패널 단축키 (Ctrl+Shift+D / Cmd+Shift+D)
   useEffect(() => {
@@ -98,9 +104,10 @@ export function MainLayout(): JSX.Element {
                 <button
                   type="button"
                   onClick={handleCreateProject}
-                  className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95"
+                  disabled={isCreating}
+                  className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  새 프로젝트 시작하기
+                  {isCreating ? '생성 중...' : '새 프로젝트 시작하기'}
                 </button>
               </div>
             </div>
