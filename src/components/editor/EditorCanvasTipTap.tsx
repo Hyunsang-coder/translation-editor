@@ -222,6 +222,12 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
 
+    // 빈 문서 검증: 텍스트 콘텐츠가 없으면 번역 불필요
+    if (sourceEditorRef.current.isEmpty) {
+      addToast({ type: 'warning', message: t('editor.emptySource', '번역할 원문이 없습니다. 원문을 먼저 입력해주세요.') });
+      return;
+    }
+
     setTranslatePreviewError(null);
     setTranslatePreviewDoc(null);
     setTranslatePreviewOpen(true);

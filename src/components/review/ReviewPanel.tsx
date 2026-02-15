@@ -143,7 +143,13 @@ export function ReviewPanel(): JSX.Element {
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
-    if (freshChunks.length === 0) return;
+    if (freshChunks.length === 0) {
+      useUIStore.getState().addToast({
+        type: 'warning',
+        message: t('review.emptyDocument', '검수할 내용이 없습니다. 원문과 번역문을 먼저 입력해주세요.'),
+      });
+      return;
+    }
 
     // 청크 캐싱 (재번역에서 사용)
     chunksRef.current = freshChunks;
@@ -305,11 +311,15 @@ export function ReviewPanel(): JSX.Element {
    */
   const handleRetranslateExecute = useCallback(async () => {
     const checkedIssues = getCheckedIssues();
-    if (checkedIssues.length === 0 || !project) return;
+    // 실행 시점의 최신 프로젝트 참조 (async 중 프로젝트 전환 대비)
+    const currentProject = useProjectStore.getState().project;
+    if (checkedIssues.length === 0 || !currentProject) return;
 
-    // Snapshot: sourceDocJson/chatStore state read at execute time, not subscribed
     const sourceDocJson = useProjectStore.getState().sourceDocJson;
     if (!sourceDocJson) return;
+
+    // 프로젝트 ID 스냅샷 (완료 후 stale 검증용)
+    const startProjectId = currentProject.id;
 
     // 중간 모달 닫기
     setRetranslateModalOpen(false);
@@ -332,11 +342,11 @@ export function ReviewPanel(): JSX.Element {
       try {
         const sourceDocument = useProjectStore.getState().sourceDocument;
         const query = (sourceDocument || '').slice(0, 2000);
-        if (query.trim() && project.id) {
+        if (query.trim() && currentProject.id) {
           const hits = await searchGlossary({
-            projectId: project.id,
+            projectId: currentProject.id,
             query,
-            domain: project.metadata.domain,
+            domain: currentProject.metadata.domain,
             limit: 30,
           });
           if (hits.length > 0) {
@@ -352,7 +362,7 @@ export function ReviewPanel(): JSX.Element {
       // 기존 번역 함수 사용 (검수 이슈 + 사용자 메시지 컨텍스트 포함)
       const trimmedMessage = retranslateMessage.trim();
       const { doc } = await translateWithStreaming({
-        project,
+        project: currentProject,
         sourceDocJson,
         translationRules,
         projectContext,
@@ -363,6 +373,12 @@ export function ReviewPanel(): JSX.Element {
         onToken: (text) => setRetranslateStreamingText(text),
         abortSignal: controller.signal,
       });
+
+      // 완료 후 프로젝트 전환 여부 확인 (stale 방지)
+      if (useProjectStore.getState().project?.id !== startProjectId) {
+        setRetranslateError(t('review.retranslate.projectChanged', '재번역 중 프로젝트가 변경되었습니다. 결과가 폐기됩니다.'));
+        return;
+      }
 
       setRetranslatePreviewDoc(doc);
     } catch (error) {
@@ -375,7 +391,7 @@ export function ReviewPanel(): JSX.Element {
       setRetranslateLoading(false);
       retranslateAbortController.current = null;
     }
-  }, [project, getCheckedIssues, retranslateMessage, t]);
+  }, [getCheckedIssues, retranslateMessage, t]);
 
   const handleRetranslateCancel = useCallback(() => {
     if (retranslateAbortController.current) {
@@ -395,7 +411,8 @@ export function ReviewPanel(): JSX.Element {
    * 재번역 결과를 에디터에 적용
    */
   const handleApplyRetranslation = useCallback(() => {
-    if (!retranslatePreviewDoc || !project) return;
+    const currentProject = useProjectStore.getState().project;
+    if (!retranslatePreviewDoc || !currentProject) return;
 
     // TipTapDocJson을 HTML로 변환하여 target document에 적용
     const html = tipTapJsonToHtml(retranslatePreviewDoc);
@@ -412,7 +429,7 @@ export function ReviewPanel(): JSX.Element {
       type: 'success',
       message: t('review.retranslate.applied', '재번역이 적용되었습니다.'),
     });
-  }, [retranslatePreviewDoc, project, resetReview, handleRetranslateClose, t]);
+  }, [retranslatePreviewDoc, resetReview, handleRetranslateClose, t]);
 
   const handleReset = useCallback(() => {
     if (isReviewing) {
