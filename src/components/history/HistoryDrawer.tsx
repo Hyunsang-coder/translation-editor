@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { HistoryTimeline, CURRENT_STATE_ID } from '@/components/history/HistoryTimeline';
 import { SaveSnapshotDialog } from '@/components/history/SaveSnapshotDialog';
 import { HistoryRenameDialog } from '@/components/history/HistoryRenameDialog';
@@ -8,6 +9,12 @@ import { HistoryRestoreDialog } from '@/components/history/HistoryRestoreDialog'
 import { useProjectStore } from '@/stores/projectStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useUIStore } from '@/stores/uiStore';
+
+function isTauriTestingBridgeActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as Window & { __TAURI_TESTING_BRIDGE__?: unknown };
+  return typeof w.__TAURI_TESTING_BRIDGE__ === 'object' && w.__TAURI_TESTING_BRIDGE__ !== null;
+}
 
 interface HistoryDrawerProps {
   open: boolean;
@@ -133,7 +140,12 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   };
 
   const handleDelete = async (snapshotId: string): Promise<void> => {
-    const ok = window.confirm(t('history.deleteConfirm'));
+    const ok = isTauriTestingBridgeActive()
+      ? true
+      : await confirm(t('history.deleteConfirm'), {
+          title: t('history.delete'),
+          kind: 'warning',
+        });
     if (!ok) return;
 
     try {

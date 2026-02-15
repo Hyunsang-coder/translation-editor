@@ -113,7 +113,7 @@ vi.mock('@/editor/targetDocument', () => ({
 }));
 
 vi.mock('@/utils/hash', () => ({
-  stripHtml: (value: string) => value.replace(/<[^>]+>/g, ''),
+  htmlToStructuredText: (value: string) => value.replace(/<[^>]+>/g, ''),
 }));
 
 describe('HistoryCompareModal', () => {

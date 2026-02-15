@@ -5,7 +5,7 @@ import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { buildTargetDocument } from '@/editor/targetDocument';
-import { stripHtml } from '@/utils/hash';
+import { htmlToStructuredText } from '@/utils/hash';
 import type { EditorBlock, HistorySnapshotMeta } from '@/types';
 
 interface HistoryCompareModalProps {
@@ -105,19 +105,19 @@ export function HistoryCompareModal({
   const baseSnapshotText = useMemo(() => {
     if (!project || !baseSnapshotBlocks) return '';
     const snapshotProject = { ...project, blocks: baseSnapshotBlocks };
-    return stripHtml(buildTargetDocument(snapshotProject).text);
+    return htmlToStructuredText(buildTargetDocument(snapshotProject).text);
   }, [project, baseSnapshotBlocks]);
 
   const currentText = useMemo(() => {
     if (!project) return '';
-    return stripHtml(buildTargetDocument(project).text);
+    return htmlToStructuredText(buildTargetDocument(project).text);
   }, [project]);
 
   const targetText = useMemo(() => {
     if (isComparingWithCurrent) return currentText;
     if (!project || !targetSnapshotBlocks) return '';
     const snapshotProject = { ...project, blocks: targetSnapshotBlocks };
-    return stripHtml(buildTargetDocument(snapshotProject).text);
+    return htmlToStructuredText(buildTargetDocument(snapshotProject).text);
   }, [project, isComparingWithCurrent, targetSnapshotBlocks, currentText]);
 
   const availableTargetSnapshots = useMemo(
