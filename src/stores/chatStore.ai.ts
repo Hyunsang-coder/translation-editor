@@ -180,6 +180,13 @@ export function createAiActions(
                 ...nextMetadata,
                 suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
               };
+            } else if (evt.toolName === 'suggest_translator_persona' && evt.args.persona) {
+              const prev = nextMetadata.suggestedPersona ?? '';
+              const cleaned = cleanSuggestionContent(String(evt.args.persona));
+              nextMetadata = {
+                ...nextMetadata,
+                suggestedPersona: prev ? `${prev}; ${cleaned}` : cleaned,
+              };
             }
           }
 
@@ -233,7 +240,7 @@ export function createAiActions(
 
         // Tool-call 누락 시 텍스트 기반 폴백 (Smart Buttons)
         const currentMetadata = get().streamingMetadata ?? {};
-        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
+        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext && !currentMetadata.suggestedPersona) {
           const inferred = inferSuggestionFromAssistantText(restored);
           if (inferred) {
             set({ streamingMetadata: { ...currentMetadata, ...inferred } });

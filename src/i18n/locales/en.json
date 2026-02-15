@@ -339,6 +339,7 @@
     "deleteAfterEdit": "Delete (subsequent conversation will be deleted)",
     "addToRules": "Add this content to Translation Rules",
     "addToContext": "Add this content to Project Context",
+    "addToPersona": "Add this content to Translator Persona",
     "composerPlaceholder": "Ask anything :)",
     "composerAttach": "Attach/Options",
     "composerAttachAriaLabel": "Attach/Options",
