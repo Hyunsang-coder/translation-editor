@@ -253,6 +253,7 @@ export function ReviewPanel(): JSX.Element {
     addResult,
     handleChunkError,
     setStreamingText,
+    t,
   ]);
 
   // ref에 최신 handleRunReview 할당

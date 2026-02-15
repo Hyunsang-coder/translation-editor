@@ -6,6 +6,17 @@ const configPath = path.join(root, 'src-tauri', 'tauri.conf.json');
 const targetDir = path.join(root, 'src-tauri', 'target');
 
 const tauriBin = process.platform === 'win32' ? 'tauri.cmd' : 'tauri';
+const isHeadlessShell = !process.stdout.isTTY || !process.stdin.isTTY;
+
+const env = {
+  ...process.env,
+  CARGO_TARGET_DIR: targetDir,
+};
+
+// In non-interactive shells, force CI mode so DMG bundling skips Finder AppleScript.
+if (isHeadlessShell && !process.env.CI) {
+  env.CI = 'true';
+}
 
 const child = spawn(
   tauriBin,
@@ -13,15 +24,11 @@ const child = spawn(
   {
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: {
-      ...process.env,
-      CARGO_TARGET_DIR: targetDir,
-    },
+    env,
   },
 );
 
 child.on('exit', (code) => {
   process.exit(code ?? 1);
 });
-
 
