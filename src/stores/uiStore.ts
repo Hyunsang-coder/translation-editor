@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { toast as sonnerToast } from 'sonner';
 import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType } from '@/types';
 import { isChatPanel, chatPanelId } from '@/types';
+import { LAYOUT } from '@/constants/layout';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useChatStore } from '@/stores/chatStore';
 
@@ -451,11 +452,11 @@ export const useUIStore = create<UIStore>()(
 
       // Legacy sidebar widths
       setSettingsSidebarWidth: (width: number): void => {
-        set({ settingsSidebarWidth: Math.max(200, Math.min(600, width)) });
+        set({ settingsSidebarWidth: Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width)) });
       },
 
       setChatPanelWidth: (width: number): void => {
-        set({ chatPanelWidth: Math.max(200, Math.min(600, width)) });
+        set({ chatPanelWidth: Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width)) });
       },
 
       // === Docking Sidebar Actions ===
@@ -476,7 +477,7 @@ export const useUIStore = create<UIStore>()(
 
       setSidebarWidthSide: (side: SidebarSide, width: number): void => {
         const key = sidebarKey(side);
-        const clamped = Math.max(200, Math.min(600, width));
+        const clamped = Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width));
         set((state) => ({ [key]: { ...state[key], width: clamped } }));
       },
 

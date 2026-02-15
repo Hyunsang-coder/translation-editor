@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Settings, Search, MessageSquare } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
+import { resolveLayout, getMaxSidebarWidth } from '@/stores/layoutResolver';
 import { SettingsContent } from '@/components/panels/SettingsContent';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
 import { ChatContent } from '@/components/chat/ChatContent';
@@ -56,7 +57,8 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   const collapsed = useUIStore((s) => s[sidebarKey].collapsed);
   const panels = useUIStore((s) => s[sidebarKey].panels);
   const activePanel = useUIStore((s) => s[sidebarKey].activePanel);
-  const width = useUIStore((s) => s[sidebarKey].width);
+  const width = useUIStore((s) => resolveLayout(s)[side === 'left' ? 'left' : 'right']);
+  const maxWidth = useUIStore((s) => getMaxSidebarWidth(s, side));
   const toggleSidebarCollapse = useUIStore((s) => s.toggleSidebarCollapse);
   const setActivePanel_side = useUIStore((s) => s.setActivePanel_side);
   const movePanel = useUIStore((s) => s.movePanel);
@@ -76,6 +78,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     width,
     onWidthChange,
     direction: side === 'left' ? 'right' : 'left',
+    maxWidth,
   });
 
   const borderClass = side === 'left' ? 'border-r' : 'border-l';

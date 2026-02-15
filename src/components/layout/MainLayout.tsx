@@ -79,7 +79,7 @@ export function MainLayout(): JSX.Element {
         )}
 
         {/* 에디터 캔버스 (TipTap) */}
-        <div className="flex-1 min-w-[300px] min-h-0">
+        <div className="flex-1 min-w-[400px] min-h-0">
           {project ? (
             <ErrorBoundary name="Editor">
               <EditorCanvasTipTap focusMode={focusMode} />
