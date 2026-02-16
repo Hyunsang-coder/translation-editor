@@ -24,6 +24,7 @@
     "test:e2e:tauri:mcp:new-project": "node scripts/tauri-testing-mcp-new-project.mjs",
     "test:e2e:tauri:mcp:workflow": "node scripts/tauri-testing-mcp-workflow.mjs",
     "test:e2e:tauri:mcp:review-highlight": "node scripts/tauri-testing-mcp-review-highlight.mjs",
+    "test:e2e:tauri:mcp:history-compare": "node scripts/tauri-testing-mcp-history-compare.mjs",
     "test:e2e:web": "playwright test -c playwright.web.config.ts",
     "test:e2e:web:ui": "playwright test -c playwright.web.config.ts --ui",
     "tauri-testing-mcp:build": "npm --prefix tauri-testing-mcp run build",

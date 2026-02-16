@@ -45,7 +45,8 @@ function parseToolText(result) {
 }
 
 function isRpcError(parsed) {
-  return parsed && typeof parsed.text === 'string' && parsed.text.startsWith('RPC ');
+  return parsed && typeof parsed.text === 'string'
+    && (parsed.text.startsWith('RPC ') || parsed.text.startsWith('MCP error'));
 }
 
 async function callTool(client, name, args = {}) {
@@ -76,6 +77,17 @@ async function callToolQuiet(client, name, args = {}) {
   return parsed;
 }
 
+async function closeClientSafely(client, timeoutMs = 2000) {
+  try {
+    await Promise.race([
+      client.close(),
+      sleep(timeoutMs),
+    ]);
+  } catch {
+    // no-op
+  }
+}
+
 async function getSelectorMatchCount(client, selector) {
   try {
     const result = await callToolQuiet(client, 'tauri_dom_query_selector', { selector });
@@ -83,6 +95,72 @@ async function getSelectorMatchCount(client, selector) {
   } catch {
     return 0;
   }
+}
+
+const LIST_LINE_PATTERN = /^(\s*)([-*+•]|\d+[.)])\s+(.+)$/u;
+
+function extractListHierarchy(text) {
+  const normalized = String(text ?? '').replace(/\r\n?/g, '\n');
+  const lineItems = [];
+  const lines = normalized.split('\n');
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\u00a0/g, ' ').replace(/\t/g, '  ');
+    const match = line.match(LIST_LINE_PATTERN);
+    if (!match) continue;
+    const marker = match[2] ?? '';
+    const indent = (match[1] ?? '').length;
+    lineItems.push({
+      type: /^\d/.test(marker) ? 'ordered' : 'bullet',
+      level: Math.floor(indent / 2),
+    });
+  }
+
+  if (lineItems.length > 1) {
+    return lineItems;
+  }
+
+  const markerItems = [];
+  const markerPattern = /(\s*)([-*+•]|\d+[.)])\s+/gu;
+  for (const match of normalized.matchAll(markerPattern)) {
+    const marker = match[2] ?? '';
+    const spaces = (match[1] ?? '').length;
+    markerItems.push({
+      type: /^\d/.test(marker) ? 'ordered' : 'bullet',
+      level: Math.floor(Math.max(spaces - 1, 0) / 2),
+    });
+  }
+
+  return markerItems;
+}
+
+function hierarchySignature(items) {
+  return items.map((item) => `${item.type}:${item.level}`).join('|');
+}
+
+function assertListHierarchyPreserved({ sourceText, targetText, label }) {
+  const sourceItems = extractListHierarchy(sourceText);
+  const targetItems = extractListHierarchy(targetText);
+
+  if (sourceItems.length === 0) {
+    throw new Error('Source list test data has no list items');
+  }
+  if (targetItems.length === 0) {
+    throw new Error(`${label}: no list markers detected in target text`);
+  }
+
+  const sourceTypes = new Set(sourceItems.map((item) => item.type));
+  if (!sourceTypes.has('bullet') || !sourceTypes.has('ordered')) {
+    throw new Error('Source list test data must include both bullet and ordered list markers');
+  }
+
+  const sourceSig = hierarchySignature(sourceItems);
+  const targetSig = hierarchySignature(targetItems);
+  if (sourceSig !== targetSig) {
+    throw new Error(`${label}: list hierarchy mismatch (source=${sourceSig}, target=${targetSig})`);
+  }
+
+  return { sourceSig, targetSig, count: sourceItems.length };
 }
 
 // ── Infra helpers ──
@@ -166,20 +244,28 @@ function createMcpClient() {
 const VALID_ISSUE_TYPES = ['mistranslation', 'omission', 'grammar', 'awkward', 'addition', 'terminology'];
 
 const SOURCE_TEXT = [
-  '- 결제 API 통합 개요',
-  '  - 인증 토큰을 발급받아 요청 헤더에 포함합니다.',
-  '  - 결제 요청에는 주문 ID, 금액, 통화를 반드시 포함합니다.',
-  '- 오류 처리 정책',
-  '  - 실패 시 지수 백오프로 최대 3회 재시도합니다.',
+  '1. 결제 API 통합 체크리스트',
+  '   1) 인증 토큰을 발급받아 요청 헤더에 포함합니다.',
+  '   2) 결제 요청에는 주문 ID, 금액, 통화를 반드시 포함합니다.',
+  '2. 오류 처리 정책',
+  '   - 실패 시 지수 백오프로 최대 3회 재시도합니다.',
+  '   - 재시도 후에도 실패하면 에러 코드를 기록하고 알림을 전송합니다.',
+  '3. 배포 검증',
+  '   - 로그에서 4xx/5xx 비율을 확인합니다.',
+  '     - 임계치 초과 시 롤백합니다.',
 ].join('\n');
 
 // 원문과 명백히 다른 번역문 — 의도적으로 오역/누락/첨가를 포함
 const TAMPERED_TRANSLATION = [
-  '- Payment API Integration Overview',
-  '  - Use your credit card number directly in the URL query string for authentication.',
-  '  - Payment requests only need the product name.',
-  '- Debugging Policy',
-  '  - On failure, immediately delete all user data and shut down the server.',
+  '1. Payment API Checklist',
+  '   1) Put the credit card number directly in the query string.',
+  '   2) Payment requests only need a product name.',
+  '2. Error Policy',
+  '   - Never retry failed requests.',
+  '   - Delete all logs after each error.',
+  '3. Deployment Verification',
+  '   - Ignore 4xx/5xx monitoring dashboards.',
+  '     - Keep the faulty release running.',
 ].join('\n');
 
 async function runScenario(client) {
@@ -244,6 +330,12 @@ async function runScenario(client) {
   const translatedText = await callTool(client, 'tauri_dom_get_text', { selector: targetEditable });
   if (!translatedText.text?.trim()) throw new Error('Target editor empty after translate');
   log(`[pass] Translation applied (${String(translatedText.text).trim().length} chars)`);
+  const listCheck = assertListHierarchyPreserved({
+    sourceText: SOURCE_TEXT,
+    targetText: String(translatedText.text),
+    label: 'Translation output',
+  });
+  log(`[list] Hierarchy preserved (${listCheck.count} items): ${listCheck.targetSig}`);
 
   // ── Phase 4: 번역문 의도적 변조 ──
   log('\n═══ Phase 4: Tamper Target Translation ═══');
@@ -305,14 +397,15 @@ async function runScenario(client) {
 
   // 6-2. 모든 하이라이트의 속성 검증
   const allHighlights = await callTool(client, 'tauri_dom_get_all', { selector: highlightSelector });
-  const elements = allHighlights.elements ?? allHighlights;
+  const highlightItems = Array.isArray(allHighlights.items) ? allHighlights.items : [];
+  const sampleCount = highlightItems.length > 0 ? highlightItems.length : Math.min(highlightCount, 20);
 
-  if (Array.isArray(elements)) {
-    for (let i = 0; i < elements.length; i += 1) {
-      const el = elements[i];
-      const issueType = el.attributes?.['data-issue-type'] ?? el['data-issue-type'] ?? '';
-      const issueId = el.attributes?.['data-issue-id'] ?? el['data-issue-id'] ?? '';
-      const text = String(el.textContent ?? el.text ?? '').trim();
+  if (sampleCount > 0) {
+    for (let i = 0; i < sampleCount; i += 1) {
+      const detail = await callToolQuiet(client, 'tauri_dom_query_selector', { selector: highlightSelector, index: i });
+      const issueType = detail.attributes?.['data-issue-type'] ?? '';
+      const issueId = detail.attributes?.['data-issue-id'] ?? '';
+      const text = String(detail.textContent ?? '').trim();
 
       log(`  [highlight ${i}] type="${issueType}" id="${issueId}" text="${text.slice(0, 50)}"`);
 
@@ -376,7 +469,7 @@ async function main() {
       await client.connect(transport);
       await runScenario(client);
     } finally {
-      try { await client.close(); } catch {}
+      await closeClientSafely(client);
     }
     return;
   }
@@ -401,7 +494,7 @@ async function main() {
       await client.connect(transport);
       await runScenario(client);
     } finally {
-      try { await client.close(); } catch {}
+      await closeClientSafely(client);
     }
   } finally {
     const waitExit = new Promise((resolve) => tauri.once('exit', resolve));
@@ -410,14 +503,18 @@ async function main() {
       waitExit.then(() => true),
       sleep(5000).then(() => false),
     ]);
-    if (!exitedGracefully && !tauri.killed) {
+    if (!exitedGracefully) {
       tauri.kill('SIGKILL');
       await Promise.race([waitExit, sleep(2000)]);
     }
   }
 }
 
-main().catch((error) => {
-  console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });

@@ -28,7 +28,8 @@ function parseToolText(result) {
 }
 
 function isRpcError(parsed) {
-  return parsed && typeof parsed.text === 'string' && parsed.text.startsWith('RPC ');
+  return parsed && typeof parsed.text === 'string'
+    && (parsed.text.startsWith('RPC ') || parsed.text.startsWith('MCP error'));
 }
 
 async function waitForPortOpen(host, targetPort, timeoutMs) {
@@ -126,6 +127,17 @@ async function callToolQuiet(client, name, args = {}) {
   return parsed;
 }
 
+async function closeClientSafely(client, timeoutMs = 2000) {
+  try {
+    await Promise.race([
+      client.close(),
+      sleep(timeoutMs),
+    ]);
+  } catch {
+    // no-op
+  }
+}
+
 async function getSelectorMatchCount(client, selector) {
   try {
     const result = await callToolQuiet(client, 'tauri_dom_query_selector', { selector });
@@ -133,6 +145,72 @@ async function getSelectorMatchCount(client, selector) {
   } catch {
     return 0;
   }
+}
+
+const LIST_LINE_PATTERN = /^(\s*)([-*+•]|\d+[.)])\s+(.+)$/u;
+
+function extractListHierarchy(text) {
+  const normalized = String(text ?? '').replace(/\r\n?/g, '\n');
+  const lineItems = [];
+  const lines = normalized.split('\n');
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\u00a0/g, ' ').replace(/\t/g, '  ');
+    const match = line.match(LIST_LINE_PATTERN);
+    if (!match) continue;
+    const marker = match[2] ?? '';
+    const indent = (match[1] ?? '').length;
+    lineItems.push({
+      type: /^\d/.test(marker) ? 'ordered' : 'bullet',
+      level: Math.floor(indent / 2),
+    });
+  }
+
+  if (lineItems.length > 1) {
+    return lineItems;
+  }
+
+  const markerItems = [];
+  const markerPattern = /(\s*)([-*+•]|\d+[.)])\s+/gu;
+  for (const match of normalized.matchAll(markerPattern)) {
+    const marker = match[2] ?? '';
+    const spaces = (match[1] ?? '').length;
+    markerItems.push({
+      type: /^\d/.test(marker) ? 'ordered' : 'bullet',
+      level: Math.floor(Math.max(spaces - 1, 0) / 2),
+    });
+  }
+
+  return markerItems;
+}
+
+function hierarchySignature(items) {
+  return items.map((item) => `${item.type}:${item.level}`).join('|');
+}
+
+function assertListHierarchyPreserved({ sourceText, targetText, label }) {
+  const sourceItems = extractListHierarchy(sourceText);
+  const targetItems = extractListHierarchy(targetText);
+
+  if (sourceItems.length === 0) {
+    throw new Error('Source list test data has no list items');
+  }
+  if (targetItems.length === 0) {
+    throw new Error(`${label}: no list markers detected in target text`);
+  }
+
+  const sourceTypes = new Set(sourceItems.map((item) => item.type));
+  if (!sourceTypes.has('bullet') || !sourceTypes.has('ordered')) {
+    throw new Error('Source list test data must include both bullet and ordered list markers');
+  }
+
+  const sourceSig = hierarchySignature(sourceItems);
+  const targetSig = hierarchySignature(targetItems);
+  if (sourceSig !== targetSig) {
+    throw new Error(`${label}: list hierarchy mismatch (source=${sourceSig}, target=${targetSig})`);
+  }
+
+  return { sourceSig, targetSig, count: sourceItems.length };
 }
 
 async function waitForAssistantReply(client, { selector, previousCount, userText, timeoutMs = 120000 }) {
@@ -181,7 +259,7 @@ async function waitForAssistantReply(client, { selector, previousCount, userText
 
 async function runWorkflow() {
   const projectTitle = `Workflow E2E ${Date.now()}`;
-  const chatMessage = '번여문 내용 간략히 요약해줘';
+  const chatMessage = '번역문 내용 간략히 요약해줘';
   const toolsButtonSelector = "button[data-testid='toolbar-tools-button'], button[title='도구'], button[title='Tools']";
   const toolbarSettingsSelector = "button[data-testid='toolbar-menu-settings']";
   const toolbarChatSelector = "button[data-testid='toolbar-menu-chat']";
@@ -189,6 +267,17 @@ async function runWorkflow() {
   const chatComposerEditableSelector = "[data-testid='chat-composer-container'] [contenteditable='true']";
   const chatModelSelectSelector = "button[data-testid='chat-model-select']";
   const assistantMessageSelector = "div[data-testid='chat-message-assistant']";
+  const sourceText = [
+    '1. 결제 API 통합 체크리스트',
+    '   1) 인증 토큰을 발급받아 요청 헤더에 포함합니다.',
+    '   2) 결제 요청에는 주문 ID, 금액, 통화를 반드시 포함합니다.',
+    '2. 오류 처리 정책',
+    '   - 실패 시 지수 백오프로 최대 3회 재시도합니다.',
+    '   - 재시도 후에도 실패하면 에러 코드를 기록하고 알림을 전송합니다.',
+    '3. 배포 검증',
+    '   - 로그에서 4xx/5xx 비율을 확인합니다.',
+    '     - 임계치 초과 시 롤백합니다.',
+  ].join('\n');
 
   const transport = new StdioClientTransport({
     command: 'node',
@@ -250,13 +339,7 @@ async function runWorkflow() {
     // 4) Fill source and translate
     await callTool(client, 'tauri_dom_fill', {
       selector: "[data-testid='source-editor'] [contenteditable='true']",
-      value: [
-        '- 결제 API 통합 개요',
-        '  - 인증 토큰을 발급받아 요청 헤더에 포함합니다.',
-        '  - 결제 요청에는 주문 ID, 금액, 통화를 반드시 포함합니다.',
-        '- 오류 처리 정책',
-        '  - 실패 시 지수 백오프로 최대 3회 재시도합니다.',
-      ].join('\n'),
+      value: sourceText,
     });
 
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='target-language-select']" });
@@ -304,6 +387,12 @@ async function runWorkflow() {
     if (!targetText.text || String(targetText.text).trim().length === 0) {
       throw new Error('Target editor is empty after apply');
     }
+    const listCheck = assertListHierarchyPreserved({
+      sourceText,
+      targetText: String(targetText.text),
+      label: 'Translation output',
+    });
+    log(`[list] Hierarchy preserved (${listCheck.count} items): ${listCheck.targetSig}`);
 
     // 5) Review
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='editor-review-button']" });
@@ -423,11 +512,7 @@ async function runWorkflow() {
 
     log(`\n[success] Workflow passed: ${projectTitle}`);
   } finally {
-    try {
-      await client.close();
-    } catch {
-      // no-op
-    }
+    await closeClientSafely(client);
   }
 }
 
@@ -458,14 +543,18 @@ async function main() {
       waitExit.then(() => true),
       sleep(5000).then(() => false),
     ]);
-    if (!exitedGracefully && !tauri.killed) {
+    if (!exitedGracefully) {
       tauri.kill('SIGKILL');
       await Promise.race([waitExit, sleep(2000)]);
     }
   }
 }
 
-main().catch((error) => {
-  console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });

@@ -13,6 +13,10 @@ function log(msg) {
   process.stdout.write(`${msg}\n`);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function parseToolText(result) {
   const text = result?.content?.find?.((c) => c?.type === 'text')?.text;
   if (!text) return result;
@@ -94,10 +98,25 @@ async function callTool(client, name, args = {}) {
   const parsed = parseToolText(raw);
   log(`\n[tool] ${name}`);
   log(JSON.stringify(parsed, null, 2));
-  if (parsed && typeof parsed.text === 'string' && parsed.text.startsWith('RPC ')) {
+  if (
+    parsed
+    && typeof parsed.text === 'string'
+    && (parsed.text.startsWith('RPC ') || parsed.text.startsWith('MCP error'))
+  ) {
     throw new Error(`${name} failed: ${parsed.text}`);
   }
   return parsed;
+}
+
+async function closeClientSafely(client, timeoutMs = 2000) {
+  try {
+    await Promise.race([
+      client.close(),
+      sleep(timeoutMs),
+    ]);
+  } catch {
+    // no-op
+  }
 }
 
 async function runScenario() {
@@ -135,11 +154,7 @@ async function runScenario() {
     });
     log(`\n[success] Created project: ${title}`);
   } finally {
-    try {
-      await client.close();
-    } catch {
-      // no-op
-    }
+    await closeClientSafely(client);
   }
 }
 
@@ -164,12 +179,27 @@ async function main() {
     await waitForPortOpen('127.0.0.1', port, 120000);
     await runScenario();
   } finally {
+    const waitExit = new Promise((resolve) => tauri.once('exit', resolve));
     stopTauri();
-    await new Promise((resolve) => tauri.once('exit', resolve));
+    const exitedGracefully = await Promise.race([
+      waitExit.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 5000)),
+    ]);
+    if (!exitedGracefully) {
+      tauri.kill('SIGKILL');
+      await Promise.race([
+        waitExit,
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    }
   }
 }
 
-main().catch((error) => {
-  console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(`\n[error] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
