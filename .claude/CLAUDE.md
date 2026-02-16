@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-**OddEyes.ai** - Professional translation workstation built with Tauri (Rust) + React (TypeScript).
+**OddEyes.ai** - AI-powered translation editor built with Tauri (Rust) + React (TypeScript).
 - Notion-style dual editor (TipTap) for Source/Target documents
 - AI chat with LangChain (OpenAI + Anthropic)
 - MCP integration (Confluence, Notion, Web Search)

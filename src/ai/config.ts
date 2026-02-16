@@ -10,13 +10,13 @@ export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
 export const MODEL_PRESETS = {
   anthropic: [
-    { value: 'claude-opus-4-6', label: 'Opus 4.6', description: '최고 성능' },
+    { value: 'claude-opus-4-6', label: 'Opus 4.6', description: '높은 정확도, 복잡한 작업에 적합' },
     { value: 'claude-sonnet-4-5', label: 'Sonnet 4.5', description: '성능/속도/비용 균형 (권장)' },
-    { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '가장 빠르고 저렴' },
+    { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '빠른 응답, 낮은 비용' },
   ],
   openai: [
-    { value: 'gpt-5.2', label: 'GPT-5.2', description: '가장 빠르고 강력한 모델' },
-    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '준수한 성능과 가성비' },
+    { value: 'gpt-5.2', label: 'GPT-5.2', description: '높은 성능, 빠른 응답' },
+    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '가벼운 작업에 적합, 낮은 비용' },
   ],
 } as const;
 
