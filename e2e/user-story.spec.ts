@@ -94,7 +94,7 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     const notionDialogSubmit = page.locator('form').getByRole('button', { name: TEXT.connect });
     await notionTokenInput.fill('invalid-token');
     await notionDialogSubmit.click();
-    await expect(page.getByText(/올바르지 않은 토큰 형식|Invalid token format/i)).toBeVisible();
+    await expect(page.getByText(/잘못된 형식.*ntn_|Invalid token format/i)).toBeVisible();
 
     await notionTokenInput.fill('ntn_test_token_1234');
     await notionDialogSubmit.click();
