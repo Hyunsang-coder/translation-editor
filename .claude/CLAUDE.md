@@ -104,6 +104,19 @@ Test Script (.mjs) → MCP Client (stdio) → MCP Server (tauri-testing-mcp)
     → bridge.js → DOM / Dialog / Tauri API
 ```
 
+### Prerequisites
+MCP 테스트 실행 전, `--features testing` 플래그로 앱을 먼저 띄워야 합니다:
+```bash
+TAURI_TESTING_ENABLED=1 \
+TAURI_TEST_TOKEN=tauri-testing-token \
+TAURI_TEST_PORT=9988 \
+npx tauri dev --features testing --no-watch --config src-tauri/tauri.conf.json --config '{"build":{"beforeDevCommand":""}}'
+```
+별도 터미널에서 MCP 서버 실행:
+```bash
+TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-mcp:start
+```
+
 ### Quick Commands
 ```bash
 npm run test:e2e:tauri:mcp:workflow     # Full workflow (번역+리뷰+채팅)
