@@ -8,6 +8,7 @@ import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
+import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
 
 export interface RunReviewParams {
@@ -20,27 +21,6 @@ export interface RunReviewParams {
   targetLanguage?: string | undefined;
   abortSignal?: AbortSignal;
   onToken?: (accumulated: string) => void;
-}
-
-/**
- * AIMessageChunk에서 텍스트 콘텐츠 추출
- */
-function extractChunkContent(chunk: AIMessageChunk): string {
-  const content = chunk.content;
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((c) => {
-        if (typeof c === 'string') return c;
-        if (typeof c === 'object' && c && 'text' in c) {
-          const text = (c as { text?: unknown }).text;
-          return String(text ?? '');
-        }
-        return '';
-      })
-      .join('');
-  }
-  return '';
 }
 
 /**

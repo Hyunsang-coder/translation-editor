@@ -41,6 +41,46 @@ interface ExecuteAiReplyParams {
   persistOnSuccess?: boolean;
 }
 
+type ToolEnabledModel = {
+  invoke: (input: string) => Promise<unknown>;
+  bindTools?: (tools: Array<Record<string, unknown>>) => { invoke: (input: string) => Promise<unknown> };
+};
+
+interface BuiltInWebSearchSpec {
+  statusMessage: string;
+  bindTools: Array<Record<string, unknown>>;
+  toolName: string;
+}
+
+function getBuiltInWebSearchSpec(provider: string): BuiltInWebSearchSpec | null {
+  if (provider === 'openai') {
+    return {
+      statusMessage: 'OpenAI 웹 검색 중...',
+      bindTools: [{ type: 'web_search_preview' }],
+      toolName: 'web_search_preview',
+    };
+  }
+  if (provider === 'anthropic') {
+    return {
+      statusMessage: 'Anthropic 웹 검색 중...',
+      bindTools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      toolName: 'web_search',
+    };
+  }
+  return null;
+}
+
+function buildWebSearchPrompt(webQuery: string): string {
+  return [
+    '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
+    '',
+    `- 질문: ${webQuery}`,
+    '- 출력:',
+    '  1) 요약(3~6줄)',
+    '  2) 근거 링크 3~8개 (가능하면 제목 + 링크)',
+  ].join('\n');
+}
+
 // ── AI Actions ─────────────────────────────────────────────────────────
 
 export function createAiActions(
@@ -374,7 +414,8 @@ export function createAiActions(
       set({ isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
       const cfg = getAiConfig();
-      const initialToolsInProgress = cfg.provider === 'openai' ? ['web_search_preview'] : ['web_search'];
+      const webSearchSpec = getBuiltInWebSearchSpec(cfg.provider);
+      const initialToolsInProgress = [webSearchSpec?.toolName ?? 'web_search'];
 
       const assistantId = addMessage({
         role: 'assistant',
@@ -386,50 +427,18 @@ export function createAiActions(
         let text = '';
         const toolsUsed: string[] = [];
 
-        type ToolEnabledModel = {
-          invoke: (input: string) => Promise<unknown>;
-          bindTools?: (tools: Array<Record<string, unknown>>) => { invoke: (input: string) => Promise<unknown> };
-        };
         const modelAny = createChatModel(undefined, { useFor: 'chat' }) as unknown as ToolEnabledModel;
 
-        if (cfg.provider === 'openai') {
-          set({ statusMessage: 'OpenAI 웹 검색 중...' });
+        if (webSearchSpec) {
+          set({ statusMessage: webSearchSpec.statusMessage });
           const modelWithSearch =
             typeof modelAny.bindTools === 'function'
-              ? modelAny.bindTools([{ type: 'web_search_preview' }])
+              ? modelAny.bindTools(webSearchSpec.bindTools)
               : modelAny;
 
-          const ai = await modelWithSearch.invoke(
-            [
-              '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
-              '',
-              `- 질문: ${webQuery}`,
-              '- 출력:',
-              '  1) 요약(3~6줄)',
-              '  2) 근거 링크 3~8개 (가능하면 제목 + 링크)',
-            ].join('\n'),
-          );
+          const ai = await modelWithSearch.invoke(buildWebSearchPrompt(webQuery));
           text = extractTextFromAiMessage(ai);
-          if (text.trim()) toolsUsed.push('web_search_preview');
-        } else if (cfg.provider === 'anthropic') {
-          set({ statusMessage: 'Anthropic 웹 검색 중...' });
-          const modelWithSearch =
-            typeof modelAny.bindTools === 'function'
-              ? modelAny.bindTools([{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }])
-              : modelAny;
-
-          const ai = await modelWithSearch.invoke(
-            [
-              '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
-              '',
-              `- 질문: ${webQuery}`,
-              '- 출력:',
-              '  1) 요약(3~6줄)',
-              '  2) 근거 링크 3~8개 (가능하면 제목 + 링크)',
-            ].join('\n'),
-          );
-          text = extractTextFromAiMessage(ai);
-          if (text.trim()) toolsUsed.push('web_search');
+          if (text.trim()) toolsUsed.push(webSearchSpec.toolName);
         }
 
         if (assistantId) {

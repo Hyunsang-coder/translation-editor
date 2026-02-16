@@ -29,6 +29,28 @@ export interface AlignedChunk {
   totalChars: number;
 }
 
+type ProjectSegment = ITEProject['segments'][number];
+
+function toMarkdownText(project: ITEProject, blockIds: string[]): string {
+  return stripImages(blockIds
+    .map((id) => {
+      const html = project.blocks[id]?.content || '';
+      if (!html.trim()) return '';
+      const json = htmlToTipTapJson(html);
+      return tipTapJsonToMarkdownForTranslation(json);
+    })
+    .join('\n')).stripped;
+}
+
+function toAlignedSegment(project: ITEProject, seg: ProjectSegment): AlignedSegment {
+  return {
+    groupId: seg.groupId,
+    order: seg.order,
+    sourceText: toMarkdownText(project, seg.sourceIds),
+    targetText: toMarkdownText(project, seg.targetIds),
+  };
+}
+
 /**
  * 프로젝트의 세그먼트를 정렬된 청크로 분할
  * - 원문-번역문 쌍을 유지하면서 청크 단위로 분할
@@ -43,25 +65,9 @@ export function buildAlignedChunks(
   let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
 
   for (const seg of orderedSegments) {
-    // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블도 HTML로 보존)
-    // 번역용 함수 사용: 셀 내 리스트/다중 paragraph가 있는 테이블도 완전 보존
-    const sourceText = stripImages(seg.sourceIds
-      .map(id => {
-        const html = project.blocks[id]?.content || '';
-        if (!html.trim()) return '';
-        const json = htmlToTipTapJson(html);
-        return tipTapJsonToMarkdownForTranslation(json);
-      })
-      .join('\n')).stripped;
-    const targetText = stripImages(seg.targetIds
-      .map(id => {
-        const html = project.blocks[id]?.content || '';
-        if (!html.trim()) return '';
-        const json = htmlToTipTapJson(html);
-        return tipTapJsonToMarkdownForTranslation(json);
-      })
-      .join('\n')).stripped;
-    const segmentSize = sourceText.length + targetText.length;
+    // HTML → TipTap JSON → Markdown 변환 (복잡한 테이블/리스트 구조 보존)
+    const alignedSegment = toAlignedSegment(project, seg);
+    const segmentSize = alignedSegment.sourceText.length + alignedSegment.targetText.length;
 
     // 청크 크기 초과 시 새 청크 시작
     if (currentChunk.totalChars + segmentSize > maxCharsPerChunk && currentChunk.segments.length > 0) {
@@ -69,12 +75,7 @@ export function buildAlignedChunks(
       currentChunk = { chunkIndex: chunks.length, segments: [], totalChars: 0 };
     }
 
-    currentChunk.segments.push({
-      groupId: seg.groupId,
-      order: seg.order,
-      sourceText,
-      targetText,
-    });
+    currentChunk.segments.push(alignedSegment);
     currentChunk.totalChars += segmentSize;
   }
 
@@ -114,23 +115,8 @@ export async function buildAlignedChunksAsync(
     const seg = orderedSegments[i]!;
 
     // HTML → TipTap JSON → Markdown 변환 → 이미지 제거 (토큰 절약)
-    const sourceText = stripImages(seg.sourceIds
-      .map(id => {
-        const html = project.blocks[id]?.content || '';
-        if (!html.trim()) return '';
-        const json = htmlToTipTapJson(html);
-        return tipTapJsonToMarkdownForTranslation(json);
-      })
-      .join('\n')).stripped;
-    const targetText = stripImages(seg.targetIds
-      .map(id => {
-        const html = project.blocks[id]?.content || '';
-        if (!html.trim()) return '';
-        const json = htmlToTipTapJson(html);
-        return tipTapJsonToMarkdownForTranslation(json);
-      })
-      .join('\n')).stripped;
-    const segmentSize = sourceText.length + targetText.length;
+    const alignedSegment = toAlignedSegment(project, seg);
+    const segmentSize = alignedSegment.sourceText.length + alignedSegment.targetText.length;
 
     // 청크 크기 초과 시 새 청크 시작
     if (currentChunk.totalChars + segmentSize > maxCharsPerChunk && currentChunk.segments.length > 0) {
@@ -138,12 +124,7 @@ export async function buildAlignedChunksAsync(
       currentChunk = { chunkIndex: chunks.length, segments: [], totalChars: 0 };
     }
 
-    currentChunk.segments.push({
-      groupId: seg.groupId,
-      order: seg.order,
-      sourceText,
-      targetText,
-    });
+    currentChunk.segments.push(alignedSegment);
     currentChunk.totalChars += segmentSize;
 
     // 배치마다 이벤트 루프에 제어권 양보 (UI 블로킹 방지)
