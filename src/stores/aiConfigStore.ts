@@ -69,7 +69,7 @@ const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
     { value: 'gpt-5-mini' },
   ],
   anthropic: [
-    { value: 'claude-sonnet-4-5' },
+    { value: 'claude-sonnet-4-6' },
     { value: 'claude-haiku-4-5' },
     { value: 'claude-opus-4-6' },
   ],
@@ -80,17 +80,16 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     (set, get) => {
       // 환경변수 VITE_AI_MODEL이 있으면 사용, 없으면 기본값
       const envModel = getEnv('VITE_AI_MODEL', '');
-      const defaultTranslationModel = envModel || 'gpt-5.2';
-      const defaultChatModel = envModel || 'gpt-5.2';
+      const defaultTranslationModel = envModel || 'claude-sonnet-4-6';
+      const defaultChatModel = envModel || 'claude-sonnet-4-6';
 
       return {
         translationModel: defaultTranslationModel,
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
-        // 기본값: OpenAI만 활성화
-        openaiEnabled: true,
-        anthropicEnabled: false,
+        openaiEnabled: false,
+        anthropicEnabled: true,
 
         loadSecureKeys: async () => {
           // 이미 성공했으면 캐시 사용
@@ -194,7 +193,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
           if (!enabled) {
             const anthropicPresets = MODEL_PRESETS.anthropic;
-            const firstAnthropicModel = anthropicPresets?.[0]?.value ?? 'claude-sonnet-4-5';
+            const firstAnthropicModel = anthropicPresets?.[0]?.value ?? 'claude-sonnet-4-6';
             if (!state.translationModel.startsWith('claude')) {
               set({ translationModel: firstAnthropicModel });
             }
@@ -228,22 +227,27 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 6, // 버전 업: Opus 4.5 → 4.6 모델 ID 변경
+      version: 7,
       migrate: (persisted: unknown, version: number) => {
         const data = persisted as Record<string, unknown>;
         if (version < 5) {
-          // v4 → v5 마이그레이션: provider 기반으로 enabled 설정
           const oldProvider = (data.provider as string) || 'openai';
           data.translationModel = (data.translationModel as string) || 'gpt-5.2';
           data.chatModel = (data.chatModel as string) || 'gpt-5.2';
           data.openaiEnabled = oldProvider !== 'anthropic';
           data.anthropicEnabled = oldProvider === 'anthropic';
         }
-        // v5 → v6: claude-opus-4-5 → claude-opus-4-6
         if (version < 6) {
           const rename = (v: unknown) => v === 'claude-opus-4-5' ? 'claude-opus-4-6' : v;
           data.translationModel = rename(data.translationModel);
           data.chatModel = rename(data.chatModel);
+        }
+        // v6 → v7: Sonnet 4.5 → 4.6, 기본 provider를 Anthropic으로 변경
+        if (version < 7) {
+          const rename = (v: unknown) => v === 'claude-sonnet-4-5' ? 'claude-sonnet-4-6' : v;
+          data.translationModel = rename(data.translationModel);
+          data.chatModel = rename(data.chatModel);
+          data.anthropicEnabled = true;
         }
         return data;
       },

@@ -54,7 +54,7 @@ describe('getAiConfig - test env fallback', () => {
 
   it('Claude 모델 선택 시 Store 키가 없으면 ANTHROPIC_API_KEY를 fallback으로 사용', () => {
     useAiConfigStore.setState({
-      translationModel: 'claude-sonnet-4-5',
+      translationModel: 'claude-sonnet-4-6',
       anthropicApiKey: undefined,
     });
     process.env.ANTHROPIC_API_KEY = 'env-anthropic-key';

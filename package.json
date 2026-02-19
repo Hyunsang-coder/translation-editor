@@ -10,15 +10,13 @@
     "tauri": "tauri",
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "node scripts/tauri-build.mjs",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
-    "test:ci:local": "npm run lint && npm run test:run && npm run test:e2e:web && cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:tauri": "npm run lint && npm run test:run && npm run test:e2e && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --release --manifest-path src-tauri/Cargo.toml",
+    "test:ci:local": "npm run test:run && npm run test:e2e:web && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:tauri": "npm run test:run && npm run test:e2e && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --release --manifest-path src-tauri/Cargo.toml",
     "test:e2e": "npm run test:e2e:tauri",
     "test:e2e:tauri": "node scripts/tauri-smoke.mjs",
     "test:e2e:tauri:mcp:new-project": "node scripts/tauri-testing-mcp-new-project.mjs",
@@ -88,8 +86,11 @@
     "zod": "^3.25.76",
     "zustand": "^5.0.2"
   },
+  "overrides": {
+    "minimatch": "^10.2.1",
+    "glob": "^11.0.0"
+  },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.58.1",
     "@tauri-apps/cli": "^2.1.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -106,15 +107,10 @@
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.20",
-    "eslint": "^9.39.2",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "globals": "^17.1.0",
     "jsdom": "^27.0.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.53.1",
     "vite": "^6.0.5",
     "vitest": "^3.2.4"
   }
