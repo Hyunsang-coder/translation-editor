@@ -183,12 +183,10 @@ function findMatches(
 function scrollToMatch(editor: { view: { dom: HTMLElement; coordsAtPos: (pos: number, side?: number) => { top: number; bottom: number } }; commands: { setTextSelection: (pos: number) => boolean } }, pos: number): void {
   editor.commands.setTextSelection(pos);
   const coords = editor.view.coordsAtPos(pos);
-  const wrapper = editor.view.dom.closest('.tiptap-wrapper');
-  if (wrapper) {
-    const rect = wrapper.getBoundingClientRect();
-    if (coords.top < rect.top || coords.bottom > rect.bottom) {
-      wrapper.scrollTop += coords.top - rect.top - rect.height / 2;
-    }
+  const scrollContainer = editor.view.dom;
+  const rect = scrollContainer.getBoundingClientRect();
+  if (coords.top < rect.top || coords.bottom > rect.bottom) {
+    scrollContainer.scrollTop += coords.top - rect.top - rect.height / 2;
   }
 }
 
