@@ -406,14 +406,37 @@ function removeDuplicateTableHeaders(root: ParentNode) {
 
     const previousElement = findPreviousElementSibling(table);
     if (!previousElement) continue;
-    if (!['p', 'div'].includes(previousElement.tagName.toLowerCase())) continue;
-    if (previousElement.querySelector('table')) continue;
 
-    const previousText = normalizeText(previousElement.textContent);
-    if (!previousText || previousText !== headerText) continue;
+    const prevTag = previousElement.tagName.toLowerCase();
 
-    previousElement.remove();
+    // 기존: 앞 요소가 p/div이고 텍스트가 헤더와 같으면 제거
+    if (['p', 'div'].includes(prevTag) && !previousElement.querySelector('table')) {
+      const previousText = normalizeText(previousElement.textContent);
+      if (previousText && previousText === headerText) {
+        previousElement.remove();
+      }
+      continue;
+    }
+
+    // 신규: 앞 요소가 table이고 sticky header 패턴이면 제거
+    // sticky header = thead만 있고 tbody 데이터 행이 없는 표
+    if (prevTag === 'table') {
+      const prevHeaderText = extractTableHeaderText(previousElement as HTMLTableElement);
+      if (prevHeaderText !== headerText) continue;
+      if (isStickyHeaderOnlyTable(previousElement as HTMLTableElement)) {
+        previousElement.remove();
+      }
+    }
   }
+}
+
+/**
+ * tbody에 실제 데이터 행이 없는 헤더 전용 표인지 판별
+ * (sticky header 복사 시 생성되는 클론 표 감지용)
+ */
+function isStickyHeaderOnlyTable(table: HTMLTableElement): boolean {
+  const tbodyRows = Array.from(table.querySelectorAll('tbody tr'));
+  return tbodyRows.length === 0;
 }
 
 function extractTableHeaderText(table: HTMLTableElement): string | null {
