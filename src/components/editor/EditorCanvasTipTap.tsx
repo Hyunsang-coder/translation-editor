@@ -120,6 +120,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const translateAbortController = useRef<AbortController | null>(null);
 
+  // 재번역 지시사항 모달 (타겟에 내용이 이미 있을 때)
+  const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
+  const [retranslateMessage, setRetranslateMessage] = useState('');
+
   // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
   const [addToChatBubble, setAddToChatBubble] = useState<null | {
@@ -210,7 +214,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     };
   }, [scheduleAddToChatBubble]);
 
-  const openTranslatePreview = useCallback(async (): Promise<void> => {
+  const openTranslatePreview = useCallback(async (extraMessage?: string): Promise<void> => {
     if (!project) return;
     if (!sourceEditorRef.current) {
       addToast({ type: 'error', message: t('editor.sourceEditorNotReady', 'Source 에디터가 아직 준비되지 않았습니다.') });
@@ -266,6 +270,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         console.warn('[Translation] Glossary search failed:', glossaryError);
       }
 
+      const trimmedMessage = extraMessage?.trim();
       const { doc } = await translateWithStreaming({
         project,
         sourceDocJson,
@@ -273,6 +278,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         projectContext,
         translatorPersona,
         glossary,
+        ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => {
           setStreamingText(text);
         },
@@ -299,6 +305,18 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     addToast,
     t,
   ]);
+
+  // 번역 버튼 클릭 핸들러: 타겟에 내용이 있으면 재번역 모달 먼저 표시
+  const handleTranslateClick = useCallback(() => {
+    if (!sourceEditorRef.current) return;
+    const hasTarget = stripHtml(targetDocument || '').trim().length > 0;
+    if (hasTarget) {
+      setRetranslateMessage('');
+      setRetranslateModalOpen(true);
+    } else {
+      void openTranslatePreview();
+    }
+  }, [targetDocument, openTranslatePreview]);
 
   // 번역 취소 핸들러
   const handleTranslateCancel = useCallback((): void => {
@@ -333,9 +351,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {
-    // 기존 에러 클리어하고 다시 번역 시도
-    void openTranslatePreview();
-  }, [openTranslatePreview]);
+    void openTranslatePreview(retranslateMessage);
+  }, [openTranslatePreview, retranslateMessage]);
 
   // Source 에디터 준비 완료 콜백
   const handleSourceEditorReady = useCallback((editor: Editor) => {
@@ -442,7 +459,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           />
           <button
             type="button"
-            onClick={() => void openTranslatePreview()}
+            onClick={handleTranslateClick}
             className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
             disabled={translateLoading}
             title={t('editor.translateTitle')}
@@ -615,6 +632,67 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           </div>
         </Panel>
       </PanelGroup>
+
+      {/* 재번역 지시사항 모달 (타겟에 이미 내용이 있을 때 번역 버튼 클릭 시) */}
+      {retranslateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-4 py-3 border-b border-editor-border">
+              <h3 className="text-sm font-semibold text-editor-text">
+                {t('editor.retranslateModal.title', '재번역')}
+              </h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-editor-muted">
+                {t('editor.retranslateModal.description', '번역문이 이미 있습니다. 처음부터 다시 번역합니다.')}
+              </p>
+              <div>
+                <label className="text-xs font-medium text-editor-text">
+                  {t('review.retranslate.modal.messageLabel', '추가 지시사항')}
+                  <span className="ml-1 text-editor-muted font-normal">
+                    {t('review.retranslate.modal.optional', '(선택)')}
+                  </span>
+                </label>
+                <textarea
+                  value={retranslateMessage}
+                  onChange={(e) => setRetranslateMessage(e.target.value)}
+                  placeholder={t('review.retranslate.modal.placeholder', '추가로 반영할 내용을 입력하세요...')}
+                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      setRetranslateModalOpen(false);
+                      void openTranslatePreview(retranslateMessage);
+                    }
+                    if (e.key === 'Escape') {
+                      setRetranslateModalOpen(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRetranslateModalOpen(false)}
+                className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+              >
+                {t('common.cancel', '취소')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRetranslateModalOpen(false);
+                  void openTranslatePreview(retranslateMessage);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+              >
+                {t('review.retranslate.modal.execute', '재번역 실행')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TranslatePreviewModal
         open={translatePreviewOpen}

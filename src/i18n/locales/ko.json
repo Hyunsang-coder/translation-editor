@@ -184,6 +184,10 @@
     "translate": "번역",
     "translating": "번역 중…",
     "translateTitle": "원문 전체 번역 → 미리보기",
+    "retranslateModal": {
+      "title": "재번역",
+      "description": "번역문이 이미 있습니다. 처음부터 다시 번역합니다."
+    },
     "previewTitle": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "addToChat": "선택한 텍스트를 채팅 입력창에 추가",
     "loadingProject": "프로젝트를 불러오는 중...",

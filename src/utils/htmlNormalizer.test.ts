@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizePastedHtml, shouldNormalizePastedHtml } from './htmlNormalizer';
+import { normalizePastedHtml } from './htmlNormalizer';
 
 describe('removeDuplicateTableHeaders', () => {
   it('표 앞 p 태그가 헤더와 동일한 텍스트면 제거 (기존 동작)', () => {

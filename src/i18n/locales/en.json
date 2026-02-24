@@ -184,6 +184,10 @@
     "translate": "Translate",
     "translating": "Translating...",
     "translateTitle": "Translate entire Source → Preview",
+    "retranslateModal": {
+      "title": "Retranslate",
+      "description": "Target already has content. This will retranslate from scratch."
+    },
     "previewTitle": "Translation Preview (Entire Source → Entire Target)",
     "addToChat": "Add selected text to chat input",
     "loadingProject": "Loading project...",
