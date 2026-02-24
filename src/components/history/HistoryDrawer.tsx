@@ -38,6 +38,11 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const renameSnapshot = useHistoryStore((s) => s.renameSnapshot);
   const reset = useHistoryStore((s) => s.reset);
 
+  const visibleSnapshots = useMemo(
+    () => snapshots.filter((s) => s.description !== 'autoSnapshot'),
+    [snapshots],
+  );
+
   const currentBlocksHash = useMemo(() => {
     if (!blocks) return null;
     return hashContent(JSON.stringify(blocks));
@@ -265,7 +270,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
 
         <div className="flex-1 overflow-y-auto">
           <HistoryTimeline
-            snapshots={snapshots}
+            snapshots={visibleSnapshots}
             isLoading={isLoading}
             isCurrentModified={isCurrentModified}
             selectedIds={selectedIds}
@@ -307,7 +312,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
         open={compareOpen}
         projectId={projectId}
         snapshotId={selectedSnapshotId}
-        snapshots={snapshots}
+        snapshots={visibleSnapshots}
         initialTargetSnapshotId={compareInitialTargetId}
         onClose={() => setCompareOpen(false)}
       />

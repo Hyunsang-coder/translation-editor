@@ -406,6 +406,7 @@ pub fn run() {
             commands::glossary::import_glossary_excel,
             commands::glossary::search_glossary,
             commands::history::create_snapshot,
+            commands::history::upsert_auto_snapshot,
             commands::history::restore_snapshot,
             commands::history::list_history,
             commands::history::get_snapshot,

@@ -59,6 +59,21 @@ export async function deleteSnapshot(params: {
   });
 }
 
+export async function upsertAutoSnapshot(params: {
+  projectId: string;
+  blocksJson: string;
+  chatSummary?: string;
+}): Promise<{ snapshotId: string; created: boolean }> {
+  return await invoke<{ snapshotId: string; created: boolean }>('upsert_auto_snapshot', {
+    args: {
+      projectId: params.projectId,
+      description: 'autoSnapshot',
+      blocksJson: params.blocksJson,
+      chatSummary: params.chatSummary,
+    },
+  });
+}
+
 export async function renameSnapshot(params: {
   projectId: string;
   snapshotId: string;

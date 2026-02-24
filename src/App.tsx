@@ -16,6 +16,7 @@ import { UpdateModal } from '@/components/ui/UpdateModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { isChatPanel } from '@/types';
+import { useHistoryStore } from '@/stores/historyStore';
 
 function App(): JSX.Element {
   const { t } = useTranslation();
@@ -29,6 +30,9 @@ function App(): JSX.Element {
     useShallow((s) => ({ initializeProject: s.initializeProject, startAutoSave: s.startAutoSave, stopAutoSave: s.stopAutoSave }))
   );
   const loadSecureKeys = useAiConfigStore((s) => s.loadSecureKeys);
+  const { startAutoSnapshotWatch, stopAutoSnapshotWatch } = useHistoryStore(
+    useShallow((s) => ({ startAutoSnapshotWatch: s.startAutoSnapshotWatch, stopAutoSnapshotWatch: s.stopAutoSnapshotWatch }))
+  );
 
   // 자동 업데이트
   const {
@@ -220,6 +224,12 @@ function App(): JSX.Element {
     startAutoSave();
     return () => stopAutoSave();
   }, [startAutoSave, stopAutoSave]);
+
+  // Auto-snapshot: 에디터 변경 후 3초 idle 시 자동 히스토리 스냅샷
+  useEffect(() => {
+    startAutoSnapshotWatch();
+    return () => stopAutoSnapshotWatch();
+  }, [startAutoSnapshotWatch, stopAutoSnapshotWatch]);
 
   // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
   useEffect(() => {

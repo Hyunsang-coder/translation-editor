@@ -126,6 +126,31 @@ pub fn delete_snapshot(args: ProjectSnapshotArgs, db_state: State<DbState>) -> C
         .map_err(CommandError::from)
 }
 
+/// autoSnapshot 덮어쓰기 또는 신규 생성
+/// 반환: { snapshotId, created }
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertAutoSnapshotResult {
+    pub snapshot_id: String,
+    pub created: bool,
+}
+
+#[tauri::command]
+pub fn upsert_auto_snapshot(
+    args: CreateSnapshotArgs,
+    db_state: State<DbState>,
+) -> CommandResult<UpsertAutoSnapshotResult> {
+    let db = db_state.acquire()?;
+    let (snapshot_id, created) = db
+        .upsert_auto_snapshot(
+            &args.project_id,
+            &args.blocks_json,
+            args.chat_summary.as_deref(),
+        )
+        .map_err(CommandError::from)?;
+    Ok(UpsertAutoSnapshotResult { snapshot_id, created })
+}
+
 /// 스냅샷 이름(설명) 변경
 #[tauri::command]
 pub fn rename_snapshot(args: RenameSnapshotArgs, db_state: State<DbState>) -> CommandResult<()> {

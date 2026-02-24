@@ -6,8 +6,10 @@ import {
   getSnapshot as tauriGetSnapshot,
   listHistory as tauriListHistory,
   renameSnapshot as tauriRenameSnapshot,
+  upsertAutoSnapshot as tauriUpsertAutoSnapshot,
 } from '@/tauri/history';
 import { hashContent } from '@/utils/hash';
+import { useProjectStore } from '@/stores/projectStore';
 
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
@@ -35,6 +37,8 @@ interface HistoryActions {
   deleteSnapshot: (params: { projectId: string; snapshotId: string }) => Promise<void>;
   renameSnapshot: (params: { projectId: string; snapshotId: string; description: string }) => Promise<void>;
   reset: () => void;
+  startAutoSnapshotWatch: () => void;
+  stopAutoSnapshotWatch: () => void;
 }
 
 type HistoryStore = HistoryState & HistoryActions;
@@ -52,6 +56,9 @@ const initialState: HistoryState = {
 };
 
 let loadHistoryRequestSeq = 0;
+let autoSnapshotTimer: number | null = null;
+let autoSnapshotInFlight = false;
+const AUTO_SNAPSHOT_DEBOUNCE_MS = 3000;
 
 function isLatestRequest(requestSeq: number): boolean {
   return requestSeq === loadHistoryRequestSeq;
@@ -207,5 +214,79 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   reset: (): void => {
     loadHistoryRequestSeq += 1;
     set(initialState);
+  },
+
+  startAutoSnapshotWatch: (): void => {
+    if (autoSnapshotTimer !== null) return;
+
+    const tick = (): void => {
+      const projectState = useProjectStore.getState();
+      const { project, lastChangeAt, materializeBlocksForSnapshot } = projectState;
+
+      if (!project || !lastChangeAt) {
+        autoSnapshotTimer = window.setTimeout(tick, 500);
+        return;
+      }
+
+      const idleFor = Date.now() - lastChangeAt;
+      const canSnapshot = idleFor >= AUTO_SNAPSHOT_DEBOUNCE_MS;
+
+      if (canSnapshot && !autoSnapshotInFlight) {
+        const blocks = materializeBlocksForSnapshot();
+        if (blocks) {
+          const { latestBlocksHash } = get();
+          const currentHash = hashContent(JSON.stringify(blocks));
+
+          if (latestBlocksHash !== null && currentHash === latestBlocksHash) {
+            // No change — skip
+            autoSnapshotTimer = window.setTimeout(tick, 500);
+            return;
+          }
+
+          autoSnapshotInFlight = true;
+          void tauriUpsertAutoSnapshot({
+            projectId: project.id,
+            blocksJson: JSON.stringify(blocks),
+          })
+            .then(({ created }) => {
+              set({ latestBlocksHash: currentHash });
+              // 새로 생성된 경우에만 목록 갱신
+              if (created) {
+                void tauriListHistory(project.id)
+                  .then((snapshots) => set({ snapshots }))
+                  .catch(() => {});
+              } else {
+                // 덮어쓴 경우 — 목록의 timestamp만 갱신 (재조회 없이)
+                set((state) => ({
+                  snapshots: state.snapshots.map((s) =>
+                    s.description === 'autoSnapshot'
+                      ? { ...s, timestamp: Date.now() }
+                      : s,
+                  ),
+                }));
+              }
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn('[AutoSnapshot] Failed:', message);
+            })
+            .finally(() => {
+              autoSnapshotInFlight = false;
+            });
+        }
+      }
+
+      autoSnapshotTimer = window.setTimeout(tick, 500);
+    };
+
+    autoSnapshotTimer = window.setTimeout(tick, 500);
+  },
+
+  stopAutoSnapshotWatch: (): void => {
+    if (autoSnapshotTimer !== null) {
+      window.clearTimeout(autoSnapshotTimer);
+      autoSnapshotTimer = null;
+    }
+    autoSnapshotInFlight = false;
   },
 }));

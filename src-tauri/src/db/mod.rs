@@ -9,6 +9,7 @@ use std::sync::Mutex;
 
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 
 use crate::error::IteError;
 use crate::models::{
@@ -430,6 +431,53 @@ impl Database {
             )));
         }
         Ok(())
+    }
+
+    /// autoSnapshot 덮어쓰기 또는 신규 생성
+    /// description = 'autoSnapshot'인 최신 스냅샷이 있으면 content + timestamp를 갱신하고,
+    /// 없으면 새로 생성한다. 반환값은 (snapshot_id, created: bool).
+    pub fn upsert_auto_snapshot(
+        &self,
+        project_id: &str,
+        snapshot_json: &str,
+        chat_summary: Option<&str>,
+    ) -> Result<(String, bool), IteError> {
+        // 저장 시점에 스냅샷 JSON 구조를 검증
+        let _: std::collections::HashMap<String, EditorBlock> =
+            serde_json::from_str(snapshot_json)?;
+
+        let now = chrono::Utc::now().timestamp_millis();
+
+        // 기존 autoSnapshot 조회 (최신 1개)
+        let existing_id: Option<String> = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id FROM history
+                 WHERE project_id = ?1
+                   AND description = 'autoSnapshot'
+                   AND snapshot_json IS NOT NULL
+                 ORDER BY timestamp DESC
+                 LIMIT 1",
+            )?;
+            stmt.query_row([project_id], |row| row.get(0)).optional()?
+        };
+
+        if let Some(id) = existing_id {
+            self.conn.execute(
+                "UPDATE history
+                 SET snapshot_json = ?1, timestamp = ?2, chat_summary = ?3
+                 WHERE id = ?4 AND project_id = ?5",
+                (snapshot_json, now, chat_summary, &id, project_id),
+            )?;
+            Ok((id, false))
+        } else {
+            let snapshot_id = uuid::Uuid::new_v4().to_string();
+            self.conn.execute(
+                "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
+                 VALUES (?1, ?2, ?3, 'autoSnapshot', '[]', ?4, ?5)",
+                (&snapshot_id, project_id, now, snapshot_json, chat_summary),
+            )?;
+            Ok((snapshot_id, true))
+        }
     }
 
     /// 히스토리 스냅샷 이름(설명) 변경
