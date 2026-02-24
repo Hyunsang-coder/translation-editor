@@ -62,12 +62,13 @@ export async function deleteSnapshot(params: {
 export async function upsertAutoSnapshot(params: {
   projectId: string;
   blocksJson: string;
+  description: string;
   chatSummary?: string;
 }): Promise<{ snapshotId: string; created: boolean }> {
   return await invoke<{ snapshotId: string; created: boolean }>('upsert_auto_snapshot', {
     args: {
       projectId: params.projectId,
-      description: 'autoSnapshot',
+      description: params.description,
       blocksJson: params.blocksJson,
       chatSummary: params.chatSummary,
     },

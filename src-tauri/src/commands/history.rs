@@ -144,6 +144,7 @@ pub fn upsert_auto_snapshot(
     let (snapshot_id, created) = db
         .upsert_auto_snapshot(
             &args.project_id,
+            &args.description,
             &args.blocks_json,
             args.chat_summary.as_deref(),
         )

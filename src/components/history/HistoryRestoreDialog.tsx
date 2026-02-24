@@ -47,9 +47,10 @@ export function HistoryRestoreDialog({
         if (!blocksForSnapshot) {
           throw new Error('Project blocks are unavailable for snapshot');
         }
+        const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         await createSnapshotIfChanged({
           projectId,
-          description: t('history.autoSnapshotBeforeRestore'),
+          description: `${t('history.autoSnapshotBeforeRestore')} ${timeLabel}`,
           blocks: blocksForSnapshot,
         });
       } catch (e) {

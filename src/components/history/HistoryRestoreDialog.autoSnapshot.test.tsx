@@ -165,7 +165,7 @@ describe('HistoryRestoreDialog auto snapshot integration', () => {
     await waitFor(() => {
       expect(mocks.historyStoreState.createSnapshotIfChanged).toHaveBeenCalledWith({
         projectId: 'project-1',
-        description: 'history.autoSnapshotBeforeRestore',
+        description: expect.stringContaining('history.autoSnapshotBeforeRestore'),
         blocks: mocks.baseBlocks,
       });
       expect(mocks.tauriHistory.restoreSnapshot).toHaveBeenCalledWith({

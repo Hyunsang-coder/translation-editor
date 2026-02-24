@@ -244,9 +244,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
           }
 
           autoSnapshotInFlight = true;
+          const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           void tauriUpsertAutoSnapshot({
             projectId: project.id,
             blocksJson: JSON.stringify(blocks),
+            description: `자동 저장 ${timeLabel}`,
           })
             .then(({ created }) => {
               set({ latestBlocksHash: currentHash });
@@ -256,11 +258,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
                   .then((snapshots) => set({ snapshots }))
                   .catch(() => {});
               } else {
-                // 덮어쓴 경우 — 목록의 timestamp만 갱신 (재조회 없이)
+                // 덮어쓴 경우 — description + timestamp 갱신 (재조회 없이)
                 set((state) => ({
                   snapshots: state.snapshots.map((s) =>
-                    s.description === 'autoSnapshot'
-                      ? { ...s, timestamp: Date.now() }
+                    s.description.startsWith('자동 저장')
+                      ? { ...s, description: `자동 저장 ${timeLabel}`, timestamp: Date.now() }
                       : s,
                   ),
                 }));

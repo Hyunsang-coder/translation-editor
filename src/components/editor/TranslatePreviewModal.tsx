@@ -201,16 +201,20 @@ export function TranslatePreviewModal(props: {
       try {
         if (project) {
           try {
-            const blocksForSnapshot = materializeBlocksForSnapshot();
-            if (!blocksForSnapshot) {
-              throw new Error('Project blocks are unavailable for snapshot');
+            const { targetDocument } = useProjectStore.getState();
+            const hasTarget = stripHtml(targetDocument || '').trim().length > 0;
+            if (hasTarget) {
+              const blocksForSnapshot = materializeBlocksForSnapshot();
+              if (!blocksForSnapshot) {
+                throw new Error('Project blocks are unavailable for snapshot');
+              }
+              const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              await createSnapshotIfChanged({
+                projectId: project.id,
+                description: `${autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate')} ${timeLabel}`,
+                blocks: blocksForSnapshot,
+              });
             }
-            await createSnapshotIfChanged({
-              projectId: project.id,
-              description:
-                autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate'),
-              blocks: blocksForSnapshot,
-            });
           } catch (snapshotError) {
             // 자동 스냅샷 실패는 메인 동작(적용)을 막지 않음
             console.warn('[history] auto snapshot before apply failed:', snapshotError);

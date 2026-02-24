@@ -39,7 +39,7 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const reset = useHistoryStore((s) => s.reset);
 
   const visibleSnapshots = useMemo(
-    () => snapshots.filter((s) => s.description !== 'autoSnapshot'),
+    () => snapshots.filter((s) => s.description !== 'autoSnapshot' && !s.description.startsWith('자동 저장')),
     [snapshots],
   );
 

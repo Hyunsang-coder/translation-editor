@@ -87,8 +87,16 @@ vi.mock('@tiptap/core', () => ({
 }));
 
 vi.mock('@/stores/projectStore', () => ({
-  useProjectStore: <T,>(selector: (state: typeof stores.projectStoreState) => T): T =>
-    selector(stores.projectStoreState),
+  useProjectStore: Object.assign(
+    <T,>(selector: (state: typeof stores.projectStoreState) => T): T =>
+      selector(stores.projectStoreState),
+    {
+      getState: () => ({
+        ...stores.projectStoreState,
+        targetDocument: '<p>current target</p>',
+      }),
+    },
+  ),
 }));
 
 vi.mock('@/stores/historyStore', () => ({
@@ -128,7 +136,7 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
     await waitFor(() => {
       expect(stores.historyStoreState.createSnapshotIfChanged).toHaveBeenCalledWith({
         projectId: 'project-1',
-        description: 'custom auto snapshot',
+        description: expect.stringContaining('custom auto snapshot'),
         blocks: stores.blocks,
       });
       expect(onApply).toHaveBeenCalledTimes(1);

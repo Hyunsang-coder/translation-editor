@@ -439,6 +439,7 @@ impl Database {
     pub fn upsert_auto_snapshot(
         &self,
         project_id: &str,
+        description: &str,
         snapshot_json: &str,
         chat_summary: Option<&str>,
     ) -> Result<(String, bool), IteError> {
@@ -453,7 +454,7 @@ impl Database {
             let mut stmt = self.conn.prepare(
                 "SELECT id FROM history
                  WHERE project_id = ?1
-                   AND description = 'autoSnapshot'
+                   AND (description = 'autoSnapshot' OR description LIKE '자동 저장%')
                    AND snapshot_json IS NOT NULL
                  ORDER BY timestamp DESC
                  LIMIT 1",
@@ -464,17 +465,17 @@ impl Database {
         if let Some(id) = existing_id {
             self.conn.execute(
                 "UPDATE history
-                 SET snapshot_json = ?1, timestamp = ?2, chat_summary = ?3
-                 WHERE id = ?4 AND project_id = ?5",
-                (snapshot_json, now, chat_summary, &id, project_id),
+                 SET snapshot_json = ?1, timestamp = ?2, chat_summary = ?3, description = ?4
+                 WHERE id = ?5 AND project_id = ?6",
+                (snapshot_json, now, chat_summary, description, &id, project_id),
             )?;
             Ok((id, false))
         } else {
             let snapshot_id = uuid::Uuid::new_v4().to_string();
             self.conn.execute(
                 "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
-                 VALUES (?1, ?2, ?3, 'autoSnapshot', '[]', ?4, ?5)",
-                (&snapshot_id, project_id, now, snapshot_json, chat_summary),
+                 VALUES (?1, ?2, ?3, ?4, '[]', ?5, ?6)",
+                (&snapshot_id, project_id, now, description, snapshot_json, chat_summary),
             )?;
             Ok((snapshot_id, true))
         }
