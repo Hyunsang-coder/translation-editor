@@ -17,6 +17,7 @@ interface HistoryState {
   isLoadingSnapshot: boolean;
   error: string | null;
   latestBlocksHash: string | null;
+  isAutoSnapshotSaving: boolean;
 }
 
 interface HistoryActions {
@@ -53,6 +54,7 @@ const initialState: HistoryState = {
   isLoadingSnapshot: false,
   error: null,
   latestBlocksHash: null,
+  isAutoSnapshotSaving: false,
 };
 
 let loadHistoryRequestSeq = 0;
@@ -244,6 +246,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
           }
 
           autoSnapshotInFlight = true;
+          set({ isAutoSnapshotSaving: true });
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           void tauriUpsertAutoSnapshot({
             projectId: project.id,
@@ -274,6 +277,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             })
             .finally(() => {
               autoSnapshotInFlight = false;
+              set({ isAutoSnapshotSaving: false });
             });
         }
       }
@@ -290,5 +294,6 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       autoSnapshotTimer = null;
     }
     autoSnapshotInFlight = false;
+    set({ isAutoSnapshotSaving: false });
   },
 }));

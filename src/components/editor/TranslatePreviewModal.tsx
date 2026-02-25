@@ -19,8 +19,6 @@ import { stripHtml } from '@/utils/hash';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
-import { useProjectStore } from '@/stores/projectStore';
-import { useHistoryStore } from '@/stores/historyStore';
 
 /**
  * 경과 시간을 포맷팅 (mm:ss)
@@ -80,7 +78,6 @@ export function TranslatePreviewModal(props: {
   onApply: () => void | Promise<void>;
   onCancel?: () => void;
   onRetry?: () => void;
-  autoSnapshotDescription?: string;
 }): JSX.Element | null {
   const { t } = useTranslation();
   const {
@@ -97,11 +94,7 @@ export function TranslatePreviewModal(props: {
     onApply,
     onCancel,
     onRetry,
-    autoSnapshotDescription,
   } = props;
-  const project = useProjectStore((s) => s.project);
-  const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
-  const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
   const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
   const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
@@ -199,27 +192,6 @@ export function TranslatePreviewModal(props: {
     setIsApplying(true);
     void (async () => {
       try {
-        if (project) {
-          try {
-            const { targetDocument } = useProjectStore.getState();
-            const hasTarget = stripHtml(targetDocument || '').trim().length > 0;
-            if (hasTarget) {
-              const blocksForSnapshot = materializeBlocksForSnapshot();
-              if (!blocksForSnapshot) {
-                throw new Error('Project blocks are unavailable for snapshot');
-              }
-              const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              await createSnapshotIfChanged({
-                projectId: project.id,
-                description: `${autoSnapshotDescription ?? t('history.autoSnapshotBeforeTranslate')} ${timeLabel}`,
-                blocks: blocksForSnapshot,
-              });
-            }
-          } catch (snapshotError) {
-            // 자동 스냅샷 실패는 메인 동작(적용)을 막지 않음
-            console.warn('[history] auto snapshot before apply failed:', snapshotError);
-          }
-        }
         await onApply();
       } finally {
         setIsApplying(false);

@@ -2,56 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EditorBlock, ITEProject } from '@/types';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
-
-const stores = vi.hoisted(() => {
-  const now = Date.now();
-  const blocks: Record<string, EditorBlock> = {
-    'target-1': {
-      id: 'target-1',
-      type: 'target',
-      content: '<p>current target</p>',
-      hash: 'hash-target-1',
-      metadata: {
-        createdAt: now,
-        updatedAt: now,
-        tags: [],
-      },
-    },
-  };
-
-  const project: ITEProject = {
-    id: 'project-1',
-    version: '1.0.0',
-    metadata: {
-      title: 'Test Project',
-      domain: 'general',
-      createdAt: now,
-      updatedAt: now,
-      settings: {
-        strictnessLevel: 0.5,
-        autoSave: true,
-        autoSaveInterval: 30000,
-        theme: 'system',
-      },
-    },
-    segments: [],
-    blocks,
-  };
-
-  return {
-    blocks,
-    project,
-    projectStoreState: {
-      project,
-      materializeBlocksForSnapshot: vi.fn<() => typeof blocks | null>(),
-    },
-    historyStoreState: {
-      createSnapshotIfChanged: vi.fn(),
-    },
-  };
-});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -75,9 +26,7 @@ vi.mock('@/components/ui/Skeleton', () => ({
 
 vi.mock('@tiptap/react', () => ({
   useEditor: () => ({
-    commands: {
-      setContent: vi.fn(),
-    },
+    commands: { setContent: vi.fn() },
   }),
   EditorContent: () => <div data-testid="editor-content" />,
 }));
@@ -86,74 +35,16 @@ vi.mock('@tiptap/core', () => ({
   generateText: () => 'translated text',
 }));
 
-vi.mock('@/stores/projectStore', () => ({
-  useProjectStore: Object.assign(
-    <T,>(selector: (state: typeof stores.projectStoreState) => T): T =>
-      selector(stores.projectStoreState),
-    {
-      getState: () => ({
-        ...stores.projectStoreState,
-        targetDocument: '<p>current target</p>',
-      }),
-    },
-  ),
-}));
-
-vi.mock('@/stores/historyStore', () => ({
-  useHistoryStore: <T,>(selector: (state: typeof stores.historyStoreState) => T): T =>
-    selector(stores.historyStoreState),
-}));
-
-describe('TranslatePreviewModal auto snapshot integration', () => {
+describe('TranslatePreviewModal', () => {
   const docJson = { type: 'doc', content: [] } as const;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    stores.projectStoreState.project = stores.project;
-    stores.projectStoreState.materializeBlocksForSnapshot.mockReturnValue(stores.blocks);
-    stores.historyStoreState.createSnapshotIfChanged.mockResolvedValue('snapshot-1');
   });
 
-  it('적용 클릭 시 자동 스냅샷을 먼저 생성한 뒤 onApply를 호출한다', async () => {
+  it('적용 클릭 시 onApply를 호출한다', async () => {
     const user = userEvent.setup();
     const onApply = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <TranslatePreviewModal
-        open
-        title="preview"
-        docJson={docJson}
-        sourceHtml="<p>source</p>"
-        originalHtml="<p>original</p>"
-        onClose={vi.fn()}
-        onApply={onApply}
-        autoSnapshotDescription="custom auto snapshot"
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'common.apply' }));
-
-    await waitFor(() => {
-      expect(stores.historyStoreState.createSnapshotIfChanged).toHaveBeenCalledWith({
-        projectId: 'project-1',
-        description: expect.stringContaining('custom auto snapshot'),
-        blocks: stores.blocks,
-      });
-      expect(onApply).toHaveBeenCalledTimes(1);
-    });
-
-    const [snapshotOrder] = stores.historyStoreState.createSnapshotIfChanged.mock.invocationCallOrder;
-    const [applyOrder] = onApply.mock.invocationCallOrder;
-    expect(snapshotOrder).toBeDefined();
-    expect(applyOrder).toBeDefined();
-    expect(snapshotOrder!).toBeLessThan(applyOrder!);
-  });
-
-  it('자동 스냅샷이 실패해도 적용(onApply)은 계속 진행한다', async () => {
-    const user = userEvent.setup();
-    const onApply = vi.fn().mockResolvedValue(undefined);
-    stores.projectStoreState.materializeBlocksForSnapshot.mockReturnValue(null);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     render(
       <TranslatePreviewModal
@@ -172,9 +63,34 @@ describe('TranslatePreviewModal auto snapshot integration', () => {
     await waitFor(() => {
       expect(onApply).toHaveBeenCalledTimes(1);
     });
-    expect(stores.historyStoreState.createSnapshotIfChanged).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalled();
+  });
 
-    warnSpy.mockRestore();
+  it('적용 중에는 중복 클릭이 방지된다', async () => {
+    const user = userEvent.setup();
+    let resolve: () => void;
+    const onApply = vi.fn(
+      () => new Promise<void>((r) => { resolve = r; }),
+    );
+
+    render(
+      <TranslatePreviewModal
+        open
+        title="preview"
+        docJson={docJson}
+        sourceHtml="<p>source</p>"
+        originalHtml="<p>original</p>"
+        onClose={vi.fn()}
+        onApply={onApply}
+      />,
+    );
+
+    const applyButton = screen.getByRole('button', { name: 'common.apply' });
+    await user.click(applyButton);
+    await user.click(applyButton);
+
+    resolve!();
+    await waitFor(() => {
+      expect(onApply).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
 
@@ -22,6 +23,7 @@ export function Toolbar(): JSX.Element {
       rightSidebar: s.rightSidebar,
     })));
   const project = useProjectStore((s) => s.project);
+  const isAutoSnapshotSaving = useHistoryStore((s) => s.isAutoSnapshotSaving);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -93,10 +95,25 @@ export function Toolbar(): JSX.Element {
   return (
     <header className="h-[45px] border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
       {/* 프로젝트 정보 */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold text-editor-text">
           {project?.metadata.title ?? t('common.untitledProject')}
         </h1>
+        {project && (
+          <span className="flex items-center gap-1 text-xs text-editor-muted">
+            {isAutoSnapshotSaving ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                {t('history.autoSnapshotSaving')}
+              </>
+            ) : (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                {t('history.autoSnapshotSaved')}
+              </>
+            )}
+          </span>
+        )}
       </div>
 
       {/* 툴바 액션 */}

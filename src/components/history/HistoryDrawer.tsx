@@ -38,6 +38,11 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const renameSnapshot = useHistoryStore((s) => s.renameSnapshot);
   const reset = useHistoryStore((s) => s.reset);
 
+  const autoSnapshotTimestamp = useMemo(() => {
+    const auto = snapshots.find((s) => s.description === 'autoSnapshot' || s.description.startsWith('자동 저장'));
+    return auto?.timestamp ?? null;
+  }, [snapshots]);
+
   const visibleSnapshots = useMemo(
     () => snapshots.filter((s) => s.description !== 'autoSnapshot' && !s.description.startsWith('자동 저장')),
     [snapshots],
@@ -240,41 +245,18 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-editor-border">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSaveDialogOpen(true)}
-              className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-            >
-              {t('history.saveSnapshot')}
-            </button>
-            <button
-              type="button"
-              disabled={!canCompare}
-              onClick={handleCompareSelected}
-              className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {t('history.compareSelected')}
-            </button>
-            <button
-              type="button"
-              disabled={selectedIds.length === 0}
-              onClick={() => setSelectedIds([])}
-              className="px-2 py-1.5 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {t('history.clearSelection')}
-            </button>
-          </div>
-        </div>
-
         <div className="flex-1 overflow-y-auto">
           <HistoryTimeline
             snapshots={visibleSnapshots}
             isLoading={isLoading}
             isCurrentModified={isCurrentModified}
+            autoSnapshotTimestamp={autoSnapshotTimestamp}
             selectedIds={selectedIds}
+            canCompare={canCompare}
             onToggleSelect={handleToggleSelect}
+            onCompare={handleCompareSelected}
+            onClearSelection={() => setSelectedIds([])}
+            onSave={() => setSaveDialogOpen(true)}
             onRestore={(snapshotId) => {
               setSelectedSnapshotId(snapshotId);
               setRestoreOpen(true);

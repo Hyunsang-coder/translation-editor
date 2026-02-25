@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
@@ -66,6 +67,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
   const translationModel = useAiConfigStore((s) => s.translationModel);
   const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
+
+  const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
 
   // 활성화된 프로바이더의 모델만 표시
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
@@ -347,7 +350,24 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     // Flash 효과 트리거 (1초 동안 지속)
     setTargetFlash(true);
     setTimeout(() => setTargetFlash(false), 1000);
-  }, [translatePreviewDoc, setTargetDocument, setTargetDocJson, addToast, t]);
+
+    // 번역 적용 후 자동 스냅샷
+    const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
+    if (project) {
+      const blocks = materializeBlocksForSnapshot();
+      if (blocks) {
+        const model = useAiConfigStore.getState().translationModel;
+        const dateLabel = new Date().toLocaleDateString('sv'); // YYYY-MM-DD
+        void createSnapshotIfChanged({
+          projectId: project.id,
+          description: `${t('history.autoSnapshotAfterTranslate')}(${model}) ${dateLabel}`,
+          blocks,
+        }).catch((err: unknown) => {
+          console.warn('[history] auto snapshot after translate failed:', err);
+        });
+      }
+    }
+  }, [translatePreviewDoc, setTargetDocument, setTargetDocJson, addToast, t, createSnapshotIfChanged]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {
@@ -707,7 +727,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           setTranslatePreviewOpen(false);
         }}
         onApply={applyTranslatePreview}
-        autoSnapshotDescription={t('history.autoSnapshotBeforeTranslate')}
         onCancel={handleTranslateCancel}
         {...(translatePreviewError ? { onRetry: handleTranslateRetry } : {})}
       />

@@ -6,8 +6,13 @@ interface HistoryTimelineProps {
   snapshots: HistorySnapshotMeta[];
   isLoading?: boolean;
   isCurrentModified?: boolean;
+  autoSnapshotTimestamp?: number | null;
   selectedIds: string[];
+  canCompare: boolean;
   onToggleSelect: (id: string) => void;
+  onCompare: () => void;
+  onClearSelection: () => void;
+  onSave: () => void;
   onRestore: (snapshotId: string) => void;
   onRename: (snapshotId: string) => void;
   onDelete: (snapshotId: string) => void;
@@ -47,8 +52,13 @@ export function HistoryTimeline({
   snapshots,
   isLoading = false,
   isCurrentModified = false,
+  autoSnapshotTimestamp = null,
   selectedIds,
+  canCompare,
   onToggleSelect,
+  onCompare,
+  onClearSelection,
+  onSave,
   onRestore,
   onRename,
   onDelete,
@@ -60,6 +70,7 @@ export function HistoryTimeline({
   );
 
   const isMaxSelected = selectedIds.length >= 2;
+  const isCurrentSelected = selectedIds.includes(CURRENT_STATE_ID);
 
   if (isLoading) {
     return (
@@ -69,22 +80,10 @@ export function HistoryTimeline({
     );
   }
 
-  if (sorted.length === 0) {
-    return (
-      <div className="p-4 text-sm text-editor-muted">
-        {t('history.empty')}
-      </div>
-    );
-  }
-
-  const isCurrentSelected = selectedIds.includes(CURRENT_STATE_ID);
-
   return (
     <ul className="divide-y divide-editor-border">
-      {/* "현재 상태" 가상 항목 */}
-      <li
-        className={`p-4 space-y-1 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}
-      >
+      {/* 현재 상태 항목 */}
+      <li className={`p-4 space-y-2 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}>
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -93,16 +92,62 @@ export function HistoryTimeline({
             onChange={() => onToggleSelect(CURRENT_STATE_ID)}
             className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500"
           />
-          <span className="text-sm font-medium text-editor-text">
-            {t('history.currentState')}
-          </span>
-          {isCurrentModified && (
-            <span className="ml-2 text-xs text-amber-500">
-              {t('history.modified')}
-            </span>
-          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-editor-text">
+                {t('history.currentState')}
+              </span>
+              {isCurrentModified && (
+                <span className="text-xs text-amber-500">
+                  {t('history.modified')}
+                </span>
+              )}
+            </div>
+            {autoSnapshotTimestamp !== null && (
+              <div className="text-xs text-editor-muted">
+                {t('history.autoSnapshotLabel')} · {formatRelativeTime(autoSnapshotTimestamp, i18n.language)}
+              </div>
+            )}
+          </div>
         </label>
+        <div className="pl-7">
+          <button
+            type="button"
+            onClick={onSave}
+            className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+          >
+            {t('history.save')}
+          </button>
+        </div>
       </li>
+
+      {/* 선택 액션바 */}
+      {sorted.length > 0 && (
+        <li className="px-4 py-2 flex items-center justify-end gap-2 bg-editor-bg/50">
+          <button
+            type="button"
+            disabled={!canCompare}
+            onClick={onCompare}
+            className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {t('history.compareSelected')}
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={onClearSelection}
+            className="px-2 py-1 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {t('history.clearSelection')}
+          </button>
+        </li>
+      )}
+
+      {sorted.length === 0 && (
+        <li className="p-4 text-sm text-editor-muted">
+          {t('history.empty')}
+        </li>
+      )}
 
       {sorted.map((snapshot) => {
         const isSelected = selectedIds.includes(snapshot.id);

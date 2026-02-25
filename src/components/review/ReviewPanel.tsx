@@ -4,6 +4,8 @@ import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useHistoryStore } from '@/stores/historyStore';
+import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
@@ -427,8 +429,8 @@ export function ReviewPanel(): JSX.Element {
    * 재번역 결과를 에디터에 적용
    */
   const handleApplyRetranslation = useCallback(() => {
-    const currentProject = useProjectStore.getState().project;
-    if (!retranslatePreviewDoc || !currentProject) return;
+    const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
+    if (!retranslatePreviewDoc || !project) return;
 
     // TipTapDocJson을 HTML로 변환하여 target document에 적용
     const html = tipTapJsonToHtml(retranslatePreviewDoc);
@@ -439,6 +441,21 @@ export function ReviewPanel(): JSX.Element {
 
     // 모달 닫기
     handleRetranslateClose();
+
+    // 재번역 적용 후 자동 스냅샷
+    const blocks = materializeBlocksForSnapshot();
+    if (blocks) {
+      const model = useAiConfigStore.getState().translationModel;
+      const dateLabel = new Date().toLocaleDateString('sv'); // YYYY-MM-DD
+      const { createSnapshotIfChanged } = useHistoryStore.getState();
+      void createSnapshotIfChanged({
+        projectId: project.id,
+        description: `${t('history.autoSnapshotAfterReviewApply')}(${model}) ${dateLabel}`,
+        blocks,
+      }).catch((err: unknown) => {
+        console.warn('[history] auto snapshot after review apply failed:', err);
+      });
+    }
 
     // 결과 알림
     useUIStore.getState().addToast({
@@ -658,7 +675,6 @@ export function ReviewPanel(): JSX.Element {
         streamingText={retranslateStreamingText}
         onClose={handleRetranslateClose}
         onApply={handleApplyRetranslation}
-        autoSnapshotDescription={t('history.autoSnapshotBeforeReviewApply')}
         onCancel={handleRetranslateCancel}
         onRetry={handleRetranslateExecute}
       />

@@ -20,19 +20,22 @@ const snapshots: HistorySnapshotMeta[] = [
 const defaultProps = {
   snapshots,
   selectedIds: [CURRENT_STATE_ID],
+  canCompare: false,
   onToggleSelect: vi.fn(),
+  onCompare: vi.fn(),
+  onClearSelection: vi.fn(),
+  onSave: vi.fn(),
   onRestore: vi.fn(),
   onRename: vi.fn(),
   onDelete: vi.fn(),
 };
 
 describe('HistoryTimeline', () => {
-  it('"현재 상태" 가상 항목이 최상단에 표시된다', () => {
+  it('"현재 상태" 항목이 최상단에 표시된다', () => {
     render(<HistoryTimeline {...defaultProps} />);
 
     const items = screen.getAllByRole('listitem');
-    // 첫 번째 항목 = 현재 상태, 나머지 = 스냅샷(최신순)
-    expect(items).toHaveLength(3);
+    // [0]=현재 상태, [1]=액션바, [2]=Snapshot B, [3]=Snapshot A
     expect(items[0]).toHaveTextContent('history.currentState');
   });
 
@@ -40,9 +43,24 @@ describe('HistoryTimeline', () => {
     render(<HistoryTimeline {...defaultProps} />);
 
     const items = screen.getAllByRole('listitem');
-    // items[1] = Snapshot B (newer), items[2] = Snapshot A (older)
-    expect(items[1]).toHaveTextContent('Snapshot B');
-    expect(items[2]).toHaveTextContent('Snapshot A');
+    expect(items[2]).toHaveTextContent('Snapshot B');
+    expect(items[3]).toHaveTextContent('Snapshot A');
+  });
+
+  it('자동 저장 타임스탬프가 있으면 현재 상태 항목에 표시된다', () => {
+    render(<HistoryTimeline {...defaultProps} autoSnapshotTimestamp={now - 30000} />);
+
+    expect(screen.getByText(/history.autoSnapshotLabel/)).toBeDefined();
+  });
+
+  it('[저장] 버튼 클릭 시 onSave가 호출된다', async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+
+    render(<HistoryTimeline {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('history.save'));
+    expect(onSave).toHaveBeenCalledTimes(1);
   });
 
   it('체크박스 클릭 시 onToggleSelect가 호출된다', async () => {
@@ -52,7 +70,7 @@ describe('HistoryTimeline', () => {
     render(<HistoryTimeline {...defaultProps} onToggleSelect={onToggleSelect} />);
 
     const checkboxes = screen.getAllByRole('checkbox');
-    // checkboxes[0] = 현재 상태, [1] = Snapshot B, [2] = Snapshot A
+    // [0]=현재 상태, [1]=Snapshot B, [2]=Snapshot A
     await user.click(checkboxes[2]!);
 
     expect(onToggleSelect).toHaveBeenCalledWith('s1');
@@ -75,17 +93,15 @@ describe('HistoryTimeline', () => {
       <HistoryTimeline
         {...defaultProps}
         selectedIds={[CURRENT_STATE_ID, 's2']}
+        canCompare
       />,
     );
 
     const checkboxes = screen.getAllByRole('checkbox');
-    // 현재 상태: checked, not disabled
     expect(checkboxes[0]).toBeChecked();
     expect(checkboxes[0]).not.toBeDisabled();
-    // Snapshot B: checked, not disabled
     expect(checkboxes[1]).toBeChecked();
     expect(checkboxes[1]).not.toBeDisabled();
-    // Snapshot A: unchecked, disabled
     expect(checkboxes[2]).not.toBeChecked();
     expect(checkboxes[2]).toBeDisabled();
   });
@@ -99,18 +115,21 @@ describe('HistoryTimeline', () => {
     );
 
     const items = screen.getAllByRole('listitem');
-    // 현재 상태 (selected)
     expect(items[0]!.className).toContain('bg-primary-500/10');
-    // Snapshot B (not selected)
-    expect(items[1]!.className).not.toContain('bg-primary-500/10');
-    // Snapshot A (selected)
-    expect(items[2]!.className).toContain('bg-primary-500/10');
+    expect(items[2]!.className).not.toContain('bg-primary-500/10'); // Snapshot B
+    expect(items[3]!.className).toContain('bg-primary-500/10');    // Snapshot A
   });
 
-  it('Compare 버튼이 존재하지 않는다 (체크박스로 대체)', () => {
-    render(<HistoryTimeline {...defaultProps} />);
+  it('canCompare=true일 때 비교 버튼이 활성화된다', async () => {
+    const onCompare = vi.fn();
+    const user = userEvent.setup();
 
-    expect(screen.queryByText('history.compare')).toBeNull();
+    render(<HistoryTimeline {...defaultProps} canCompare onCompare={onCompare} />);
+
+    const compareBtn = screen.getByText('history.compareSelected');
+    expect(compareBtn).not.toBeDisabled();
+    await user.click(compareBtn);
+    expect(onCompare).toHaveBeenCalledTimes(1);
   });
 
   it('Restore/Rename/Delete 버튼은 정상 동작한다', async () => {

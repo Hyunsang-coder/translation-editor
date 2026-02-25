@@ -160,14 +160,19 @@
     "saveSuccess": "Snapshot saved.",
     "saveError": "Failed to save snapshot.",
     "loadError": "Failed to load history.",
-    "autoSnapshotBeforeTranslate": "Before translation",
-    "autoSnapshotBeforeReviewApply": "Before review",
+    "autoSnapshotAfterTranslate": "Translation applied",
+    "autoSnapshotAfterReviewApply": "Review applied",
     "autoSnapshotBeforeRestore": "Before restore",
     "currentState": "Current State",
     "compareSelected": "Compare",
     "clearSelection": "Clear",
     "selectToCompare": "Select 2 items to compare",
-    "modified": "Modified"
+    "modified": "Modified",
+    "autoSnapshotSaving": "Saving...",
+    "autoSnapshotSaved": "Saved",
+    "autoSnapshotLabel": "Auto save",
+    "autoSnapshotEmpty": "No auto-save yet.",
+    "save": "Save"
   },
   "projectSidebar": {
     "projects": "Projects",
