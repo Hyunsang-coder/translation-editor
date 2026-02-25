@@ -84,13 +84,13 @@ export function HistoryTimeline({
     <ul className="divide-y divide-editor-border">
       {/* 현재 상태 항목 */}
       <li className={`p-4 space-y-2 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}>
-        <label className="flex items-center gap-3 cursor-pointer">
+        <div className="flex items-center gap-3">
           <input
             type="checkbox"
             checked={isCurrentSelected}
             disabled={!isCurrentSelected && isMaxSelected}
             onChange={() => onToggleSelect(CURRENT_STATE_ID)}
-            className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500"
+            className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500 cursor-pointer"
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -109,8 +109,8 @@ export function HistoryTimeline({
               </div>
             )}
           </div>
-        </label>
-        <div className="pl-7">
+        </div>
+        <div className="pl-7 flex items-center gap-2">
           <button
             type="button"
             onClick={onSave}
@@ -118,12 +118,6 @@ export function HistoryTimeline({
           >
             {t('history.save')}
           </button>
-        </div>
-      </li>
-
-      {/* 선택 액션바 */}
-      {sorted.length > 0 && (
-        <li className="px-4 py-2 flex items-center justify-end gap-2 bg-editor-bg/50">
           <button
             type="button"
             disabled={!canCompare}
@@ -140,8 +134,8 @@ export function HistoryTimeline({
           >
             {t('history.clearSelection')}
           </button>
-        </li>
-      )}
+        </div>
+      </li>
 
       {sorted.length === 0 && (
         <li className="p-4 text-sm text-editor-muted">

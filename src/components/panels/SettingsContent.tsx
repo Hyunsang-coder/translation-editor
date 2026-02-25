@@ -134,7 +134,7 @@ export function SettingsContent(): JSX.Element {
           </div>
           <button
             type="button"
-            className="px-2 py-1 rounded text-xs bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1"
+            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex-shrink-0"
             onClick={() => {
               void (async () => {
                 if (!isTauriRuntime() || !project) return;
@@ -151,8 +151,7 @@ export function SettingsContent(): JSX.Element {
               })();
             }}
           >
-            <span>+</span>
-            <span>{t('settings.glossaryAttach')}</span>
+            {t('settings.glossaryAttach')}
           </button>
         </div>
 
@@ -214,7 +213,7 @@ export function SettingsContent(): JSX.Element {
           </div>
           <button
             type="button"
-            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 flex-shrink-0"
+            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex-shrink-0"
             onClick={() => {
               void (async () => {
                 if (!isTauriRuntime() || !project) return;
@@ -225,8 +224,7 @@ export function SettingsContent(): JSX.Element {
               })();
             }}
           >
-            <span>+</span>
-            <span>{t('settings.attachmentsAttach')}</span>
+            {t('settings.attachmentsAttach')}
           </button>
         </div>
 

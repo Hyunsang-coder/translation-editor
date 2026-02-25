@@ -25,8 +25,8 @@ interface HistoryDrawerProps {
 export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Element | null {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
-  const blocks = useProjectStore((s) => s.project?.blocks);
   const materializeBlocksForSnapshot = useProjectStore((s) => s.materializeBlocksForSnapshot);
+  const lastChangeAt = useProjectStore((s) => s.lastChangeAt);
   const addToast = useUIStore((s) => s.addToast);
 
   const snapshots = useHistoryStore((s) => s.snapshots);
@@ -49,9 +49,10 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   );
 
   const currentBlocksHash = useMemo(() => {
+    const blocks = materializeBlocksForSnapshot();
     if (!blocks) return null;
     return hashContent(JSON.stringify(blocks));
-  }, [blocks]);
+  }, [materializeBlocksForSnapshot, lastChangeAt]);
 
   const isCurrentModified =
     latestBlocksHash !== null &&

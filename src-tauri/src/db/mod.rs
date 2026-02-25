@@ -1641,4 +1641,115 @@ mod tests {
             .expect("failed to list history metadata");
         assert!(list.is_empty(), "invalid snapshot should not be inserted");
     }
+
+    #[test]
+    fn upsert_auto_snapshot_creates_new_when_none_exists() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-1");
+        db.save_project(&project).expect("failed to save project");
+
+        let snapshot_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize blocks");
+
+        let (id, created) = db
+            .upsert_auto_snapshot(&project.id, "자동 저장 10:00", &snapshot_json, None)
+            .expect("upsert failed");
+
+        assert!(created, "첫 번째 호출은 신규 생성이어야 한다");
+        assert!(!id.is_empty());
+
+        let metas = db
+            .list_history_metadata(&project.id)
+            .expect("list failed");
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].description, "자동 저장 10:00");
+    }
+
+    #[test]
+    fn upsert_auto_snapshot_overwrites_existing_auto_snapshot() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-2");
+        db.save_project(&project).expect("failed to save project");
+
+        let snapshot_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize blocks");
+
+        // 첫 번째 upsert — 신규 생성
+        let (id1, created1) = db
+            .upsert_auto_snapshot(&project.id, "자동 저장 10:00", &snapshot_json, None)
+            .expect("first upsert failed");
+        assert!(created1);
+
+        // 두 번째 upsert — 덮어쓰기
+        let (id2, created2) = db
+            .upsert_auto_snapshot(&project.id, "자동 저장 10:03", &snapshot_json, None)
+            .expect("second upsert failed");
+
+        assert!(!created2, "두 번째 호출은 덮어쓰기여야 한다");
+        assert_eq!(id1, id2, "덮어쓸 때 ID는 동일해야 한다");
+
+        // 목록에는 1개만 있어야 함
+        let metas = db
+            .list_history_metadata(&project.id)
+            .expect("list failed");
+        let auto_snaps: Vec<_> = metas
+            .iter()
+            .filter(|m| m.description.starts_with("자동 저장"))
+            .collect();
+        assert_eq!(auto_snaps.len(), 1, "자동 저장 스냅샷은 1개만 존재해야 한다");
+        assert_eq!(auto_snaps[0].description, "자동 저장 10:03", "description이 갱신되어야 한다");
+    }
+
+    #[test]
+    fn upsert_auto_snapshot_does_not_overwrite_manual_snapshots() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-3");
+        db.save_project(&project).expect("failed to save project");
+
+        let snapshot_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize blocks");
+
+        // 수동 스냅샷 생성
+        db.create_history_snapshot(&project.id, "manual checkpoint", &snapshot_json, None)
+            .expect("manual snapshot failed");
+
+        // auto upsert — 수동 스냅샷과 별개로 신규 생성되어야 함
+        let (_, created) = db
+            .upsert_auto_snapshot(&project.id, "자동 저장 10:05", &snapshot_json, None)
+            .expect("upsert failed");
+        assert!(created, "수동 스냅샷이 있어도 auto는 새로 생성되어야 한다");
+
+        let metas = db
+            .list_history_metadata(&project.id)
+            .expect("list failed");
+        assert_eq!(metas.len(), 2, "수동 + 자동 총 2개여야 한다");
+    }
+
+    #[test]
+    fn upsert_auto_snapshot_rejects_invalid_json() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-4");
+        db.save_project(&project).expect("failed to save project");
+
+        let result = db.upsert_auto_snapshot(
+            &project.id,
+            "자동 저장 10:00",
+            "not-valid-json",
+            None,
+        );
+
+        assert!(result.is_err(), "잘못된 JSON은 에러를 반환해야 한다");
+    }
 }

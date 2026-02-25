@@ -201,13 +201,15 @@ export function TranslatePreviewModal(props: {
 
   // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.
   useEffect(() => {
-    const baseHtml = (diffOriginalHtmlSnapshot ?? originalHtml) ?? '';
+    // 모달이 열릴 때: diffOriginalHtmlSnapshot이 아직 세팅되기 전이므로
+    // originalHtml을 직접 사용하여 effect A와 동일한 값으로 판단
+    const baseHtml = open ? (originalHtml ?? '') : '';
     if (open && baseHtml && stripHtml(baseHtml).trim().length > 0) {
       setViewMode('diff');
     } else {
       setViewMode('preview');
     }
-  }, [open, originalHtml, diffOriginalHtmlSnapshot]);
+  }, [open, originalHtml]);
 
   const content = useMemo(() => docJson ?? null, [docJson]);
 

@@ -341,10 +341,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     // replaceDocContent는 onUpdate를 발동시키므로 store 자동 동기화됨
     // addToHistory: true → Ctrl+Z로 번역 취소 가능
     replaceDocContent(targetEditorRef.current, translatePreviewDoc, { addToHistory: true });
-    // 안전 장치: 수동 store 동기화 유지 (onUpdate로도 갱신되지만 redundant 허용)
-    const updatedHtml = targetEditorRef.current.getHTML();
-    setTargetDocument(updatedHtml);
-    setTargetDocJson(targetEditorRef.current.getJSON() as Record<string, unknown>);
     setTranslatePreviewOpen(false);
 
     // Flash 효과 트리거 (1초 동안 지속)
@@ -367,7 +363,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         });
       }
     }
-  }, [translatePreviewDoc, setTargetDocument, setTargetDocJson, addToast, t, createSnapshotIfChanged]);
+  }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {

@@ -60,6 +60,10 @@ const initialState: HistoryState = {
 let loadHistoryRequestSeq = 0;
 let autoSnapshotTimer: number | null = null;
 let autoSnapshotInFlight = false;
+let createSnapshotIfChangedInFlight = false;
+// stopAutoSnapshotWatch 호출 후 in-flight Promise가 다른 프로젝트 state를 오염시키지
+// 않도록, 실행 시점의 projectId를 캡처해 완료 시 검증한다.
+let autoSnapshotActiveProjectId: string | null = null;
 const AUTO_SNAPSHOT_DEBOUNCE_MS = 3000;
 
 function isLatestRequest(requestSeq: number): boolean {
@@ -123,8 +127,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       throw error;
     }
 
-    // Update hash cache after successful creation
-    set({ latestBlocksHash: hashContent(blocksJson) });
+    // Update hash cache after successful creation — guard with requestSeq to
+    // prevent stale project's hash from overwriting the current project's cache.
+    if (isLatestRequest(requestSeq)) {
+      set({ latestBlocksHash: hashContent(blocksJson) });
+    }
 
     try {
       const snapshots = await tauriListHistory(projectId);
@@ -139,30 +146,36 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   },
 
   createSnapshotIfChanged: async ({ projectId, description, blocks, chatSummary }): Promise<string | null> => {
-    const { latestBlocksHash, snapshots, getSnapshot, createSnapshot } = get();
-    const currentHash = hashContent(JSON.stringify(blocks));
+    if (createSnapshotIfChangedInFlight) return null;
+    createSnapshotIfChangedInFlight = true;
+    try {
+      const { latestBlocksHash, snapshots, getSnapshot, createSnapshot } = get();
+      const currentHash = hashContent(JSON.stringify(blocks));
 
-    // Cached hash available — fast path comparison
-    if (latestBlocksHash !== null && currentHash === latestBlocksHash) {
-      return null; // No change → skip
-    }
-
-    // No cached hash (session first call) — load latest snapshot and compare
-    if (latestBlocksHash === null && snapshots.length > 0) {
-      const latest = [...snapshots].sort((a, b) => b.timestamp - a.timestamp)[0];
-      if (!latest) return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
-      try {
-        const snapshot = await getSnapshot({ projectId, snapshotId: latest.id });
-        if (snapshot.snapshotJson && hashContent(snapshot.snapshotJson) === currentHash) {
-          set({ latestBlocksHash: currentHash });
-          return null; // No change
-        }
-      } catch {
-        // Load failed — proceed with snapshot creation
+      // Cached hash available — fast path comparison
+      if (latestBlocksHash !== null && currentHash === latestBlocksHash) {
+        return null; // No change → skip
       }
-    }
 
-    return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
+      // No cached hash (session first call) — load latest snapshot and compare
+      if (latestBlocksHash === null && snapshots.length > 0) {
+        const latest = [...snapshots].sort((a, b) => b.timestamp - a.timestamp)[0];
+        if (!latest) return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
+        try {
+          const snapshot = await getSnapshot({ projectId, snapshotId: latest.id });
+          if (snapshot.snapshotJson && hashContent(snapshot.snapshotJson) === currentHash) {
+            set({ latestBlocksHash: currentHash });
+            return null; // No change
+          }
+        } catch {
+          // Load failed — proceed with snapshot creation
+        }
+      }
+
+      return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
+    } finally {
+      createSnapshotIfChangedInFlight = false;
+    }
   },
 
   getSnapshot: async ({ projectId, snapshotId }): Promise<HistorySnapshot> => {
@@ -239,26 +252,40 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
           const { latestBlocksHash } = get();
           const currentHash = hashContent(JSON.stringify(blocks));
 
-          if (latestBlocksHash !== null && currentHash === latestBlocksHash) {
+          if (latestBlocksHash === null) {
+            // Hash not yet initialized — wait for loadHistory to populate it,
+            // then compare on next tick to avoid duplicate snapshots on session start.
+            autoSnapshotTimer = window.setTimeout(tick, 500);
+            return;
+          }
+
+          if (currentHash === latestBlocksHash) {
             // No change — skip
             autoSnapshotTimer = window.setTimeout(tick, 500);
             return;
           }
 
           autoSnapshotInFlight = true;
+          autoSnapshotActiveProjectId = project.id;
           set({ isAutoSnapshotSaving: true });
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const snapshotProjectId = project.id;
           void tauriUpsertAutoSnapshot({
-            projectId: project.id,
+            projectId: snapshotProjectId,
             blocksJson: JSON.stringify(blocks),
             description: `자동 저장 ${timeLabel}`,
           })
             .then(({ created }) => {
+              // stopAutoSnapshotWatch 또는 프로젝트 전환으로 projectId가 달라진 경우 폐기
+              if (autoSnapshotActiveProjectId !== snapshotProjectId) return;
               set({ latestBlocksHash: currentHash });
               // 새로 생성된 경우에만 목록 갱신
               if (created) {
-                void tauriListHistory(project.id)
-                  .then((snapshots) => set({ snapshots }))
+                void tauriListHistory(snapshotProjectId)
+                  .then((snapshots) => {
+                    if (autoSnapshotActiveProjectId !== snapshotProjectId) return;
+                    set({ snapshots });
+                  })
                   .catch(() => {});
               } else {
                 // 덮어쓴 경우 — description + timestamp 갱신 (재조회 없이)
@@ -294,6 +321,8 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       autoSnapshotTimer = null;
     }
     autoSnapshotInFlight = false;
+    // in-flight Promise의 projectId guard를 무효화하여 완료 콜백이 state를 오염시키지 않도록 한다.
+    autoSnapshotActiveProjectId = null;
     set({ isAutoSnapshotSaving: false });
   },
 }));

@@ -59,6 +59,8 @@ function detectSourceLanguage(segments: AlignedSegment[]): string {
 export function ReviewPanel(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
+  const sourceDocument = useProjectStore((s) => s.sourceDocument);
+  const targetDocument = useProjectStore((s) => s.targetDocument);
   // Note: translationRules/projectContext는 useCallback 내에서 getState()로 직접 가져옴
   // 검수 중 규칙이 변경되어도 각 청크 처리 시 최신 값 사용 (Issue #13 Fix)
 
@@ -663,13 +665,12 @@ export function ReviewPanel(): JSX.Element {
       </div>
 
       {/* 재번역 미리보기 모달 (기존 번역 diff UI 사용) */}
-      {/* Snapshot: sourceDocument/targetDocument read at render — fresh on every modal open */}
       <TranslatePreviewModal
         open={retranslatePreviewOpen}
         title={t('review.retranslate.preview', '재번역 미리보기')}
         docJson={retranslatePreviewDoc}
-        sourceHtml={useProjectStore.getState().sourceDocument}
-        originalHtml={useProjectStore.getState().targetDocument}
+        sourceHtml={sourceDocument}
+        originalHtml={targetDocument}
         isLoading={retranslateLoading}
         error={retranslateError}
         streamingText={retranslateStreamingText}
