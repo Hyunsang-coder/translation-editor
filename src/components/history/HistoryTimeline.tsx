@@ -83,7 +83,7 @@ export function HistoryTimeline({
   return (
     <ul className="divide-y divide-editor-border">
       {/* 현재 상태 항목 */}
-      <li className={`p-4 space-y-2 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}>
+      <li className={`p-4 ${isCurrentSelected ? 'bg-primary-500/10' : ''}`}>
         <div className="flex items-center gap-3">
           <input
             type="checkbox"
@@ -110,31 +110,33 @@ export function HistoryTimeline({
             )}
           </div>
         </div>
-        <div className="pl-7 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onSave}
-            className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-          >
-            {t('history.save')}
-          </button>
-          <button
-            type="button"
-            disabled={!canCompare}
-            onClick={onCompare}
-            className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {t('history.compareSelected')}
-          </button>
-          <button
-            type="button"
-            disabled={selectedIds.length === 0}
-            onClick={onClearSelection}
-            className="px-2 py-1 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {t('history.clearSelection')}
-          </button>
-        </div>
+      </li>
+
+      {/* 액션 바 */}
+      <li className="px-4 py-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onSave}
+          className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+        >
+          {t('history.save')}
+        </button>
+        <button
+          type="button"
+          disabled={!canCompare}
+          onClick={onCompare}
+          className="px-2 py-1 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {t('history.compareSelected')}
+        </button>
+        <button
+          type="button"
+          disabled={selectedIds.length === 0}
+          onClick={onClearSelection}
+          className="px-2 py-1 text-xs rounded border border-editor-border text-editor-muted hover:bg-editor-bg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {t('history.clearSelection')}
+        </button>
       </li>
 
       {sorted.length === 0 && (
