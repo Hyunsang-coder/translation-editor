@@ -47,23 +47,26 @@ function categorizeIssueType(typeText: string): IssueType {
 
 /**
  * 심각도 분류
+ * - 숫자(1~5): 5→critical, 4→major, 1~3→minor
+ * - 레이블(legacy): critical/major/minor 텍스트 그대로 매핑
  */
 function categorizeSeverity(severityText: string): IssueSeverity {
   const normalized = severityText.toLowerCase().trim();
 
-  if (normalized.includes('critical') || normalized.includes('심각')) {
-    return 'critical';
-  }
-
-  if (normalized.includes('major') || normalized.includes('중요')) {
-    return 'major';
-  }
-
-  if (normalized.includes('minor') || normalized.includes('경미') || normalized.includes('사소')) {
+  // 숫자 파싱 (새 형식: 1~5)
+  const numMatch = normalized.match(/^(\d)/);
+  if (numMatch) {
+    const score = parseInt(numMatch[1]!, 10);
+    if (score >= 5) return 'critical';
+    if (score === 4) return 'major';
     return 'minor';
   }
 
-  // 기본값
+  // 레이블 파싱 (레거시 호환)
+  if (normalized.includes('critical') || normalized.includes('심각')) return 'critical';
+  if (normalized.includes('major') || normalized.includes('중요')) return 'major';
+  if (normalized.includes('minor') || normalized.includes('경미') || normalized.includes('사소')) return 'minor';
+
   return 'major';
 }
 

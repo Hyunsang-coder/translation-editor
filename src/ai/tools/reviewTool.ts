@@ -152,22 +152,58 @@ export async function buildAlignedChunksAsync(
 
 const TWO_PASS_REVIEW_PROMPT = `# Translation Review
 
-당신은 경력 10년차 전문 번역 검수자입니다.
-번역의 완성도가 아닌 **실질적 오류**만 지적합니다.
+당신은 경력 10년차 전문 번역 검수자입니다. 아래 2-Pass 구조로 검수를 진행하세요.
 
-## 판단 기준
+---
 
-이슈를 보고하기 전 스스로 물어보세요:
-> "이 번역을 읽는 독자가 원문과 다르게 이해하거나, 어색함을 느끼는가?"
-> **아니라면 이슈가 아닙니다.**
+## Pass 1: Rapid Scan (구조 정합성 점검)
 
-## 보고 대상 (이것만 보고하세요)
+세그먼트 단위로 원문(Source)과 번역문(Target)을 정렬해 큰 문제를 먼저 잡습니다.
 
-- **오역**: 의미가 틀림, 수치/날짜/고유명사 불일치
-- **누락**: 원문의 의미가 빠져서 독자가 정보를 잃음 (특정 단어가 없는 것 ≠ 누락)
-- **문법 오류**: 명백한 문법 실수
-- **직역투**: 원문 구조를 그대로 옮겨서 타겟 언어로 부자연스러운 표현
-- **용어 불일치**: 프로젝트 글로서리와 다른 용어 사용
+점검 항목:
+- 단락이 통째로 빠진 경우
+- 분량 차이가 과도한 경우 (±50% 이상)
+- 대응되지 않는 섹션
+
+Pass 1에서 심각한 구조적 문제가 발견되면 해당 세그먼트에 Severity 5로 즉시 플래그합니다.
+
+---
+
+## Pass 2: Granular Fidelity Audit (세밀한 품질 점검)
+
+Pass 1을 통과한 세그먼트를 하나씩 4가지 항목으로 점검합니다.
+
+### ① Omission Check (누락 점검)
+번역문의 핵심 명사 3개·동사 2개를 추출하고, 원문의 모든 개념이 담겨 있는지 확인합니다.
+- 빠진 개념은 원문에서 직접 인용해 명시합니다.
+- **특정 단어가 없는 것 ≠ 누락** (의역/자연스러운 생략은 제외)
+
+### ② Nuance Audit (뉘앙스 점검)
+- 감정 강도 (중립 vs 긴박)
+- 격식 수준 (formal vs informal)
+- 내포된 톤 (권위, 아이러니, 향수 등)
+
+### ③ Terminology Consistency (용어 일관성)
+글로서리와 대조해 전문 용어·UI 텍스트·브랜드명 표기를 검증합니다.
+
+### ④ Adaptation Assessment (번역 적응 판정)
+변경 사항이:
+- **JUSTIFIED**: 언어 구조상 필요한 적응 → 이슈 아님
+- **QUESTIONABLE**: 의심스러운 생략 → 이슈로 보고
+- **UNNECESSARY**: 불필요한 단순화 → 이슈로 보고
+
+---
+
+## Adversarial Validation (Severity 3점 이상 세그먼트)
+
+Severity 3점 이상으로 플래그된 세그먼트에 한해 내부적으로 다음 3단계를 거칩니다:
+1. **Initial Critique**: 문제를 명확히 지적
+2. **Defense**: 번역가의 선택이 정당화될 수 있는 반론 구성
+3. **Final Judgment**: 양쪽을 종합해 최종 판정 (오탐 방지)
+
+이 과정은 내부 추론으로만 사용하고, 출력에는 Final Judgment 결과만 반영합니다.
+
+---
 
 ## 보고하지 마세요
 
@@ -179,15 +215,18 @@ const TWO_PASS_REVIEW_PROMPT = `# Translation Review
 이슈가 없으면 없다고 보고하세요. 억지로 찾지 마세요.`;
 
 // ============================================
-// Severity 기준
+// Severity 기준 (1~5점 스케일)
 // ============================================
 
-const REVIEW_DETECTION_PROMPT = `## Severity
+const REVIEW_DETECTION_PROMPT = `## Severity (1~5점 스케일)
 
-- **Critical**: 오역, 핵심 정보 누락, 수치/고유명사 오류
-- **Major**: 문법 오류, 직역투, 세부 정보 누락
-
-Minor는 보고하지 마세요.`;
+- **5 (Critical)**: 독자가 원문과 다른 행동/결정을 내릴 수 있는 오류
+  → 수치/날짜/고유명사 오류, 핵심 의미 반전, 핵심 정보 완전 누락
+- **4 (Major)**: 독자가 의미는 파악하지만 명백히 어색하거나 부정확한 오류
+  → 문법 오류, 직역투, 세부 정보 누락, 용어 불일치
+- **3 (Moderate)**: 뉘앙스·톤 차이, 경미한 어색함 (Adversarial Validation 대상)
+- **2 (Minor)**: 스타일 차이지만 독자 경험에 영향 없음
+- **1 (Trivial)**: 거의 무시 가능한 수준`;
 
 // ============================================
 // 출력 형식 (Markdown 기반)
@@ -202,7 +241,7 @@ const OUTPUT_FORMAT = `## Output Format
 - **Source**: "[원문 해당 부분]"
 - **Target**: "[번역문 해당 부분]" 또는 (missing)
 - **Type**: [Omission/Addition/Mistranslation/Grammar/Awkward/Terminology]
-- **Severity**: [Critical/Major]
+- **Severity**: [1~5]
 - **SegmentGroupId**: [세그먼트 ID]
 - **Explanation**: [1줄, 20자 이내로 핵심만]
 - **Suggestion**: [수정된 번역문 - 필수!]
@@ -210,9 +249,18 @@ const OUTPUT_FORMAT = `## Output Format
 ---
 
 ## Summary
-- Critical: [N]
-- Major: [N]
+- Critical (5): [N]
+- Major (4): [N]
+- Moderate (3): [N]
+- Minor (1~2): [N]
+- Verdict: [ACCEPT / MINOR REVISIONS / MAJOR REVISIONS / REJECT]
 ---REVIEW_END---
+
+**Verdict 기준:**
+- ACCEPT: 5점·4점 이슈 없음
+- MINOR REVISIONS: 4점 이슈 1~2개 또는 3점 이슈만 있음
+- MAJOR REVISIONS: 4점 이슈 3개 이상 또는 5점 이슈 1개
+- REJECT: 5점 이슈 3개 이상 또는 구조적 문제
 
 **출력 예시 (반드시 이 형식을 따르세요):**
 ---REVIEW_START---
@@ -222,12 +270,19 @@ const OUTPUT_FORMAT = `## Output Format
 - **Source**: "fully stealth heists"
 - **Target**: "도둑질을 실행하도록"
 - **Type**: Mistranslation
-- **Severity**: Critical
+- **Severity**: 5
 - **SegmentGroupId**: seg-001
 - **Explanation**: '은밀함' 의미 누락
 - **Suggestion**: 완전히 은밀하게 강도를 진행
 
 ---
+
+## Summary
+- Critical (5): 1
+- Major (4): 0
+- Moderate (3): 0
+- Minor (1~2): 0
+- Verdict: MAJOR REVISIONS
 ---REVIEW_END---
 
 **이슈 없을 경우:**
@@ -238,6 +293,9 @@ Review complete. No issues found.
 
 - Segments reviewed: [N]
 - Issues detected: 0
+
+## Summary
+- Verdict: ACCEPT
 ---REVIEW_END---
 
 ## 작성 규칙 (필수!)

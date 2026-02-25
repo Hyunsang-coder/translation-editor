@@ -202,8 +202,8 @@ let cachedNonce: number = -1;
 // ============================================
 
 const initialState: ReviewState = {
-  // severity 필터 기본값: Critical + Major 표시
-  severityFilter: ['critical', 'major'] as IssueSeverity[],
+  // severity 필터 기본값: 전체 표시
+  severityFilter: ['critical', 'major', 'minor'] as IssueSeverity[],
 
   // 검수 실행 상태 기본값
   chunks: [],
@@ -371,8 +371,9 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   getCheckedIssues: () => {
+    const { severityFilter } = get();
     const allIssues = get().getAllIssues();
-    return allIssues.filter((issue) => issue.checked);
+    return allIssues.filter((issue) => issue.checked && severityFilter.includes(issue.severity));
   },
 
   toggleHighlight: () => {
@@ -397,11 +398,11 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   toggleSeverityFilter: (severity: IssueSeverity) => {
-    const { severityFilter } = get();
+    const { severityFilter, highlightNonce } = get();
     const next = severityFilter.includes(severity)
       ? severityFilter.filter((s) => s !== severity)
       : [...severityFilter, severity];
-    set({ severityFilter: next });
+    set({ severityFilter: next, highlightNonce: highlightNonce + 1 });
   },
 
   getFilteredIssues: () => {
