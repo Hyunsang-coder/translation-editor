@@ -61,6 +61,7 @@ const initialState: HistoryState = {
 
 let loadHistoryRequestSeq = 0;
 let autoSnapshotTimer: number | null = null;
+let autoSnapshotSavedTimer: number | null = null;
 let autoSnapshotInFlight = false;
 let createSnapshotIfChangedInFlight = false;
 // stopAutoSnapshotWatch 호출 후 in-flight Promise가 다른 프로젝트 state를 오염시키지
@@ -307,6 +308,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             .finally(() => {
               autoSnapshotInFlight = false;
               set({ autoSnapshotStatus: 'saved' });
+              if (autoSnapshotSavedTimer !== null) window.clearTimeout(autoSnapshotSavedTimer);
+              autoSnapshotSavedTimer = window.setTimeout(() => {
+                set({ autoSnapshotStatus: 'idle' });
+                autoSnapshotSavedTimer = null;
+              }, 2000);
             });
         }
       }
@@ -321,6 +327,10 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     if (autoSnapshotTimer !== null) {
       window.clearTimeout(autoSnapshotTimer);
       autoSnapshotTimer = null;
+    }
+    if (autoSnapshotSavedTimer !== null) {
+      window.clearTimeout(autoSnapshotSavedTimer);
+      autoSnapshotSavedTimer = null;
     }
     autoSnapshotInFlight = false;
     // in-flight Promise의 projectId guard를 무효화하여 완료 콜백이 state를 오염시키지 않도록 한다.
