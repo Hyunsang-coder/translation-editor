@@ -23,7 +23,7 @@ export function Toolbar(): JSX.Element {
       rightSidebar: s.rightSidebar,
     })));
   const project = useProjectStore((s) => s.project);
-  const isAutoSnapshotSaving = useHistoryStore((s) => s.isAutoSnapshotSaving);
+  const autoSnapshotStatus = useHistoryStore((s) => s.autoSnapshotStatus);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -99,9 +99,9 @@ export function Toolbar(): JSX.Element {
         <h1 className="text-lg font-semibold text-editor-text">
           {project?.metadata.title ?? t('common.untitledProject')}
         </h1>
-        {project && (
+        {project && autoSnapshotStatus !== 'idle' && (
           <span className="flex items-center gap-1 text-xs text-editor-muted">
-            {isAutoSnapshotSaving ? (
+            {autoSnapshotStatus === 'saving' ? (
               <>
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 {t('history.autoSnapshotSaving')}

@@ -11,13 +11,15 @@ import {
 import { hashContent } from '@/utils/hash';
 import { useProjectStore } from '@/stores/projectStore';
 
+type AutoSnapshotStatus = 'idle' | 'saving' | 'saved';
+
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
   isLoading: boolean;
   isLoadingSnapshot: boolean;
   error: string | null;
   latestBlocksHash: string | null;
-  isAutoSnapshotSaving: boolean;
+  autoSnapshotStatus: AutoSnapshotStatus;
 }
 
 interface HistoryActions {
@@ -54,7 +56,7 @@ const initialState: HistoryState = {
   isLoadingSnapshot: false,
   error: null,
   latestBlocksHash: null,
-  isAutoSnapshotSaving: false,
+  autoSnapshotStatus: 'idle',
 };
 
 let loadHistoryRequestSeq = 0;
@@ -267,7 +269,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
 
           autoSnapshotInFlight = true;
           autoSnapshotActiveProjectId = project.id;
-          set({ isAutoSnapshotSaving: true });
+          set({ autoSnapshotStatus: 'saving' });
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const snapshotProjectId = project.id;
           void tauriUpsertAutoSnapshot({
@@ -304,7 +306,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             })
             .finally(() => {
               autoSnapshotInFlight = false;
-              set({ isAutoSnapshotSaving: false });
+              set({ autoSnapshotStatus: 'saved' });
             });
         }
       }
@@ -323,6 +325,6 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     autoSnapshotInFlight = false;
     // in-flight Promise의 projectId guard를 무효화하여 완료 콜백이 state를 오염시키지 않도록 한다.
     autoSnapshotActiveProjectId = null;
-    set({ isAutoSnapshotSaving: false });
+    set({ autoSnapshotStatus: 'idle' });
   },
 }));
