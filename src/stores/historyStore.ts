@@ -231,7 +231,9 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
 
   reset: (): void => {
     loadHistoryRequestSeq += 1;
-    set(initialState);
+    // latestBlocksHash는 유지 — null로 리셋하면 히스토리 창 재오픈 시
+    // hash 재계산 전 autoSnapshot tick이 불필요한 저장을 유발함
+    set({ ...initialState, latestBlocksHash: get().latestBlocksHash });
   },
 
   startAutoSnapshotWatch: (): void => {

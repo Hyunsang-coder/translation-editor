@@ -680,12 +680,13 @@ export const useProjectStore = create<ProjectStore>()(
       materializeBlocksForSnapshot: (): Record<string, EditorBlock> | null => {
         const { project, targetDocument, sourceDocument, targetDocHandle } = get();
         if (!project) return null;
+        // now=0 고정: snapshot hash 비교용이므로 timestamp가 달라지면 안 됨
         return materializeBlocksFromDocuments({
           project,
           targetDocument,
           sourceDocument,
           targetDocHandle,
-          now: Date.now(),
+          now: 0,
         });
       },
 
@@ -727,12 +728,13 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       setTargetDocument: (next: string): void => {
-        console.warn('[setTargetDocument] called, length:', next?.length);
+        if (get().targetDocument === next) return;
         set({ targetDocument: next, isDirty: true, lastChangeAt: Date.now() });
         scheduleWriteThroughSave(set, get);
       },
 
       setSourceDocument: (next: string): void => {
+        if (get().sourceDocument === next) return;
         set({ sourceDocument: next, isDirty: true, lastChangeAt: Date.now() });
         scheduleWriteThroughSave(set, get);
       },
