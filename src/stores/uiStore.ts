@@ -22,15 +22,6 @@ interface UIState extends EditorUIState {
   leftSidebar: DockingSidebarState;
   rightSidebar: DockingSidebarState;
 
-  // === Legacy (deprecated - kept for backward compat during migration) ===
-  sidebarActiveTab: 'settings' | 'review';
-  chatPanelOpen: boolean;
-  chatPanelPinned: boolean;
-
-  // Legacy sidebar widths
-  settingsSidebarWidth: number;
-  chatPanelWidth: number;
-
   // Editor typography settings (Source/Target 패널별 독립 설정)
   sourceFontSize: number; // px
   sourceLineHeight: number; // ratio
@@ -89,17 +80,6 @@ interface UIActions {
   // Dev Test Panel
   toggleDevTestPanel: () => void;
   setDevTestPanelOpen: (open: boolean) => void;
-
-  // Legacy Chat Panel
-  setSidebarActiveTab: (tab: 'settings' | 'review') => void;
-  setChatPanelOpen: (open: boolean) => void;
-  toggleChatPanel: () => void;
-  setChatPanelPinned: (pinned: boolean) => void;
-  toggleChatPanelPinned: () => void;
-
-  // Legacy sidebar widths
-  setSettingsSidebarWidth: (width: number) => void;
-  setChatPanelWidth: (width: number) => void;
 
   // === Docking Sidebar Actions ===
   setActivePanel_side: (side: SidebarSide, panel: PanelType) => void;
@@ -175,15 +155,6 @@ export const useUIStore = create<UIStore>()(
       // === Docking Sidebar - 기본값 ===
       leftSidebar: { collapsed: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
       rightSidebar: { collapsed: false, panels: [], activePanel: null, width: 250 },
-
-      // Legacy (deprecated - backward compat)
-      sidebarActiveTab: 'settings',
-      chatPanelOpen: true,
-      chatPanelPinned: true,
-
-      // Legacy sidebar widths
-      settingsSidebarWidth: 250,
-      chatPanelWidth: 250,
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
       sourceFontSize: 14,
@@ -427,36 +398,6 @@ export const useUIStore = create<UIStore>()(
 
       setDevTestPanelOpen: (open: boolean): void => {
         set({ devTestPanelOpen: open });
-      },
-
-      // Legacy Chat Panel
-      setSidebarActiveTab: (tab: 'settings' | 'review'): void => {
-        set({ sidebarActiveTab: tab });
-      },
-
-      setChatPanelOpen: (open: boolean): void => {
-        set({ chatPanelOpen: open });
-      },
-
-      toggleChatPanel: (): void => {
-        set((state) => ({ chatPanelOpen: !state.chatPanelOpen }));
-      },
-
-      setChatPanelPinned: (pinned: boolean): void => {
-        set({ chatPanelPinned: pinned });
-      },
-
-      toggleChatPanelPinned: (): void => {
-        set((state) => ({ chatPanelPinned: !state.chatPanelPinned }));
-      },
-
-      // Legacy sidebar widths
-      setSettingsSidebarWidth: (width: number): void => {
-        set({ settingsSidebarWidth: Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width)) });
-      },
-
-      setChatPanelWidth: (width: number): void => {
-        set({ chatPanelWidth: Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width)) });
       },
 
       // === Docking Sidebar Actions ===
@@ -811,12 +752,6 @@ export const useUIStore = create<UIStore>()(
         // Dual sidebar persist
         leftSidebar: state.leftSidebar,
         rightSidebar: state.rightSidebar,
-        // Legacy (kept for potential rollback)
-        sidebarActiveTab: state.sidebarActiveTab,
-        chatPanelOpen: state.chatPanelOpen,
-        chatPanelPinned: state.chatPanelPinned,
-        settingsSidebarWidth: state.settingsSidebarWidth,
-        chatPanelWidth: state.chatPanelWidth,
         // Editor typography
         sourceFontSize: state.sourceFontSize,
         sourceLineHeight: state.sourceLineHeight,

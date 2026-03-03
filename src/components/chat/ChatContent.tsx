@@ -176,7 +176,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       const panelId = chatPanelId(sessionId);
       return !sb.collapsed && sb.activePanel === panelId;
     }
-    return s.chatPanelOpen;
+    return true;
   });
 
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());

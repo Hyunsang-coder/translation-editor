@@ -230,6 +230,18 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   },
 
   reset: (): void => {
+    // 모듈 레벨 타이머/플래그 정리 (프로젝트 전환 시 dangling timer 방지)
+    if (autoSnapshotTimer !== null) {
+      window.clearTimeout(autoSnapshotTimer);
+      autoSnapshotTimer = null;
+    }
+    if (autoSnapshotSavedTimer !== null) {
+      window.clearTimeout(autoSnapshotSavedTimer);
+      autoSnapshotSavedTimer = null;
+    }
+    autoSnapshotInFlight = false;
+    autoSnapshotActiveProjectId = null;
+
     loadHistoryRequestSeq += 1;
     // latestBlocksHash는 유지 — null로 리셋하면 히스토리 창 재오픈 시
     // hash 재계산 전 autoSnapshot tick이 불필요한 저장을 유발함
