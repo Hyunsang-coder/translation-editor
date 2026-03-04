@@ -723,6 +723,9 @@ export const useProjectStore = create<ProjectStore>()(
           });
           throw switchError;
         } finally {
+          // historyStore 상태 초기화: autoSnapshotTimer/activeProjectId 정리
+          const { useHistoryStore } = await import('@/stores/historyStore');
+          useHistoryStore.getState().reset();
           startAutoSave();
         }
       },
