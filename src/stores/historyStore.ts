@@ -102,6 +102,9 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             })
             .catch(() => {});
         }
+      } else {
+        // 스냅샷이 없는 신규 프로젝트 — 빈 sentinel로 초기화해서 auto snapshot이 진행되도록 함
+        set({ latestBlocksHash: '' });
       }
     } catch (error) {
       if (!isLatestRequest(requestSeq)) return;
