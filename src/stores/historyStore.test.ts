@@ -347,15 +347,18 @@ describe('createSnapshot — 버그 1: 프로젝트 전환 후 latestBlocksHash 
 
     // createSnapshot 응답 전에 프로젝트 전환 (reset → requestSeq 증가)
     useHistoryStore.getState().reset();
-    // latestBlocksHash는 reset으로 null이 됨
+    // reset() 후 새 프로젝트의 hash가 설정된 상태를 시뮬레이션
+    // (reset은 latestBlocksHash를 유지하므로, 새 프로젝트에서 다른 hash가 설정된 경우)
+    const newProjectHash = 'new-project-hash';
+    useHistoryStore.setState({ latestBlocksHash: newProjectHash });
 
-    // 이제 createSnapshot 완료
+    // 이제 stale createSnapshot 완료
     deferredCreate.resolve('snapshot-stale');
     deferredList.resolve([]);
     await createPromise;
 
-    // 프로젝트 전환 이후이므로 latestBlocksHash는 갱신되지 않아야 한다
-    expect(useHistoryStore.getState().latestBlocksHash).toBeNull();
+    // 프로젝트 전환 이후이므로 stale snapshot의 hash가 새 프로젝트 hash를 덮어쓰지 않아야 한다
+    expect(useHistoryStore.getState().latestBlocksHash).toBe(newProjectHash);
   });
 });
 
