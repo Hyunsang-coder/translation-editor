@@ -30,9 +30,10 @@ function App(): JSX.Element {
     useShallow((s) => ({ initializeProject: s.initializeProject, startAutoSave: s.startAutoSave, stopAutoSave: s.stopAutoSave }))
   );
   const loadSecureKeys = useAiConfigStore((s) => s.loadSecureKeys);
-  const { startAutoSnapshotWatch, stopAutoSnapshotWatch } = useHistoryStore(
-    useShallow((s) => ({ startAutoSnapshotWatch: s.startAutoSnapshotWatch, stopAutoSnapshotWatch: s.stopAutoSnapshotWatch }))
+  const { startAutoSnapshotWatch, stopAutoSnapshotWatch, loadHistory } = useHistoryStore(
+    useShallow((s) => ({ startAutoSnapshotWatch: s.startAutoSnapshotWatch, stopAutoSnapshotWatch: s.stopAutoSnapshotWatch, loadHistory: s.loadHistory }))
   );
+  const projectId = useProjectStore((s) => s.project?.id ?? null);
 
   // 자동 업데이트
   const {
@@ -230,6 +231,12 @@ function App(): JSX.Element {
     startAutoSnapshotWatch();
     return () => stopAutoSnapshotWatch();
   }, [startAutoSnapshotWatch, stopAutoSnapshotWatch]);
+
+  // latestBlocksHash 초기화: 프로젝트 전환/로드 시 loadHistory로 hash 캐시를 채워
+  // auto snapshot이 히스토리 드로어 오픈 없이도 정상 작동하도록 함
+  useEffect(() => {
+    void loadHistory(projectId ?? '');
+  }, [projectId, loadHistory]);
 
   // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
   useEffect(() => {
