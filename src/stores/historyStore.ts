@@ -11,15 +11,12 @@ import {
 import { hashContent } from '@/utils/hash';
 import { useProjectStore } from '@/stores/projectStore';
 
-type AutoSnapshotStatus = 'idle' | 'saving' | 'saved';
-
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
   isLoading: boolean;
   isLoadingSnapshot: boolean;
   error: string | null;
   latestBlocksHash: string | null;
-  autoSnapshotStatus: AutoSnapshotStatus;
 }
 
 interface HistoryActions {
@@ -56,12 +53,10 @@ const initialState: HistoryState = {
   isLoadingSnapshot: false,
   error: null,
   latestBlocksHash: null,
-  autoSnapshotStatus: 'idle',
 };
 
 let loadHistoryRequestSeq = 0;
 let autoSnapshotTimer: number | null = null;
-let autoSnapshotSavedTimer: number | null = null;
 let autoSnapshotInFlight = false;
 let createSnapshotIfChangedInFlight = false;
 // stopAutoSnapshotWatch 호출 후 in-flight Promise가 다른 프로젝트 state를 오염시키지
@@ -238,10 +233,6 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       window.clearTimeout(autoSnapshotTimer);
       autoSnapshotTimer = null;
     }
-    if (autoSnapshotSavedTimer !== null) {
-      window.clearTimeout(autoSnapshotSavedTimer);
-      autoSnapshotSavedTimer = null;
-    }
     autoSnapshotInFlight = false;
     autoSnapshotActiveProjectId = null;
 
@@ -287,7 +278,6 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
 
           autoSnapshotInFlight = true;
           autoSnapshotActiveProjectId = project.id;
-          set({ autoSnapshotStatus: 'saving' });
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const snapshotProjectId = project.id;
           void tauriUpsertAutoSnapshot({
@@ -324,12 +314,6 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             })
             .finally(() => {
               autoSnapshotInFlight = false;
-              set({ autoSnapshotStatus: 'saved' });
-              if (autoSnapshotSavedTimer !== null) window.clearTimeout(autoSnapshotSavedTimer);
-              autoSnapshotSavedTimer = window.setTimeout(() => {
-                set({ autoSnapshotStatus: 'idle' });
-                autoSnapshotSavedTimer = null;
-              }, 2000);
             });
         }
       }
@@ -345,13 +329,8 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       window.clearTimeout(autoSnapshotTimer);
       autoSnapshotTimer = null;
     }
-    if (autoSnapshotSavedTimer !== null) {
-      window.clearTimeout(autoSnapshotSavedTimer);
-      autoSnapshotSavedTimer = null;
-    }
     autoSnapshotInFlight = false;
     // in-flight Promise의 projectId guard를 무효화하여 완료 콜백이 state를 오염시키지 않도록 한다.
     autoSnapshotActiveProjectId = null;
-    set({ autoSnapshotStatus: 'idle' });
   },
 }));

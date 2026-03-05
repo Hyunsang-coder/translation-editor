@@ -304,7 +304,7 @@
     "highlight": "표시",
     "apply": "적용",
     "copy": "복사",
-    "ignore": "무시",
+    "ignore": "확인",
     "applySuccess": "수정 제안이 적용되었습니다.",
     "copySuccess": "클립보드에 복사되었습니다. 적절한 위치에 붙여넣어 주세요.",
     "copyError": "클립보드 복사에 실패했습니다.",

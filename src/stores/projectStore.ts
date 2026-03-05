@@ -593,6 +593,7 @@ export const useProjectStore = create<ProjectStore>()(
           set({
             project: nextProject,
             isDirty: true,
+            lastChangeAt: Date.now(),
             lastProjectId: initialProject.id,
             targetDocument: td.text,
             sourceDocument: sd.text,
@@ -855,7 +856,9 @@ export const useProjectStore = create<ProjectStore>()(
           targetDocument: next,
           pendingDocDiff: null,
           isDirty: true,
+          lastChangeAt: Date.now(),
         });
+        scheduleWriteThroughSave(set, get);
 
         if (sessionId) {
           get().finalizeEditSession({ sessionId, status: 'kept' });
@@ -1136,6 +1139,7 @@ export const useProjectStore = create<ProjectStore>()(
             ),
           },
           isDirty: true,
+          lastChangeAt: Date.now(),
         });
         scheduleWriteThroughSave(set, get);
       },
@@ -1199,6 +1203,7 @@ export const useProjectStore = create<ProjectStore>()(
             ),
           },
           isDirty: true,
+          lastChangeAt: Date.now(),
         });
         scheduleWriteThroughSave(set, get);
       },
@@ -1366,6 +1371,7 @@ export const useProjectStore = create<ProjectStore>()(
             segments: [...project.segments, newSegment],
           },
           isDirty: true,
+          lastChangeAt: Date.now(),
         });
         scheduleWriteThroughSave(set, get);
       },

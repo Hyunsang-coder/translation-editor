@@ -82,13 +82,11 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-02-16)
+## Recent Updates (2026-03-05)
 
-- **스냅샷 변경 감지**: `createSnapshotIfChanged()` — `latestBlocksHash` 캐시 비교로 중복 스냅샷 방지. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 사용.
-- **수정 상태 표시**: HistoryTimeline에 "수정됨" 배지 (amber-500) — `currentBlocksHash ≠ latestBlocksHash` 시 표시.
-- **빈 문서 검증 강화**: 원문/번역문 분리 검증 + HTML 직접 확인 (`stripHtml`). 검수 전 Markdown 변환 파이프라인 우회하여 정확한 빈 문서 감지.
-- **프로젝트 생성 UI 안정성**: `isCreating` 상태로 더블클릭 방지 + Toolbar 메뉴 버튼에 `disabled={!project}` 가드.
-- **히스토리 버튼 레이아웃 개선**: 드로어 UI 리팩터링.
+- **자동저장 버그 수정**: `acceptDocDiff`, `splitBlock`, `mergeBlocks`, `addSegment`, `createNewProject`에서 `lastChangeAt` 미갱신 → autoSave/autoSnapshot debounce 무력화 버그 수정.
+- **autoSnapshotStatus 제거**: Toolbar 저장 배지 제거 (히스토리 타임라인으로 확인). `historyStore`에서 `AutoSnapshotStatus` 타입·상태·타이머 전부 삭제.
+- **검수 패널 "무시" → "확인"**: `review.ignore` i18n 키 변경 (EN: "Done").
 
 ### Tauri Testing Bridge Notes
 - 이 브리지는 **Playwright 전체 엔진 대체가 아니라**, Tauri 런타임 내부 제어를 위한 RPC 레이어입니다.
