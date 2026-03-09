@@ -44,7 +44,6 @@ export function AddToChatButton({
       style={{
         ...style,
         backgroundColor: 'color-mix(in srgb, var(--editor-surface) 90%, transparent)',
-        fontFamily: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         fontSize: 'var(--editor-font-size, 14px)',
       }}
       onMouseDown={onMouseDown}

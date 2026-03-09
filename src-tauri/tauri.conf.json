@@ -37,7 +37,11 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": null,
+      "entitlements": null
+    }
   },
   "plugins": {
     "updater": {

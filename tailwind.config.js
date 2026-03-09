@@ -50,7 +50,6 @@ export default {
           'Consolas',
           'monospace',
         ],
-        editor: ['Noto Sans KR', 'sans-serif'],
       },
       fontSize: {
         editor: ['1rem', { lineHeight: '1.75' }],
