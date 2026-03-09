@@ -8,6 +8,11 @@ import {
   CONTEXT_SAFETY_MARGIN,
 } from '@/ai/constants';
 import i18n from '@/i18n/config';
+
+/** Escape XML/HTML tags in user-provided content to prevent prompt injection */
+function escapeXmlTags(text: string): string {
+  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 import {
   translateInChunks,
   type TranslationProgressCallback,
@@ -146,7 +151,7 @@ function buildTranslationSetup(params: {
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
 
   const persona = params.translatorPersona?.trim()
-    ? `<user_persona>\n${params.translatorPersona}\n</user_persona>`
+    ? `<user_persona>\n${escapeXmlTags(params.translatorPersona)}\n</user_persona>`
     : '당신은 경험많은 전문 번역가입니다.';
 
   const systemLines: string[] = [

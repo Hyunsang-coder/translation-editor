@@ -47,6 +47,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     currentSessionId: null,
     currentSession: null,
     isLoading: false,
+    isAttachmentLoading: false,
     isFinalizingStreaming: false,
     streamingMessageId: null,
     streamingSessionId: null,
@@ -82,6 +83,20 @@ export const useChatStore = create<ChatStore>((set, get) => {
     ...attachmentActions,
     ...utilityActions,
   };
+});
+
+// C-05: Auto-sync currentSession from sessions[] to prevent denormalization drift.
+// If any mutation updates sessions or currentSessionId but forgets to sync currentSession,
+// this subscription auto-corrects it on the next tick.
+useChatStore.subscribe((state, prevState) => {
+  if (state.sessions !== prevState.sessions || state.currentSessionId !== prevState.currentSessionId) {
+    const derived = state.currentSessionId
+      ? state.sessions.find((s) => s.id === state.currentSessionId) ?? null
+      : null;
+    if (derived !== state.currentSession) {
+      useChatStore.setState({ currentSession: derived });
+    }
+  }
 });
 
 // Re-export types for convenience

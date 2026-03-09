@@ -30,6 +30,8 @@ export interface ChatState {
   currentSessionId: string | null;
   currentSession: ChatSession | null;
   isLoading: boolean;
+  /** 첨부 파일 작업 진행 중 여부 (isLoading과 분리: AI 응답 스켈레톤 방지) */
+  isAttachmentLoading: boolean;
   isHydrating: boolean;
   /** finalization 진행 중 여부 (Race Condition 방지) */
   isFinalizingStreaming: boolean;

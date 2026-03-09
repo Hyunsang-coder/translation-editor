@@ -232,32 +232,32 @@ export function createAttachmentActions(set: ChatSet, get: ChatGet) {
     const projectId = get().loadedProjectId;
     if (!projectId) return;
 
-    set({ isLoading: true });
+    set({ isAttachmentLoading: true });
     try {
       const newAtt = await attachFile(projectId, path);
       set((state) => ({
         attachments: [...state.attachments, newAtt],
-        isLoading: false,
+        isAttachmentLoading: false,
       }));
     } catch (e) {
       set({
-        isLoading: false,
+        isAttachmentLoading: false,
         error: e instanceof Error ? e.message : '첨부 파일 추가 실패',
       });
     }
   };
 
   const deleteAttachment = async (id: string): Promise<void> => {
-    set({ isLoading: true });
+    set({ isAttachmentLoading: true });
     try {
       await deleteAttachmentApi(id);
       set((state) => ({
         attachments: state.attachments.filter((a) => a.id !== id),
-        isLoading: false,
+        isAttachmentLoading: false,
       }));
     } catch (e) {
       set({
-        isLoading: false,
+        isAttachmentLoading: false,
         error: e instanceof Error ? e.message : '첨부 파일 삭제 실패',
       });
     }

@@ -816,6 +816,32 @@ impl Database {
         Ok(())
     }
 
+    /// 블록 삽입
+    pub fn insert_block(&self, block: &EditorBlock, project_id: &str) -> Result<(), IteError> {
+        self.conn.execute(
+            "INSERT INTO blocks (id, project_id, block_type, content, hash, metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (
+                &block.id,
+                project_id,
+                &block.block_type,
+                &block.content,
+                &block.hash,
+                serde_json::to_string(&block.metadata)?,
+            ),
+        )?;
+        Ok(())
+    }
+
+    /// 블록 삭제
+    pub fn delete_block(&self, block_id: &str, project_id: &str) -> Result<(), IteError> {
+        self.conn.execute(
+            "DELETE FROM blocks WHERE id = ?1 AND project_id = ?2",
+            [block_id, project_id],
+        )?;
+        Ok(())
+    }
+
     /// 블록 조회
     pub fn get_block(&self, block_id: &str, project_id: &str) -> Result<EditorBlock, IteError> {
         let mut stmt = self.conn.prepare(

@@ -963,6 +963,7 @@ export async function streamAssistantReply(
         bindTools,
         messages: fallback,
         ...(cb ? { cb } : {}),
+        ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       }));
     } else {
       throw e;

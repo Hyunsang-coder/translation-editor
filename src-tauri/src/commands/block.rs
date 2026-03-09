@@ -103,7 +103,11 @@ pub fn split_block(
         },
     };
 
-    // TODO: 데이터베이스에 저장 및 세그먼트 업데이트
+    // 데이터베이스에 저장
+    db.update_block(&updated_original, &project_id)
+        .map_err(CommandError::from)?;
+    db.insert_block(&new_block, &project_id)
+        .map_err(CommandError::from)?;
 
     Ok((updated_original, new_block))
 }
@@ -156,7 +160,15 @@ pub fn merge_blocks(
         },
     };
 
-    // TODO: 데이터베이스에 저장 및 세그먼트 업데이트
+    // 데이터베이스에 저장: 첫 번째 블록 업데이트
+    db.update_block(&merged_block, &project_id)
+        .map_err(CommandError::from)?;
+
+    // 나머지 블록 삭제
+    for block_id in block_ids.iter().skip(1) {
+        db.delete_block(block_id, &project_id)
+            .map_err(CommandError::from)?;
+    }
 
     Ok(merged_block)
 }

@@ -27,6 +27,16 @@ let suppressNextClick = false;
 
 const DRAG_THRESHOLD = 5;
 
+// Event-based drag state notification (replaces 50ms polling)
+type DragStateListener = (ds: DragState | null) => void;
+const dragStateListeners = new Set<DragStateListener>();
+
+function notifyDragStateChange(): void {
+  for (const listener of dragStateListeners) {
+    listener(dragState);
+  }
+}
+
 // Cross-instance event emitter for drop indicator
 type IndicatorListener = (indicator: DropIndicator | null) => void;
 const indicatorListeners = new Set<IndicatorListener>();
@@ -122,6 +132,7 @@ function handleDocumentMouseMove(e: MouseEvent): void {
     const dy = e.clientY - dragState.startY;
     if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
     dragState.isDragging = true;
+    notifyDragStateChange();
     createGhost(dragState.sourceLabel);
     document.body.style.cursor = 'grabbing';
     document.body.style.userSelect = 'none';
@@ -143,6 +154,7 @@ function handleDocumentMouseUp(e: MouseEvent): void {
   const state = dragState;
   const wasDragging = state.isDragging;
   dragState = null;
+  notifyDragStateChange();
 
   removeGhost();
   document.body.style.cursor = '';
@@ -179,6 +191,7 @@ function handleDocumentMouseLeave(e: MouseEvent): void {
   // Cancel drag when cursor leaves the window
   if (e.target === document.documentElement && dragState?.isDragging) {
     dragState = null;
+    notifyDragStateChange();
     removeGhost();
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
@@ -235,17 +248,17 @@ export function usePanelDrag({ side }: UsePanelDragOptions): UsePanelDragReturn 
     };
     indicatorListeners.add(listener);
 
-    // Poll dragState for draggingPanel reactivity
-    const interval = setInterval(() => {
-      const ds = dragState;
+    // Event-based drag state tracking (replaces 50ms polling)
+    const dragListener: DragStateListener = (ds) => {
       setDraggingPanel(ds?.isDragging && ds.sourceSide === side ? ds.panelType : null);
-    }, 50);
+    };
+    dragStateListeners.add(dragListener);
 
     return () => {
       instanceCount--;
       if (instanceCount === 0) detachDocumentListeners();
       indicatorListeners.delete(listener);
-      clearInterval(interval);
+      dragStateListeners.delete(dragListener);
     };
   }, [side]);
 

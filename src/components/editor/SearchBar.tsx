@@ -111,13 +111,11 @@ export function SearchBar({
       }
     };
 
-    // 에디터 업데이트 이벤트 구독
+    // 에디터 업데이트 이벤트 구독 (transaction은 과도한 호출을 유발하므로 update만 사용)
     editor.on('update', updateMatchInfo);
-    editor.on('transaction', updateMatchInfo);
 
     return () => {
       editor.off('update', updateMatchInfo);
-      editor.off('transaction', updateMatchInfo);
     };
   }, [editor, isOpen]);
 

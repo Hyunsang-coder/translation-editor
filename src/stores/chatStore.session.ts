@@ -87,6 +87,7 @@ export function createSessionActions(
         streamingContent: null,
         streamingMetadata: null,
         isLoading: false,
+        isAttachmentLoading: false,
       });
       return;
     }
@@ -113,6 +114,7 @@ export function createSessionActions(
       streamingContent: null,
       streamingMetadata: null,
       isLoading: false,
+      isAttachmentLoading: false,
       isHydrating: true,
       isFinalizingStreaming: false,
       error: null,

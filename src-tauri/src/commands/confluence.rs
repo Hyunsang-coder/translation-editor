@@ -39,12 +39,30 @@ struct AccessibleResource {
     id: String,
 }
 
+/// Validate that a string contains only safe URL path characters (alphanumeric, hyphens).
+/// Confluence page IDs are numeric; cloud IDs are UUIDs (alphanumeric + hyphens).
+fn validate_url_segment(value: &str, name: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{} is empty", name));
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(format!("{} contains invalid characters: {}", name, value));
+    }
+    Ok(())
+}
+
 /// Confluence 페이지 HTML(storage format) 가져오기
 ///
 /// MCP OAuth 토큰을 재사용하여 Confluence REST API v2 직접 호출.
 /// 결과는 Tauri command로만 반환되어 LLM 컨텍스트에 노출되지 않음.
 #[tauri::command]
 pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageContent, String> {
+    // Validate page_id before any use
+    validate_url_segment(&page_id, "page_id")?;
+
     println!("[Confluence REST] Getting page HTML for: {}", page_id);
 
     // 1. OAuth 토큰 가져오기
@@ -70,7 +88,10 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         }
     };
 
-    // 3. Confluence REST API v2 호출
+    // 3. Validate cloud_id before URL construction
+    validate_url_segment(&cloud_id, "cloud_id")?;
+
+    // 4. Confluence REST API v2 호출
     // https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/#api-pages-id-get
     let url = format!(
         "https://api.atlassian.com/ex/confluence/{}/wiki/api/v2/pages/{}?body-format=storage",

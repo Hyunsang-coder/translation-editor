@@ -209,6 +209,7 @@ interface ProjectActions {
 type ProjectStore = ProjectState & ProjectActions;
 
 const WRITE_THROUGH_DELAY_MS = 500;
+const MAX_EDIT_SESSIONS = 50;
 let writeThroughTimer: number | null = null;
 
 let autoSaveTimer: number | null = null;
@@ -557,6 +558,7 @@ export const useProjectStore = create<ProjectStore>()(
           targetDocJson: htmlToTipTapJson(td.text),
           // pendingDocDiff 초기화 (이전 프로젝트의 diff가 남아있으면 문제)
           pendingDocDiff: null,
+          editSessions: [],
         });
       },
 
@@ -881,8 +883,15 @@ export const useProjectStore = create<ProjectStore>()(
         const cur = editSessions[idx];
         if (!cur || cur.status !== 'pending') return;
         const next = { ...cur, status };
-        const updated = [...editSessions];
+        let updated = [...editSessions];
         updated[idx] = next;
+        // Evict old finalized sessions if over limit
+        if (updated.length > MAX_EDIT_SESSIONS) {
+          updated = [
+            ...updated.filter((s) => s.status === 'pending'),
+            ...updated.filter((s) => s.status !== 'pending').slice(-MAX_EDIT_SESSIONS),
+          ];
+        }
         set({ editSessions: updated });
       },
 

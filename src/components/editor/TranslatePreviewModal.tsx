@@ -62,7 +62,7 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-export function TranslatePreviewModal(props: {
+interface TranslatePreviewModalProps {
   open: boolean;
   title?: string;
   docJson: TipTapDocJson | null;
@@ -78,10 +78,25 @@ export function TranslatePreviewModal(props: {
   onApply: () => void | Promise<void>;
   onCancel?: () => void;
   onRetry?: () => void;
-}): JSX.Element | null {
+}
+
+/**
+ * Outer wrapper: only mounts the inner component when open===true.
+ * This ensures the TipTap editor created by useEditor is properly
+ * destroyed when the modal closes (component unmounts).
+ */
+export function TranslatePreviewModal(props: TranslatePreviewModalProps): JSX.Element | null {
+  if (!props.open) return null;
+  return <TranslatePreviewModalInner {...props} />;
+}
+
+/**
+ * Inner component: contains all state, hooks, and rendering logic.
+ * Only mounted when the modal is open, guaranteeing proper cleanup on close.
+ */
+function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Element {
   const { t } = useTranslation();
   const {
-    open,
     title,
     docJson,
     sourceHtml,
@@ -95,16 +110,27 @@ export function TranslatePreviewModal(props: {
     onCancel,
     onRetry,
   } = props;
-  const [viewMode, setViewMode] = useState<'preview' | 'diff'>('preview');
-  const [isApplying, setIsApplying] = useState(false); // 추가: 적용 중 상태
-  const [diffOriginalHtmlSnapshot, setDiffOriginalHtmlSnapshot] = useState<string | null>(null);
+
+  const [viewMode, setViewMode] = useState<'preview' | 'diff'>(() => {
+    // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드
+    const baseHtml = originalHtml ?? '';
+    if (baseHtml && stripHtml(baseHtml).trim().length > 0) {
+      return 'diff';
+    }
+    return 'preview';
+  });
+  const [isApplying, setIsApplying] = useState(false);
+
+  // Diff의 기준(original)은 모달을 열 때의 target 상태로 스냅샷 고정합니다.
+  // Apply로 targetDocument가 바뀌어도 DiffEditor의 모델이 갈아끼워지지 않게 해서
+  // "TextModel got disposed before ... reset" 레이스를 피합니다.
+  const [diffOriginalHtmlSnapshot] = useState<string>(() => originalHtml ?? '');
 
   // 경과 시간 상태
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [finalElapsedSeconds, setFinalElapsedSeconds] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedSecondsRef = useRef(0);
-  const wasOpenRef = useRef(false);
 
   // elapsedSeconds가 변경될 때마다 ref도 업데이트
   useEffect(() => {
@@ -154,38 +180,6 @@ export function TranslatePreviewModal(props: {
     };
   }, [isLoading, docJson, error, startTimer, stopTimer]);
 
-  // 모달이 닫힐 때 타이머 리셋
-  useEffect(() => {
-    if (!open) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setFinalElapsedSeconds(null);
-      setElapsedSeconds(0);
-      elapsedSecondsRef.current = 0;
-    }
-  }, [open]);
-
-  // Diff의 기준(original)은 모달을 열 때의 target 상태로 스냅샷 고정합니다.
-  // Apply로 targetDocument가 바뀌어도 DiffEditor의 모델이 갈아끼워지지 않게 해서
-  // "TextModel got disposed before ... reset" 레이스를 피합니다.
-  useEffect(() => {
-    if (open && !wasOpenRef.current) {
-      setDiffOriginalHtmlSnapshot(originalHtml ?? '');
-    } else if (!open) {
-      setDiffOriginalHtmlSnapshot(null);
-    }
-    wasOpenRef.current = open;
-  }, [open, originalHtml]);
-
-  // 모달이 닫힐 때 상태 초기화
-  useEffect(() => {
-    if (!open) {
-      setIsApplying(false);
-    }
-  }, [open]);
-
   // Apply 핸들러 래퍼
   const handleApply = (): void => {
     if (isApplying) return;
@@ -198,18 +192,6 @@ export function TranslatePreviewModal(props: {
       }
     })();
   };
-
-  // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드로 보여줍니다.
-  useEffect(() => {
-    // 모달이 열릴 때: diffOriginalHtmlSnapshot이 아직 세팅되기 전이므로
-    // originalHtml을 직접 사용하여 effect A와 동일한 값으로 판단
-    const baseHtml = open ? (originalHtml ?? '') : '';
-    if (open && baseHtml && stripHtml(baseHtml).trim().length > 0) {
-      setViewMode('diff');
-    } else {
-      setViewMode('preview');
-    }
-  }, [open, originalHtml]);
 
   const content = useMemo(() => docJson ?? null, [docJson]);
 
@@ -286,16 +268,13 @@ export function TranslatePreviewModal(props: {
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {
     if (!editor) return;
-    if (!open) return;
     if (!docJson) return;
     // setContent는 내부적으로 selection을 바꾸므로, focus는 건드리지 않습니다.
     editor.commands.setContent(docJson);
-  }, [editor, open, docJson]);
-
-  if (!open) return null;
+  }, [editor, docJson]);
 
   return (
-    <Modal open={open} onClose={onClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
+    <Modal open onClose={onClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
       <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
