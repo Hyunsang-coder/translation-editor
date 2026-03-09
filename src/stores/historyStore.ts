@@ -58,6 +58,7 @@ const initialState: HistoryState = {
 let loadHistoryRequestSeq = 0;
 let autoSnapshotTimer: number | null = null;
 let autoSnapshotInFlight = false;
+let lastCheckedChangeAt = 0;
 let createSnapshotIfChangedInFlight = false;
 // stopAutoSnapshotWatch 호출 후 in-flight Promise가 다른 프로젝트 state를 오염시키지
 // 않도록, 실행 시점의 projectId를 캡처해 완료 시 검증한다.
@@ -234,6 +235,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       autoSnapshotTimer = null;
     }
     autoSnapshotInFlight = false;
+    lastCheckedChangeAt = 0;
     autoSnapshotActiveProjectId = null;
 
     loadHistoryRequestSeq += 1;
@@ -254,10 +256,17 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
         return;
       }
 
+      // 이전 tick 이후 lastChangeAt이 변경되지 않았으면 hash 계산 불필요
+      if (lastChangeAt === lastCheckedChangeAt) {
+        autoSnapshotTimer = window.setTimeout(tick, 500);
+        return;
+      }
+
       const idleFor = Date.now() - lastChangeAt;
       const canSnapshot = idleFor >= AUTO_SNAPSHOT_DEBOUNCE_MS;
 
       if (canSnapshot && !autoSnapshotInFlight) {
+        lastCheckedChangeAt = lastChangeAt;
         const blocks = materializeBlocksForSnapshot();
         if (blocks) {
           const { latestBlocksHash } = get();
@@ -330,6 +339,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       autoSnapshotTimer = null;
     }
     autoSnapshotInFlight = false;
+    lastCheckedChangeAt = 0;
     // in-flight Promise의 projectId guard를 무효화하여 완료 콜백이 state를 오염시키지 않도록 한다.
     autoSnapshotActiveProjectId = null;
   },

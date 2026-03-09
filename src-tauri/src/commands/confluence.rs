@@ -4,7 +4,12 @@
 //! 단어 카운팅 등 LLM 컨텍스트에 내용을 노출하지 않아야 하는 작업에 사용.
 
 use crate::mcp::client::MCP_CLIENT;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info, warn};
+
+/// 재사용 HTTP 클라이언트 (커넥션 풀링)
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 /// Confluence 페이지 콘텐츠 응답
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,7 +68,7 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
     // Validate page_id before any use
     validate_url_segment(&page_id, "page_id")?;
 
-    println!("[Confluence REST] Getting page HTML for: {}", page_id);
+    debug!("[Confluence REST] Getting page HTML for: {}", page_id);
 
     // 1. OAuth 토큰 가져오기
     let access_token = MCP_CLIENT
@@ -71,7 +76,7 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         .await
         .ok_or("Atlassian OAuth 토큰이 없습니다. Confluence에 먼저 연결해주세요.")?;
 
-    println!(
+    debug!(
         "[Confluence REST] Got OAuth token (length: {})",
         access_token.len()
     );
@@ -79,11 +84,11 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
     // 2. cloudId 가져오기 (accessible resources에서)
     let cloud_id = match get_cloud_id(&access_token).await {
         Ok(id) => {
-            println!("[Confluence REST] Got cloudId: {}", id);
+            debug!("[Confluence REST] Got cloudId: {}", id);
             id
         }
         Err(e) => {
-            println!("[Confluence REST] Failed to get cloudId: {}", e);
+            warn!("[Confluence REST] Failed to get cloudId: {}", e);
             return Err(e);
         }
     };
@@ -97,10 +102,9 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         "https://api.atlassian.com/ex/confluence/{}/wiki/api/v2/pages/{}?body-format=storage",
         cloud_id, page_id
     );
-    println!("[Confluence REST] Calling API: {}", url);
+    debug!("[Confluence REST] Calling API: {}", url);
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .get(&url)
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Accept", "application/json")
@@ -109,11 +113,11 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         .map_err(|e| format!("Confluence API 요청 실패: {}", e))?;
 
     let status = response.status();
-    println!("[Confluence REST] Response status: {}", status);
+    debug!("[Confluence REST] Response status: {}", status);
 
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        println!("[Confluence REST] Error response: {}", body);
+        warn!("[Confluence REST] Error response: {}", body);
         return Err(format!("Confluence API 오류 ({}): {}", status, body));
     }
 
@@ -128,7 +132,7 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
         .map(|s| s.value)
         .unwrap_or_default();
 
-    println!(
+    info!(
         "[Confluence REST] Success! Title: {}, Body length: {}",
         api_response.title,
         body.len()
@@ -145,8 +149,7 @@ pub async fn confluence_get_page_html(page_id: String) -> Result<ConfluencePageC
 async fn get_cloud_id(access_token: &str) -> Result<String, String> {
     let url = "https://api.atlassian.com/oauth/token/accessible-resources";
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .get(url)
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Accept", "application/json")

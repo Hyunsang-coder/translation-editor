@@ -14,7 +14,6 @@ import { useChatStore } from '@/stores/chatStore';
 interface UIState extends EditorUIState {
   theme: 'light' | 'dark' | 'system';
   language: 'ko' | 'en';
-  toasts: Toast[];
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
   devTestPanelOpen: boolean; // 개발자 테스트 패널 (검수 디버그용)
 
@@ -71,9 +70,6 @@ interface UIActions {
 
   // Toasts
   addToast: (toast: Omit<Toast, 'id'>) => void;
-  removeToast: (id: string) => void;
-  clearToasts: () => void;
-
   // Review Panel
   closeReviewPanel: () => void;
 
@@ -148,7 +144,6 @@ export const useUIStore = create<UIStore>()(
       theme: 'system',
       language: 'ko',
       isPanelsSwapped: false,
-      toasts: [],
       reviewPanelOpen: false,
       devTestPanelOpen: false,
 
@@ -252,15 +247,6 @@ export const useUIStore = create<UIStore>()(
             sonnerToast.info(toast.message, options);
             break;
         }
-      },
-
-      removeToast: (_id: string): void => {
-        // sonner handles dismissal automatically
-        sonnerToast.dismiss();
-      },
-
-      clearToasts: (): void => {
-        sonnerToast.dismiss();
       },
 
       // Review Panel (delegates to docking model)

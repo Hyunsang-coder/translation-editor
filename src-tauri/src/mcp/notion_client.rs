@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
@@ -101,14 +102,14 @@ impl NotionMcpClient {
         }
 
         let mcp_url = self.config.get_mcp_url().await;
-        println!("[NotionMCP] Connecting to: {}", mcp_url);
+        info!("[NotionMCP] Connecting to: {}", mcp_url);
 
         // MCP 초기화 수행
         match self.initialize().await {
             Ok(()) => {
                 // 도구 목록 가져오기
                 if let Err(e) = self.fetch_tools().await {
-                    eprintln!("[NotionMCP] Failed to fetch tools: {}", e);
+                    error!("[NotionMCP] Failed to fetch tools: {}", e);
                 }
 
                 self.update_status(|s| {
@@ -179,7 +180,7 @@ impl NotionMcpClient {
 
         if let Some(result) = response.result {
             if let Ok(tools_result) = serde_json::from_value::<ListToolsResult>(result) {
-                println!("[NotionMCP] Loaded {} tools", tools_result.tools.len());
+                info!("[NotionMCP] Loaded {} tools", tools_result.tools.len());
                 *self.cached_tools.write().await = tools_result.tools;
                 return Ok(());
             }
@@ -211,7 +212,7 @@ impl NotionMcpClient {
         let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
         let request_body = JsonRpcRequest::new(id, method, params);
 
-        println!(
+        debug!(
             "[NotionMCP] Sending request: {} (id: {}) to {}",
             method, id, mcp_url
         );
@@ -233,20 +234,20 @@ impl NotionMcpClient {
         }
 
         let response = request.json(&request_body).send().await.map_err(|e| {
-            eprintln!("[NotionMCP] HTTP request failed: {}", e);
+            error!("[NotionMCP] HTTP request failed: {}", e);
             format!(
                 "Failed to send request: {}. Is the local MCP server running?",
                 e
             )
         })?;
 
-        println!("[NotionMCP] HTTP response status: {}", response.status());
+        debug!("[NotionMCP] HTTP response status: {}", response.status());
 
         // 응답 헤더에서 세션 ID 추출
         if let Some(new_session_id) = response.headers().get("mcp-session-id") {
             if let Ok(sid) = new_session_id.to_str() {
                 *self.session_id.write().await = Some(sid.to_string());
-                println!("[NotionMCP] Session ID: {}", sid);
+                debug!("[NotionMCP] Session ID: {}", sid);
             }
         }
 
@@ -265,7 +266,7 @@ impl NotionMcpClient {
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
-        println!(
+        debug!(
             "[NotionMCP] Response: {}",
             &response_text[..response_text.len().min(200)]
         );
@@ -303,7 +304,7 @@ impl NotionMcpClient {
             params,
         };
 
-        println!("[NotionMCP] Sending notification: {}", method);
+        debug!("[NotionMCP] Sending notification: {}", method);
 
         let client = reqwest::Client::builder()
             .build()

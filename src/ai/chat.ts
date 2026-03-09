@@ -6,6 +6,7 @@ import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } fr
 import { suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
+import i18n from '@/i18n/config';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -31,26 +32,41 @@ function uniqueStrings(items: string[]): string[] {
 
 /**
  * Promise에 타임아웃을 적용하는 유틸리티
+ *
+ * 타임아웃 발생 시 `abortController`가 전달되었으면 abort()를 호출하여
+ * 원래 프로미스의 사이드이펙트(네트워크 요청 등)를 취소할 수 있도록 합니다.
+ *
  * @param promise 감쌀 Promise
  * @param ms 타임아웃 시간 (밀리초)
  * @param timeoutMessage 타임아웃 시 에러 메시지
+ * @param abortController 타임아웃 시 abort()를 호출할 AbortController (선택)
  */
 function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  timeoutMessage = 'Operation timed out'
+  timeoutMessage = 'Operation timed out',
+  abortController?: AbortController,
 ): Promise<T> {
+  let settled = false;
+
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      abortController?.abort(new Error(`${timeoutMessage} after ${ms}ms`));
       reject(new Error(`${timeoutMessage} after ${ms}ms`));
     }, ms);
 
     promise
       .then((value) => {
+        if (settled) return;       // 타임아웃 이후 resolve 무시
+        settled = true;
         clearTimeout(timeoutId);
         resolve(value);
       })
       .catch((error) => {
+        if (settled) return;       // 타임아웃 이후 reject 무시
+        settled = true;
         clearTimeout(timeoutId);
         reject(error);
       });
@@ -304,12 +320,17 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
 // 같은 에러 반복 시 조기 중단을 위한 상수
 const MAX_SAME_ERROR = 2;
 
+// 루프 내 누적 메시지 수 상한 (context window 초과 방지)
+// 초기 메시지 + (AI 응답 + 도구 결과) * N 스텝이 이 값을 초과하면 루프 중단
+const MAX_LOOP_MESSAGES = 80;
+
 /**
  * 실시간 토큰 스트리밍을 지원하는 도구 호출 루프
  * - LangChain .stream() API를 사용하여 토큰별로 UI에 전달
  * - 도구 호출 시 도구 실행 후 재스트리밍
  * - 외부 도구 출력에 인젝션 방어 태그 추가
  * - 같은 에러 반복 시 조기 중단
+ * - 누적 메시지 수 상한(MAX_LOOP_MESSAGES) 초과 시 context window 보호를 위해 중단
  */
 async function runToolCallingLoop(params: {
   model: ReturnType<typeof createChatModel>;
@@ -457,11 +478,19 @@ async function runToolCallingLoop(params: {
         }
 
         params.cb?.onToolCall?.({ phase: 'start', toolName: call.name, args: call.args });
+        // 도구별 AbortController: 타임아웃 시 abort()로 사이드이펙트 취소 시도
+        const toolAbort = new AbortController();
+        // 상위 abortSignal이 abort되면 도구도 함께 취소
+        const onParentAbort = () => toolAbort.abort(params.abortSignal?.reason);
+        params.abortSignal?.addEventListener('abort', onParentAbort, { once: true });
         const out = await withTimeout(
-          tool.invoke(call.args ?? {}),
+          tool.invoke({ ...(call.args ?? {}), signal: toolAbort.signal }),
           30000,
-          `Tool ${call.name} timed out`
-        );
+          `Tool ${call.name} timed out`,
+          toolAbort,
+        ).finally(() => {
+          params.abortSignal?.removeEventListener('abort', onParentAbort);
+        });
 
         // AbortSignal 체크 (tool 호출 후에도 체크)
         if (params.abortSignal?.aborted) {
@@ -517,7 +546,7 @@ async function runToolCallingLoop(params: {
           // 같은 에러가 MAX_SAME_ERROR 이상 반복되면 조기 중단
           if (count >= MAX_SAME_ERROR) {
             shouldEarlyExit = true;
-            earlyExitMessage = `도구 "${toolName}" 호출이 반복 실패했습니다. 질문을 다시 확인해주세요.`;
+            earlyExitMessage = i18n.t('errors.toolCallRepeatedFailure', { toolName });
             console.warn(`[AI tool_call] Early exit: ${errorKey} repeated ${count} times`);
           }
         }
@@ -535,10 +564,24 @@ async function runToolCallingLoop(params: {
         toolsUsed,
       };
     }
+
+    // 누적 메시지 수 상한 초과 시 context window 보호를 위해 루프 중단
+    if (loopMessages.length >= MAX_LOOP_MESSAGES) {
+      console.warn(
+        `[AI tool_call] Loop message count (${loopMessages.length}) reached limit (${MAX_LOOP_MESSAGES}). Breaking to prevent context window overflow.`
+      );
+      // 마지막으로 누적된 텍스트가 있으면 반환, 없으면 안내 메시지
+      const text = accumulatedText || i18n.t('errors.conversationLengthLimit');
+      return {
+        finalText: text,
+        usedTools: true,
+        toolsUsed,
+      };
+    }
   }
 
   return {
-    finalText: '요청을 처리하는 데 필요한 컨텍스트를 충분히 확보하지 못했습니다. 질문을 더 구체화하거나, 필요한 문서/블록을 선택해 주세요.',
+    finalText: i18n.t('errors.insufficientContext'),
     usedTools: true,
     toolsUsed,
   };

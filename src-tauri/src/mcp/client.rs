@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tracing::{debug, error, info, warn};
 
 const MCP_SSE_URL: &str = "https://mcp.atlassian.com/v1/sse";
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -35,6 +36,8 @@ pub struct McpClient {
     cached_tools: Arc<RwLock<Vec<McpTool>>>,
     /// 서버 정보
     server_info: Arc<RwLock<Option<ServerInfo>>>,
+    /// HTTP 클라이언트 (재사용)
+    http: reqwest::Client,
 }
 
 impl McpClient {
@@ -48,6 +51,7 @@ impl McpClient {
             shutdown_tx: Arc::new(Mutex::new(None)),
             cached_tools: Arc::new(RwLock::new(Vec::new())),
             server_info: Arc::new(RwLock::new(None)),
+            http: reqwest::Client::new(),
         }
     }
 
@@ -75,13 +79,13 @@ impl McpClient {
     pub async fn connect(&self) -> Result<(), String> {
         const MAX_RETRY_ATTEMPTS: u32 = 5;
 
-        println!("[MCP] connect() called");
+        debug!("[MCP] connect() called");
 
         // 이미 연결 중이거나 연결된 경우
         {
             let status = self.status.read().await;
             if status.is_connected || status.is_connecting {
-                println!("[MCP] Already connected or connecting, skipping");
+                debug!("[MCP] Already connected or connecting, skipping");
                 return Ok(());
             }
         }
@@ -93,15 +97,15 @@ impl McpClient {
         .await;
 
         // OAuth 토큰 확인 (재시도 대상 아님 - 사용자 인터랙션 필요)
-        println!("[MCP] Checking OAuth token...");
+        debug!("[MCP] Checking OAuth token...");
         if !self.oauth.has_token().await {
-            println!("[MCP] No token found, starting OAuth flow...");
+            info!("[MCP] No token found, starting OAuth flow...");
             match self.oauth.start_auth_flow().await {
                 Ok(msg) => {
-                    println!("[MCP] OAuth flow completed successfully: {}", msg);
+                    info!("[MCP] OAuth flow completed successfully: {}", msg);
                 }
                 Err(e) => {
-                    println!("[MCP] OAuth flow failed: {}", e);
+                    warn!("[MCP] OAuth flow failed: {}", e);
                     self.update_status(|s| {
                         s.is_connecting = false;
                         s.error = Some(e.clone());
@@ -111,7 +115,7 @@ impl McpClient {
                 }
             }
         } else {
-            println!("[MCP] Token already exists");
+            debug!("[MCP] Token already exists");
         }
 
         // SSE 연결 및 초기화 (지수 백오프로 재시도)
@@ -133,7 +137,7 @@ impl McpClient {
                     let jitter_ms = rand::thread_rng().gen_range(0..1000);
                     let delay_ms = std::cmp::min(base_delay_ms + jitter_ms, 30000);
 
-                    println!(
+                    warn!(
                         "[MCP] Connection attempt {} failed: {}. Retrying in {}ms...",
                         attempt + 1,
                         e,
@@ -146,7 +150,7 @@ impl McpClient {
                 Err(e) => {
                     let error_msg =
                         format!("Connection failed after {} attempts: {}", attempt + 1, e);
-                    println!("[MCP] {}", error_msg);
+                    error!("[MCP] {}", error_msg);
                     self.update_status(|s| {
                         s.is_connecting = false;
                         s.error = Some(error_msg.clone());
@@ -160,7 +164,7 @@ impl McpClient {
 
     /// SSE 연결 및 MCP 초기화 수행 (내부 구현)
     async fn connect_inner(&self) -> Result<(), String> {
-        println!("[MCP] Starting SSE connection...");
+        debug!("[MCP] Starting SSE connection...");
 
         match self.start_sse_connection().await {
             Ok(()) => {
@@ -169,7 +173,7 @@ impl McpClient {
                     Ok(()) => {
                         // 도구 목록 가져오기
                         if let Err(e) = self.fetch_tools().await {
-                            eprintln!("[MCP] Failed to fetch tools: {}", e);
+                            warn!("[MCP] Failed to fetch tools: {}", e);
                         }
                         Ok(())
                     }
@@ -191,18 +195,14 @@ impl McpClient {
             .await
             .ok_or("No access token available")?;
 
-        println!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
-        println!(
+        debug!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
+        debug!(
             "[MCP] Access token: [REDACTED] (length: {})",
             access_token.len()
         );
 
-        // reqwest 클라이언트 빌드 (TLS 설정 포함)
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
-        let request = client
+        let request = self
+            .http
             .get(MCP_SSE_URL)
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Accept", "text/event-stream")
@@ -225,7 +225,7 @@ impl McpClient {
                     event = es.next() => {
                         match event {
                             Some(Ok(Event::Open)) => {
-                                println!("[MCP] SSE connection opened");
+                                info!("[MCP] SSE connection opened");
                             }
                             Some(Ok(Event::Message(msg))) => {
                                 // SSE 이벤트 타입에 따라 처리
@@ -247,7 +247,7 @@ impl McpClient {
                                                 Err(_) => format!("https://mcp.atlassian.com{}", msg.data)
                                             }
                                         };
-                                        println!("[MCP] Received endpoint: {} -> {}", msg.data, endpoint_url);
+                                        debug!("[MCP] Received endpoint: {} -> {}", msg.data, endpoint_url);
                                         *message_endpoint.write().await = Some(endpoint_url);
                                     }
                                     "message" => {
@@ -266,25 +266,25 @@ impl McpClient {
                                         }
                                     }
                                     _ => {
-                                        println!("[MCP] Unknown SSE event: {} - {}", msg.event, msg.data);
+                                        debug!("[MCP] Unknown SSE event: {} - {}", msg.event, msg.data);
                                     }
                                 }
                             }
                             Some(Err(e)) => {
-                                eprintln!("[MCP] SSE error: {}", e);
+                                error!("[MCP] SSE error: {}", e);
                                 let mut s = status.write().await;
                                 s.error = Some(format!("SSE error: {}", e));
                                 emit_mcp_status_changed(&s);
                                 break;
                             }
                             None => {
-                                println!("[MCP] SSE stream ended");
+                                info!("[MCP] SSE stream ended");
                                 break;
                             }
                         }
                     }
                     _ = shutdown_rx.recv() => {
-                        println!("[MCP] Shutting down SSE connection");
+                        debug!("[MCP] Shutting down SSE connection");
                         es.close();
                         break;
                     }
@@ -296,7 +296,7 @@ impl McpClient {
             s.is_connected = false;
             s.is_connecting = false;
             emit_mcp_status_changed(&s);
-            println!("[MCP] SSE disconnected, event emitted to frontend");
+            info!("[MCP] SSE disconnected, event emitted to frontend");
         });
 
         // 엔드포인트 수신 대기 (최대 10초)
@@ -310,7 +310,7 @@ impl McpClient {
         // 타임아웃 시 SSE 태스크 종료
         if let Some(tx) = self.shutdown_tx.lock().await.take() {
             let _ = tx.send(()).await;
-            println!("[MCP] Sent shutdown signal due to endpoint timeout");
+            warn!("[MCP] Sent shutdown signal due to endpoint timeout");
         }
 
         Err("Timeout waiting for message endpoint".to_string())
@@ -393,8 +393,8 @@ impl McpClient {
             .clone()
             .ok_or("Not connected to MCP server")?;
 
-        println!("[MCP] Sending request to endpoint: {}", endpoint);
-        println!("[MCP] Method: {}", method);
+        debug!("[MCP] Sending request to endpoint: {}", endpoint);
+        debug!("[MCP] Method: {}", method);
 
         let access_token = self
             .oauth
@@ -413,11 +413,8 @@ impl McpClient {
             .insert(id.to_string(), tx);
 
         // HTTP POST로 요청 전송
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
-        let response = client
+        let response = self
+            .http
             .post(&endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")
@@ -469,13 +466,10 @@ impl McpClient {
             params,
         };
 
-        println!("[MCP] Sending notification: {}", method);
+        debug!("[MCP] Sending notification: {}", method);
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
-        let response = client
+        let response = self
+            .http
             .post(&endpoint)
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")

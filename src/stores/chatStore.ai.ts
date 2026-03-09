@@ -367,7 +367,12 @@ export function createAiActions(
     // 실제 사용할 세션 ID (createSession 직후일 수 있으므로 다시 resolve)
     const effectiveSessionId = resolvedSessionId && get().sessions.find((s) => s.id === resolvedSessionId)
       ? resolvedSessionId
-      : get().currentSessionId!;
+      : get().currentSessionId;
+
+    if (!effectiveSessionId) {
+      console.error('[Chat] No active session');
+      return;
+    }
 
     // 최근 채팅 히스토리를 모델 컨텍스트에 포함
     const maxRecent = getAiConfig().maxRecentMessages;

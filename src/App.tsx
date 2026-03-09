@@ -178,7 +178,7 @@ function App(): JSX.Element {
 
   // 초기 프로젝트 설정
   useEffect(() => {
-    initializeProject();
+    void initializeProject();
   }, [initializeProject]);
 
   // SecretManager 초기화 및 보안 저장소에서 API 키 로드

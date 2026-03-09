@@ -1,5 +1,6 @@
 import { Editor } from '@tiptap/react';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import {
   Heading,
@@ -27,6 +28,8 @@ const ICON_SIZE = 13;
  * Notion 스타일의 리치 텍스트 포맷팅 도구
  */
 export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.Element | null {
+  const { t } = useTranslation();
+
   // Source/Target 패널별 독립 폰트 설정
   const sourceFontSize = useUIStore((s) => s.sourceFontSize);
   const sourceLineHeight = useUIStore((s) => s.sourceLineHeight);
@@ -75,8 +78,10 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           type="button"
           onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
           className={`${btnBase} ${isActive('heading') ? btnActive : ''}`}
-          title="헤딩"
-          aria-label="헤딩"
+          title={t('editor.menuBar.heading')}
+          aria-label={t('editor.menuBar.heading')}
+          aria-haspopup="menu"
+          aria-expanded={headingMenuOpen}
         >
           <Heading size={ICON_SIZE} />
         </button>
@@ -86,16 +91,22 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
               className="fixed inset-0 z-40"
               onClick={() => setHeadingMenuOpen(false)}
             />
-            <div className="absolute top-full left-0 mt-1 bg-editor-surface border border-editor-border rounded shadow-lg z-50 min-w-[48px]">
+            <div
+              className="absolute top-full left-0 mt-1 bg-editor-surface border border-editor-border rounded shadow-lg z-50 min-w-[48px]"
+              role="menu"
+              aria-label={t('editor.menuBar.heading')}
+            >
               {[1, 2, 3, 4, 5, 6].map((level) => (
                 <button
                   key={level}
                   type="button"
+                  role="menuitem"
                   onClick={() => setHeading(level as 1 | 2 | 3 | 4 | 5 | 6)}
                   className={`
                     flex items-center gap-1 w-full px-3 py-1.5 text-sm hover:bg-editor-bg transition-colors
                     ${isActive('heading', { level }) ? 'bg-editor-bg font-medium' : ''}
                   `}
+                  aria-label={t('editor.menuBar.headingLevel', { level })}
                 >
                   <Heading size={13} />
                   <span>{level}</span>
@@ -114,8 +125,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleBold().run()}
         className={`${btnBase} ${isActive('bold') ? btnActive : ''}`}
-        title="볼드 (Cmd+B)"
-        aria-label="볼드"
+        title={t('editor.menuBar.boldTitle')}
+        aria-label={t('editor.menuBar.bold')}
       >
         <Bold size={ICON_SIZE} />
       </button>
@@ -123,8 +134,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleItalic().run()}
         className={`${btnBase} ${isActive('italic') ? btnActive : ''}`}
-        title="이탤릭 (Cmd+I)"
-        aria-label="이탤릭"
+        title={t('editor.menuBar.italicTitle')}
+        aria-label={t('editor.menuBar.italic')}
       >
         <Italic size={ICON_SIZE} />
       </button>
@@ -132,8 +143,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleStrike().run()}
         className={`${btnBase} ${isActive('strike') ? btnActive : ''}`}
-        title="취소선"
-        aria-label="취소선"
+        title={t('editor.menuBar.strikethrough')}
+        aria-label={t('editor.menuBar.strikethrough')}
       >
         <Strikethrough size={ICON_SIZE} />
       </button>
@@ -141,8 +152,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleCode().run()}
         className={`${btnBase} ${isActive('code') ? btnActive : ''}`}
-        title="인라인 코드 (Cmd+E)"
-        aria-label="인라인 코드"
+        title={t('editor.menuBar.inlineCodeTitle')}
+        aria-label={t('editor.menuBar.inlineCode')}
       >
         <Code size={ICON_SIZE} />
       </button>
@@ -155,8 +166,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         className={`${btnBase} ${isActive('bulletList') ? btnActive : ''}`}
-        title="불릿 리스트"
-        aria-label="불릿 리스트"
+        title={t('editor.menuBar.bulletList')}
+        aria-label={t('editor.menuBar.bulletList')}
       >
         <List size={ICON_SIZE} />
       </button>
@@ -164,8 +175,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         className={`${btnBase} ${isActive('orderedList') ? btnActive : ''}`}
-        title="번호 리스트"
-        aria-label="번호 리스트"
+        title={t('editor.menuBar.orderedList')}
+        aria-label={t('editor.menuBar.orderedList')}
       >
         <ListOrdered size={ICON_SIZE} />
       </button>
@@ -178,8 +189,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
         type="button"
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
         className={`${btnBase} ${isActive('blockquote') ? btnActive : ''}`}
-        title="인용 블록"
-        aria-label="인용 블록"
+        title={t('editor.menuBar.blockquote')}
+        aria-label={t('editor.menuBar.blockquote')}
       >
         <Quote size={ICON_SIZE} />
       </button>
@@ -193,8 +204,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           type="button"
           onClick={() => adjustFontSize(-1)}
           className={btnBase}
-          title="폰트 크기 -1px"
-          aria-label="폰트 크기 줄이기"
+          title={t('editor.menuBar.fontSizeDecreaseTitle')}
+          aria-label={t('editor.menuBar.fontSizeDecrease')}
         >
           <div className="flex items-center">
             <span className="text-xs font-medium">A</span>
@@ -206,8 +217,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           type="button"
           onClick={() => adjustFontSize(1)}
           className={btnBase}
-          title="폰트 크기 +1px"
-          aria-label="폰트 크기 늘리기"
+          title={t('editor.menuBar.fontSizeIncreaseTitle')}
+          aria-label={t('editor.menuBar.fontSizeIncrease')}
         >
           <div className="flex items-center">
             <span className="text-xs font-medium">A</span>
@@ -225,8 +236,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           type="button"
           onClick={() => adjustLineHeight(-0.1)}
           className={btnBase}
-          title="줄 높이 -0.1"
-          aria-label="줄 높이 줄이기"
+          title={t('editor.menuBar.lineHeightDecreaseTitle')}
+          aria-label={t('editor.menuBar.lineHeightDecrease')}
         >
           <div className="flex items-center">
             <MoveVertical size={13} />
@@ -238,8 +249,8 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           type="button"
           onClick={() => adjustLineHeight(0.1)}
           className={btnBase}
-          title="줄 높이 +0.1"
-          aria-label="줄 높이 늘리기"
+          title={t('editor.menuBar.lineHeightIncreaseTitle')}
+          aria-label={t('editor.menuBar.lineHeightIncrease')}
         >
           <div className="flex items-center">
             <MoveVertical size={13} />

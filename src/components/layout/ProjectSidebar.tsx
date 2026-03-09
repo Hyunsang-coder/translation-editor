@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, Cog } from 'lucide-react';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
@@ -79,7 +79,7 @@ export function ProjectSidebar(): JSX.Element {
 
   const selectedId = project?.id ?? null;
 
-  const refresh = async (): Promise<void> => {
+  const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const list = await listRecentProjects();
@@ -90,11 +90,11 @@ export function ProjectSidebar(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void refresh();
-  }, [lastSavedAt]);
+  }, [lastSavedAt, refresh]);
 
   // Close context menu on global click
   useEffect(() => {
@@ -227,7 +227,7 @@ export function ProjectSidebar(): JSX.Element {
     await deleteProject(projectId);
 
     if (isCurrent && !nextProjectId) {
-      initializeProject();
+      await initializeProject();
     }
 
     await refresh();

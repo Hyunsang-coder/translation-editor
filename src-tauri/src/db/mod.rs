@@ -1146,16 +1146,9 @@ impl Database {
     ) -> Result<(u32, u32, u32), IteError> {
         use calamine::{open_workbook_auto, Data, Reader};
 
-        let now = chrono::Utc::now().timestamp_millis();
-        let tx = self.conn.unchecked_transaction()?;
-
-        if replace_project_scope {
-            tx.execute(
-                "DELETE FROM glossary_entries WHERE project_id = ?1",
-                [project_id],
-            )?;
-        }
-
+        // ────────────────────────────────────────────────────────────────────
+        // Phase 1: Read and parse OUTSIDE transaction
+        // ────────────────────────────────────────────────────────────────────
         let mut workbook =
             open_workbook_auto(path).map_err(|e| IteError::InvalidOperation(format!("{}", e)))?;
         let sheet_names = workbook.sheet_names().to_owned();
@@ -1209,8 +1202,17 @@ impl Database {
         let idx_domain = find_idx("domain");
         let idx_case = find_idx("casesensitive").or_else(|| find_idx("case_sensitive"));
 
-        let mut inserted: u32 = 0;
-        let mut updated: u32 = 0;
+        // Pre-parse all records into a structured Vec (outside transaction)
+        struct ParsedRecord {
+            id: String,
+            source: String,
+            target: String,
+            notes: Option<String>,
+            domain: Option<String>,
+            case_sensitive: bool,
+        }
+
+        let mut parsed_records: Vec<ParsedRecord> = Vec::with_capacity(data_rows.len());
         let mut skipped: u32 = 0;
 
         for record in data_rows {
@@ -1240,47 +1242,84 @@ impl Database {
                 md5::compute(format!("{}|{}|{}", project_id, source, target))
             );
 
-            let exists: bool = tx
-                .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM glossary_entries WHERE id = ?1)",
-                    [&id],
-                    |row| row.get::<_, i64>(0).map(|v| v == 1),
-                )
-                .unwrap_or(false);
-
-            tx.execute(
-                "INSERT INTO glossary_entries (
-                    id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                 ON CONFLICT(id) DO UPDATE SET
-                    project_id = excluded.project_id,
-                    source = excluded.source,
-                    target = excluded.target,
-                    notes = excluded.notes,
-                    domain = excluded.domain,
-                    case_sensitive = excluded.case_sensitive,
-                    updated_at = excluded.updated_at",
-                (
-                    &id,
-                    project_id,
-                    source,
-                    target,
-                    notes.as_deref(),
-                    domain.as_deref(),
-                    if case_sensitive { 1 } else { 0 },
-                    now,
-                    now,
-                ),
-            )?;
-
-            if exists {
-                updated += 1;
-            } else {
-                inserted += 1;
-            }
+            parsed_records.push(ParsedRecord {
+                id,
+                source: source.to_string(),
+                target: target.to_string(),
+                notes,
+                domain,
+                case_sensitive,
+            });
         }
 
-        tx.commit()?;
+        // ────────────────────────────────────────────────────────────────────
+        // Phase 2: Batch insert WITH transaction per batch
+        // ────────────────────────────────────────────────────────────────────
+        const BATCH_SIZE: usize = 500;
+        let mut inserted: u32 = 0;
+        let mut updated: u32 = 0;
+
+        // Handle replace_project_scope in its own transaction first
+        if replace_project_scope {
+            let tx = self.conn.unchecked_transaction()?;
+            tx.execute(
+                "DELETE FROM glossary_entries WHERE project_id = ?1",
+                [project_id],
+            )?;
+            tx.commit()?;
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+
+        for chunk in parsed_records.chunks(BATCH_SIZE) {
+            let tx = self.conn.unchecked_transaction()?;
+
+            for rec in chunk {
+                // 존재 여부 확인(INSERT vs UPDATE 카운트용)
+                let exists: bool = tx
+                    .query_row(
+                        "SELECT EXISTS(SELECT 1 FROM glossary_entries WHERE id = ?1)",
+                        [&rec.id],
+                        |row| row.get::<_, i64>(0).map(|v| v == 1),
+                    )
+                    .unwrap_or(false);
+
+                // upsert (created_at은 기존 유지)
+                tx.execute(
+                    "INSERT INTO glossary_entries (
+                        id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                     ON CONFLICT(id) DO UPDATE SET
+                        project_id = excluded.project_id,
+                        source = excluded.source,
+                        target = excluded.target,
+                        notes = excluded.notes,
+                        domain = excluded.domain,
+                        case_sensitive = excluded.case_sensitive,
+                        updated_at = excluded.updated_at",
+                    (
+                        &rec.id,
+                        project_id,
+                        &rec.source,
+                        &rec.target,
+                        rec.notes.as_deref(),
+                        rec.domain.as_deref(),
+                        if rec.case_sensitive { 1 } else { 0 },
+                        now,
+                        now,
+                    ),
+                )?;
+
+                if exists {
+                    updated += 1;
+                } else {
+                    inserted += 1;
+                }
+            }
+
+            tx.commit()?;
+        }
+
         Ok((inserted, updated, skipped))
     }
 

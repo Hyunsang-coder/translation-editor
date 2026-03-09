@@ -114,14 +114,17 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
             `}
             title={t('toolbar.tools')}
             data-testid="toolbar-tools-button"
+            aria-haspopup="true"
+            aria-expanded={dropdownOpen}
           >
             <img src="/app-icon-64.png" alt="" className="w-6 h-6" />
             <span className="text-xs text-editor-muted">▼</span>
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50">
+            <div role="menu" className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50">
               <button
+                role="menuitem"
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleChat}
@@ -132,8 +135,9 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
                 <MessageSquare size={16} />
                 <span>{t('toolbar.aiChat')}</span>
               </button>
-              <div className="h-px bg-editor-border" />
+              <div role="separator" className="h-px bg-editor-border" />
               <button
+                role="menuitem"
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleReview}
@@ -143,8 +147,9 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
                 <Search size={16} />
                 <span>{t('toolbar.review')}</span>
               </button>
-              <div className="h-px bg-editor-border" />
+              <div role="separator" className="h-px bg-editor-border" />
               <button
+                role="menuitem"
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleHistory}
@@ -153,8 +158,9 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
                 <Clock3 size={16} />
                 <span>{t('history.title')}</span>
               </button>
-              <div className="h-px bg-editor-border" />
+              <div role="separator" className="h-px bg-editor-border" />
               <button
+                role="menuitem"
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleExport}
@@ -164,8 +170,9 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
                 <Download size={16} />
                 <span>{t('export.title')}</span>
               </button>
-              <div className="h-px bg-editor-border" />
+              <div role="separator" className="h-px bg-editor-border" />
               <button
+                role="menuitem"
                 type="button"
                 className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleProjectSettings}

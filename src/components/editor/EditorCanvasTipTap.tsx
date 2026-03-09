@@ -137,23 +137,27 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const selectionTimerRef = useRef<number | null>(null);
   const selectionTokenRef = useRef<number>(0);
 
-  // 단어 수 계산 함수
-  const countWords = useCallback((text: string): number => {
-    if (!text || text.trim().length === 0) return 0;
-    return text.trim().split(/\s+/).filter(Boolean).length;
-  }, []);
+  // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
+  const [sourceWordCount, setSourceWordCount] = useState(0);
+  const [targetWordCount, setTargetWordCount] = useState(0);
 
-  // Source 단어 수 계산
-  const sourceWordCount = useMemo(() => {
-    if (!sourceDocument) return 0;
-    return countWords(stripHtml(sourceDocument));
-  }, [sourceDocument, countWords]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!sourceDocument) { setSourceWordCount(0); return; }
+      const text = stripHtml(sourceDocument).trim();
+      setSourceWordCount(text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [sourceDocument]);
 
-  // Target 단어 수 계산
-  const targetWordCount = useMemo(() => {
-    if (!targetDocument) return 0;
-    return countWords(stripHtml(targetDocument));
-  }, [targetDocument, countWords]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!targetDocument) { setTargetWordCount(0); return; }
+      const text = stripHtml(targetDocument).trim();
+      setTargetWordCount(text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [targetDocument]);
 
   const clearSelectionTimer = (): void => {
     if (selectionTimerRef.current !== null) {
@@ -374,14 +378,21 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const handleSourceEditorReady = useCallback((editor: Editor) => {
     sourceEditorRef.current = editor;
     setSourceEditor(editor);
+    useEditorStore.getState().setSourceEditor(editor);
   }, []);
 
   // Target 에디터 준비 완료 콜백
   const handleTargetEditorReady = useCallback((editor: Editor) => {
     targetEditorRef.current = editor;
     setTargetEditor(editor);
-    // Zustand 상태에도 저장 (검색/하이라이트 등에서 접근용)
     useEditorStore.getState().setTargetEditor(editor);
+  }, []);
+
+  // 에디터 unmount/재생성 시 editorStore에서 stale 참조 정리
+  useEffect(() => {
+    return () => {
+      useEditorStore.getState().clearEditors();
+    };
   }, []);
 
   // 검색바 핸들러

@@ -129,8 +129,16 @@ const confluenceWordCountSchema = z.object({
 
 type ConfluenceWordCountArgs = z.infer<typeof confluenceWordCountSchema>;
 
-// 캐시된 cloudId (세션 동안 유지)
+// 캐시된 cloudId (TTL: 5분 — 계정 전환 시 stale 데이터 방지)
 let cachedCloudId: string | null = null;
+let cachedCloudIdAt = 0;
+const CLOUD_ID_TTL_MS = 5 * 60 * 1000; // 5분
+
+/** cloudId 캐시 무효화 (계정/설정 변경 시 호출 가능) */
+export function clearCachedCloudId(): void {
+  cachedCloudId = null;
+  cachedCloudIdAt = 0;
+}
 
 /**
  * 페이지 콘텐츠 형식
@@ -238,7 +246,11 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
  * Atlassian cloudId 가져오기 (MCP tool로 조회)
  */
 async function getCloudId(): Promise<string> {
-  if (cachedCloudId) return cachedCloudId;
+  if (cachedCloudId && Date.now() - cachedCloudIdAt < CLOUD_ID_TTL_MS) {
+    return cachedCloudId;
+  }
+  // TTL 만료 또는 미캐시 → 재조회
+  cachedCloudId = null;
 
   const result = await invoke<McpToolResult>('mcp_call_tool', {
     name: 'getAccessibleAtlassianResources',
@@ -254,12 +266,14 @@ async function getCloudId(): Promise<string> {
     const resources = JSON.parse(text);
     if (Array.isArray(resources) && resources.length > 0 && resources[0].id) {
       cachedCloudId = resources[0].id as string;
+      cachedCloudIdAt = Date.now();
       return cachedCloudId;
     }
   } catch {
     const match = text.match(/"id"\s*:\s*"([^"]+)"/);
     if (match?.[1]) {
       cachedCloudId = match[1];
+      cachedCloudIdAt = Date.now();
       return cachedCloudId;
     }
   }

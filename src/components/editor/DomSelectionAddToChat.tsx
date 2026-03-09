@@ -4,16 +4,22 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
 
-// Debounce utility
+// Debounce utility with cancel support
+type DebouncedFn<T extends (...args: unknown[]) => unknown> = ((
+  ...args: Parameters<T>
+) => void) & { cancel: () => void };
+
 const debounce = <T extends (...args: unknown[]) => unknown>(
   fn: T,
   ms: number,
-): ((...args: Parameters<T>) => void) => {
+): DebouncedFn<T> => {
   let timeoutId: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
+  const debounced = (...args: Parameters<T>) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => fn(...args), ms);
   };
+  debounced.cancel = () => clearTimeout(timeoutId);
+  return debounced as DebouncedFn<T>;
 };
 
 interface BubbleState {
@@ -96,6 +102,7 @@ export function DomSelectionAddToChat(): JSX.Element | null {
     window.addEventListener('resize', debouncedHandler);
 
     return () => {
+      debouncedHandler.cancel();
       document.removeEventListener('selectionchange', debouncedHandler);
       window.removeEventListener('scroll', debouncedHandler);
       window.removeEventListener('resize', debouncedHandler);

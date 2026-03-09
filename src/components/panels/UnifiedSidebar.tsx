@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Settings, Search, MessageSquare } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
+import { MAX_CHAT_SESSIONS } from '@/stores/chatStore.types';
 import { resolveLayout, getMaxSidebarWidth } from '@/stores/layoutResolver';
 import { SettingsContent } from '@/components/panels/SettingsContent';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
@@ -67,7 +68,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   // chatStore에서 세션 목록 구독 (이름 표시용) — sessions 배열 자체를 구독하고 useMemo로 파생
   const sessions = useChatStore((s) => s.sessions);
   const chatSessions = useMemo(() => sessions.map((ses) => ({ id: ses.id, name: ses.name })), [sessions]);
-  const isSessionLimitReached = useChatStore((s) => s.isSessionLimitReached);
+  const isSessionLimitReached = useChatStore((s) => s.sessions.length >= MAX_CHAT_SESSIONS);
 
   const onWidthChange = useCallback(
     (w: number) => setSidebarWidthSide(side, w),
@@ -273,7 +274,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
           {renderInsertionIndicator(panels.length)}
 
           {/* + 버튼: 새 채팅 추가 */}
-          {!isSessionLimitReached() && (
+          {!isSessionLimitReached && (
             <button
               type="button"
               onClick={handleAddChatSession}

@@ -20,12 +20,23 @@ interface HistoryTimelineProps {
 
 const CURRENT_STATE_ID = '__current__';
 
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+function getRelativeTimeFormatter(locale: string): Intl.RelativeTimeFormat {
+  let formatter = relativeTimeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    relativeTimeFormatters.set(locale, formatter);
+  }
+  return formatter;
+}
+
 function formatRelativeTime(
   timestamp: number,
   language: string,
 ): string {
   const locale = language.startsWith('ko') ? 'ko' : 'en';
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const formatter = getRelativeTimeFormatter(locale);
   const now = Date.now();
   const diffMs = timestamp - now;
   const diffSec = Math.round(diffMs / 1000);

@@ -176,6 +176,21 @@ function findMatches(
 }
 
 /**
+ * 가장 가까운 scrollable ancestor를 찾는다.
+ * view.dom이 항상 scroll container가 아닐 수 있으므로
+ * computed style을 확인하여 실제 스크롤 가능한 부모를 반환한다.
+ */
+function getScrollableAncestor(el: Element): Element | null {
+  let current = el.parentElement;
+  while (current) {
+    const { overflow, overflowY } = getComputedStyle(current);
+    if (/(auto|scroll)/.test(overflow + overflowY)) return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
  * 매치 위치로 스크롤 (포커스 이동 없이)
  * ProseMirror의 scrollIntoView는 DOM selection 기반이라
  * 검색바에 포커스가 있을 때 동작하지 않으므로 직접 스크롤
@@ -183,7 +198,7 @@ function findMatches(
 function scrollToMatch(editor: { view: { dom: HTMLElement; coordsAtPos: (pos: number, side?: number) => { top: number; bottom: number } }; commands: { setTextSelection: (pos: number) => boolean } }, pos: number): void {
   editor.commands.setTextSelection(pos);
   const coords = editor.view.coordsAtPos(pos);
-  const scrollContainer = editor.view.dom;
+  const scrollContainer = getScrollableAncestor(editor.view.dom) ?? editor.view.dom;
   const rect = scrollContainer.getBoundingClientRect();
   if (coords.top < rect.top || coords.bottom > rect.bottom) {
     scrollContainer.scrollTop += coords.top - rect.top - rect.height / 2;

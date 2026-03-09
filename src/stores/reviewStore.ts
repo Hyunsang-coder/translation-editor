@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ITEProject } from '@/types';
-import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync, clearReviewChunkCache, type AlignedChunk } from '@/ai/tools/reviewTool';
 
 // ============================================
 // Review Settings Types
@@ -255,7 +255,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   handleChunkError: (chunkIndex: number, error: Error) => {
-    const { results, progress } = get();
+    const { results, progress, highlightNonce } = get();
     set({
       results: [
         ...results,
@@ -267,6 +267,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       ],
       currentChunkIndex: chunkIndex + 1,
       progress: { ...progress, completed: progress.completed + 1 },
+      highlightNonce: highlightNonce + 1,
     });
   },
 
@@ -296,6 +297,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
 
   resetReview: () => {
     const { highlightNonce } = get();
+    clearReviewChunkCache(); // 메모리 해제 + 다음 리뷰에서 최신 문서 사용 보장
     set({
       ...initialState,
       highlightNonce: highlightNonce + 1, // 에디터에 refresh 신호 전송

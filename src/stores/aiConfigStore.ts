@@ -60,7 +60,8 @@ async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
   }
 }
 
-let keysLoaded: boolean | 'loading' = false;
+let keysLoaded = false;
+let loadingPromise: Promise<void> | null = null;
 
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
@@ -93,67 +94,71 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
 
         loadSecureKeys: async () => {
           // 이미 성공했으면 캐시 사용
-          if (keysLoaded === true) return;
-          // 이미 로딩 중이면 중복 호출 방지
-          if (keysLoaded === 'loading') return;
+          if (keysLoaded) return;
+          // 이미 로딩 중이면 같은 프로미스 반환 (concurrent caller 대기)
+          if (loadingPromise) return loadingPromise;
 
-          keysLoaded = 'loading';
+          loadingPromise = (async () => {
+            try {
+              // 1. 번들 로드 시도
+              const bundleJson = await getSecureSecret(API_KEYS_BUNDLE_ID);
 
-          try {
-            // 1. 번들 로드 시도
-            const bundleJson = await getSecureSecret(API_KEYS_BUNDLE_ID);
+              if (bundleJson) {
+                // 번들이 있으면 파싱해서 적용 (brave 키는 무시 - 제거됨)
+                try {
+                  const bundle = JSON.parse(bundleJson) as ApiKeysBundle & { brave?: string };
+                  set({
+                    openaiApiKey: bundle.openai,
+                    anthropicApiKey: bundle.anthropic,
+                  });
+                  keysLoaded = true;  // ✅ 성공 후에만 true
+                  return; // 로드 완료
+                } catch (e) {
+                  // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+                  const message = e instanceof Error ? e.message : String(e);
+                  console.error('[aiConfigStore] Failed to parse API keys bundle:', message);
+                }
+              }
 
-            if (bundleJson) {
-              // 번들이 있으면 파싱해서 적용 (brave 키는 무시 - 제거됨)
-              try {
-                const bundle = JSON.parse(bundleJson) as ApiKeysBundle & { brave?: string };
+              // 2. 번들이 없으면 마이그레이션 (개별 키 로드 -> 번들 저장)
+              // brave 키는 제거됨 - 레거시 호환성을 위해 로드는 하되 무시
+              const oldKinds: SecureKeyId[] = ['openai', 'anthropic'];
+              const newBundle: ApiKeysBundle = {
+                openai: undefined,
+                anthropic: undefined,
+              };
+              let hasLegacyKey = false;
+
+              for (const kind of oldKinds) {
+                if (kind === 'api_keys_bundle') continue;
+                const val = await getSecureSecret(kind);
+                if (val) {
+                  hasLegacyKey = true;
+                  if (kind === 'openai') newBundle.openai = val;
+                  if (kind === 'anthropic') newBundle.anthropic = val;
+                }
+              }
+
+              if (hasLegacyKey) {
                 set({
-                  openaiApiKey: bundle.openai,
-                  anthropicApiKey: bundle.anthropic,
+                  openaiApiKey: newBundle.openai,
+                  anthropicApiKey: newBundle.anthropic,
                 });
-                keysLoaded = true;  // ✅ 성공 후에만 true
-                return; // 로드 완료
-              } catch (e) {
-                // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
-                const message = e instanceof Error ? e.message : String(e);
-                console.error('[aiConfigStore] Failed to parse API keys bundle:', message);
+                await persistAllKeys(newBundle);
               }
+
+              keysLoaded = true;  // ✅ 마이그레이션도 성공
+            } catch (err) {
+              // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
+              // keysLoaded remains false → 재시도 가능
+            } finally {
+              loadingPromise = null;
             }
+          })();
 
-            // 2. 번들이 없으면 마이그레이션 (개별 키 로드 -> 번들 저장)
-            // brave 키는 제거됨 - 레거시 호환성을 위해 로드는 하되 무시
-            const oldKinds: SecureKeyId[] = ['openai', 'anthropic'];
-            const newBundle: ApiKeysBundle = {
-              openai: undefined,
-              anthropic: undefined,
-            };
-            let hasLegacyKey = false;
-
-            for (const kind of oldKinds) {
-              if (kind === 'api_keys_bundle') continue;
-              const val = await getSecureSecret(kind);
-              if (val) {
-                hasLegacyKey = true;
-                if (kind === 'openai') newBundle.openai = val;
-                if (kind === 'anthropic') newBundle.anthropic = val;
-              }
-            }
-
-            if (hasLegacyKey) {
-              set({
-                openaiApiKey: newBundle.openai,
-                anthropicApiKey: newBundle.anthropic,
-              });
-              await persistAllKeys(newBundle);
-            }
-
-            keysLoaded = true;  // ✅ 마이그레이션도 성공
-          } catch (err) {
-            // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
-            const message = err instanceof Error ? err.message : String(err);
-            console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
-            keysLoaded = false;  // ✅ 실패 시 false → 재시도 가능
-          }
+          return loadingPromise;
         },
 
         setTranslationModel: (model) => set({ translationModel: model }),

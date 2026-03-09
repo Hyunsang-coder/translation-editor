@@ -14,6 +14,7 @@
 use crate::secrets::SECRETS;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
 // Vault 저장 키 (SecretManager용)
 const VAULT_NOTION_CONFIG: &str = "mcp/notion/config_json";
@@ -73,13 +74,13 @@ impl NotionOAuth {
             return Ok(());
         }
 
-        println!("[NotionMCP] Initializing config from vault...");
+        info!("[NotionMCP] Initializing config from vault...");
 
         // vault에서 설정 로드
         match SECRETS.get(VAULT_NOTION_CONFIG).await {
             Ok(Some(config_json)) => {
                 if let Ok(config) = serde_json::from_str::<NotionMcpConfig>(&config_json) {
-                    println!(
+                    info!(
                         "[NotionMCP] Loaded config from vault (URL: {}, has_token: {})",
                         config.mcp_url,
                         !config.auth_token.is_empty()
@@ -88,10 +89,10 @@ impl NotionOAuth {
                 }
             }
             Ok(None) => {
-                println!("[NotionMCP] No config found in vault");
+                info!("[NotionMCP] No config found in vault");
             }
             Err(e) => {
-                eprintln!("[NotionMCP] Failed to load config from vault: {}", e);
+                warn!("[NotionMCP] Failed to load config from vault: {}", e);
             }
         }
 
@@ -110,7 +111,7 @@ impl NotionOAuth {
             .map_err(|e| format!("Failed to save config: {}", e))?;
         *self.config.lock().await = Some(config);
 
-        println!("[NotionMCP] Config saved to vault");
+        info!("[NotionMCP] Config saved to vault");
         Ok(())
     }
 
@@ -184,7 +185,7 @@ impl NotionOAuth {
         // vault에서 설정 삭제
         let _ = SECRETS.delete(VAULT_NOTION_CONFIG).await;
 
-        println!("[NotionMCP] Logged out, config deleted from vault");
+        info!("[NotionMCP] Logged out, config deleted from vault");
     }
 
     /// 완전 초기화 (설정 삭제)
@@ -192,7 +193,7 @@ impl NotionOAuth {
         self.logout().await;
         *self.initialized.lock().await = false;
 
-        println!("[NotionMCP] All config cleared");
+        info!("[NotionMCP] All config cleared");
     }
 }
 

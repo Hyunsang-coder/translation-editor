@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useShallow } from 'zustand/shallow';
@@ -37,9 +37,11 @@ export function MainLayout(): JSX.Element {
   useResponsiveLayout();
 
   const [isCreating, setIsCreating] = useState(false);
+  const isCreatingRef = useRef(false);
 
   const handleCreateProject = useCallback(async () => {
-    if (isCreating) return;
+    if (isCreatingRef.current) return;
+    isCreatingRef.current = true;
     setIsCreating(true);
     try {
       const created = await createProject({
@@ -50,9 +52,10 @@ export function MainLayout(): JSX.Element {
     } catch (e) {
       console.error('Failed to create project:', e);
     } finally {
+      isCreatingRef.current = false;
       setIsCreating(false);
     }
-  }, [loadProject, isCreating]);
+  }, [loadProject]);
 
   // 개발자 테스트 패널 단축키 (Ctrl+Shift+D / Cmd+Shift+D)
   useEffect(() => {

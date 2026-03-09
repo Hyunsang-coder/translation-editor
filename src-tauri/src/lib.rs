@@ -16,6 +16,7 @@ use crate::secrets::SECRETS;
 use std::path::{Path, PathBuf};
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 struct ApiKeysBundle {
@@ -47,7 +48,7 @@ async fn seed_api_keys_bundle_from_env_if_missing() {
     let existing_bundle_json = match SECRETS.get("ai/api_keys_bundle").await {
         Ok(v) => v,
         Err(err) => {
-            eprintln!(
+            error!(
                 "[startup] Failed to read ai/api_keys_bundle from vault: {}",
                 err
             );
@@ -81,14 +82,14 @@ async fn seed_api_keys_bundle_from_env_if_missing() {
     match serde_json::to_string(&bundle) {
         Ok(json) => {
             if let Err(err) = SECRETS.set("ai/api_keys_bundle", &json).await {
-                eprintln!(
+                error!(
                     "[startup] Failed to seed ai/api_keys_bundle from env: {}",
                     err
                 );
             }
         }
         Err(err) => {
-            eprintln!("[startup] Failed to serialize api_keys_bundle: {}", err);
+            error!("[startup] Failed to serialize api_keys_bundle: {}", err);
         }
     }
 }
@@ -141,7 +142,14 @@ fn try_load_env_lenient(path: &Path) -> std::io::Result<usize> {
             value = value[1..value.len().saturating_sub(1)].to_string();
         }
 
-        std::env::set_var(key, value);
+        // SAFETY: `set_var` is not thread-safe, but this function is called
+        // exclusively from `load_env_for_tauri_dev()` inside `setup()`, which
+        // runs during Tauri builder initialization — before any concurrent task
+        // reads these env vars. No other thread accesses these keys at this point.
+        // (Rust 2024 edition 대비 unsafe 명시)
+        unsafe {
+            std::env::set_var(key, &value);
+        }
         loaded += 1;
     }
 
@@ -162,6 +170,12 @@ fn find_upwards(start: PathBuf, filename: &str, max_hops: usize) -> Option<PathB
     None
 }
 
+/// .env.local 파일에서 환경변수를 로드합니다.
+///
+/// # Safety (env mutation)
+/// 이 함수와 내부에서 호출하는 `dotenvy`, `try_load_env_lenient` 모두 `std::env::set_var`를
+/// 사용합니다. `set_var`는 멀티스레드 환경에서 안전하지 않지만, 이 함수는 `setup()` 콜백의
+/// 최상단에서 한 번만 호출되며, 이 시점에서 다른 스레드가 해당 환경변수를 읽지 않습니다.
 fn load_env_for_tauri_dev() {
     // 1) 가장 단순한 케이스: CWD 기준 (.env.local)
     if dotenvy::from_filename(".env.local").is_ok() {
@@ -238,6 +252,9 @@ pub fn run() {
             // - .env.local이 markdown(코드펜스 등)을 포함하면 dotenvy(strict)가 실패할 수 있어,
             //   strict 실패 시 lenient(KEY=VALUE 라인만) 로더로 보강합니다.
             // - production에서는 파일이 없을 수 있으므로 실패해도 무시합니다.
+            // Note: load_env_for_tauri_dev()와 dotenvy::dotenv() 모두 내부에서
+            // std::env::set_var를 호출합니다. setup() 최상단이므로 다른 스레드의
+            // env 접근이 없는 시점입니다. (Safety 상세: load_env_for_tauri_dev 문서 참조)
             load_env_for_tauri_dev();
             let _ = dotenvy::dotenv();
 
@@ -275,7 +292,7 @@ pub fn run() {
             // 앱 시작 시 오래된 임시 이미지 파일 정리 (24시간 이상 경과된 파일)
             if let Ok(deleted) = commands::attachments::cleanup_temp_images() {
                 if deleted > 0 {
-                    eprintln!("[startup] Cleaned up {} old temp image(s)", deleted);
+                    info!("[startup] Cleaned up {} old temp image(s)", deleted);
                 }
             }
 

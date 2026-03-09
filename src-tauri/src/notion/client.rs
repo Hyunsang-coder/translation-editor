@@ -8,6 +8,7 @@ use crate::secrets::SECRETS;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 const NOTION_API_BASE: &str = "https://api.notion.com/v1";
 const NOTION_VERSION: &str = "2022-06-28";
@@ -56,7 +57,7 @@ impl NotionClient {
         // 메모리 캐시 업데이트
         *self.token.write().await = Some(token);
 
-        println!("[Notion] Token saved to vault");
+        info!("[Notion] Token saved to vault");
         Ok(())
     }
 
@@ -75,7 +76,7 @@ impl NotionClient {
             }
             Ok(None) => None,
             Err(e) => {
-                eprintln!("[Notion] Failed to load token from vault: {}", e);
+                warn!("[Notion] Failed to load token from vault: {}", e);
                 None
             }
         }
@@ -92,7 +93,7 @@ impl NotionClient {
 
         let _ = SECRETS.delete(VAULT_NOTION_TOKEN).await;
 
-        println!("[Notion] Token cleared");
+        info!("[Notion] Token cleared");
     }
 
     /// 검색 API 호출
@@ -122,7 +123,7 @@ impl NotionClient {
             page_size: page_size.or(Some(20)),
         };
 
-        println!("[Notion] Searching: {:?}", request_body);
+        info!("[Notion] Searching: {:?}", request_body);
 
         let response = self
             .http
@@ -162,10 +163,10 @@ impl NotionClient {
             .await
             .ok_or("No Notion token. Please set your Integration Token first.")?;
 
-        let id = Self::normalize_id(page_id);
+        let id = Self::normalize_id(page_id)?;
         let url = format!("{}/pages/{}", NOTION_API_BASE, id);
 
-        println!("[Notion] Getting page: {}", id);
+        info!("[Notion] Getting page: {}", id);
 
         let response = self
             .http
@@ -207,7 +208,7 @@ impl NotionClient {
             .await
             .ok_or("No Notion token. Please set your Integration Token first.")?;
 
-        let id = Self::normalize_id(block_id);
+        let id = Self::normalize_id(block_id)?;
         let url = format!(
             "{}/blocks/{}/children?page_size={}",
             NOTION_API_BASE,
@@ -215,7 +216,7 @@ impl NotionClient {
             page_size.unwrap_or(100)
         );
 
-        println!("[Notion] Getting blocks: {}", id);
+        info!("[Notion] Getting blocks: {}", id);
 
         let response = self
             .http
@@ -258,7 +259,7 @@ impl NotionClient {
             .await
             .ok_or("No Notion token. Please set your Integration Token first.")?;
 
-        let id = Self::normalize_id(database_id);
+        let id = Self::normalize_id(database_id)?;
         let url = format!("{}/databases/{}/query", NOTION_API_BASE, id);
 
         let request_body = DatabaseQueryRequest {
@@ -268,7 +269,7 @@ impl NotionClient {
             page_size: page_size.or(Some(20)),
         };
 
-        println!("[Notion] Querying database: {}", id);
+        info!("[Notion] Querying database: {}", id);
 
         let response = self
             .http
@@ -301,8 +302,8 @@ impl NotionClient {
             .map_err(|e| format!("Failed to parse response: {} - {}", e, body))
     }
 
-    /// ID 정규화 (URL에서 추출, 하이픈 제거 등)
-    fn normalize_id(id_or_url: &str) -> String {
+    /// ID 정규화 (URL에서 추출, 하이픈 제거, 32자 hex 검증)
+    fn normalize_id(id_or_url: &str) -> Result<String, String> {
         let id = if id_or_url.contains("notion.so") || id_or_url.contains("notion.site") {
             // URL에서 ID 추출
             // 예: https://www.notion.so/Page-Title-1234567890abcdef1234567890abcdef
@@ -323,7 +324,14 @@ impl NotionClient {
         };
 
         // 하이픈 제거
-        id.replace('-', "")
+        let hex = id.replace('-', "");
+
+        // 32자 hex 검증
+        if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(format!("Invalid Notion ID: '{}'", id_or_url));
+        }
+
+        Ok(hex)
     }
 
     /// 블록을 텍스트로 변환

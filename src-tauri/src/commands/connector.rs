@@ -5,6 +5,7 @@
 
 use crate::secrets::SECRETS;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info, warn};
 
 /// 토큰 만료 전 갱신 여유 시간 (5분)
 const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
@@ -97,7 +98,7 @@ async fn try_refresh_token(
     let client_secret = std::env::var(config.client_secret_env)
         .map_err(|_| format!("Missing env var: {}", config.client_secret_env))?;
 
-    println!("[Connector] Attempting token refresh for {}", connector_id);
+    debug!("[Connector] Attempting token refresh for {}", connector_id);
 
     let client = reqwest::Client::new();
     let response = client
@@ -140,10 +141,7 @@ async fn try_refresh_token(
             .or_else(|| current_token.token_type.clone()),
     };
 
-    println!(
-        "[Connector] Token refreshed successfully for {}",
-        connector_id
-    );
+    info!("[Connector] Token refreshed successfully for {}", connector_id);
     Ok(new_token)
 }
 
@@ -176,7 +174,7 @@ pub async fn connector_set_token(
         .await
         .map_err(|e| format!("Failed to save token: {}", e))?;
 
-    println!("[Connector] Token saved for {}", connector_id);
+    info!("[Connector] Token saved for {}", connector_id);
     Ok(())
 }
 
@@ -194,7 +192,7 @@ pub async fn connector_get_token(connector_id: String) -> Result<Option<String>,
 
             // 만료 확인 및 자동 갱신
             if token.is_expired() {
-                println!(
+                debug!(
                     "[Connector] Token expired or expiring soon for {}",
                     connector_id
                 );
@@ -216,7 +214,7 @@ pub async fn connector_get_token(connector_id: String) -> Result<Option<String>,
                             token = new_token;
                         }
                         Err(e) => {
-                            eprintln!(
+                            warn!(
                                 "[Connector] Token refresh failed for {}: {}",
                                 connector_id, e
                             );
@@ -226,7 +224,7 @@ pub async fn connector_get_token(connector_id: String) -> Result<Option<String>,
                     }
                 } else {
                     // refresh_token이 없으면 갱신 불가
-                    println!(
+                    warn!(
                         "[Connector] No refresh token available for {}",
                         connector_id
                     );
@@ -251,7 +249,7 @@ pub async fn connector_delete_token(connector_id: String) -> Result<(), String> 
         .await
         .map_err(|e| format!("Failed to delete token: {}", e))?;
 
-    println!("[Connector] Token deleted for {}", connector_id);
+    info!("[Connector] Token deleted for {}", connector_id);
     Ok(())
 }
 

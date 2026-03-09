@@ -1,6 +1,6 @@
 # Code Review 2026-03-09
 
-> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning 35 | Suggestion 20
+> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion 20
 
 ---
 
@@ -18,23 +18,23 @@
 
 ### Warning
 
-- [ ] **[W-12] loopMessages 토큰 미체크** `src/ai/chat.ts:344`
+- [x] **[W-12] loopMessages 토큰 미체크** `src/ai/chat.ts:344`
   - 도구 호출 루프에서 누적 메시지 토큰 예산 미확인, context window 초과 가능
   - Fix: 누적 토큰 카운트 + 예산 초과 시 중단
 
-- [ ] **[W-13] Confluence cachedCloudId TTL 없음** `src/ai/tools/confluenceTools.ts:132`
+- [x] **[W-13] Confluence cachedCloudId TTL 없음** `src/ai/tools/confluenceTools.ts:132`
   - 계정 전환 시 stale 데이터 유지
   - Fix: TTL 또는 무효화 로직 추가
 
-- [ ] **[W-14] buildAlignedChunks 매 호출 재계산** `src/ai/tools/reviewTool.ts:449`
+- [x] **[W-14] buildAlignedChunks 매 호출 재계산** `src/ai/tools/reviewTool.ts:449`
   - `get_review_chunk`마다 HTML->MD 변환 반복
   - Fix: 첫 호출 시 캐싱
 
-- [ ] **[W-15] withTimeout 사이드이펙트 미취소** `src/ai/chat.ts:38-58`
+- [x] **[W-15] withTimeout 사이드이펙트 미취소** `src/ai/chat.ts:38-58`
   - 타임아웃 후에도 원래 프로미스의 사이드이펙트 계속 실행
   - Fix: AbortController 연계 또는 결과 무시 처리
 
-- [ ] **[W-16] 하드코딩된 한국어 에러 메시지** `src/ai/chat.ts:520,541`
+- [x] **[W-16] 하드코딩된 한국어 에러 메시지** `src/ai/chat.ts:520,541`
   - Fix: i18n 키 사용으로 전환
 
 ### Suggestion
@@ -68,30 +68,30 @@
 
 ### Warning
 
-- [ ] **[W-17] autoSnapshotTimer 500ms 변경 없어도 hash 계산** `src/stores/historyStore.ts:248-324`
+- [x] **[W-17] autoSnapshotTimer 500ms 변경 없어도 hash 계산** `src/stores/historyStore.ts:248-324`
   - Fix: `lastChangeAt` 미변경 시 early exit 추가
 
-- [ ] **[W-18] loadSecureKeys race condition** `src/stores/aiConfigStore.ts:96-98`
+- [x] **[W-18] loadSecureKeys race condition** `src/stores/aiConfigStore.ts:96-98`
   - concurrent 호출 시 두 번째 caller가 skip
   - Fix: 로딩 프로미스 공유 (promise dedup)
 
-- [ ] **[W-19] pendingDiffs loadProject 미초기화** `src/stores/projectStore.ts:547-561`
+- [x] **[W-19] pendingDiffs loadProject 미초기화** `src/stores/projectStore.ts:547-561`
   - 프로젝트 전환 시 이전 프로젝트의 pendingDiffs 잔류
   - Fix: `pendingDiffs: {}` 초기화 추가
 
-- [ ] **[W-20] toasts 배열 미사용** `src/stores/uiStore.ts:17`
+- [x] **[W-20] toasts 배열 미사용** `src/stores/uiStore.ts:17`
   - sonner 사용으로 dead state
   - Fix: 제거
 
-- [ ] **[W-21] reviewStore cache invalidation 취약** `src/stores/reviewStore.ts:197-199`
+- [x] **[W-21] reviewStore cache invalidation 취약** `src/stores/reviewStore.ts:197-199`
   - `highlightNonce` 기반 캐시, nonce 변경 없이 results 변경 시 stale
   - Fix: results 변경 시 nonce도 갱신
 
-- [ ] **[W-22] initializeProject fire-and-forget** `src/stores/projectStore.ts:346-419`
+- [x] **[W-22] initializeProject fire-and-forget** `src/stores/projectStore.ts:346-419`
   - 비동기 IIFE, caller가 완료/실패 감지 불가
   - Fix: 프로미스 반환 또는 상태 플래그 노출
 
-- [ ] **[W-23] sendMessage unsafe non-null assertion** `src/stores/chatStore.ai.ts:368-370`
+- [x] **[W-23] sendMessage unsafe non-null assertion** `src/stores/chatStore.ai.ts:368-370`
   - `createSession` 실패 시 `currentSessionId!`가 null
   - Fix: null 체크 추가
 
@@ -130,30 +130,30 @@
 
 ### Warning
 
-- [ ] **[W-24] useBlockEditor stale closure** `src/hooks/useBlockEditor.ts:68-139`
+- [x] **[W-24] useBlockEditor stale closure** `src/hooks/useBlockEditor.ts:68-139`
   - `editor` null 참조 가능
   - Fix: 콜백 내에서 `_view` 파라미터 사용으로 전환
 
-- [ ] **[W-25] replaceDocContent innerHTML XSS** `src/editor/utils/replaceDocContent.ts:19-23`
+- [x] **[W-25] replaceDocContent innerHTML XSS** `src/editor/utils/replaceDocContent.ts:19-23`
   - Fix: DOMPurify sanitize 적용
 
-- [ ] **[W-26] scrollToMatch 잘못된 scroll container** `src/editor/extensions/SearchHighlight.ts:183-191`
+- [x] **[W-26] scrollToMatch 잘못된 scroll container** `src/editor/extensions/SearchHighlight.ts:183-191`
   - `view.dom`이 아닌 실제 scrollable ancestor 찾아야 함
   - Fix: closest scrollable ancestor 탐색 로직
 
-- [ ] **[W-27] editorStore 파괴된 에디터 참조 미정리** `src/stores/editorStore.ts`
+- [x] **[W-27] editorStore 파괴된 에디터 참조 미정리** `src/stores/editorStore.ts`
   - unmount/재생성 시 null 설정 cleanup 누락
   - Fix: cleanup 로직 추가
 
-- [ ] **[W-28] TipTapMenuBar ARIA/i18n 부재** `src/components/editor/TipTapMenuBar.tsx`
+- [x] **[W-28] TipTapMenuBar ARIA/i18n 부재** `src/components/editor/TipTapMenuBar.tsx`
   - heading dropdown에 role="menu" 없음, 라벨 한국어 하드코딩
   - Fix: ARIA 속성 + i18n 키 적용
 
-- [ ] **[W-29] DomSelectionAddToChat debounce 타이머 누수** `src/components/editor/DomSelectionAddToChat.tsx:92-102`
+- [x] **[W-29] DomSelectionAddToChat debounce 타이머 누수** `src/components/editor/DomSelectionAddToChat.tsx:92-102`
   - unmount 시 pending setTimeout 미정리
   - Fix: useEffect cleanup에서 clearTimeout
 
-- [ ] **[W-30] EditorCanvasTipTap 워드카운트 매 변경 재계산** `src/components/editor/EditorCanvasTipTap.tsx:147-156`
+- [x] **[W-30] EditorCanvasTipTap 워드카운트 매 변경 재계산** `src/components/editor/EditorCanvasTipTap.tsx:147-156`
   - Fix: debounce/throttle 적용
 
 ### Suggestion
@@ -184,26 +184,26 @@
 
 ### Warning
 
-- [ ] **[W-31] ReviewPanel getAllIssues memoize 누락** `src/components/review/ReviewPanel.tsx:476-477`
+- [x] **[W-31] ReviewPanel getAllIssues memoize 누락** `src/components/review/ReviewPanel.tsx:476-477`
   - Fix: `useMemo` 적용
 
-- [ ] **[W-32] isSessionLimitReached 반응성 없음** `src/components/panels/UnifiedSidebar.tsx:70,276`
+- [x] **[W-32] isSessionLimitReached 반응성 없음** `src/components/panels/UnifiedSidebar.tsx:70,276`
   - 함수 참조 구독 -> 파생 boolean 구독으로 전환
   - Fix: store에서 파생 boolean 셀렉터
 
-- [ ] **[W-33] MainLayout handleCreateProject stale closure** `src/components/layout/MainLayout.tsx:55`
+- [x] **[W-33] MainLayout handleCreateProject stale closure** `src/components/layout/MainLayout.tsx:55`
   - Fix: 더블클릭 방지 가드에 ref 사용
 
-- [ ] **[W-34] ProjectSidebar refresh 미메모이제이션** `src/components/layout/ProjectSidebar.tsx:82`
+- [x] **[W-34] ProjectSidebar refresh 미메모이제이션** `src/components/layout/ProjectSidebar.tsx:82`
   - Fix: useCallback 또는 effect 내부 추출
 
-- [ ] **[W-35] HistoryDrawer backdrop 이벤트 전파** `src/components/history/HistoryDrawer.tsx:235`
+- [x] **[W-35] HistoryDrawer backdrop 이벤트 전파** `src/components/history/HistoryDrawer.tsx:235`
   - Fix: aside에 stopPropagation 추가
 
-- [ ] **[W-36] Toolbar dropdown ARIA 부재** `src/components/layout/Toolbar.tsx:122-178`
+- [x] **[W-36] Toolbar dropdown ARIA 부재** `src/components/layout/Toolbar.tsx:122-178`
   - Fix: role="menu"/menuitem 추가
 
-- [ ] **[W-37] HistoryTimeline Intl 매 호출 생성** `src/components/history/HistoryTimeline.tsx:28`
+- [x] **[W-37] HistoryTimeline Intl 매 호출 생성** `src/components/history/HistoryTimeline.tsx:28`
   - Fix: formatter를 모듈 스코프 또는 useMemo로 캐싱
 
 ### Suggestion
@@ -239,33 +239,33 @@
 
 ### Warning
 
-- [ ] **[W-38] reqwest::Client 매 요청 생성** `src-tauri/src/mcp/client.rs:416,474`, `notion_client.rs:219`, `confluence.rs:81`
+- [x] **[W-38] reqwest::Client 매 요청 생성** `src-tauri/src/mcp/client.rs:416,474`, `notion_client.rs:219`, `confluence.rs:81`
   - Fix: 구조체 필드로 Client 재사용
 
-- [ ] **[W-39] OAuth callback XSS** `src-tauri/src/mcp/oauth.rs:619-621`
+- [x] **[W-39] OAuth callback XSS** `src-tauri/src/mcp/oauth.rs:619-621`
   - 에러 메시지가 HTML에 이스케이프 없이 삽입
   - Fix: HTML 이스케이프 적용
 
-- [ ] **[W-40] OAuth 고정 포트** `src-tauri/src/mcp/oauth.rs:22`
+- [x] **[W-40] OAuth 고정 포트** `src-tauri/src/mcp/oauth.rs:22`
   - 포트 점유 시 fallback 없음
   - Fix: 포트 범위 fallback 또는 동적 할당
 
-- [ ] **[W-41] Notion normalize_id 미검증** `src-tauri/src/notion/client.rs:305-327`
+- [x] **[W-41] Notion normalize_id 미검증** `src-tauri/src/notion/client.rs:305-327`
   - Fix: 32자 hex 검증 추가
 
-- [ ] **[W-42] import_glossary_excel 단일 트랜잭션** `src-tauri/src/db/mod.rs:1124`
+- [x] **[W-42] import_glossary_excel 단일 트랜잭션** `src-tauri/src/db/mod.rs:1124`
   - Fix: CSV처럼 배치 트랜잭션 적용
 
-- [ ] **[W-43] SecretManager initialize TOCTOU** `src-tauri/src/secrets/manager.rs:160-190`
+- [x] **[W-43] SecretManager initialize TOCTOU** `src-tauri/src/secrets/manager.rs:160-190`
   - Fix: OnceCell 또는 단일 write lock
 
-- [ ] **[W-44] Mutex 에러 처리 불일치** `src-tauri/src/commands/mcp.rs:20-21`
+- [x] **[W-44] Mutex 에러 처리 불일치** `src-tauri/src/commands/mcp.rs:20-21`
   - Fix: AcquireDb trait 사용으로 통일
 
-- [ ] **[W-45] println 남용** 다수 파일
+- [x] **[W-45] println 남용** 다수 파일
   - Fix: tracing 구조화 로깅으로 전환
 
-- [ ] **[W-46] std::env::set_var 멀티스레드 안전성** `src-tauri/src/lib.rs:144`
+- [x] **[W-46] std::env::set_var 멀티스레드 안전성** `src-tauri/src/lib.rs:144`
   - Fix: SAFETY 코멘트 추가 또는 HashMap 대체
 
 ### Suggestion

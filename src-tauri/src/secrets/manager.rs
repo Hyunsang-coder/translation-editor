@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 use zeroize::Zeroize;
 
 /// Keychain 서비스 이름
@@ -123,7 +124,7 @@ impl SecretManager {
             if bytes.len() == MASTER_KEY_LEN {
                 let mut k = [0u8; MASTER_KEY_LEN];
                 k.copy_from_slice(&bytes);
-                println!("[SecretManager] Using Base64 master key from ITE_DEV_MASTER_KEY (keychain bypassed)");
+                info!("[SecretManager] Using Base64 master key from ITE_DEV_MASTER_KEY (keychain bypassed)");
                 k
             } else {
                 Self::hash_to_master_key(&val)
@@ -140,7 +141,7 @@ impl SecretManager {
         let hash = Sha256::digest(passphrase.as_bytes());
         let mut key = [0u8; MASTER_KEY_LEN];
         key.copy_from_slice(&hash[..MASTER_KEY_LEN]);
-        println!(
+        info!(
             "[SecretManager] Using hashed master key from ITE_DEV_MASTER_KEY (keychain bypassed)"
         );
         key
@@ -159,7 +160,8 @@ impl SecretManager {
         let mut waited_ms: u64 = 0;
 
         loop {
-            let state = self.state.read().await;
+            // Write lock으로 상태 확인 + 전환을 atomic하게 처리 (TOCTOU 방지)
+            let mut state = self.state.write().await;
             match &*state {
                 InitState::Ready => return Ok(()),
                 InitState::Initializing => {
@@ -167,7 +169,7 @@ impl SecretManager {
                     drop(state);
                     if waited_ms >= MAX_WAIT_MS {
                         // 60초 후에도 초기화 중이면 hang으로 간주, 상태 리셋하여 재시도 가능하게
-                        eprintln!("[SecretManager] Initialization timeout (60s), resetting state for retry");
+                        warn!("[SecretManager] Initialization timeout (60s), resetting state for retry");
                         *self.state.write().await = InitState::NotInitialized;
                         return Err(SecretManagerError::PreviousInitFailed(
                             "Timeout waiting for initialization (60s). \
@@ -183,13 +185,16 @@ impl SecretManager {
                 InitState::Failed(msg) => {
                     return Err(SecretManagerError::PreviousInitFailed(msg.clone()))
                 }
-                InitState::NotInitialized => break,
+                InitState::NotInitialized => {
+                    // Atomic: check + transition under the same write lock
+                    *state = InitState::Initializing;
+                    drop(state);
+                    break;
+                }
             }
         }
 
-        *self.state.write().await = InitState::Initializing;
-
-        println!("[SecretManager] Initializing...");
+        info!("[SecretManager] Initializing...");
 
         // 1. 마스터키 로드 또는 생성
         //    ITE_DEV_MASTER_KEY 환경변수가 있으면 Keychain 우회
@@ -198,21 +203,21 @@ impl SecretManager {
         } else {
             match self.load_master_key_from_keychain() {
                 Ok(key) => {
-                    println!("[SecretManager] Master key loaded from keychain");
+                    info!("[SecretManager] Master key loaded from keychain");
                     key
                 }
                 Err(SecretManagerError::KeychainNoEntry) => {
                     // 마스터키가 없으면 새로 생성
-                    println!("[SecretManager] No master key found, generating new one...");
+                    info!("[SecretManager] No master key found, generating new one...");
                     let new_key = Self::generate_master_key();
                     if let Err(e) = self.save_master_key_to_keychain(&new_key) {
                         // 키체인 저장 실패 시 Failed 상태로 전환
                         let error_msg = format!("Failed to save master key to keychain: {}", e);
-                        eprintln!("[SecretManager] {}", error_msg);
+                        warn!("[SecretManager] {}", error_msg);
                         *self.state.write().await = InitState::Failed(error_msg);
                         return Err(e);
                     }
-                    println!("[SecretManager] New master key saved to keychain");
+                    info!("[SecretManager] New master key saved to keychain");
                     new_key
                 }
                 Err(e) => {
@@ -232,7 +237,7 @@ impl SecretManager {
                 match read_and_decrypt(&vault_path, &master_key) {
                     Ok(payload) => {
                         *self.cache.write().await = payload.secrets;
-                        println!(
+                        info!(
                             "[SecretManager] Vault loaded, {} secrets cached",
                             self.cache.read().await.len()
                         );
@@ -246,20 +251,20 @@ impl SecretManager {
                             To reset, delete the vault file manually: {:?}",
                             e, vault_path
                         );
-                        eprintln!("[SecretManager] {}", error_msg);
+                        warn!("[SecretManager] {}", error_msg);
                         *self.state.write().await = InitState::Failed(error_msg.clone());
                         return Err(SecretManagerError::VaultDecryptFailed(error_msg));
                     }
                 }
             } else {
-                println!("[SecretManager] No existing vault, starting fresh");
+                info!("[SecretManager] No existing vault, starting fresh");
             }
         } else {
-            println!("[SecretManager] Warning: app_data_dir not set yet");
+            info!("[SecretManager] Warning: app_data_dir not set yet");
         }
 
         *self.state.write().await = InitState::Ready;
-        println!("[SecretManager] Initialization complete");
+        info!("[SecretManager] Initialization complete");
 
         Ok(())
     }
@@ -313,7 +318,7 @@ impl SecretManager {
         // Vault 파일 저장
         self.persist_vault().await?;
 
-        println!("[SecretManager] Secret set: {}", key);
+        info!("[SecretManager] Secret set: {}", key);
         Ok(())
     }
 
@@ -332,7 +337,7 @@ impl SecretManager {
         // Vault 파일 저장
         self.persist_vault().await?;
 
-        println!("[SecretManager] {} secrets set", entries.len());
+        info!("[SecretManager] {} secrets set", entries.len());
         Ok(())
     }
 
@@ -349,7 +354,7 @@ impl SecretManager {
         // Vault 파일 저장
         self.persist_vault().await?;
 
-        println!("[SecretManager] Secret deleted: {}", key);
+        info!("[SecretManager] Secret deleted: {}", key);
         Ok(())
     }
 
@@ -368,7 +373,7 @@ impl SecretManager {
         // Vault 파일 저장
         self.persist_vault().await?;
 
-        println!("[SecretManager] {} secrets deleted", keys.len());
+        info!("[SecretManager] {} secrets deleted", keys.len());
         Ok(())
     }
 
@@ -485,7 +490,7 @@ impl SecretManager {
             Ok(value) => Some(value),
             Err(keyring::Error::NoEntry) => None,
             Err(e) => {
-                eprintln!(
+                warn!(
                     "[SecretManager] Legacy keychain read error for {}: {}",
                     key, e
                 );

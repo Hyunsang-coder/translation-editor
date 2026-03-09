@@ -1,4 +1,5 @@
 use crate::db::{DbState, McpServerRow};
+use crate::error::{CommandError, CommandResult};
 use crate::mcp::{
     McpConnectionStatus, McpRegistry, McpRegistryStatus, McpServerId, McpTool, McpToolResult,
     MCP_CLIENT,
@@ -6,6 +7,8 @@ use crate::mcp::{
 use std::collections::HashMap;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
+
+use super::AcquireDb;
 
 #[tauri::command]
 pub async fn save_mcp_server(
@@ -16,8 +19,8 @@ pub async fn save_mcp_server(
     config_json: String,
     is_enabled: bool,
     id: Option<String>,
-) -> Result<String, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
+) -> CommandResult<String> {
+    let db = state.acquire()?;
 
     let server_id = id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let now = chrono::Utc::now().timestamp_millis();
@@ -32,22 +35,22 @@ pub async fn save_mcp_server(
         updated_at: now,
     };
 
-    db.save_mcp_server(&server).map_err(|e| e.to_string())?;
+    db.save_mcp_server(&server).map_err(CommandError::from)?;
 
     Ok(server_id)
 }
 
 #[tauri::command]
-pub async fn list_mcp_servers(state: State<'_, DbState>) -> Result<Vec<McpServerRow>, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
-    let servers = db.list_mcp_servers().map_err(|e| e.to_string())?;
+pub async fn list_mcp_servers(state: State<'_, DbState>) -> CommandResult<Vec<McpServerRow>> {
+    let db = state.acquire()?;
+    let servers = db.list_mcp_servers().map_err(CommandError::from)?;
     Ok(servers)
 }
 
 #[tauri::command]
-pub async fn delete_mcp_server(state: State<'_, DbState>, id: String) -> Result<(), String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
-    db.delete_mcp_server(&id).map_err(|e| e.to_string())?;
+pub async fn delete_mcp_server(state: State<'_, DbState>, id: String) -> CommandResult<()> {
+    let db = state.acquire()?;
+    db.delete_mcp_server(&id).map_err(CommandError::from)?;
     Ok(())
 }
 

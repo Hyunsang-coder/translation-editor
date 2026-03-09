@@ -11,6 +11,38 @@ import type { ITEProject } from '@/types';
 // 세그먼트 기반 청킹 (Phase 2)
 // ============================================
 
+// ── Review Chunk Cache ──────────────────────
+// review_translation → get_review_chunk 사이에서
+// buildAlignedChunks의 HTML→MD 변환 반복을 방지하는 캐시.
+// review_translation 호출 시 캐시가 채워지고,
+// get_review_chunk 호출 시 재사용된다.
+let _chunkCache: {
+  projectId: string;
+  maxChars: number;
+  chunks: AlignedChunk[];
+} | null = null;
+
+/** 리뷰 청크 캐시를 무효화한다. 새 리뷰 시작 시 또는 테스트에서 호출. */
+export function clearReviewChunkCache(): void {
+  _chunkCache = null;
+}
+
+/**
+ * 캐시된 청크를 반환하거나, 캐시 미스 시 buildAlignedChunks를 수행하고 캐시한다.
+ */
+function getCachedChunks(project: ITEProject, maxChars: number): AlignedChunk[] {
+  if (
+    _chunkCache &&
+    _chunkCache.projectId === project.id &&
+    _chunkCache.maxChars === maxChars
+  ) {
+    return _chunkCache.chunks;
+  }
+  const chunks = buildAlignedChunks(project, maxChars);
+  _chunkCache = { projectId: project.id, maxChars, chunks };
+  return chunks;
+}
+
 /**
  * 청킹 기본값 (review_translation과 get_review_chunk에서 일관되게 사용)
  */
@@ -343,7 +375,9 @@ export const reviewTranslationTool = tool(
     }
 
     // 세그먼트 기반 청킹 (원문-번역문 정렬 유지)
-    const chunks = buildAlignedChunks(project, maxChars);
+    // 리뷰 시작 시 캐시 초기화 후 새로 생성 (gotcha #28: 항상 최신 문서 사용)
+    clearReviewChunkCache();
+    const chunks = getCachedChunks(project, maxChars);
     const firstChunk = chunks[0];
     if (!firstChunk) {
       throw new Error('원문 또는 번역문이 없습니다. 문서를 먼저 로드해주세요.');
@@ -446,7 +480,9 @@ export const getReviewChunkTool = tool(
       throw new Error('프로젝트가 로드되지 않았습니다.');
     }
 
-    const chunks = buildAlignedChunks(project);
+    // 캐시된 청크 사용 (review_translation에서 이미 생성됨)
+    // 캐시 미스 시에도 정상 동작 (buildAlignedChunks 수행 후 캐싱)
+    const chunks = getCachedChunks(project, DEFAULT_REVIEW_CHUNK_SIZE);
 
     if (chunkIndex >= chunks.length) {
       return {

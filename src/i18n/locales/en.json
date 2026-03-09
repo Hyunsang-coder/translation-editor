@@ -228,6 +228,28 @@
     "showSource": "Show Source",
     "chunks": "sections",
     "completedIn": "Completed in",
+    "menuBar": {
+      "heading": "Heading",
+      "headingLevel": "Heading {{level}}",
+      "bold": "Bold",
+      "boldTitle": "Bold (Cmd+B)",
+      "italic": "Italic",
+      "italicTitle": "Italic (Cmd+I)",
+      "strikethrough": "Strikethrough",
+      "inlineCode": "Inline Code",
+      "inlineCodeTitle": "Inline Code (Cmd+E)",
+      "bulletList": "Bullet List",
+      "orderedList": "Ordered List",
+      "blockquote": "Blockquote",
+      "fontSizeDecrease": "Decrease font size",
+      "fontSizeDecreaseTitle": "Font size -1px",
+      "fontSizeIncrease": "Increase font size",
+      "fontSizeIncreaseTitle": "Font size +1px",
+      "lineHeightDecrease": "Decrease line height",
+      "lineHeightDecreaseTitle": "Line height -0.1",
+      "lineHeightIncrease": "Increase line height",
+      "lineHeightIncreaseTitle": "Line height +0.1"
+    },
     "search": {
       "placeholder": "Search...",
       "replacePlaceholder": "Replace with...",
@@ -423,7 +445,10 @@
     "googleApiKeyMissing": "Google API key is missing. Please enter it in App Settings.",
     "unsupportedProvider": "Unsupported AI provider: {{provider}}. Please select a valid provider in App Settings.",
     "translationPreviewError": "Try increasing max_tokens in Settings, or translate a shorter document.",
-    "aiResponseFailed": "Failed to generate AI response"
+    "aiResponseFailed": "Failed to generate AI response",
+    "toolCallRepeatedFailure": "Tool \"{{toolName}}\" failed repeatedly. Please review your question and try again.",
+    "insufficientContext": "Could not gather enough context to process your request. Please be more specific or select the relevant documents/blocks.",
+    "conversationLengthLimit": "Too many tool calls reached the conversation length limit. Please split your question and try again."
   },
   "update": {
     "newVersionAvailable": "New Version Available",

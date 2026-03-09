@@ -65,7 +65,7 @@ export function useBlockEditor({
         class: 'outline-none',
         'data-block-id': blockId,
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         // Cmd+L or Cmd+K: Selection to Chat (모델 호출 없음)
         // readOnly(source)에서도 동작해야 하므로 readOnly 체크보다 먼저 처리합니다.
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
@@ -74,9 +74,9 @@ export function useBlockEditor({
         if (isSelectionShortcut) {
           event.preventDefault();
           void (async () => {
-            if (!editor) return;
-            const { from, to } = editor.state.selection;
-            const selected = editor.state.doc.textBetween(from, to, ' ').trim();
+            // view 파라미터를 사용하여 stale closure 방지 (editor 캡처 제거)
+            const { from, to } = view.state.selection;
+            const selected = view.state.doc.textBetween(from, to, ' ').trim();
 
             // getState()를 사용하여 stale closure 문제 방지
             const { addContextBlock } = useChatStore.getState();
@@ -100,9 +100,8 @@ export function useBlockEditor({
         // Enter: 블록 분할 (N:M)
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
-          if (!editor) return true;
-          const { from } = editor.state.selection;
-          const before = editor.state.doc.textBetween(0, from, '\n', '\n');
+          const { from } = view.state.selection;
+          const before = view.state.doc.textBetween(0, from, '\n', '\n');
           const offset = before.length;
           splitBlock(blockId, offset);
           return true;
@@ -110,8 +109,7 @@ export function useBlockEditor({
 
         // Backspace: 블록 시작이면 이전 블록과 병합
         if (event.key === 'Backspace') {
-          if (!editor) return false;
-          const { from, to, empty } = editor.state.selection;
+          const { from, to, empty } = view.state.selection;
           if (empty && from === to && from <= 1) {
             event.preventDefault();
             mergeWithPreviousTargetBlock(blockId);

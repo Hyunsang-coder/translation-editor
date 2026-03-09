@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::secrets::SECRETS;
@@ -19,7 +20,10 @@ use crate::secrets::SECRETS;
 const MCP_AUTH_URL: &str = "https://mcp.atlassian.com/v1/authorize";
 const MCP_TOKEN_URL: &str = "https://cf.mcp.atlassian.com/v1/token";
 const MCP_REGISTRATION_URL: &str = "https://cf.mcp.atlassian.com/v1/register";
-const REDIRECT_PORT: u16 = 23456;
+/// OAuth 콜백 서버 포트 범위 (고정 범위 + fallback)
+/// Dynamic Client Registration으로 redirect_uri에 포트가 포함되므로,
+/// 예측 가능한 고정 범위를 사용하되 점유 시 다음 포트로 fallback.
+const REDIRECT_PORT_RANGE: std::ops::RangeInclusive<u16> = 19960..=19969;
 
 // Vault 저장 키 (SecretManager용)
 const VAULT_MCP_TOKEN: &str = "mcp/atlassian/oauth_token_json";
@@ -27,6 +31,15 @@ const VAULT_MCP_CLIENT: &str = "mcp/atlassian/client_json";
 
 // 토큰 만료 전 갱신 여유 시간 (5분)
 const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
+
+/// HTML 특수문자 이스케이프 (XSS 방지)
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
 
 /// OAuth 토큰 (영속화 가능)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -83,6 +96,9 @@ struct RegisteredClient {
     client_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     client_secret: Option<String>,
+    /// 등록 시 사용한 redirect_uri 포트 (포트 변경 시 재등록 판단용)
+    #[serde(default)]
+    registered_port: u16,
 }
 
 /// PKCE 검증 데이터
@@ -127,12 +143,12 @@ impl AtlassianOAuth {
             return Ok(());
         }
 
-        println!("[OAuth] Initializing from SecretManager vault...");
+        info!("[OAuth] Initializing from SecretManager vault...");
 
         // 저장된 클라이언트 로드
         if let Ok(Some(client_json)) = SECRETS.get(VAULT_MCP_CLIENT).await {
             if let Ok(client) = serde_json::from_str::<RegisteredClient>(&client_json) {
-                println!("[OAuth] Loaded client_id from vault: {}", client.client_id);
+                info!("[OAuth] Loaded client_id from vault: {}", client.client_id);
                 *self.registered_client.lock().await = Some(client);
             }
         }
@@ -141,7 +157,7 @@ impl AtlassianOAuth {
         if let Ok(Some(token_json)) = SECRETS.get(VAULT_MCP_TOKEN).await {
             if let Ok(token) = serde_json::from_str::<OAuthToken>(&token_json) {
                 if let Some(remaining) = token.remaining_seconds() {
-                    println!(
+                    info!(
                         "[OAuth] Loaded token from vault (expires in {} seconds)",
                         remaining
                     );
@@ -165,7 +181,7 @@ impl AtlassianOAuth {
             .map_err(|e| format!("Failed to save token: {}", e))?;
         *self.token.lock().await = Some(token);
 
-        println!("[OAuth] Token saved to vault");
+        info!("[OAuth] Token saved to vault");
         Ok(())
     }
 
@@ -180,7 +196,7 @@ impl AtlassianOAuth {
             .map_err(|e| format!("Failed to save client: {}", e))?;
         *self.registered_client.lock().await = Some(client);
 
-        println!("[OAuth] Client saved to vault");
+        info!("[OAuth] Client saved to vault");
         Ok(())
     }
 
@@ -205,11 +221,11 @@ impl AtlassianOAuth {
 
         // 만료된 경우 갱신 시도
         if needs_refresh {
-            println!("[OAuth] Token expired, attempting refresh...");
+            info!("[OAuth] Token expired, attempting refresh...");
             match self.refresh_token().await {
-                Ok(()) => println!("[OAuth] Token refreshed successfully"),
+                Ok(()) => info!("[OAuth] Token refreshed successfully"),
                 Err(e) => {
-                    eprintln!("[OAuth] Token refresh failed: {}", e);
+                    warn!("[OAuth] Token refresh failed: {}", e);
                     // 만료된 토큰 삭제 (메모리 + vault) - 호출자가 재인증 트리거하도록
                     *self.token.lock().await = None;
                     let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
@@ -248,16 +264,25 @@ impl AtlassianOAuth {
     }
 
     /// Dynamic Client Registration
-    async fn register_client(&self) -> Result<RegisteredClient, String> {
+    ///
+    /// `port`는 콜백 서버가 실제 바인딩된 포트.
+    /// 캐시된 클라이언트의 등록 포트와 다르면 재등록한다.
+    async fn register_client(&self, port: u16) -> Result<RegisteredClient, String> {
         let _ = self.initialize().await;
 
-        // 이미 등록된 클라이언트가 있으면 재사용
+        // 이미 등록된 클라이언트가 있고, 같은 포트로 등록되었으면 재사용
         if let Some(client) = self.registered_client.lock().await.clone() {
-            println!("[OAuth] Reusing existing client: {}", client.client_id);
-            return Ok(client);
+            if client.registered_port == port {
+                info!("[OAuth] Reusing existing client: {} (port {})", client.client_id, port);
+                return Ok(client);
+            }
+            info!(
+                "[OAuth] Port changed ({} -> {}), re-registering client",
+                client.registered_port, port
+            );
         }
 
-        let redirect_uri = format!("http://localhost:{}/callback", REDIRECT_PORT);
+        let redirect_uri = format!("http://localhost:{}/callback", port);
 
         let registration_request = serde_json::json!({
             "client_name": "OddEyes.ai",
@@ -267,7 +292,7 @@ impl AtlassianOAuth {
             "token_endpoint_auth_method": "none"
         });
 
-        println!("[OAuth] Registering OAuth client...");
+        info!("[OAuth] Registering OAuth client...");
 
         let client = reqwest::Client::builder()
             .build()
@@ -300,17 +325,48 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Failed to parse registration response: {}", e))?;
 
-        println!("[OAuth] Client registered: {}", reg_response.client_id);
+        info!("[OAuth] Client registered: {}", reg_response.client_id);
 
         let registered = RegisteredClient {
             client_id: reg_response.client_id,
             client_secret: reg_response.client_secret,
+            registered_port: port,
         };
 
         // vault에 저장
         self.save_client(registered.clone()).await?;
 
         Ok(registered)
+    }
+
+    /// 포트 범위에서 사용 가능한 포트에 TcpListener 바인딩
+    ///
+    /// `REDIRECT_PORT_RANGE` 내 포트를 순차적으로 시도하여
+    /// 첫 번째로 바인딩 성공한 (listener, port)를 반환한다.
+    async fn bind_callback_listener(
+    ) -> Result<(tokio::net::TcpListener, u16), String> {
+        use tokio::net::TcpListener;
+
+        for port in REDIRECT_PORT_RANGE {
+            match TcpListener::bind(format!("127.0.0.1:{}", port)).await {
+                Ok(listener) => {
+                    info!("[OAuth] Callback server bound to port {}", port);
+                    return Ok((listener, port));
+                }
+                Err(e) => {
+                    info!(
+                        "[OAuth] Port {} unavailable ({}), trying next...",
+                        port, e
+                    );
+                }
+            }
+        }
+
+        Err(format!(
+            "All OAuth callback ports ({}-{}) are in use",
+            REDIRECT_PORT_RANGE.start(),
+            REDIRECT_PORT_RANGE.end()
+        ))
     }
 
     /// OAuth 인증 플로우 시작
@@ -323,7 +379,11 @@ impl AtlassianOAuth {
             }
         }
 
-        let registered_client = self.register_client().await?;
+        // 1) 먼저 콜백 서버 포트를 확보 (바인딩 실패 시 여기서 에러 반환)
+        let (listener, bound_port) = Self::bind_callback_listener().await?;
+
+        // 2) 확보된 포트로 클라이언트 등록 (포트 변경 시 자동 재등록)
+        let registered_client = self.register_client(bound_port).await?;
 
         let code_verifier = Self::generate_code_verifier();
         let code_challenge = Self::generate_code_challenge(&code_verifier);
@@ -334,7 +394,7 @@ impl AtlassianOAuth {
             state: state.clone(),
         });
 
-        let redirect_uri = format!("http://localhost:{}/callback", REDIRECT_PORT);
+        let redirect_uri = format!("http://localhost:{}/callback", bound_port);
         let auth_url = format!(
             "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
             MCP_AUTH_URL,
@@ -345,7 +405,7 @@ impl AtlassianOAuth {
             code_challenge
         );
 
-        println!("[OAuth] Authorization URL: {}", auth_url);
+        info!("[OAuth] Authorization URL: {}", auth_url);
 
         let (tx, rx) = oneshot::channel();
         *self.callback_tx.lock().await = Some(tx);
@@ -360,8 +420,9 @@ impl AtlassianOAuth {
         *self.callback_shutdown_tx.lock().await = Some(shutdown_tx);
 
         tokio::spawn(async move {
-            if let Err(e) = Self::run_callback_server(
-                REDIRECT_PORT,
+            if let Err(e) = Self::run_callback_server_with_listener(
+                listener,
+                bound_port,
                 callback_tx,
                 pending_pkce,
                 token_storage,
@@ -370,11 +431,9 @@ impl AtlassianOAuth {
             )
             .await
             {
-                eprintln!("[OAuth] Callback server error: {}", e);
+                warn!("[OAuth] Callback server error: {}", e);
             }
         });
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         if let Err(e) = open::that(&auth_url) {
             // 브라우저 열기 실패 시 상태 정리 후 콜백 서버 종료
@@ -384,13 +443,13 @@ impl AtlassianOAuth {
             return Err(format!("Failed to open browser: {}", e));
         }
 
-        println!("[OAuth] Waiting for OAuth callback (max 5 minutes)...");
+        info!("[OAuth] Waiting for OAuth callback (max 5 minutes)...");
 
         let auth_result = match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx)
             .await
         {
             Ok(Ok(result)) => {
-                println!("[OAuth] Callback received: {:?}", result);
+                info!("[OAuth] Callback received: {:?}", result);
                 // 인증 성공 시 토큰을 vault에 저장
                 if result.is_ok() {
                     // lock scope를 분리하여 데드락 방지
@@ -399,12 +458,12 @@ impl AtlassianOAuth {
 
                     if let Some(token) = token_opt {
                         if let Err(e) = self.save_token(token).await {
-                            eprintln!("[OAuth] Failed to save token: {}", e);
+                            warn!("[OAuth] Failed to save token: {}", e);
                         } else {
-                            println!("[OAuth] Token persisted to vault");
+                            info!("[OAuth] Token persisted to vault");
                         }
                     } else {
-                        eprintln!("[OAuth] Warning: callback succeeded but no token in memory!");
+                        warn!("[OAuth] Warning: callback succeeded but no token in memory!");
                     }
                 }
                 result
@@ -423,7 +482,7 @@ impl AtlassianOAuth {
             }
         };
 
-        println!("[OAuth] start_auth_flow returning: {:?}", auth_result);
+        info!("[OAuth] start_auth_flow returning: {:?}", auth_result);
         auth_result
     }
 
@@ -431,14 +490,15 @@ impl AtlassianOAuth {
     async fn shutdown_callback_server(&self) {
         if let Some(tx) = self.callback_shutdown_tx.lock().await.take() {
             let _ = tx.send(()).await;
-            println!("[OAuth] Sent shutdown signal to callback server");
+            info!("[OAuth] Sent shutdown signal to callback server");
         }
     }
 
-    /// 로컬 콜백 서버 실행
+    /// 로컬 콜백 서버 실행 (사전 바인딩된 listener 사용)
     ///
     /// shutdown signal 수신 시 또는 6분 자체 타임아웃 시 종료됨
-    async fn run_callback_server(
+    async fn run_callback_server_with_listener(
+        listener: tokio::net::TcpListener,
         port: u16,
         callback_tx: Arc<Mutex<Option<oneshot::Sender<Result<String, String>>>>>,
         pending_pkce: Arc<Mutex<Option<PkceData>>>,
@@ -447,16 +507,11 @@ impl AtlassianOAuth {
         mut shutdown_rx: tokio::sync::mpsc::Receiver<()>,
     ) -> Result<(), String> {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-        use tokio::net::TcpListener;
 
         // 서버 자체 타임아웃 (OAuth 흐름 타임아웃 + 여유)
         const SERVER_TIMEOUT_SECS: u64 = 360; // 6분
 
-        let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
-            .await
-            .map_err(|e| format!("Failed to bind callback server: {}", e))?;
-
-        println!(
+        info!(
             "[OAuth] Callback server listening on port {} (timeout: {}s)",
             port, SERVER_TIMEOUT_SECS
         );
@@ -467,14 +522,14 @@ impl AtlassianOAuth {
         loop {
             // 서버 타임아웃 체크
             if server_start.elapsed().as_secs() >= SERVER_TIMEOUT_SECS {
-                println!("[OAuth] Callback server timeout, shutting down");
+                info!("[OAuth] Callback server timeout, shutting down");
                 return Err("Callback server timeout".to_string());
             }
 
             // accept + shutdown signal 동시 대기
             let stream_result = tokio::select! {
                 _ = shutdown_rx.recv() => {
-                    println!("[OAuth] Callback server received shutdown signal");
+                    info!("[OAuth] Callback server received shutdown signal");
                     return Ok(());
                 }
                 accept_result = tokio::time::timeout(
@@ -494,7 +549,7 @@ impl AtlassianOAuth {
                 None => continue,
             };
 
-            println!("[OAuth] Accepted connection from {}", addr);
+            info!("[OAuth] Accepted connection from {}", addr);
 
             // 읽기/쓰기 분리 (BufReader와 write_all 충돌 방지)
             let (reader_half, mut writer_half) = stream.into_split();
@@ -503,11 +558,11 @@ impl AtlassianOAuth {
             // HTTP 요청 라인 읽기
             let mut request_line = String::new();
             if let Err(e) = reader.read_line(&mut request_line).await {
-                eprintln!("[OAuth] Failed to read request line: {}", e);
+                warn!("[OAuth] Failed to read request line: {}", e);
                 continue;
             }
 
-            println!("[OAuth] Received request line: {:?}", request_line.trim());
+            info!("[OAuth] Received request line: {:?}", request_line.trim());
 
             // HTTP 헤더 모두 읽기 (빈 줄까지)
             loop {
@@ -527,7 +582,7 @@ impl AtlassianOAuth {
             let path = match request_line.split_whitespace().nth(1) {
                 Some(p) => p.to_string(),
                 None => {
-                    eprintln!("[OAuth] Invalid HTTP request format");
+                    warn!("[OAuth] Invalid HTTP request format");
                     let error_resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                     let _ = writer_half.write_all(error_resp.as_bytes()).await;
                     let _ = writer_half.shutdown().await;
@@ -535,11 +590,11 @@ impl AtlassianOAuth {
                 }
             };
 
-            println!("[OAuth] Request path: {}", path);
+            info!("[OAuth] Request path: {}", path);
 
             // /callback 경로가 아닌 요청은 404 응답 후 다음 연결 대기
             if !path.starts_with("/callback") {
-                println!("[OAuth] Ignoring non-callback request: {}", path);
+                info!("[OAuth] Ignoring non-callback request: {}", path);
                 let not_found =
                     "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 let _ = writer_half.write_all(not_found.as_bytes()).await;
@@ -566,7 +621,7 @@ impl AtlassianOAuth {
                                 Ok(mut token) => {
                                     // 발급 시점 기록
                                     token.issued_at = chrono::Utc::now().timestamp();
-                                    println!(
+                                    info!(
                                         "[OAuth] Token stored in memory, issued_at: {}",
                                         token.issued_at
                                     );
@@ -574,7 +629,7 @@ impl AtlassianOAuth {
                                     Ok("OAuth authentication successful".to_string())
                                 }
                                 Err(e) => {
-                                    eprintln!("[OAuth] Token exchange error: {}", e);
+                                    warn!("[OAuth] Token exchange error: {}", e);
                                     Err(format!("Token exchange failed: {}", e))
                                 }
                             }
@@ -605,10 +660,10 @@ impl AtlassianOAuth {
                         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Success</title></head>
                     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
                     <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <h1 style="color: #36B37E; margin-bottom: 16px;">✓ {}</h1>
+                    <h1 style="color: #36B37E; margin-bottom: 16px;">&#10003; {}</h1>
                     <p style="color: #42526e;">You can close this window and return to the app.</p>
                     </div></body></html>"#,
-                        msg
+                        escape_html(msg)
                     ),
                 ),
                 Err(msg) => (
@@ -617,10 +672,10 @@ impl AtlassianOAuth {
                         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head>
                     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f5f7;">
                     <div style="background: white; padding: 40px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <h1 style="color: #FF5630; margin-bottom: 16px;">✗ Error</h1>
+                    <h1 style="color: #FF5630; margin-bottom: 16px;">&#10007; Error</h1>
                     <p style="color: #42526e;">{}</p>
                     </div></body></html>"#,
-                        msg
+                        escape_html(msg)
                     ),
                 ),
             };
@@ -653,7 +708,7 @@ impl AtlassianOAuth {
     ) -> Result<OAuthToken, String> {
         let redirect_uri = format!("http://localhost:{}/callback", port);
 
-        println!("[OAuth] Exchanging code for token...");
+        info!("[OAuth] Exchanging code for token...");
 
         let client = reqwest::Client::builder()
             .build()
@@ -667,7 +722,7 @@ impl AtlassianOAuth {
             ("code_verifier", code_verifier),
         ];
 
-        println!("[OAuth] Sending token request to: {}", MCP_TOKEN_URL);
+        info!("[OAuth] Sending token request to: {}", MCP_TOKEN_URL);
 
         let response = client
             .post(MCP_TOKEN_URL)
@@ -676,7 +731,7 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Token request failed: {}", e))?;
 
-        println!("[OAuth] Token response status: {}", response.status());
+        info!("[OAuth] Token response status: {}", response.status());
 
         if !response.status().is_success() {
             let status = response.status();
@@ -689,7 +744,7 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
-        println!(
+        info!(
             "[OAuth] Token exchange successful, access_token length: {}",
             token.access_token.len()
         );
@@ -709,7 +764,7 @@ impl AtlassianOAuth {
             .map(|r| r.client_id)
             .ok_or("No registered client")?;
 
-        println!("[OAuth] Refreshing token...");
+        info!("[OAuth] Refreshing token...");
 
         let client = reqwest::Client::builder()
             .build()
@@ -745,7 +800,7 @@ impl AtlassianOAuth {
         // vault에 저장
         self.save_token(new_token).await?;
 
-        println!("[OAuth] Token refreshed and saved");
+        info!("[OAuth] Token refreshed and saved");
         Ok(())
     }
 
@@ -757,7 +812,7 @@ impl AtlassianOAuth {
         // vault에서 토큰 삭제
         let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
 
-        println!("[OAuth] Logged out, token deleted from vault");
+        info!("[OAuth] Logged out, token deleted from vault");
     }
 
     /// 저장된 토큰 정보 조회 (자동 초기화 포함)
@@ -785,7 +840,7 @@ impl AtlassianOAuth {
         // vault에서 클라이언트도 삭제
         let _ = SECRETS.delete(VAULT_MCP_CLIENT).await;
 
-        println!("[OAuth] All credentials cleared");
+        info!("[OAuth] All credentials cleared");
     }
 }
 
