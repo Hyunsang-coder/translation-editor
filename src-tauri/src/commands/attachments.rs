@@ -10,8 +10,11 @@ use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
 use crate::utils::{validate_path, validate_file_size};
 
-/// 첨부 파일 최대 크기 (100MB)
-const MAX_ATTACHMENT_SIZE: u64 = 100 * 1024 * 1024;
+/// 이미지 첨부 파일 최대 크기 (100MB)
+const MAX_IMAGE_ATTACHMENT_SIZE: u64 = 100 * 1024 * 1024;
+
+/// 문서 첨부 파일 최대 크기 (200MB) — 텍스트만 추출
+const MAX_DOCUMENT_ATTACHMENT_SIZE: u64 = 200 * 1024 * 1024;
 
 /// 임시 이미지 최대 크기 (10MB)
 const MAX_TEMP_IMAGE_SIZE: usize = 10 * 1024 * 1024;
@@ -38,9 +41,6 @@ pub async fn attach_file(
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
-    // 파일 크기 검증 (100MB 제한)
-    let file_size = validate_file_size(&path, MAX_ATTACHMENT_SIZE)? as i64;
-
     let filename = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -52,6 +52,14 @@ pub async fn attach_file(
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
+
+    // 파일 크기 제한: 이미지 100MB / 문서(pdf, docx, pptx 등) 200MB
+    let max_size = if is_image_extension(&extension) {
+        MAX_IMAGE_ATTACHMENT_SIZE
+    } else {
+        MAX_DOCUMENT_ATTACHMENT_SIZE
+    };
+    let file_size = validate_file_size(&path, max_size)? as i64;
 
     // Extract text based on file type (images are stored without extracted text)
     let extracted_text: Option<String> = if is_image_extension(&extension) {
@@ -118,9 +126,6 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
-    // 파일 크기 검증 (100MB 제한)
-    let file_size = validate_file_size(&path, MAX_ATTACHMENT_SIZE)? as i64;
-
     let filename = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -132,6 +137,14 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
+
+    // 파일 크기 제한: 이미지는 100MB, 문서는 2GB
+    let max_size = if is_image_extension(&extension) {
+        MAX_IMAGE_ATTACHMENT_SIZE
+    } else {
+        MAX_DOCUMENT_ATTACHMENT_SIZE
+    };
+    let file_size = validate_file_size(&path, max_size)? as i64;
 
     let extracted_text = extract_file_text(&path, &extension).ok();
     let extracted_text_length = extracted_text.as_ref().map(|t| t.len() as i64);
@@ -158,8 +171,8 @@ pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> 
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
-    // 파일 크기 검증 (100MB 제한)
-    validate_file_size(&path, MAX_ATTACHMENT_SIZE)?;
+    // 파일 크기 검증 (이미지 100MB 제한)
+    validate_file_size(&path, MAX_IMAGE_ATTACHMENT_SIZE)?;
 
     fs::read(&path).map_err(|e| CommandError {
         code: "READ_ERROR".to_string(),

@@ -220,10 +220,13 @@ export function createAttachmentActions(set: ChatSet, get: ChatGet) {
         isAttachmentLoading: false,
       }));
     } catch (e) {
+      console.error('[chatStore] attachFile failed (raw):', e);
+      const message = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
       set({
         isAttachmentLoading: false,
-        error: e instanceof Error ? e.message : '첨부 파일 추가 실패',
+        error: message,
       });
+      throw e; // UI에서 토스트로 표시할 수 있도록 re-throw
     }
   };
 

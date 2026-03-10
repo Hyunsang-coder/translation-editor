@@ -227,7 +227,29 @@ export function SettingsContent(): JSX.Element {
                 if (!isTauriRuntime() || !project) return;
                 const path = await pickDocumentFile();
                 if (path) {
-                  await attachFile(path);
+                  try {
+                    await attachFile(path);
+                  } catch (err) {
+                    const e = err as { code?: string; message?: string } | undefined;
+                    const code = e?.code;
+                    let msg: string;
+                    if (code === 'FILE_TOO_LARGE') {
+                      // "파일 크기가 너무 큽니다: 422MB (최대 200MB)" → size, max 추출
+                      const match = e?.message?.match(/(\d+)MB.*?(\d+)MB/);
+                      msg = match
+                        ? t('settings.attachmentErrorFileTooLarge', { size: match[1], max: match[2] })
+                        : t('settings.attachmentErrorFileTooLarge', { size: '?', max: '200' });
+                    } else if (code === 'EXTRACT_ERROR') {
+                      msg = t('settings.attachmentErrorExtractFailed');
+                    } else if (code === 'SECURITY_ERROR') {
+                      msg = t('settings.attachmentErrorPathBlocked');
+                    } else if (code === 'PATH_ERROR' || code === 'FILE_ERROR') {
+                      msg = t('settings.attachmentErrorFileNotFound');
+                    } else {
+                      msg = t('settings.attachmentErrorUnknown');
+                    }
+                    addToast({ type: 'error', message: msg });
+                  }
                 }
               })();
             }}

@@ -48,7 +48,13 @@
     "attachmentsNoFiles": "No reference materials attached.",
     "attachmentsDeleteConfirm": "Delete \"{{filename}}\"?",
     "attachmentsDeleteTitle": "Delete Reference Material",
-    "attachmentsTruncationWarning": "Partially used in translation"
+    "attachmentsTruncationWarning": "Partially used in translation",
+    "attachmentErrorFileTooLarge": "File size ({{size}}MB) exceeds the maximum allowed size ({{max}}MB).",
+    "attachmentErrorExtractFailed": "Could not extract text from the file. It may be corrupted or in an unsupported format.",
+    "attachmentErrorUnsupportedType": "Unsupported file type: {{type}}",
+    "attachmentErrorPathBlocked": "Access to this path is blocked by security policy.",
+    "attachmentErrorFileNotFound": "File not found or access denied.",
+    "attachmentErrorUnknown": "Failed to attach the file."
   },
   "appSettings": {
     "title": "App Settings",
