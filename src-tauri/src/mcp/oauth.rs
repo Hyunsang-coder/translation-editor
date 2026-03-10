@@ -14,7 +14,12 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, info, warn};
 use url::Url;
 
+use once_cell::sync::Lazy;
+
 use crate::secrets::SECRETS;
+
+/// 재사용 HTTP 클라이언트 (커넥션 풀링)
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 // Atlassian MCP 서버 자체 OAuth 엔드포인트
 const MCP_AUTH_URL: &str = "https://mcp.atlassian.com/v1/authorize";
@@ -294,11 +299,7 @@ impl AtlassianOAuth {
 
         info!("[OAuth] Registering OAuth client...");
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
-        let response = client
+        let response = HTTP_CLIENT
             .post(MCP_REGISTRATION_URL)
             .header("Content-Type", "application/json")
             .json(&registration_request)
@@ -710,10 +711,6 @@ impl AtlassianOAuth {
 
         info!("[OAuth] Exchanging code for token...");
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         let params = [
             ("grant_type", "authorization_code"),
             ("client_id", client_id),
@@ -724,7 +721,7 @@ impl AtlassianOAuth {
 
         info!("[OAuth] Sending token request to: {}", MCP_TOKEN_URL);
 
-        let response = client
+        let response = HTTP_CLIENT
             .post(MCP_TOKEN_URL)
             .form(&params)
             .send()
@@ -766,17 +763,13 @@ impl AtlassianOAuth {
 
         info!("[OAuth] Refreshing token...");
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         let params = [
             ("grant_type", "refresh_token"),
             ("client_id", &client_id),
             ("refresh_token", &refresh_token),
         ];
 
-        let response = client
+        let response = HTTP_CLIENT
             .post(MCP_TOKEN_URL)
             .form(&params)
             .send()

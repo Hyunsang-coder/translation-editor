@@ -481,7 +481,7 @@ export function ReviewPanel(): JSX.Element {
     [allIssues, severityFilter],
   );
   const hasErrors = useMemo(() => results.some((r) => r.error), [results]);
-  const allChecked = allIssues.length > 0 && allIssues.every((i) => i.checked);
+  const allChecked = useMemo(() => allIssues.length > 0 && allIssues.every((i) => i.checked), [allIssues]);
 
   return (
     <div className="h-full flex min-h-0 flex-col bg-editor-bg">

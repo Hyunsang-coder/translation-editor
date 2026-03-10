@@ -14,7 +14,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use once_cell::sync::Lazy;
 use tracing::{debug, error, info};
+
+/// 재사용 HTTP 클라이언트 (커넥션 풀링)
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
@@ -217,14 +221,10 @@ impl NotionMcpClient {
             method, id, mcp_url
         );
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         // 세션 ID가 있으면 헤더에 추가
         let session_id = self.session_id.read().await.clone();
 
-        let mut request = client
+        let mut request = HTTP_CLIENT
             .post(&mcp_url)
             .header("Authorization", format!("Bearer {}", auth_token))
             .header("Content-Type", "application/json");
@@ -306,13 +306,9 @@ impl NotionMcpClient {
 
         debug!("[NotionMCP] Sending notification: {}", method);
 
-        let client = reqwest::Client::builder()
-            .build()
-            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-
         let session_id = self.session_id.read().await.clone();
 
-        let mut request = client
+        let mut request = HTTP_CLIENT
             .post(&mcp_url)
             .header("Authorization", format!("Bearer {}", auth_token))
             .header("Content-Type", "application/json");
@@ -413,6 +409,4 @@ impl Default for NotionMcpClient {
 }
 
 // 전역 싱글톤 인스턴스
-use once_cell::sync::Lazy;
-
 pub static NOTION_MCP_CLIENT: Lazy<NotionMcpClient> = Lazy::new(NotionMcpClient::new);

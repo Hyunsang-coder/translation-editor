@@ -134,11 +134,6 @@ let cachedCloudId: string | null = null;
 let cachedCloudIdAt = 0;
 const CLOUD_ID_TTL_MS = 5 * 60 * 1000; // 5분
 
-/** cloudId 캐시 무효화 (계정/설정 변경 시 호출 가능) */
-export function clearCachedCloudId(): void {
-  cachedCloudId = null;
-  cachedCloudIdAt = 0;
-}
 
 /**
  * 페이지 콘텐츠 형식

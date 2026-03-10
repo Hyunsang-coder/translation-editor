@@ -4,8 +4,12 @@
 //! 토큰은 SecretManager vault에 안전하게 저장됩니다.
 
 use crate::secrets::SECRETS;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
+
+/// 재사용 HTTP 클라이언트 (커넥션 풀링)
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
 /// 토큰 만료 전 갱신 여유 시간 (5분)
 const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
@@ -100,8 +104,7 @@ async fn try_refresh_token(
 
     debug!("[Connector] Attempting token refresh for {}", connector_id);
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(config.token_url)
         .form(&[
             ("grant_type", "refresh_token"),

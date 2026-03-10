@@ -134,11 +134,12 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
 
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
     await page.getByRole('button', { name: TEXT.review }).click();
-    await expect(page.getByRole('button', { name: /^(검수 시작|Start Review|다시 검수|Review Again)$/ })).toBeVisible();
+    await expect(page.getByTestId('review-run-button')).toBeVisible();
 
     await openToolsMenu(page);
-    await page.getByRole('button', { name: TEXT.aiChat }).click();
-    await expect(page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i })).toBeVisible();
+    await page.getByRole('menuitem', { name: TEXT.aiChat }).click();
+    // Chat panel may take a moment to create a session and render
+    await expect(page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i })).toBeVisible({ timeout: 5000 });
     await expect(page.getByLabel(/채팅 모델|Chat model/i)).toBeVisible();
 
     await page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i }).click();
@@ -156,12 +157,12 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
 
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
     await openToolsMenu(page);
-    await page.getByRole('button', { name: TEXT.history }).click();
+    await page.getByRole('menuitem', { name: TEXT.history }).click();
 
     await expect(page.getByRole('heading', { name: TEXT.history })).toBeVisible();
-    await page.getByRole('button', { name: /^(스냅샷 저장|Save Snapshot)$/ }).click();
+    await page.getByRole('button', { name: /^(저장|Save)$/ }).first().click();
     await page.locator('#history-description').fill('마리아 수동 저장');
-    await page.getByRole('button', { name: TEXT.save }).click();
+    await page.getByLabel(/스냅샷 저장|Save Snapshot/i).getByRole('button', { name: TEXT.save }).click();
     await expect(page.getByText('마리아 수동 저장')).toBeVisible();
 
     const savedItem = page.locator('li').filter({ hasText: '마리아 수동 저장' }).first();
