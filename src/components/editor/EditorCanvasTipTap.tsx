@@ -749,6 +749,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             top: addToChatBubble.top,
             left: addToChatBubble.left,
             zIndex: 80,
+            zoom: 1 / useUIStore.getState().editorZoom,
           }}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {

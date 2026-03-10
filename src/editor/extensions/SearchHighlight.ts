@@ -7,6 +7,7 @@ import {
   buildNormalizedTextWithMapping,
 } from '@/utils/normalizeForSearch';
 import { pluginKeys } from '@/editor/plugins/pluginKeys';
+import { useUIStore } from '@/stores/uiStore';
 
 // ============================================
 // Types
@@ -201,7 +202,8 @@ function scrollToMatch(editor: { view: { dom: HTMLElement; coordsAtPos: (pos: nu
   const scrollContainer = getScrollableAncestor(editor.view.dom) ?? editor.view.dom;
   const rect = scrollContainer.getBoundingClientRect();
   if (coords.top < rect.top || coords.bottom > rect.bottom) {
-    scrollContainer.scrollTop += coords.top - rect.top - rect.height / 2;
+    const zoom = useUIStore.getState().editorZoom;
+    scrollContainer.scrollTop += (coords.top - rect.top - rect.height / 2) / zoom;
   }
 }
 
