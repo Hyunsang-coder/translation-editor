@@ -66,6 +66,7 @@ let loadingPromise: Promise<void> | null = null;
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   openai: [
+    { value: 'gpt-5.4' },
     { value: 'gpt-5.2' },
     { value: 'gpt-5-mini' },
   ],
