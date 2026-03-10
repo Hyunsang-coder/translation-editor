@@ -5,6 +5,7 @@ export interface ImportGlossaryCsvResult {
   inserted: number;
   updated: number;
   skipped: number;
+  warnings: string[];
 }
 
 export async function importGlossaryCsv(params: {

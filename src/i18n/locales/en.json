@@ -40,12 +40,15 @@
     "glossaryNoFiles": "No glossary files linked.",
     "glossaryDeleteConfirm": "Delete glossary \"{{filename}}\"?",
     "glossaryDeleteTitle": "Delete Glossary",
+    "glossaryImportSuccess": "Glossary imported: {{inserted}} added, {{updated}} updated, {{skipped}} skipped",
+    "glossaryImportWarning": "Glossary warning: {{warning}}",
     "attachments": "Reference Materials",
     "attachmentsDescription": "PDF, Word, PPTX, Markdown",
     "attachmentsAttach": "Attach",
     "attachmentsNoFiles": "No reference materials attached.",
     "attachmentsDeleteConfirm": "Delete \"{{filename}}\"?",
-    "attachmentsDeleteTitle": "Delete Reference Material"
+    "attachmentsDeleteTitle": "Delete Reference Material",
+    "attachmentsTruncationWarning": "Partially used in translation"
   },
   "appSettings": {
     "title": "App Settings",

@@ -40,12 +40,15 @@
     "glossaryNoFiles": "연결된 용어집 파일이 없습니다.",
     "glossaryDeleteConfirm": "\"{{filename}}\" 용어집을 삭제하시겠습니까?",
     "glossaryDeleteTitle": "용어집 삭제",
+    "glossaryImportSuccess": "용어집 가져오기 완료: {{inserted}}건 추가, {{updated}}건 갱신, {{skipped}}건 건너뜀",
+    "glossaryImportWarning": "용어집 경고: {{warning}}",
     "attachments": "참고 자료",
     "attachmentsDescription": "PDF, Word, PPTX, Markdown",
     "attachmentsAttach": "첨부",
     "attachmentsNoFiles": "첨부된 참고 자료가 없습니다.",
     "attachmentsDeleteConfirm": "\"{{filename}}\"을(를) 삭제하시겠습니까?",
-    "attachmentsDeleteTitle": "참고 자료 삭제"
+    "attachmentsDeleteTitle": "참고 자료 삭제",
+    "attachmentsTruncationWarning": "번역 시 일부만 사용"
   },
   "appSettings": {
     "title": "앱 설정",

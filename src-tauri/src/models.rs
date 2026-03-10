@@ -190,6 +190,7 @@ pub struct AttachmentDto {
     pub file_type: String,
     pub file_size: Option<i64>,
     pub extracted_text: Option<String>,
+    pub extracted_text_length: Option<i64>,
     pub file_path: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,

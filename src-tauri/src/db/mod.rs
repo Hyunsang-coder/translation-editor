@@ -46,6 +46,40 @@ pub struct McpServerRow {
     pub updated_at: i64,
 }
 
+/// Glossary 임포트 공통 검증
+fn validate_glossary_rows(
+    headers: &[String],
+    parsed_count: usize,
+    skipped: u32,
+    long_entry_count: usize,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    let lower_headers: Vec<String> = headers.iter().map(|h| h.trim().to_lowercase()).collect();
+    let has_source = lower_headers.iter().any(|h| h == "source");
+    let has_target = lower_headers.iter().any(|h| h == "target");
+
+    if !has_source || !has_target {
+        warnings.push(
+            "Header row does not contain 'Source'/'Target' columns. Using first two columns."
+                .to_string(),
+        );
+    }
+
+    if parsed_count == 0 && skipped > 0 {
+        warnings.push("All rows were skipped (empty source or target).".to_string());
+    }
+
+    if parsed_count > 0 && long_entry_count * 2 > parsed_count {
+        warnings.push(format!(
+            "{}% of entries exceed 200 characters. This file may not be a glossary.",
+            long_entry_count * 100 / parsed_count
+        ));
+    }
+
+    warnings
+}
+
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
 pub struct DbState(pub Mutex<Database>);
 
@@ -872,7 +906,7 @@ impl Database {
         project_id: &str,
         path: &str,
         replace_project_scope: bool,
-    ) -> Result<(u32, u32, u32), IteError> {
+    ) -> Result<(u32, u32, u32, Vec<String>), IteError> {
         // ────────────────────────────────────────────────────────────────────
         // Phase 1: Read and parse OUTSIDE transaction
         // ────────────────────────────────────────────────────────────────────
@@ -948,18 +982,18 @@ impl Database {
         }
 
         if rows.is_empty() {
-            return Ok((0, 0, 0));
+            return Ok((0, 0, 0, vec![]));
+        }
+
+        // 컬럼 수 검증
+        if rows[0].len() < 2 {
+            return Err(IteError::InvalidOperation(
+                "File must have at least 2 columns.".to_string(),
+            ));
         }
 
         // 헤더 여부 판단
         let first = &rows[0];
-        let lower = first
-            .iter()
-            .map(|c| c.trim().to_lowercase())
-            .collect::<Vec<_>>();
-
-        let _has_source = lower.iter().any(|c| c == "source");
-        let _has_target = lower.iter().any(|c| c == "target");
 
         // "A언어 칼럼 | B언어 칼럼" 구조만 지켜지면 OK.
         // 즉, headers가 있든 없든 2개 이상의 칼럼이 있으면 0, 1번을 사용.
@@ -994,6 +1028,7 @@ impl Database {
 
         let mut parsed_records: Vec<ParsedRecord> = Vec::with_capacity(data_rows.len());
         let mut skipped: u32 = 0;
+        let mut long_entry_count: usize = 0;
 
         for record in data_rows {
             let source = record.get(idx_source).map(|s| s.trim()).unwrap_or("");
@@ -1025,6 +1060,10 @@ impl Database {
                 md5::compute(format!("{}|{}|{}", project_id, source, target))
             );
 
+            if source.len() > 200 || target.len() > 200 {
+                long_entry_count += 1;
+            }
+
             parsed_records.push(ParsedRecord {
                 id,
                 source: source.to_string(),
@@ -1034,6 +1073,13 @@ impl Database {
                 case_sensitive,
             });
         }
+
+        let warnings = validate_glossary_rows(
+            &headers,
+            parsed_records.len(),
+            skipped,
+            long_entry_count,
+        );
 
         // ────────────────────────────────────────────────────────────────────
         // Phase 2: Batch insert WITH transaction per batch
@@ -1103,7 +1149,7 @@ impl Database {
             tx.commit()?;
         }
 
-        Ok((inserted, updated, skipped))
+        Ok((inserted, updated, skipped, warnings))
     }
 
     /// query 문자열 안에 등장하는 source 용어를 찾아 상위 N개를 반환합니다.
@@ -1168,7 +1214,7 @@ impl Database {
         project_id: &str,
         path: &str,
         replace_project_scope: bool,
-    ) -> Result<(u32, u32, u32), IteError> {
+    ) -> Result<(u32, u32, u32, Vec<String>), IteError> {
         use calamine::{open_workbook_auto, Data, Reader};
 
         // ────────────────────────────────────────────────────────────────────
@@ -1204,7 +1250,14 @@ impl Database {
         }
 
         if rows.is_empty() {
-            return Ok((0, 0, 0));
+            return Ok((0, 0, 0, vec![]));
+        }
+
+        // 컬럼 수 검증
+        if rows[0].len() < 2 {
+            return Err(IteError::InvalidOperation(
+                "File must have at least 2 columns.".to_string(),
+            ));
         }
 
         // 헤더 여부 판단
@@ -1239,6 +1292,7 @@ impl Database {
 
         let mut parsed_records: Vec<ParsedRecord> = Vec::with_capacity(data_rows.len());
         let mut skipped: u32 = 0;
+        let mut long_entry_count: usize = 0;
 
         for record in data_rows {
             let source = record.get(idx_source).map(|s| s.trim()).unwrap_or("");
@@ -1267,6 +1321,10 @@ impl Database {
                 md5::compute(format!("{}|{}|{}", project_id, source, target))
             );
 
+            if source.len() > 200 || target.len() > 200 {
+                long_entry_count += 1;
+            }
+
             parsed_records.push(ParsedRecord {
                 id,
                 source: source.to_string(),
@@ -1276,6 +1334,13 @@ impl Database {
                 case_sensitive,
             });
         }
+
+        let warnings = validate_glossary_rows(
+            &headers,
+            parsed_records.len(),
+            skipped,
+            long_entry_count,
+        );
 
         // ────────────────────────────────────────────────────────────────────
         // Phase 2: Batch insert WITH transaction per batch
@@ -1345,7 +1410,7 @@ impl Database {
             tx.commit()?;
         }
 
-        Ok((inserted, updated, skipped))
+        Ok((inserted, updated, skipped, warnings))
     }
 
     /// 첨부 파일 저장

@@ -8,7 +8,10 @@ use tauri::State;
 use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use crate::utils::validate_path;
+use crate::utils::{validate_path, validate_file_size};
+
+/// 글로서리 파일 최대 크기 (10MB)
+const MAX_GLOSSARY_SIZE: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +29,7 @@ pub struct ImportGlossaryResult {
     pub inserted: u32,
     pub updated: u32,
     pub skipped: u32,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,10 +51,12 @@ pub fn import_glossary_csv(
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
+    validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
+
     let mut db = db_state.acquire()?;
 
     let replace = args.replace_project_scope.unwrap_or(false);
-    let (inserted, updated, skipped) = db
+    let (inserted, updated, skipped, warnings) = db
         .import_glossary_csv(
             &args.project_id,
             validated_path.to_string_lossy().as_ref(),
@@ -62,6 +68,7 @@ pub fn import_glossary_csv(
         inserted,
         updated,
         skipped,
+        warnings,
     })
 }
 
@@ -74,10 +81,12 @@ pub fn import_glossary_excel(
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
+    validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
+
     let mut db = db_state.acquire()?;
 
     let replace = args.replace_project_scope.unwrap_or(false);
-    let (inserted, updated, skipped) = db
+    let (inserted, updated, skipped, warnings) = db
         .import_glossary_excel(
             &args.project_id,
             validated_path.to_string_lossy().as_ref(),
@@ -89,6 +98,7 @@ pub fn import_glossary_excel(
         inserted,
         updated,
         skipped,
+        warnings,
     })
 }
 
