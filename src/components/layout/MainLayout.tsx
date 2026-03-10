@@ -57,6 +57,41 @@ export function MainLayout(): JSX.Element {
     }
   }, [loadProject]);
 
+  // App-wide Ctrl/Cmd + Scroll zoom
+  const zoomContainerRef = useRef<HTMLElement | null>(null);
+  const editorZoomRef = useRef(useUIStore.getState().editorZoom);
+  useEffect(() => {
+    const unsub = useUIStore.subscribe((state) => {
+      const zoom = state.editorZoom;
+      editorZoomRef.current = zoom;
+      const el = zoomContainerRef.current;
+      if (el) {
+        (el.style as unknown as Record<string, string>).zoom = String(zoom);
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const el = zoomContainerRef.current;
+    if (!el) return;
+
+    // Apply initial zoom
+    (el.style as unknown as Record<string, string>).zoom = String(editorZoomRef.current);
+
+    const handleWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      useUIStore.getState().adjustEditorZoom(delta);
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
   // 개발자 테스트 패널 단축키 (Ctrl+Shift+D / Cmd+Shift+D)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -76,7 +111,7 @@ export function MainLayout(): JSX.Element {
       <Toolbar />
 
       {/* 메인 에디터 영역 */}
-      <main className="flex-1 flex overflow-hidden min-h-0">
+      <main ref={zoomContainerRef} className="flex-1 flex overflow-hidden min-h-0 relative">
         {/* 프로젝트 사이드바 (항상 렌더링, 자체적으로 접힘 처리) */}
         <ProjectSidebar />
 
@@ -123,6 +158,7 @@ export function MainLayout(): JSX.Element {
             <UnifiedSidebar side="right" />
           </ErrorBoundary>
         )}
+
       </main>
 
       {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}

@@ -91,6 +91,27 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
     || (!rightSidebar.collapsed && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
   );
 
+  // Chrome-style zoom indicator: show on change, auto-hide after 2s
+  const resetEditorZoom = useUIStore((s) => s.resetEditorZoom);
+  const [zoomDisplay, setZoomDisplay] = useState<{ visible: boolean; percent: number }>({
+    visible: false,
+    percent: Math.round(useUIStore.getState().editorZoom * 100),
+  });
+  const zoomHideTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const unsub = useUIStore.subscribe((state) => {
+      const percent = Math.round(state.editorZoom * 100);
+      setZoomDisplay({ visible: true, percent });
+      if (zoomHideTimerRef.current) window.clearTimeout(zoomHideTimerRef.current);
+      zoomHideTimerRef.current = window.setTimeout(
+        () => setZoomDisplay((prev) => ({ ...prev, visible: false })),
+        2000,
+      );
+    });
+    return unsub;
+  }, []);
+
   return (
     <header className="h-[45px] border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
       {/* 프로젝트 정보 */}
@@ -102,6 +123,23 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
 
       {/* 툴바 액션 */}
       <div className="flex items-center gap-2">
+        {/* Chrome-style zoom indicator */}
+        {zoomDisplay.visible && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-editor-bg border border-editor-border text-[11px] text-editor-muted animate-in fade-in duration-150">
+            <span className="font-medium">{zoomDisplay.percent}%</span>
+            {zoomDisplay.percent !== 100 && (
+              <button
+                type="button"
+                onClick={resetEditorZoom}
+                className="px-1 py-0.5 rounded text-[10px] hover:text-editor-text hover:bg-editor-border transition-colors"
+                title={t('editor.zoom.reset', '초기화')}
+              >
+                {t('editor.zoom.reset', 'Reset')}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Tools 드롭다운 */}
         <div ref={dropdownRef} className="relative">
           <button
