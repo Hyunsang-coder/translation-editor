@@ -237,6 +237,9 @@
     "reviewTitle": "Translation Review",
     "hideSource": "Hide",
     "showSource": "Show Source",
+    "zoom": {
+      "reset": "Reset Zoom"
+    },
     "chunks": "sections",
     "completedIn": "Completed in",
     "menuBar": {

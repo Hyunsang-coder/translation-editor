@@ -237,6 +237,9 @@
     "reviewTitle": "번역 검수",
     "hideSource": "숨기기",
     "showSource": "원문 표시",
+    "zoom": {
+      "reset": "줌 초기화"
+    },
     "chunks": "섹션",
     "completedIn": "완료",
     "menuBar": {

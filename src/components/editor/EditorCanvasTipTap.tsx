@@ -49,6 +49,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const projectContext = useChatStore((s) => s.projectContext);
   const translatorPersona = useChatStore((s) => s.translatorPersona);
 
+  const resetEditorZoom = useUIStore((s) => s.resetEditorZoom);
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
   const addToast = useUIStore((s) => s.addToast);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
@@ -103,6 +104,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     }
   }, [translationModel, allTranslationModels, setTranslationModel]);
 
+  const zoomContainerRef = useRef<HTMLDivElement | null>(null);
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
   const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
@@ -459,6 +461,45 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     };
   }, [sourceEditor, targetEditor, attachSelectionWatcher]);
 
+  // Ctrl/Cmd + Scroll zoom: ref-based DOM update to avoid full re-render
+  const [showZoomIndicator, setShowZoomIndicator] = useState(
+    () => Math.abs(useUIStore.getState().editorZoom - 1.0) > 0.001
+  );
+  const editorZoomRef = useRef(useUIStore.getState().editorZoom);
+
+  useEffect(() => {
+    const unsub = useUIStore.subscribe((state) => {
+      const zoom = state.editorZoom;
+      editorZoomRef.current = zoom;
+      const el = zoomContainerRef.current;
+      if (el) {
+        (el.style as unknown as Record<string, string>).zoom = String(zoom);
+      }
+      setShowZoomIndicator(Math.abs(zoom - 1.0) > 0.001);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const el = zoomContainerRef.current;
+    if (!el) return;
+
+    // Apply initial zoom
+    (el.style as unknown as Record<string, string>).zoom = String(editorZoomRef.current);
+
+    const handleWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.1 : -0.1;
+      useUIStore.getState().adjustEditorZoom(delta);
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [!!project]);
+
   if (!project) {
     return (
       <div className="h-full flex items-center justify-center text-editor-muted">
@@ -514,7 +555,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       </div>
 
       {/* Editor Panels */}
-      <PanelGroup orientation="horizontal" className="flex-1 min-h-0 min-w-0" id="editor-panels">
+      <div ref={zoomContainerRef} className="flex-1 min-h-0 min-w-0 relative">
+      <PanelGroup orientation="horizontal" className="h-full min-h-0 min-w-0" id="editor-panels">
         {/* Source Panel */}
         {!focusMode && (
           <>
@@ -659,6 +701,22 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           </div>
         </Panel>
       </PanelGroup>
+
+      {/* Zoom indicator */}
+      {showZoomIndicator && (
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded bg-editor-surface/90 border border-editor-border shadow-sm text-[11px] text-editor-muted z-10">
+          <span>{Math.round(editorZoomRef.current * 100)}%</span>
+          <button
+            type="button"
+            onClick={resetEditorZoom}
+            className="ml-1 px-1 py-0.5 rounded text-[10px] hover:bg-editor-bg hover:text-editor-text transition-colors"
+            title={t('editor.zoom.reset', '줌 초기화')}
+          >
+            {t('editor.zoom.reset', 'Reset')}
+          </button>
+        </div>
+      )}
+      </div>
 
       {/* 재번역 지시사항 모달 (타겟에 이미 내용이 있을 때 번역 버튼 클릭 시) */}
       {retranslateModalOpen && (

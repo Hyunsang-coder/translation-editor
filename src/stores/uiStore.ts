@@ -35,6 +35,9 @@ interface UIState extends EditorUIState {
   // Paste settings
   pasteImageMode: 'placeholder' | 'original' | 'ignore';
   pasteLinkPreserve: boolean;
+
+  // Editor zoom (CSS zoom, 0.5~2.0)
+  editorZoom: number;
 }
 
 interface UIActions {
@@ -116,6 +119,11 @@ interface UIActions {
   // Paste settings
   setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore') => void;
   setPasteLinkPreserve: (preserve: boolean) => void;
+
+  // Editor zoom
+  setEditorZoom: (zoom: number) => void;
+  adjustEditorZoom: (delta: number) => void;
+  resetEditorZoom: () => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -165,6 +173,9 @@ export const useUIStore = create<UIStore>()(
       // Paste settings defaults
       pasteImageMode: 'original',
       pasteLinkPreserve: true,
+
+      // Editor zoom default
+      editorZoom: 1.0,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -669,6 +680,21 @@ export const useUIStore = create<UIStore>()(
       setPasteLinkPreserve: (preserve: boolean): void => {
         set({ pasteLinkPreserve: preserve });
       },
+
+      // Editor zoom
+      setEditorZoom: (zoom: number): void => {
+        set({ editorZoom: Math.max(0.5, Math.min(2.0, Math.round(zoom * 10) / 10)) });
+      },
+
+      adjustEditorZoom: (delta: number): void => {
+        set((state) => ({
+          editorZoom: Math.max(0.5, Math.min(2.0, Math.round((state.editorZoom + delta) * 10) / 10)),
+        }));
+      },
+
+      resetEditorZoom: (): void => {
+        set({ editorZoom: 1.0 });
+      },
     }),
     {
       name: 'ite-ui-storage',
@@ -747,6 +773,8 @@ export const useUIStore = create<UIStore>()(
         // Paste settings
         pasteImageMode: state.pasteImageMode,
         pasteLinkPreserve: state.pasteLinkPreserve,
+        // Editor zoom
+        editorZoom: state.editorZoom,
       }),
     }
   )
