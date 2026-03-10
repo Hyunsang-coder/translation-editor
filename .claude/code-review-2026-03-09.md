@@ -1,6 +1,6 @@
 # Code Review 2026-03-09
 
-> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion ~~20~~ 12 (8 fixed, 12 skipped)
+> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion ~~20~~ 5 (12 fixed, 3 backlog, 5 dismissed)
 
 ---
 
@@ -41,12 +41,6 @@
 
 - [ ] **[S-47] retry.ts/chat.ts 테스트 커버리지 부재**
   - 핵심 인프라 유닛 테스트 필요
-
-- [ ] **[S-48] buildToolGuideMessage 토큰 과다** `src/ai/chat.ts:631-753`
-  - Fix: 압축 또는 tool description만 활용
-
-- [ ] **[S-49] detectRequestType 한국어 질문형 오분류** `src/ai/prompt.ts:30-85`
-  - "번역해줘?" -> question으로 분류될 수 있음
 
 ---
 
@@ -100,19 +94,11 @@
 - [x] **[S-50] appendTo* 중복 로직** `src/stores/chatStore.settings.ts:79-135`
   - Fix: `appendFormattedSnippet` 공유 헬퍼 추출
 
-- [ ] **[S-51] 매직 넘버 상수화**
-  - projectStore 1500ms/500ms, historyStore 3000ms, chatStore.ai 100ms 등
-  - Fix: 네임드 상수로 추출
-
 - [x] **[S-52] connectorStore getConnectorConfigs 매 호출 배열 생성**
   - Fix: 호출처 없는 dead code → 삭제
 
-- [ ] **[S-53] legacy sidebar state 정리** `src/stores/uiStore.ts:749`
-  - deprecated 상태가 persist에 남아있음
-  - Fix: persist에서 제거
-
-- [ ] **[S-54] chatStore 셀렉터에 action 포함**
-  - useShallow에서 action 분리 필요
+- [x] **[S-53] legacy sidebar state 정리** `src/stores/uiStore.ts:749`
+  - Fix: partialize에서 `sidebarCollapsed` 제거 (migration은 유지)
 
 ---
 
@@ -162,8 +148,7 @@
   - Fix: 한번 계산 후 파생
 
 - [ ] **[S-56] TipTap extension 배열 중복**
-  - TipTapEditor/TranslatePreviewModal에서 유사 extension 배열 반복
-  - Fix: `createBaseExtensions()` 공유 함수 추출
+  - read-only/edit 모드 차이가 커서 공유 추출 시 조건 분기 과다. 3번째 에디터 변형 추가 시 재검토
 
 - [x] **[S-57] legacy 블록 에디터 코드**
   - SegmentGroupRow.tsx, TranslationBlock.ts (extension) 삭제, index.ts re-export 제거
@@ -211,12 +196,8 @@
 - [x] **[S-58] ErrorBoundary i18n 미적용** `src/components/ui/ErrorBoundary.tsx:43-50`
   - Fix: `i18n.t()` 직접 호출 (class 컴포넌트), common.errorOccurred/errorOccurredIn 키 추가
 
-- [ ] **[S-59] AppSettingsModal API 키 입력 debounce 미적용** `src/components/AppSettingsModal.tsx:287,325`
-  - 매 키스트로크 store 호출
-  - Fix: debounce 적용
-
 - [ ] **[S-60] ChatContent 컴포넌트 700줄+**
-  - Fix: 서브 훅/컴포넌트 분리
+  - 섹션별 역할 분리 잘 되어있고 커스텀 훅 이미 추출됨. 규모 증가 시 재검토
 
 - [x] **[S-61] isTauriTestingBridgeActive 중복 정의**
   - Fix: `src/utils/tauri.ts`로 추출, 두 파일에서 import
@@ -268,18 +249,11 @@
 
 ### Suggestion
 
-- [ ] **[S-62] save_project delete-all + reinsert** `src-tauri/src/db/mod.rs:276-278`
-  - Fix: UPSERT 패턴으로 개선
-
-- [ ] **[S-63] update_block affected row 미확인** `src-tauri/src/db/mod.rs:804-816`
-  - Fix: 0 rows 시 에러 반환
-
 - [x] **[S-64] path blocklist symlink 우회** `src-tauri/src/utils.rs:51-89`
   - Fix: `/private/etc`, `/private/var`, `/private/tmp` 추가
 
-- [ ] **[S-65] MasterKey Clone 제거** `src-tauri/src/secrets/manager.rs:83-84`
-  - 미제어 복사 방지
-  - Fix: Clone derive 제거, 참조로 전달
+- [x] **[S-65] MasterKey Clone 제거** `src-tauri/src/secrets/manager.rs:83-84`
+  - Fix: Clone derive 제거 (실제 clone 호출처 없음 확인)
 
 - [x] **[S-66] CSV 파서 multi-line 미지원** `src-tauri/src/db/mod.rs:859-887`
   - Fix: 인용부호 내 줄바꿈 레코드 결합 로직 추가

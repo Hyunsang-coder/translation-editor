@@ -732,7 +732,6 @@ export const useUIStore = create<UIStore>()(
         theme: state.theme,
         language: state.language,
         focusMode: state.focusMode,
-        sidebarCollapsed: state.sidebarCollapsed,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
         isPanelsSwapped: state.isPanelsSwapped,
         // Dual sidebar persist

@@ -81,7 +81,6 @@ pub struct SecretManager {
 }
 
 /// Zeroize가 적용된 마스터키 래퍼
-#[derive(Clone)]
 struct MasterKey {
     bytes: [u8; MASTER_KEY_LEN],
 }
