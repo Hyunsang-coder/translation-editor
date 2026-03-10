@@ -59,35 +59,29 @@ export function MainLayout(): JSX.Element {
 
   // App-wide Ctrl/Cmd + Scroll zoom
   const zoomContainerRef = useRef<HTMLElement | null>(null);
-  const editorZoomRef = useRef(useUIStore.getState().editorZoom);
-  useEffect(() => {
-    const unsub = useUIStore.subscribe((state) => {
-      const zoom = state.editorZoom;
-      editorZoomRef.current = zoom;
-      const el = zoomContainerRef.current;
-      if (el) {
-        (el.style as unknown as Record<string, string>).zoom = String(zoom);
-      }
-    });
-    return unsub;
-  }, []);
 
   useEffect(() => {
     const el = zoomContainerRef.current;
     if (!el) return;
 
-    // Apply initial zoom
-    (el.style as unknown as Record<string, string>).zoom = String(editorZoomRef.current);
+    // Apply initial zoom + subscribe for updates (zoom-only guard)
+    el.style.setProperty('zoom', String(useUIStore.getState().editorZoom));
+    let prevZoom = useUIStore.getState().editorZoom;
+    const unsub = useUIStore.subscribe((state) => {
+      if (state.editorZoom === prevZoom) return;
+      prevZoom = state.editorZoom;
+      el.style.setProperty('zoom', String(state.editorZoom));
+    });
 
     const handleWheel = (e: WheelEvent): void => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      const delta = e.deltaY < 0 ? 0.1 : -0.1;
-      useUIStore.getState().adjustEditorZoom(delta);
+      useUIStore.getState().adjustEditorZoom(e.deltaY < 0 ? 0.1 : -0.1);
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
+      unsub();
       el.removeEventListener('wheel', handleWheel);
     };
   }, []);

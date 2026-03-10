@@ -93,23 +93,24 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Chrome-style zoom indicator: show on change, auto-hide after 2s
   const resetEditorZoom = useUIStore((s) => s.resetEditorZoom);
-  const [zoomDisplay, setZoomDisplay] = useState<{ visible: boolean; percent: number }>({
-    visible: false,
-    percent: Math.round(useUIStore.getState().editorZoom * 100),
-  });
+  const [zoomPercent, setZoomPercent] = useState(() => Math.round(useUIStore.getState().editorZoom * 100));
+  const [zoomVisible, setZoomVisible] = useState(false);
   const zoomHideTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    let prevZoom = useUIStore.getState().editorZoom;
     const unsub = useUIStore.subscribe((state) => {
-      const percent = Math.round(state.editorZoom * 100);
-      setZoomDisplay({ visible: true, percent });
+      if (state.editorZoom === prevZoom) return;
+      prevZoom = state.editorZoom;
+      setZoomPercent(Math.round(state.editorZoom * 100));
+      setZoomVisible(true);
       if (zoomHideTimerRef.current) window.clearTimeout(zoomHideTimerRef.current);
-      zoomHideTimerRef.current = window.setTimeout(
-        () => setZoomDisplay((prev) => ({ ...prev, visible: false })),
-        2000,
-      );
+      zoomHideTimerRef.current = window.setTimeout(() => setZoomVisible(false), 2000);
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (zoomHideTimerRef.current) window.clearTimeout(zoomHideTimerRef.current);
+    };
   }, []);
 
   return (
@@ -124,10 +125,10 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
       {/* 툴바 액션 */}
       <div className="flex items-center gap-2">
         {/* Chrome-style zoom indicator */}
-        {zoomDisplay.visible && (
+        {zoomVisible && (
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-editor-bg border border-editor-border text-[11px] text-editor-muted animate-in fade-in duration-150">
-            <span className="font-medium">{zoomDisplay.percent}%</span>
-            {zoomDisplay.percent !== 100 && (
+            <span className="font-medium">{zoomPercent}%</span>
+            {zoomPercent !== 100 && (
               <button
                 type="button"
                 onClick={resetEditorZoom}
