@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import i18n from '@/i18n/config';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -40,14 +41,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="flex flex-col items-center justify-center h-full p-6 text-editor-muted">
           <p className="text-sm mb-2">
-            {this.props.name ? `${this.props.name}에서 ` : ''}오류가 발생했습니다.
+            {this.props.name
+              ? i18n.t('common.errorOccurredIn', { name: this.props.name })
+              : i18n.t('common.errorOccurred')}
           </p>
           <button
             type="button"
             onClick={this.reset}
             className="px-3 py-1.5 text-xs bg-editor-surface border border-editor-border rounded hover:bg-editor-hover transition-colors"
           >
-            다시 시도
+            {i18n.t('common.retry')}
           </button>
         </div>
       );

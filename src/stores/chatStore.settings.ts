@@ -76,63 +76,43 @@ export function createSettingsActions(
     schedulePersist();
   };
 
-  const appendToTranslatorPersona = (snippet: string): void => {
+  /** 세미콜론 구분 스니펫을 불릿 포인트로 변환해 기존 필드에 추가 */
+  const appendFormattedSnippet = (
+    fieldName: 'translatorPersona' | 'translationRules' | 'projectContext',
+    snippet: string,
+  ): void => {
     const incoming = snippet.trim();
     if (!incoming) return;
-    // 세미콜론 구분자를 불릿 포인트로 변환
     const formatted = incoming
       .split(';')
       .map((r) => r.trim())
       .filter(Boolean)
       .map((r) => `- ${r}`)
       .join('\n');
-    const current = get().translatorPersona.trim();
+    const current = (get()[fieldName] as string).trim();
     const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
-    set({ translatorPersona: next });
+    set({ [fieldName]: next });
     schedulePersist();
   };
+
+  const appendToTranslatorPersona = (snippet: string): void =>
+    appendFormattedSnippet('translatorPersona', snippet);
 
   const setTranslationRules = (rules: string): void => {
     set({ translationRules: rules });
     schedulePersist();
   };
 
-  const appendToTranslationRules = (snippet: string): void => {
-    const incoming = snippet.trim();
-    if (!incoming) return;
-    // 세미콜론 구분자를 불릿 포인트로 변환
-    const formatted = incoming
-      .split(';')
-      .map((r) => r.trim())
-      .filter(Boolean)
-      .map((r) => `- ${r}`)
-      .join('\n');
-    const current = get().translationRules.trim();
-    const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
-    set({ translationRules: next });
-    schedulePersist();
-  };
+  const appendToTranslationRules = (snippet: string): void =>
+    appendFormattedSnippet('translationRules', snippet);
 
   const setProjectContext = (memory: string): void => {
     set({ projectContext: memory });
     schedulePersist();
   };
 
-  const appendToProjectContext = (snippet: string): void => {
-    const incoming = snippet.trim();
-    if (!incoming) return;
-    // 세미콜론 구분자를 불릿 포인트로 변환
-    const formatted = incoming
-      .split(';')
-      .map((r) => r.trim())
-      .filter(Boolean)
-      .map((r) => `- ${r}`)
-      .join('\n');
-    const current = get().projectContext.trim();
-    const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
-    set({ projectContext: next });
-    schedulePersist();
-  };
+  const appendToProjectContext = (snippet: string): void =>
+    appendFormattedSnippet('projectContext', snippet);
 
   const setWebSearchEnabled = (enabled: boolean): void => {
     set({ webSearchEnabled: enabled });

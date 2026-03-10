@@ -15,7 +15,9 @@
     "copy": "Copy",
     "copied": "Copied to clipboard.",
     "copyError": "Failed to copy.",
-    "copyToClipboard": "Copy"
+    "copyToClipboard": "Copy",
+    "errorOccurred": "An error occurred.",
+    "errorOccurredIn": "An error occurred in {{name}}."
   },
   "settings": {
     "title": "Settings",

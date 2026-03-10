@@ -32,8 +32,6 @@ interface ConnectorActions {
   setTokenStatus: (connectorId: string, hasToken: boolean, expiresAt?: number) => void;
   /** 토큰 삭제 (로그아웃) */
   clearToken: (connectorId: string) => void;
-  /** 전체 커넥터 설정 목록 반환 */
-  getConnectorConfigs: () => ConnectorConfig[];
   /** 활성화된 빌트인 커넥터 목록 반환 */
   getEnabledBuiltinConnectors: () => ConnectorConfig[];
   /** 특정 커넥터의 토큰 존재 여부 확인 */
@@ -97,35 +95,6 @@ export const useConnectorStore = create<ConnectorState & ConnectorActions>()(
             expiresAtMap: newExpiresAtMap,
           };
         });
-      },
-
-      getConnectorConfigs: () => {
-        const { enabledMap, tokenMap, expiresAtMap } = get();
-        const configs: ConnectorConfig[] = [];
-
-        // 빌트인 커넥터
-        for (const base of BUILTIN_CONNECTORS) {
-          const expiresAt = expiresAtMap[base.id];
-          configs.push({
-            ...base,
-            enabled: enabledMap[base.id] ?? false,
-            hasToken: tokenMap[base.id] ?? false,
-            ...(expiresAt !== undefined ? { tokenExpiresAt: expiresAt } : {}),
-          });
-        }
-
-        // MCP 커넥터
-        for (const base of MCP_CONNECTORS) {
-          const expiresAt = expiresAtMap[base.id];
-          configs.push({
-            ...base,
-            enabled: enabledMap[base.id] ?? false,
-            hasToken: tokenMap[base.id] ?? false,
-            ...(expiresAt !== undefined ? { tokenExpiresAt: expiresAt } : {}),
-          });
-        }
-
-        return configs;
       },
 
       getEnabledBuiltinConnectors: () => {

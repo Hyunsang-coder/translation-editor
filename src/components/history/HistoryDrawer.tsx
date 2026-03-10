@@ -10,12 +10,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useUIStore } from '@/stores/uiStore';
 import { hashContent } from '@/utils/hash';
-
-function isTauriTestingBridgeActive(): boolean {
-  if (typeof window === 'undefined') return false;
-  const w = window as Window & { __TAURI_TESTING_BRIDGE__?: unknown };
-  return typeof w.__TAURI_TESTING_BRIDGE__ === 'object' && w.__TAURI_TESTING_BRIDGE__ !== null;
-}
+import { isTauriTestingBridgeActive } from '@/utils/tauri';
 
 interface HistoryDrawerProps {
   open: boolean;

@@ -1,6 +1,6 @@
 # Code Review 2026-03-09
 
-> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion ~~20~~ 16 (4 fixed, 16 skipped)
+> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion ~~20~~ 12 (8 fixed, 12 skipped)
 
 ---
 
@@ -97,15 +97,15 @@
 
 ### Suggestion
 
-- [ ] **[S-50] appendTo* 중복 로직** `src/stores/chatStore.settings.ts:79-135`
-  - Fix: 공유 헬퍼 추출
+- [x] **[S-50] appendTo* 중복 로직** `src/stores/chatStore.settings.ts:79-135`
+  - Fix: `appendFormattedSnippet` 공유 헬퍼 추출
 
 - [ ] **[S-51] 매직 넘버 상수화**
   - projectStore 1500ms/500ms, historyStore 3000ms, chatStore.ai 100ms 등
   - Fix: 네임드 상수로 추출
 
-- [ ] **[S-52] connectorStore getConnectorConfigs 매 호출 배열 생성**
-  - Fix: 셀렉터 메모이제이션
+- [x] **[S-52] connectorStore getConnectorConfigs 매 호출 배열 생성**
+  - Fix: 호출처 없는 dead code → 삭제
 
 - [ ] **[S-53] legacy sidebar state 정리** `src/stores/uiStore.ts:749`
   - deprecated 상태가 persist에 남아있음
@@ -208,9 +208,8 @@
 
 ### Suggestion
 
-- [ ] **[S-58] ErrorBoundary i18n 미적용** `src/components/ui/ErrorBoundary.tsx:43-50`
-  - 한국어 하드코딩
-  - Fix: i18n 키 사용
+- [x] **[S-58] ErrorBoundary i18n 미적용** `src/components/ui/ErrorBoundary.tsx:43-50`
+  - Fix: `i18n.t()` 직접 호출 (class 컴포넌트), common.errorOccurred/errorOccurredIn 키 추가
 
 - [ ] **[S-59] AppSettingsModal API 키 입력 debounce 미적용** `src/components/AppSettingsModal.tsx:287,325`
   - 매 키스트로크 store 호출
@@ -219,9 +218,8 @@
 - [ ] **[S-60] ChatContent 컴포넌트 700줄+**
   - Fix: 서브 훅/컴포넌트 분리
 
-- [ ] **[S-61] isTauriTestingBridgeActive 중복 정의**
-  - ProjectSidebar/HistoryDrawer에서 동일 코드
-  - Fix: 공유 유틸 추출
+- [x] **[S-61] isTauriTestingBridgeActive 중복 정의**
+  - Fix: `src/utils/tauri.ts`로 추출, 두 파일에서 import
 
 ---
 

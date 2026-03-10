@@ -14,17 +14,12 @@ import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { ProjectDomain } from '@/types';
 import { confirm, message } from '@tauri-apps/plugin-dialog';
+import { isTauriTestingBridgeActive } from '@/utils/tauri';
 
 type NewProjectForm = {
   title: string;
   domain: ProjectDomain;
 };
-
-function isTauriTestingBridgeActive(): boolean {
-  if (typeof window === 'undefined') return false;
-  const w = window as Window & { __TAURI_TESTING_BRIDGE__?: unknown };
-  return typeof w.__TAURI_TESTING_BRIDGE__ === 'object' && w.__TAURI_TESTING_BRIDGE__ !== null;
-}
 
 function mergeProjectListStable(
   prev: RecentProjectInfo[],

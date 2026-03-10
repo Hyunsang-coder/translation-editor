@@ -15,7 +15,9 @@
     "copy": "복사",
     "copied": "클립보드에 복사되었습니다.",
     "copyError": "복사에 실패했습니다.",
-    "copyToClipboard": "복사"
+    "copyToClipboard": "복사",
+    "errorOccurred": "오류가 발생했습니다.",
+    "errorOccurredIn": "{{name}}에서 오류가 발생했습니다."
   },
   "settings": {
     "title": "설정",
