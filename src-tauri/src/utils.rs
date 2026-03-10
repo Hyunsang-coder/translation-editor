@@ -73,6 +73,9 @@ fn is_blocked_path(path: &Path) -> bool {
         // /Users (macOS) 또는 /home (Linux) 은 허용해야 함.
         if path_str.starts_with("/etc")
             || path_str.starts_with("/var")
+            || path_str.starts_with("/private/etc")
+            || path_str.starts_with("/private/var")
+            || path_str.starts_with("/private/tmp")
             || path_str.starts_with("/root")
             || path_str.starts_with("/proc")
             || path_str.starts_with("/sys")

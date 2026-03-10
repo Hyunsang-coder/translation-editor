@@ -1,6 +1,6 @@
 # Code Review 2026-03-09
 
-> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion 20
+> 총 66건 | Critical ~~11~~ 0 (all fixed) | Warning ~~35~~ 0 (all fixed) | Suggestion ~~20~~ 16 (4 fixed, 16 skipped)
 
 ---
 
@@ -158,15 +158,15 @@
 
 ### Suggestion
 
-- [ ] **[S-55] TranslatePreviewModal generateText 이중 호출** `src/components/editor/TranslatePreviewModal.tsx:258-284`
+- [x] **[S-55] TranslatePreviewModal generateText 이중 호출** `src/components/editor/TranslatePreviewModal.tsx:258-284`
   - Fix: 한번 계산 후 파생
 
 - [ ] **[S-56] TipTap extension 배열 중복**
   - TipTapEditor/TranslatePreviewModal에서 유사 extension 배열 반복
   - Fix: `createBaseExtensions()` 공유 함수 추출
 
-- [ ] **[S-57] legacy 블록 에디터 코드**
-  - SegmentGroupRow/TranslationBlock 사용 여부 확인, 미사용 시 제거
+- [x] **[S-57] legacy 블록 에디터 코드**
+  - SegmentGroupRow.tsx, TranslationBlock.ts (extension) 삭제, index.ts re-export 제거
 
 ---
 
@@ -276,15 +276,15 @@
 - [ ] **[S-63] update_block affected row 미확인** `src-tauri/src/db/mod.rs:804-816`
   - Fix: 0 rows 시 에러 반환
 
-- [ ] **[S-64] path blocklist symlink 우회** `src-tauri/src/utils.rs:51-89`
-  - Fix: `/private/var`, `/private/etc` 추가
+- [x] **[S-64] path blocklist symlink 우회** `src-tauri/src/utils.rs:51-89`
+  - Fix: `/private/etc`, `/private/var`, `/private/tmp` 추가
 
 - [ ] **[S-65] MasterKey Clone 제거** `src-tauri/src/secrets/manager.rs:83-84`
   - 미제어 복사 방지
   - Fix: Clone derive 제거, 참조로 전달
 
-- [ ] **[S-66] CSV 파서 multi-line 미지원** `src-tauri/src/db/mod.rs:859-887`
-  - Fix: csv crate 사용 또는 제한사항 문서화
+- [x] **[S-66] CSV 파서 multi-line 미지원** `src-tauri/src/db/mod.rs:859-887`
+  - Fix: 인용부호 내 줄바꿈 레코드 결합 로직 추가
 
 ---
 

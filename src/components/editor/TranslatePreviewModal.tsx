@@ -237,17 +237,17 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     return prepareDiffText(raw);
   }, [diffOriginalHtmlSnapshot, originalHtml]);
 
-  const translatedText = useMemo(() => {
+  const translatedTextRaw = useMemo(() => {
     if (!docJson) return '';
     try {
-      // TipTap JSON을 plain text로 변환 (Heading 등 구조 반영)
-      const raw = generateText(docJson, extensions);
-      return prepareDiffText(raw);
+      return generateText(docJson, extensions);
     } catch (err) {
       console.error('Failed to generate text from docJson:', err);
       return '';
     }
   }, [docJson, extensions]);
+
+  const translatedText = useMemo(() => prepareDiffText(translatedTextRaw), [translatedTextRaw]);
 
   // 단어 수 계산
   const sourceWordCount = useMemo(() => {
@@ -255,15 +255,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     return countWords(stripHtml(sourceHtml));
   }, [sourceHtml]);
 
-  const translationWordCount = useMemo(() => {
-    if (!docJson) return 0;
-    try {
-      const text = generateText(docJson, extensions);
-      return countWords(text);
-    } catch {
-      return 0;
-    }
-  }, [docJson, extensions]);
+  const translationWordCount = useMemo(() => countWords(translatedTextRaw), [translatedTextRaw]);
 
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {

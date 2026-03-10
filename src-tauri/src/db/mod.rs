@@ -880,7 +880,7 @@ impl Database {
 
         // 간단 CSV 파서(외부 크레이트 없이 동작)
         // - 기본: UTF-8 CSV
-        // - 따옴표(") 내부의 콤마는 필드로 취급
+        // - 따옴표(") 내부의 콤마/줄바꿈은 필드로 취급
         // - "" 는 " 로 이스케이프
         fn parse_csv_row(line: &str) -> Vec<String> {
             let mut out: Vec<String> = Vec::new();
@@ -912,14 +912,39 @@ impl Database {
             out
         }
 
-        // 유효 라인들만 파싱
+        // Multi-line CSV 지원: 인용부호 안의 줄바꿈을 하나의 레코드로 결합
         let mut rows: Vec<Vec<String>> = Vec::new();
+        let mut pending_line = String::new();
+        let mut in_quotes = false;
         for line in text.lines() {
-            let l = line.trim_end_matches('\r').trim();
-            if l.is_empty() || l.starts_with('#') {
-                continue;
+            let l = line.trim_end_matches('\r');
+            if pending_line.is_empty() {
+                let trimmed = l.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
             }
-            rows.push(parse_csv_row(l));
+
+            if !pending_line.is_empty() {
+                pending_line.push('\n');
+            }
+            pending_line.push_str(l);
+
+            // 인용부호 개수를 세어 열린 상태인지 판단
+            for ch in l.chars() {
+                if ch == '"' {
+                    in_quotes = !in_quotes;
+                }
+            }
+
+            if !in_quotes {
+                rows.push(parse_csv_row(&pending_line));
+                pending_line.clear();
+            }
+        }
+        // 파일 끝에 닫히지 않은 인용부호가 있으면 남은 줄도 파싱
+        if !pending_line.is_empty() {
+            rows.push(parse_csv_row(&pending_line));
         }
 
         if rows.is_empty() {
