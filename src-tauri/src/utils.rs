@@ -48,6 +48,30 @@ pub fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
     Ok(canonical_path)
 }
 
+/// 파일 크기 검증
+pub fn validate_file_size(path: &std::path::Path, max_size: u64) -> CommandResult<u64> {
+    let metadata = std::fs::metadata(path).map_err(|e| CommandError {
+        code: "FILE_ERROR".to_string(),
+        message: format!("파일 정보를 읽을 수 없습니다: {}", e),
+        details: None,
+    })?;
+
+    let size = metadata.len();
+    if size > max_size {
+        return Err(CommandError {
+            code: "FILE_TOO_LARGE".to_string(),
+            message: format!(
+                "파일 크기가 너무 큽니다: {}MB (최대 {}MB)",
+                size / (1024 * 1024),
+                max_size / (1024 * 1024)
+            ),
+            details: None,
+        });
+    }
+
+    Ok(size)
+}
+
 fn is_blocked_path(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
 

@@ -8,7 +8,7 @@ use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
-use crate::utils::validate_path;
+use crate::utils::{validate_path, validate_file_size};
 
 /// 첨부 파일 최대 크기 (100MB)
 const MAX_ATTACHMENT_SIZE: u64 = 100 * 1024 * 1024;
@@ -21,30 +21,6 @@ const TEMP_FILE_MAX_AGE_SECS: u64 = 24 * 60 * 60;
 
 fn is_image_extension(ext: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "webp" | "gif")
-}
-
-/// 파일 크기 검증
-fn validate_file_size(path: &Path, max_size: u64) -> CommandResult<u64> {
-    let metadata = fs::metadata(path).map_err(|e| CommandError {
-        code: "FILE_ERROR".to_string(),
-        message: format!("파일 정보를 읽을 수 없습니다: {}", e),
-        details: None,
-    })?;
-
-    let size = metadata.len();
-    if size > max_size {
-        return Err(CommandError {
-            code: "FILE_TOO_LARGE".to_string(),
-            message: format!(
-                "파일 크기가 너무 큽니다: {}MB (최대 {}MB)",
-                size / (1024 * 1024),
-                max_size / (1024 * 1024)
-            ),
-            details: None,
-        });
-    }
-
-    Ok(size)
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,12 +84,14 @@ pub async fn attach_file(
     db.save_attachment(&attachment)
         .map_err(CommandError::from)?;
 
+    let extracted_text_length = attachment.extracted_text.as_ref().map(|t| t.len() as i64);
     Ok(AttachmentDto {
         id: attachment.id,
         filename: attachment.filename,
         file_type: attachment.file_type,
         file_size: attachment.file_size,
         extracted_text: attachment.extracted_text,
+        extracted_text_length,
         file_path: attachment.file_path,
         created_at: attachment.created_at,
         updated_at: attachment.updated_at,
@@ -156,6 +134,7 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         .unwrap_or_default();
 
     let extracted_text = extract_file_text(&path, &extension).ok();
+    let extracted_text_length = extracted_text.as_ref().map(|t| t.len() as i64);
 
     let now = chrono::Utc::now().timestamp_millis();
     Ok(AttachmentDto {
@@ -164,6 +143,7 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
         file_type: extension,
         file_size: Some(file_size),
         extracted_text,
+        extracted_text_length,
         file_path: Some(path.to_string_lossy().to_string()),
         created_at: now,
         updated_at: now,
@@ -201,15 +181,19 @@ pub fn list_attachments(
 
     Ok(attachments
         .into_iter()
-        .map(|a| AttachmentDto {
-            id: a.id,
-            filename: a.filename,
-            file_type: a.file_type,
-            file_size: a.file_size,
-            extracted_text: a.extracted_text,
-            file_path: a.file_path,
-            created_at: a.created_at,
-            updated_at: a.updated_at,
+        .map(|a| {
+            let extracted_text_length = a.extracted_text.as_ref().map(|t| t.len() as i64);
+            AttachmentDto {
+                id: a.id,
+                filename: a.filename,
+                file_type: a.file_type,
+                file_size: a.file_size,
+                extracted_text: a.extracted_text,
+                extracted_text_length,
+                file_path: a.file_path,
+                created_at: a.created_at,
+                updated_at: a.updated_at,
+            }
         })
         .collect())
 }

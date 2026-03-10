@@ -16,6 +16,7 @@ export interface AttachmentDto {
     fileType: string;
     fileSize: number | null;
     extractedText?: string;
+    extractedTextLength: number | null;
     filePath: string | null;
     createdAt: number;
     updatedAt: number;

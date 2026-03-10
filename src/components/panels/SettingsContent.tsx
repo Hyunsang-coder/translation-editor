@@ -7,6 +7,7 @@ import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -14,6 +15,7 @@ import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
  */
 export function SettingsContent(): JSX.Element {
   const { t } = useTranslation();
+  const addToast = useUIStore((s) => s.addToast);
 
   const { translatorPersona, setTranslatorPersona, translationRules, setTranslationRules,
           projectContext, setProjectContext, attachments, attachFile, deleteAttachment } =
@@ -140,13 +142,19 @@ export function SettingsContent(): JSX.Element {
                 if (!isTauriRuntime() || !project) return;
                 const path = await pickGlossaryFile();
                 if (path) {
-                  const ext = path.split('.').pop()?.toLowerCase();
-                  if (ext === 'csv') {
-                    await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false });
-                  } else {
-                    await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
+                  try {
+                    const ext = path.split('.').pop()?.toLowerCase();
+                    const result = ext === 'csv'
+                      ? await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false })
+                      : await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
+                    addGlossaryPath(path);
+                    addToast({ type: 'success', message: t('settings.glossaryImportSuccess', { inserted: result.inserted, updated: result.updated, skipped: result.skipped }) });
+                    for (const warning of result.warnings) {
+                      addToast({ type: 'warning', message: t('settings.glossaryImportWarning', { warning }) });
+                    }
+                  } catch (err) {
+                    addToast({ type: 'error', message: String(err) });
                   }
-                  addGlossaryPath(path);
                 }
               })();
             }}
@@ -244,11 +252,18 @@ export function SettingsContent(): JSX.Element {
                     <span className="text-[11px] text-editor-text font-medium truncate">
                       {att.filename}
                     </span>
-                    {att.fileSize && (
-                      <span className="text-[9px] text-editor-muted">
-                        {(att.fileSize / 1024).toFixed(1)} KB
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {att.fileSize && (
+                        <span className="text-[9px] text-editor-muted">
+                          {(att.fileSize / 1024).toFixed(1)} KB
+                        </span>
+                      )}
+                      {att.extractedTextLength != null && att.extractedTextLength > 10000 && (
+                        <span className="text-[9px] text-amber-500 font-medium" title={`${(att.extractedTextLength / 1000).toFixed(0)}K chars`}>
+                          {t('settings.attachmentsTruncationWarning')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button
