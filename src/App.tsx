@@ -17,6 +17,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { isChatPanel } from '@/types';
 import { useHistoryStore } from '@/stores/historyStore';
+import { DesktopTranslationPreviewHost } from '@/components/editor/DesktopTranslationPreviewHost';
+import { initializeOddEyesAppBridge } from '@/desktop/oddeyesAppBridge';
 
 function App(): JSX.Element {
   const { t } = useTranslation();
@@ -207,6 +209,10 @@ function App(): JSX.Element {
     void mcpClientManager.initialize();
   }, []);
 
+  useEffect(() => {
+    initializeOddEyesAppBridge();
+  }, []);
+
   // 임시 파일 정리 (24시간 이상 된 임시 이미지 삭제)
   useEffect(() => {
     cleanupTempImages()
@@ -280,6 +286,8 @@ function App(): JSX.Element {
       {showAppSettingsModal && (
         <AppSettingsModal onClose={() => setShowAppSettingsModal(false)} />
       )}
+
+      <DesktopTranslationPreviewHost />
 
       <UpdateModal
         isOpen={showUpdateModal}
