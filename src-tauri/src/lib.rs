@@ -5,6 +5,7 @@
 
 pub mod commands;
 pub mod db;
+pub mod desktop_mcp;
 pub mod error;
 pub mod mcp;
 pub mod models;
@@ -16,7 +17,7 @@ use crate::secrets::SECRETS;
 use std::path::{Path, PathBuf};
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Manager;
-use tracing::{debug, error, info};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 struct ApiKeysBundle {
@@ -234,6 +235,8 @@ fn set_view_chat_menu_checked(app: tauri::AppHandle, checked: bool) -> Result<()
 /// Tauri 앱 실행
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let desktop_mcp_runtime = desktop_mcp::configure_runtime_env();
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -248,7 +251,7 @@ pub fn run() {
     }
 
     builder
-        .setup(|app| {
+        .setup(move |app| {
             // Dev 환경에서 .env.local 을 로드 (Brave Search API 등 비밀키는 프론트에 노출하지 않고 백엔드에서 사용)
             // - .env.local이 markdown(코드펜스 등)을 포함하면 dotenvy(strict)가 실패할 수 있어,
             //   strict 실패 시 lenient(KEY=VALUE 라인만) 로더로 보강합니다.
@@ -279,6 +282,9 @@ pub fn run() {
 
             // 앱 상태로 데이터베이스 관리
             app.manage(db::DbState(std::sync::Mutex::new(db)));
+            app.manage(desktop_mcp::DesktopMcpState::new(
+                desktop_mcp_runtime.clone(),
+            ));
 
             // SecretManager에 app_data_dir 설정 (Vault 경로용)
             // 동기 실행: 프론트엔드의 initializeSecrets()보다 먼저 완료되어야 함
@@ -403,6 +409,10 @@ pub fn run() {
                 }
             });
 
+            if let Err(err) = desktop_mcp::initialize(&app.handle()) {
+                warn!("[desktop-mcp] initialization skipped: {}", err);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -496,8 +506,17 @@ pub fn run() {
             commands::secrets::secrets_has,
             commands::secrets::secrets_list_keys,
             commands::secrets::secrets_migrate_legacy,
+            desktop_mcp::get_oddeyes_desktop_mcp_status,
             set_view_chat_menu_checked,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                desktop_mcp::cleanup(app_handle);
+            }
+        });
 }

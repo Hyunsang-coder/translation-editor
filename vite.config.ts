@@ -6,7 +6,7 @@ import pkg from './package.json';
 // package.json에서 버전 정보를 가져옴
 const appVersion = pkg.version;
 
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env.TAURI_DEV_HOST || '127.0.0.1';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -132,14 +132,12 @@ export default defineConfig(({ command }) => {
     // Tauri expects a fixed port
     port: 1420,
     strictPort: true,
-    host: host || false,
-    hmr: host
-      ? {
-          protocol: 'ws',
-          host,
-          port: 1421,
-        }
-      : undefined,
+    host,
+    hmr: {
+      protocol: 'ws',
+      host,
+      port: 1421,
+    },
     watch: {
       // Tell Vite to ignore watching `src-tauri`
       ignored: ['**/src-tauri/**'],

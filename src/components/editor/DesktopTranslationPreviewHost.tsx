@@ -5,19 +5,11 @@ import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 
 export function DesktopTranslationPreviewHost(): JSX.Element | null {
   const { t } = useTranslation();
-  const {
-    open,
-    title,
-    docJson,
-    sourceHtml,
-    originalHtml,
-  } = useTranslationPreviewStore((s) => ({
-    open: s.open,
-    title: s.title,
-    docJson: s.docJson,
-    sourceHtml: s.sourceHtml,
-    originalHtml: s.originalHtml,
-  }));
+  const open = useTranslationPreviewStore((s) => s.open);
+  const title = useTranslationPreviewStore((s) => s.title);
+  const docJson = useTranslationPreviewStore((s) => s.docJson);
+  const sourceHtml = useTranslationPreviewStore((s) => s.sourceHtml);
+  const originalHtml = useTranslationPreviewStore((s) => s.originalHtml);
 
   if (!open) {
     return null;

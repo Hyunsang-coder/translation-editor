@@ -36,6 +36,18 @@ npm run tauri:dev    # 개발 서버
 npm run tauri:build  # 프로덕션 빌드
 ```
 
+### Claude Desktop 프리뷰 연동
+
+- 앱 시작 시 `oddeyes-desktop-mcp` 번들이 자동으로 준비되고, 로컬 HTTP helper가 자동 spawn/healthcheck 됩니다.
+- Claude Desktop용 launcher와 설정 스니펫은 앱 데이터 디렉터리의 `desktop-mcp/` 아래에 생성됩니다.
+- macOS 예시:
+  `/Users/<you>/Library/Application Support/com.oddeyes.desktop/desktop-mcp/claude-desktop-config.json`
+- 기본 launcher 파일명:
+  `run-oddeyes-desktop-mcp.sh` (Windows는 `.cmd`)
+- 로컬 프리뷰 helper endpoint:
+  `http://127.0.0.1:<auto-port>/mcp`
+- 이 경로는 앱이 실행 중일 때만 유효합니다. Claude Desktop에는 생성된 `claude-desktop-config.json` 내용을 사용하면 됩니다.
+
 ## 린트 & 테스트
 
 ```bash
