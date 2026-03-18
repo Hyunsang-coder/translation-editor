@@ -36,7 +36,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [],
+    "resources": [
+      "../oddeyes-desktop-mcp/build/oddeyes-desktop.mcpb"
+    ],
     "createUpdaterArtifacts": true,
     "macOS": {
       "signingIdentity": null,

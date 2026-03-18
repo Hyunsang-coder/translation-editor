@@ -2,12 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { OddEyesBridgeClient } from "./client/websocket.js";
+import { OddEyesBridgeRuntime } from "./bridgeRuntime.js";
 import { registerDocumentTools } from "./tools/documents.js";
 import { registerPreviewTools } from "./tools/preview.js";
 
-const bridgePort = Number(process.env.ODDEYES_BRIDGE_PORT ?? "9966");
-const bridgeToken = process.env.ODDEYES_BRIDGE_TOKEN ?? "oddeyes-bridge-token";
 const transportMode = process.env.ODDEYES_DESKTOP_MCP_TRANSPORT === "http" ? "http" : "stdio";
 const httpPort = Number(process.env.ODDEYES_DESKTOP_MCP_PORT ?? "9977");
 const httpAuthToken = process.env.ODDEYES_DESKTOP_MCP_AUTH_TOKEN ?? "";
@@ -15,11 +13,10 @@ const httpHost = process.env.ODDEYES_DESKTOP_MCP_HOST ?? "127.0.0.1";
 const mcpPath = process.env.ODDEYES_DESKTOP_MCP_PATH ?? "/mcp";
 const healthPath = process.env.ODDEYES_DESKTOP_MCP_HEALTH_PATH ?? "/health";
 
-const bridge = new OddEyesBridgeClient(bridgePort, bridgeToken);
+const bridgeRuntime = new OddEyesBridgeRuntime();
 
 async function callBridge(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  await bridge.connect();
-  return await bridge.request(method, params);
+  return await bridgeRuntime.call(method, params);
 }
 
 function createMcpServer(): McpServer {
@@ -83,7 +80,7 @@ async function buildHealthPayload(): Promise<Record<string, unknown>> {
     return {
       ok: true,
       transport: transportMode,
-      bridgePort,
+      bridgeInfoPath: bridgeRuntime.getBridgeInfoPath(),
       mcpPort: transportMode === "http" ? httpPort : null,
       status,
     };
@@ -91,7 +88,7 @@ async function buildHealthPayload(): Promise<Record<string, unknown>> {
     return {
       ok: false,
       transport: transportMode,
-      bridgePort,
+      bridgeInfoPath: bridgeRuntime.getBridgeInfoPath(),
       mcpPort: transportMode === "http" ? httpPort : null,
       error: error instanceof Error ? error.message : String(error),
     };
@@ -104,7 +101,7 @@ async function startStdioServer(): Promise<() => Promise<void>> {
   await server.connect(transport);
 
   return async () => {
-    await bridge.disconnect().catch(() => undefined);
+    await bridgeRuntime.disconnect().catch(() => undefined);
     await server.close().catch(() => undefined);
   };
 }
@@ -193,7 +190,7 @@ async function startHttpServer(): Promise<() => Promise<void>> {
         resolve();
       });
     }).catch(() => undefined);
-    await bridge.disconnect().catch(() => undefined);
+    await bridgeRuntime.disconnect().catch(() => undefined);
   };
 }
 

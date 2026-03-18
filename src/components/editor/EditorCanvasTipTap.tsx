@@ -20,7 +20,7 @@ import { MODEL_PRESETS } from '@/ai/config';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { stripHtml } from '@/utils/hash';
 import { searchGlossary } from '@/tauri/glossary';
-import { tipTapJsonToMarkdown } from '@/utils/markdownConverter';
+import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -426,7 +426,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
     try {
-      const markdown = tipTapJsonToMarkdown(sourceDocJson as Record<string, unknown>);
+      const markdown = tipTapJsonToMarkdownForTranslation(sourceDocJson as Record<string, unknown>);
       await navigator.clipboard.writeText(markdown);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
@@ -440,7 +440,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
     try {
-      const markdown = tipTapJsonToMarkdown(targetDocJson as Record<string, unknown>);
+      const markdown = tipTapJsonToMarkdownForTranslation(targetDocJson as Record<string, unknown>);
       await navigator.clipboard.writeText(markdown);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build:ts": "tsc -p tsconfig.json",
+    "build:bundle": "node scripts/build-bundle.mjs",
+    "build": "npm run build:ts && npm run build:bundle",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },
