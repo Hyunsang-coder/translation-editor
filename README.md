@@ -47,6 +47,7 @@ npm run tauri:build  # 프로덕션 빌드
 - 로컬 프리뷰 helper endpoint:
   `http://127.0.0.1:<auto-port>/mcp`
 - 이 경로는 앱이 실행 중일 때만 유효합니다. Claude Desktop에는 생성된 `claude-desktop-config.json` 내용을 사용하면 됩니다.
+- 상세 가이드는 `/docs/ODDEYES_DESKTOP_MCP.md` 참조
 
 ## 린트 & 테스트
 

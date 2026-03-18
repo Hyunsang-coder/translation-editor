@@ -35,6 +35,7 @@
 |------|------|------|
 | **Tauri 테스트 가이드** | `/docs/TAURI_TESTING.md` | Tauri 중심 테스트 명령 및 릴리즈 전 스모크 절차 |
 | **Tauri Testing Plugin 명세** | `/docs/TAURI_TESTING_PLUGIN.md` | Tauri 테스트 플러그인 + MCP 브리지 MVP 구현 명세 |
+| **OddEyes Desktop MCP** | `/docs/ODDEYES_DESKTOP_MCP.md` | Claude Desktop 연동 구조, launcher/config, preview flow |
 
 ## 코드 리뷰
 
