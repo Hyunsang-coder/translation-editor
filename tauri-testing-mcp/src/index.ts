@@ -5,6 +5,7 @@ import { registerDomTools } from "./tools/dom.js";
 import { registerTauriTools } from "./tools/tauri.js";
 import { registerWindowTools } from "./tools/window.js";
 import { registerAppTools } from "./tools/app.js";
+import { registerOddEyesTools } from "./tools/oddeyes.js";
 
 const port = Number(process.env.TAURI_TEST_PORT ?? "9876");
 const token = process.env.TAURI_TEST_TOKEN ?? "tauri-testing-token";
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
   registerTauriTools(server, callBridge);
   registerWindowTools(server, callBridge);
   registerAppTools(server, callBridge);
+  registerOddEyesTools(server, callBridge);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

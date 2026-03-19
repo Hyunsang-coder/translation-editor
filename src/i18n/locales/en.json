@@ -125,6 +125,14 @@
         "helpText": "You can create an Integration Token in your Notion settings:",
         "useExistingToken": "Press Connect to use your existing token"
       }
+    },
+    "claudeDesktop": {
+      "title": "Claude Desktop",
+      "description": "Let Claude Desktop read and write your translation documents directly in OddEyes.",
+      "howTo": "Click the button below to locate the Extension file (.mcpb), then install it in Claude Desktop → Settings → Extensions.",
+      "openFolder": "Open Extension File",
+      "notReady": "Extension file is not ready yet. Try restarting the app.",
+      "bridgeActive": "Bridge active (port {{port}})"
     }
   },
   "toolbar": {

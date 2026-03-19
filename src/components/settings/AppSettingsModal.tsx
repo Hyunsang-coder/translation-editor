@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { check } from '@tauri-apps/plugin-updater';
@@ -7,6 +7,8 @@ import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
 import { Modal } from '@/components/ui/Modal';
+import { invoke } from '@/tauri/invoke';
+import { isTauriRuntime } from '@/tauri/invoke';
 import i18n from 'i18next';
 
 interface AppSettingsModalProps {
@@ -45,6 +47,26 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
       setOpenaiEnabled: s.setOpenaiEnabled, setAnthropicEnabled: s.setAnthropicEnabled,
     }))
   );
+
+  // Claude Desktop MCP 상태
+  const [mcpStatus, setMcpStatus] = useState<{
+    bridgePort: number;
+    extensionBundlePath: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    invoke<{ bridgePort: number; extensionBundlePath: string | null }>('get_oddeyes_desktop_mcp_status')
+      .then(setMcpStatus)
+      .catch(() => setMcpStatus(null));
+  }, []);
+
+  const handleOpenExtensionFolder = () => {
+    if (!mcpStatus?.extensionBundlePath) return;
+    // Open the parent directory containing the .mcpb file
+    const dirPath = mcpStatus.extensionBundlePath.replace(/\/[^/]+$/, '');
+    void open(dirPath);
+  };
 
   // 업데이트 확인 상태
   const [checkState, setCheckState] = useState<'idle' | 'checking' | 'latest' | 'error'>('idle');
@@ -334,6 +356,42 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
             {/* Connectors */}
             <ConnectorsSection />
+
+            {/* Claude Desktop */}
+            {isTauriRuntime() && (
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">🤖</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.claudeDesktop.title')}</h3>
+                </div>
+                <p className="text-xs text-editor-muted">
+                    {t('appSettings.claudeDesktop.description')}
+                </p>
+                <p className="text-xs text-editor-muted">
+                    {t('appSettings.claudeDesktop.howTo')}
+                </p>
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleOpenExtensionFolder}
+                        disabled={!mcpStatus?.extensionBundlePath}
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {t('appSettings.claudeDesktop.openFolder')}
+                    </button>
+                    {mcpStatus?.bridgePort && (
+                        <span className="text-xs text-green-600 dark:text-green-400">
+                            {t('appSettings.claudeDesktop.bridgeActive', { port: mcpStatus.bridgePort })}
+                        </span>
+                    )}
+                </div>
+                {!mcpStatus?.extensionBundlePath && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                        {t('appSettings.claudeDesktop.notReady')}
+                    </p>
+                )}
+            </section>
+            )}
 
             {/* Help & Info */}
             <section className="space-y-3">

@@ -131,19 +131,39 @@ macOS 기준:
 
 ## 사용 가능한 도구
 
-### Read-only
+### Desktop MCP Extension (oddeyes-desktop-mcp)
 
+#### Read-only
 - `oddeyes_get_status`
 - `oddeyes_get_source_document`
 - `oddeyes_get_target_document`
 - `oddeyes_get_translation_context`
 - `oddeyes_get_translation_preview`
 
-### Preview write/apply
-
+#### Preview write/apply
 - `oddeyes_set_translation_preview`
 - `oddeyes_apply_translation_preview`
 - `oddeyes_discard_translation_preview`
+
+### Semantic Tools (tauri-testing-mcp, `oddeyes_*` prefix)
+
+Claude가 앱의 구조화된 번역 데이터를 직접 읽고 쓸 수 있는 도구입니다.
+
+#### Project
+- `oddeyes_project_list` — 프로젝트 목록 조회
+- `oddeyes_project_open` — 프로젝트 로드 (전체 구조 반환)
+
+#### Document
+- `oddeyes_document_get_blocks` — 정렬된 source↔target 블록 쌍 조회
+- `oddeyes_document_set_blocks` — target 블록에 번역 내용 쓰기 (에디터 자동 갱신)
+
+#### Settings & Glossary
+- `oddeyes_settings_get` — 번역 설정 조회 (persona, rules, context, 프로젝트 메타데이터)
+- `oddeyes_glossary_search` — 프로젝트 용어집 검색
+
+#### Snapshots
+- `oddeyes_snapshot_create` — 명명된 스냅샷 생성
+- `oddeyes_snapshot_list` — 스냅샷 목록 조회
 
 ## 권장 테스트 순서
 
@@ -175,4 +195,5 @@ macOS 기준:
 - `.mcpb` 서명/배포 정책 정리
 - Claude Desktop extension directory 등록 가능 형태로 메타데이터 확장
 - sidecar 또는 binary MCP server 필요성 재검토
-- app UI에서 extension bundle 경로 / 설치 상태 노출 여부 결정
+- ~~app UI에서 extension bundle 경로 / 설치 상태 노출 여부 결정~~ → 완료 (AppSettingsModal에 Claude Desktop 섹션 추가)
+- `oddeyes-desktop-mcp`에 semantic tools (document_get/set_blocks 등) 통합

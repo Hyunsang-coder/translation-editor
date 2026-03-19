@@ -56,8 +56,10 @@ src/stores/       # Zustand stores (chatStore: 7 슬라이스)
 src/components/   # React components
 src/components/history/  # History snapshot UI (timeline/compare/restore/rename)
 src-tauri/src/    # Rust backend (commands/, mcp/)
+src/desktop/      # Claude Desktop bridge (oddeyesAppBridge, translationPreview)
 crates/tauri-plugin-testing/  # Tauri runtime testing bridge plugin
-tauri-testing-mcp/            # MCP server for runtime control tools
+tauri-testing-mcp/            # MCP server for runtime control tools (+ oddeyes_* semantic tools)
+oddeyes-desktop-mcp/          # Claude Desktop MCP extension (.mcpb bundle)
 ```
 
 ### Version Files (Keep in Sync)
@@ -82,8 +84,14 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-03-05)
+## Recent Updates (2026-03-19)
 
+- **OddEyes MCP Semantic Tools**: `tauri-testing-mcp`에 `oddeyes_*` 도구 8개 추가 (project_list/open, document_get/set_blocks, settings_get, glossary_search, snapshot_create/list). Claude가 앱의 구조화된 번역 데이터를 직접 읽고 쓸 수 있음.
+- **Claude Desktop 연결 UI**: 앱 설정에 Claude Desktop 섹션 추가 — Extension 파일(.mcpb) 폴더 열기 + Bridge 상태 표시.
+- **Frontend 자동 새로고침**: MCP 도구가 블록을 수정하면 `oddeyes://project-changed` 이벤트로 에디터 자동 갱신.
+- **CI .mcpb 빌드**: `beforeBuildCommand`에 `oddeyes-desktop-mcp:build` 추가하여 릴리스 빌드 시 Extension 번들 자동 생성.
+
+### Previous (2026-03-05)
 - **자동저장 버그 수정**: `acceptDocDiff`, `splitBlock`, `mergeBlocks`, `addSegment`, `createNewProject`에서 `lastChangeAt` 미갱신 → autoSave/autoSnapshot debounce 무력화 버그 수정.
 - **autoSnapshotStatus 제거**: Toolbar 저장 배지 제거 (히스토리 타임라인으로 확인). `historyStore`에서 `AutoSnapshotStatus` 타입·상태·타이머 전부 삭제.
 - **검수 패널 "무시" → "확인"**: `review.ignore` i18n 키 변경 (EN: "Done").

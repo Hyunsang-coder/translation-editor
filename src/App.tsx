@@ -8,12 +8,14 @@ import { useShallow } from 'zustand/shallow';
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
 import { initializeSecrets } from '@/tauri/secrets';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { loadProject as tauriLoadProject } from '@/tauri/project';
 import { setViewChatMenuChecked } from '@/tauri/menu';
 import { initializeConnectors } from '@/stores/connectorStore';
 import { cleanupTempImages } from '@/tauri/attachments';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { UpdateModal } from '@/components/ui/UpdateModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { isChatPanel } from '@/types';
 import { useHistoryStore } from '@/stores/historyStore';
@@ -146,6 +148,23 @@ function App(): JSX.Element {
     window.addEventListener('tauri-menu', handler);
     return () => window.removeEventListener('tauri-menu', handler);
   }, [checkForUpdate, addToast, t]);
+
+  // MCP bridge: reload project when external tool modifies it in SQLite
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const unlisten = listen<{ projectId: string }>('oddeyes://project-changed', async (event) => {
+      const currentId = useProjectStore.getState().project?.id;
+      if (event.payload?.projectId && event.payload.projectId === currentId) {
+        try {
+          const fresh = await tauriLoadProject(event.payload.projectId);
+          useProjectStore.getState().loadProject(fresh);
+        } catch (err) {
+          console.warn('[App] Failed to reload project after MCP change:', err);
+        }
+      }
+    });
+    return () => { void unlisten.then((fn) => fn()); };
+  }, []);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
