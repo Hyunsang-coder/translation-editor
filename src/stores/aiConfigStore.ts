@@ -15,9 +15,9 @@ interface ApiKeysBundle {
 }
 
 interface AiConfigState {
-  // 번역용 모델 (예: gpt-5.2)
+  // 번역용 모델 (예: gpt-5.4)
   translationModel: string;
-  // 채팅/질문용 모델 (예: gpt-5-mini)
+  // 채팅/질문용 모델 (예: gpt-5.4-mini)
   chatModel: string;
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
@@ -67,8 +67,7 @@ let loadingPromise: Promise<void> | null = null;
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   openai: [
     { value: 'gpt-5.4' },
-    { value: 'gpt-5.2' },
-    { value: 'gpt-5-mini' },
+    { value: 'gpt-5.4-mini' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-6' },
@@ -220,7 +219,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
           if (!enabled) {
             const openaiPresets = MODEL_PRESETS.openai;
-            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.2';
+            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.4';
             if (state.translationModel.startsWith('claude')) {
               set({ translationModel: firstOpenaiModel });
             }
@@ -233,13 +232,13 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 7,
+      version: 8,
       migrate: (persisted: unknown, version: number) => {
         const data = persisted as Record<string, unknown>;
         if (version < 5) {
           const oldProvider = (data.provider as string) || 'openai';
-          data.translationModel = (data.translationModel as string) || 'gpt-5.2';
-          data.chatModel = (data.chatModel as string) || 'gpt-5.2';
+          data.translationModel = (data.translationModel as string) || 'gpt-5.4';
+          data.chatModel = (data.chatModel as string) || 'gpt-5.4';
           data.openaiEnabled = oldProvider !== 'anthropic';
           data.anthropicEnabled = oldProvider === 'anthropic';
         }
@@ -254,6 +253,16 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           data.translationModel = rename(data.translationModel);
           data.chatModel = rename(data.chatModel);
           data.anthropicEnabled = true;
+        }
+        // v7 → v8: OpenAI 모델 gpt-5.2/gpt-5-mini → gpt-5.4/gpt-5.4-mini
+        if (version < 8) {
+          const rename = (v: unknown) => {
+            if (v === 'gpt-5.2') return 'gpt-5.4';
+            if (v === 'gpt-5-mini') return 'gpt-5.4-mini';
+            return v;
+          };
+          data.translationModel = rename(data.translationModel);
+          data.chatModel = rename(data.chatModel);
         }
         return data;
       },

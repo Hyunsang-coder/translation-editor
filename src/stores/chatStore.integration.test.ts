@@ -38,7 +38,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
     mocks.searchGlossary.mockResolvedValue([]);
     mocks.getAiConfig.mockReturnValue({
       provider: 'openai',
-      model: 'gpt-5-mini',
+      model: 'gpt-5.4-mini',
       maxRecentMessages: 20,
       openaiApiKey: 'sk-test',
     });

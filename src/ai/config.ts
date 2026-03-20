@@ -16,8 +16,7 @@ export const MODEL_PRESETS = {
   ],
   openai: [
     { value: 'gpt-5.4', label: 'GPT-5.4', description: '최신 모델, 최고 성능' },
-    { value: 'gpt-5.2', label: 'GPT-5.2', description: '높은 성능, 빠른 응답' },
-    { value: 'gpt-5-mini', label: 'GPT-5-mini', description: '가벼운 작업에 적합, 낮은 비용' },
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', description: '빠른 응답, 낮은 비용' },
   ],
 } as const;
 
