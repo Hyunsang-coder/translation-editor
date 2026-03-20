@@ -159,6 +159,9 @@ async function copyDirectory(sourceDir, destinationDir, options = {}) {
 
 async function createBundleArchive() {
   if (process.platform === 'win32') {
+    // Compress-Archive only supports .zip extension, so create as .zip then rename
+    const zipPath = bundlePath.replace(/\.mcpb$/, '.zip');
+    await fs.rm(zipPath, { force: true });
     await fs.rm(bundlePath, { force: true });
     execFileSync(
       'powershell.exe',
@@ -166,13 +169,14 @@ async function createBundleArchive() {
         '-NoLogo',
         '-NoProfile',
         '-Command',
-        `Compress-Archive -Path * -DestinationPath "${bundlePath}" -Force`,
+        `Compress-Archive -Path * -DestinationPath "${zipPath}" -Force`,
       ],
       {
         cwd: extensionDir,
         stdio: 'inherit',
       },
     );
+    await fs.rename(zipPath, bundlePath);
     return;
   }
 
