@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build MCP extension bundle
+        run: npm ci --prefix oddeyes-desktop-mcp && npm run oddeyes-desktop-mcp:build
+
       - name: Unit tests
         run: npm run test:run
 
