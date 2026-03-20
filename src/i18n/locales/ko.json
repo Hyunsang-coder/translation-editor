@@ -129,9 +129,9 @@
     "claudeDesktop": {
       "title": "Claude Desktop 연결",
       "description": "Claude Desktop에서 OddEyes의 번역 문서를 직접 읽고 쓸 수 있습니다.",
-      "howTo": "아래 버튼을 눌러 Extension 파일(.mcpb)을 찾은 뒤, Claude Desktop → Settings → Extensions에서 설치하세요.",
-      "openFolder": "Extension 파일 열기",
-      "notReady": "Extension 파일이 아직 준비되지 않았습니다. 앱을 재시작해 보세요.",
+      "howTo": "아래 설정을 Claude Desktop → Settings → claude_desktop_config.json에 붙여넣으세요.",
+      "copyConfig": "설정 복사",
+      "copied": "복사됨!",
       "bridgeActive": "Bridge 활성 (포트 {{port}})"
     }
   },

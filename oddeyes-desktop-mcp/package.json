@@ -1,14 +1,37 @@
 {
   "name": "oddeyes-desktop-mcp",
   "version": "0.1.0",
-  "private": true,
+  "description": "MCP server that connects Claude Desktop to OddEyes.ai translation editor",
   "type": "module",
+  "bin": {
+    "oddeyes-desktop-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "build:ts": "tsc -p tsconfig.json",
     "build:bundle": "node scripts/build-bundle.mjs",
     "build": "npm run build:ts && npm run build:bundle",
+    "prepublishOnly": "npm run build:ts",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "claude-desktop",
+    "translation",
+    "oddeyes"
+  ],
+  "author": "OddEyes.ai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hyunsang-coder/translation-editor",
+    "directory": "oddeyes-desktop-mcp"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",

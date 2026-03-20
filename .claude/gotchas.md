@@ -144,6 +144,10 @@ Critical implementation warnings learned from past issues.
 
 61. **Bundle Targets Configuration**: `tauri.conf.json` uses `"targets": "all"` to auto-select bundles for current OS. Override with `--bundles` flag.
 
+142. **Tauri Resource Path `_up_` Prefix**: `tauri.conf.json`의 `resources`에 `../` 상대경로를 쓰면 릴리스 빌드 시 `_up_/`으로 치환됨. 예: `"../oddeyes-desktop-mcp/build/x.mcpb"` → `Contents/Resources/_up_/oddeyes-desktop-mcp/build/x.mcpb`. Rust에서 `BaseDirectory::Resource`로 resolve할 때 이 전체 경로를 사용해야 함. Dev 모드에서는 리포 경로를 직접 참조하므로 문제가 안 보여서 릴리스에서만 실패하는 함정.
+
+143. **Windows `Compress-Archive` 확장자 제한**: PowerShell `Compress-Archive`는 `.zip` 확장자만 지원. `.mcpb` 등 커스텀 확장자는 `NotSupportedArchiveFileExtension` 에러 발생. `.zip`으로 생성 후 rename 필요.
+
 ## Security
 
 62. **Keychain Access**: First run requires OS authentication prompt for keychain access.

@@ -51,21 +51,29 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   // Claude Desktop MCP 상태
   const [mcpStatus, setMcpStatus] = useState<{
     bridgePort: number;
-    extensionBundlePath: string | null;
   } | null>(null);
+  const [configCopied, setConfigCopied] = useState(false);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
-    invoke<{ bridgePort: number; extensionBundlePath: string | null }>('get_oddeyes_desktop_mcp_status')
+    invoke<{ bridgePort: number }>('get_oddeyes_desktop_mcp_status')
       .then(setMcpStatus)
       .catch(() => setMcpStatus(null));
   }, []);
 
-  const handleOpenExtensionFolder = () => {
-    if (!mcpStatus?.extensionBundlePath) return;
-    // Open the parent directory containing the .mcpb file
-    const dirPath = mcpStatus.extensionBundlePath.replace(/\/[^/]+$/, '');
-    void open(dirPath);
+  const handleCopyMcpConfig = () => {
+    const config = JSON.stringify({
+      mcpServers: {
+        'oddeyes-desktop': {
+          command: 'npx',
+          args: ['-y', 'oddeyes-desktop-mcp'],
+        },
+      },
+    }, null, 2);
+    void navigator.clipboard.writeText(config).then(() => {
+      setConfigCopied(true);
+      setTimeout(() => setConfigCopied(false), 2000);
+    });
   };
 
   // 업데이트 확인 상태
@@ -370,14 +378,23 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.claudeDesktop.howTo')}
                 </p>
+                <pre className="p-3 text-xs bg-editor-bg-sidebar rounded-lg overflow-x-auto font-mono text-editor-text/80">
+{`{
+  "mcpServers": {
+    "oddeyes-desktop": {
+      "command": "npx",
+      "args": ["-y", "oddeyes-desktop-mcp"]
+    }
+  }
+}`}
+                </pre>
                 <div className="flex items-center gap-3">
                     <button
                         type="button"
-                        onClick={handleOpenExtensionFolder}
-                        disabled={!mcpStatus?.extensionBundlePath}
-                        className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        onClick={handleCopyMcpConfig}
+                        className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors"
                     >
-                        {t('appSettings.claudeDesktop.openFolder')}
+                        {configCopied ? t('appSettings.claudeDesktop.copied') : t('appSettings.claudeDesktop.copyConfig')}
                     </button>
                     {mcpStatus?.bridgePort && (
                         <span className="text-xs text-green-600 dark:text-green-400">
@@ -385,11 +402,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         </span>
                     )}
                 </div>
-                {!mcpStatus?.extensionBundlePath && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                        {t('appSettings.claudeDesktop.notReady')}
-                    </p>
-                )}
             </section>
             )}
 
