@@ -419,34 +419,48 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     setTargetSearchReplaceMode(false);
   }, []);
 
-  // 패널 복사 핸들러
+  // 패널 복사 핸들러 (text/html + text/plain 둘 다 클립보드에 저장)
   const handleCopySource = useCallback(async () => {
-    if (!sourceDocJson) {
+    const editor = sourceEditorRef.current;
+    if (!editor || editor.isEmpty) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
       return;
     }
     try {
-      const markdown = tipTapJsonToMarkdownForTranslation(sourceDocJson as Record<string, unknown>);
-      await navigator.clipboard.writeText(markdown);
+      const html = editor.getHTML();
+      const markdown = tipTapJsonToMarkdownForTranslation(editor.getJSON() as Record<string, unknown>);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([markdown], { type: 'text/plain' }),
+        }),
+      ]);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
     }
-  }, [sourceDocJson, addToast, t]);
+  }, [addToast, t]);
 
   const handleCopyTarget = useCallback(async () => {
-    if (!targetDocJson) {
+    const editor = targetEditorRef.current;
+    if (!editor || editor.isEmpty) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
       return;
     }
     try {
-      const markdown = tipTapJsonToMarkdownForTranslation(targetDocJson as Record<string, unknown>);
-      await navigator.clipboard.writeText(markdown);
+      const html = editor.getHTML();
+      const markdown = tipTapJsonToMarkdownForTranslation(editor.getJSON() as Record<string, unknown>);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([markdown], { type: 'text/plain' }),
+        }),
+      ]);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
     }
-  }, [targetDocJson, addToast, t]);
+  }, [addToast, t]);
 
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
