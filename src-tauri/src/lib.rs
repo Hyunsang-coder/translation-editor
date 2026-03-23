@@ -507,6 +507,9 @@ pub fn run() {
             commands::secrets::secrets_list_keys,
             commands::secrets::secrets_migrate_legacy,
             desktop_mcp::get_oddeyes_desktop_mcp_status,
+            desktop_mcp::check_claude_desktop_mcp_registered,
+            desktop_mcp::register_claude_desktop_mcp,
+            desktop_mcp::unregister_claude_desktop_mcp,
             set_view_chat_menu_checked,
         ])
         .build(tauri::generate_context!())

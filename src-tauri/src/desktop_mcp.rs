@@ -247,6 +247,207 @@ fn write_bridge_info(
     Ok(())
 }
 
+// ── Claude Desktop config auto-registration ──
+
+/// Claude Desktop의 config 파일 경로를 반환합니다.
+fn claude_desktop_config_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var("HOME").ok().map(|home| {
+            PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("claude_desktop_config.json")
+        })
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var("APPDATA").ok().map(|appdata| {
+            PathBuf::from(appdata)
+                .join("Claude")
+                .join("claude_desktop_config.json")
+        })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::env::var("XDG_CONFIG_HOME")
+            .ok()
+            .or_else(|| std::env::var("HOME").ok().map(|h| format!("{h}/.config")))
+            .map(|config_dir| {
+                PathBuf::from(config_dir)
+                    .join("Claude")
+                    .join("claude_desktop_config.json")
+            })
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClaudeDesktopMcpRegistration {
+    /// Claude Desktop이 설치되지 않음 (config 파일 없음)
+    NotInstalled,
+    /// 등록되지 않음
+    NotRegistered,
+    /// 등록됨
+    Registered,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeDesktopMcpRegistrationStatus {
+    pub status: ClaudeDesktopMcpRegistration,
+    pub config_path: Option<String>,
+}
+
+/// 기존 config JSON을 파싱하여 mcpServers.oddeyes-desktop 존재 여부를 확인합니다.
+#[tauri::command]
+pub fn check_claude_desktop_mcp_registered() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = match claude_desktop_config_path() {
+        Some(p) => p,
+        None => {
+            return Ok(ClaudeDesktopMcpRegistrationStatus {
+                status: ClaudeDesktopMcpRegistration::NotInstalled,
+                config_path: None,
+            })
+        }
+    };
+
+    if !config_path.exists() {
+        // config 파일이 없으면 — Claude Desktop 디렉토리 자체가 있는지 확인
+        let dir_exists = config_path.parent().map_or(false, |d| d.exists());
+        return Ok(ClaudeDesktopMcpRegistrationStatus {
+            status: if dir_exists {
+                ClaudeDesktopMcpRegistration::NotRegistered
+            } else {
+                ClaudeDesktopMcpRegistration::NotInstalled
+            },
+            config_path: Some(config_path.display().to_string()),
+        });
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read Claude Desktop config: {e}"))?;
+    let config: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse Claude Desktop config: {e}"))?;
+
+    let registered = config
+        .get("mcpServers")
+        .and_then(|s| s.get("oddeyes-desktop"))
+        .is_some();
+
+    Ok(ClaudeDesktopMcpRegistrationStatus {
+        status: if registered {
+            ClaudeDesktopMcpRegistration::Registered
+        } else {
+            ClaudeDesktopMcpRegistration::NotRegistered
+        },
+        config_path: Some(config_path.display().to_string()),
+    })
+}
+
+/// Claude Desktop config에 oddeyes-desktop MCP 서버를 등록합니다.
+#[tauri::command]
+pub fn register_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = claude_desktop_config_path()
+        .ok_or_else(|| "Cannot determine Claude Desktop config path".to_string())?;
+
+    // 디렉토리가 없으면 생성
+    if let Some(parent) = config_path.parent() {
+        if !parent.exists() {
+            return Err("Claude Desktop is not installed".to_string());
+        }
+    }
+
+    // 기존 config 읽기 (없으면 빈 객체)
+    let mut config: serde_json::Value = if config_path.exists() {
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read Claude Desktop config: {e}"))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse Claude Desktop config: {e}"))?
+    } else {
+        serde_json::json!({})
+    };
+
+    // mcpServers 객체 확보
+    let mcp_servers = config
+        .as_object_mut()
+        .ok_or_else(|| "Claude Desktop config is not a JSON object".to_string())?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+
+    let servers_obj = mcp_servers
+        .as_object_mut()
+        .ok_or_else(|| "mcpServers is not a JSON object".to_string())?;
+
+    // oddeyes-desktop 엔트리 추가 (이미 있으면 덮어씀)
+    servers_obj.insert(
+        "oddeyes-desktop".to_string(),
+        serde_json::json!({
+            "command": "npx",
+            "args": ["-y", "oddeyes-desktop-mcp"]
+        }),
+    );
+
+    // 저장
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    fs::write(&config_path, serialized)
+        .map_err(|e| format!("Failed to write Claude Desktop config: {e}"))?;
+
+    info!(
+        "[desktop-mcp] Registered oddeyes-desktop in Claude Desktop config at {}",
+        config_path.display()
+    );
+
+    Ok(ClaudeDesktopMcpRegistrationStatus {
+        status: ClaudeDesktopMcpRegistration::Registered,
+        config_path: Some(config_path.display().to_string()),
+    })
+}
+
+/// Claude Desktop config에서 oddeyes-desktop MCP 서버를 제거합니다.
+#[tauri::command]
+pub fn unregister_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = claude_desktop_config_path()
+        .ok_or_else(|| "Cannot determine Claude Desktop config path".to_string())?;
+
+    if !config_path.exists() {
+        return Ok(ClaudeDesktopMcpRegistrationStatus {
+            status: ClaudeDesktopMcpRegistration::NotRegistered,
+            config_path: Some(config_path.display().to_string()),
+        });
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read Claude Desktop config: {e}"))?;
+    let mut config: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse Claude Desktop config: {e}"))?;
+
+    // mcpServers에서 oddeyes-desktop 제거
+    if let Some(servers) = config
+        .get_mut("mcpServers")
+        .and_then(|s| s.as_object_mut())
+    {
+        servers.remove("oddeyes-desktop");
+    }
+
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    fs::write(&config_path, serialized)
+        .map_err(|e| format!("Failed to write Claude Desktop config: {e}"))?;
+
+    info!(
+        "[desktop-mcp] Unregistered oddeyes-desktop from Claude Desktop config at {}",
+        config_path.display()
+    );
+
+    Ok(ClaudeDesktopMcpRegistrationStatus {
+        status: ClaudeDesktopMcpRegistration::NotRegistered,
+        config_path: Some(config_path.display().to_string()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

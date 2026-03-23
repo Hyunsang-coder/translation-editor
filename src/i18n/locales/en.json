@@ -129,9 +129,12 @@
     "claudeDesktop": {
       "title": "Claude Desktop",
       "description": "Let Claude Desktop read and write your translation documents directly in OddEyes.",
-      "howTo": "Paste the config below into Claude Desktop → Settings → claude_desktop_config.json.",
-      "copyConfig": "Copy Config",
-      "copied": "Copied!",
+      "register": "Register to Claude Desktop",
+      "registering": "Registering...",
+      "unregister": "Unregister",
+      "registered": "Registered",
+      "notInstalled": "Claude Desktop is not installed.",
+      "restartHint": "Restart Claude Desktop to apply changes.",
       "bridgeActive": "Bridge active (port {{port}})"
     }
   },

@@ -52,28 +52,44 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const [mcpStatus, setMcpStatus] = useState<{
     bridgePort: number;
   } | null>(null);
-  const [configCopied, setConfigCopied] = useState(false);
+  const [mcpRegistration, setMcpRegistration] = useState<{
+    status: 'notInstalled' | 'notRegistered' | 'registered';
+    configPath: string | null;
+  } | null>(null);
+  const [mcpRegistering, setMcpRegistering] = useState(false);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
     invoke<{ bridgePort: number }>('get_oddeyes_desktop_mcp_status')
       .then(setMcpStatus)
       .catch(() => setMcpStatus(null));
+    invoke<{ status: string; configPath: string | null }>('check_claude_desktop_mcp_registered')
+      .then((r) => setMcpRegistration({ status: r.status as 'notInstalled' | 'notRegistered' | 'registered', configPath: r.configPath }))
+      .catch(() => setMcpRegistration(null));
   }, []);
 
-  const handleCopyMcpConfig = () => {
-    const config = JSON.stringify({
-      mcpServers: {
-        'oddeyes-desktop': {
-          command: 'npx',
-          args: ['-y', 'oddeyes-desktop-mcp'],
-        },
-      },
-    }, null, 2);
-    void navigator.clipboard.writeText(config).then(() => {
-      setConfigCopied(true);
-      setTimeout(() => setConfigCopied(false), 2000);
-    });
+  const handleRegisterMcp = async () => {
+    setMcpRegistering(true);
+    try {
+      const r = await invoke<{ status: string; configPath: string | null }>('register_claude_desktop_mcp');
+      setMcpRegistration({ status: r.status as 'registered', configPath: r.configPath });
+    } catch (e) {
+      console.error('Failed to register MCP:', e);
+    } finally {
+      setMcpRegistering(false);
+    }
+  };
+
+  const handleUnregisterMcp = async () => {
+    setMcpRegistering(true);
+    try {
+      const r = await invoke<{ status: string; configPath: string | null }>('unregister_claude_desktop_mcp');
+      setMcpRegistration({ status: r.status as 'notRegistered', configPath: r.configPath });
+    } catch (e) {
+      console.error('Failed to unregister MCP:', e);
+    } finally {
+      setMcpRegistering(false);
+    }
   };
 
   // 업데이트 확인 상태
@@ -375,33 +391,53 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.claudeDesktop.description')}
                 </p>
-                <p className="text-xs text-editor-muted">
-                    {t('appSettings.claudeDesktop.howTo')}
-                </p>
-                <pre className="p-3 text-xs bg-editor-bg-sidebar rounded-lg overflow-x-auto font-mono text-editor-text/80">
-{`{
-  "mcpServers": {
-    "oddeyes-desktop": {
-      "command": "npx",
-      "args": ["-y", "oddeyes-desktop-mcp"]
-    }
-  }
-}`}
-                </pre>
-                <div className="flex items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={handleCopyMcpConfig}
-                        className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-                    >
-                        {configCopied ? t('appSettings.claudeDesktop.copied') : t('appSettings.claudeDesktop.copyConfig')}
-                    </button>
+
+                {/* Registration status & action */}
+                <div className="flex items-center gap-3 flex-wrap">
+                    {mcpRegistration?.status === 'registered' ? (
+                        <>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                {t('appSettings.claudeDesktop.registered')}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleUnregisterMcp}
+                                disabled={mcpRegistering}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
+                            >
+                                {t('appSettings.claudeDesktop.unregister')}
+                            </button>
+                        </>
+                    ) : mcpRegistration?.status === 'notRegistered' ? (
+                        <button
+                            type="button"
+                            onClick={handleRegisterMcp}
+                            disabled={mcpRegistering}
+                            className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+                        >
+                            {mcpRegistering
+                                ? t('appSettings.claudeDesktop.registering')
+                                : t('appSettings.claudeDesktop.register')}
+                        </button>
+                    ) : mcpRegistration?.status === 'notInstalled' ? (
+                        <span className="text-xs text-editor-muted">
+                            {t('appSettings.claudeDesktop.notInstalled')}
+                        </span>
+                    ) : null}
+
                     {mcpStatus?.bridgePort && (
                         <span className="text-xs text-green-600 dark:text-green-400">
                             {t('appSettings.claudeDesktop.bridgeActive', { port: mcpStatus.bridgePort })}
                         </span>
                     )}
                 </div>
+
+                {mcpRegistration?.status === 'registered' && (
+                    <p className="text-[10px] text-editor-muted">
+                        {t('appSettings.claudeDesktop.restartHint')}
+                    </p>
+                )}
             </section>
             )}
 
