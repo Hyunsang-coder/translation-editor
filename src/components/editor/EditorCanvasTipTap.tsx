@@ -420,8 +420,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   }, []);
 
   // 패널 복사 핸들러 (text/html + text/plain 둘 다 클립보드에 저장)
-  const handleCopySource = useCallback(async () => {
-    const editor = sourceEditorRef.current;
+  const copyEditorContent = useCallback(async (editor: Editor | null) => {
     if (!editor || editor.isEmpty) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
       return;
@@ -441,26 +440,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     }
   }, [addToast, t]);
 
-  const handleCopyTarget = useCallback(async () => {
-    const editor = targetEditorRef.current;
-    if (!editor || editor.isEmpty) {
-      addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
-      return;
-    }
-    try {
-      const html = editor.getHTML();
-      const markdown = tipTapJsonToMarkdownForTranslation(editor.getJSON() as Record<string, unknown>);
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([markdown], { type: 'text/plain' }),
-        }),
-      ]);
-      addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
-    } catch {
-      addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
-    }
-  }, [addToast, t]);
+  const handleCopySource = useCallback(() => copyEditorContent(sourceEditorRef.current), [copyEditorContent]);
+  const handleCopyTarget = useCallback(() => copyEditorContent(targetEditorRef.current), [copyEditorContent]);
 
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {

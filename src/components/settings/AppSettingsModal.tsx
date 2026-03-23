@@ -11,6 +11,16 @@ import { invoke } from '@/tauri/invoke';
 import { isTauriRuntime } from '@/tauri/invoke';
 import i18n from 'i18next';
 
+type McpRegistrationStatus = {
+  status: 'notInstalled' | 'notRegistered' | 'registered';
+  configPath: string | null;
+};
+
+const MCP_STATUSES = new Set(['notInstalled', 'notRegistered', 'registered']);
+function isMcpStatus(s: string): s is McpRegistrationStatus['status'] {
+  return MCP_STATUSES.has(s);
+}
+
 interface AppSettingsModalProps {
   onClose: () => void;
 }
@@ -49,44 +59,31 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   );
 
   // Claude Desktop MCP 상태
-  const [mcpStatus, setMcpStatus] = useState<{
-    bridgePort: number;
-  } | null>(null);
-  const [mcpRegistration, setMcpRegistration] = useState<{
-    status: 'notInstalled' | 'notRegistered' | 'registered';
-    configPath: string | null;
-  } | null>(null);
+  const [mcpStatus, setMcpStatus] = useState<{ bridgePort: number } | null>(null);
+  const [mcpRegistration, setMcpRegistration] = useState<McpRegistrationStatus | null>(null);
   const [mcpRegistering, setMcpRegistering] = useState(false);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
+    let cancelled = false;
     invoke<{ bridgePort: number }>('get_oddeyes_desktop_mcp_status')
-      .then(setMcpStatus)
-      .catch(() => setMcpStatus(null));
+      .then((r) => { if (!cancelled) setMcpStatus(r); })
+      .catch(() => { if (!cancelled) setMcpStatus(null); });
     invoke<{ status: string; configPath: string | null }>('check_claude_desktop_mcp_registered')
-      .then((r) => setMcpRegistration({ status: r.status as 'notInstalled' | 'notRegistered' | 'registered', configPath: r.configPath }))
-      .catch(() => setMcpRegistration(null));
+      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setMcpRegistration({ status: r.status, configPath: r.configPath }); })
+      .catch(() => { if (!cancelled) setMcpRegistration(null); });
+    return () => { cancelled = true; };
   }, []);
 
-  const handleRegisterMcp = async () => {
+  const handleToggleMcpRegistration = async (command: 'register_claude_desktop_mcp' | 'unregister_claude_desktop_mcp') => {
     setMcpRegistering(true);
     try {
-      const r = await invoke<{ status: string; configPath: string | null }>('register_claude_desktop_mcp');
-      setMcpRegistration({ status: r.status as 'registered', configPath: r.configPath });
+      const r = await invoke<{ status: string; configPath: string | null }>(command);
+      if (isMcpStatus(r.status)) {
+        setMcpRegistration({ status: r.status, configPath: r.configPath });
+      }
     } catch (e) {
-      console.error('Failed to register MCP:', e);
-    } finally {
-      setMcpRegistering(false);
-    }
-  };
-
-  const handleUnregisterMcp = async () => {
-    setMcpRegistering(true);
-    try {
-      const r = await invoke<{ status: string; configPath: string | null }>('unregister_claude_desktop_mcp');
-      setMcpRegistration({ status: r.status as 'notRegistered', configPath: r.configPath });
-    } catch (e) {
-      console.error('Failed to unregister MCP:', e);
+      console.error(`Failed ${command}:`, e);
     } finally {
       setMcpRegistering(false);
     }
@@ -402,7 +399,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             </span>
                             <button
                                 type="button"
-                                onClick={handleUnregisterMcp}
+                                onClick={() => handleToggleMcpRegistration('unregister_claude_desktop_mcp')}
                                 disabled={mcpRegistering}
                                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
                             >
@@ -412,7 +409,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     ) : mcpRegistration?.status === 'notRegistered' ? (
                         <button
                             type="button"
-                            onClick={handleRegisterMcp}
+                            onClick={() => handleToggleMcpRegistration('register_claude_desktop_mcp')}
                             disabled={mcpRegistering}
                             className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
                         >
