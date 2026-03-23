@@ -53,9 +53,6 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const addToast = useUIStore((s) => s.addToast);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
-  // 복사용 JSON 상태
-  const sourceDocJson = useProjectStore((s) => s.sourceDocJson);
-  const targetDocJson = useProjectStore((s) => s.targetDocJson);
 
   // Source/Target 패널별 폰트 설정
   const sourceFontSize = useUIStore((s) => s.sourceFontSize);
