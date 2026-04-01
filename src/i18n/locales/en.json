@@ -150,7 +150,10 @@
       "registered": "Registered",
       "notInstalled": "Claude Desktop is not installed.",
       "restartHint": "Restart Claude Desktop to apply changes.",
-      "bridgeActive": "Bridge active (port {{port}})"
+      "bridgeActive": "Bridge active (port {{port}})",
+      "manualSetup": "Manual Setup",
+      "manualHint": "Add this to ~/Library/Application Support/Claude/claude_desktop_config.json:",
+      "copied": "Copied!"
     }
   },
   "toolbar": {

@@ -111,7 +111,18 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     }
   };
 
-  const mcpSnippet = JSON.stringify({
+  // Claude Desktop: claude_desktop_config.json 스니펫
+  const desktopSnippet = JSON.stringify({
+    mcpServers: {
+      "oddeyes-desktop": {
+        command: "npx",
+        args: ["-y", "oddeyes-desktop-mcp"],
+      },
+    },
+  }, null, 2);
+
+  // Claude Code: .mcp.json 스니펫
+  const codeSnippet = JSON.stringify({
     mcpServers: {
       oddeyes: {
         command: "node",
@@ -125,10 +136,17 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     },
   }, null, 2);
 
-  const handleCopyMcpJson = async () => {
-    await navigator.clipboard.writeText(mcpSnippet);
-    setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 2000);
+  const [desktopCopied, setDesktopCopied] = useState(false);
+
+  const handleCopySnippet = async (snippet: string, target: 'desktop' | 'code') => {
+    await navigator.clipboard.writeText(snippet);
+    if (target === 'desktop') {
+      setDesktopCopied(true);
+      setTimeout(() => setDesktopCopied(false), 2000);
+    } else {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
   };
 
   // 업데이트 확인 상태
@@ -478,6 +496,26 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             {t('appSettings.claudeDesktop.restartHint')}
                         </p>
                     )}
+
+                    {/* Manual Setup */}
+                    <details className="group">
+                        <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text transition-colors select-none">
+                            {t('appSettings.claudeDesktop.manualSetup')}
+                        </summary>
+                        <div className="mt-2 space-y-1.5">
+                            <p className="text-[10px] text-editor-muted">{t('appSettings.claudeDesktop.manualHint')}</p>
+                            <div className="relative">
+                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{desktopSnippet}</pre>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCopySnippet(desktopSnippet, 'desktop')}
+                                    className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                                >
+                                    {desktopCopied ? t('appSettings.claudeDesktop.copied') : '📋'}
+                                </button>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 {/* Sub-card: Claude Code */}
@@ -526,10 +564,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <div className="mt-2 space-y-1.5">
                             <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
                             <div className="relative">
-                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{mcpSnippet}</pre>
+                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{codeSnippet}</pre>
                                 <button
                                     type="button"
-                                    onClick={handleCopyMcpJson}
+                                    onClick={() => handleCopySnippet(codeSnippet, 'code')}
                                     className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
                                 >
                                     {codeCopied ? t('appSettings.claudeCode.copied') : '📋'}
