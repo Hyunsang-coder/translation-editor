@@ -15,6 +15,7 @@ export interface LayoutInput {
   rightSidebar: DockingSidebarState;
   projectSidebarCollapsed: boolean;
   projectSidebarHidden: boolean;
+  projectSidebarWidth?: number;
 }
 
 export interface ResolvedWidths {
@@ -30,9 +31,9 @@ function getDesiredWidth(sidebar: DockingSidebarState): number {
 }
 
 /** ProjectSidebar가 차지하는 너비 */
-function getProjectWidth(hidden: boolean, collapsed: boolean): number {
+function getProjectWidth(hidden: boolean, collapsed: boolean, width?: number): number {
   if (hidden) return 0;
-  return collapsed ? LAYOUT.PROJECT_COLLAPSED : LAYOUT.PROJECT_EXPANDED;
+  return collapsed ? LAYOUT.PROJECT_COLLAPSED : (width ?? LAYOUT.PROJECT_EXPANDED);
 }
 
 /**
@@ -44,7 +45,7 @@ function getProjectWidth(hidden: boolean, collapsed: boolean): number {
  * 3. 초과하면 비례 축소 (SIDEBAR_MIN까지)
  */
 export function resolveLayout(input: LayoutInput): ResolvedWidths {
-  const projectW = getProjectWidth(input.projectSidebarHidden, input.projectSidebarCollapsed);
+  const projectW = getProjectWidth(input.projectSidebarHidden, input.projectSidebarCollapsed, input.projectSidebarWidth);
   const leftDesired = getDesiredWidth(input.leftSidebar);
   const rightDesired = getDesiredWidth(input.rightSidebar);
 
@@ -89,7 +90,7 @@ export function resolveLayout(input: LayoutInput): ResolvedWidths {
  * 드래그 중 반대편 사이드바와 에디터 최소 너비를 고려한다.
  */
 export function getMaxSidebarWidth(input: LayoutInput, side: 'left' | 'right'): number {
-  const projectW = getProjectWidth(input.projectSidebarHidden, input.projectSidebarCollapsed);
+  const projectW = getProjectWidth(input.projectSidebarHidden, input.projectSidebarCollapsed, input.projectSidebarWidth);
   const otherSidebar = side === 'left' ? input.rightSidebar : input.leftSidebar;
   const otherW = getDesiredWidth(otherSidebar);
   const max = input.windowWidth - projectW - otherW - LAYOUT.EDITOR_MIN;

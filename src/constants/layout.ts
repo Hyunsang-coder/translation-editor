@@ -14,8 +14,12 @@ export const LAYOUT = {
   SIDEBAR_COLLAPSED: 48,
   /** 빈 사이드바 드롭존 너비 (px) */
   SIDEBAR_EMPTY: 16,
-  /** ProjectSidebar 확장 너비 (px) */
+  /** ProjectSidebar 기본 확장 너비 (px) */
   PROJECT_EXPANDED: 160,
+  /** ProjectSidebar 최소 너비 (px) — 리사이즈 하한 */
+  PROJECT_MIN: 160,
+  /** ProjectSidebar 최대 너비 (px) — 리사이즈 상한 */
+  PROJECT_MAX: 300,
   /** ProjectSidebar 축소 너비 (px) */
   PROJECT_COLLAPSED: 48,
 } as const;

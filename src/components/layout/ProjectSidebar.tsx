@@ -12,6 +12,8 @@ import {
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useResizeHandle } from '@/hooks/useResizeHandle';
+import { LAYOUT } from '@/constants/layout';
 import type { ProjectDomain } from '@/types';
 import { confirm, message } from '@tauri-apps/plugin-dialog';
 import { isTauriTestingBridgeActive } from '@/utils/tauri';
@@ -44,6 +46,16 @@ export function ProjectSidebar(): JSX.Element {
   const { t } = useTranslation();
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
   const toggleProjectSidebar = useUIStore((s) => s.toggleProjectSidebar);
+  const projectSidebarWidth = useUIStore((s) => s.projectSidebarWidth);
+  const setProjectSidebarWidth = useUIStore((s) => s.setProjectSidebarWidth);
+
+  const { handleResizeStart } = useResizeHandle({
+    width: projectSidebarWidth,
+    onWidthChange: setProjectSidebarWidth,
+    direction: 'right',
+    minWidth: LAYOUT.PROJECT_MIN,
+    maxWidth: LAYOUT.PROJECT_MAX,
+  });
   const project = useProjectStore((s) => s.project);
   const error = useProjectStore((s) => s.error);
   const switchProjectById = useProjectStore((s) => s.switchProjectById);
@@ -304,7 +316,7 @@ export function ProjectSidebar(): JSX.Element {
   };
 
   return (
-    <div className="w-40 h-full flex flex-col bg-editor-surface border-r border-editor-border relative">
+    <div className="h-full flex flex-col bg-editor-surface border-r border-editor-border relative" style={{ width: projectSidebarWidth }}>
       <div className="h-10 px-3 flex items-center justify-between border-b border-editor-border shrink-0">
         {/* Toggle (접기) */}
         <button
@@ -448,6 +460,12 @@ export function ProjectSidebar(): JSX.Element {
       {showAppSettings && (
         <AppSettingsModal onClose={() => setShowAppSettings(false)} />
       )}
+
+      {/* Resize Handle */}
+      <div
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary-500/30 active:bg-primary-500/50 transition-colors z-10"
+        onMouseDown={handleResizeStart}
+      />
 
       {/* Context Menu */}
       {contextMenu && (

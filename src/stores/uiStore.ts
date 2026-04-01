@@ -31,6 +31,7 @@ interface UIState extends EditorUIState {
   windowWidth: number; // 현재 윈도우 너비 (세션마다 새로 측정, persist 안함)
   autoLayoutEnabled: boolean; // 자동 레이아웃 활성화 (기본: true)
   projectSidebarHidden: boolean; // ProjectSidebar 완전 숨김 상태
+  projectSidebarWidth: number; // ProjectSidebar 너비 (리사이즈 가능)
 
   // Paste settings
   pasteImageMode: 'placeholder' | 'original' | 'ignore';
@@ -115,6 +116,7 @@ interface UIActions {
   setWindowWidth: (width: number) => void;
   setAutoLayoutEnabled: (enabled: boolean) => void;
   setProjectSidebarHidden: (hidden: boolean) => void;
+  setProjectSidebarWidth: (width: number) => void;
 
   // Paste settings
   setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore') => void;
@@ -169,6 +171,7 @@ export const useUIStore = create<UIStore>()(
       windowWidth: typeof window !== 'undefined' ? window.innerWidth : 1400,
       autoLayoutEnabled: true,
       projectSidebarHidden: false,
+      projectSidebarWidth: LAYOUT.PROJECT_EXPANDED,
 
       // Paste settings defaults
       pasteImageMode: 'original',
@@ -672,6 +675,11 @@ export const useUIStore = create<UIStore>()(
         set({ projectSidebarHidden: hidden });
       },
 
+      setProjectSidebarWidth: (width: number): void => {
+        const clamped = Math.max(LAYOUT.PROJECT_MIN, Math.min(LAYOUT.PROJECT_MAX, width));
+        set({ projectSidebarWidth: clamped });
+      },
+
       // Paste settings
       setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore'): void => {
         set({ pasteImageMode: mode });
@@ -759,6 +767,7 @@ export const useUIStore = create<UIStore>()(
         language: state.language,
         focusMode: state.focusMode,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
+        projectSidebarWidth: state.projectSidebarWidth,
         isPanelsSwapped: state.isPanelsSwapped,
         // Dual sidebar persist
         leftSidebar: state.leftSidebar,
