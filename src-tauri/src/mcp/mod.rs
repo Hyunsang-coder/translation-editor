@@ -1,8 +1,7 @@
 //! MCP (Model Context Protocol) 클라이언트 모듈
 //!
 //! Node.js 의존성 없이 Rust에서 직접 MCP 서버에 연결합니다.
-//! - SSE (Server-Sent Events) 클라이언트 (Atlassian)
-//! - Streamable HTTP 클라이언트 (Notion)
+//! - Streamable HTTP 클라이언트 (Atlassian, Notion)
 //! - OAuth 2.1 PKCE 인증 (Atlassian)
 //! - Integration Token 인증 (Notion)
 //! - MCP JSON-RPC 프로토콜 처리

@@ -11,12 +11,12 @@ MCP 서버 및 외부 연동 작업 시 적용되는 규칙.
 
 - [ ] OAuth 토큰은 SecretManager Vault에만 저장 (localStorage 금지)
 - [ ] 동시 OAuth 플로우 방지 (`oauth_in_progress` 플래그)
-- [ ] SSE 연결 시 shutdown signal로 graceful 종료
+- [ ] Streamable HTTP 세션 ID 관리 (`mcp-session-id` 헤더)
 - [ ] 토큰 갱신 실패 시 토큰 삭제 후 재인증 CTA 표시
 
 ## Architecture
 
-- **Rust 네이티브 SSE** (Node.js Sidecar 아님)
+- **Rust 네이티브 Streamable HTTP** (Node.js Sidecar 아님)
 - **McpRegistry**: 다중 MCP 서버 통합 관리
 - **OAuth Callback**: 고정 포트 23456
 
@@ -49,7 +49,7 @@ if (confluenceEnabled && confluence.connected) {
 
 ## Common Pitfalls
 
-1. **SSE 연결 끊김**: shutdown signal 및 타임아웃 설정 확인
+1. **HTTP 요청 실패**: 네트워크 상태 및 토큰 만료 확인
 2. **OAuth 콜백 미수신**: 포트 23456 사용 중 확인 (`lsof -i:23456`)
 3. **토큰 만료**: refresh_token 갱신 로직 및 Vault 저장 확인
 4. **동시 OAuth**: single-flight guard 확인

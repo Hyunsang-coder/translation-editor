@@ -36,9 +36,6 @@ docx-rs = "0.4"
 zip = "2.2"
 quick-xml = "0.37"
 keyring = "2"
-# MCP SSE 클라이언트 (Node.js 의존성 제거)
-reqwest-eventsource = "0.6"
-futures = "0.3"
 oauth2 = { version = "4", default-features = false, features = ["reqwest"] }
 url = "2"
 rand = "0.8"

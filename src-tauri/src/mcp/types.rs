@@ -197,15 +197,3 @@ impl Default for McpConnectionStatus {
     }
 }
 
-/// SSE 메시지 타입
-#[derive(Debug, Clone)]
-pub enum SseMessage {
-    /// 엔드포인트 정보 (세션 URL 등)
-    Endpoint { uri: String },
-    /// JSON-RPC 메시지
-    Message(JsonRpcResponse),
-    /// 연결 종료
-    Close,
-    /// 오류
-    Error(String),
-}

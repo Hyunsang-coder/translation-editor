@@ -1,21 +1,20 @@
-//! MCP SSE 클라이언트 구현
+//! MCP Streamable HTTP 클라이언트 구현
 //!
-//! Atlassian MCP 서버와 SSE(Server-Sent Events)로 통신합니다.
+//! Atlassian MCP 서버와 Streamable HTTP transport로 통신합니다.
+//! (SSE 방식은 2026-06-30 폐기 예정 → Streamable HTTP로 마이그레이션)
 
 use crate::mcp::emit_mcp_status_changed;
 use crate::mcp::oauth::AtlassianOAuth;
 use crate::mcp::types::*;
-use futures::StreamExt;
 use rand::Rng;
-use reqwest_eventsource::{Event, EventSource};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
-const MCP_SSE_URL: &str = "https://mcp.atlassian.com/v1/sse";
+const MCP_ENDPOINT_URL: &str = "https://mcp.atlassian.com/v1/mcp";
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// MCP 클라이언트
@@ -24,18 +23,14 @@ pub struct McpClient {
     oauth: Arc<AtlassianOAuth>,
     /// 연결 상태
     status: Arc<RwLock<McpConnectionStatus>>,
-    /// 메시지 전송용 엔드포인트 (SSE 연결 후 받음)
-    message_endpoint: Arc<RwLock<Option<String>>>,
-    /// 대기 중인 응답 (request id -> response channel)
-    pending_requests: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
     /// 다음 요청 ID
     next_request_id: AtomicU64,
-    /// SSE 연결 종료용
-    shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     /// 캐시된 도구 목록
     cached_tools: Arc<RwLock<Vec<McpTool>>>,
     /// 서버 정보
     server_info: Arc<RwLock<Option<ServerInfo>>>,
+    /// MCP 세션 ID (서버에서 반환)
+    session_id: Arc<RwLock<Option<String>>>,
     /// HTTP 클라이언트 (재사용)
     http: reqwest::Client,
 }
@@ -45,12 +40,10 @@ impl McpClient {
         Self {
             oauth: Arc::new(AtlassianOAuth::new()),
             status: Arc::new(RwLock::new(McpConnectionStatus::default())),
-            message_endpoint: Arc::new(RwLock::new(None)),
-            pending_requests: Arc::new(Mutex::new(HashMap::new())),
             next_request_id: AtomicU64::new(1),
-            shutdown_tx: Arc::new(Mutex::new(None)),
             cached_tools: Arc::new(RwLock::new(Vec::new())),
             server_info: Arc::new(RwLock::new(None)),
+            session_id: Arc::new(RwLock::new(None)),
             http: reqwest::Client::new(),
         }
     }
@@ -118,7 +111,7 @@ impl McpClient {
             debug!("[MCP] Token already exists");
         }
 
-        // SSE 연결 및 초기화 (지수 백오프로 재시도)
+        // MCP 초기화 (지수 백오프로 재시도)
         let mut attempt = 0u32;
         loop {
             match self.connect_inner().await {
@@ -162,158 +155,19 @@ impl McpClient {
         }
     }
 
-    /// SSE 연결 및 MCP 초기화 수행 (내부 구현)
+    /// MCP 초기화 및 도구 가져오기 (내부 구현)
     async fn connect_inner(&self) -> Result<(), String> {
-        debug!("[MCP] Starting SSE connection...");
+        debug!("[MCP] Starting MCP initialization via Streamable HTTP...");
 
-        match self.start_sse_connection().await {
-            Ok(()) => {
-                // MCP 초기화 수행
-                match self.initialize().await {
-                    Ok(()) => {
-                        // 도구 목록 가져오기
-                        if let Err(e) = self.fetch_tools().await {
-                            warn!("[MCP] Failed to fetch tools: {}", e);
-                        }
-                        Ok(())
-                    }
-                    Err(e) => {
-                        self.disconnect().await;
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => Err(e),
-        }
-    }
+        // MCP 초기화 수행
+        self.initialize().await?;
 
-    /// SSE 연결 시작
-    async fn start_sse_connection(&self) -> Result<(), String> {
-        let access_token = self
-            .oauth
-            .get_access_token()
-            .await
-            .ok_or("No access token available")?;
-
-        debug!("[MCP] Starting SSE connection to: {}", MCP_SSE_URL);
-        debug!(
-            "[MCP] Access token: [REDACTED] (length: {})",
-            access_token.len()
-        );
-
-        let request = self
-            .http
-            .get(MCP_SSE_URL)
-            .header("Authorization", format!("Bearer {}", access_token))
-            .header("Accept", "text/event-stream")
-            .header("Cache-Control", "no-cache");
-
-        let mut es = EventSource::new(request)
-            .map_err(|e| format!("Failed to create EventSource: {}", e))?;
-
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        *self.shutdown_tx.lock().await = Some(shutdown_tx);
-
-        let message_endpoint = self.message_endpoint.clone();
-        let pending_requests = self.pending_requests.clone();
-        let status = self.status.clone();
-
-        // SSE 이벤트 처리 태스크
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    event = es.next() => {
-                        match event {
-                            Some(Ok(Event::Open)) => {
-                                info!("[MCP] SSE connection opened");
-                            }
-                            Some(Ok(Event::Message(msg))) => {
-                                // SSE 이벤트 타입에 따라 처리
-                                match msg.event.as_str() {
-                                    "endpoint" => {
-                                        // 메시지 전송 엔드포인트 수신
-                                        // 상대 경로인 경우 절대 URL로 변환
-                                        let endpoint_url = if msg.data.starts_with("http://") || msg.data.starts_with("https://") {
-                                            msg.data.clone()
-                                        } else {
-                                            // 상대 경로를 SSE URL 기준으로 절대 URL로 변환
-                                            match url::Url::parse(MCP_SSE_URL) {
-                                                Ok(base_url) => {
-                                                    match base_url.join(&msg.data) {
-                                                        Ok(full_url) => full_url.to_string(),
-                                                        Err(_) => format!("https://mcp.atlassian.com{}", msg.data)
-                                                    }
-                                                }
-                                                Err(_) => format!("https://mcp.atlassian.com{}", msg.data)
-                                            }
-                                        };
-                                        debug!("[MCP] Received endpoint: {} -> {}", msg.data, endpoint_url);
-                                        *message_endpoint.write().await = Some(endpoint_url);
-                                    }
-                                    "message" => {
-                                        // JSON-RPC 응답 수신
-                                        if let Ok(response) = serde_json::from_str::<JsonRpcResponse>(&msg.data) {
-                                            if let Some(id) = &response.id {
-                                                let id_str = match id {
-                                                    serde_json::Value::Number(n) => n.to_string(),
-                                                    serde_json::Value::String(s) => s.clone(),
-                                                    _ => continue,
-                                                };
-                                                if let Some(tx) = pending_requests.lock().await.remove(&id_str) {
-                                                    let _ = tx.send(response);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    _ => {
-                                        debug!("[MCP] Unknown SSE event: {} - {}", msg.event, msg.data);
-                                    }
-                                }
-                            }
-                            Some(Err(e)) => {
-                                error!("[MCP] SSE error: {}", e);
-                                let mut s = status.write().await;
-                                s.error = Some(format!("SSE error: {}", e));
-                                emit_mcp_status_changed(&s);
-                                break;
-                            }
-                            None => {
-                                info!("[MCP] SSE stream ended");
-                                break;
-                            }
-                        }
-                    }
-                    _ = shutdown_rx.recv() => {
-                        debug!("[MCP] Shutting down SSE connection");
-                        es.close();
-                        break;
-                    }
-                }
-            }
-
-            // 연결 종료 시 상태 업데이트 및 이벤트 발송
-            let mut s = status.write().await;
-            s.is_connected = false;
-            s.is_connecting = false;
-            emit_mcp_status_changed(&s);
-            info!("[MCP] SSE disconnected, event emitted to frontend");
-        });
-
-        // 엔드포인트 수신 대기 (최대 10초)
-        for _ in 0..100 {
-            if self.message_endpoint.read().await.is_some() {
-                return Ok(());
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // 도구 목록 가져오기
+        if let Err(e) = self.fetch_tools().await {
+            warn!("[MCP] Failed to fetch tools: {}", e);
         }
 
-        // 타임아웃 시 SSE 태스크 종료
-        if let Some(tx) = self.shutdown_tx.lock().await.take() {
-            let _ = tx.send(()).await;
-            warn!("[MCP] Sent shutdown signal due to endpoint timeout");
-        }
-
-        Err("Timeout waiting for message endpoint".to_string())
+        Ok(())
     }
 
     /// MCP 초기화 요청
@@ -365,6 +219,7 @@ impl McpClient {
 
         if let Some(result) = response.result {
             if let Ok(tools_result) = serde_json::from_value::<ListToolsResult>(result) {
+                info!("[MCP] Loaded {} tools", tools_result.tools.len());
                 *self.cached_tools.write().await = tools_result.tools;
                 return Ok(());
             }
@@ -380,22 +235,12 @@ impl McpClient {
         Err("List tools failed: unknown error".to_string())
     }
 
-    /// JSON-RPC 요청 전송
+    /// JSON-RPC 요청 전송 (Streamable HTTP)
     async fn send_request(
         &self,
         method: &str,
         params: Option<serde_json::Value>,
     ) -> Result<JsonRpcResponse, String> {
-        let endpoint = self
-            .message_endpoint
-            .read()
-            .await
-            .clone()
-            .ok_or("Not connected to MCP server")?;
-
-        debug!("[MCP] Sending request to endpoint: {}", endpoint);
-        debug!("[MCP] Method: {}", method);
-
         let access_token = self
             .oauth
             .get_access_token()
@@ -405,40 +250,74 @@ impl McpClient {
         let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
         let request_body = JsonRpcRequest::new(id, method, params);
 
-        // 응답 채널 등록
-        let (tx, rx) = oneshot::channel();
-        self.pending_requests
-            .lock()
-            .await
-            .insert(id.to_string(), tx);
+        debug!(
+            "[MCP] Sending request: {} (id: {}) to {}",
+            method, id, MCP_ENDPOINT_URL
+        );
 
-        // HTTP POST로 요청 전송
-        let response = self
+        // 세션 ID가 있으면 헤더에 추가
+        let session_id = self.session_id.read().await.clone();
+
+        let mut request = self
             .http
-            .post(&endpoint)
+            .post(MCP_ENDPOINT_URL)
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to send request: {}", e))?;
+            .header("Accept", "application/json");
 
-        if !response.status().is_success() {
-            self.pending_requests.lock().await.remove(&id.to_string());
-            let status = response.status();
+        if let Some(sid) = &session_id {
+            request = request.header("mcp-session-id", sid.as_str());
+        }
+
+        let response = request.json(&request_body).send().await.map_err(|e| {
+            error!("[MCP] HTTP request failed: {}", e);
+            format!("Failed to send request: {}", e)
+        })?;
+
+        debug!("[MCP] HTTP response status: {}", response.status());
+
+        // 응답 헤더에서 세션 ID 추출
+        if let Some(new_session_id) = response.headers().get("mcp-session-id") {
+            if let Ok(sid) = new_session_id.to_str() {
+                *self.session_id.write().await = Some(sid.to_string());
+                debug!("[MCP] Session ID: {}", sid);
+            }
+        }
+
+        let status = response.status();
+        if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
+            if status.as_u16() == 401 {
+                return Err(
+                    "Authentication failed. Token may be expired — please reconnect.".to_string(),
+                );
+            }
             return Err(format!("Request failed with status {}: {}", status, body));
         }
 
-        // SSE를 통한 응답 대기 (타임아웃: 30초)
-        match tokio::time::timeout(tokio::time::Duration::from_secs(30), rx).await {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(_)) => Err("Response channel closed".to_string()),
-            Err(_) => {
-                self.pending_requests.lock().await.remove(&id.to_string());
-                Err("Request timeout".to_string())
-            }
+        // 응답 본문에서 JSON-RPC 응답 파싱
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        debug!(
+            "[MCP] Response: {}",
+            &response_text[..response_text.len().min(200)]
+        );
+
+        // 응답이 비어있는 경우 (일부 알림 요청에 대한 응답)
+        if response_text.is_empty() {
+            return Ok(JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id: Some(serde_json::Value::Number(id.into())),
+                result: Some(serde_json::json!({})),
+                error: None,
+            });
         }
+
+        serde_json::from_str::<JsonRpcResponse>(&response_text)
+            .map_err(|e| format!("Failed to parse response: {} - {}", e, response_text))
     }
 
     /// JSON-RPC 알림 전송 (응답 없음)
@@ -447,13 +326,6 @@ impl McpClient {
         method: &str,
         params: Option<serde_json::Value>,
     ) -> Result<(), String> {
-        let endpoint = self
-            .message_endpoint
-            .read()
-            .await
-            .clone()
-            .ok_or("Not connected to MCP server")?;
-
         let access_token = self
             .oauth
             .get_access_token()
@@ -468,11 +340,19 @@ impl McpClient {
 
         debug!("[MCP] Sending notification: {}", method);
 
-        let response = self
+        let session_id = self.session_id.read().await.clone();
+
+        let mut request = self
             .http
-            .post(&endpoint)
+            .post(MCP_ENDPOINT_URL)
             .header("Authorization", format!("Bearer {}", access_token))
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        if let Some(sid) = &session_id {
+            request = request.header("mcp-session-id", sid.as_str());
+        }
+
+        let response = request
             .json(&notification)
             .send()
             .await
@@ -536,16 +416,10 @@ impl McpClient {
 
     /// 연결 해제
     pub async fn disconnect(&self) {
-        // SSE 연결 종료
-        if let Some(tx) = self.shutdown_tx.lock().await.take() {
-            let _ = tx.send(()).await;
-        }
-
         // 상태 초기화
-        *self.message_endpoint.write().await = None;
-        self.pending_requests.lock().await.clear();
         *self.cached_tools.write().await = Vec::new();
         *self.server_info.write().await = None;
+        *self.session_id.write().await = None;
 
         self.update_status(|s| {
             s.is_connected = false;
