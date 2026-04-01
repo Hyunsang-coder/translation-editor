@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { check } from '@tauri-apps/plugin-updater';
@@ -20,6 +20,30 @@ const MCP_STATUSES = new Set(['notInstalled', 'notRegistered', 'registered']);
 function isMcpStatus(s: string): s is McpRegistrationStatus['status'] {
   return MCP_STATUSES.has(s);
 }
+
+// Static snippets — never change, no need to recompute per render
+const DESKTOP_SNIPPET = JSON.stringify({
+  mcpServers: {
+    "oddeyes-desktop": {
+      command: "npx",
+      args: ["-y", "oddeyes-desktop-mcp"],
+    },
+  },
+}, null, 2);
+
+const CODE_SNIPPET = JSON.stringify({
+  mcpServers: {
+    oddeyes: {
+      command: "node",
+      args: ["tauri-testing-mcp/dist/index.js"],
+      cwd: "<project-root>",
+      env: {
+        TAURI_TEST_TOKEN: "tauri-testing-token",
+        TAURI_TEST_PORT: "9988",
+      },
+    },
+  },
+}, null, 2);
 
 interface AppSettingsModalProps {
   onClose: () => void;
@@ -58,15 +82,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     }))
   );
 
-  // Claude Desktop MCP 상태
+  // Claude MCP 상태 (Desktop + Code 공용)
   const [mcpStatus, setMcpStatus] = useState<{ bridgePort: number } | null>(null);
-  const [mcpRegistration, setMcpRegistration] = useState<McpRegistrationStatus | null>(null);
-  const [mcpRegistering, setMcpRegistering] = useState(false);
-
-  // Claude Code MCP 상태
-  const [codeRegistration, setCodeRegistration] = useState<McpRegistrationStatus | null>(null);
-  const [codeRegistering, setCodeRegistering] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
+  const [desktopReg, setDesktopReg] = useState<McpRegistrationStatus | null>(null);
+  const [desktopBusy, setDesktopBusy] = useState(false);
+  const [codeReg, setCodeReg] = useState<McpRegistrationStatus | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<'desktop' | 'code' | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -75,79 +98,39 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
       .then((r) => { if (!cancelled) setMcpStatus(r); })
       .catch(() => { if (!cancelled) setMcpStatus(null); });
     invoke<{ status: string; configPath: string | null }>('check_claude_desktop_mcp_registered')
-      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setMcpRegistration({ status: r.status, configPath: r.configPath }); })
-      .catch(() => { if (!cancelled) setMcpRegistration(null); });
+      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setDesktopReg({ status: r.status, configPath: r.configPath }); })
+      .catch(() => { if (!cancelled) setDesktopReg(null); });
     invoke<{ status: string; configPath: string | null }>('check_claude_code_mcp_registered')
-      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setCodeRegistration({ status: r.status, configPath: r.configPath }); })
-      .catch(() => { if (!cancelled) setCodeRegistration(null); });
+      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setCodeReg({ status: r.status, configPath: r.configPath }); })
+      .catch(() => { if (!cancelled) setCodeReg(null); });
     return () => { cancelled = true; };
   }, []);
 
-  const handleToggleMcpRegistration = async (command: 'register_claude_desktop_mcp' | 'unregister_claude_desktop_mcp') => {
-    setMcpRegistering(true);
+  // Cleanup copy timer on unmount
+  useEffect(() => () => { clearTimeout(copyTimerRef.current); }, []);
+
+  const handleToggleRegistration = useCallback(async (
+    command: string,
+    setBusy: (v: boolean) => void,
+    setReg: (v: McpRegistrationStatus) => void,
+  ) => {
+    setBusy(true);
     try {
       const r = await invoke<{ status: string; configPath: string | null }>(command);
-      if (isMcpStatus(r.status)) {
-        setMcpRegistration({ status: r.status, configPath: r.configPath });
-      }
+      if (isMcpStatus(r.status)) setReg({ status: r.status, configPath: r.configPath });
     } catch (e) {
       console.error(`Failed ${command}:`, e);
     } finally {
-      setMcpRegistering(false);
+      setBusy(false);
     }
-  };
+  }, []);
 
-  const handleToggleCodeRegistration = async (command: 'register_claude_code_mcp' | 'unregister_claude_code_mcp') => {
-    setCodeRegistering(true);
-    try {
-      const r = await invoke<{ status: string; configPath: string | null }>(command);
-      if (isMcpStatus(r.status)) {
-        setCodeRegistration({ status: r.status, configPath: r.configPath });
-      }
-    } catch (e) {
-      console.error(`Failed ${command}:`, e);
-    } finally {
-      setCodeRegistering(false);
-    }
-  };
-
-  // Claude Desktop: claude_desktop_config.json 스니펫
-  const desktopSnippet = JSON.stringify({
-    mcpServers: {
-      "oddeyes-desktop": {
-        command: "npx",
-        args: ["-y", "oddeyes-desktop-mcp"],
-      },
-    },
-  }, null, 2);
-
-  // Claude Code: .mcp.json 스니펫
-  const codeSnippet = JSON.stringify({
-    mcpServers: {
-      oddeyes: {
-        command: "node",
-        args: ["tauri-testing-mcp/dist/index.js"],
-        cwd: "<project-root>",
-        env: {
-          TAURI_TEST_TOKEN: "tauri-testing-token",
-          TAURI_TEST_PORT: "9988",
-        },
-      },
-    },
-  }, null, 2);
-
-  const [desktopCopied, setDesktopCopied] = useState(false);
-
-  const handleCopySnippet = async (snippet: string, target: 'desktop' | 'code') => {
+  const handleCopySnippet = useCallback(async (snippet: string, id: 'desktop' | 'code') => {
     await navigator.clipboard.writeText(snippet);
-    if (target === 'desktop') {
-      setDesktopCopied(true);
-      setTimeout(() => setDesktopCopied(false), 2000);
-    } else {
-      setCodeCopied(true);
-      setTimeout(() => setCodeCopied(false), 2000);
-    }
-  };
+    setCopiedId(id);
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopiedId(null), 2000);
+  }, []);
 
   // 업데이트 확인 상태
   const [checkState, setCheckState] = useState<'idle' | 'checking' | 'latest' | 'error'>('idle');
@@ -453,7 +436,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
                     <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeDesktop.title')}</h4>
                     <div className="flex items-center gap-3 flex-wrap">
-                        {mcpRegistration?.status === 'registered' ? (
+                        {desktopReg?.status === 'registered' ? (
                             <>
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -461,25 +444,25 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={() => handleToggleMcpRegistration('unregister_claude_desktop_mcp')}
-                                    disabled={mcpRegistering}
+                                    onClick={() => handleToggleRegistration('unregister_claude_desktop_mcp', setDesktopBusy, setDesktopReg)}
+                                    disabled={desktopBusy}
                                     className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
                                 >
                                     {t('appSettings.claudeDesktop.unregister')}
                                 </button>
                             </>
-                        ) : mcpRegistration?.status === 'notRegistered' ? (
+                        ) : desktopReg?.status === 'notRegistered' ? (
                             <button
                                 type="button"
-                                onClick={() => handleToggleMcpRegistration('register_claude_desktop_mcp')}
-                                disabled={mcpRegistering}
+                                onClick={() => handleToggleRegistration('register_claude_desktop_mcp', setDesktopBusy, setDesktopReg)}
+                                disabled={desktopBusy}
                                 className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
                             >
-                                {mcpRegistering
+                                {desktopBusy
                                     ? t('appSettings.claudeDesktop.registering')
                                     : t('appSettings.claudeDesktop.register')}
                             </button>
-                        ) : mcpRegistration?.status === 'notInstalled' ? (
+                        ) : desktopReg?.status === 'notInstalled' ? (
                             <span className="text-xs text-editor-muted">
                                 {t('appSettings.claudeDesktop.notInstalled')}
                             </span>
@@ -491,7 +474,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             </span>
                         )}
                     </div>
-                    {mcpRegistration?.status === 'registered' && (
+                    {desktopReg?.status === 'registered' && (
                         <p className="text-[10px] text-editor-muted">
                             {t('appSettings.claudeDesktop.restartHint')}
                         </p>
@@ -505,13 +488,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <div className="mt-2 space-y-1.5">
                             <p className="text-[10px] text-editor-muted">{t('appSettings.claudeDesktop.manualHint')}</p>
                             <div className="relative">
-                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{desktopSnippet}</pre>
+                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{DESKTOP_SNIPPET}</pre>
                                 <button
                                     type="button"
-                                    onClick={() => handleCopySnippet(desktopSnippet, 'desktop')}
+                                    onClick={() => handleCopySnippet(DESKTOP_SNIPPET, 'desktop')}
                                     className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
                                 >
-                                    {desktopCopied ? t('appSettings.claudeDesktop.copied') : '📋'}
+                                    {copiedId === 'desktop' ? t('appSettings.claudeDesktop.copied') : '📋'}
                                 </button>
                             </div>
                         </div>
@@ -522,7 +505,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
                     <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeCode.title')}</h4>
                     <div className="flex items-center gap-3 flex-wrap">
-                        {codeRegistration?.status === 'registered' ? (
+                        {codeReg?.status === 'registered' ? (
                             <>
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -530,8 +513,8 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={() => handleToggleCodeRegistration('unregister_claude_code_mcp')}
-                                    disabled={codeRegistering}
+                                    onClick={() => handleToggleRegistration('unregister_claude_code_mcp', setCodeBusy, setCodeReg)}
+                                    disabled={codeBusy}
                                     className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
                                 >
                                     {t('appSettings.claudeCode.unregister')}
@@ -540,17 +523,17 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         ) : (
                             <button
                                 type="button"
-                                onClick={() => handleToggleCodeRegistration('register_claude_code_mcp')}
-                                disabled={codeRegistering}
+                                onClick={() => handleToggleRegistration('register_claude_code_mcp', setCodeBusy, setCodeReg)}
+                                disabled={codeBusy}
                                 className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
                             >
-                                {codeRegistering
+                                {codeBusy
                                     ? t('appSettings.claudeCode.registering')
                                     : t('appSettings.claudeCode.register')}
                             </button>
                         )}
                     </div>
-                    {codeRegistration?.status === 'registered' && (
+                    {codeReg?.status === 'registered' && (
                         <p className="text-[10px] text-editor-muted">
                             {t('appSettings.claudeCode.restartHint')}
                         </p>
@@ -564,13 +547,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <div className="mt-2 space-y-1.5">
                             <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
                             <div className="relative">
-                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{codeSnippet}</pre>
+                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{CODE_SNIPPET}</pre>
                                 <button
                                     type="button"
-                                    onClick={() => handleCopySnippet(codeSnippet, 'code')}
+                                    onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
                                     className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
                                 >
-                                    {codeCopied ? t('appSettings.claudeCode.copied') : '📋'}
+                                    {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
                                 </button>
                             </div>
                         </div>

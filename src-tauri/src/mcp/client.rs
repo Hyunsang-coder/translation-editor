@@ -235,18 +235,36 @@ impl McpClient {
         Err("List tools failed: unknown error".to_string())
     }
 
-    /// JSON-RPC 요청 전송 (Streamable HTTP)
-    async fn send_request(
-        &self,
-        method: &str,
-        params: Option<serde_json::Value>,
-    ) -> Result<JsonRpcResponse, String> {
+    /// MCP 엔드포인트에 인증 헤더 + 세션 ID가 포함된 POST 요청 빌더 생성
+    async fn build_mcp_request(&self) -> Result<reqwest::RequestBuilder, String> {
         let access_token = self
             .oauth
             .get_access_token()
             .await
             .ok_or("No access token available")?;
 
+        let session_id = self.session_id.read().await.clone();
+
+        let mut req = self
+            .http
+            .post(MCP_ENDPOINT_URL)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream");
+
+        if let Some(sid) = &session_id {
+            req = req.header("mcp-session-id", sid.as_str());
+        }
+
+        Ok(req)
+    }
+
+    /// JSON-RPC 요청 전송 (Streamable HTTP)
+    async fn send_request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<JsonRpcResponse, String> {
         let id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
         let request_body = JsonRpcRequest::new(id, method, params);
 
@@ -255,21 +273,7 @@ impl McpClient {
             method, id, MCP_ENDPOINT_URL
         );
 
-        // 세션 ID가 있으면 헤더에 추가
-        let session_id = self.session_id.read().await.clone();
-
-        let mut request = self
-            .http
-            .post(MCP_ENDPOINT_URL)
-            .header("Authorization", format!("Bearer {}", access_token))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json, text/event-stream");
-
-        if let Some(sid) = &session_id {
-            request = request.header("mcp-session-id", sid.as_str());
-        }
-
-        let response = request.json(&request_body).send().await.map_err(|e| {
+        let response = self.build_mcp_request().await?.json(&request_body).send().await.map_err(|e| {
             error!("[MCP] HTTP request failed: {}", e);
             format!("Failed to send request: {}", e)
         })?;
@@ -355,12 +359,6 @@ impl McpClient {
         method: &str,
         params: Option<serde_json::Value>,
     ) -> Result<(), String> {
-        let access_token = self
-            .oauth
-            .get_access_token()
-            .await
-            .ok_or("No access token available")?;
-
         let notification = JsonRpcNotification {
             jsonrpc: "2.0".to_string(),
             method: method.to_string(),
@@ -369,20 +367,7 @@ impl McpClient {
 
         debug!("[MCP] Sending notification: {}", method);
 
-        let session_id = self.session_id.read().await.clone();
-
-        let mut request = self
-            .http
-            .post(MCP_ENDPOINT_URL)
-            .header("Authorization", format!("Bearer {}", access_token))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json, text/event-stream");
-
-        if let Some(sid) = &session_id {
-            request = request.header("mcp-session-id", sid.as_str());
-        }
-
-        let response = request
+        let response = self.build_mcp_request().await?
             .json(&notification)
             .send()
             .await

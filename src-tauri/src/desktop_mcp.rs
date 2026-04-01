@@ -321,6 +321,67 @@ fn make_status(status: ClaudeDesktopMcpRegistration, path: &Path) -> ClaudeDeskt
     }
 }
 
+// ── Shared MCP registration helpers ──
+
+fn check_mcp_registered(config_path: &Path, server_key: &str) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    if !config_path.exists() {
+        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path));
+    }
+
+    let config = read_claude_config(config_path)?;
+    let registered = config
+        .get("mcpServers")
+        .and_then(|s| s.get(server_key))
+        .is_some();
+
+    let status = if registered { ClaudeDesktopMcpRegistration::Registered } else { ClaudeDesktopMcpRegistration::NotRegistered };
+    Ok(make_status(status, config_path))
+}
+
+fn register_mcp_server(config_path: &Path, server_key: &str, entry: serde_json::Value) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let mut config: serde_json::Value = if config_path.exists() {
+        read_claude_config(config_path)?
+    } else {
+        serde_json::json!({})
+    };
+
+    config
+        .as_object_mut()
+        .ok_or_else(|| "Config is not a JSON object".to_string())?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "mcpServers is not a JSON object".to_string())?
+        .insert(server_key.to_string(), entry);
+
+    write_claude_config(config_path, &config)?;
+    info!("[desktop-mcp] Registered {} in {}", server_key, config_path.display());
+    Ok(make_status(ClaudeDesktopMcpRegistration::Registered, config_path))
+}
+
+fn unregister_mcp_server(config_path: &Path, server_key: &str) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    if !config_path.exists() {
+        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path));
+    }
+
+    let mut config = read_claude_config(config_path)?;
+
+    if let Some(servers) = config
+        .get_mut("mcpServers")
+        .and_then(|s| s.as_object_mut())
+    {
+        servers.remove(server_key);
+    }
+
+    write_claude_config(config_path, &config)?;
+    info!("[desktop-mcp] Unregistered {} from {}", server_key, config_path.display());
+    Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path))
+}
+
+// ── Claude Desktop commands ──
+
+const DESKTOP_SERVER_KEY: &str = "oddeyes-desktop";
+
 #[tauri::command]
 pub fn check_claude_desktop_mcp_registered() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
     let config_path = match claude_desktop_config_path() {
@@ -339,14 +400,7 @@ pub fn check_claude_desktop_mcp_registered() -> Result<ClaudeDesktopMcpRegistrat
         return Ok(make_status(status, &config_path));
     }
 
-    let config = read_claude_config(&config_path)?;
-    let registered = config
-        .get("mcpServers")
-        .and_then(|s| s.get("oddeyes-desktop"))
-        .is_some();
-
-    let status = if registered { ClaudeDesktopMcpRegistration::Registered } else { ClaudeDesktopMcpRegistration::NotRegistered };
-    Ok(make_status(status, &config_path))
+    check_mcp_registered(&config_path, DESKTOP_SERVER_KEY)
 }
 
 #[tauri::command]
@@ -360,37 +414,10 @@ pub fn register_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationStatu
         }
     }
 
-    let mut config: serde_json::Value = if config_path.exists() {
-        read_claude_config(&config_path)?
-    } else {
-        serde_json::json!({})
-    };
-
-    let mcp_servers = config
-        .as_object_mut()
-        .ok_or_else(|| "Claude Desktop config is not a JSON object".to_string())?
-        .entry("mcpServers")
-        .or_insert_with(|| serde_json::json!({}));
-
-    mcp_servers
-        .as_object_mut()
-        .ok_or_else(|| "mcpServers is not a JSON object".to_string())?
-        .insert(
-            "oddeyes-desktop".to_string(),
-            serde_json::json!({
-                "command": "npx",
-                "args": ["-y", "oddeyes-desktop-mcp"]
-            }),
-        );
-
-    write_claude_config(&config_path, &config)?;
-
-    info!(
-        "[desktop-mcp] Registered oddeyes-desktop in Claude Desktop config at {}",
-        config_path.display()
-    );
-
-    Ok(make_status(ClaudeDesktopMcpRegistration::Registered, &config_path))
+    register_mcp_server(&config_path, DESKTOP_SERVER_KEY, serde_json::json!({
+        "command": "npx",
+        "args": ["-y", "oddeyes-desktop-mcp"]
+    }))
 }
 
 #[tauri::command]
@@ -398,39 +425,19 @@ pub fn unregister_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationSta
     let config_path = claude_desktop_config_path()
         .ok_or_else(|| "Cannot determine Claude Desktop config path".to_string())?;
 
-    if !config_path.exists() {
-        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path));
-    }
-
-    let mut config = read_claude_config(&config_path)?;
-
-    if let Some(servers) = config
-        .get_mut("mcpServers")
-        .and_then(|s| s.as_object_mut())
-    {
-        servers.remove("oddeyes-desktop");
-    }
-
-    write_claude_config(&config_path, &config)?;
-
-    info!(
-        "[desktop-mcp] Unregistered oddeyes-desktop from Claude Desktop config at {}",
-        config_path.display()
-    );
-
-    Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path))
+    unregister_mcp_server(&config_path, DESKTOP_SERVER_KEY)
 }
 
-// ── Claude Code (.mcp.json) auto-registration ──
+// ── Claude Code commands ──
 
-const CLAUDE_CODE_MCP_FILENAME: &str = ".mcp.json";
-const CLAUDE_CODE_MCP_SERVER_KEY: &str = "oddeyes";
+const CODE_MCP_FILENAME: &str = ".mcp.json";
+const CODE_SERVER_KEY: &str = "oddeyes";
 
 fn claude_code_mcp_json_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("repo root")
-        .join(CLAUDE_CODE_MCP_FILENAME)
+        .join(CODE_MCP_FILENAME)
 }
 
 fn oddeyes_mcp_server_entry() -> serde_json::Value {
@@ -452,87 +459,17 @@ fn oddeyes_mcp_server_entry() -> serde_json::Value {
 
 #[tauri::command]
 pub fn check_claude_code_mcp_registered() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    let config_path = claude_code_mcp_json_path();
-
-    if !config_path.exists() {
-        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path));
-    }
-
-    let config = read_claude_config(&config_path)?;
-    let registered = config
-        .get("mcpServers")
-        .and_then(|s| s.get(CLAUDE_CODE_MCP_SERVER_KEY))
-        .is_some();
-
-    let status = if registered {
-        ClaudeDesktopMcpRegistration::Registered
-    } else {
-        ClaudeDesktopMcpRegistration::NotRegistered
-    };
-    Ok(make_status(status, &config_path))
+    check_mcp_registered(&claude_code_mcp_json_path(), CODE_SERVER_KEY)
 }
 
 #[tauri::command]
 pub fn register_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    let config_path = claude_code_mcp_json_path();
-
-    let mut config: serde_json::Value = if config_path.exists() {
-        read_claude_config(&config_path)?
-    } else {
-        serde_json::json!({})
-    };
-
-    let mcp_servers = config
-        .as_object_mut()
-        .ok_or_else(|| "Config is not a JSON object".to_string())?
-        .entry("mcpServers")
-        .or_insert_with(|| serde_json::json!({}));
-
-    mcp_servers
-        .as_object_mut()
-        .ok_or_else(|| "mcpServers is not a JSON object".to_string())?
-        .insert(
-            CLAUDE_CODE_MCP_SERVER_KEY.to_string(),
-            oddeyes_mcp_server_entry(),
-        );
-
-    write_claude_config(&config_path, &config)?;
-
-    info!(
-        "[desktop-mcp] Registered {} in Claude Code config at {}",
-        CLAUDE_CODE_MCP_SERVER_KEY,
-        config_path.display()
-    );
-
-    Ok(make_status(ClaudeDesktopMcpRegistration::Registered, &config_path))
+    register_mcp_server(&claude_code_mcp_json_path(), CODE_SERVER_KEY, oddeyes_mcp_server_entry())
 }
 
 #[tauri::command]
 pub fn unregister_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    let config_path = claude_code_mcp_json_path();
-
-    if !config_path.exists() {
-        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path));
-    }
-
-    let mut config = read_claude_config(&config_path)?;
-
-    if let Some(servers) = config
-        .get_mut("mcpServers")
-        .and_then(|s| s.as_object_mut())
-    {
-        servers.remove(CLAUDE_CODE_MCP_SERVER_KEY);
-    }
-
-    write_claude_config(&config_path, &config)?;
-
-    info!(
-        "[desktop-mcp] Unregistered {} from Claude Code config at {}",
-        CLAUDE_CODE_MCP_SERVER_KEY,
-        config_path.display()
-    );
-
-    Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path))
+    unregister_mcp_server(&claude_code_mcp_json_path(), CODE_SERVER_KEY)
 }
 
 #[cfg(test)]
