@@ -421,6 +421,120 @@ pub fn unregister_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationSta
     Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path))
 }
 
+// ── Claude Code (.mcp.json) auto-registration ──
+
+const CLAUDE_CODE_MCP_FILENAME: &str = ".mcp.json";
+const CLAUDE_CODE_MCP_SERVER_KEY: &str = "oddeyes";
+
+fn claude_code_mcp_json_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("repo root")
+        .join(CLAUDE_CODE_MCP_FILENAME)
+}
+
+fn oddeyes_mcp_server_entry() -> serde_json::Value {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("repo root")
+        .to_string_lossy()
+        .to_string();
+    serde_json::json!({
+        "command": "node",
+        "args": ["tauri-testing-mcp/dist/index.js"],
+        "cwd": repo_root,
+        "env": {
+            "TAURI_TEST_TOKEN": "tauri-testing-token",
+            "TAURI_TEST_PORT": "9988"
+        }
+    })
+}
+
+#[tauri::command]
+pub fn check_claude_code_mcp_registered() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = claude_code_mcp_json_path();
+
+    if !config_path.exists() {
+        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path));
+    }
+
+    let config = read_claude_config(&config_path)?;
+    let registered = config
+        .get("mcpServers")
+        .and_then(|s| s.get(CLAUDE_CODE_MCP_SERVER_KEY))
+        .is_some();
+
+    let status = if registered {
+        ClaudeDesktopMcpRegistration::Registered
+    } else {
+        ClaudeDesktopMcpRegistration::NotRegistered
+    };
+    Ok(make_status(status, &config_path))
+}
+
+#[tauri::command]
+pub fn register_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = claude_code_mcp_json_path();
+
+    let mut config: serde_json::Value = if config_path.exists() {
+        read_claude_config(&config_path)?
+    } else {
+        serde_json::json!({})
+    };
+
+    let mcp_servers = config
+        .as_object_mut()
+        .ok_or_else(|| "Config is not a JSON object".to_string())?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+
+    mcp_servers
+        .as_object_mut()
+        .ok_or_else(|| "mcpServers is not a JSON object".to_string())?
+        .insert(
+            CLAUDE_CODE_MCP_SERVER_KEY.to_string(),
+            oddeyes_mcp_server_entry(),
+        );
+
+    write_claude_config(&config_path, &config)?;
+
+    info!(
+        "[desktop-mcp] Registered {} in Claude Code config at {}",
+        CLAUDE_CODE_MCP_SERVER_KEY,
+        config_path.display()
+    );
+
+    Ok(make_status(ClaudeDesktopMcpRegistration::Registered, &config_path))
+}
+
+#[tauri::command]
+pub fn unregister_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+    let config_path = claude_code_mcp_json_path();
+
+    if !config_path.exists() {
+        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path));
+    }
+
+    let mut config = read_claude_config(&config_path)?;
+
+    if let Some(servers) = config
+        .get_mut("mcpServers")
+        .and_then(|s| s.as_object_mut())
+    {
+        servers.remove(CLAUDE_CODE_MCP_SERVER_KEY);
+    }
+
+    write_claude_config(&config_path, &config)?;
+
+    info!(
+        "[desktop-mcp] Unregistered {} from Claude Code config at {}",
+        CLAUDE_CODE_MCP_SERVER_KEY,
+        config_path.display()
+    );
+
+    Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, &config_path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

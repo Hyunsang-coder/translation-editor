@@ -126,6 +126,21 @@
         "useExistingToken": "Press Connect to use your existing token"
       }
     },
+    "claudeIntegration": {
+      "title": "Claude Integration",
+      "description": "Connect OddEyes to Claude Desktop and Claude Code for AI-powered translation workflows."
+    },
+    "claudeCode": {
+      "title": "Claude Code",
+      "register": "Register to Claude Code",
+      "registering": "Registering...",
+      "unregister": "Unregister",
+      "registered": "Registered",
+      "manualSetup": "Manual Setup",
+      "manualHint": "Add this to your project's .mcp.json:",
+      "copied": "Copied!",
+      "restartHint": "Restart Claude Code to apply changes."
+    },
     "claudeDesktop": {
       "title": "Claude Desktop",
       "description": "Let Claude Desktop read and write your translation documents directly in OddEyes.",

@@ -63,6 +63,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const [mcpRegistration, setMcpRegistration] = useState<McpRegistrationStatus | null>(null);
   const [mcpRegistering, setMcpRegistering] = useState(false);
 
+  // Claude Code MCP 상태
+  const [codeRegistration, setCodeRegistration] = useState<McpRegistrationStatus | null>(null);
+  const [codeRegistering, setCodeRegistering] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   useEffect(() => {
     if (!isTauriRuntime()) return;
     let cancelled = false;
@@ -72,6 +77,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     invoke<{ status: string; configPath: string | null }>('check_claude_desktop_mcp_registered')
       .then((r) => { if (!cancelled && isMcpStatus(r.status)) setMcpRegistration({ status: r.status, configPath: r.configPath }); })
       .catch(() => { if (!cancelled) setMcpRegistration(null); });
+    invoke<{ status: string; configPath: string | null }>('check_claude_code_mcp_registered')
+      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setCodeRegistration({ status: r.status, configPath: r.configPath }); })
+      .catch(() => { if (!cancelled) setCodeRegistration(null); });
     return () => { cancelled = true; };
   }, []);
 
@@ -87,6 +95,40 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     } finally {
       setMcpRegistering(false);
     }
+  };
+
+  const handleToggleCodeRegistration = async (command: 'register_claude_code_mcp' | 'unregister_claude_code_mcp') => {
+    setCodeRegistering(true);
+    try {
+      const r = await invoke<{ status: string; configPath: string | null }>(command);
+      if (isMcpStatus(r.status)) {
+        setCodeRegistration({ status: r.status, configPath: r.configPath });
+      }
+    } catch (e) {
+      console.error(`Failed ${command}:`, e);
+    } finally {
+      setCodeRegistering(false);
+    }
+  };
+
+  const mcpSnippet = JSON.stringify({
+    mcpServers: {
+      oddeyes: {
+        command: "node",
+        args: ["tauri-testing-mcp/dist/index.js"],
+        cwd: "<project-root>",
+        env: {
+          TAURI_TEST_TOKEN: "tauri-testing-token",
+          TAURI_TEST_PORT: "9988",
+        },
+      },
+    },
+  }, null, 2);
+
+  const handleCopyMcpJson = async () => {
+    await navigator.clipboard.writeText(mcpSnippet);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
   };
 
   // 업데이트 확인 상태
@@ -378,63 +420,124 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Connectors */}
             <ConnectorsSection />
 
-            {/* Claude Desktop */}
+            {/* Claude Integration */}
             {isTauriRuntime() && (
             <section className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
                     <span className="text-lg">🤖</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.claudeDesktop.title')}</h3>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.claudeIntegration.title')}</h3>
                 </div>
                 <p className="text-xs text-editor-muted">
-                    {t('appSettings.claudeDesktop.description')}
+                    {t('appSettings.claudeIntegration.description')}
                 </p>
 
-                {/* Registration status & action */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    {mcpRegistration?.status === 'registered' ? (
-                        <>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                {t('appSettings.claudeDesktop.registered')}
-                            </span>
+                {/* Sub-card: Claude Desktop */}
+                <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
+                    <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeDesktop.title')}</h4>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {mcpRegistration?.status === 'registered' ? (
+                            <>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                    {t('appSettings.claudeDesktop.registered')}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleMcpRegistration('unregister_claude_desktop_mcp')}
+                                    disabled={mcpRegistering}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
+                                >
+                                    {t('appSettings.claudeDesktop.unregister')}
+                                </button>
+                            </>
+                        ) : mcpRegistration?.status === 'notRegistered' ? (
                             <button
                                 type="button"
-                                onClick={() => handleToggleMcpRegistration('unregister_claude_desktop_mcp')}
+                                onClick={() => handleToggleMcpRegistration('register_claude_desktop_mcp')}
                                 disabled={mcpRegistering}
-                                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
                             >
-                                {t('appSettings.claudeDesktop.unregister')}
+                                {mcpRegistering
+                                    ? t('appSettings.claudeDesktop.registering')
+                                    : t('appSettings.claudeDesktop.register')}
                             </button>
-                        </>
-                    ) : mcpRegistration?.status === 'notRegistered' ? (
-                        <button
-                            type="button"
-                            onClick={() => handleToggleMcpRegistration('register_claude_desktop_mcp')}
-                            disabled={mcpRegistering}
-                            className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
-                        >
-                            {mcpRegistering
-                                ? t('appSettings.claudeDesktop.registering')
-                                : t('appSettings.claudeDesktop.register')}
-                        </button>
-                    ) : mcpRegistration?.status === 'notInstalled' ? (
-                        <span className="text-xs text-editor-muted">
-                            {t('appSettings.claudeDesktop.notInstalled')}
-                        </span>
-                    ) : null}
+                        ) : mcpRegistration?.status === 'notInstalled' ? (
+                            <span className="text-xs text-editor-muted">
+                                {t('appSettings.claudeDesktop.notInstalled')}
+                            </span>
+                        ) : null}
 
-                    {mcpStatus?.bridgePort && (
-                        <span className="text-xs text-green-600 dark:text-green-400">
-                            {t('appSettings.claudeDesktop.bridgeActive', { port: mcpStatus.bridgePort })}
-                        </span>
+                        {mcpStatus?.bridgePort && (
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                                {t('appSettings.claudeDesktop.bridgeActive', { port: mcpStatus.bridgePort })}
+                            </span>
+                        )}
+                    </div>
+                    {mcpRegistration?.status === 'registered' && (
+                        <p className="text-[10px] text-editor-muted">
+                            {t('appSettings.claudeDesktop.restartHint')}
+                        </p>
                     )}
                 </div>
 
-                {mcpRegistration?.status === 'registered' && (
-                    <p className="text-[10px] text-editor-muted">
-                        {t('appSettings.claudeDesktop.restartHint')}
-                    </p>
-                )}
+                {/* Sub-card: Claude Code */}
+                <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
+                    <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeCode.title')}</h4>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {codeRegistration?.status === 'registered' ? (
+                            <>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                    {t('appSettings.claudeCode.registered')}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggleCodeRegistration('unregister_claude_code_mcp')}
+                                    disabled={codeRegistering}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
+                                >
+                                    {t('appSettings.claudeCode.unregister')}
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => handleToggleCodeRegistration('register_claude_code_mcp')}
+                                disabled={codeRegistering}
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+                            >
+                                {codeRegistering
+                                    ? t('appSettings.claudeCode.registering')
+                                    : t('appSettings.claudeCode.register')}
+                            </button>
+                        )}
+                    </div>
+                    {codeRegistration?.status === 'registered' && (
+                        <p className="text-[10px] text-editor-muted">
+                            {t('appSettings.claudeCode.restartHint')}
+                        </p>
+                    )}
+
+                    {/* Manual Setup */}
+                    <details className="group">
+                        <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text transition-colors select-none">
+                            {t('appSettings.claudeCode.manualSetup')}
+                        </summary>
+                        <div className="mt-2 space-y-1.5">
+                            <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
+                            <div className="relative">
+                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{mcpSnippet}</pre>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyMcpJson}
+                                    className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                                >
+                                    {codeCopied ? t('appSettings.claudeCode.copied') : '📋'}
+                                </button>
+                            </div>
+                        </div>
+                    </details>
+                </div>
             </section>
             )}
 
