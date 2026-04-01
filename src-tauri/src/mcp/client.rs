@@ -263,7 +263,7 @@ impl McpClient {
             .post(MCP_ENDPOINT_URL)
             .header("Authorization", format!("Bearer {}", access_token))
             .header("Content-Type", "application/json")
-            .header("Accept", "application/json");
+            .header("Accept", "application/json, text/event-stream");
 
         if let Some(sid) = &session_id {
             request = request.header("mcp-session-id", sid.as_str());
@@ -295,14 +295,22 @@ impl McpClient {
             return Err(format!("Request failed with status {}: {}", status, body));
         }
 
-        // 응답 본문에서 JSON-RPC 응답 파싱
+        // Content-Type에 따라 파싱 분기
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+
         let response_text = response
             .text()
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
         debug!(
-            "[MCP] Response: {}",
+            "[MCP] Response ({}): {}",
+            content_type,
             &response_text[..response_text.len().min(200)]
         );
 
@@ -316,8 +324,29 @@ impl McpClient {
             });
         }
 
+        // SSE 형식 응답인 경우 data 필드에서 JSON 추출
+        if content_type.contains("text/event-stream") {
+            return Self::parse_sse_response(&response_text);
+        }
+
         serde_json::from_str::<JsonRpcResponse>(&response_text)
             .map_err(|e| format!("Failed to parse response: {} - {}", e, response_text))
+    }
+
+    /// SSE 형식 응답에서 JSON-RPC 응답 추출
+    ///
+    /// Streamable HTTP 서버가 text/event-stream으로 응답할 경우,
+    /// `event: message\ndata: {...}\n\n` 형식에서 마지막 data 라인의 JSON을 파싱한다.
+    fn parse_sse_response(body: &str) -> Result<JsonRpcResponse, String> {
+        // SSE 이벤트에서 마지막 "data:" 라인 추출
+        let json_str = body
+            .lines()
+            .rev()
+            .find_map(|line| line.strip_prefix("data:").map(|d| d.trim()))
+            .ok_or_else(|| format!("No data field in SSE response: {}", &body[..body.len().min(200)]))?;
+
+        serde_json::from_str::<JsonRpcResponse>(json_str)
+            .map_err(|e| format!("Failed to parse SSE data as JSON-RPC: {} - {}", e, json_str))
     }
 
     /// JSON-RPC 알림 전송 (응답 없음)
@@ -346,7 +375,8 @@ impl McpClient {
             .http
             .post(MCP_ENDPOINT_URL)
             .header("Authorization", format!("Bearer {}", access_token))
-            .header("Content-Type", "application/json");
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream");
 
         if let Some(sid) = &session_id {
             request = request.header("mcp-session-id", sid.as_str());
