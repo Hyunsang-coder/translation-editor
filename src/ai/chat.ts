@@ -4,7 +4,7 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona } from '@/ai/tools/suggestionTools';
-import { confluenceWordCountTool } from '@/ai/tools/confluenceTools';
+import { confluenceWordCountTool, confluenceLoadPageTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
 import i18n from '@/i18n/config';
 import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
@@ -635,8 +635,9 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     const allMcpTools = await mcpClientManager.getTools();
     const mcpTools = allMcpTools.filter((tool) => tool.name !== 'getConfluencePage');
     toolSpecs.push(...mcpTools);
-    // confluence_word_count 도구 추가
+    // confluence_word_count, confluence_load_page 도구 추가
     toolSpecs.push(confluenceWordCountTool);
+    toolSpecs.push(confluenceLoadPageTool);
   }
 
   // Notion 도구 (REST API 기반)

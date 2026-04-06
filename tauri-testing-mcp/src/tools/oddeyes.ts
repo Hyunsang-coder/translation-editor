@@ -358,7 +358,43 @@ Use these to understand how to translate for this project.`,
     },
   );
 
+  // ─── 9. load_confluence_page ──────────────────────────────────────
+
+  server.registerTool(
+    "oddeyes_load_confluence_page",
+    {
+      description:
+        "Load a Confluence page into the OddEyes source (original) editor panel. " +
+        "Fetches the page in ADF format, converts it to TipTap JSON, and sets it as the source document. " +
+        "Requires Atlassian OAuth to be connected in OddEyes Settings. " +
+        "After loading, use oddeyes_document_get_blocks to read the source content.",
+      inputSchema: {
+        pageUrl: z
+          .string()
+          .describe(
+            "Full Confluence page URL (e.g. https://your-domain.atlassian.net/wiki/spaces/SPACE/pages/123456/Page+Title)",
+          ),
+        projectId: z
+          .string()
+          .optional()
+          .describe("Optional: project ID to associate this source with"),
+      },
+    },
+    async ({ pageUrl, projectId }) => {
+      const result = await invoke("load_confluence_page_as_source", {
+        args: { pageUrl },
+      });
+
+      if (projectId) {
+        await notifyProjectChanged(projectId).catch(() => undefined);
+      }
+
+      return textResult({ success: true, pageUrl, result });
+    },
+  );
+
   // ─── 8. snapshot_list ─────────────────────────────────────────────
+
 
   server.registerTool(
     "oddeyes_snapshot_list",

@@ -31,6 +31,9 @@ import {
   isValidAdfDocument,
   listAvailableSections,
 } from '@/utils/adfParser';
+import { adfToTipTap } from '@/utils/adfToTipTap';
+import { markdownToTipTapJson, tipTapJsonToHtml } from '@/utils/markdownConverter';
+import { useProjectStore } from '@/stores/projectStore';
 
 /**
  * 페이지별 결과 타입
@@ -662,5 +665,62 @@ export const confluenceWordCountTool = tool(
       '"표만" → contentType="table". "간단히" → outputFormat="summary". ' +
       '페이지 내용 참고/인용이 필요하면 getConfluencePage를 사용하세요.',
     schema: confluenceWordCountSchema,
+  }
+);
+
+// ============================================================================
+// loadAdfAsSourceDocument — Confluence 페이지를 원문 패널에 로드
+// ============================================================================
+
+/**
+ * Confluence 페이지 URL → 원문 에디터 패널에 로드
+ *
+ * ADF 수신 시: adfToTipTap() 경유
+ * Markdown 폴백 시: markdownToTipTapJson() 경유
+ * 결과를 projectStore의 sourceDocument(HTML) + sourceDocJson(TipTap JSON)에 저장
+ */
+export async function loadAdfAsSourceDocument(pageUrl: string): Promise<void> {
+  const pageId = extractPageIdFromUrl(pageUrl);
+  if (!pageId) {
+    throw new Error(`Confluence 페이지 ID를 추출할 수 없습니다: ${pageUrl}`);
+  }
+
+  const pageContent = await fetchConfluencePageViaMcp(pageId);
+
+  let tipTapJson: ReturnType<typeof adfToTipTap> | ReturnType<typeof markdownToTipTapJson>;
+
+  if (pageContent.format === 'adf') {
+    tipTapJson = adfToTipTap(pageContent.content as AdfDocument);
+  } else {
+    tipTapJson = markdownToTipTapJson(pageContent.content as string);
+  }
+
+  const html = tipTapJsonToHtml(tipTapJson);
+
+  const { setSourceDocument, setSourceDocJson } = useProjectStore.getState();
+  setSourceDocument(html);
+  setSourceDocJson(tipTapJson);
+}
+
+/**
+ * confluence_load_page LangChain 도구
+ *
+ * 채팅에서 "이 Confluence 페이지 원문으로 불러와줘" 요청 시 agent가 호출.
+ * 결과 텍스트만 AI에게 반환 — 페이지 내용은 LLM에 노출되지 않음.
+ */
+export const confluenceLoadPageTool = tool(
+  async ({ pageUrl }: { pageUrl: string }): Promise<string> => {
+    await loadAdfAsSourceDocument(pageUrl);
+    return '원문 패널에 Confluence 페이지를 로드했습니다. 에디터에서 확인하세요.';
+  },
+  {
+    name: 'confluence_load_page',
+    description:
+      'Confluence 페이지를 원문(Source) 에디터 패널에 로드합니다. ' +
+      '번역 작업을 시작할 원문 페이지 URL을 받아 ADF 형식으로 가져온 뒤 에디터에 표시합니다. ' +
+      '예: "이 페이지 번역해줘 https://..." → confluence_load_page(pageUrl) 호출.',
+    schema: z.object({
+      pageUrl: z.string().describe('Confluence 페이지 URL (예: https://your-domain.atlassian.net/wiki/spaces/.../pages/123456)'),
+    }),
   }
 );
