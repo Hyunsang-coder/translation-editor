@@ -17,6 +17,18 @@ pub fn write_text_file(path: String, content: String) -> CommandResult<()> {
     })
 }
 
+/// UTF-8 텍스트 파일 읽기
+#[tauri::command]
+pub fn read_text_file(path: String) -> CommandResult<String> {
+    let validated = validate_path(&path)?;
+
+    std::fs::read_to_string(&validated).map_err(|e| CommandError {
+        code: "IO_ERROR".to_string(),
+        message: format!("Failed to read file: {}", e),
+        details: Some(validated.display().to_string()),
+    })
+}
+
 /// 바이너리 데이터를 파일로 저장 (DOCX 등)
 #[tauri::command]
 pub fn write_binary_file(path: String, data: Vec<u8>) -> CommandResult<()> {

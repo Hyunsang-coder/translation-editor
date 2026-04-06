@@ -3,10 +3,15 @@ import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { searchGlossary } from '@/tauri/glossary';
+import { invoke } from '@tauri-apps/api/core';
+import { adfToTipTap } from '@/utils/adfToTipTap';
+import type { AdfDocument } from '@/utils/adfParser';
 import { hashContent } from '@/utils/hash';
 import {
   htmlToTipTapJson,
+  markdownToTipTapJson,
   markdownToTipTapJsonForTranslation,
+  tipTapJsonToHtml,
   tipTapJsonToMarkdownForTranslation,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
@@ -198,6 +203,78 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.discardTranslationPreview': async () => {
     discardDesktopTranslationPreview();
     return { ok: true };
+  },
+
+  'oddeyes.setSourceDocument': async (params) => {
+    const format = typeof params?.format === 'string' ? params.format : 'markdown';
+    const filePath = typeof params?.filePath === 'string' ? params.filePath : '';
+    const content = params?.content;
+
+    let tipTapJson: TipTapDocJson;
+
+    if (filePath) {
+      // 파일 경로 기반: Rust command로 파일 읽기
+      const raw = await invoke<string>('read_text_file', { path: filePath });
+
+      if (format === 'adf') {
+        const adfDoc: AdfDocument = JSON.parse(raw);
+        tipTapJson = adfToTipTap(adfDoc);
+      } else if (format === 'tiptap_json') {
+        tipTapJson = JSON.parse(raw) as TipTapDocJson;
+      } else {
+        // markdown
+        tipTapJson = markdownToTipTapJson(raw);
+      }
+    } else if (content != null) {
+      // content 직접 전달
+      if (format === 'adf') {
+        const adfDoc: AdfDocument = typeof content === 'string' ? JSON.parse(content) : content as AdfDocument;
+        tipTapJson = adfToTipTap(adfDoc);
+      } else if (format === 'tiptap_json') {
+        tipTapJson = typeof content === 'string' ? JSON.parse(content) as TipTapDocJson : content as TipTapDocJson;
+      } else {
+        // markdown
+        tipTapJson = markdownToTipTapJson(String(content));
+      }
+    } else {
+      throw new Error('Either filePath or content is required.');
+    }
+
+    const html = tipTapJsonToHtml(tipTapJson);
+    const { setSourceDocument, setSourceDocJson } = useProjectStore.getState();
+    setSourceDocument(html);
+    setSourceDocJson(tipTapJson);
+
+    const snapshot = buildDocumentSnapshot('source', 'markdown');
+    return { ok: true, sourceRevision: snapshot.revision };
+  },
+
+  'oddeyes.loadConfluencePage': async (params) => {
+    const pageUrl = typeof params?.pageUrl === 'string' ? params.pageUrl : '';
+    if (!pageUrl) {
+      throw new Error('pageUrl is required');
+    }
+
+    // Rust command로 ADF 직접 fetch (OAuth 토큰 재사용)
+    const apiResponse = await invoke<{ body?: { atlas_doc_format?: { value?: string } }; title?: string }>(
+      'load_confluence_page_as_source',
+      { pageUrl },
+    );
+
+    const adfRaw = apiResponse?.body?.atlas_doc_format?.value;
+    if (!adfRaw) {
+      throw new Error('ADF 콘텐츠를 가져올 수 없습니다.');
+    }
+
+    const adfDoc: AdfDocument = typeof adfRaw === 'string' ? JSON.parse(adfRaw) : adfRaw;
+    const tipTapJson = adfToTipTap(adfDoc);
+    const html = tipTapJsonToHtml(tipTapJson);
+
+    const { setSourceDocument, setSourceDocJson } = useProjectStore.getState();
+    setSourceDocument(html);
+    setSourceDocJson(tipTapJson);
+
+    return { ok: true, pageUrl };
   },
 };
 

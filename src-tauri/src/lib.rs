@@ -494,7 +494,8 @@ pub fn run() {
             commands::notion::notion_get_page,
             commands::notion::notion_get_page_content,
             commands::notion::notion_query_database,
-            // Export
+            // Export / Import
+            commands::export::read_text_file,
             commands::export::write_text_file,
             commands::export::write_binary_file,
             // Secret Manager
