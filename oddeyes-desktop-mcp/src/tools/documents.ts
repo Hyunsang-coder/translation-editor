@@ -53,31 +53,4 @@ export function registerDocumentTools(
     async () => textResult(await callBridge("oddeyes.getTranslationContext")),
   );
 
-  server.registerTool(
-    "oddeyes_set_source_document",
-    {
-      description:
-        "Set the source (original) document in the OddEyes editor. " +
-        "Supports two input modes: (1) Pass content directly via 'content' parameter, " +
-        "or (2) Pass a local file path via 'filePath' for large documents (recommended for ADF). " +
-        "Supported formats: 'markdown', 'tiptap_json', 'adf' (Atlassian Document Format).",
-      inputSchema: {
-        content: z
-          .union([z.string(), z.record(z.unknown())])
-          .optional()
-          .describe("Document content (string for markdown/adf, object for tiptap_json). Use filePath for large documents."),
-        filePath: z
-          .string()
-          .optional()
-          .describe("Absolute path to a local file to read. Recommended for large ADF documents to avoid context bloat."),
-        format: z
-          .enum(["markdown", "tiptap_json", "adf"])
-          .optional()
-          .describe("Content format. Default: 'markdown'. Use 'adf' for Confluence ADF documents."),
-      },
-    },
-    async ({ content, filePath, format }) =>
-      textResult(await callBridge("oddeyes.setSourceDocument", { content, filePath, format })),
-  );
-
 }
