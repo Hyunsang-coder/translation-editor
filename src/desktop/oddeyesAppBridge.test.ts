@@ -8,7 +8,6 @@
  * 4. filePath + adf → read_text_file invoke → adfToTipTap → store
  * 5. filePath + markdown → read_text_file invoke → markdownToTipTapJson → store
  * 6. content/filePath 둘 다 없으면 에러
- * 7. loadConfluencePage → invoke → adfToTipTap → store
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -187,52 +186,6 @@ describe('oddeyesAppBridge — setSourceDocument', () => {
     await callBridge('oddeyes.setSourceDocument', { content: 'plain text' });
 
     expect(markdownToTipTapJson).toHaveBeenCalledWith('plain text');
-  });
-});
-
-describe('oddeyesAppBridge — loadConfluencePage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    initializeOddEyesAppBridge();
-  });
-
-  it('Rust command 호출 → ADF 변환 → source store 업데이트', async () => {
-    mockInvoke.mockResolvedValueOnce({
-      title: 'Test Page',
-      body: {
-        atlas_doc_format: {
-          value: JSON.stringify(sampleAdf),
-        },
-      },
-    });
-
-    const result = await callBridge('oddeyes.loadConfluencePage', {
-      pageUrl: 'https://test.atlassian.net/wiki/spaces/SP/pages/123456/Test',
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith('load_confluence_page_as_source', {
-      pageUrl: 'https://test.atlassian.net/wiki/spaces/SP/pages/123456/Test',
-    });
-    expect(adfToTipTap).toHaveBeenCalledWith(sampleAdf);
-    expect(mockSetSourceDocument).toHaveBeenCalled();
-    expect(mockSetSourceDocJson).toHaveBeenCalled();
-    expect(result).toHaveProperty('ok', true);
-  });
-
-  it('ADF 콘텐츠 없으면 에러', async () => {
-    mockInvoke.mockResolvedValueOnce({ title: 'Empty', body: {} });
-
-    await expect(
-      callBridge('oddeyes.loadConfluencePage', {
-        pageUrl: 'https://test.atlassian.net/wiki/spaces/SP/pages/999/Empty',
-      }),
-    ).rejects.toThrow('ADF 콘텐츠를 가져올 수 없습니다.');
-  });
-
-  it('pageUrl 없으면 에러', async () => {
-    await expect(
-      callBridge('oddeyes.loadConfluencePage', {}),
-    ).rejects.toThrow('pageUrl is required');
   });
 });
 

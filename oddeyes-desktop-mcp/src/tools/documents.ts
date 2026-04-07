@@ -80,22 +80,4 @@ export function registerDocumentTools(
       textResult(await callBridge("oddeyes.setSourceDocument", { content, filePath, format })),
   );
 
-  server.registerTool(
-    "oddeyes_load_confluence_page",
-    {
-      description:
-        "Load a Confluence page into the OddEyes source (original) editor panel. " +
-        "Fetches the page in ADF format, converts it to TipTap JSON, and sets it as the source document. " +
-        "Requires Atlassian OAuth to be connected in OddEyes Settings. " +
-        "After loading, use oddeyes_get_source_document to read the loaded content.",
-      inputSchema: {
-        pageUrl: z
-          .string()
-          .describe(
-            "Full Confluence page URL (e.g. https://your-domain.atlassian.net/wiki/spaces/SPACE/pages/123456/Page+Title)",
-          ),
-      },
-    },
-    async ({ pageUrl }) => textResult(await callBridge("oddeyes.loadConfluencePage", { pageUrl })),
-  );
 }

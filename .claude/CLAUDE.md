@@ -91,7 +91,7 @@ This `.claude/` directory contains:
 - **Rust 미사용 import 정리**: 4개 파일에서 `tracing::{debug, error}` 미사용 import 제거.
 
 ### Previous (2026-04-06)
-- **ADF→TipTap Converter + Confluence Page Load**: `oddeyes-desktop-mcp`에서 Confluence 페이지 URL → ADF → TipTap JSON 변환 후 소스 에디터 로드.
+- **ADF→TipTap Converter**: ADF(Atlassian Document Format) → TipTap JSON 변환기 추가 (`adfToTipTap.ts`). `oddeyes_set_source_document`에서 `format: "adf"` 지원.
 - **ResizableProjectSidebar**: ProjectSidebar 너비 160–300px 범위에서 드래그 리사이즈 가능.
 - **Atlassian MCP SSE→Streamable HTTP 마이그레이션**: SSE 방식에서 Streamable HTTP로 전환.
 

@@ -249,33 +249,6 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
     return { ok: true, sourceRevision: snapshot.revision };
   },
 
-  'oddeyes.loadConfluencePage': async (params) => {
-    const pageUrl = typeof params?.pageUrl === 'string' ? params.pageUrl : '';
-    if (!pageUrl) {
-      throw new Error('pageUrl is required');
-    }
-
-    // Rust command로 ADF 직접 fetch (OAuth 토큰 재사용)
-    const apiResponse = await invoke<{ body?: { atlas_doc_format?: { value?: string } }; title?: string }>(
-      'load_confluence_page_as_source',
-      { pageUrl },
-    );
-
-    const adfRaw = apiResponse?.body?.atlas_doc_format?.value;
-    if (!adfRaw) {
-      throw new Error('ADF 콘텐츠를 가져올 수 없습니다.');
-    }
-
-    const adfDoc: AdfDocument = typeof adfRaw === 'string' ? JSON.parse(adfRaw) : adfRaw;
-    const tipTapJson = adfToTipTap(adfDoc);
-    const html = tipTapJsonToHtml(tipTapJson);
-
-    const { setSourceDocument, setSourceDocJson } = useProjectStore.getState();
-    setSourceDocument(html);
-    setSourceDocJson(tipTapJson);
-
-    return { ok: true, pageUrl };
-  },
 };
 
 export function initializeOddEyesAppBridge(): void {
