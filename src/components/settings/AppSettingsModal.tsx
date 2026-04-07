@@ -21,8 +21,12 @@ function isMcpStatus(s: string): s is McpRegistrationStatus['status'] {
   return MCP_STATUSES.has(s);
 }
 
-// Static snippets — never change, no need to recompute per render
-const MCP_NPX_ENTRY = { command: "npx", args: ["-y", "oddeyes-desktop-mcp"] } as const;
+// Static snippets — platform-aware for Windows cmd /c wrapper
+const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.platform.startsWith('Win');
+
+const MCP_NPX_ENTRY = IS_WINDOWS
+  ? { command: "cmd", args: ["/c", "npx", "-y", "oddeyes-desktop-mcp"] } as const
+  : { command: "npx", args: ["-y", "oddeyes-desktop-mcp"] } as const;
 
 const DESKTOP_SNIPPET = JSON.stringify({
   mcpServers: { "oddeyes-desktop": MCP_NPX_ENTRY },
