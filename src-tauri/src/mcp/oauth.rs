@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 use url::Url;
 
 use once_cell::sync::Lazy;

@@ -19,12 +19,12 @@ This file provides guidance to Claude Code when working with this repository.
 npm install              # Install dependencies
 npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
-npm run lint             # ESLint
+npx tsc --noEmit         # TypeScript type check
 npm test                 # Vitest watch mode
 npm run test:run         # Single test run
 npm run test:e2e:web     # Playwright web E2E
-npm run test:ci:local    # CI verify equivalent (lint+unit+web e2e+cargo test)
-npm run test:tauri       # Full pre-deploy gate (lint+unit+e2e+rust+release)
+npm run test:ci:local    # CI verify equivalent (typecheck+unit+web e2e+cargo test)
+npm run test:tauri       # Full pre-deploy gate (typecheck+unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
 npm run tauri-testing-mcp:build  # Build MCP bridge server
 npm run tauri-testing-mcp:start  # Start MCP bridge server (stdio)
@@ -58,7 +58,7 @@ src/components/history/  # History snapshot UI (timeline/compare/restore/rename)
 src-tauri/src/    # Rust backend (commands/, mcp/)
 src/desktop/      # Claude Desktop bridge (oddeyesAppBridge.ts, translationPreviewActions.ts)
 crates/tauri-plugin-testing/  # Tauri runtime testing bridge plugin
-tauri-testing-mcp/            # MCP server for runtime control tools (+ oddeyes_* semantic tools)
+tauri-testing-mcp/            # MCP server for runtime control tools (dom/tauri/window/app)
 oddeyes-desktop-mcp/          # Claude Desktop MCP extension (.mcpb bundle)
 ```
 
@@ -84,23 +84,16 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-04-06)
+## Recent Updates (2026-04-07)
 
-- **ADF→TipTap Converter + Confluence Page Load**: `oddeyes-desktop-mcp`에 `oddeyes_load_confluence_page` 도구 추가. Atlassian OAuth 연결 후 Confluence 페이지 URL을 전달하면 ADF → TipTap JSON 변환 후 소스 에디터에 로드됨. `oddeyesAppBridge.ts`에 `oddeyes.loadConfluencePage` 메서드 추가.
+- **MCP 정리**: `tauri-testing-mcp`에서 `oddeyes_*` semantic tools 8개 제거, `desktop_mcp.rs`에서 미사용 `load_confluence_page` 커맨드 제거, AppSettingsModal Claude Desktop 섹션 간소화.
+- **테스트 타입 수정**: `adfToTipTap.test.ts`에 `AdfNode` 타입 적용, `confluenceTools.test.ts` 미사용 헬퍼 제거.
+- **Rust 미사용 import 정리**: 4개 파일에서 `tracing::{debug, error}` 미사용 import 제거.
+
+### Previous (2026-04-06)
+- **ADF→TipTap Converter + Confluence Page Load**: `oddeyes-desktop-mcp`에서 Confluence 페이지 URL → ADF → TipTap JSON 변환 후 소스 에디터 로드.
 - **ResizableProjectSidebar**: ProjectSidebar 너비 160–300px 범위에서 드래그 리사이즈 가능.
-- **Claude Code MCP 원클릭 등록**: App Settings에서 Claude Code MCP 서버를 원클릭으로 등록하는 UI 추가.
-- **Atlassian MCP SSE→Streamable HTTP 마이그레이션**: SSE 방식에서 Streamable HTTP로 전환 (406 오류 수정 포함).
-
-### Previous (2026-03-19)
-- **OddEyes MCP Semantic Tools**: `tauri-testing-mcp`에 `oddeyes_*` 도구 8개 추가 (project_list/open, document_get/set_blocks, settings_get, glossary_search, snapshot_create/list). Claude가 앱의 구조화된 번역 데이터를 직접 읽고 쓸 수 있음.
-- **Claude Desktop 연결 UI**: 앱 설정에 Claude Desktop 섹션 추가 — Extension 파일(.mcpb) 폴더 열기 + Bridge 상태 표시.
-- **Frontend 자동 새로고침**: MCP 도구가 블록을 수정하면 `oddeyes://project-changed` 이벤트로 에디터 자동 갱신.
-- **CI .mcpb 빌드**: `beforeBuildCommand`에 `oddeyes-desktop-mcp:build` 추가하여 릴리스 빌드 시 Extension 번들 자동 생성.
-
-### Previous (2026-03-05)
-- **자동저장 버그 수정**: `acceptDocDiff`, `splitBlock`, `mergeBlocks`, `addSegment`, `createNewProject`에서 `lastChangeAt` 미갱신 → autoSave/autoSnapshot debounce 무력화 버그 수정.
-- **autoSnapshotStatus 제거**: Toolbar 저장 배지 제거 (히스토리 타임라인으로 확인). `historyStore`에서 `AutoSnapshotStatus` 타입·상태·타이머 전부 삭제.
-- **검수 패널 "무시" → "확인"**: `review.ignore` i18n 키 변경 (EN: "Done").
+- **Atlassian MCP SSE→Streamable HTTP 마이그레이션**: SSE 방식에서 Streamable HTTP로 전환.
 
 ### Tauri Testing Bridge Notes
 - 이 브리지는 **Playwright 전체 엔진 대체가 아니라**, Tauri 런타임 내부 제어를 위한 RPC 레이어입니다.
@@ -143,7 +136,7 @@ node scripts/tauri-testing-mcp-<name>.mjs  # Custom scenario
 /e2e-scenario --attach-to-running 채팅 테스트       # 실행 중인 앱에 연결
 ```
 
-### Available MCP Tools (36개)
+### Available MCP Tools (33개)
 - **DOM**: `query_selector`, `click`, `click_by_text`, `fill`, `fill_by_placeholder`, `type_contenteditable`, `type_contenteditable_by_selector`, `get_text`, `get_value`, `get_all`, `get_page_content`, `select`, `keyboard`, `scroll_to`, `wait_for_selector`, `wait_for_text`, `wait_for_hidden`
 - **Dialog**: `get_state`, `set_auto_response`, `push_response`, `clear`
 - **Tauri**: `invoke`, `emit`

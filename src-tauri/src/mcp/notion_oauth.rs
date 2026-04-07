@@ -14,7 +14,7 @@
 use crate::secrets::SECRETS;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 // Vault 저장 키 (SecretManager용)
 const VAULT_NOTION_CONFIG: &str = "mcp/notion/config_json";
