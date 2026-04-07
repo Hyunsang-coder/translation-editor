@@ -22,7 +22,7 @@ function isMcpStatus(s: string): s is McpRegistrationStatus['status'] {
 }
 
 // Static snippets — platform-aware for Windows cmd /c wrapper
-const IS_WINDOWS = typeof navigator !== 'undefined' && navigator.platform.startsWith('Win');
+const IS_WINDOWS = process.platform === 'win32';
 
 const MCP_NPX_ENTRY = IS_WINDOWS
   ? { command: "cmd", args: ["/c", "npx", "-y", "oddeyes-desktop-mcp"] } as const
