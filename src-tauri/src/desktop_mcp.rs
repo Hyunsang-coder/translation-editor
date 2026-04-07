@@ -428,49 +428,6 @@ pub fn unregister_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationSta
     unregister_mcp_server(&config_path, DESKTOP_SERVER_KEY)
 }
 
-// ── Claude Code commands ──
-
-const CODE_MCP_FILENAME: &str = ".mcp.json";
-const CODE_SERVER_KEY: &str = "oddeyes";
-
-fn claude_code_mcp_json_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("repo root")
-        .join(CODE_MCP_FILENAME)
-}
-
-fn oddeyes_mcp_server_entry() -> serde_json::Value {
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("repo root")
-        .to_string_lossy()
-        .to_string();
-    serde_json::json!({
-        "command": "node",
-        "args": ["tauri-testing-mcp/dist/index.js"],
-        "cwd": repo_root,
-        "env": {
-            "TAURI_TEST_TOKEN": "tauri-testing-token",
-            "TAURI_TEST_PORT": "9988"
-        }
-    })
-}
-
-#[tauri::command]
-pub fn check_claude_code_mcp_registered() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    check_mcp_registered(&claude_code_mcp_json_path(), CODE_SERVER_KEY)
-}
-
-#[tauri::command]
-pub fn register_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    register_mcp_server(&claude_code_mcp_json_path(), CODE_SERVER_KEY, oddeyes_mcp_server_entry())
-}
-
-#[tauri::command]
-pub fn unregister_claude_code_mcp() -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
-    unregister_mcp_server(&claude_code_mcp_json_path(), CODE_SERVER_KEY)
-}
 
 #[cfg(test)]
 mod tests {

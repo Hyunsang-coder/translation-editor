@@ -1,0 +1,73 @@
+---
+name: typecheck
+description: Rust + TypeScript 동시 타입 체크. Tauri 프로젝트의 양쪽 타입 오류를 한번에 확인합니다. 코드 수정 후, 커밋 전, 또는 빌드 오류 발생 시 사용.
+argument-hint: "[--rust|--ts|--fix]"
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+---
+
+# /typecheck
+
+Rust + TypeScript 타입 체크를 동시에 실행합니다.
+
+## Usage
+
+```
+/typecheck           # 전체 타입 체크 (Rust + TS)
+/typecheck --rust    # Rust만
+/typecheck --ts      # TypeScript만
+/typecheck --fix     # 가능한 오류 자동 수정 제안
+```
+
+## Execution Steps
+
+### 1. Rust Type Check
+```bash
+cd src-tauri && cargo check 2>&1
+```
+
+### 2. TypeScript Type Check
+```bash
+npx tsc --noEmit 2>&1
+```
+
+### 3. Cross-boundary Validation
+Tauri command 경계에서 타입 일관성 검증:
+- `src-tauri/src/commands/*.rs` 반환 타입
+- `src/tauri/*.ts` invoke 호출 타입
+- `src/types/index.ts` 공유 타입
+
+## Output Format
+
+```
+═══════════════════════════════════════════════════════════
+                    TYPE CHECK RESULTS
+═══════════════════════════════════════════════════════════
+
+🦀 RUST (cargo check)
+───────────────────────────────────────────────────────────
+✅ No errors / ❌ Errors (N)
+
+📘 TYPESCRIPT (tsc --noEmit)
+───────────────────────────────────────────────────────────
+✅ No errors / ❌ Errors (N)
+
+🔗 CROSS-BOUNDARY CHECK
+───────────────────────────────────────────────────────────
+⚠️  Potential mismatches (if any)
+
+═══════════════════════════════════════════════════════════
+SUMMARY: X errors, Y warnings
+═══════════════════════════════════════════════════════════
+```
+
+## Type Mapping Reference
+
+| Rust | TypeScript |
+|------|------------|
+| `String` | `string` |
+| `Option<T>` | `T \| null` |
+| `Vec<T>` | `T[]` |
+| `Result<T,E>` | `Promise<T>` (reject on Err) |

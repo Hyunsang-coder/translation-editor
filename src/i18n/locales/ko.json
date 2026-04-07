@@ -132,14 +132,8 @@
     },
     "claudeCode": {
       "title": "Claude Code",
-      "register": "Claude Code에 등록",
-      "registering": "등록 중...",
-      "unregister": "등록 해제",
-      "registered": "등록됨",
-      "manualSetup": "수동 설정",
       "manualHint": "프로젝트의 .mcp.json에 아래 내용을 추가하세요:",
-      "copied": "복사됨!",
-      "restartHint": "변경 사항을 적용하려면 Claude Code를 재시작하세요."
+      "copied": "복사됨!"
     },
     "claudeDesktop": {
       "title": "Claude Desktop 연결",

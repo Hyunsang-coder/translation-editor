@@ -75,10 +75,6 @@ function mcpMarkdownResponse(md: string) {
   return { content: [{ type: 'text', text: md }], isError: false };
 }
 
-function mcpErrorResponse(msg: string) {
-  return { content: [{ type: 'text', text: msg }], isError: true };
-}
-
 // ============================================================================
 
 describe('loadAdfAsSourceDocument', () => {

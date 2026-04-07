@@ -22,27 +22,14 @@ function isMcpStatus(s: string): s is McpRegistrationStatus['status'] {
 }
 
 // Static snippets — never change, no need to recompute per render
+const MCP_NPX_ENTRY = { command: "npx", args: ["-y", "oddeyes-desktop-mcp"] } as const;
+
 const DESKTOP_SNIPPET = JSON.stringify({
-  mcpServers: {
-    "oddeyes-desktop": {
-      command: "npx",
-      args: ["-y", "oddeyes-desktop-mcp"],
-    },
-  },
+  mcpServers: { "oddeyes-desktop": MCP_NPX_ENTRY },
 }, null, 2);
 
 const CODE_SNIPPET = JSON.stringify({
-  mcpServers: {
-    oddeyes: {
-      command: "node",
-      args: ["tauri-testing-mcp/dist/index.js"],
-      cwd: "<project-root>",
-      env: {
-        TAURI_TEST_TOKEN: "tauri-testing-token",
-        TAURI_TEST_PORT: "9988",
-      },
-    },
-  },
+  mcpServers: { oddeyes: MCP_NPX_ENTRY },
 }, null, 2);
 
 interface AppSettingsModalProps {
@@ -86,8 +73,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const [mcpStatus, setMcpStatus] = useState<{ bridgePort: number } | null>(null);
   const [desktopReg, setDesktopReg] = useState<McpRegistrationStatus | null>(null);
   const [desktopBusy, setDesktopBusy] = useState(false);
-  const [codeReg, setCodeReg] = useState<McpRegistrationStatus | null>(null);
-  const [codeBusy, setCodeBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<'desktop' | 'code' | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -100,9 +85,6 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     invoke<{ status: string; configPath: string | null }>('check_claude_desktop_mcp_registered')
       .then((r) => { if (!cancelled && isMcpStatus(r.status)) setDesktopReg({ status: r.status, configPath: r.configPath }); })
       .catch(() => { if (!cancelled) setDesktopReg(null); });
-    invoke<{ status: string; configPath: string | null }>('check_claude_code_mcp_registered')
-      .then((r) => { if (!cancelled && isMcpStatus(r.status)) setCodeReg({ status: r.status, configPath: r.configPath }); })
-      .catch(() => { if (!cancelled) setCodeReg(null); });
     return () => { cancelled = true; };
   }, []);
 
@@ -504,60 +486,17 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 {/* Sub-card: Claude Code */}
                 <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
                     <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeCode.title')}</h4>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        {codeReg?.status === 'registered' ? (
-                            <>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                    {t('appSettings.claudeCode.registered')}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleToggleRegistration('unregister_claude_code_mcp', setCodeBusy, setCodeReg)}
-                                    disabled={codeBusy}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
-                                >
-                                    {t('appSettings.claudeCode.unregister')}
-                                </button>
-                            </>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => handleToggleRegistration('register_claude_code_mcp', setCodeBusy, setCodeReg)}
-                                disabled={codeBusy}
-                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
-                            >
-                                {codeBusy
-                                    ? t('appSettings.claudeCode.registering')
-                                    : t('appSettings.claudeCode.register')}
-                            </button>
-                        )}
+                    <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
+                    <div className="relative">
+                        <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{CODE_SNIPPET}</pre>
+                        <button
+                            type="button"
+                            onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
+                            className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                        >
+                            {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
+                        </button>
                     </div>
-                    {codeReg?.status === 'registered' && (
-                        <p className="text-[10px] text-editor-muted">
-                            {t('appSettings.claudeCode.restartHint')}
-                        </p>
-                    )}
-
-                    {/* Manual Setup */}
-                    <details className="group">
-                        <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text transition-colors select-none">
-                            {t('appSettings.claudeCode.manualSetup')}
-                        </summary>
-                        <div className="mt-2 space-y-1.5">
-                            <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
-                            <div className="relative">
-                                <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{CODE_SNIPPET}</pre>
-                                <button
-                                    type="button"
-                                    onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
-                                    className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
-                                >
-                                    {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
-                                </button>
-                            </div>
-                        </div>
-                    </details>
                 </div>
             </section>
             )}

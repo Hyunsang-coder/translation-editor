@@ -132,14 +132,8 @@
     },
     "claudeCode": {
       "title": "Claude Code",
-      "register": "Register to Claude Code",
-      "registering": "Registering...",
-      "unregister": "Unregister",
-      "registered": "Registered",
-      "manualSetup": "Manual Setup",
       "manualHint": "Add this to your project's .mcp.json:",
-      "copied": "Copied!",
-      "restartHint": "Restart Claude Code to apply changes."
+      "copied": "Copied!"
     },
     "claudeDesktop": {
       "title": "Claude Desktop",

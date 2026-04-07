@@ -1,154 +1,68 @@
 # Session Handoff
 
-> Updated: 2026-02-12
+> Generated: 2026-04-07 00:15
 > Branch: main
-> Version: 1.7.3
 
 ## 작업 요약
 
-1. **듀얼 사이드바 채팅 세션 격리** — 구현 + 버그 수정 완료
-2. **MD-13: TipTapEditor Source/Target 통합** — 완료
-3. **HI-01: sendMessage/replayMessage 중복 제거** — 완료
-4. **컴포저 로컬화** — 완료
-5. **HI-05: chatStore.ts 파일 분할** — 완료
-6. **코드 리뷰 잔여 이슈 전체 처리** — 완료 (`4d5c98a`)
-7. **TipTap 개선** — Plugin Key 중앙화, Editor Registry → Zustand 마이그레이션, SearchHighlight 로그 정리
-8. **Zustand 이슈 3건 TDD 수정** — aiConfigStore latch, ReviewPanel selector, ConnectorsSection selector
-9. **TDD Phase 1-2** — translateDocument/runReview/chatStore 유닛 테스트 + E2E Tauri smoke 설정
-10. **Atlassian 연결 개선** — 경과 시간 타이머 + Notion 토큰 검증 (Option C)
+Desktop MCP와 Claude Code MCP에 `oddeyes_set_source_document`, `oddeyes_load_confluence_page` 도구를 추가했다. 이후 Claude Code MCP(`tauri-testing-mcp`)의 배포 방식을 `env!("CARGO_MANIFEST_DIR")` 기반 로컬 전용에서 **npx + bridge.json 자동 탐지 방식으로 통일**하는 작업이 필요함을 확인했다.
 
 ## 현재 상태
 
-- Working tree: **clean**
-- 타입 체크 통과 (TypeScript 0 에러, Rust cargo check 통과)
-- **388 unit tests passed** (22 skipped), 23 test files
-- Rust tests: 2/2 passed
-- Release build check: passed
-- **CR+HI+MD 23건 전부 해결**, **LOW 12/17 해결**, 나머지 5건 수정 불필요
-- Review audit 7건 전부 처리
+### 변경된 파일
+- `M .claude/CLAUDE.md` — Recent Updates 섹션 갱신 (unstaged)
+- `?? .agents/`, `?? AGENTS.md` — untracked (이번 작업과 무관)
 
-### 커밋 이력
-
-| 커밋 | 내용 |
-|------|------|
-| `a32ae25` | 채팅 세션 격리 문제 분석 및 구현 계획 |
-| `1a918b3` | Phase 1-3: streamingSessionId, targetSessionId, 셀렉터 |
-| `888daa2` | Phase 4: ChatContent 세션별 렌더링 |
-| `7ae8239` | 코드 리뷰 후 버그 수정 6건 (Rules of Hooks, 리셋 누락, as any 제거 등) |
-| `3f3ca8d` | MD-13: TipTapEditor Source/Target 통합 (panelType prop) |
-| `fff1b9d` | HI-01: sendMessage/replayMessage 중복 제거 (executeAiReply 헬퍼 추출) |
-| `0fa087d` | 컴포저 로컬화 (ChatContent 인스턴스별 독립 관리) |
-| `e629c7e` | HI-05: chatStore.ts 파일 분할 (1,603줄 → 7개 슬라이스) |
-| `4d5c98a` | 남은 코드 리뷰 이슈 7건 + 4개 모달 통합 |
+### 커밋 이력 (이번 세션)
+```
+6b3a48f Add set_source_document and load_confluence_page MCP tools
+```
+- `oddeyes_set_source_document`: source 에디터에 문서 직접 설정 (markdown/tiptap_json/adf, content 또는 filePath)
+- `oddeyes_load_confluence_page`: Confluence 페이지 ADF→TipTap 변환 후 source에 로드
+- `read_text_file` Rust command: filePath 기반 텍스트 파일 읽기
+- `oddeyesAppBridge.test.ts`: 12개 유닛 테스트
 
 ## 미완료 작업
 
-### 수동 테스트 (듀얼 사이드바)
-- [ ] 양쪽 사이드바에 서로 다른 세션 열고 각각 메시지 전송
-- [ ] 한쪽에서 스트리밍 중 다른 쪽 세션 전환
-- [ ] 한쪽에서 메시지 편집(edit) → 올바른 세션에서 truncation 확인
-- [ ] 한쪽에서 메시지 재전송(replay) → 올바른 세션에서 동작 확인
-- [ ] 외부 "채팅에 추가" 버튼 (Cmd+L) → 활성 세션 컴포저에 추가 확인
-- [ ] 프로젝트 전환 → 양쪽 세션 상태 정상 초기화
-- [ ] 듀얼 사이드바에서 양쪽 컴포저 텍스트 독립 입력 확인
+- [ ] **Claude Code MCP를 npx + bridge.json 방식으로 통일** (메인 작업)
+  - [ ] `tauri-testing-mcp`에 `bridgeRuntime.ts` 자동 탐지 로직 추가 (Desktop MCP의 구현 재사용)
+  - [ ] env fallback 유지 (`TAURI_TEST_PORT`/`TAURI_TEST_TOKEN` — 기존 테스트 스크립트 호환)
+  - [ ] `tauri-testing-mcp`를 npm에 퍼블리시 준비 (패키지명 결정 필요)
+  - [ ] Rust `register_claude_code_mcp` 수정 — `npx <package>` 방식으로 변경
+  - [ ] `oddeyes_mcp_server_entry()` 함수에서 `env!("CARGO_MANIFEST_DIR")` 제거
+  - [ ] UI 스니펫(`CODE_SNIPPET` in `AppSettingsModal.tsx`) 업데이트
+  - [ ] `claude_code_mcp_json_path()` 수정 — 현재 `CARGO_MANIFEST_DIR` 기반이라 빌드된 PC에서만 동작
+- [ ] **수동 설정 버튼 UI 문제**: `<details><summary>` 의 selector 영역이 텍스트와 불일치해 혼란스러움 (사용자 리포트)
+- [ ] `.claude/CLAUDE.md` 변경 커밋
 
----
+## 핵심 결정 사항
 
-## 남은 기술 부채
+- **Desktop MCP와 Claude Code MCP의 bridge.json 탐지 방식 통일**: 현재 Desktop MCP(`oddeyes-desktop-mcp`)는 `bridge.json` 자동 탐지를 사용하고 Claude Code MCP(`tauri-testing-mcp`)는 env 변수 기반. 다른 PC에서 작동하려면 bridge.json 방식으로 통일 필요. (대안: 두 패키지를 하나로 합치기 — 도구 범위가 다르므로 분리 유지가 나음)
+- **`set_source_document`에 filePath 모드 추가**: 대형 ADF 문서를 MCP 인자로 직접 전달하면 Claude 컨텍스트를 많이 차지하므로, 파일 경로를 넘기고 앱이 직접 읽는 방식 추가. `read_text_file` Rust command 신규.
+- **`loadConfluencePage` 브리지 구현**: `loadAdfAsSourceDocument()` (MCP client 경유)는 Desktop MCP 컨텍스트에서 동작 안 함 → Rust command `load_confluence_page_as_source` 직접 invoke로 변경.
 
-### 수정 불필요 (검증 완료)
-- MD-09, MD-10, MD-12, LO-17, LO-08/09/13/15/16 — 현재 구현이 적절하거나 영향 미미
+## 주의사항
 
-### ✅ 해결 완료 (4d5c98a — 이번 세션)
-
-#### HI-04: Toolbar/SettingsContent useShallow 통합
-- **Toolbar.tsx**: `useUIStore` 개별 6회 → `useShallow` 1회
-- **SettingsContent.tsx**: `useChatStore` 9회 + `useProjectStore` 3회 → `useShallow` 2회
-
-#### LO-01/02: Modal 접근성 개선
-- 공통 `Modal.tsx` 생성 (focus trap, aria, ESC, overlay click)
-- 4개 모달 적용: UpdateModal, AppSettingsModal, TranslatePreviewModal, ReviewModal
-
-#### LO-03: Confluence pageCache 크기 제한
-- `MAX_PAGE_CACHE_SIZE = 50` + LRU 방식 eviction
-
-#### LO-07: Rust lock 보일러플레이트 제거
-- `AcquireDb` trait 추출 → `db_state.acquire()?` (5줄→1줄, 7개 파일)
-
-#### LO-14: ChatContent.tsx 분할
-- 841줄 → 678줄, 3개 커스텀 훅 추출:
-  - `useChatDragDrop.ts` — Tauri 드래그앤드롭 + HTML5 fallback
-  - `useChatScroll.ts` — 자동 스크롤 + 스크롤 버튼
-  - `useChatComposerHandlers.ts` — 붙여넣기/첨부파일 핸들러
-
-#### Review Audit 7건
-- #4: segmentOrder=0 Known limitation 코멘트
-- #6: glossary 첫 청크 Trade-off 코멘트
-- #7: severityFilter `Set` → `IssueSeverity[]` (shallow 비교 호환)
-- #9: ReviewPanel `project?.id` deps + getState() 스냅샷
-- #10: getState() 스냅샷 인라인 코멘트 4곳
-- #11: hashContent djb2 32-bit collision 코멘트
-- #12: 검수 경과 시간 보존 (startReview 전 리셋)
-- #13: buildAlignedChunks 테스트 (이미 존재, 8개 테스트)
-
-### ✅ 해결 완료 (이전 세션)
-
-#### ~~HI-05: chatStore.ts 1,603줄 단일 파일 분할~~ (`e629c7e`)
-- 7개 슬라이스 분할, Slice creator 패턴
-
-#### ~~컴포저 로컬화~~ (`0fa087d`)
-- ChatContent 로컬 `useState` + `pendingComposerAppend` 이벤트 패턴
-
-#### ~~HI-01: sendMessage/replayMessage 중복 제거~~ (`fff1b9d`)
-- `executeAiReply()` 헬퍼 추출 (-214줄)
-
-#### ~~MD-13: TipTapEditor Source/Target 통합~~ (`3f3ca8d`)
-- 통합 `TipTapEditor` + `panelType` prop (-154줄)
-
-## 핵심 결정 사항 (유지)
-
-- **Hybrid 접근**: chatStore 구조 최소 변경 + `targetSessionId` 폴백으로 하위 호환 100% 보존
-- **`currentSessionId` 유지**: 외부 "채팅에 추가" 버튼이 의존
-- **스트리밍 동시 1개**: API 제약. `streamingSessionId`로 어느 패널인지 추적
-- **`targetSessionId` 미지정 시 `currentSessionId` 폴백**: 기존 단일 패널 동작 완전 보존
-- **컴포저 로컬화**: `pendingComposerAppend` 이벤트 패턴으로 외부→내부 단방향 통신
-- **chatStore slice 패턴**: `createXxxActions(set, get, helpers)` — DI 기반, 순환 참조 없음
-- **reviewStore severityFilter**: `IssueSeverity[]` (Set 대신 — useShallow 호환)
-- **Modal 접근성**: 공통 `Modal.tsx` 래퍼 (focus trap + aria)
-- **Rust DB lock**: `AcquireDb` trait로 통일 (mcp.rs 제외 — `Result<_, String>` 반환)
+- **`env!("CARGO_MANIFEST_DIR")`**: 컴파일 시점에 `src-tauri/` 경로가 고정됨. `claude_code_mcp_json_path()`와 `oddeyes_mcp_server_entry()` 모두 이걸 사용하므로 릴리스 빌드에서는 다른 PC에서 절대 동작하지 않음. 이것이 "원클릭 버튼 안됨"의 근본 원인.
+- **두 WebSocket 클라이언트가 거의 동일**: `oddeyes-desktop-mcp/src/client/websocket.ts` (`OddEyesBridgeClient`)와 `tauri-testing-mcp/src/client/websocket.ts` (`TauriBridgeClient`)는 구조가 동일. 통합 시 하나로 합칠 수 있음.
+- **Confluence API 응답 구조**: `body.atlas_doc_format.value`는 **JSON 문자열**이라 `JSON.parse` 필요. `oddeyesAppBridge.ts`에 이미 처리됨.
+- **`tauri-testing-mcp` 도구 범위**: DOM/Window/App 도구는 E2E 테스트 전용. npx 배포 시 이 도구들이 일반 사용자에게 노출되는 것이 적절한지 검토 필요.
 
 ## 핵심 파일
 
-### chatStore 슬라이스 구조
-```
-chatStore.types.ts    (타입 정의, 의존성 없음)
-    ↓
-chatStore.helpers.ts  (순수 함수)
-chatStore.persist.ts  (영속성, types 사용)
-    ↓
-chatStore.session.ts  (세션 CRUD, types+persist 사용)
-chatStore.ai.ts       (AI 파이프라인, types+helpers 사용)
-chatStore.settings.ts (설정/첨부, types 사용)
-    ↓
-chatStore.ts          (컴포지션 루트, 모든 슬라이스 조합)
-    ↓
-chatStore.selectors.ts (그룹 셀렉터, 변경 없음)
-```
-
-### 기타 핵심 파일
-- `src/components/chat/ChatContent.tsx` — 채팅 UI (effectiveSessionId, localComposerText, subscribe 패턴)
-- `src/components/chat/useChatDragDrop.ts` — Tauri 드래그앤드롭
-- `src/components/chat/useChatScroll.ts` — 자동 스크롤
-- `src/components/chat/useChatComposerHandlers.ts` — 붙여넣기/첨부
-- `src/components/ui/Modal.tsx` — 공통 모달 래퍼 (focus trap, aria)
-- `src-tauri/src/commands/mod.rs` — `AcquireDb` trait
-- `src/stores/uiStore.ts` — 사이드바 상태 (도킹 모델)
-- `src/types/index.ts` — PanelType, chatPanelId 등
+- `src-tauri/src/desktop_mcp.rs` — Rust: `register_claude_code_mcp`, `claude_code_mcp_json_path`, `oddeyes_mcp_server_entry` (수정 대상)
+- `tauri-testing-mcp/src/index.ts` — Claude Code MCP 엔트리 (env 기반 → bridge.json 전환 대상)
+- `oddeyes-desktop-mcp/src/bridgeRuntime.ts` — bridge.json 자동 탐지 참조 구현 (재사용 대상)
+- `src/components/settings/AppSettingsModal.tsx:34-46,524-560` — UI 스니펫 + 원클릭 버튼 + 수동 설정
+- `src/desktop/oddeyesAppBridge.ts` — 브리지 메서드 (이번 세션에서 setSourceDocument/loadConfluencePage 추가)
 
 ## 다음 세션 가이드
 
-코드 리뷰 이슈가 모두 해결되었으므로, 다음 작업으로 추천:
-
-1. **수동 테스트** — 위 체크리스트 항목 검증
-2. **새 기능 개발** — 사용자 요구에 따라
-3. **성능 프로파일링** — 대규모 문서 테스트
+1. `/pickup`으로 이 문서를 로드
+2. **bridge.json 통일 작업** 시작:
+   - `oddeyes-desktop-mcp/src/bridgeRuntime.ts`를 공유 모듈로 추출하거나 `tauri-testing-mcp`에 복사
+   - `tauri-testing-mcp/src/index.ts`에서 bridge.json 탐지 → env fallback 순서로 연결
+   - Rust `desktop_mcp.rs`의 `oddeyes_mcp_server_entry()`를 `npx <package>` 방식으로 변경
+   - `AppSettingsModal.tsx`의 `CODE_SNIPPET` 업데이트
+3. npm 퍼블리시 여부/패키지명은 사용자에게 확인
+4. 수동 설정 `<details>` UI 개선

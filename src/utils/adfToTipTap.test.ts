@@ -15,31 +15,31 @@
 import { describe, it, expect } from 'vitest';
 import { adfToTipTap } from './adfToTipTap';
 import { tipTapJsonToMarkdown } from './markdownConverter';
-import type { AdfDocument } from './adfParser';
+import type { AdfDocument, AdfNode } from './adfParser';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function doc(...content: unknown[]) {
+function doc(...content: AdfNode[]) {
   return { version: 1, type: 'doc' as const, content } as AdfDocument;
 }
 
-function p(...content: unknown[]) {
-  return { type: 'paragraph', content };
+function p(...content: AdfNode[]) {
+  return { type: 'paragraph', content } as AdfNode;
 }
 
-function text(t: string, ...marks: unknown[]) {
-  const node: Record<string, unknown> = { type: 'text', text: t };
+function text(t: string, ...marks: Array<{ type: string; attrs?: Record<string, unknown> }>) {
+  const node: AdfNode = { type: 'text', text: t };
   if (marks.length) node.marks = marks;
   return node;
 }
 
-function heading(level: number, ...content: unknown[]) {
-  return { type: 'heading', attrs: { level }, content };
+function heading(level: number, ...content: AdfNode[]) {
+  return { type: 'heading', attrs: { level }, content } as AdfNode;
 }
 
-function mark(type: string, attrs?: Record<string, unknown>) {
+function mark(type: string, attrs?: Record<string, unknown>): { type: string; attrs?: Record<string, unknown> } {
   return attrs ? { type, attrs } : { type };
 }
 
@@ -49,7 +49,7 @@ function firstNode(result: ReturnType<typeof adfToTipTap>) {
 }
 
 function firstText(node: Record<string, unknown>) {
-  return (node.content as Array<Record<string, unknown>>)[0];
+  return (node.content as Array<Record<string, unknown>>)[0]!;
 }
 
 // ============================================================================
@@ -234,9 +234,9 @@ describe('adfToTipTap - lists', () => {
       content: [{ type: 'listItem', content: [p(text('Hello'))] }],
     });
     const list = firstNode(adfToTipTap(adf));
-    const item = (list.content as Array<Record<string, unknown>>)[0];
+    const item = (list.content as Array<Record<string, unknown>>)[0]!;
     expect(item.type).toBe('listItem');
-    expect((item.content as Array<Record<string, unknown>>)[0].type).toBe('paragraph');
+    expect((item.content as Array<Record<string, unknown>>)[0]!.type).toBe('paragraph');
   });
 
   it('중첩 리스트 (listItem 안에 bulletList)', () => {
@@ -319,18 +319,18 @@ describe('adfToTipTap - table', () => {
     const table = firstNode(result);
     expect(table.type).toBe('table');
     const rows = table.content as Array<Record<string, unknown>>;
-    expect(rows[0].type).toBe('tableRow');
-    const headerRow = rows[0].content as Array<Record<string, unknown>>;
-    expect(headerRow[0].type).toBe('tableHeader');
-    const dataRow = rows[1].content as Array<Record<string, unknown>>;
-    expect(dataRow[0].type).toBe('tableCell');
+    expect(rows[0]!.type).toBe('tableRow');
+    const headerRow = rows[0]!.content as Array<Record<string, unknown>>;
+    expect(headerRow[0]!.type).toBe('tableHeader');
+    const dataRow = rows[1]!.content as Array<Record<string, unknown>>;
+    expect(dataRow[0]!.type).toBe('tableCell');
   });
 
   it('tableHeader colspan attrs 보존', () => {
     const result = adfToTipTap(tableAdf);
     const table = firstNode(result);
     const rows = table.content as Array<Record<string, unknown>>;
-    const header = (rows[0].content as Array<Record<string, unknown>>)[0];
+    const header = (rows[0]!.content as Array<Record<string, unknown>>)[0]!;
     expect((header.attrs as Record<string, unknown>).colspan).toBe(2);
   });
 
@@ -338,7 +338,7 @@ describe('adfToTipTap - table', () => {
     const result = adfToTipTap(tableAdf);
     const table = firstNode(result);
     const rows = table.content as Array<Record<string, unknown>>;
-    const cell = (rows[1].content as Array<Record<string, unknown>>)[0];
+    const cell = (rows[1]!.content as Array<Record<string, unknown>>)[0]!;
     expect((cell.attrs as Record<string, unknown>).colspan).toBe(1);
     expect((cell.attrs as Record<string, unknown>).rowspan).toBe(1);
   });
@@ -347,8 +347,8 @@ describe('adfToTipTap - table', () => {
     const result = adfToTipTap(tableAdf);
     const table = firstNode(result);
     const rows = table.content as Array<Record<string, unknown>>;
-    const cell = (rows[1].content as Array<Record<string, unknown>>)[0];
-    const cellPara = (cell.content as Array<Record<string, unknown>>)[0];
+    const cell = (rows[1]!.content as Array<Record<string, unknown>>)[0]!;
+    const cellPara = (cell.content as Array<Record<string, unknown>>)[0]!;
     expect(cellPara.type).toBe('paragraph');
   });
 });
@@ -505,7 +505,7 @@ describe('adfToTipTap - 인라인 노드', () => {
     // 블록 레벨이므로 paragraph여야 함
     expect(node.type).toBe('paragraph');
     const content = node.content as Array<Record<string, unknown>>;
-    const marks = content[0].marks as Array<Record<string, unknown>>;
+    const marks = content[0]!.marks as Array<Record<string, unknown>>;
     expect(marks.some((m) => m.type === 'link')).toBe(true);
   });
 
