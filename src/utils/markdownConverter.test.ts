@@ -226,6 +226,30 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     expect(JSON.stringify(json)).toContain('Item 1');
   });
 
+  it('markdownToTipTapJsonForTranslation: HTML 테이블 셀 내 리스트가 보존되어야 함 (MCP 경로)', () => {
+    const htmlTable = `<table style="min-width: 25px;"><colgroup><col style="min-width: 25px;"></colgroup><tbody><tr><td colspan="1" rowspan="1"><p>Tasks</p><ul class="tight" data-tight="true"><li><p>Task A</p></li><li><p>Task B</p></li></ul></td></tr></tbody></table>`;
+
+    const json = markdownToTipTapJsonForTranslation(htmlTable);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('"type":"bulletList"');
+    expect(jsonStr).toContain('Task A');
+    expect(jsonStr).toContain('Task B');
+  });
+
+  it('markdownToTipTapJsonForTranslation: Markdown + HTML 테이블 혼합에서 리스트 보존', () => {
+    const input = `# Title\n\n<table><tr><td><ul><li><p>Item</p></li></ul></td></tr></table>\n\n## Footer`;
+
+    const json = markdownToTipTapJsonForTranslation(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"heading"');
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('"type":"bulletList"');
+    expect(jsonStr).toContain('Footer');
+  });
+
   it('markdownToTipTapJsonForTranslation: HTML 테이블이 TipTap JSON으로 파싱되어야 함', () => {
     const htmlTable = `<table>
       <tr><th>Header 1</th><th>Header 2</th></tr>

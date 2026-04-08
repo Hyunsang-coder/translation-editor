@@ -258,20 +258,8 @@ export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string 
  * @returns TipTap document JSON
  */
 export function markdownToTipTapJsonForTranslation(markdown: string): TipTapDocJson {
-  // 전처리: --- 를 수평선으로 인식하려면 앞뒤에 빈 줄이 필요함
-  // AI 응답에서 빈 줄이 누락될 수 있으므로 정규화
   const normalized = normalizeHorizontalRules(markdown);
-
-  const editor = new Editor({
-    extensions: getExtensionsForTranslation(),
-  });
-
-  editor.commands.setContent(normalized);
-
-  const json = editor.getJSON() as TipTapDocJson;
-  editor.destroy();
-
-  return json;
+  return parseMarkdownWithTables(normalized);
 }
 
 /**
@@ -741,29 +729,27 @@ function splitTablesFromContent(text: string): ContentSegment[] {
 }
 
 /**
- * 번역 응답 후처리: HTML/마크다운 구분 후 TipTap JSON 변환
+ * Markdown + HTML 혼합 콘텐츠를 TipTap JSON으로 변환 (공통 로직)
  *
- * - AI가 HTML(ul, ol, li, p 등)을 반환하면 Markdown으로 변환 후 파싱
- * - HTML <table> 블록은 ProseMirror DOMParser로 직접 파싱하여
- *   셀 안의 bulletList/orderedList 구조를 보존
+ * HTML <table> 블록은 ProseMirror DOMParser로 직접 파싱하여
+ * 셀 안의 bulletList/orderedList 구조를 보존합니다.
+ * 나머지 Markdown은 기존 tiptap-markdown(markdown-it) 경로를 사용합니다.
  */
-export function parseTranslationResponseToTipTap(content: string): TipTapDocJson {
-  const trimmed = content.trim();
-  const toParse = looksLikeBlockHtml(trimmed)
-    ? convertHtmlListsToMarkdown(trimmed)
-    : trimmed;
-  const normalized = normalizeHorizontalRules(toParse);
-
-  // 테이블이 없으면 기존 markdown-it 경로 그대로
+function parseMarkdownWithTables(normalized: string): TipTapDocJson {
+  // 테이블이 없으면 markdown-it 경로만 사용
   if (!TABLE_OPEN_RE.test(normalized)) {
-    return markdownToTipTapJsonForTranslation(normalized);
+    const editor = new Editor({ extensions: getExtensionsForTranslation() });
+    try {
+      editor.commands.setContent(normalized);
+      return editor.getJSON() as TipTapDocJson;
+    } finally {
+      editor.destroy();
+    }
   }
 
   // 테이블은 ProseMirror DOMParser로, 나머지는 markdown-it으로
   const segments = splitTablesFromContent(normalized);
-  const editor = new Editor({
-    extensions: getExtensionsForTranslation(),
-  });
+  const editor = new Editor({ extensions: getExtensionsForTranslation() });
 
   try {
     const schema = editor.state.schema;
@@ -790,6 +776,21 @@ export function parseTranslationResponseToTipTap(content: string): TipTapDocJson
   } finally {
     editor.destroy();
   }
+}
+
+/**
+ * 번역 응답 후처리: HTML/마크다운 구분 후 TipTap JSON 변환
+ *
+ * - AI가 HTML(ul, ol, li, p 등)을 반환하면 Markdown으로 변환 후 파싱
+ * - HTML <table> 블록은 ProseMirror DOMParser로 직접 파싱하여
+ *   셀 안의 bulletList/orderedList 구조를 보존
+ */
+export function parseTranslationResponseToTipTap(content: string): TipTapDocJson {
+  const trimmed = content.trim();
+  const toParse = looksLikeBlockHtml(trimmed)
+    ? convertHtmlListsToMarkdown(trimmed)
+    : trimmed;
+  return parseMarkdownWithTables(normalizeHorizontalRules(toParse));
 }
 
 /**
