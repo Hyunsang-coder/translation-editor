@@ -454,6 +454,125 @@ describe('markdownConverter - 검수(Review) 파이프라인 시나리오', () =
   });
 });
 
+describe('parseTranslationResponseToTipTap - 테이블 내 리스트 보존', () => {
+  it('HTML 테이블 셀 안의 bulletList 구조가 보존되어야 함', () => {
+    const input = `<table>
+      <tr><th><p>Header</p></th></tr>
+      <tr><td><p>Intro</p><ul><li><p>Item A</p></li><li><p>Item B</p></li></ul></td></tr>
+    </table>`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('"type":"bulletList"');
+    expect(jsonStr).toContain('Item A');
+    expect(jsonStr).toContain('Item B');
+  });
+
+  it('HTML 테이블 셀 안의 orderedList 구조가 보존되어야 함', () => {
+    const input = `<table>
+      <tr><td><ol><li><p>Step 1</p></li><li><p>Step 2</p></li></ol></td></tr>
+    </table>`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"orderedList"');
+    expect(jsonStr).toContain('Step 1');
+    expect(jsonStr).toContain('Step 2');
+  });
+
+  it('Markdown + HTML 테이블 혼합 콘텐츠에서 양쪽 모두 올바르게 파싱', () => {
+    const input = `# Title\n\nSome paragraph.\n\n<table><tr><td><ul><li><p>A</p></li></ul></td></tr></table>\n\n## Next section`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"heading"');
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('"type":"bulletList"');
+    expect(jsonStr).toContain('Next section');
+  });
+
+  it('테이블이 없는 콘텐츠는 기존 동작 유지 (fast path)', () => {
+    const input = '# Hello\n\nWorld';
+    const json = parseTranslationResponseToTipTap(input);
+    expect(json.type).toBe('doc');
+    const jsonStr = JSON.stringify(json);
+    expect(jsonStr).toContain('Hello');
+    expect(jsonStr).toContain('World');
+    expect(jsonStr).not.toContain('"type":"table"');
+  });
+
+  it('라운드트립: 셀 내 리스트가 있는 TipTap JSON → Markdown → 파싱 후 리스트 보존', () => {
+    const original = {
+      type: 'doc',
+      content: [{
+        type: 'table',
+        content: [{
+          type: 'tableRow',
+          content: [{
+            type: 'tableCell',
+            attrs: { colspan: 1, rowspan: 1, colwidth: null },
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text: 'Tasks' }] },
+              { type: 'bulletList', content: [
+                { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Task A' }] }] },
+                { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Task B' }] }] },
+              ]},
+            ],
+          }],
+        }],
+      }],
+    };
+
+    // TipTap JSON → HTML+Markdown (이 단계는 정상 동작)
+    const markdown = tipTapJsonToMarkdownForTranslation(original);
+    expect(markdown).toContain('<table');
+
+    // HTML+Markdown → TipTap JSON (이 단계에서 리스트가 깨졌던 버그)
+    const restored = parseTranslationResponseToTipTap(markdown);
+    const restoredStr = JSON.stringify(restored);
+
+    expect(restoredStr).toContain('"type":"table"');
+    expect(restoredStr).toContain('"type":"bulletList"');
+    expect(restoredStr).toContain('Task A');
+    expect(restoredStr).toContain('Task B');
+  });
+
+  it('여러 테이블이 Markdown 사이에 있는 경우 모두 올바르게 파싱', () => {
+    const input = `# Section 1\n\n<table><tr><td><ul><li><p>List 1</p></li></ul></td></tr></table>\n\nMiddle text\n\n<table><tr><td><ul><li><p>List 2</p></li></ul></td></tr></table>\n\n# Section 2`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('Section 1');
+    expect(jsonStr).toContain('List 1');
+    expect(jsonStr).toContain('Middle text');
+    expect(jsonStr).toContain('List 2');
+    expect(jsonStr).toContain('Section 2');
+    // 테이블 2개 존재
+    expect((jsonStr.match(/"type":"table"/g) || []).length).toBe(2);
+  });
+
+  it('리스트 없는 단순 HTML 테이블도 정상 파싱 (회귀 테스트)', () => {
+    const input = `<table><tr><th><p>H1</p></th><th><p>H2</p></th></tr><tr><td><p>C1</p></td><td><p>C2</p></td></tr></table>`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('H1');
+    expect(jsonStr).toContain('C2');
+  });
+
+  it('colspan/rowspan이 있는 테이블도 보존', () => {
+    const input = `<table><tr><td colspan="2" rowspan="1"><p>Merged</p></td></tr><tr><td><p>A</p></td><td><p>B</p></td></tr></table>`;
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('"type":"table"');
+    expect(jsonStr).toContain('Merged');
+    expect(jsonStr).toContain('"colspan":2');
+  });
+});
+
 describe('fixMisalignedBoldMarks - LLM 볼드 마크 경계 보정', () => {
   // 패턴 1: 닫는 ** 뒤에 이어지는 단어문자를 mark 안으로
   it('**partial**rest → **partial rest** (닫는 ** 뒤 이어지는 단어)', () => {

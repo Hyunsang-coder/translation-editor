@@ -6,7 +6,8 @@
  */
 
 import { Editor, type Content, getHTMLFromFragment } from '@tiptap/core';
-import { Fragment } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, Fragment } from '@tiptap/pm/model';
+import DOMPurify from 'dompurify';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Table from '@tiptap/extension-table';
@@ -670,8 +671,81 @@ function convertHtmlListsToMarkdown(html: string): string {
 }
 
 /**
+ * 혼합 콘텐츠(Markdown + HTML 테이블)를 세그먼트로 분리
+ *
+ * HTML 테이블 블록은 markdown-it에서 셀 내 블록 요소(ul, ol 등)를 파싱하지 못하므로
+ * 별도로 분리하여 ProseMirror DOMParser로 파싱합니다.
+ */
+type ContentSegment =
+  | { type: 'markdown'; content: string }
+  | { type: 'html-table'; content: string };
+
+const TABLE_OPEN_RE = /<table[\s>]/i;
+const TABLE_OPEN_STICKY = /<table[\s>]/iy;
+const TABLE_CLOSE_STICKY = /<\/table\s*>/iy;
+
+function splitTablesFromContent(text: string): ContentSegment[] {
+  const segments: ContentSegment[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    const tableStart = remaining.search(TABLE_OPEN_RE);
+
+    if (tableStart === -1) {
+      segments.push({ type: 'markdown', content: remaining });
+      break;
+    }
+
+    if (tableStart > 0) {
+      segments.push({ type: 'markdown', content: remaining.slice(0, tableStart) });
+    }
+
+    let depth = 0;
+    let i = tableStart;
+    let tableEnd = -1;
+
+    while (i < remaining.length) {
+      TABLE_OPEN_STICKY.lastIndex = i;
+      TABLE_CLOSE_STICKY.lastIndex = i;
+
+      if (TABLE_OPEN_STICKY.test(remaining)) {
+        depth++;
+        i = remaining.indexOf('>', i) + 1;
+      } else {
+        const closeMatch = TABLE_CLOSE_STICKY.exec(remaining);
+        if (closeMatch) {
+          depth--;
+          if (depth === 0) {
+            tableEnd = TABLE_CLOSE_STICKY.lastIndex;
+            break;
+          }
+          i = TABLE_CLOSE_STICKY.lastIndex;
+        } else {
+          // Skip to next '<' to avoid character-by-character scanning
+          const nextAngle = remaining.indexOf('<', i + 1);
+          i = nextAngle === -1 ? remaining.length : nextAngle;
+        }
+      }
+    }
+
+    if (tableEnd === -1) {
+      segments.push({ type: 'markdown', content: remaining.slice(tableStart) });
+      break;
+    }
+
+    segments.push({ type: 'html-table', content: remaining.slice(tableStart, tableEnd) });
+    remaining = remaining.slice(tableEnd);
+  }
+
+  return segments;
+}
+
+/**
  * 번역 응답 후처리: HTML/마크다운 구분 후 TipTap JSON 변환
- * AI가 마크다운 대신 HTML(ul, ol, li, p 등)을 반환하면 raw로 표시되는 문제 해결
+ *
+ * - AI가 HTML(ul, ol, li, p 등)을 반환하면 Markdown으로 변환 후 파싱
+ * - HTML <table> 블록은 ProseMirror DOMParser로 직접 파싱하여
+ *   셀 안의 bulletList/orderedList 구조를 보존
  */
 export function parseTranslationResponseToTipTap(content: string): TipTapDocJson {
   const trimmed = content.trim();
@@ -679,13 +753,43 @@ export function parseTranslationResponseToTipTap(content: string): TipTapDocJson
     ? convertHtmlListsToMarkdown(trimmed)
     : trimmed;
   const normalized = normalizeHorizontalRules(toParse);
+
+  // 테이블이 없으면 기존 markdown-it 경로 그대로
+  if (!TABLE_OPEN_RE.test(normalized)) {
+    return markdownToTipTapJsonForTranslation(normalized);
+  }
+
+  // 테이블은 ProseMirror DOMParser로, 나머지는 markdown-it으로
+  const segments = splitTablesFromContent(normalized);
   const editor = new Editor({
     extensions: getExtensionsForTranslation(),
   });
-  editor.commands.setContent(normalized);
-  const json = editor.getJSON() as TipTapDocJson;
-  editor.destroy();
-  return json;
+
+  try {
+    const schema = editor.state.schema;
+    const allNodes: unknown[] = [];
+
+    for (const segment of segments) {
+      if (segment.type === 'markdown') {
+        if (!segment.content.trim()) continue;
+        editor.commands.setContent(segment.content);
+        const json = editor.getJSON() as TipTapDocJson;
+        const nodes = json.content as unknown[];
+        if (nodes) allNodes.push(...nodes);
+      } else {
+        const div = document.createElement('div');
+        div.innerHTML = DOMPurify.sanitize(segment.content);
+        const parsed = PMDOMParser.fromSchema(schema).parse(div);
+        parsed.content.forEach(node => {
+          allNodes.push(node.toJSON());
+        });
+      }
+    }
+
+    return { type: 'doc', content: allNodes };
+  } finally {
+    editor.destroy();
+  }
 }
 
 /**
