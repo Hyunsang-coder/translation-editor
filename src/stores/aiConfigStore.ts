@@ -15,7 +15,7 @@ interface ApiKeysBundle {
 }
 
 interface AiConfigState {
-  // 번역용 모델 (예: gpt-5.4)
+  // 번역용 모델 (예: gpt-5.5)
   translationModel: string;
   // 채팅/질문용 모델 (예: gpt-5.4-mini)
   chatModel: string;
@@ -66,15 +66,60 @@ let loadingPromise: Promise<void> | null = null;
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   openai: [
-    { value: 'gpt-5.4' },
+    { value: 'gpt-5.5' },
     { value: 'gpt-5.4-mini' },
   ],
   anthropic: [
     { value: 'claude-sonnet-4-6' },
     { value: 'claude-haiku-4-5' },
-    { value: 'claude-opus-4-6' },
+    { value: 'claude-opus-4-7' },
   ],
 };
+
+export function migrateAiConfig(
+  persisted: Record<string, unknown>,
+  version: number,
+): Record<string, unknown> {
+  const data = { ...persisted };
+  if (version < 5) {
+    const oldProvider = (data.provider as string) || 'openai';
+    data.translationModel = (data.translationModel as string) || 'gpt-5.5';
+    data.chatModel = (data.chatModel as string) || 'gpt-5.5';
+    data.openaiEnabled = oldProvider !== 'anthropic';
+    data.anthropicEnabled = oldProvider === 'anthropic';
+  }
+  if (version < 6) {
+    const rename = (v: unknown) => v === 'claude-opus-4-5' ? 'claude-opus-4-6' : v;
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  if (version < 7) {
+    const rename = (v: unknown) => v === 'claude-sonnet-4-5' ? 'claude-sonnet-4-6' : v;
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+    data.anthropicEnabled = true;
+  }
+  if (version < 8) {
+    const rename = (v: unknown) => {
+      if (v === 'gpt-5.2') return 'gpt-5.4';
+      if (v === 'gpt-5-mini') return 'gpt-5.4-mini';
+      return v;
+    };
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  // v8 → v9: GPT-5.4 → 5.5, Opus 4.6 → 4.7
+  if (version < 9) {
+    const rename = (v: unknown) => {
+      if (v === 'gpt-5.4') return 'gpt-5.5';
+      if (v === 'claude-opus-4-6') return 'claude-opus-4-7';
+      return v;
+    };
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  return data;
+}
 
 export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
   persist(
@@ -219,7 +264,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
           if (!enabled) {
             const openaiPresets = MODEL_PRESETS.openai;
-            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.4';
+            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.5';
             if (state.translationModel.startsWith('claude')) {
               set({ translationModel: firstOpenaiModel });
             }
@@ -232,40 +277,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 8,
-      migrate: (persisted: unknown, version: number) => {
-        const data = persisted as Record<string, unknown>;
-        if (version < 5) {
-          const oldProvider = (data.provider as string) || 'openai';
-          data.translationModel = (data.translationModel as string) || 'gpt-5.4';
-          data.chatModel = (data.chatModel as string) || 'gpt-5.4';
-          data.openaiEnabled = oldProvider !== 'anthropic';
-          data.anthropicEnabled = oldProvider === 'anthropic';
-        }
-        if (version < 6) {
-          const rename = (v: unknown) => v === 'claude-opus-4-5' ? 'claude-opus-4-6' : v;
-          data.translationModel = rename(data.translationModel);
-          data.chatModel = rename(data.chatModel);
-        }
-        // v6 → v7: Sonnet 4.5 → 4.6, 기본 provider를 Anthropic으로 변경
-        if (version < 7) {
-          const rename = (v: unknown) => v === 'claude-sonnet-4-5' ? 'claude-sonnet-4-6' : v;
-          data.translationModel = rename(data.translationModel);
-          data.chatModel = rename(data.chatModel);
-          data.anthropicEnabled = true;
-        }
-        // v7 → v8: OpenAI 모델 gpt-5.2/gpt-5-mini → gpt-5.4/gpt-5.4-mini
-        if (version < 8) {
-          const rename = (v: unknown) => {
-            if (v === 'gpt-5.2') return 'gpt-5.4';
-            if (v === 'gpt-5-mini') return 'gpt-5.4-mini';
-            return v;
-          };
-          data.translationModel = rename(data.translationModel);
-          data.chatModel = rename(data.chatModel);
-        }
-        return data;
-      },
+      version: 9,
+      migrate: (persisted: unknown, version: number) =>
+        migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({
         translationModel: state.translationModel,
         chatModel: state.chatModel,

@@ -1,4 +1,52 @@
 import { describe, it, expect } from 'vitest';
+import { migrateAiConfig } from './aiConfigStore';
+
+describe('aiConfigStore - migrate v8 → v9 (GPT-5.5 / Opus 4.7)', () => {
+  it('claude-opus-4-6 → claude-opus-4-7 자동 rename', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-opus-4-6', chatModel: 'claude-opus-4-6' },
+      8,
+    );
+    expect(result.translationModel).toBe('claude-opus-4-7');
+    expect(result.chatModel).toBe('claude-opus-4-7');
+  });
+
+  it('gpt-5.4 → gpt-5.5 rename, gpt-5.4-mini는 유지', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'gpt-5.4', chatModel: 'gpt-5.4-mini' },
+      8,
+    );
+    expect(result.translationModel).toBe('gpt-5.5');
+    expect(result.chatModel).toBe('gpt-5.4-mini');
+  });
+
+  it('claude-sonnet-4-6 / claude-haiku-4-5 등 다른 모델은 그대로 유지', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-sonnet-4-6', chatModel: 'claude-haiku-4-5' },
+      8,
+    );
+    expect(result.translationModel).toBe('claude-sonnet-4-6');
+    expect(result.chatModel).toBe('claude-haiku-4-5');
+  });
+
+  it('이미 v9인 경우 변경 없음', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-opus-4-7', chatModel: 'gpt-5.5' },
+      9,
+    );
+    expect(result.translationModel).toBe('claude-opus-4-7');
+    expect(result.chatModel).toBe('gpt-5.5');
+  });
+
+  it('과거 버전(v5)에서 누적 마이그레이션: opus-4-5 → 4-6 → 4-7', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-opus-4-5', chatModel: 'claude-opus-4-5' },
+      5,
+    );
+    expect(result.translationModel).toBe('claude-opus-4-7');
+    expect(result.chatModel).toBe('claude-opus-4-7');
+  });
+});
 
 // 핵심: loadSecureKeys가 동시 호출/재시도를 올바르게 처리하는지 검증
 describe('aiConfigStore - loadSecureKeys 로직 검증', () => {

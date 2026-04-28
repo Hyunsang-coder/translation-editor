@@ -8,8 +8,8 @@ describe('getAiConfig - test env fallback', () => {
 
   beforeEach(() => {
     useAiConfigStore.setState({
-      translationModel: 'gpt-5.4',
-      chatModel: 'gpt-5.4',
+      translationModel: 'gpt-5.5',
+      chatModel: 'gpt-5.5',
       openaiApiKey: undefined,
       anthropicApiKey: undefined,
       openaiEnabled: true,

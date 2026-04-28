@@ -24,8 +24,9 @@ export function createChatModel(
       throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
     }
 
-    // Claude는 temperature 정상 지원 (0-1)
-    const temperatureOption = cfg.temperature !== undefined
+    // Opus 4.7+ rejects non-default temperature/top_p/top_k with 400 error
+    const isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model);
+    const temperatureOption = (!isOpus47Plus && cfg.temperature !== undefined)
       ? { temperature: cfg.temperature } : {};
 
     // Claude는 max_tokens 기본값이 낮으므로 명시적 설정
