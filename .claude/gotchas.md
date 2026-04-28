@@ -42,6 +42,8 @@ Critical implementation warnings learned from past issues.
 
 18. **GPT-5 Temperature Handling**: GPT-5 series doesn't support temperature parameter. In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to exclude temperature.
 
+18a. **Opus 4.7+ Sampling Parameter Guard**: Claude Opus 4.7 returns 400 if `temperature`, `top_p`, or `top_k` is set to a non-default value. `client.ts` uses `isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model)` to skip the temperature option. Adaptive thinking, prefill removal, and new tokenizer (1.0–1.35x token count) are documented in the Anthropic migration guide; only the temperature guard is enforced in code today.
+
 19. **LangChain Image Format Unification**: LangChain handles both OpenAI and Anthropic vision with the same `image_url` format. LangChain `@langchain/anthropic` internally converts to Anthropic's native `source` format. Do NOT use provider-specific image formats in `chat.ts`.
 
 20. **Provider-Specific Image Limits**: `chat.ts` → `maybeReplaceLastHumanMessageWithImages()` enforces different size limits: Anthropic 5MB, OpenAI 20MB. Error messages include provider name for clarity.
