@@ -1,6 +1,7 @@
 import { applyDesktopTranslationPreview, discardDesktopTranslationPreview } from '@/desktop/translationPreviewActions';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { searchGlossary } from '@/tauri/glossary';
 import { hashContent } from '@/utils/hash';
@@ -159,6 +160,62 @@ async function getTranslationPreview(): Promise<unknown> {
   };
 }
 
+const SEVERITY_MAP: Record<string, IssueSeverity> = {
+  '🔴': 'critical', critical: 'critical', error: 'critical', '5': 'critical',
+  '4': 'major', major: 'major',
+  '🟡': 'minor', minor: 'minor', warning: 'minor', '3': 'minor', '2': 'minor', '1': 'minor',
+};
+
+const TYPE_MAP: Record<string, IssueType> = {
+  '누락': 'omission', omission: 'omission',
+  '추가': 'addition', addition: 'addition',
+  '오역': 'mistranslation', mistranslation: 'mistranslation',
+  '문법': 'grammar', grammar: 'grammar',
+  '직역투': 'awkward', awkward: 'awkward',
+  '용어': 'terminology', terminology: 'terminology',
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+async function setReviewIssues(params: BridgeParams): Promise<unknown> {
+  const project = useProjectStore.getState().project;
+  if (!project) throw new Error('No project loaded');
+
+  if (typeof params.projectId === 'string' && params.projectId.length > 0 && params.projectId !== project.id) {
+    throw new Error(`Project mismatch: expected ${project.id}, got ${params.projectId}`);
+  }
+
+  const rawIssues = Array.isArray(params.issues) ? params.issues : [];
+  const issues = rawIssues.map((raw) => {
+    const r = asRecord(raw);
+    const issue: {
+      sourceExcerpt: string;
+      targetExcerpt: string;
+      type: IssueType;
+      severity: IssueSeverity;
+      description: string;
+      segmentOrder?: number;
+      segmentGroupId?: string;
+      suggestedFix?: string;
+    } = {
+      sourceExcerpt: String(r.sourceExcerpt ?? ''),
+      targetExcerpt: String(r.targetExcerpt ?? ''),
+      type: TYPE_MAP[String(r.type)] ?? 'mistranslation',
+      severity: SEVERITY_MAP[String(r.severity)] ?? 'minor',
+      description: String(r.description ?? ''),
+    };
+    if (typeof r.segmentOrder === 'number') issue.segmentOrder = r.segmentOrder;
+    if (typeof r.segmentGroupId === 'string') issue.segmentGroupId = r.segmentGroupId;
+    if (typeof r.suggestedFix === 'string') issue.suggestedFix = r.suggestedFix;
+    return issue;
+  }).filter((i) => i.targetExcerpt.trim().length > 0);
+
+  useReviewStore.getState().ingestExternalReview({ projectId: project.id, issues });
+  return { ok: true, count: issues.length, dropped: rawIssues.length - issues.length };
+}
+
 const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.getStatus': async () => {
     const project = useProjectStore.getState().project;
@@ -199,6 +256,8 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
     discardDesktopTranslationPreview();
     return { ok: true };
   },
+
+  'oddeyes.setReviewIssues': async (params) => await setReviewIssues(params ?? {}),
 
 };
 

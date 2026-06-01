@@ -59,6 +59,11 @@ vi.mock('@/desktop/translationPreviewActions', () => ({
   discardDesktopTranslationPreview: vi.fn(),
 }));
 
+const ingestSpy = vi.fn();
+vi.mock('@/stores/reviewStore', () => ({
+  useReviewStore: { getState: () => ({ ingestExternalReview: ingestSpy }) },
+}));
+
 import { initializeOddEyesAppBridge } from './oddeyesAppBridge';
 
 // ── helper ──────────────────────────────────────────────────────────────────
@@ -101,5 +106,31 @@ describe('oddeyesAppBridge — getSource', () => {
     expect(result.format).toBe('markdown');
     expect(result).toHaveProperty('revision');
     expect(result).toHaveProperty('empty');
+  });
+});
+
+describe('oddeyesAppBridge — setReviewIssues', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    ingestSpy.mockClear();
+  });
+
+  it('severity/type 정규화 + excerpt 없는 항목 드롭', async () => {
+    const res = await callBridge('oddeyes.setReviewIssues', {
+      issues: [
+        { sourceExcerpt: 's1', targetExcerpt: 't1', type: '오역', severity: '🔴', description: 'd1' },
+        { sourceExcerpt: 's2', targetExcerpt: '',   type: '누락', severity: '🟡', description: 'd2' },
+      ],
+    }) as Record<string, unknown>;
+    expect(res.count).toBe(1);
+    expect(res.dropped).toBe(1);
+    expect(ingestSpy).toHaveBeenCalledWith(expect.objectContaining({
+      issues: [expect.objectContaining({ type: 'mistranslation', severity: 'critical' })],
+    }));
+  });
+
+  it('projectId 불일치 시 거부 (함정 5)', async () => {
+    await expect(callBridge('oddeyes.setReviewIssues', { projectId: 'other', issues: [] }))
+      .rejects.toThrow('Project mismatch');
   });
 });

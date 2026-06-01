@@ -54,3 +54,46 @@ describe('reviewStore startReview', () => {
     expect(state.progress.total).toBe(3);
   });
 });
+
+describe('reviewStore ingestExternalReview', () => {
+  beforeEach(() => {
+    useReviewStore.getState().resetReview();
+  });
+
+  it('주입 시 checked:true·highlightEnabled·initializedProjectId가 한 번에 세팅된다', () => {
+    useReviewStore.getState().ingestExternalReview({
+      projectId: 'p1',
+      issues: [{
+        sourceExcerpt: 'src', targetExcerpt: 'tgt',
+        type: 'mistranslation', severity: 'major', description: 'd',
+      }],
+    });
+    const s = useReviewStore.getState();
+    expect(s.results).toHaveLength(1);
+    expect(s.results[0]!.issues[0]!.checked).toBe(true);
+    expect(s.highlightEnabled).toBe(true);
+    expect(s.initializedProjectId).toBe('p1');
+    expect(s.totalIssuesFound).toBe(1);
+  });
+
+  it('severityFilter가 좁혀져 있어도 주입이 3값 전체로 리셋한다 (함정 4)', () => {
+    useReviewStore.setState({ severityFilter: ['critical'] });
+    useReviewStore.getState().ingestExternalReview({
+      projectId: 'p1',
+      issues: [{ sourceExcerpt: 's', targetExcerpt: 't', type: 'omission', severity: 'minor', description: 'd' }],
+    });
+    expect(useReviewStore.getState().severityFilter).toEqual(['critical', 'major', 'minor']);
+    expect(useReviewStore.getState().getCheckedIssues()).toHaveLength(1);
+  });
+
+  it('주입은 append가 아니라 전체 교체다', () => {
+    const inject = (txt: string) => useReviewStore.getState().ingestExternalReview({
+      projectId: 'p1',
+      issues: [{ sourceExcerpt: 's', targetExcerpt: txt, type: 'grammar', severity: 'major', description: 'd' }],
+    });
+    inject('first'); inject('second');
+    const issues = useReviewStore.getState().getAllIssues();
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.targetExcerpt).toBe('second');
+  });
+});

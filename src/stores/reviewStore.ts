@@ -186,6 +186,24 @@ interface ReviewActions {
    * 스트리밍 텍스트 업데이트
    */
   setStreamingText: (text: string) => void;
+
+  /**
+   * 외부(MCP) 검수 결과 주입: 기존 results를 1회 전체 교체하고 하이라이트 즉시 활성화.
+   * initializeReview 경합(함정 2)·severityFilter 경합(함정 4) 방지를 한 set()에서 처리.
+   */
+  ingestExternalReview: (params: {
+    projectId: string;
+    issues: Array<{
+      segmentOrder?: number;
+      segmentGroupId?: string;
+      sourceExcerpt: string;
+      targetExcerpt: string;
+      suggestedFix?: string;
+      type: IssueType;
+      severity: IssueSeverity;
+      description: string;
+    }>;
+  }) => void;
 }
 
 type ReviewStore = ReviewState & ReviewActions;
@@ -251,6 +269,37 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       progress: { ...progress, completed: progress.completed + 1 },
       highlightEnabled: true, // 결과가 추가되면 하이라이트 자동 활성화
       highlightNonce: highlightNonce + 1,
+    });
+  },
+
+  ingestExternalReview: ({ projectId, issues }) => {
+    const { highlightNonce } = get();
+    const normalized: ReviewIssue[] = issues.map((it, i) => {
+      const segmentOrder = it.segmentOrder ?? i;
+      return {
+        id: generateIssueId(segmentOrder, it.type, it.sourceExcerpt, it.targetExcerpt),
+        segmentOrder,
+        segmentGroupId: it.segmentGroupId,
+        sourceExcerpt: it.sourceExcerpt,
+        targetExcerpt: it.targetExcerpt,
+        suggestedFix: it.suggestedFix ?? '',
+        type: it.type,
+        severity: it.severity,
+        description: it.description,
+        checked: true,
+      };
+    });
+    set({
+      results: [{ chunkIndex: 0, issues: normalized }],
+      currentChunkIndex: 1,
+      progress: { completed: 1, total: 1 },
+      isReviewing: false,
+      totalIssuesFound: normalized.length,
+      initializedProjectId: projectId,
+      severityFilter: ['critical', 'major', 'minor'],
+      highlightEnabled: true,
+      highlightNonce: highlightNonce + 1,
+      streamingText: '',
     });
   },
 
