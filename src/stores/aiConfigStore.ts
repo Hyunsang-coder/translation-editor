@@ -72,7 +72,7 @@ const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   anthropic: [
     { value: 'claude-sonnet-4-6' },
     { value: 'claude-haiku-4-5' },
-    { value: 'claude-opus-4-7' },
+    { value: 'claude-opus-4-8' },
   ],
 };
 
@@ -115,6 +115,12 @@ export function migrateAiConfig(
       if (v === 'claude-opus-4-6') return 'claude-opus-4-7';
       return v;
     };
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  // v9 → v10: Opus 4.7 → 4.8
+  if (version < 10) {
+    const rename = (v: unknown) => v === 'claude-opus-4-7' ? 'claude-opus-4-8' : v;
     data.translationModel = rename(data.translationModel);
     data.chatModel = rename(data.chatModel);
   }
@@ -277,7 +283,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 9,
+      version: 10,
       migrate: (persisted: unknown, version: number) =>
         migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({

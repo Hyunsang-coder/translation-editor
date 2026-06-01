@@ -25,6 +25,7 @@ export function createChatModel(
     }
 
     // Opus 4.7+ rejects non-default temperature/top_p/top_k with 400 error
+    // (정규식은 4.7/4.8/4.9 및 2자리 이상 버전까지 자동 커버)
     const isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model);
     const temperatureOption = (!isOpus47Plus && cfg.temperature !== undefined)
       ? { temperature: cfg.temperature } : {};

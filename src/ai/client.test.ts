@@ -18,13 +18,13 @@ vi.mock('@langchain/openai', () => ({
   }),
 }));
 
-describe('createChatModel - Opus 4.7 sampling parameter guard', () => {
+describe('createChatModel - Opus 4.8 sampling parameter guard', () => {
   beforeEach(() => {
     anthropicCtorSpy.mockClear();
     openaiCtorSpy.mockClear();
     useAiConfigStore.setState({
-      translationModel: 'claude-opus-4-7',
-      chatModel: 'claude-opus-4-7',
+      translationModel: 'claude-opus-4-8',
+      chatModel: 'claude-opus-4-8',
       anthropicApiKey: 'sk-ant-test',
       openaiApiKey: undefined,
       anthropicEnabled: true,
@@ -36,7 +36,7 @@ describe('createChatModel - Opus 4.7 sampling parameter guard', () => {
     vi.unstubAllEnvs();
   });
 
-  it('claude-opus-4-7 호출 시 ChatAnthropic 생성자에 temperature가 전달되지 않음', async () => {
+  it('claude-opus-4-8 호출 시 ChatAnthropic 생성자에 temperature가 전달되지 않음', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
     const { createChatModel } = await import('@/ai/client');
 
@@ -44,7 +44,7 @@ describe('createChatModel - Opus 4.7 sampling parameter guard', () => {
 
     expect(anthropicCtorSpy).toHaveBeenCalledTimes(1);
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('claude-opus-4-7');
+    expect(callArgs.model).toBe('claude-opus-4-8');
     expect('temperature' in callArgs).toBe(false);
   });
 
@@ -63,7 +63,7 @@ describe('createChatModel - Opus 4.7 sampling parameter guard', () => {
     expect(callArgs.temperature).toBe(0.7);
   });
 
-  it('modelOverride로 claude-opus-4-7을 직접 지정해도 temperature 차단', async () => {
+  it('modelOverride로 claude-opus-4-8을 직접 지정해도 temperature 차단', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.5');
     useAiConfigStore.setState({
       translationModel: 'claude-sonnet-4-6',
@@ -71,10 +71,10 @@ describe('createChatModel - Opus 4.7 sampling parameter guard', () => {
     });
     const { createChatModel } = await import('@/ai/client');
 
-    createChatModel('claude-opus-4-7', { useFor: 'chat' });
+    createChatModel('claude-opus-4-8', { useFor: 'chat' });
 
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('claude-opus-4-7');
+    expect(callArgs.model).toBe('claude-opus-4-8');
     expect('temperature' in callArgs).toBe(false);
   });
 });

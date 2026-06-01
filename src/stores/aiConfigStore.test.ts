@@ -1,14 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { migrateAiConfig } from './aiConfigStore';
 
-describe('aiConfigStore - migrate v8 → v9 (GPT-5.5 / Opus 4.7)', () => {
-  it('claude-opus-4-6 → claude-opus-4-7 자동 rename', () => {
+describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
+  it('claude-opus-4-6 → 4-7 → 4-8 누적 rename', () => {
     const result = migrateAiConfig(
       { translationModel: 'claude-opus-4-6', chatModel: 'claude-opus-4-6' },
       8,
     );
-    expect(result.translationModel).toBe('claude-opus-4-7');
-    expect(result.chatModel).toBe('claude-opus-4-7');
+    expect(result.translationModel).toBe('claude-opus-4-8');
+    expect(result.chatModel).toBe('claude-opus-4-8');
+  });
+
+  it('v9 → v10: claude-opus-4-7 → 4-8 자동 rename', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-opus-4-7', chatModel: 'claude-opus-4-7' },
+      9,
+    );
+    expect(result.translationModel).toBe('claude-opus-4-8');
+    expect(result.chatModel).toBe('claude-opus-4-8');
   });
 
   it('gpt-5.4 → gpt-5.5 rename, gpt-5.4-mini는 유지', () => {
@@ -29,22 +38,22 @@ describe('aiConfigStore - migrate v8 → v9 (GPT-5.5 / Opus 4.7)', () => {
     expect(result.chatModel).toBe('claude-haiku-4-5');
   });
 
-  it('이미 v9인 경우 변경 없음', () => {
+  it('이미 v10인 경우 변경 없음', () => {
     const result = migrateAiConfig(
-      { translationModel: 'claude-opus-4-7', chatModel: 'gpt-5.5' },
-      9,
+      { translationModel: 'claude-opus-4-8', chatModel: 'gpt-5.5' },
+      10,
     );
-    expect(result.translationModel).toBe('claude-opus-4-7');
+    expect(result.translationModel).toBe('claude-opus-4-8');
     expect(result.chatModel).toBe('gpt-5.5');
   });
 
-  it('과거 버전(v5)에서 누적 마이그레이션: opus-4-5 → 4-6 → 4-7', () => {
+  it('과거 버전(v5)에서 누적 마이그레이션: opus-4-5 → 4-6 → 4-7 → 4-8', () => {
     const result = migrateAiConfig(
       { translationModel: 'claude-opus-4-5', chatModel: 'claude-opus-4-5' },
       5,
     );
-    expect(result.translationModel).toBe('claude-opus-4-7');
-    expect(result.chatModel).toBe('claude-opus-4-7');
+    expect(result.translationModel).toBe('claude-opus-4-8');
+    expect(result.chatModel).toBe('claude-opus-4-8');
   });
 });
 

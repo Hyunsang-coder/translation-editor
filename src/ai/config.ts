@@ -10,7 +10,7 @@ export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
 export const MODEL_PRESETS = {
   anthropic: [
-    { value: 'claude-opus-4-7', label: 'Opus 4.7', description: '높은 정확도, 복잡한 작업에 적합' },
+    { value: 'claude-opus-4-8', label: 'Opus 4.8', description: '높은 정확도, 복잡한 작업에 적합' },
     { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6', description: '성능/속도/비용 균형 (권장)' },
     { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '빠른 응답, 낮은 비용' },
   ],
