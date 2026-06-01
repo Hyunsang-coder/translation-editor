@@ -19,6 +19,7 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS } from '@/ai/config';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { stripHtml } from '@/utils/hash';
+import { countTotalWords } from '@/utils/wordCounter';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
@@ -141,8 +142,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!sourceDocument) { setSourceWordCount(0); return; }
-      const text = stripHtml(sourceDocument).trim();
-      setSourceWordCount(text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length);
+      setSourceWordCount(countTotalWords(sourceDocument));
     }, 300);
     return () => window.clearTimeout(timer);
   }, [sourceDocument]);
@@ -150,8 +150,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!targetDocument) { setTargetWordCount(0); return; }
-      const text = stripHtml(targetDocument).trim();
-      setTargetWordCount(text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length);
+      setTargetWordCount(countTotalWords(targetDocument));
     }, 300);
     return () => window.clearTimeout(timer);
   }, [targetDocument]);
