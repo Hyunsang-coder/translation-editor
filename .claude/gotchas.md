@@ -150,6 +150,8 @@ Critical implementation warnings learned from past issues.
 
 143. **Windows `Compress-Archive` 확장자 제한**: PowerShell `Compress-Archive`는 `.zip` 확장자만 지원. `.mcpb` 등 커스텀 확장자는 `NotSupportedArchiveFileExtension` 에러 발생. `.zip`으로 생성 후 rename 필요.
 
+144. **`oddeyes-desktop-mcp` 도구 추가 = 배포 3종 동기화 필수**: `src/tools/*.ts`에 도구를 등록하고 `index.ts`에 register하면 코드는 동작하지만, 클라이언트가 새 도구를 **못 본다**. ① `package.json` + `manifest.template.json` 버전 bump, ② `manifest.template.json`의 `tools` 배열에 도구명 추가(Claude Desktop UI 메타데이터), ③ `npm run build`로 `.mcpb` 재번들 **그리고** `npm publish`(npx 경로 사용 시)까지 해야 함. 사용 측은 `.mcpb` 재설치 또는 npx 캐시 무효화 후 클라이언트 재연결 필요. (이 MCP는 npm 레지스트리에 게시됨 — `npm view oddeyes-desktop-mcp version`으로 확인.)
+
 ## Security
 
 62. **Keychain Access**: First run requires OS authentication prompt for keychain access.

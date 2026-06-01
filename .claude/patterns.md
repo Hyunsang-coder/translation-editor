@@ -651,6 +651,50 @@ useEffect(() => {
 
 **View 메뉴 항목**: Project Sidebar, Settings, Review (일반 MenuItemBuilder), Chat (CheckMenuItemBuilder — 체크 상태 동기화)
 
+## Desktop Bridge MCP (외부 Claude → 앱 제어)
+
+외부 에이전트(Claude Desktop / trans_agent)가 **실행 중인 OddEyes 앱**을 읽고 쓰는 채널.
+앱 내부 MCP(Confluence/Notion, Rust)와는 **별개**다.
+
+```
+외부 Claude → oddeyes-desktop-mcp (Node, .mcpb/npx) → WebSocket
+   → window.__ODDEYES_APP_BRIDGE__ (oddeyesAppBridge.ts) → Zustand store → SQLite
+```
+
+**도구 추가 패턴** (3-레이어, 신규 store 액션 없이 기존 세터만 호출):
+
+```typescript
+// 1) src/desktop/oddeyesAppBridge.ts — bridge 헬퍼 + methods 등록
+async function setTranslationContext(params: BridgeParams): Promise<unknown> {
+  const project = useProjectStore.getState().project;
+  if (!project) throw new Error('No project loaded');           // 함정: 영속화 가드
+  if (typeof params.projectId === 'string' && params.projectId.length > 0
+      && params.projectId !== project.id) {
+    throw new Error(`Project mismatch: ...`);                   // stale 방지
+  }
+  const mode = params.mode === 'append' ? 'append' : 'replace';
+  // typeof value === 'string'으로 "제공 여부" 판별: undefined→스킵, ''→replace로 비우기
+  // 기존 chatStore 세터(set*/appendTo*) 호출 → schedulePersist() → SQLite
+}
+const methods = { 'oddeyes.setTranslationContext': async (p) => setTranslationContext(p ?? {}) };
+
+// 2) oddeyes-desktop-mcp/src/tools/<domain>.ts — registerXxxTools(server, callBridge)
+//    server.registerTool("oddeyes_set_translation_context", { description, inputSchema(zod) }, handler)
+// 3) oddeyes-desktop-mcp/src/index.ts — createMcpServer()에서 registerXxxTools 등록
+//    + manifest.template.json tools 배열에 도구명 추가 (Claude Desktop UI 메타데이터)
+```
+
+**현재 도구** (`oddeyes-desktop-mcp` v0.2.0, 10개):
+- 읽기: `get_status`, `get_source_document`, `get_target_document`, `get_translation_context`, `get_translation_preview`
+- 쓰기(preview-first): `set_translation_preview`, `apply_translation_preview`, `discard_translation_preview`
+- 쓰기(검수): `set_review_issues` → `reviewStore.ingestExternalReview` (highlight를 위해 `targetExcerpt` verbatim 필수)
+- 쓰기(컨텍스트): `set_translation_context` → `chatStore` 세터 (persona/rules/projectContext, replace|append)
+
+**함정**:
+- **영속화는 `loadedProjectId` 필요** — 프로젝트 미로드 시 store 메모리엔 반영되나 SQLite 미저장 → bridge에서 `project` 없으면 거부.
+- **빈 문자열 vs 미제공** — `replace`에서 `''`는 비우기(허용), `append`에서 `''`는 무의미(스킵). `undefined`는 항상 스킵(부분 업데이트).
+- **배포 3종 동기화** — 도구 추가 시 ① `package.json`/`manifest` 버전 bump ② manifest `tools` 배열 ③ `.mcpb` 재번들 + npm publish(npx 경로). 빠뜨리면 코드는 동작하나 클라이언트가 새 도구를 못 봄.
+
 ## Build Commands
 
 ```bash

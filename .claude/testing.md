@@ -89,7 +89,7 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (as of 2026-02-16: 31 files, 458 tests, 8 skipped)
+### Unit Test Files (as of 2026-06-01: 36 test files; table below lists the main ones)
 
 | File | Tests | Description |
 |------|-------|-------------|
@@ -124,6 +124,7 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/components/history/HistoryRestoreDialog.autoSnapshot.test.tsx` | 2 | Auto-snapshot before restore |
 | `src/components/editor/TranslatePreviewModal.history.test.tsx` | 2 | Auto-snapshot before translation apply |
 | `src/components/review/ReviewPanel.test.tsx` | 3 | ReviewPanel empty document validation |
+| `src/desktop/oddeyesAppBridge.test.ts` | 10 | Desktop bridge: method routing, getStatus/getSource, `setReviewIssues`(정규화/드롭/projectId 가드), `setTranslationContext`(replace/append/빈문자열/projectId 가드) |
 
 ## Backend Testing (Rust)
 

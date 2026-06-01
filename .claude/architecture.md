@@ -74,6 +74,13 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 - **Web Search**: Brave Search API + OpenAI Web Search
 - **OAuth Flow**: Lazy authentication - toggle enables tool, "Connect" initiates OAuth
 
+**Desktop Bridge MCP (역방향 — 외부 Claude가 앱을 제어)**: 위 셋이 앱→외부 서비스라면,
+`oddeyes-desktop-mcp`(Node, `.mcpb`/npx, npm `oddeyes-desktop-mcp@0.2.0`)는 외부 Claude Desktop이
+실행 중인 앱을 읽고 쓰는 역방향 채널이다. WebSocket → `window.__ODDEYES_APP_BRIDGE__`
+(`src/desktop/oddeyesAppBridge.ts`) → Zustand store. 읽기 5종 + preview-first 쓰기 3종 +
+검수 주입(`set_review_issues` → reviewStore) + 컨텍스트 주입(`set_translation_context` → chatStore).
+상세 패턴은 `patterns.md`의 "Desktop Bridge MCP" 참조.
+
 ### 5. State Management (Zustand Stores)
 
 | Store | Purpose |
