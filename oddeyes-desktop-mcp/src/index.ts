@@ -7,6 +7,7 @@ import { OddEyesBridgeRuntime } from "./bridgeRuntime.js";
 import { registerDocumentTools } from "./tools/documents.js";
 import { registerPreviewTools } from "./tools/preview.js";
 import { registerReviewTools } from "./tools/review.js";
+import { registerContextTools } from "./tools/context.js";
 
 const transportMode = process.env.ODDEYES_DESKTOP_MCP_TRANSPORT === "http" ? "http" : "stdio";
 const httpPort = Number(process.env.ODDEYES_DESKTOP_MCP_PORT ?? "9977");
@@ -30,6 +31,7 @@ function createMcpServer(): McpServer {
   registerDocumentTools(server, callBridge);
   registerPreviewTools(server, callBridge);
   registerReviewTools(server, callBridge);
+  registerContextTools(server, callBridge);
 
   return server;
 }

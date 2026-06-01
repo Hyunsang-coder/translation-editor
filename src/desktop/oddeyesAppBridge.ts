@@ -216,6 +216,43 @@ async function setReviewIssues(params: BridgeParams): Promise<unknown> {
   return { ok: true, count: issues.length, dropped: rawIssues.length - issues.length };
 }
 
+type ContextField = 'translatorPersona' | 'translationRules' | 'projectContext';
+
+async function setTranslationContext(params: BridgeParams): Promise<unknown> {
+  const project = useProjectStore.getState().project;
+  if (!project) throw new Error('No project loaded');
+
+  if (typeof params.projectId === 'string' && params.projectId.length > 0 && params.projectId !== project.id) {
+    throw new Error(`Project mismatch: expected ${project.id}, got ${params.projectId}`);
+  }
+
+  const mode = params.mode === 'append' ? 'append' : 'replace';
+  const chat = useChatStore.getState();
+  const updated: ContextField[] = [];
+
+  const apply = (
+    field: ContextField,
+    value: unknown,
+    setFn: (v: string) => void,
+    appendFn: (v: string) => void,
+  ): void => {
+    if (typeof value !== 'string') return;
+    if (mode === 'append') {
+      if (value.trim().length === 0) return;
+      appendFn(value);
+    } else {
+      setFn(value);
+    }
+    updated.push(field);
+  };
+
+  apply('translatorPersona', params.translatorPersona, chat.setTranslatorPersona, chat.appendToTranslatorPersona);
+  apply('translationRules',  params.translationRules,  chat.setTranslationRules,  chat.appendToTranslationRules);
+  apply('projectContext',    params.projectContext,    chat.setProjectContext,    chat.appendToProjectContext);
+
+  return { ok: true, mode, updated };
+}
+
 const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.getStatus': async () => {
     const project = useProjectStore.getState().project;
@@ -258,6 +295,7 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   },
 
   'oddeyes.setReviewIssues': async (params) => await setReviewIssues(params ?? {}),
+  'oddeyes.setTranslationContext': async (params) => await setTranslationContext(params ?? {}),
 
 };
 

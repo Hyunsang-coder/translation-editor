@@ -20,12 +20,23 @@ vi.mock('@/stores/projectStore', () => ({
   },
 }));
 
+const setPersonaSpy = vi.fn();
+const setRulesSpy = vi.fn();
+const setContextSpy = vi.fn();
+const appendRulesSpy = vi.fn();
+
 vi.mock('@/stores/chatStore', () => ({
   useChatStore: {
     getState: () => ({
       translationRules: '',
       projectContext: '',
       translatorPersona: '',
+      setTranslatorPersona: setPersonaSpy,
+      appendToTranslatorPersona: vi.fn(),
+      setTranslationRules: setRulesSpy,
+      appendToTranslationRules: appendRulesSpy,
+      setProjectContext: setContextSpy,
+      appendToProjectContext: vi.fn(),
     }),
   },
 }));
@@ -132,5 +143,54 @@ describe('oddeyesAppBridge — setReviewIssues', () => {
   it('projectId 불일치 시 거부 (함정 5)', async () => {
     await expect(callBridge('oddeyes.setReviewIssues', { projectId: 'other', issues: [] }))
       .rejects.toThrow('Project mismatch');
+  });
+});
+
+describe('oddeyesAppBridge — setTranslationContext', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    setPersonaSpy.mockClear();
+    setRulesSpy.mockClear();
+    setContextSpy.mockClear();
+    appendRulesSpy.mockClear();
+  });
+
+  it('제공된 필드만 replace로 갱신', async () => {
+    const res = await callBridge('oddeyes.setTranslationContext', {
+      translationRules: 'rule A',
+    }) as Record<string, unknown>;
+    expect(res.updated).toEqual(['translationRules']);
+    expect(setRulesSpy).toHaveBeenCalledWith('rule A');
+    expect(setPersonaSpy).not.toHaveBeenCalled();
+    expect(setContextSpy).not.toHaveBeenCalled();
+  });
+
+  it('mode=append는 appendTo* 호출', async () => {
+    await callBridge('oddeyes.setTranslationContext', {
+      translationRules: 'extra rule', mode: 'append',
+    });
+    expect(appendRulesSpy).toHaveBeenCalledWith('extra rule');
+    expect(setRulesSpy).not.toHaveBeenCalled();
+  });
+
+  it('projectId 불일치 시 거부', async () => {
+    await expect(callBridge('oddeyes.setTranslationContext', { projectId: 'other' }))
+      .rejects.toThrow('Project mismatch');
+  });
+
+  it('빈 문자열 replace는 허용(비우기)', async () => {
+    const res = await callBridge('oddeyes.setTranslationContext', {
+      translatorPersona: '',
+    }) as Record<string, unknown>;
+    expect(res.updated).toEqual(['translatorPersona']);
+    expect(setPersonaSpy).toHaveBeenCalledWith('');
+  });
+
+  it('mode=append에서 빈 문자열은 스킵', async () => {
+    const res = await callBridge('oddeyes.setTranslationContext', {
+      translationRules: '   ', mode: 'append',
+    }) as Record<string, unknown>;
+    expect(res.updated).toEqual([]);
+    expect(appendRulesSpy).not.toHaveBeenCalled();
   });
 });
