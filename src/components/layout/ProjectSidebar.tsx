@@ -23,25 +23,6 @@ type NewProjectForm = {
   domain: ProjectDomain;
 };
 
-function mergeProjectListStable(
-  prev: RecentProjectInfo[],
-  next: RecentProjectInfo[],
-): RecentProjectInfo[] {
-  const nextById = new Map(next.map((item) => [item.id, item]));
-  const prevIds = new Set(prev.map((item) => item.id));
-
-  // 신규 프로젝트는 상단에 추가
-  const newcomers = next.filter((item) => !prevIds.has(item.id));
-
-  // 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환
-  const existing = prev
-    .map((item) => nextById.get(item.id))
-    .filter((item): item is RecentProjectInfo => item !== undefined);
-
-  return [...newcomers, ...existing];
-}
-
-
 export function ProjectSidebar(): JSX.Element {
   const { t } = useTranslation();
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
@@ -89,8 +70,9 @@ export function ProjectSidebar(): JSX.Element {
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
+      // 백엔드가 updated_at DESC로 정렬해 보내므로(최근 수정 우선) 그대로 사용
       const list = await listRecentProjects();
-      setItems((prev) => mergeProjectListStable(prev, list));
+      setItems(list);
     } catch (e) {
       const msg = e instanceof Error ? e.message : '프로젝트 목록 로드 실패';
       await message(msg, { title: 'Projects', kind: 'error' });
