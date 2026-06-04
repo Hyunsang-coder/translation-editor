@@ -305,7 +305,7 @@
   font-size: var(--editor-font-size, 14px);
   line-height: var(--editor-line-height, 1.4);
   color: var(--editor-text);
-  max-width: 800px;
+  max-width: none;
   margin: 0 auto;
   width: 100%;
   height: 100%;
@@ -441,6 +441,7 @@
 
 .ProseMirror table {
   @apply border-collapse;
+  width: 100%;
 }
 
 .ProseMirror th,
