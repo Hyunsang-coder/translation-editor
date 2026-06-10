@@ -15,7 +15,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 use zeroize::Zeroize;
 
@@ -74,6 +74,8 @@ pub struct SecretManager {
     master_key: Arc<RwLock<Option<MasterKey>>>,
     /// 시크릿 캐시
     cache: Arc<RwLock<HashMap<String, String>>>,
+    /// cache 변경과 vault 파일 쓰기를 하나의 mutation으로 직렬화
+    mutation_lock: Arc<Mutex<()>>,
     /// 초기화 상태
     state: Arc<RwLock<InitState>>,
     /// app_data_dir 경로
@@ -96,6 +98,7 @@ impl SecretManager {
         Self {
             master_key: Arc::new(RwLock::new(None)),
             cache: Arc::new(RwLock::new(HashMap::new())),
+            mutation_lock: Arc::new(Mutex::new(())),
             state: Arc::new(RwLock::new(InitState::NotInitialized)),
             app_data_dir: Arc::new(RwLock::new(None)),
         }
@@ -306,6 +309,7 @@ impl SecretManager {
 
     /// 시크릿 저장
     pub async fn set(&self, key: &str, value: &str) -> Result<(), SecretManagerError> {
+        let _mutation_guard = self.mutation_lock.lock().await;
         self.ensure_initialized().await?;
 
         // 캐시 업데이트
@@ -323,6 +327,7 @@ impl SecretManager {
 
     /// 여러 시크릿 저장
     pub async fn set_many(&self, entries: Vec<(String, String)>) -> Result<(), SecretManagerError> {
+        let _mutation_guard = self.mutation_lock.lock().await;
         self.ensure_initialized().await?;
 
         // 캐시 업데이트
@@ -342,6 +347,7 @@ impl SecretManager {
 
     /// 시크릿 삭제
     pub async fn delete(&self, key: &str) -> Result<(), SecretManagerError> {
+        let _mutation_guard = self.mutation_lock.lock().await;
         self.ensure_initialized().await?;
 
         // 캐시에서 삭제
@@ -359,6 +365,7 @@ impl SecretManager {
 
     /// 여러 시크릿 삭제
     pub async fn delete_many(&self, keys: &[String]) -> Result<(), SecretManagerError> {
+        let _mutation_guard = self.mutation_lock.lock().await;
         self.ensure_initialized().await?;
 
         // 캐시에서 삭제

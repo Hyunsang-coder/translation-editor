@@ -58,6 +58,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   const {
     openaiApiKey,
     anthropicApiKey,
+    secureKeyPersistError,
     setOpenaiApiKey,
     setAnthropicApiKey,
     openaiEnabled,
@@ -67,6 +68,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
   } = useAiConfigStore(
     useShallow((s) => ({
       openaiApiKey: s.openaiApiKey, anthropicApiKey: s.anthropicApiKey,
+      secureKeyPersistError: s.secureKeyPersistError,
       setOpenaiApiKey: s.setOpenaiApiKey, setAnthropicApiKey: s.setAnthropicApiKey,
       openaiEnabled: s.openaiEnabled, anthropicEnabled: s.anthropicEnabled,
       setOpenaiEnabled: s.setOpenaiEnabled, setAnthropicEnabled: s.setAnthropicEnabled,
@@ -322,6 +324,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.apiKeysDescription')}
                 </p>
+                {secureKeyPersistError && (
+                    <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                        {t('appSettings.apiKeysSaveFailed')}
+                    </p>
+                )}
 
                 {/* OpenAI API Key + Enable Checkbox */}
                 <div className="space-y-2 p-3 rounded-lg border border-editor-border bg-editor-bg/50">

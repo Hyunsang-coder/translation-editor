@@ -140,6 +140,14 @@ Some text after
       expect(parseReviewResult(response)[0]?.type).toBe('awkward');
     });
 
+    it('콜로케이션/표현/문장 구조 → awkward', () => {
+      const cases = ['Collocation', '표현 어색함', 'Sentence Structure'];
+      for (const type of cases) {
+        const response = `{"issues": [{"type": "${type}", "sourceExcerpt": "", "targetExcerpt": "b"}]}`;
+        expect(parseReviewResult(response)[0]?.type).toBe('awkward');
+      }
+    });
+
     it('용어 → terminology', () => {
       const response = `{"issues": [{"type": "용어 불일치", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
       expect(parseReviewResult(response)[0]?.type).toBe('terminology');

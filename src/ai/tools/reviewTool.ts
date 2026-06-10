@@ -184,67 +184,36 @@ export async function buildAlignedChunksAsync(
 
 const TWO_PASS_REVIEW_PROMPT = `# Translation Review
 
-당신은 경력 10년차 전문 번역 검수자입니다. 아래 2-Pass 구조로 검수를 진행하세요.
+당신은 전문 번역 검수자입니다. 세그먼트별 Source/Target을 2-pass로 검수하세요.
 
----
+## Pass 1: Rapid Scan
+- 단락/섹션 누락, 과도한 분량 차이(±50% 이상), 대응되지 않는 섹션을 먼저 확인합니다.
+- 심각한 구조 문제는 Severity 5로 보고합니다.
 
-## Pass 1: Rapid Scan (구조 정합성 점검)
+## Pass 2: Fidelity + Native Naturalness Audit
+- Omission: 원문 핵심 개념 누락. 단어 단위 직역 차이나 자연스러운 생략은 제외합니다.
+- Mistranslation/Addition: 의미 왜곡, 수치·날짜·고유명사 오류, 원문에 없는 추가.
+- Nuance/Tone: 감정 강도, 격식 수준, 권위/아이러니/향수 등 내포된 톤 차이.
+- Terminology: 글로서리, 전문 용어, UI 텍스트, 브랜드명 불일치.
+- Adaptation: 언어 구조상 필요한 적응은 이슈 아님. 의심스러운 생략/불필요한 단순화는 보고.
+- Native Naturalness Audit: Target 언어 원어민에게 자연스럽게 읽히는지 확인합니다.
+- 어색한 콜로케이션
+- 부자연스러운 관용 표현·상투 표현
+- 원어민이 잘 쓰지 않는 단어 조합
+- 직역투 문장 구조
+- 문법적으로 맞지만 읽기 흐름이 어색한 문장 배열
 
-세그먼트 단위로 원문(Source)과 번역문(Target)을 정렬해 큰 문제를 먼저 잡습니다.
+의미상 문제는 없어도 원어민 독자가 어색하다고 느낄 수준이면 Type: Awkward로 보고하세요.
 
-점검 항목:
-- 단락이 통째로 빠진 경우
-- 분량 차이가 과도한 경우 (±50% 이상)
-- 대응되지 않는 섹션
-
-Pass 1에서 심각한 구조적 문제가 발견되면 해당 세그먼트에 Severity 5로 즉시 플래그합니다.
-
----
-
-## Pass 2: Granular Fidelity Audit (세밀한 품질 점검)
-
-Pass 1을 통과한 세그먼트를 하나씩 4가지 항목으로 점검합니다.
-
-### ① Omission Check (누락 점검)
-번역문의 핵심 명사 3개·동사 2개를 추출하고, 원문의 모든 개념이 담겨 있는지 확인합니다.
-- 빠진 개념은 원문에서 직접 인용해 명시합니다.
-- **특정 단어가 없는 것 ≠ 누락** (의역/자연스러운 생략은 제외)
-
-### ② Nuance Audit (뉘앙스 점검)
-- 감정 강도 (중립 vs 긴박)
-- 격식 수준 (formal vs informal)
-- 내포된 톤 (권위, 아이러니, 향수 등)
-
-### ③ Terminology Consistency (용어 일관성)
-글로서리와 대조해 전문 용어·UI 텍스트·브랜드명 표기를 검증합니다.
-
-### ④ Adaptation Assessment (번역 적응 판정)
-변경 사항이:
-- **JUSTIFIED**: 언어 구조상 필요한 적응 → 이슈 아님
-- **QUESTIONABLE**: 의심스러운 생략 → 이슈로 보고
-- **UNNECESSARY**: 불필요한 단순화 → 이슈로 보고
-
----
-
-## Adversarial Validation (Severity 3점 이상 세그먼트)
-
-Severity 3점 이상으로 플래그된 세그먼트에 한해 내부적으로 다음 3단계를 거칩니다:
-1. **Initial Critique**: 문제를 명확히 지적
-2. **Defense**: 번역가의 선택이 정당화될 수 있는 반론 구성
-3. **Final Judgment**: 양쪽을 종합해 최종 판정 (오탐 방지)
-
-이 과정은 내부 추론으로만 사용하고, 출력에는 Final Judgment 결과만 반영합니다.
-
----
-
-## 보고하지 마세요
+## Validation
+Severity 3 이상 후보는 내부적으로 반론을 검토한 뒤 최종 판단만 출력하세요.
 
 - 의미가 같은 다른 표현 ("진행하다" vs "수행하다")
 - 자연스러운 의역/생략 (한국어 주어 생략 등)
 - 이미 자연스러운 번역의 "더 나은" 대안
 - 스타일 선호 차이
 
-이슈가 없으면 없다고 보고하세요. 억지로 찾지 마세요.`;
+이슈가 없으면 억지로 찾지 마세요. 단, 원어민 관점에서 어색한 콜로케이션, 표현, 문장 구조는 단순 스타일 선호가 아니라 검수 대상입니다.`;
 
 // ============================================
 // Severity 기준 (1~5점 스케일)
@@ -266,17 +235,19 @@ const REVIEW_DETECTION_PROMPT = `## Severity (1~5점 스케일)
 
 const OUTPUT_FORMAT = `## Output Format
 
+마커 외부에는 아무 텍스트도 출력하지 마세요.
+
 ---REVIEW_START---
 ## Translation Review Result
 
 ### Issue #1
-- **Source**: "[원문 해당 부분]"
-- **Target**: "[번역문 해당 부분]" 또는 (missing)
+- **Source**: "[원문에서 문자 그대로 복사, 50자 이내]"
+- **Target**: "[번역문에서 문자 그대로 복사, 50자 이내]" 또는 (missing)
 - **Type**: [Omission/Addition/Mistranslation/Grammar/Awkward/Terminology]
 - **Severity**: [1~5]
 - **SegmentGroupId**: [세그먼트 ID]
-- **Explanation**: [1줄, 20자 이내로 핵심만]
-- **Suggestion**: [수정된 번역문 - 필수!]
+- **Explanation**: [핵심만 1줄]
+- **Suggestion**: [수정된 Target 언어 번역문]
 
 ---
 
@@ -286,35 +257,6 @@ const OUTPUT_FORMAT = `## Output Format
 - Moderate (3): [N]
 - Minor (1~2): [N]
 - Verdict: [ACCEPT / MINOR REVISIONS / MAJOR REVISIONS / REJECT]
----REVIEW_END---
-
-**Verdict 기준:**
-- ACCEPT: 5점·4점 이슈 없음
-- MINOR REVISIONS: 4점 이슈 1~2개 또는 3점 이슈만 있음
-- MAJOR REVISIONS: 4점 이슈 3개 이상 또는 5점 이슈 1개
-- REJECT: 5점 이슈 3개 이상 또는 구조적 문제
-
-**출력 예시 (반드시 이 형식을 따르세요):**
----REVIEW_START---
-## Translation Review Result
-
-### Issue #1
-- **Source**: "fully stealth heists"
-- **Target**: "도둑질을 실행하도록"
-- **Type**: Mistranslation
-- **Severity**: 5
-- **SegmentGroupId**: seg-001
-- **Explanation**: '은밀함' 의미 누락
-- **Suggestion**: 완전히 은밀하게 강도를 진행
-
----
-
-## Summary
-- Critical (5): 1
-- Major (4): 0
-- Moderate (3): 0
-- Minor (1~2): 0
-- Verdict: MAJOR REVISIONS
 ---REVIEW_END---
 
 **이슈 없을 경우:**
@@ -331,10 +273,8 @@ Review complete. No issues found.
 ---REVIEW_END---
 
 ## 작성 규칙 (필수!)
-- Source/Target excerpt: 원문/번역문에서 **문자 그대로 복사** (50자 이내)
-- **Suggestion 필수!**: 각 이슈에 올바른 번역 수정안을 반드시 제시 (빈 값 금지)
-- SegmentGroupId: 해당 세그먼트의 ID (반드시 포함!)
-- 마커(---REVIEW_START/END---) 외부에 텍스트 금지`;
+- 각 이슈에는 SegmentGroupId와 Suggestion을 반드시 포함하세요.
+- Source/Target excerpt는 원문/번역문에서 문자 그대로 복사하세요.`;
 
 // ============================================
 // 프롬프트 생성 함수

@@ -55,6 +55,18 @@ describe('reviewStore startReview', () => {
   });
 });
 
+describe('reviewStore triggerReview', () => {
+  beforeEach(() => {
+    useReviewStore.getState().resetReview();
+  });
+
+  it('외부 검수 실행 요청 nonce를 증가시킨다', () => {
+    useReviewStore.getState().triggerReview();
+    const state = useReviewStore.getState();
+    expect(state.reviewTrigger).toBe(1);
+  });
+});
+
 describe('reviewStore ingestExternalReview', () => {
   beforeEach(() => {
     useReviewStore.getState().resetReview();

@@ -33,7 +33,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   // 검수는 도구 호출 없이 단순 텍스트 생성이므로 Responses API 불필요
   const model = createChatModel(undefined, { useFor: 'translation', maxTokens: 4096 });
 
-  // 시스템 프롬프트: 검수 지침만
+  // 시스템 프롬프트: 검수 지침
   const systemPrompt = buildReviewPrompt();
 
   // 사용자 메시지: 컨텍스트 + 세그먼트
@@ -58,9 +58,8 @@ export async function runReview(params: RunReviewParams): Promise<string> {
     userContentParts.push(`## 용어집\n${params.glossary.trim()}`);
   }
 
-  // 검수 대상 세그먼트 (대조 검수: 원문+번역문)
   const segmentsText = params.segments
-    .map((s) => `[#${s.order}]\nSource (${srcLang}): ${s.sourceText}\nTarget (${tgtLang}): ${s.targetText}`)
+    .map((s) => `[#${s.order}]\nSegmentGroupId: ${s.groupId}\nSource (${srcLang}): ${s.sourceText}\nTarget (${tgtLang}): ${s.targetText}`)
     .join('\n\n');
   userContentParts.push(`## 검수 대상\n${segmentsText}`);
 

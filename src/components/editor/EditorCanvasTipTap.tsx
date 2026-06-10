@@ -13,7 +13,9 @@ import type { Editor } from '@tiptap/react';
 import {
   translateWithStreaming,
   formatTranslationError,
+  type TipTapDocJson,
 } from '@/ai/translateDocument';
+import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { MODEL_PRESETS } from '@/ai/config';
@@ -120,6 +122,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [translateLoading, setTranslateLoading] = useState(false);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const translateAbortController = useRef<AbortController | null>(null);
+
+  const [polishPreviewOpen, setPolishPreviewOpen] = useState(false);
+  const [polishPreviewDoc, setPolishPreviewDoc] = useState<TipTapDocJson | null>(null);
+  const [polishPreviewError, setPolishPreviewError] = useState<string | null>(null);
+  const [polishLoading, setPolishLoading] = useState(false);
+  const [polishStreamingText, setPolishStreamingText] = useState<string | null>(null);
+  const polishAbortController = useRef<AbortController | null>(null);
 
   // 재번역 지시사항 모달 (타겟에 내용이 이미 있을 때)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
@@ -321,6 +330,63 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     }
   }, [targetDocument, openTranslatePreview]);
 
+  const hasTargetContent = useMemo(
+    () => stripHtml(targetDocument || '').trim().length > 0,
+    [targetDocument],
+  );
+
+  const openPolishPreview = useCallback(async (): Promise<void> => {
+    if (!project) return;
+
+    if (!hasTargetContent) {
+      addToast({
+        type: 'warning',
+        message: t('review.emptyTarget', '번역문이 비어있습니다. 번역을 먼저 실행해주세요.'),
+      });
+      return;
+    }
+
+    if (!targetEditorRef.current) {
+      addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      return;
+    }
+
+    setPolishPreviewError(null);
+    setPolishPreviewDoc(null);
+    setPolishPreviewOpen(true);
+    setPolishLoading(true);
+    setPolishStreamingText(null);
+
+    const abortController = new AbortController();
+    polishAbortController.current = abortController;
+
+    try {
+      const targetDocJson = targetEditorRef.current.getJSON() as TipTapDocJson;
+      const { doc } = await polishTargetDocumentWithStreaming({
+        targetDocJson,
+        targetLanguage: project.metadata.targetLanguage,
+        styleRules: translationRules,
+        onToken: (text) => setPolishStreamingText(text),
+        abortSignal: abortController.signal,
+      });
+      setPolishPreviewDoc(doc);
+      setPolishStreamingText(null);
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        setPolishPreviewError(t('editor.polishCancelled', '폴리싱이 취소되었습니다.'));
+      } else {
+        setPolishPreviewError(formatTranslationError(error));
+      }
+    } finally {
+      setPolishLoading(false);
+      polishAbortController.current = null;
+    }
+  }, [addToast, hasTargetContent, project, t, translationRules]);
+
+  const handlePolishClick = useCallback(() => {
+    void openPolishPreview();
+  }, [openPolishPreview]);
+
   // 번역 취소 핸들러
   const handleTranslateCancel = useCallback((): void => {
     if (translateAbortController.current) {
@@ -364,6 +430,45 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       }
     }
   }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged]);
+
+  const handlePolishCancel = useCallback((): void => {
+    if (polishAbortController.current) {
+      polishAbortController.current.abort();
+    }
+    setPolishLoading(false);
+    setPolishPreviewOpen(false);
+    setPolishStreamingText(null);
+  }, []);
+
+  const applyPolishPreview = useCallback((): void => {
+    if (!polishPreviewDoc) return;
+    if (!targetEditorRef.current) {
+      addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      return;
+    }
+
+    replaceDocContent(targetEditorRef.current, polishPreviewDoc, { addToHistory: true });
+    setPolishPreviewOpen(false);
+
+    setTargetFlash(true);
+    setTimeout(() => setTargetFlash(false), 1000);
+
+    const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
+    if (project) {
+      const blocks = materializeBlocksForSnapshot();
+      if (blocks) {
+        const model = useAiConfigStore.getState().translationModel;
+        const dateLabel = new Date().toLocaleDateString('sv');
+        void createSnapshotIfChanged({
+          projectId: project.id,
+          description: `${t('history.autoSnapshotAfterPolish')}(${model}) ${dateLabel}`,
+          blocks,
+        }).catch((err: unknown) => {
+          console.warn('[history] auto snapshot after polish failed:', err);
+        });
+      }
+    }
+  }, [polishPreviewDoc, addToast, t, createSnapshotIfChanged]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {
@@ -500,6 +605,16 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             data-testid="editor-review-button"
           >
             {t('editor.review', '검수')}
+          </button>
+          <button
+            type="button"
+            onClick={handlePolishClick}
+            className="px-2 py-1 rounded text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={!hasTargetContent || polishLoading}
+            title={t('review.polish', '폴리싱')}
+            data-testid="editor-polish-button"
+          >
+            {t('review.polish', '폴리싱')}
           </button>
         </div>
       </div>
@@ -730,6 +845,23 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         onApply={applyTranslatePreview}
         onCancel={handleTranslateCancel}
         {...(translatePreviewError ? { onRetry: handleTranslateRetry } : {})}
+      />
+
+      <TranslatePreviewModal
+        open={polishPreviewOpen}
+        title={t('editor.polishPreviewTitle', '폴리싱 미리보기')}
+        docJson={polishPreviewDoc}
+        sourceHtml={targetDocument}
+        originalHtml={targetDocument}
+        isLoading={polishLoading}
+        error={polishPreviewError}
+        streamingText={polishStreamingText}
+        onClose={() => {
+          setPolishPreviewOpen(false);
+        }}
+        onApply={applyPolishPreview}
+        onCancel={handlePolishCancel}
+        {...(polishPreviewError ? { onRetry: openPolishPreview } : {})}
       />
 
       {/* TipTap Add to chat 버튼 (드래그 후 1초) */}

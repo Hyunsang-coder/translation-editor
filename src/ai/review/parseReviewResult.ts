@@ -26,7 +26,10 @@ function categorizeIssueType(typeText: string): IssueType {
   }
 
   if (normalized.includes('awkward') || normalized.includes('직역') || normalized.includes('어색') ||
-    normalized.includes('부자연') || normalized.includes('unnatural')) {
+    normalized.includes('부자연') || normalized.includes('unnatural') ||
+    normalized.includes('collocation') || normalized.includes('콜로케이션') ||
+    normalized.includes('expression') || normalized.includes('표현') ||
+    normalized.includes('sentence structure') || normalized.includes('문장 구조')) {
     return 'awkward';
   }
 

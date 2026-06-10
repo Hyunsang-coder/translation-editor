@@ -22,6 +22,7 @@ interface AiConfigState {
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
+  secureKeyPersistError: string | undefined;
   // NEW: 프로바이더 사용 여부 체크박스
   openaiEnabled: boolean;
   anthropicEnabled: boolean;
@@ -50,18 +51,17 @@ function normalizeKey(key: string | undefined): string | undefined {
 
 // 번들로 묶어서 저장하는 함수
 async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
-  try {
-    const json = JSON.stringify(keys);
-    await setSecureSecret(API_KEYS_BUNDLE_ID, json);
-  } catch (err) {
-    // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
-  }
+  const json = JSON.stringify(keys);
+  await setSecureSecret(API_KEYS_BUNDLE_ID, json);
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 let keysLoaded = false;
 let loadingPromise: Promise<void> | null = null;
+let persistVersion = 0;
 
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
@@ -140,6 +140,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         chatModel: defaultChatModel,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
+        secureKeyPersistError: undefined,
         openaiEnabled: false,
         anthropicEnabled: true,
 
@@ -216,21 +217,33 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
         setChatModel: (model) => set({ chatModel: model }),
 
         setOpenaiApiKey: (key) => {
+          const version = ++persistVersion;
           const next = normalizeKey(key);
-          set({ openaiApiKey: next });
+          set({ openaiApiKey: next, secureKeyPersistError: undefined });
           const state = get();
           void persistAllKeys({
             openai: next,
             anthropic: state.anthropicApiKey,
+          }).catch((err) => {
+            if (version !== persistVersion) return;
+            const message = getErrorMessage(err);
+            console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
+            set({ secureKeyPersistError: message });
           });
         },
         setAnthropicApiKey: (key) => {
+          const version = ++persistVersion;
           const next = normalizeKey(key);
-          set({ anthropicApiKey: next });
+          set({ anthropicApiKey: next, secureKeyPersistError: undefined });
           const state = get();
           void persistAllKeys({
             openai: state.openaiApiKey,
             anthropic: next,
+          }).catch((err) => {
+            if (version !== persistVersion) return;
+            const message = getErrorMessage(err);
+            console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
+            set({ secureKeyPersistError: message });
           });
           // API Key 삭제 시 해당 provider 비활성화
           if (!next && state.anthropicEnabled && state.openaiEnabled) {

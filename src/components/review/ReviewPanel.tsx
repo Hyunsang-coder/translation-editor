@@ -655,7 +655,7 @@ export function ReviewPanel(): JSX.Element {
               )}
               <button
                 type="button"
-                onClick={handleRunReview}
+                onClick={() => void handleRunReview()}
                 disabled={!project}
                 className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
                 data-testid="review-run-button"

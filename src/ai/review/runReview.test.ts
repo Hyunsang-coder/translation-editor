@@ -101,6 +101,19 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(String(messages[1]?.content)).toContain('## 번역 규칙');
     });
 
+    it('검수 프롬프트에 원어민 자연스러움 점검 항목을 포함', async () => {
+      await runReview({
+        segments: mockSegments,
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
+
+      const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      expect(String(messages[0]?.content)).toContain('Native Naturalness Audit');
+      expect(String(messages[0]?.content)).toContain('어색한 콜로케이션');
+      expect(String(messages[0]?.content)).toContain('문장 구조');
+    });
+
     it('여러 청크 순차 리뷰 (Phase 6.1 - Multiple chunks)', async () => {
       const chunk0 = [mockSegments[0]!];
       const chunk1 = [mockSegments[1]!];
