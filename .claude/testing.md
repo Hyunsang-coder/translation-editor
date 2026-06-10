@@ -89,25 +89,26 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (as of 2026-06-01: 36 test files; table below lists the main ones)
+### Unit Test Files (as of 2026-06-10: 37 test files; table below lists the main ones)
 
 | File | Tests | Description |
 |------|-------|-------------|
 | `src/ai/prompt.test.ts` | 19 | `detectRequestType`, `buildBlockContextText` |
-| `src/ai/review/parseReviewResult.test.ts` | 32 | `parseReviewResult`, `deduplicateIssues` |
-| `src/ai/review/runReview.test.ts` | 11 (3 skip) | Review pipeline, chunk processing |
+| `src/ai/polishDocument.test.ts` | 2 | Target-only polishing prompt and payload behavior |
+| `src/ai/review/parseReviewResult.test.ts` | 33 | `parseReviewResult`, `deduplicateIssues` |
+| `src/ai/review/runReview.test.ts` | 12 (3 skip) | Review pipeline, chunk processing, native-naturalness criteria |
 | `src/ai/translateDocument.test.ts` | 28 (5 skip) | `isTimeoutError`, `isRetryableTranslationError`, `formatTranslationError` |
 | `src/ai/config.test.ts` | 3 | 테스트 환경 API 키 fallback 우선순위 검증 |
 | `src/ai/tools/buildAlignedChunks.test.ts` | 8 | `buildAlignedChunks`, `buildAlignedChunksAsync` |
 | `src/components/review/reviewApply.test.ts` | 8 | Review suggestion apply logic |
 | `src/editor/extensions/ReviewHighlight.test.ts` | 6 | ReviewHighlight decoration |
 | `src/editor/extensions/SearchHighlight.test.ts` | 5 | SearchHighlight normalization |
-| `src/stores/aiConfigStore.test.ts` | 3 | Key loading latch, concurrent call prevention |
+| `src/stores/aiConfigStore.test.ts` | 9 | Key loading latch, concurrent call prevention, secure persistence handling |
 | `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
 | `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
-| `src/stores/historyStore.test.ts` | 12 | History store snapshot create/list race/rename/createSnapshotIfChanged behavior |
+| `src/stores/historyStore.test.ts` | 16 | History store snapshot create/list race/rename/createSnapshotIfChanged behavior |
 | `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |
-| `src/stores/reviewStore.test.ts` | 2 | ReviewPanel selector optimization |
+| `src/stores/reviewStore.test.ts` | 6 | ReviewPanel selector optimization |
 | `src/stores/uiStore.test.ts` | 5 | syncChatPanels 복구 로직, toggleChatVisibility 양방향 토글 |
 | `src/utils/normalizeForSearch.test.ts` | 31 | `normalizeForSearch`, Unicode normalization |
 | `src/utils/imagePlaceholder.test.ts` | 27 | `extractImages`, `restoreImages`, token savings |
@@ -209,6 +210,7 @@ Related files grouped by feature (e.g., `ai/`, `editor/`, `stores/`)
 src/
 ├── ai/               # AI integration
 │   ├── chat.ts       # Chat mode with tool calling
+│   ├── polishDocument.ts # Target-only polishing workflow
 │   ├── translateDocument.ts
 │   ├── client.ts     # LangChain model initialization
 │   ├── prompt.ts     # Prompt construction

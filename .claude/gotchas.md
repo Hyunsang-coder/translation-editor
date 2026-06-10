@@ -48,6 +48,10 @@ Critical implementation warnings learned from past issues.
 
 20. **Provider-Specific Image Limits**: `chat.ts` → `maybeReplaceLastHumanMessageWithImages()` enforces different size limits: Anthropic 5MB, OpenAI 20MB. Error messages include provider name for clarity.
 
+145. **Target Polishing Is Not Review**: 폴리싱은 `src/ai/polishDocument.ts`의 Target-only 재작성 워크플로우다. ReviewPanel의 `reviewIssues`, 검수 chunk, source 문서를 사용하지 말 것. 버튼은 에디터 헤더에서 번역/검수 다음에 위치하며 Target이 비어 있으면 disabled여야 한다.
+
+146. **Polishing Prompt Must Preserve Meaning**: 폴리싱 프롬프트는 원어민 관점의 collocation, 표현, 문장 구조, 톤을 자연스럽게 다듬되 의미 변경, 정보 추가, 정보 삭제를 금지해야 한다. 번역 품질 개선처럼 보이더라도 Source 없이 새 의미를 추정하면 안 된다.
+
 ## AbortController / Async
 
 21. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.
@@ -83,6 +87,8 @@ Critical implementation warnings learned from past issues.
 35. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 
 36. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation.
+
+147. **Review Naturalness Criteria**: 검수 프롬프트에는 누락/오역/왜곡/일관성뿐 아니라 원어민이 보기에 어색한 collocation, 표현, 문장 구조도 명시해야 한다. 단, 검수는 이슈 제안만 생성하고 문서를 자동 수정하지 않는다.
 
 ## JSON Parsing
 
@@ -155,6 +161,12 @@ Critical implementation warnings learned from past issues.
 ## Security
 
 62. **Keychain Access**: First run requires OS authentication prompt for keychain access.
+
+148. **SecretManager Failed State Must Be Retryable**: Keychain prompt 취소, 잠금, startup UI 제한 등으로 초기화가 한 번 실패해도 `InitState::Failed`에서 바로 `PreviousInitFailed`를 반환하면 이후 API 키 저장 시 macOS prompt가 다시 뜨지 않는다. `manager.rs`는 다음 explicit secret access에서 initialize를 재시도해야 한다.
+
+149. **API Key Save Warning Means Secure Persist Failed**: `aiConfigStore`는 키 입력 시 UI state를 먼저 갱신한 뒤 `ai/api_keys_bundle` secure store 저장을 비동기로 수행한다. `secureKeyPersistError`가 있으면 현재 세션에서는 키가 보일 수 있지만 재시작 후 사라질 수 있다. 절대 localStorage에 실제 API 키를 fallback 저장하지 말 것.
+
+150. **Dev Master Key Bypasses Keychain**: `.env.local`의 `ITE_DEV_MASTER_KEY`가 설정된 개발 실행은 Keychain을 우회한다. dev build에서 API 키 저장이 성공해도 release `.app`의 Keychain prompt/persistence를 검증한 것으로 보지 말고, 설치된 앱을 종료/재실행해 키가 남는지 확인해야 한다.
 
 63. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols, strips dangerous attributes, normalizes inline styles.
 

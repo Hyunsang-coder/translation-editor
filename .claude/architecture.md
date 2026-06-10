@@ -39,19 +39,24 @@
   - GPT-4o: 16384
 - **Image Placeholder**: Base64 images replaced with placeholders (saves 99%+ tokens)
 
+#### Target Polishing Mode (`polishDocument.ts`)
+- Target document only → **Markdown** → LLM → **Markdown** → TipTap JSON → Preview modal → Apply
+- Triggered by the editor header `Polish` button next to Translate/Review
+- Disabled when Target is empty; independent from ReviewPanel state and review issues
+- Purpose: native-speaker polish for awkward collocations, phrasing, tone, and sentence structure
+- Uses compact target-only prompt and existing project settings where relevant; never sends Source unless explicitly translating/reviewing
+
 #### Chat/Question Mode (`chat.ts`)
 - User-initiated Q&A with chat history (max 20 messages)
 - **On-demand document access**: Documents NOT included in initial payload
 - Uses Tool Calling to fetch Source/Target when needed
 
 #### Review Mode (`runReview.ts`)
-- AI-assisted review for errors, omissions, distortions, consistency
+- AI-assisted review for errors, omissions, distortions, consistency, and native-speaker naturalness
 - Document split into chunks → sequential AI review → Markdown parsing
 - Output format: Markdown with `---REVIEW_START/END---` markers (required `Suggestion` field)
 - Results displayed in table with Apply/Copy/Ignore actions
-- **Two Categories**:
-  - **Comparison Review** (대조 검수): Source↔Target comparison
-  - **Polishing** (폴리싱): Target-only inspection
+- **Comparison Review** (대조 검수): Source↔Target comparison plus target naturalness checks
 - **Retranslation**: Uses `translateWithStreaming()` with all project settings (translationRules, projectContext, translatorPersona, glossary) + reviewIssues context
 
 ### 3. Tool Calling Architecture
@@ -121,6 +126,8 @@ Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
 - **Tier 1 — Keychain**: OS keychain stores a single master key (`ite:master_key_v1`), accessed once at app startup
 - **Tier 2 — Vault**: Encrypted file (`secrets.vault`) in app data dir, ChaCha20-Poly1305 with random nonce
 - Secrets cached in memory after vault decryption; no further Keychain prompts at runtime
+- Initialization failures are retryable: a failed startup Keychain interaction no longer blocks later explicit secret access, so saving an API key can trigger the macOS prompt again
+- API keys are stored as a bundled JSON secret under `ai/api_keys_bundle`; `aiConfigStore` updates UI state immediately but surfaces `secureKeyPersistError` if vault persistence fails
 - Commands: `src-tauri/src/commands/secrets.rs`, `src-tauri/src/secrets/manager.rs`
 - Legacy: `secure_store.rs` wraps SecretManager with key prefixing (`ai:openai`, etc.)
 

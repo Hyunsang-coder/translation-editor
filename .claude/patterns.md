@@ -156,6 +156,30 @@ normalizePastedHtml(html, options?)
 // No chat history
 ```
 
+### Target Polishing Mode
+```typescript
+// src/ai/polishDocument.ts
+// Pipeline: Target TipTap JSON → Markdown → LLM → Markdown → TipTap JSON
+// Direct message array: SystemMessage + HumanMessage
+// No Source document, no ReviewPanel issues, no chat history
+
+polishDocument({
+  targetDocJson,
+  targetLanguage,
+  model,
+  translationRules,
+  projectContext,
+  translatorPersona,
+  signal,
+  onToken,
+});
+```
+
+폴리싱은 검수 결과를 적용하는 기능이 아니라 Target 문서만 다시 다듬는 preview-first 재작성이다.
+버튼 위치는 에디터 패널 상단 `Translate → Review → Polish` 순서이며 Target이 비어 있으면 비활성화한다.
+프롬프트는 원어민이 보기에 어색한 collocation, 표현, 문장 구조, 톤을 자연스럽게 고치는 데 집중하고
+의미 변경/정보 추가/정보 삭제를 금지한다.
+
 ## Tool Calling Patterns
 
 ### 도구 빌드 공통화
@@ -303,6 +327,28 @@ loadSecureKeys: async () => {
 }
 ```
 
+### Secure API Key Persistence
+```typescript
+// src/stores/aiConfigStore.ts
+// API key 입력 시 UI state는 즉시 갱신하고, secure store 저장은 비동기로 수행한다.
+// 실패하면 key 값을 localStorage에 남기지 않고 secureKeyPersistError만 설정한다.
+
+setOpenaiApiKey: (key) => {
+  set({ openaiApiKey: key, secureKeyPersistError: null });
+  persistAllKeys(get()).catch((err) => {
+    set({ secureKeyPersistError: String(err) });
+  });
+}
+
+// src-tauri/src/secrets/manager.rs
+// InitState::Failed는 영구 차단 상태가 아니다.
+// 다음 get/set/delete에서 initialize()를 다시 시도하여 Keychain prompt가 다시 뜰 수 있게 한다.
+```
+
+실제 앱(Tauri runtime)은 `.env.local` API key fallback을 사용하지 않는다. `.env.local`의
+`ITE_DEV_MASTER_KEY`는 개발/CI에서 Keychain prompt를 우회하기 위한 master key fallback이므로,
+release 빌드의 Keychain 동작 검증은 설치된 `.app`을 재시작해 secure store persistence를 확인해야 한다.
+
 ### Cross-Store 접근 (구독 금지)
 ```typescript
 // ✅ 권장: getState()로 현재값만 읽기 (구독 없음)
@@ -405,6 +451,16 @@ Two independent timers can trigger `saveProject()`: auto-save (500ms poll) and w
 4. If error occurs → Retry button shown (recoverable errors only)
 5. User reviews and clicks "Apply" → Target document replaced via `replaceDocContent(addToHistory: true)` (Ctrl+Z undoable)
 6. User manually edits Target if needed
+
+## Polishing Workflow
+
+1. User has an existing Target document
+2. `Polish` button is enabled only when Target is non-empty
+3. AI rewrites Target only for native-speaker naturalness
+4. Preview modal shows the polished result before any document change
+5. User clicks "Apply" → Target document replaced via `replaceDocContent(addToHistory: true)`
+
+Do not route this through ReviewPanel or review issue state. Polishing is a standalone target-only rewrite.
 
 ## Markdown Conversion
 
