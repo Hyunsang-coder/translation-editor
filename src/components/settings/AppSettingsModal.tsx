@@ -325,9 +325,12 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     {t('appSettings.apiKeysDescription')}
                 </p>
                 {secureKeyPersistError && (
-                    <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
-                        {t('appSettings.apiKeysSaveFailed')}
-                    </p>
+                    <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                        <p>{t('appSettings.apiKeysSaveFailed')}</p>
+                        <p className="mt-1 break-words opacity-80">
+                            {t('appSettings.apiKeysSaveFailedDetail', { message: secureKeyPersistError })}
+                        </p>
+                    </div>
                 )}
 
                 {/* OpenAI API Key + Enable Checkbox */}

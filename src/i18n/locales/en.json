@@ -70,6 +70,7 @@
     "apiKeys": "API Keys",
     "apiKeysDescription": "Keys are stored securely in your OS keychain and are not saved to localStorage.",
     "apiKeysSaveFailed": "API keys could not be saved securely. The key you just entered may disappear after restarting the app.",
+    "apiKeysSaveFailedDetail": "Reason: {{message}}",
     "openaiApiKey": "OpenAI API Key",
     "openaiApiKeyPlaceholder": "Enter your OpenAI API key",
     "anthropicApiKey": "Anthropic API Key",

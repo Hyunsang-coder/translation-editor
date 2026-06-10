@@ -185,7 +185,17 @@ impl SecretManager {
                     continue;
                 }
                 InitState::Failed(msg) => {
-                    return Err(SecretManagerError::PreviousInitFailed(msg.clone()))
+                    // A failed Keychain interaction can be transient: the prompt may have
+                    // been dismissed, the keychain may have been locked, or macOS may not
+                    // have allowed UI at startup. Retry on the next explicit secret access
+                    // so saving an API key can trigger the system prompt again.
+                    warn!(
+                        "[SecretManager] Previous initialization failed, retrying: {}",
+                        msg
+                    );
+                    *state = InitState::Initializing;
+                    drop(state);
+                    break;
                 }
                 InitState::NotInitialized => {
                     // Atomic: check + transition under the same write lock
