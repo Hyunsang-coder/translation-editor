@@ -35,6 +35,14 @@ export interface MigrationResult {
 }
 
 /**
+ * 보안 저장소 리셋 결과
+ */
+export interface ResetSecureStorageResult {
+  vaultBackupPath: string | null;
+  keychainDeleted: boolean;
+}
+
+/**
  * SecretManager 초기화
  *
  * 앱 시작 시 1회 호출하여 마스터키를 로드하고 Vault를 복호화합니다.
@@ -153,5 +161,19 @@ export async function migrateLegacySecrets(): Promise<MigrationResult> {
   }
 
   return await invoke<MigrationResult>('secrets_migrate_legacy');
+}
+
+/**
+ * 보안 저장소 복구 리셋
+ *
+ * 기존 vault 파일은 백업하고 Keychain master key를 삭제합니다.
+ * API 키/커넥터 토큰은 재입력이 필요할 수 있으므로 사용자의 명시적 확인 후 호출하세요.
+ */
+export async function resetSecureStorage(): Promise<ResetSecureStorageResult> {
+  if (!isTauriRuntime()) {
+    return { vaultBackupPath: null, keychainDeleted: false };
+  }
+
+  return await invoke<ResetSecureStorageResult>('secrets_reset_secure_storage');
 }
 

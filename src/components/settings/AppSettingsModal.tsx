@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { check } from '@tauri-apps/plugin-updater';
-import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { getErrorMessage, useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
 import { Modal } from '@/components/ui/Modal';
 import { invoke } from '@/tauri/invoke';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { resetSecureStorage } from '@/tauri/secrets';
 import i18n from 'i18next';
 
 type McpRegistrationStatus = {
@@ -65,6 +66,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     anthropicEnabled,
     setOpenaiEnabled,
     setAnthropicEnabled,
+    clearApiKeysAfterSecureStorageReset,
   } = useAiConfigStore(
     useShallow((s) => ({
       openaiApiKey: s.openaiApiKey, anthropicApiKey: s.anthropicApiKey,
@@ -72,6 +74,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
       setOpenaiApiKey: s.setOpenaiApiKey, setAnthropicApiKey: s.setAnthropicApiKey,
       openaiEnabled: s.openaiEnabled, anthropicEnabled: s.anthropicEnabled,
       setOpenaiEnabled: s.setOpenaiEnabled, setAnthropicEnabled: s.setAnthropicEnabled,
+      clearApiKeysAfterSecureStorageReset: s.clearApiKeysAfterSecureStorageReset,
     }))
   );
 
@@ -122,6 +125,10 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
   // 업데이트 확인 상태
   const [checkState, setCheckState] = useState<'idle' | 'checking' | 'latest' | 'error'>('idle');
+  const [showSecureStorageResetConfirm, setShowSecureStorageResetConfirm] = useState(false);
+  const [isResettingSecureStorage, setIsResettingSecureStorage] = useState(false);
+  const [secureStorageResetMessage, setSecureStorageResetMessage] = useState<string | null>(null);
+  const [secureStorageResetError, setSecureStorageResetError] = useState<string | null>(null);
 
   const handleCheckForUpdate = async () => {
     if (checkState === 'checking') return;
@@ -150,7 +157,30 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     setTheme(newTheme);
   };
 
+  const handleResetSecureStorage = useCallback(async () => {
+    if (isResettingSecureStorage) return;
+    setIsResettingSecureStorage(true);
+    setSecureStorageResetError(null);
+    setSecureStorageResetMessage(null);
+
+    try {
+      const result = await resetSecureStorage();
+      clearApiKeysAfterSecureStorageReset();
+      setSecureStorageResetMessage(
+        t('appSettings.secureStorageResetSuccess', {
+          backupPath: result.vaultBackupPath ?? t('appSettings.secureStorageResetNoVault'),
+        }),
+      );
+      setShowSecureStorageResetConfirm(false);
+    } catch (error) {
+      setSecureStorageResetError(getErrorMessage(error));
+    } finally {
+      setIsResettingSecureStorage(false);
+    }
+  }, [clearApiKeysAfterSecureStorageReset, isResettingSecureStorage, t]);
+
   return (
+    <>
     <Modal open onClose={onClose} labelId="app-settings-title" className="bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-editor-surface border border-editor-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
@@ -417,6 +447,51 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Connectors */}
             <ConnectorsSection />
 
+            {/* Security Recovery */}
+            {isTauriRuntime() && (
+            <section className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                    <span className="text-lg">🔒</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.security')}</h3>
+                </div>
+                <p className="text-xs text-editor-muted">
+                    {t('appSettings.securityDescription')}
+                </p>
+                <div className="space-y-2 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-semibold text-editor-text">
+                                {t('appSettings.secureStorageResetTitle')}
+                            </h4>
+                            <p className="text-[10px] text-editor-muted">
+                                {t('appSettings.secureStorageResetDescription')}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowSecureStorageResetConfirm(true)}
+                            disabled={isResettingSecureStorage}
+                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-yellow-500/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/10 transition-colors disabled:opacity-50"
+                        >
+                            {isResettingSecureStorage
+                                ? t('appSettings.secureStorageResetting')
+                                : t('appSettings.secureStorageResetButton')}
+                        </button>
+                    </div>
+                    {secureStorageResetMessage && (
+                        <p className="text-[10px] text-green-600 dark:text-green-400 break-words">
+                            {secureStorageResetMessage}
+                        </p>
+                    )}
+                    {secureStorageResetError && (
+                        <p className="text-[10px] text-red-600 dark:text-red-300 break-words">
+                            {t('appSettings.secureStorageResetFailed', { message: secureStorageResetError })}
+                        </p>
+                    )}
+                </div>
+            </section>
+            )}
+
             {/* Claude Integration */}
             {isTauriRuntime() && (
             <section className="space-y-4">
@@ -582,5 +657,52 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
         </div>
       </div>
     </Modal>
+    <Modal
+      open={showSecureStorageResetConfirm}
+      onClose={() => {
+        if (!isResettingSecureStorage) setShowSecureStorageResetConfirm(false);
+      }}
+      labelId="secure-storage-reset-title"
+      closeOnOverlay={!isResettingSecureStorage}
+      closeOnEsc={!isResettingSecureStorage}
+      className="bg-black/60 backdrop-blur-sm p-4"
+    >
+      <div className="w-full max-w-md rounded-xl border border-editor-border bg-editor-surface p-5 shadow-2xl space-y-4">
+        <div className="space-y-2">
+          <h3 id="secure-storage-reset-title" className="text-base font-bold text-editor-text">
+            {t('appSettings.secureStorageResetConfirmTitle')}
+          </h3>
+          <p className="text-sm text-editor-muted">
+            {t('appSettings.secureStorageResetConfirmDescription')}
+          </p>
+        </div>
+        {secureStorageResetError && (
+          <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300 break-words">
+            {t('appSettings.secureStorageResetFailed', { message: secureStorageResetError })}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSecureStorageResetConfirm(false)}
+            disabled={isResettingSecureStorage}
+            className="px-3 py-1.5 rounded-md border border-editor-border text-sm text-editor-muted hover:text-editor-text hover:bg-editor-bg transition-colors disabled:opacity-50"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleResetSecureStorage}
+            disabled={isResettingSecureStorage}
+            className="px-3 py-1.5 rounded-md bg-red-600 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+          >
+            {isResettingSecureStorage
+              ? t('appSettings.secureStorageResetting')
+              : t('appSettings.secureStorageResetConfirmButton')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }

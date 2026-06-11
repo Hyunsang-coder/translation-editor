@@ -5,7 +5,7 @@
 //! - Keychain 접근은 마스터키 로드 시 1회만 발생
 
 use crate::error::{CommandError, CommandResult};
-use crate::secrets::{MigrationResult, SECRETS};
+use crate::secrets::{MigrationResult, ResetSecureStorageResult, SECRETS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -119,6 +119,18 @@ pub async fn secrets_list_keys(prefix: String) -> CommandResult<Vec<String>> {
 pub async fn secrets_migrate_legacy() -> CommandResult<MigrationResult> {
     SECRETS
         .migrate_from_legacy_keychain()
+        .await
+        .map_err(map_secret_error)
+}
+
+/// 보안 저장소 복구 리셋
+///
+/// vault 파일은 백업 이름으로 이동하고, Keychain master key를 삭제합니다.
+/// 사용자가 설정 화면에서 명시적으로 확인한 뒤 호출하는 복구용 명령입니다.
+#[tauri::command]
+pub async fn secrets_reset_secure_storage() -> CommandResult<ResetSecureStorageResult> {
+    SECRETS
+        .reset_secure_storage()
         .await
         .map_err(map_secret_error)
 }

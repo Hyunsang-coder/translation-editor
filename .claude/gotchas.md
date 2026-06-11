@@ -168,6 +168,8 @@ Critical implementation warnings learned from past issues.
 
 150. **Dev Master Key Bypasses Keychain**: `.env.local`의 `ITE_DEV_MASTER_KEY`가 설정된 개발 실행은 Keychain을 우회한다. dev build에서 API 키 저장이 성공해도 release `.app`의 Keychain prompt/persistence를 검증한 것으로 보지 말고, 설치된 앱을 종료/재실행해 키가 남는지 확인해야 한다.
 
+151. **Mac Migration Can Split Vault and Keychain Master Key**: Mac migration can copy `~/Library/Application Support/com.oddeyes.desktop/secrets.vault` without preserving a usable Keychain master key (`com.ite.app` / `ite:master_key_v1`) or its app ACL. Symptom: API key appears saved for the current session, disappears after restart, then saving again fails. Recovery is to quit the installed app, back up `secrets.vault`, delete the Keychain master key, install/run the patched `/Applications/OddEyes.ai.app` from the same path, and re-enter API keys. If the app is tested from `target/release/.../OddEyes.ai.app` but later launched from `/Applications/OddEyes.ai.app`, Keychain ACL/path differences can reproduce the issue; always verify persistence using the installed app path.
+
 63. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols, strips dangerous attributes, normalizes inline styles.
 
 64. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories.

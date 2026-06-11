@@ -15,6 +15,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 use zeroize::Zeroize;
@@ -444,6 +445,53 @@ impl SecretManager {
         Ok(())
     }
 
+    /// 보안 저장소를 백업 후 리셋합니다.
+    ///
+    /// Mac 마이그레이션 등으로 vault 파일과 Keychain master key가 불일치할 때
+    /// 사용자가 명시적으로 복구할 수 있는 경로입니다. 기존 vault는 삭제하지 않고
+    /// `secrets.vault.backup-{unix_seconds}`로 이동합니다.
+    pub async fn reset_secure_storage(
+        &self,
+    ) -> Result<ResetSecureStorageResult, SecretManagerError> {
+        let _mutation_guard = self.mutation_lock.lock().await;
+
+        let app_data_dir = self
+            .app_data_dir
+            .read()
+            .await
+            .clone()
+            .ok_or(SecretManagerError::AppDataDirNotSet)?;
+
+        let vault_path = get_vault_path(&app_data_dir);
+        let vault_backup_path = if vault_exists(&vault_path) {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let backup_path = app_data_dir.join(format!("secrets.vault.backup-{}", timestamp));
+            std::fs::rename(&vault_path, &backup_path)?;
+            Some(backup_path.display().to_string())
+        } else {
+            None
+        };
+
+        let keychain_deleted = Self::delete_master_key_from_keychain()?;
+
+        *self.cache.write().await = HashMap::new();
+        *self.master_key.write().await = None;
+        *self.state.write().await = InitState::NotInitialized;
+
+        info!(
+            "[SecretManager] Secure storage reset complete (vault_backup={:?}, keychain_deleted={})",
+            vault_backup_path, keychain_deleted
+        );
+
+        Ok(ResetSecureStorageResult {
+            vault_backup_path,
+            keychain_deleted,
+        })
+    }
+
     /// 마스터키 생성 (CSPRNG)
     fn generate_master_key() -> [u8; MASTER_KEY_LEN] {
         let mut key = [0u8; MASTER_KEY_LEN];
@@ -493,6 +541,17 @@ impl SecretManager {
             .map_err(|e| SecretManagerError::Keychain(e.to_string()))?;
 
         Ok(())
+    }
+
+    fn delete_master_key_from_keychain() -> Result<bool, SecretManagerError> {
+        let entry = Entry::new(KEYCHAIN_SERVICE, MASTER_KEY_KEYCHAIN_KEY)
+            .map_err(|e| SecretManagerError::Keychain(e.to_string()))?;
+
+        match entry.delete_password() {
+            Ok(()) => Ok(true),
+            Err(keyring::Error::NoEntry) => Ok(false),
+            Err(e) => Err(SecretManagerError::Keychain(e.to_string())),
+        }
     }
 
     // =====================================
@@ -618,6 +677,13 @@ pub struct MigrationResult {
     pub migrated: usize,
     pub failed: usize,
     pub details: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetSecureStorageResult {
+    pub vault_backup_path: Option<String>,
+    pub keychain_deleted: bool,
 }
 
 // vault::VaultError를 std::io::Error로 변환

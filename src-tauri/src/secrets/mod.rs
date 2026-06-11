@@ -9,4 +9,4 @@
 pub mod manager;
 pub mod vault;
 
-pub use manager::{MigrationResult, SecretManager, SECRETS};
+pub use manager::{MigrationResult, ResetSecureStorageResult, SecretManager, SECRETS};

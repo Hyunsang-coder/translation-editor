@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { migrateAiConfig } from './aiConfigStore';
+import { migrateAiConfig, getErrorMessage } from './aiConfigStore';
 
 describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
   it('claude-opus-4-6 → 4-7 → 4-8 누적 rename', () => {
@@ -54,6 +54,45 @@ describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
     );
     expect(result.translationModel).toBe('claude-opus-4-8');
     expect(result.chatModel).toBe('claude-opus-4-8');
+  });
+});
+
+// API 키 저장 실패 시 "원인: [object Object]" 대신 실제 메시지를 노출하는지 검증
+describe('aiConfigStore - getErrorMessage (Tauri CommandError 추출)', () => {
+  it('Error 인스턴스는 message를 반환', () => {
+    expect(getErrorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('문자열 에러는 그대로 반환', () => {
+    expect(getErrorMessage('plain error')).toBe('plain error');
+  });
+
+  it('Tauri CommandError 객체에서 message를 추출 ([object Object] 방지)', () => {
+    const commandError = {
+      code: 'SECURE_STORE_ERROR',
+      message: 'Secure store error: Keychain error: access denied',
+      details: null,
+    };
+    expect(getErrorMessage(commandError)).toBe(
+      'Secure store error: Keychain error: access denied',
+    );
+  });
+
+  it('details 문자열이 있으면 message에 덧붙임', () => {
+    const commandError = {
+      code: 'SECURE_STORE_ERROR',
+      message: 'Secure store error',
+      details: 'vault corruption',
+    };
+    expect(getErrorMessage(commandError)).toBe('Secure store error (vault corruption)');
+  });
+
+  it('message가 없으면 code로 폴백', () => {
+    expect(getErrorMessage({ code: 'SECURE_STORE_ERROR' })).toBe('SECURE_STORE_ERROR');
+  });
+
+  it('임의 객체도 [object Object]가 아닌 JSON으로 직렬화', () => {
+    expect(getErrorMessage({ foo: 'bar' })).toBe('{"foo":"bar"}');
   });
 });
 

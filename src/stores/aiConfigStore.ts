@@ -34,6 +34,7 @@ interface AiConfigActions {
   setChatModel: (model: string) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
+  clearApiKeysAfterSecureStorageReset: () => void;
   // NEW: 프로바이더 enabled 설정
   setOpenaiEnabled: (enabled: boolean) => void;
   setAnthropicEnabled: (enabled: boolean) => void;
@@ -55,8 +56,27 @@ async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
   await setSecureSecret(API_KEYS_BUNDLE_ID, json);
 }
 
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+export function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  // Tauri command rejections surface the serialized CommandError plain object
+  // ({ code, message, details }) rather than an Error instance, so extract its
+  // fields explicitly to avoid rendering "[object Object]".
+  if (err && typeof err === 'object') {
+    const obj = err as { message?: unknown; details?: unknown; code?: unknown };
+    if (typeof obj.message === 'string' && obj.message.trim()) {
+      const detail =
+        typeof obj.details === 'string' && obj.details.trim() ? ` (${obj.details})` : '';
+      return obj.message + detail;
+    }
+    if (typeof obj.code === 'string' && obj.code.trim()) return obj.code;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      // fall through to String() below
+    }
+  }
+  return String(err);
 }
 
 let keysLoaded = false;
@@ -202,7 +222,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               keysLoaded = true;  // ✅ 마이그레이션도 성공
             } catch (err) {
               // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
-              const message = err instanceof Error ? err.message : String(err);
+              const message = getErrorMessage(err);
               console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
               // keysLoaded remains false → 재시도 가능
             } finally {
@@ -249,6 +269,19 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           if (!next && state.anthropicEnabled && state.openaiEnabled) {
             set({ anthropicEnabled: false });
           }
+        },
+
+        clearApiKeysAfterSecureStorageReset: () => {
+          persistVersion += 1;
+          keysLoaded = false;
+          loadingPromise = null;
+          set({
+            openaiApiKey: undefined,
+            anthropicApiKey: undefined,
+            secureKeyPersistError: undefined,
+            openaiEnabled: false,
+            anthropicEnabled: true,
+          });
         },
 
         setOpenaiEnabled: (enabled) => {

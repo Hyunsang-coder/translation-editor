@@ -507,6 +507,7 @@ pub fn run() {
             commands::secrets::secrets_has,
             commands::secrets::secrets_list_keys,
             commands::secrets::secrets_migrate_legacy,
+            commands::secrets::secrets_reset_secure_storage,
             desktop_mcp::get_oddeyes_desktop_mcp_status,
             desktop_mcp::check_claude_desktop_mcp_registered,
             desktop_mcp::register_claude_desktop_mcp,
