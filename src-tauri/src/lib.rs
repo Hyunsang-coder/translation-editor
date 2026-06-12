@@ -282,6 +282,8 @@ pub fn run() {
 
             // 앱 상태로 데이터베이스 관리
             app.manage(db::DbState(std::sync::Mutex::new(db)));
+            app.manage(commands::ai::AiStreamRegistry::default());
+            app.manage(commands::http_proxy::HttpProxyRegistry::default());
             app.manage(desktop_mcp::DesktopMcpState::new(
                 desktop_mcp_runtime.clone(),
             ));
@@ -416,6 +418,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::ai::ai_complete,
+            commands::ai::ai_stream,
+            commands::ai::ai_stream_cancel,
+            commands::http_proxy::http_proxy_stream,
+            commands::http_proxy::http_proxy_cancel,
             commands::project::create_project,
             commands::project::load_project,
             commands::project::save_project,

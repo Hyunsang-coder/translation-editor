@@ -8,7 +8,7 @@ use tauri::State;
 use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
-use crate::utils::{validate_path, validate_file_size};
+use crate::utils::{validate_file_size, validate_path};
 
 /// 글로서리 파일 최대 크기 (10MB)
 const MAX_GLOSSARY_SIZE: u64 = 10 * 1024 * 1024;

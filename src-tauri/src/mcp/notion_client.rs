@@ -10,11 +10,11 @@
 
 use crate::mcp::notion_oauth::NotionOAuth;
 use crate::mcp::types::*;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use once_cell::sync::Lazy;
 use tracing::{debug, error, info};
 
 /// 재사용 HTTP 클라이언트 (커넥션 풀링)

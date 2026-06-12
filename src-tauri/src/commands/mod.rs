@@ -22,6 +22,7 @@ impl AcquireDb for State<'_, DbState> {
     }
 }
 
+pub mod ai;
 pub mod attachments;
 pub mod block;
 pub mod chat;
@@ -30,6 +31,7 @@ pub mod connector;
 pub mod export;
 pub mod glossary;
 pub mod history;
+pub mod http_proxy;
 pub mod mcp;
 pub mod notion;
 pub mod project;

@@ -8,7 +8,7 @@ use super::AcquireDb;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
-use crate::utils::{validate_path, validate_file_size};
+use crate::utils::{validate_file_size, validate_path};
 
 /// 이미지 첨부 파일 최대 크기 (100MB)
 const MAX_IMAGE_ATTACHMENT_SIZE: u64 = 100 * 1024 * 1024;

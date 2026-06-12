@@ -222,10 +222,7 @@ struct BridgeRuntimeInfo<'a> {
     updated_at: String,
 }
 
-fn write_bridge_info(
-    path: &Path,
-    runtime: &DesktopMcpRuntime,
-) -> Result<(), String> {
+fn write_bridge_info(path: &Path, runtime: &DesktopMcpRuntime) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create desktop MCP runtime directory: {e}"))?;
@@ -310,11 +307,13 @@ fn read_claude_config(path: &Path) -> Result<serde_json::Value, String> {
 fn write_claude_config(path: &Path, config: &serde_json::Value) -> Result<(), String> {
     let serialized = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {e}"))?;
-    fs::write(path, serialized)
-        .map_err(|e| format!("Failed to write Claude Desktop config: {e}"))
+    fs::write(path, serialized).map_err(|e| format!("Failed to write Claude Desktop config: {e}"))
 }
 
-fn make_status(status: ClaudeDesktopMcpRegistration, path: &Path) -> ClaudeDesktopMcpRegistrationStatus {
+fn make_status(
+    status: ClaudeDesktopMcpRegistration,
+    path: &Path,
+) -> ClaudeDesktopMcpRegistrationStatus {
     ClaudeDesktopMcpRegistrationStatus {
         status,
         config_path: Some(path.display().to_string()),
@@ -323,9 +322,15 @@ fn make_status(status: ClaudeDesktopMcpRegistration, path: &Path) -> ClaudeDeskt
 
 // ── Shared MCP registration helpers ──
 
-fn check_mcp_registered(config_path: &Path, server_key: &str) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+fn check_mcp_registered(
+    config_path: &Path,
+    server_key: &str,
+) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
     if !config_path.exists() {
-        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path));
+        return Ok(make_status(
+            ClaudeDesktopMcpRegistration::NotRegistered,
+            config_path,
+        ));
     }
 
     let config = read_claude_config(config_path)?;
@@ -334,11 +339,19 @@ fn check_mcp_registered(config_path: &Path, server_key: &str) -> Result<ClaudeDe
         .and_then(|s| s.get(server_key))
         .is_some();
 
-    let status = if registered { ClaudeDesktopMcpRegistration::Registered } else { ClaudeDesktopMcpRegistration::NotRegistered };
+    let status = if registered {
+        ClaudeDesktopMcpRegistration::Registered
+    } else {
+        ClaudeDesktopMcpRegistration::NotRegistered
+    };
     Ok(make_status(status, config_path))
 }
 
-fn register_mcp_server(config_path: &Path, server_key: &str, entry: serde_json::Value) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+fn register_mcp_server(
+    config_path: &Path,
+    server_key: &str,
+    entry: serde_json::Value,
+) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
     let mut config: serde_json::Value = if config_path.exists() {
         read_claude_config(config_path)?
     } else {
@@ -355,27 +368,44 @@ fn register_mcp_server(config_path: &Path, server_key: &str, entry: serde_json::
         .insert(server_key.to_string(), entry);
 
     write_claude_config(config_path, &config)?;
-    info!("[desktop-mcp] Registered {} in {}", server_key, config_path.display());
-    Ok(make_status(ClaudeDesktopMcpRegistration::Registered, config_path))
+    info!(
+        "[desktop-mcp] Registered {} in {}",
+        server_key,
+        config_path.display()
+    );
+    Ok(make_status(
+        ClaudeDesktopMcpRegistration::Registered,
+        config_path,
+    ))
 }
 
-fn unregister_mcp_server(config_path: &Path, server_key: &str) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
+fn unregister_mcp_server(
+    config_path: &Path,
+    server_key: &str,
+) -> Result<ClaudeDesktopMcpRegistrationStatus, String> {
     if !config_path.exists() {
-        return Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path));
+        return Ok(make_status(
+            ClaudeDesktopMcpRegistration::NotRegistered,
+            config_path,
+        ));
     }
 
     let mut config = read_claude_config(config_path)?;
 
-    if let Some(servers) = config
-        .get_mut("mcpServers")
-        .and_then(|s| s.as_object_mut())
-    {
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
         servers.remove(server_key);
     }
 
     write_claude_config(config_path, &config)?;
-    info!("[desktop-mcp] Unregistered {} from {}", server_key, config_path.display());
-    Ok(make_status(ClaudeDesktopMcpRegistration::NotRegistered, config_path))
+    info!(
+        "[desktop-mcp] Unregistered {} from {}",
+        server_key,
+        config_path.display()
+    );
+    Ok(make_status(
+        ClaudeDesktopMcpRegistration::NotRegistered,
+        config_path,
+    ))
 }
 
 // ── Claude Desktop commands ──
@@ -396,7 +426,11 @@ pub fn check_claude_desktop_mcp_registered() -> Result<ClaudeDesktopMcpRegistrat
 
     if !config_path.exists() {
         let dir_exists = config_path.parent().map_or(false, |d| d.exists());
-        let status = if dir_exists { ClaudeDesktopMcpRegistration::NotRegistered } else { ClaudeDesktopMcpRegistration::NotInstalled };
+        let status = if dir_exists {
+            ClaudeDesktopMcpRegistration::NotRegistered
+        } else {
+            ClaudeDesktopMcpRegistration::NotInstalled
+        };
         return Ok(make_status(status, &config_path));
     }
 
@@ -414,10 +448,14 @@ pub fn register_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationStatu
         }
     }
 
-    register_mcp_server(&config_path, DESKTOP_SERVER_KEY, serde_json::json!({
-        "command": "npx",
-        "args": ["-y", "oddeyes-desktop-mcp"]
-    }))
+    register_mcp_server(
+        &config_path,
+        DESKTOP_SERVER_KEY,
+        serde_json::json!({
+            "command": "npx",
+            "args": ["-y", "oddeyes-desktop-mcp"]
+        }),
+    )
 }
 
 #[tauri::command]
@@ -427,7 +465,6 @@ pub fn unregister_claude_desktop_mcp() -> Result<ClaudeDesktopMcpRegistrationSta
 
     unregister_mcp_server(&config_path, DESKTOP_SERVER_KEY)
 }
-
 
 #[cfg(test)]
 mod tests {

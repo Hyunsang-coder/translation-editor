@@ -19,6 +19,12 @@ import {
 } from '@/utils/markdownConverter';
 import { stripImages } from '@/utils/imagePlaceholder';
 import i18n from '@/i18n/config';
+import {
+  completeWithTauriAiBackend,
+  shouldRetryWithTauriAiBackend,
+  streamWithTauriAiBackend,
+} from '@/ai/backendCompletion';
+import { isTauriRuntime } from '@/tauri/invoke';
 
 const POLISH_START = '---POLISH_START---';
 const POLISH_END = '---POLISH_END---';
@@ -108,9 +114,10 @@ function buildPolishMessages(params: {
     );
   }
 
+  const maxTokens = calculatedMaxTokens;
   const model = createChatModel(undefined, {
     useFor: 'translation',
-    maxTokens: calculatedMaxTokens,
+    maxTokens,
   });
 
   const messages = [
@@ -127,7 +134,7 @@ function buildPolishMessages(params: {
     },
   ];
 
-  return { model, messages };
+  return { cfg, model, messages, maxTokens };
 }
 
 function processPolishResponse(raw: string): { doc: TipTapDocJson } {
@@ -160,36 +167,85 @@ export interface PolishTargetDocumentParams {
 export async function polishTargetDocumentWithStreaming(
   params: PolishTargetDocumentParams,
 ): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const { model, messages } = buildPolishMessages(params);
+  const { cfg, model, messages, maxTokens } = buildPolishMessages(params);
 
   if (params.abortSignal?.aborted) {
     throw new Error('폴리싱이 취소되었습니다.');
   }
 
-  let accumulated = '';
-  const stream = await model.stream(messages, params.abortSignal ? { signal: params.abortSignal } : {});
-
-  for await (const chunk of stream) {
-    if (params.abortSignal?.aborted) {
-      throw new Error('폴리싱이 취소되었습니다.');
-    }
-
-    const delta = typeof chunk.content === 'string'
-      ? chunk.content
-      : Array.isArray(chunk.content)
-        ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
-        : '';
-
-    if (!delta) continue;
-
-    accumulated += delta;
-    const startIdx = accumulated.indexOf(POLISH_START);
-    if (startIdx !== -1) {
-      let filtered = accumulated.slice(startIdx + POLISH_START.length);
+  // Tauri 런타임에서는 백엔드 SSE 스트리밍을 1차 경로로 사용한다.
+  if (isTauriRuntime() && cfg.provider !== 'mock') {
+    const emitFiltered = (rawSoFar: string) => {
+      const startIdx = rawSoFar.indexOf(POLISH_START);
+      if (startIdx === -1) return;
+      let filtered = rawSoFar.slice(startIdx + POLISH_START.length);
       const endIdx = filtered.indexOf(POLISH_END);
       if (endIdx !== -1) filtered = filtered.slice(0, endIdx);
       params.onToken?.(filtered.trim());
+    };
+
+    const raw = await streamWithTauriAiBackend({
+      cfg,
+      messages,
+      maxTokens,
+      onAccumulated: emitFiltered,
+      cancelMessage: '폴리싱이 취소되었습니다.',
+      abortSignal: params.abortSignal,
+    });
+
+    if (!raw.trim()) {
+      throw new Error('폴리싱 응답이 비어 있습니다. 다시 시도해주세요.');
     }
+
+    const { doc } = processPolishResponse(raw);
+    return { doc, raw };
+  }
+
+  let accumulated = '';
+  try {
+    // WebView fetch의 CORS/네트워크 실패는 for-await 반복 도중 "Type error"로
+    // 던져지므로 스트리밍 소비 전체를 try로 감싼다.
+    const stream = await model.stream(messages, params.abortSignal ? { signal: params.abortSignal } : {});
+
+    for await (const chunk of stream) {
+      if (params.abortSignal?.aborted) {
+        throw new Error('폴리싱이 취소되었습니다.');
+      }
+
+      const delta = typeof chunk.content === 'string'
+        ? chunk.content
+        : Array.isArray(chunk.content)
+          ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+          : '';
+
+      if (!delta) continue;
+
+      accumulated += delta;
+      const startIdx = accumulated.indexOf(POLISH_START);
+      if (startIdx !== -1) {
+        let filtered = accumulated.slice(startIdx + POLISH_START.length);
+        const endIdx = filtered.indexOf(POLISH_END);
+        if (endIdx !== -1) filtered = filtered.slice(0, endIdx);
+        params.onToken?.(filtered.trim());
+      }
+    }
+  } catch (error) {
+    if (!shouldRetryWithTauriAiBackend(error)) {
+      throw error;
+    }
+    const raw = await completeWithTauriAiBackend({
+      cfg,
+      messages,
+      maxTokens,
+      cancelMessage: '폴리싱이 취소되었습니다.',
+      abortSignal: params.abortSignal,
+    });
+    const polishedMarkdown = extractPolishedMarkdown(raw);
+    if (polishedMarkdown.trim()) {
+      params.onToken?.(polishedMarkdown.trim());
+    }
+    const { doc } = processPolishResponse(raw);
+    return { doc, raw };
   }
 
   if (!accumulated.trim()) {

@@ -7,9 +7,16 @@
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import type { AIMessageChunk } from '@langchain/core/messages';
 import { createChatModel } from '@/ai/client';
+import { getAiConfig } from '@/ai/config';
+import {
+  shouldRetryWithTauriAiBackend,
+  streamWithTauriAiBackend,
+  type AiPromptMessage,
+} from '@/ai/backendCompletion';
 import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
 import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
+import { isTauriRuntime } from '@/tauri/invoke';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
@@ -23,23 +30,13 @@ export interface RunReviewParams {
   onToken?: (accumulated: string) => void;
 }
 
-/**
- * 검수 실행 (도구 없이 단순 API 호출)
- *
- * @returns AI 응답 텍스트 (JSON 형식)
- */
-export async function runReview(params: RunReviewParams): Promise<string> {
-  // useFor: 'translation'으로 설정하여 Responses API 비활성화 (성능 향상)
-  // 검수는 도구 호출 없이 단순 텍스트 생성이므로 Responses API 불필요
-  const model = createChatModel(undefined, { useFor: 'translation', maxTokens: 4096 });
+const REVIEW_MAX_TOKENS = 4096;
 
-  // 시스템 프롬프트: 검수 지침
+function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   const systemPrompt = buildReviewPrompt();
 
-  // 사용자 메시지: 컨텍스트 + 세그먼트
   const userContentParts: string[] = [];
 
-  // 언어 정보 추가 (Source/Target 방향 명시)
   const srcLang = params.sourceLanguage || '원문';
   const tgtLang = params.targetLanguage || '번역문';
   userContentParts.push(`## 번역 방향
@@ -69,30 +66,74 @@ export async function runReview(params: RunReviewParams): Promise<string> {
 - Explanation: ${appLang}로 작성
 - Suggestion: 반드시 Target 언어(${tgtLang})로 작성`);
 
-  const userContent = userContentParts.join('\n\n');
-
-  const messages = [
-    new SystemMessage(systemPrompt),
-    new HumanMessage(userContent),
+  return [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userContentParts.join('\n\n') },
   ];
+}
+
+/**
+ * 검수 실행 (도구 없이 단순 API 호출)
+ *
+ * @returns AI 응답 텍스트 (JSON 형식)
+ */
+export async function runReview(params: RunReviewParams): Promise<string> {
+  const cfg = getAiConfig({ useFor: 'translation' });
+  const promptMessages = buildReviewMessages(params);
+
+  if (params.abortSignal?.aborted) {
+    throw new DOMException('Request aborted', 'AbortError');
+  }
+
+  // 검수는 도구 호출 없는 단순 스트리밍이므로 Tauri에서는 WebView fetch를 거치지 않는다.
+  if (isTauriRuntime() && cfg.provider !== 'mock') {
+    return await streamWithTauriAiBackend({
+      cfg,
+      messages: promptMessages,
+      maxTokens: REVIEW_MAX_TOKENS,
+      onAccumulated: params.onToken,
+      cancelMessage: '검수가 취소되었습니다.',
+      abortSignal: params.abortSignal,
+    });
+  }
 
   // 도구 없이 직접 스트리밍 (1회 호출)
-  const stream = await model.stream(messages, {
-    ...(params.abortSignal && { signal: params.abortSignal }),
-  });
-
   let result = '';
-  for await (const chunk of stream) {
-    // AbortSignal 체크
-    if (params.abortSignal?.aborted) {
-      throw new DOMException('Request aborted', 'AbortError');
-    }
+  try {
+    // useFor: 'translation'으로 설정하여 Responses API 비활성화 (성능 향상)
+    const model = createChatModel(undefined, { useFor: 'translation', maxTokens: REVIEW_MAX_TOKENS });
+    const messages = [
+      new SystemMessage(promptMessages[0]!.content),
+      new HumanMessage(promptMessages[1]!.content),
+    ];
+    const stream = await model.stream(messages, {
+      ...(params.abortSignal && { signal: params.abortSignal }),
+    });
 
-    const text = extractChunkContent(chunk as AIMessageChunk);
-    if (text) {
-      result += text;
-      params.onToken?.(result);
+    for await (const chunk of stream) {
+      // AbortSignal 체크
+      if (params.abortSignal?.aborted) {
+        throw new DOMException('Request aborted', 'AbortError');
+      }
+
+      const text = extractChunkContent(chunk as AIMessageChunk);
+      if (text) {
+        result += text;
+        params.onToken?.(result);
+      }
     }
+  } catch (error) {
+    if (!shouldRetryWithTauriAiBackend(error)) {
+      throw error;
+    }
+    return await streamWithTauriAiBackend({
+      cfg,
+      messages: promptMessages,
+      maxTokens: REVIEW_MAX_TOKENS,
+      onAccumulated: params.onToken,
+      cancelMessage: '검수가 취소되었습니다.',
+      abortSignal: params.abortSignal,
+    });
   }
 
   return result;

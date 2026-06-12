@@ -303,6 +303,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       if (abortController.signal.aborted) {
         setTranslatePreviewError('번역이 취소되었습니다.');
       } else {
+        console.error('[Translation] preview failed:', e);
         setTranslatePreviewError(formatTranslationError(e));
       }
     } finally {

@@ -278,7 +278,10 @@ impl AtlassianOAuth {
         // 이미 등록된 클라이언트가 있고, 같은 포트로 등록되었으면 재사용
         if let Some(client) = self.registered_client.lock().await.clone() {
             if client.registered_port == port {
-                info!("[OAuth] Reusing existing client: {} (port {})", client.client_id, port);
+                info!(
+                    "[OAuth] Reusing existing client: {} (port {})",
+                    client.client_id, port
+                );
                 return Ok(client);
             }
             info!(
@@ -344,8 +347,7 @@ impl AtlassianOAuth {
     ///
     /// `REDIRECT_PORT_RANGE` 내 포트를 순차적으로 시도하여
     /// 첫 번째로 바인딩 성공한 (listener, port)를 반환한다.
-    async fn bind_callback_listener(
-    ) -> Result<(tokio::net::TcpListener, u16), String> {
+    async fn bind_callback_listener() -> Result<(tokio::net::TcpListener, u16), String> {
         use tokio::net::TcpListener;
 
         for port in REDIRECT_PORT_RANGE {
@@ -355,10 +357,7 @@ impl AtlassianOAuth {
                     return Ok((listener, port));
                 }
                 Err(e) => {
-                    info!(
-                        "[OAuth] Port {} unavailable ({}), trying next...",
-                        port, e
-                    );
+                    info!("[OAuth] Port {} unavailable ({}), trying next...", port, e);
                 }
             }
         }
@@ -446,42 +445,41 @@ impl AtlassianOAuth {
 
         info!("[OAuth] Waiting for OAuth callback (max 5 minutes)...");
 
-        let auth_result = match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx)
-            .await
-        {
-            Ok(Ok(result)) => {
-                info!("[OAuth] Callback received: {:?}", result);
-                // 인증 성공 시 토큰을 vault에 저장
-                if result.is_ok() {
-                    // lock scope를 분리하여 데드락 방지
-                    // (save_token 내부에서 다시 lock을 잡기 때문)
-                    let token_opt = { self.token.lock().await.clone() };
+        let auth_result =
+            match tokio::time::timeout(tokio::time::Duration::from_secs(300), rx).await {
+                Ok(Ok(result)) => {
+                    info!("[OAuth] Callback received: {:?}", result);
+                    // 인증 성공 시 토큰을 vault에 저장
+                    if result.is_ok() {
+                        // lock scope를 분리하여 데드락 방지
+                        // (save_token 내부에서 다시 lock을 잡기 때문)
+                        let token_opt = { self.token.lock().await.clone() };
 
-                    if let Some(token) = token_opt {
-                        if let Err(e) = self.save_token(token).await {
-                            warn!("[OAuth] Failed to save token: {}", e);
+                        if let Some(token) = token_opt {
+                            if let Err(e) = self.save_token(token).await {
+                                warn!("[OAuth] Failed to save token: {}", e);
+                            } else {
+                                info!("[OAuth] Token persisted to vault");
+                            }
                         } else {
-                            info!("[OAuth] Token persisted to vault");
+                            warn!("[OAuth] Warning: callback succeeded but no token in memory!");
                         }
-                    } else {
-                        warn!("[OAuth] Warning: callback succeeded but no token in memory!");
                     }
+                    result
                 }
-                result
-            }
-            Ok(Err(_)) => {
-                // 채널 닫힘 시 상태 정리
-                *self.pending_pkce.lock().await = None;
-                self.shutdown_callback_server().await;
-                Err("OAuth callback channel closed".to_string())
-            }
-            Err(_) => {
-                // 타임아웃 시 상태 정리 후 콜백 서버 종료
-                *self.pending_pkce.lock().await = None;
-                self.shutdown_callback_server().await;
-                Err("OAuth timeout (5 minutes)".to_string())
-            }
-        };
+                Ok(Err(_)) => {
+                    // 채널 닫힘 시 상태 정리
+                    *self.pending_pkce.lock().await = None;
+                    self.shutdown_callback_server().await;
+                    Err("OAuth callback channel closed".to_string())
+                }
+                Err(_) => {
+                    // 타임아웃 시 상태 정리 후 콜백 서버 종료
+                    *self.pending_pkce.lock().await = None;
+                    self.shutdown_callback_server().await;
+                    Err("OAuth timeout (5 minutes)".to_string())
+                }
+            };
 
         info!("[OAuth] start_auth_flow returning: {:?}", auth_result);
         auth_result

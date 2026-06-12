@@ -149,7 +149,10 @@ pub fn upsert_auto_snapshot(
             args.chat_summary.as_deref(),
         )
         .map_err(CommandError::from)?;
-    Ok(UpsertAutoSnapshotResult { snapshot_id, created })
+    Ok(UpsertAutoSnapshotResult {
+        snapshot_id,
+        created,
+    })
 }
 
 /// 스냅샷 이름(설명) 변경

@@ -4,6 +4,8 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { getAiConfig } from '@/ai/config';
 import { DEFAULT_TRANSLATION_MAX_TOKENS, DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import i18n from '@/i18n/config';
+import { isTauriRuntime } from '@/tauri/invoke';
+import { getTauriResilientFetch } from '@/ai/tauriFetch';
 
 /**
  * Chat 모델 생성
@@ -17,6 +19,11 @@ export function createChatModel(
   const cfg = getAiConfig(options);
   const model = modelOverride ?? cfg.model;
   const useFor = options?.useFor ?? 'chat';
+
+  // Tauri 런타임에서는 WebView fetch 실패 시 백엔드(reqwest)로 우회하는 fetch를 주입한다.
+  // 정상 환경에서는 네이티브 fetch를 그대로 사용하므로 동작 변화가 없다.
+  const useTauriFetch = isTauriRuntime();
+  const tauriFetch = useTauriFetch ? getTauriResilientFetch() : undefined;
 
   // Anthropic (Claude)
   if (cfg.provider === 'anthropic') {
@@ -40,6 +47,9 @@ export function createChatModel(
       model,
       ...temperatureOption,
       ...maxTokensOption,
+      ...(tauriFetch
+        ? { clientOptions: { fetch: tauriFetch, dangerouslyAllowBrowser: true } }
+        : {}),
     });
   }
 
@@ -67,6 +77,9 @@ export function createChatModel(
       ...maxTokensOption,
       // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
       ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
+      ...(tauriFetch
+        ? { configuration: { fetch: tauriFetch, dangerouslyAllowBrowser: true } }
+        : {}),
     });
   }
 

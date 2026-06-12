@@ -30,6 +30,12 @@ import {
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
 import { stripImages } from '@/utils/imagePlaceholder';
+import {
+  completeWithTauriAiBackend,
+  shouldRetryWithTauriAiBackend,
+  streamWithTauriAiBackend,
+} from '@/ai/backendCompletion';
+import { isTauriRuntime } from '@/tauri/invoke';
 
 // TipTapDocJson 타입을 re-export
 export type { TipTapDocJson };
@@ -79,16 +85,39 @@ export function isRetryableTranslationError(error: unknown): boolean {
 /**
  * 에러 메시지를 사용자 친화적으로 변환
  */
-export function formatTranslationError(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return String(error);
+/**
+ * Error 인스턴스가 아닌 값(Tauri CommandError 등 plain object/문자열)에서도
+ * 사람이 읽을 수 있는 메시지를 추출한다. (String(obj) → "[object Object]" 방지)
+ */
+function extractErrorMessage(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const obj = error as { message?: unknown; code?: unknown; details?: unknown };
+    const parts: string[] = [];
+    if (typeof obj.message === 'string' && obj.message.trim()) {
+      parts.push(obj.message.trim());
+    }
+    if (typeof obj.details === 'string' && obj.details.trim()) {
+      parts.push(`(${obj.details.trim()})`);
+    }
+    if (parts.length > 0) return parts.join(' ');
+    if (typeof obj.code === 'string' && obj.code.trim()) return obj.code.trim();
+    try {
+      const json = JSON.stringify(error);
+      if (json && json !== '{}') return json;
+    } catch {
+      // ignore
+    }
   }
+  return String(error);
+}
 
-  if (isTimeoutError(error)) {
+export function formatTranslationError(error: unknown): string {
+  if (error instanceof Error && isTimeoutError(error)) {
     return '번역 요청 시간이 초과되었습니다. 문서가 복잡하거나 길 경우 자동으로 분할 번역됩니다. 다시 시도해주세요.';
   }
 
-  const msg = error.message;
+  const msg = extractErrorMessage(error);
 
   if (msg.includes('파싱') || msg.includes('JSON')) {
     return '번역 결과를 처리하는 중 오류가 발생했습니다. 다시 시도해주세요.';
@@ -253,9 +282,10 @@ function buildTranslationSetup(params: {
     );
   }
 
+  const maxTokens = calculatedMaxTokens;
   const model = createChatModel(undefined, {
     useFor: 'translation',
-    maxTokens: calculatedMaxTokens,
+    maxTokens,
   });
 
   const messages = [
@@ -274,7 +304,7 @@ function buildTranslationSetup(params: {
     },
   ];
 
-  return { model, messages };
+  return { cfg, model, messages, maxTokens };
 }
 
 /**
@@ -327,14 +357,29 @@ export async function translateSourceDocToTargetDocJson(params: {
   /** 취소 신호 */
   abortSignal?: AbortSignal | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const { model, messages } = buildTranslationSetup(params);
+  const { cfg, model, messages, maxTokens } = buildTranslationSetup(params);
 
   // 취소 확인
   if (params.abortSignal?.aborted) {
     throw new Error('번역이 취소되었습니다.');
   }
 
-  // 번역 실행
+  // Tauri 런타임: 비스트리밍도 백엔드 프록시로 처리 (청킹 경로 포함, WebView fetch 의존 제거)
+  if (isTauriRuntime() && cfg.provider !== 'mock') {
+    const raw = await completeWithTauriAiBackend({
+      cfg,
+      messages,
+      maxTokens,
+      abortSignal: params.abortSignal,
+    });
+    if (!raw || raw.trim().length === 0) {
+      throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
+    }
+    const { doc } = processTranslationResponse(raw);
+    return { doc, raw };
+  }
+
+  // 번역 실행 (비 Tauri 환경: LangChain 직접 호출)
   const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
   const res = await model.invoke(messages, invokeOptions);
 
@@ -404,47 +449,99 @@ export interface StreamingTranslationParams {
 export async function translateWithStreaming(
   params: StreamingTranslationParams
 ): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const { model, messages } = buildTranslationSetup(params);
+  const { cfg, model, messages, maxTokens } = buildTranslationSetup(params);
 
   // 취소 확인
   if (params.abortSignal?.aborted) {
     throw new Error('번역이 취소되었습니다.');
   }
 
-  // 스트리밍 실행
+  // Tauri 런타임에서는 백엔드 SSE 스트리밍을 1차 경로로 사용한다.
+  // (WebView fetch의 CORS/네트워크 제약에 의존하지 않아 안정적)
+  if (isTauriRuntime() && cfg.provider !== 'mock') {
+    const startMarker = '---TRANSLATION_START---';
+    const endMarker = '---TRANSLATION_END---';
+    const emitFiltered = (rawSoFar: string) => {
+      const startIdx = rawSoFar.indexOf(startMarker);
+      if (startIdx === -1) return; // 마커 전에는 콜백 안함 (로딩 상태 유지)
+      let filtered = rawSoFar.slice(startIdx + startMarker.length);
+      const endIdx = filtered.indexOf(endMarker);
+      if (endIdx !== -1) filtered = filtered.slice(0, endIdx);
+      params.onToken?.(filtered.trim());
+    };
+
+    const raw = await streamWithTauriAiBackend({
+      cfg,
+      messages,
+      maxTokens,
+      onAccumulated: emitFiltered,
+      abortSignal: params.abortSignal,
+    });
+
+    if (!raw || raw.trim().length === 0) {
+      throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
+    }
+
+    const { doc } = processTranslationResponse(raw);
+    return { doc, raw };
+  }
+
+  // 스트리밍 실행 (웹/테스트 등 비 Tauri 환경: LangChain 직접 호출)
   let accumulated = '';
   const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-  const stream = await model.stream(messages, streamOptions);
+  try {
+    // WebView fetch는 CORS/네트워크 실패를 불투명한 "Type error"로 던질 수 있다.
+    // 에러는 model.stream() 호출이 아니라 for-await 반복 도중에 발생하므로
+    // 스트리밍 소비 전체를 감싼다.
+    const stream = await model.stream(messages, streamOptions);
 
-  for await (const chunk of stream) {
-    // 취소 확인
-    if (params.abortSignal?.aborted) {
-      throw new Error('번역이 취소되었습니다.');
-    }
-
-    // chunk.content에서 텍스트 추출
-    const delta = typeof chunk.content === 'string'
-      ? chunk.content
-      : Array.isArray(chunk.content)
-        ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
-        : '';
-
-    if (delta) {
-      accumulated += delta;
-      // 마커 이후 텍스트만 콜백에 전달 (지침 반복 필터링)
-      const startMarker = '---TRANSLATION_START---';
-      const endMarker = '---TRANSLATION_END---';
-      const startIdx = accumulated.indexOf(startMarker);
-      if (startIdx !== -1) {
-        let filtered = accumulated.slice(startIdx + startMarker.length);
-        const endIdx = filtered.indexOf(endMarker);
-        if (endIdx !== -1) {
-          filtered = filtered.slice(0, endIdx);
-        }
-        params.onToken?.(filtered.trim());
+    for await (const chunk of stream) {
+      // 취소 확인
+      if (params.abortSignal?.aborted) {
+        throw new Error('번역이 취소되었습니다.');
       }
-      // 마커가 아직 없으면 콜백 호출 안함 (로딩 상태 유지)
+
+      // chunk.content에서 텍스트 추출
+      const delta = typeof chunk.content === 'string'
+        ? chunk.content
+        : Array.isArray(chunk.content)
+          ? chunk.content.map(c => typeof c === 'string' ? c : (c as { text?: string }).text || '').join('')
+          : '';
+
+      if (delta) {
+        accumulated += delta;
+        // 마커 이후 텍스트만 콜백에 전달 (지침 반복 필터링)
+        const startMarker = '---TRANSLATION_START---';
+        const endMarker = '---TRANSLATION_END---';
+        const startIdx = accumulated.indexOf(startMarker);
+        if (startIdx !== -1) {
+          let filtered = accumulated.slice(startIdx + startMarker.length);
+          const endIdx = filtered.indexOf(endMarker);
+          if (endIdx !== -1) {
+            filtered = filtered.slice(0, endIdx);
+          }
+          params.onToken?.(filtered.trim());
+        }
+        // 마커가 아직 없으면 콜백 호출 안함 (로딩 상태 유지)
+      }
     }
+  } catch (error) {
+    // 네트워크성 TypeError만 백엔드 프록시로 재시도 (CORS 우회)
+    if (!shouldRetryWithTauriAiBackend(error)) {
+      throw error;
+    }
+    const raw = await completeWithTauriAiBackend({
+      cfg,
+      messages,
+      maxTokens,
+      abortSignal: params.abortSignal,
+    });
+    const translatedMarkdown = extractTranslationMarkdown(raw);
+    if (translatedMarkdown.trim()) {
+      params.onToken?.(translatedMarkdown.trim());
+    }
+    const { doc } = processTranslationResponse(raw);
+    return { doc, raw };
   }
 
   // 응답이 비어있는 경우

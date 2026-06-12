@@ -273,10 +273,16 @@ impl McpClient {
             method, id, MCP_ENDPOINT_URL
         );
 
-        let response = self.build_mcp_request().await?.json(&request_body).send().await.map_err(|e| {
-            error!("[MCP] HTTP request failed: {}", e);
-            format!("Failed to send request: {}", e)
-        })?;
+        let response = self
+            .build_mcp_request()
+            .await?
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| {
+                error!("[MCP] HTTP request failed: {}", e);
+                format!("Failed to send request: {}", e)
+            })?;
 
         debug!("[MCP] HTTP response status: {}", response.status());
 
@@ -347,7 +353,12 @@ impl McpClient {
             .lines()
             .rev()
             .find_map(|line| line.strip_prefix("data:").map(|d| d.trim()))
-            .ok_or_else(|| format!("No data field in SSE response: {}", &body[..body.len().min(200)]))?;
+            .ok_or_else(|| {
+                format!(
+                    "No data field in SSE response: {}",
+                    &body[..body.len().min(200)]
+                )
+            })?;
 
         serde_json::from_str::<JsonRpcResponse>(json_str)
             .map_err(|e| format!("Failed to parse SSE data as JSON-RPC: {} - {}", e, json_str))
@@ -367,7 +378,9 @@ impl McpClient {
 
         debug!("[MCP] Sending notification: {}", method);
 
-        let response = self.build_mcp_request().await?
+        let response = self
+            .build_mcp_request()
+            .await?
             .json(&notification)
             .send()
             .await

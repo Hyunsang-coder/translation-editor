@@ -144,7 +144,10 @@ async fn try_refresh_token(
             .or_else(|| current_token.token_type.clone()),
     };
 
-    info!("[Connector] Token refreshed successfully for {}", connector_id);
+    info!(
+        "[Connector] Token refreshed successfully for {}",
+        connector_id
+    );
     Ok(new_token)
 }
 

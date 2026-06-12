@@ -6,10 +6,22 @@ import { parseReviewResult } from './parseReviewResult';
 const mocks = vi.hoisted(() => ({
   createChatModel: vi.fn(),
   stream: vi.fn(),
+  isTauriRuntime: vi.fn(),
+  shouldRetryWithTauriAiBackend: vi.fn(),
+  streamWithTauriAiBackend: vi.fn(),
 }));
 
 vi.mock('@/ai/client', () => ({
   createChatModel: mocks.createChatModel,
+}));
+
+vi.mock('@/tauri/invoke', () => ({
+  isTauriRuntime: mocks.isTauriRuntime,
+}));
+
+vi.mock('@/ai/backendCompletion', () => ({
+  shouldRetryWithTauriAiBackend: mocks.shouldRetryWithTauriAiBackend,
+  streamWithTauriAiBackend: mocks.streamWithTauriAiBackend,
 }));
 
 /**
@@ -20,6 +32,9 @@ vi.mock('@/ai/client', () => ({
 describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isTauriRuntime.mockReturnValue(false);
+    mocks.shouldRetryWithTauriAiBackend.mockReturnValue(false);
+    mocks.streamWithTauriAiBackend.mockResolvedValue('---REVIEW_START---\nIssues detected: 0\n---REVIEW_END---');
     mocks.stream.mockImplementation(async function* () {
       yield { content: '---REVIEW_START---\n' };
       yield { content: 'Issues detected: 0\n' };
@@ -99,6 +114,30 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(String(messages[1]?.content)).toContain('Source (English): This guide provides detailed instructions');
       expect(String(messages[1]?.content)).toContain('Target (Spanish): Esta guía proporciona instrucciones detalladas');
       expect(String(messages[1]?.content)).toContain('## 번역 규칙');
+    });
+
+    it('Tauri 런타임에서는 백엔드 스트리밍을 1차 경로로 사용', async () => {
+      mocks.isTauriRuntime.mockReturnValue(true);
+
+      const result = await runReview({
+        segments: mockSegments,
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
+
+      expect(result).toContain('---REVIEW_START---');
+      expect(mocks.createChatModel).not.toHaveBeenCalled();
+      expect(mocks.stream).not.toHaveBeenCalled();
+      expect(mocks.streamWithTauriAiBackend).toHaveBeenCalledTimes(1);
+
+      const callArgs = mocks.streamWithTauriAiBackend.mock.calls[0]?.[0] as {
+        maxTokens?: number;
+        messages?: Array<{ role: string; content: string }>;
+      };
+      expect(callArgs.maxTokens).toBe(4096);
+      expect(callArgs.messages?.[0]?.role).toBe('system');
+      expect(callArgs.messages?.[1]?.content).toContain('Source (English): This guide provides detailed instructions');
+      expect(callArgs.messages?.[1]?.content).toContain('Target (Spanish): Esta guía proporciona instrucciones detalladas');
     });
 
     it('검수 프롬프트에 원어민 자연스러움 점검 항목을 포함', async () => {

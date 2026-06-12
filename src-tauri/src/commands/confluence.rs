@@ -50,10 +50,7 @@ fn validate_url_segment(value: &str, name: &str) -> Result<(), String> {
     if value.is_empty() {
         return Err(format!("{} is empty", name));
     }
-    if !value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-')
-    {
+    if !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(format!("{} contains invalid characters: {}", name, value));
     }
     Ok(())

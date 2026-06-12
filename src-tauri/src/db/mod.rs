@@ -501,7 +501,14 @@ impl Database {
                 "UPDATE history
                  SET snapshot_json = ?1, timestamp = ?2, chat_summary = ?3, description = ?4
                  WHERE id = ?5 AND project_id = ?6",
-                (snapshot_json, now, chat_summary, description, &id, project_id),
+                (
+                    snapshot_json,
+                    now,
+                    chat_summary,
+                    description,
+                    &id,
+                    project_id,
+                ),
             )?;
             Ok((id, false))
         } else {
@@ -1074,12 +1081,8 @@ impl Database {
             });
         }
 
-        let warnings = validate_glossary_rows(
-            &headers,
-            parsed_records.len(),
-            skipped,
-            long_entry_count,
-        );
+        let warnings =
+            validate_glossary_rows(&headers, parsed_records.len(), skipped, long_entry_count);
 
         // ────────────────────────────────────────────────────────────────────
         // Phase 2: Batch insert WITH transaction per batch
@@ -1335,12 +1338,8 @@ impl Database {
             });
         }
 
-        let warnings = validate_glossary_rows(
-            &headers,
-            parsed_records.len(),
-            skipped,
-            long_entry_count,
-        );
+        let warnings =
+            validate_glossary_rows(&headers, parsed_records.len(), skipped, long_entry_count);
 
         // ────────────────────────────────────────────────────────────────────
         // Phase 2: Batch insert WITH transaction per batch
@@ -1816,9 +1815,7 @@ mod tests {
         assert!(created, "첫 번째 호출은 신규 생성이어야 한다");
         assert!(!id.is_empty());
 
-        let metas = db
-            .list_history_metadata(&project.id)
-            .expect("list failed");
+        let metas = db.list_history_metadata(&project.id).expect("list failed");
         assert_eq!(metas.len(), 1);
         assert_eq!(metas[0].description, "자동 저장 10:00");
     }
@@ -1850,15 +1847,20 @@ mod tests {
         assert_eq!(id1, id2, "덮어쓸 때 ID는 동일해야 한다");
 
         // 목록에는 1개만 있어야 함
-        let metas = db
-            .list_history_metadata(&project.id)
-            .expect("list failed");
+        let metas = db.list_history_metadata(&project.id).expect("list failed");
         let auto_snaps: Vec<_> = metas
             .iter()
             .filter(|m| m.description.starts_with("자동 저장"))
             .collect();
-        assert_eq!(auto_snaps.len(), 1, "자동 저장 스냅샷은 1개만 존재해야 한다");
-        assert_eq!(auto_snaps[0].description, "자동 저장 10:03", "description이 갱신되어야 한다");
+        assert_eq!(
+            auto_snaps.len(),
+            1,
+            "자동 저장 스냅샷은 1개만 존재해야 한다"
+        );
+        assert_eq!(
+            auto_snaps[0].description, "자동 저장 10:03",
+            "description이 갱신되어야 한다"
+        );
     }
 
     #[test]
@@ -1883,9 +1885,7 @@ mod tests {
             .expect("upsert failed");
         assert!(created, "수동 스냅샷이 있어도 auto는 새로 생성되어야 한다");
 
-        let metas = db
-            .list_history_metadata(&project.id)
-            .expect("list failed");
+        let metas = db.list_history_metadata(&project.id).expect("list failed");
         assert_eq!(metas.len(), 2, "수동 + 자동 총 2개여야 한다");
     }
 
@@ -1898,12 +1898,8 @@ mod tests {
         let project = build_test_project("project-auto-4");
         db.save_project(&project).expect("failed to save project");
 
-        let result = db.upsert_auto_snapshot(
-            &project.id,
-            "자동 저장 10:00",
-            "not-valid-json",
-            None,
-        );
+        let result =
+            db.upsert_auto_snapshot(&project.id, "자동 저장 10:00", "not-valid-json", None);
 
         assert!(result.is_err(), "잘못된 JSON은 에러를 반환해야 한다");
     }
