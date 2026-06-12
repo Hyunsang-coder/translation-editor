@@ -468,6 +468,45 @@
   @apply bg-primary-900/30;
 }
 
+/* 표 열 너비 드래그 리사이즈 — Source/Target 본문 에디터 전용
+   (preview/chat 등 읽기 전용 에디터는 columnResizing 플러그인이 없어 핸들이 생성되지 않음) */
+.source-editor .ProseMirror table,
+.target-editor .ProseMirror table {
+  table-layout: fixed;
+}
+
+.source-editor .ProseMirror .tableWrapper,
+.target-editor .ProseMirror .tableWrapper {
+  overflow-x: auto;
+}
+
+.source-editor .ProseMirror th,
+.source-editor .ProseMirror td,
+.target-editor .ProseMirror th,
+.target-editor .ProseMirror td {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 24px;
+}
+
+/* 열 경계에 마우스를 올리면 나타나는 리사이즈 핸들 위젯 */
+.source-editor .ProseMirror .column-resize-handle,
+.target-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  pointer-events: none;
+  /* primary-500은 var(--primary-500) hex 변수라 @apply 불투명도 수식어를 쓸 수 없음 */
+  background-color: color-mix(in srgb, var(--primary-500) 70%, transparent);
+}
+
+/* 리사이즈 가능한 영역 위에서의 커서 (ProseMirror가 루트에 부여) */
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
 /* Placeholder */
 .ProseMirror p.is-empty::before,
 .ProseMirror.tiptap-empty::before {

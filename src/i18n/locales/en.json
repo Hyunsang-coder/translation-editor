@@ -345,6 +345,7 @@
     "description": "Description",
     "selectedCount": "{{count}} selected",
     "selectAll": "Select All",
+    "resizeColumn": "Resize column (double-click to reset)",
     "selectIssue": "Select Issue",
     "deleteIssue": "Delete Issue",
     "highlight": "Highlight",

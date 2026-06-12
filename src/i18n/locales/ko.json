@@ -345,6 +345,7 @@
     "description": "설명",
     "selectedCount": "{{count}}개 선택됨",
     "selectAll": "전체 선택",
+    "resizeColumn": "열 너비 조정 (더블클릭 시 초기화)",
     "selectIssue": "이슈 선택",
     "deleteIssue": "이슈 삭제",
     "highlight": "표시",
