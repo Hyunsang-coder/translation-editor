@@ -418,12 +418,13 @@ function removeDuplicateTableHeaders(root: ParentNode) {
       continue;
     }
 
-    // 신규: 앞 요소가 table이고 sticky header 패턴이면 제거
-    // sticky header = thead만 있고 tbody 데이터 행이 없는 표
+    // 앞 요소가 table이고 sticky header 패턴이면 제거
+    // sticky header = thead만 있거나, 브라우저가 tbody의 단일 헤더 행으로 복사한 클론 표
     if (prevTag === 'table') {
-      const prevHeaderText = extractTableHeaderText(previousElement as HTMLTableElement);
+      const previousTable = previousElement as HTMLTableElement;
+      const prevHeaderText = extractTableHeaderText(previousTable) ?? extractFirstRowText(previousTable);
       if (prevHeaderText !== headerText) continue;
-      if (isStickyHeaderOnlyTable(previousElement as HTMLTableElement)) {
+      if (isStickyHeaderOnlyTable(previousTable, headerText)) {
         previousElement.remove();
       }
     }
@@ -431,12 +432,21 @@ function removeDuplicateTableHeaders(root: ParentNode) {
 }
 
 /**
- * tbody에 실제 데이터 행이 없는 헤더 전용 표인지 판별
+ * 실제 데이터 행이 없는 헤더 전용 표인지 판별
  * (sticky header 복사 시 생성되는 클론 표 감지용)
  */
-function isStickyHeaderOnlyTable(table: HTMLTableElement): boolean {
+function isStickyHeaderOnlyTable(table: HTMLTableElement, expectedHeaderText: string): boolean {
   const tbodyRows = Array.from(table.querySelectorAll('tbody tr'));
-  return tbodyRows.length === 0;
+  if (tbodyRows.length === 0) return true;
+
+  const rows = Array.from(table.querySelectorAll('tr'));
+  if (rows.length === 0) return false;
+
+  return rows.every((row) => {
+    const rowText = extractRowText(row as HTMLTableRowElement);
+    if (rowText !== expectedHeaderText) return false;
+    return row.querySelector('th') !== null || rows.length === 1;
+  });
 }
 
 function extractTableHeaderText(table: HTMLTableElement): string | null {
@@ -453,6 +463,13 @@ function extractTableHeaderText(table: HTMLTableElement): string | null {
   }
 
   return null;
+}
+
+function extractFirstRowText(table: HTMLTableElement): string | null {
+  const firstRow = table.querySelector('tr') as HTMLTableRowElement | null;
+  if (!firstRow) return null;
+  const text = extractRowText(firstRow);
+  return text.length > 0 ? text : null;
 }
 
 function extractRowText(row: HTMLTableRowElement): string {

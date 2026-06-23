@@ -56,6 +56,38 @@ describe('removeDuplicateTableHeaders', () => {
     expect(result).toContain('Foo');
   });
 
+  it('sticky header: 앞 표가 tbody 안의 th 헤더 한 줄로 복사되어도 제거', () => {
+    const html = `
+      <table>
+        <tbody><tr><th>Asset</th><th>Image</th><th>Feedback</th></tr></tbody>
+      </table>
+      <table>
+        <thead><tr><th>Asset</th><th>Image</th><th>Feedback</th></tr></thead>
+        <tbody><tr><td>NS_ERA_Car</td><td>img</td><td>feedback text</td></tr></tbody>
+      </table>
+    `;
+    const result = normalizePastedHtml(html);
+    const tableCount = (result.match(/<table/g) ?? []).length;
+    expect(tableCount).toBe(1);
+    expect(result).toContain('NS_ERA_Car');
+  });
+
+  it('sticky header: 앞 표가 td만 있는 헤더 클론이어도 제거', () => {
+    const html = `
+      <table>
+        <tbody><tr><td>Asset</td><td>Image</td><td>Feedback</td></tr></tbody>
+      </table>
+      <table>
+        <thead><tr><th>Asset</th><th>Image</th><th>Feedback</th></tr></thead>
+        <tbody><tr><td>NS_ERA_Car</td><td>img</td><td>feedback text</td></tr></tbody>
+      </table>
+    `;
+    const result = normalizePastedHtml(html);
+    const tableCount = (result.match(/<table/g) ?? []).length;
+    expect(tableCount).toBe(1);
+    expect(result).toContain('NS_ERA_Car');
+  });
+
   it('두 표의 헤더가 다르면 둘 다 유지', () => {
     const html = `
       <table>
