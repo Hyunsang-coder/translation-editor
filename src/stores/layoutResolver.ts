@@ -8,6 +8,7 @@
  */
 import { LAYOUT } from '@/constants/layout';
 import type { DockingSidebarState } from '@/types';
+import { isChatPanel } from '@/types';
 
 export interface LayoutInput {
   windowWidth: number;
@@ -34,6 +35,11 @@ function getDesiredWidth(sidebar: DockingSidebarState): number {
 function getProjectWidth(hidden: boolean, collapsed: boolean, width?: number): number {
   if (hidden) return 0;
   return collapsed ? LAYOUT.PROJECT_COLLAPSED : (width ?? LAYOUT.PROJECT_EXPANDED);
+}
+
+/** 열린 사이드바의 최소 너비 (채팅 패널 포함 시 더 넓게) */
+function getOpenSidebarMinWidth(sidebar: DockingSidebarState): number {
+  return sidebar.panels.some(isChatPanel) ? LAYOUT.CHAT_SIDEBAR_MIN : LAYOUT.SIDEBAR_MIN;
 }
 
 /**
@@ -68,18 +74,21 @@ export function resolveLayout(input: LayoutInput): ResolvedWidths {
   const openRightDesired = rightOpen ? rightDesired : 0;
   const totalOpenDesired = openLeftDesired + openRightDesired;
 
-  // 여유 충분 → desired 그대로
+  // 여유 충분 → desired 그대로 (단, 열린 사이드바는 패널 유형별 최소 너비 보장)
   if (totalOpenDesired <= budgetForOpen) {
-    return { left: leftDesired, right: rightDesired };
+    return {
+      left: leftOpen ? Math.max(getOpenSidebarMinWidth(input.leftSidebar), leftDesired) : leftDesired,
+      right: rightOpen ? Math.max(getOpenSidebarMinWidth(input.rightSidebar), rightDesired) : rightDesired,
+    };
   }
 
   // 비례 축소
   const ratio = budgetForOpen > 0 ? budgetForOpen / totalOpenDesired : 0;
   const leftEffective = leftOpen
-    ? Math.max(LAYOUT.SIDEBAR_MIN, Math.round(openLeftDesired * ratio))
+    ? Math.max(getOpenSidebarMinWidth(input.leftSidebar), Math.round(openLeftDesired * ratio))
     : leftDesired;
   const rightEffective = rightOpen
-    ? Math.max(LAYOUT.SIDEBAR_MIN, Math.round(openRightDesired * ratio))
+    ? Math.max(getOpenSidebarMinWidth(input.rightSidebar), Math.round(openRightDesired * ratio))
     : rightDesired;
 
   return { left: leftEffective, right: rightEffective };
@@ -91,8 +100,10 @@ export function resolveLayout(input: LayoutInput): ResolvedWidths {
  */
 export function getMaxSidebarWidth(input: LayoutInput, side: 'left' | 'right'): number {
   const projectW = getProjectWidth(input.projectSidebarHidden, input.projectSidebarCollapsed, input.projectSidebarWidth);
+  const sidebar = side === 'left' ? input.leftSidebar : input.rightSidebar;
   const otherSidebar = side === 'left' ? input.rightSidebar : input.leftSidebar;
   const otherW = getDesiredWidth(otherSidebar);
+  const minW = getOpenSidebarMinWidth(sidebar);
   const max = input.windowWidth - projectW - otherW - LAYOUT.EDITOR_MIN;
-  return Math.min(LAYOUT.SIDEBAR_MAX, Math.max(LAYOUT.SIDEBAR_MIN, max));
+  return Math.min(LAYOUT.SIDEBAR_MAX, Math.max(minW, max));
 }

@@ -294,9 +294,9 @@
     },
     "review": "검수",
     "reviewTitle": "번역 검수",
-    "hideSource": "원문 숨기기",
+    "hideSource": "숨기기",
     "showSource": "원문 표시",
-    "hideTarget": "번역문 숨기기",
+    "hideTarget": "숨기기",
     "showTarget": "번역문 표시",
     "zoom": {
       "reset": "줌 초기화"

@@ -558,8 +558,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           </div>
 
           {/* 하단 컨트롤 바 */}
-          <div className="absolute inset-x-0 bottom-0 px-3 pb-1.5 flex items-end justify-between pointer-events-none">
-            <div className="pointer-events-auto flex items-center gap-1.5">
+          <div className="absolute inset-x-0 bottom-0 px-2 pb-1.5 flex items-end gap-1 pointer-events-none min-w-0">
+            <div className="pointer-events-auto flex items-center gap-1 shrink-0">
               <div className="relative" data-ite-composer-menu-root>
                 <button
                   type="button"
@@ -672,7 +672,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               </button>
             </div>
 
-            <div className="pointer-events-auto flex items-center gap-2">
+            <div className="pointer-events-auto ml-auto flex items-center gap-1 min-w-0">
               <Select
                 value={chatModel}
                 onChange={setChatModel}
@@ -680,14 +680,15 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 disabled={isLoading}
                 aria-label={t('chat.chatModelAriaLabel')}
                 title={t('chat.chatModelTitle')}
-                className="min-w-[100px]"
+                size="sm"
+                className="min-w-0 max-w-[8.5rem] shrink"
                 anchor="top"
                 data-testid="chat-model-select"
               />
               <button
                 type="submit"
                 disabled={globalIsLoading || !localComposerText.trim()}
-                className="w-7 h-7 rounded-full bg-primary-500 text-white
+                className="shrink-0 w-7 h-7 rounded-full bg-primary-500 text-white
                            hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
                            transition-colors flex items-center justify-center"
                 title={t('chat.send')}

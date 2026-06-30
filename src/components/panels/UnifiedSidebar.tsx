@@ -11,6 +11,7 @@ import { CommentListPanel } from '@/components/comment/CommentListPanel';
 import { ChatContent } from '@/components/chat/ChatContent';
 import { useResizeHandle } from '@/hooks/useResizeHandle';
 import { usePanelDrag } from '@/hooks/usePanelDrag';
+import { LAYOUT } from '@/constants/layout';
 import type { SidebarSide, PanelType } from '@/types';
 import { isChatPanel, getChatSessionId, chatPanelId } from '@/types';
 import { confirm } from '@tauri-apps/plugin-dialog';
@@ -72,6 +73,11 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   const chatSessions = useMemo(() => sessions.map((ses) => ({ id: ses.id, name: ses.name })), [sessions]);
   const isSessionLimitReached = useChatStore((s) => s.sessions.length >= MAX_CHAT_SESSIONS);
 
+  const minSidebarWidth = useMemo(
+    () => (panels.some(isChatPanel) ? LAYOUT.CHAT_SIDEBAR_MIN : LAYOUT.SIDEBAR_MIN),
+    [panels],
+  );
+
   const onWidthChange = useCallback(
     (w: number) => setSidebarWidthSide(side, w),
     [side, setSidebarWidthSide],
@@ -82,6 +88,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     onWidthChange,
     direction: side === 'left' ? 'right' : 'left',
     maxWidth,
+    minWidth: minSidebarWidth,
   });
 
   const borderClass = side === 'left' ? 'border-r' : 'border-l';

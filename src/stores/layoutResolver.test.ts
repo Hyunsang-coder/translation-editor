@@ -7,7 +7,7 @@ function makeInput(overrides: Partial<LayoutInput> = {}): LayoutInput {
   return {
     windowWidth: 1440,
     leftSidebar: { collapsed: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
-    rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 250 },
+    rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 260 },
     projectSidebarCollapsed: false,
     projectSidebarHidden: false,
     ...overrides,
@@ -18,7 +18,7 @@ describe('resolveLayout', () => {
   it('여유 충분하면 desired 그대로 반환', () => {
     const result = resolveLayout(makeInput());
     // 1440 - 160(project) - 250 - 250 = 780 >= 400(EDITOR_MIN) → OK
-    expect(result).toEqual({ left: 250, right: 250 });
+    expect(result).toEqual({ left: 250, right: 260 });
   });
 
   it('양쪽 사이드바 600px → 비례 축소', () => {
@@ -107,9 +107,9 @@ describe('resolveLayout', () => {
     });
     const result = resolveLayout(input);
     // budget = 600 - 0 - 400 = 200
-    // ratio = 200 / 800 = 0.25 → 100px each → SIDEBAR_MIN=200으로 clamp
+    // ratio = 200 / 800 = 0.25 → 100px each → 채팅 사이드바는 CHAT_SIDEBAR_MIN=260으로 clamp
     expect(result.left).toBe(LAYOUT.SIDEBAR_MIN);
-    expect(result.right).toBe(LAYOUT.SIDEBAR_MIN);
+    expect(result.right).toBe(LAYOUT.CHAT_SIDEBAR_MIN);
   });
 
   it('비대칭 desired → 비례적으로 축소', () => {

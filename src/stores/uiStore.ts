@@ -458,7 +458,9 @@ export const useUIStore = create<UIStore>()(
 
       setSidebarWidthSide: (side: SidebarSide, width: number): void => {
         const key = sidebarKey(side);
-        const clamped = Math.max(LAYOUT.SIDEBAR_MIN, Math.min(LAYOUT.SIDEBAR_MAX, width));
+        const sidebar = get()[key];
+        const minWidth = sidebar.panels.some(isChatPanel) ? LAYOUT.CHAT_SIDEBAR_MIN : LAYOUT.SIDEBAR_MIN;
+        const clamped = Math.max(minWidth, Math.min(LAYOUT.SIDEBAR_MAX, width));
         set((state) => ({ [key]: { ...state[key], width: clamped } }));
       },
 
