@@ -32,11 +32,34 @@ import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
 import { serializeUserComments } from '@/ai/commentContext';
 import { collectCommentIdsInRange, removeCommentMark } from '@/editor/utils/commentNavigation';
+import type { ITEProject } from '@/types';
 
 /**
  * TipTap 기반 에디터 캔버스
  * Notion 스타일의 리치 텍스트 편집 환경
  */
+function inferSegmentGroupIdForSelection(
+  project: ITEProject | null,
+  field: CommentField,
+  selectedText: string,
+): string | undefined {
+  const needle = selectedText.trim();
+  if (!project || !needle) return undefined;
+
+  const matches: string[] = [];
+  for (const segment of project.segments) {
+    const blockIds = field === 'source' ? segment.sourceIds : segment.targetIds;
+    const segmentText = blockIds
+      .map((id) => stripHtml(project.blocks[id]?.content ?? ''))
+      .join('\n');
+    if (segmentText.includes(needle)) {
+      matches.push(segment.groupId);
+    }
+  }
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
@@ -238,6 +261,9 @@ export function EditorCanvasTipTap(): JSX.Element {
     } catch {
       // ignore
     }
+    if (!segmentGroupId) {
+      segmentGroupId = inferSegmentGroupIdForSelection(project, field, selectedText);
+    }
 
     // 드래그 후 1초 정도 멈추면 버튼 표시
     clearSelectionTimer();
@@ -274,7 +300,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         // ignore
       }
     }, 1000);
-  }, []);
+  }, [project]);
 
   const attachSelectionWatcher = useCallback((editor: Editor, field: CommentField) => {
     // TipTap 이벤트로 selection 변화 감지

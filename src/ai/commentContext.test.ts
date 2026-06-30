@@ -91,14 +91,16 @@ describe('serializeUserComments', () => {
     expect(result).not.toContain('drop');
   });
 
-  it('segmentGroupIds filter always includes comments without a segmentGroupId', () => {
+  it('segmentGroupIds filter excludes comments without a segmentGroupId', () => {
     const comments = [
       makeComment({ id: 'a', segmentGroupId: undefined, excerpt: 'noid', comment: 'always' }),
       makeComment({ id: 'b', segmentGroupId: 'sg9', excerpt: 'other', comment: 'drop' }),
     ];
     const result = serializeUserComments(comments, { segmentGroupIds: new Set(['sg1']) });
 
-    expect(result).toContain('1. "noid" — always');
+    expect(result).not.toContain('noid');
+    expect(result).not.toContain('always');
     expect(result).not.toContain('other');
+    expect(result).toBe('');
   });
 });

@@ -395,6 +395,12 @@ export function ReviewPanel(): JSX.Element {
 
       // 기존 번역 함수 사용 (검수 이슈 + 사용자 메시지 컨텍스트 포함)
       const trimmedMessage = retranslateMessage.trim();
+      const serializedComments = serializeUserComments(
+        useCommentStore.getState().comments,
+        {
+          leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 재번역 시 반드시 반영하세요:',
+        },
+      );
       const { doc } = await translateWithStreaming({
         project: currentProject,
         sourceDocJson,
@@ -403,6 +409,7 @@ export function ReviewPanel(): JSX.Element {
         translatorPersona,
         glossary,
         reviewIssues: checkedIssues,
+        ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => setRetranslateStreamingText(text),
         abortSignal: controller.signal,

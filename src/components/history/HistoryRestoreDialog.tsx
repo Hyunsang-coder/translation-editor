@@ -67,7 +67,7 @@ export function HistoryRestoreDialog({
         },
       };
 
-      loadProject(restoredProject);
+      loadProject(restoredProject, { hydrateComments: false });
 
       const sourceDoc = buildSourceDocument(restoredProject).text;
       const targetDoc = buildTargetDocument(restoredProject).text;

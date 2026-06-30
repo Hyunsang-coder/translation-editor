@@ -14,12 +14,14 @@ import type { TipTapDocJson } from '@/ai/translateDocument';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { loadProject as tauriLoadProject, saveProject as tauriSaveProject } from '@/tauri/project';
 import { listProjectIds as tauriListProjectIds } from '@/tauri/storage';
+import { loadComments, saveComments } from '@/tauri/comments';
 import { createDiffResult, diffToHtml, applyDiff } from '@/utils/diff';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { htmlToTipTapJson } from '@/utils/markdownConverter';
 import { useEditorStore } from '@/stores/editorStore';
 import { useChatStore } from '@/stores/chatStore';
+import { useCommentStore } from '@/stores/commentStore';
 
 // ============================================
 // Store State Interface
@@ -131,7 +133,7 @@ interface ProjectState {
 interface ProjectActions {
   // 프로젝트 관리
   initializeProject: () => Promise<void>;
-  loadProject: (project: ITEProject) => void;
+  loadProject: (project: ITEProject, options?: { hydrateComments?: boolean }) => void;
   createNewProject: (metadata: Partial<ProjectMetadata>) => Promise<void>;
   saveProject: () => Promise<void>;
   switchProjectById: (projectId: string) => Promise<void>;
@@ -215,6 +217,7 @@ let writeThroughTimer: number | null = null;
 let autoSaveTimer: number | null = null;
 let autoSaveInFlight = false;
 let saveInFlight: Promise<void> | null = null;
+let hydrateCommentsRequestSeq = 0;
 
 /**
  * 두 에디터의 현재 문서에서 살아있는 commentId 집합을 수집.
@@ -245,38 +248,46 @@ function collectLiveCommentIds(): Set<string> {
 /**
  * 현재 commentStore의 코멘트를 프로젝트별 영속 저장.
  * 저장 전에 고아 코멘트(마크가 사라진 commentId)를 정리한다.
- * 프로젝트 저장과 분리(코멘트 저장 실패가 본 저장을 깨지 않도록 호출부에서 void 처리).
+ * 프로젝트 저장 완료 상태가 코멘트 테이블과 갈라지지 않도록 호출부에서 await 한다.
  */
 async function persistCommentsForProject(projectId: string): Promise<void> {
-  try {
-    const { useCommentStore } = await import('@/stores/commentStore');
-    const { saveComments } = await import('@/tauri/comments');
-    // 고아 정리: 에디터가 마운트된 경우에만(빈 집합으로 전부 지우는 사고 방지)
-    const { sourceEditor, targetEditor } = useEditorStore.getState();
-    if (sourceEditor || targetEditor) {
-      useCommentStore.getState().pruneOrphans(collectLiveCommentIds());
-    }
-    await saveComments(projectId, useCommentStore.getState().comments);
-  } catch (e) {
-    console.error('[persistComments] FAILED:', e instanceof Error ? e.message : e);
+  if (useProjectStore.getState().project?.id !== projectId) return;
+
+  // 고아 정리: 에디터가 마운트된 경우에만(빈 집합으로 전부 지우는 사고 방지)
+  const { sourceEditor, targetEditor } = useEditorStore.getState();
+  if (sourceEditor || targetEditor) {
+    useCommentStore.getState().pruneOrphans(collectLiveCommentIds());
   }
+
+  if (useProjectStore.getState().project?.id !== projectId) return;
+  const commentsToSave = useCommentStore.getState().comments;
+  await saveComments(projectId, commentsToSave);
 }
 
 /**
  * 프로젝트별 코멘트를 로드해 commentStore에 하이드레이션.
  */
 async function hydrateCommentsForProject(projectId: string): Promise<void> {
+  const requestSeq = ++hydrateCommentsRequestSeq;
+  useCommentStore.getState().clear();
+
   try {
-    const { useCommentStore } = await import('@/stores/commentStore');
-    const { loadComments } = await import('@/tauri/comments');
     const comments = await loadComments(projectId);
+    if (requestSeq !== hydrateCommentsRequestSeq) return;
+    if (useProjectStore.getState().project?.id !== projectId) return;
     useCommentStore.getState().setComments(comments);
   } catch (e) {
+    if (requestSeq !== hydrateCommentsRequestSeq) return;
+    if (useProjectStore.getState().project?.id !== projectId) return;
     console.error('[hydrateComments] FAILED:', e instanceof Error ? e.message : e);
     // 로드 실패 시 이전 프로젝트 코멘트가 남지 않도록 비움
-    const { useCommentStore } = await import('@/stores/commentStore');
     useCommentStore.getState().clear();
   }
+}
+
+function clearCommentsForProjectContext(): void {
+  hydrateCommentsRequestSeq++;
+  useCommentStore.getState().clear();
 }
 
 // ============================================
@@ -477,6 +488,7 @@ export const useProjectStore = create<ProjectStore>()(
           });
           // chatStore 초기화 (프로젝트 없음)
           await useChatStore.getState().hydrateForProject(null);
+          clearCommentsForProjectContext();
         } catch (err) {
           console.error('[initializeProject] Unhandled error:', err);
           set({ error: err instanceof Error ? err.message : 'Initialization failed', isLoading: false });
@@ -599,7 +611,7 @@ export const useProjectStore = create<ProjectStore>()(
       // 주의: 이전 프로젝트가 dirty면 저장하지 않고 바로 덮어씁니다.
       // 이전 프로젝트를 저장하려면 호출 전에 saveProject()를 먼저 호출하거나,
       // switchProjectById()를 사용하세요.
-      loadProject: (project: ITEProject): void => {
+      loadProject: (project: ITEProject, options?: { hydrateComments?: boolean }): void => {
         // write-through 타이머 취소 (이전 프로젝트가 새 프로젝트 상태로 저장되는 것 방지)
         if (writeThroughTimer !== null) {
           window.clearTimeout(writeThroughTimer);
@@ -624,6 +636,11 @@ export const useProjectStore = create<ProjectStore>()(
           pendingDiffs: {},
           editSessions: [],
         });
+        if (options?.hydrateComments === false) {
+          hydrateCommentsRequestSeq++;
+        } else {
+          void hydrateCommentsForProject(project.id);
+        }
       },
 
       // 새 프로젝트 생성
@@ -667,6 +684,7 @@ export const useProjectStore = create<ProjectStore>()(
             sourceDocJson: htmlToTipTapJson(sd.text),
             targetDocJson: htmlToTipTapJson(td.text),
           });
+          clearCommentsForProjectContext();
           scheduleWriteThroughSave(set, get);
         }
       },
@@ -711,9 +729,11 @@ export const useProjectStore = create<ProjectStore>()(
             console.warn('[saveProject] saving, blocks:', Object.keys(nextBlocks).length);
 
             await tauriSaveProject(projectToSave);
+            await persistCommentsForProject(projectToSave.id);
 
-            // 인라인 코멘트 영속화 — 본 저장 실패와 분리(코멘트 저장 실패가 프로젝트 저장을 깨지 않도록)
-            void persistCommentsForProject(projectToSave.id);
+            if (get().project?.id !== projectToSave.id) {
+              return;
+            }
 
             console.warn('[saveProject] success:', projectToSave.id);
 

@@ -172,6 +172,13 @@ describe('HistoryRestoreDialog auto snapshot integration', () => {
         projectId: 'project-1',
         snapshotId: 'snapshot-1',
       });
+      expect(mocks.projectStoreState.loadProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'project-1',
+          blocks: mocks.restoredBlocks,
+        }),
+        { hydrateComments: false },
+      );
       expect(mocks.projectStoreState.saveProject).toHaveBeenCalledTimes(1);
       expect(mocks.historyStoreState.loadHistory).toHaveBeenCalledWith('project-1');
       expect(mocks.onClose).toHaveBeenCalledTimes(1);
