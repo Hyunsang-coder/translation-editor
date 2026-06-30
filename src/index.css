@@ -803,6 +803,22 @@
   /* red-600 */
 }
 
+/* 인라인 코멘트 마크 (사용자 마킹) */
+.comment-mark {
+  background: rgba(59, 130, 246, 0.14);
+  /* blue-500 */
+  border-bottom: 2px solid rgba(37, 99, 235, 0.7);
+  /* blue-600 */
+  border-radius: 2px;
+  padding: 1px 0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.comment-mark:hover {
+  background: rgba(59, 130, 246, 0.28);
+}
+
 .review-highlight[data-issue-type="omission"] {
   background: rgba(249, 115, 22, 0.25);
   /* orange-500 */

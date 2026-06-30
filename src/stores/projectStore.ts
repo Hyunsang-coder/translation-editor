@@ -216,6 +216,69 @@ let autoSaveTimer: number | null = null;
 let autoSaveInFlight = false;
 let saveInFlight: Promise<void> | null = null;
 
+/**
+ * 두 에디터의 현재 문서에서 살아있는 commentId 집합을 수집.
+ * 마킹된 텍스트가 삭제되면 해당 마크도 사라지므로, 여기에 없는 commentId는 고아.
+ */
+function collectLiveCommentIds(): Set<string> {
+  const ids = new Set<string>();
+  const { sourceEditor, targetEditor } = useEditorStore.getState();
+  for (const editor of [sourceEditor, targetEditor]) {
+    if (!editor) continue;
+    try {
+      editor.state.doc.descendants((node) => {
+        for (const mark of node.marks) {
+          if (mark.type.name === 'comment') {
+            const id = mark.attrs?.commentId;
+            if (typeof id === 'string' && id) ids.add(id);
+          }
+        }
+        return true;
+      });
+    } catch {
+      // ignore: 에디터 상태 접근 실패 시 해당 에디터는 건너뜀
+    }
+  }
+  return ids;
+}
+
+/**
+ * 현재 commentStore의 코멘트를 프로젝트별 영속 저장.
+ * 저장 전에 고아 코멘트(마크가 사라진 commentId)를 정리한다.
+ * 프로젝트 저장과 분리(코멘트 저장 실패가 본 저장을 깨지 않도록 호출부에서 void 처리).
+ */
+async function persistCommentsForProject(projectId: string): Promise<void> {
+  try {
+    const { useCommentStore } = await import('@/stores/commentStore');
+    const { saveComments } = await import('@/tauri/comments');
+    // 고아 정리: 에디터가 마운트된 경우에만(빈 집합으로 전부 지우는 사고 방지)
+    const { sourceEditor, targetEditor } = useEditorStore.getState();
+    if (sourceEditor || targetEditor) {
+      useCommentStore.getState().pruneOrphans(collectLiveCommentIds());
+    }
+    await saveComments(projectId, useCommentStore.getState().comments);
+  } catch (e) {
+    console.error('[persistComments] FAILED:', e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * 프로젝트별 코멘트를 로드해 commentStore에 하이드레이션.
+ */
+async function hydrateCommentsForProject(projectId: string): Promise<void> {
+  try {
+    const { useCommentStore } = await import('@/stores/commentStore');
+    const { loadComments } = await import('@/tauri/comments');
+    const comments = await loadComments(projectId);
+    useCommentStore.getState().setComments(comments);
+  } catch (e) {
+    console.error('[hydrateComments] FAILED:', e instanceof Error ? e.message : e);
+    // 로드 실패 시 이전 프로젝트 코멘트가 남지 않도록 비움
+    const { useCommentStore } = await import('@/stores/commentStore');
+    useCommentStore.getState().clear();
+  }
+}
+
 // ============================================
 // Initial State
 // ============================================
@@ -366,6 +429,7 @@ export const useProjectStore = create<ProjectStore>()(
               });
               // chatStore 하이드레이션 (프로젝트별 설정 로드)
               await useChatStore.getState().hydrateForProject(loaded.id);
+              await hydrateCommentsForProject(loaded.id);
               return;
             } catch (err) {
               console.warn('[initializeProject] Failed to load lastProjectId:', lastProjectId, err instanceof Error ? err.message : err);
@@ -394,6 +458,7 @@ export const useProjectStore = create<ProjectStore>()(
               });
               // chatStore 하이드레이션 (프로젝트별 설정 로드)
               await useChatStore.getState().hydrateForProject(loaded.id);
+              await hydrateCommentsForProject(loaded.id);
               return;
             }
           } catch (err) {
@@ -647,6 +712,9 @@ export const useProjectStore = create<ProjectStore>()(
 
             await tauriSaveProject(projectToSave);
 
+            // 인라인 코멘트 영속화 — 본 저장 실패와 분리(코멘트 저장 실패가 프로젝트 저장을 깨지 않도록)
+            void persistCommentsForProject(projectToSave.id);
+
             console.warn('[saveProject] success:', projectToSave.id);
 
             set({
@@ -717,6 +785,7 @@ export const useProjectStore = create<ProjectStore>()(
           // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출
           // React useEffect 의존 대신 직접 호출하여 race condition 방지
           await useChatStore.getState().hydrateForProject(loaded.id);
+          await hydrateCommentsForProject(loaded.id);
         } catch (e) {
           const switchError = e instanceof Error ? e : new Error('Failed to switch project');
           set({

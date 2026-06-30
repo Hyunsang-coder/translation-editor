@@ -326,6 +326,13 @@
       "replaceAll": "Replace All"
     }
   },
+  "comment": {
+    "addButton": "Comment",
+    "inputPlaceholder": "Write a comment…",
+    "empty": "No comments yet.",
+    "resolve": "Mark as resolved",
+    "unresolve": "Mark as unresolved"
+  },
   "review": {
     "title": "Review",
     "progress": "Reviewing...",

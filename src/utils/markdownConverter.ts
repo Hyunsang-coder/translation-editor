@@ -19,7 +19,25 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import { CommentMark } from '@/editor/extensions/CommentMark';
 import { Markdown } from 'tiptap-markdown';
+
+/**
+ * 헤드리스(변환) 전용 CommentMark.
+ * 에디터/JSON에서 `data-comment-id` span을 파싱하기 위해 schema에는 등록하되,
+ * Markdown 직렬화 시에는 마크를 무시(open/close 빈 문자열)하여 코멘트 span이
+ * AI 프롬프트로 새지 않도록 한다. 코멘트는 excerpt 방식으로 별도 주입된다.
+ */
+const CommentMarkForConversion = CommentMark.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: '', close: '', mixable: true, expelEnclosingWhitespace: true },
+        parse: {},
+      },
+    };
+  },
+});
 
 /**
  * TipTap 문서 JSON 타입
@@ -68,6 +86,7 @@ function createExtensions() {
     Highlight.configure({ multicolor: false }),
     Subscript,
     Superscript,
+    CommentMarkForConversion,
     Markdown.configure({
       html: false,                  // HTML 태그 비활성화
       tightLists: true,             // 리스트 항목 사이 빈 줄 제거
@@ -151,6 +170,7 @@ function createExtensionsForTranslation() {
     Highlight.configure({ multicolor: false }),
     Subscript,
     Superscript,
+    CommentMarkForConversion,
     Markdown.configure({
       html: true,                   // HTML 태그 활성화 (테이블 지원)
       tightLists: true,

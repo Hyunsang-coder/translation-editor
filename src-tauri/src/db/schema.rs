@@ -130,6 +130,23 @@ CREATE TABLE IF NOT EXISTS attachments (
 -- 첨부 파일 인덱스
 CREATE INDEX IF NOT EXISTS idx_attachments_project ON attachments(project_id);
 
+-- 인라인 코멘트 테이블 (텍스트 마킹 + 코멘트)
+-- 마크 span 자체는 blocks.content HTML에 영속되고, 코멘트 본문/메타만 여기 저장
+CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    field TEXT NOT NULL CHECK (field IN ('source', 'target')),
+    segment_group_id TEXT,
+    excerpt TEXT NOT NULL,
+    comment TEXT NOT NULL,
+    resolved INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- 코멘트 인덱스
+CREATE INDEX IF NOT EXISTS idx_comments_project ON comments(project_id);
+
 -- MCP 서버 설정 테이블
 CREATE TABLE IF NOT EXISTS mcp_servers (
     id TEXT PRIMARY KEY,

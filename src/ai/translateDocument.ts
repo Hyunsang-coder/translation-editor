@@ -150,6 +150,7 @@ function buildTranslationSetup(params: {
   glossary?: string | undefined;
   reviewIssues?: ReviewIssue[] | undefined;
   retranslateMessage?: string | undefined;
+  userComments?: string | undefined;
 }) {
   const cfg = getAiConfig({ useFor: 'translation' });
 
@@ -256,6 +257,11 @@ function buildTranslationSetup(params: {
       params.retranslateMessage.trim(),
       ''
     );
+  }
+
+  // 사용자 인라인 코멘트 (이미 직렬화된 문자열)
+  if (params.userComments?.trim()) {
+    systemLines.push(params.userComments.trim(), '');
   }
 
   const systemPrompt = systemLines.join('\n').trim();
@@ -433,6 +439,8 @@ export interface StreamingTranslationParams {
   reviewIssues?: ReviewIssue[];
   /** 재번역 시 사용자 추가 지시사항 */
   retranslateMessage?: string;
+  /** 사용자 인라인 코멘트 (직렬화된 문자열, buildTranslationSetup에 전달) */
+  userComments?: string;
   /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
   onToken?: (accumulatedText: string) => void;
   /** 취소 신호 */

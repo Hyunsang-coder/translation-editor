@@ -26,6 +26,10 @@ import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { AddToChatButton } from '@/components/ui/AddToChatButton';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+import { MessageSquareText } from 'lucide-react';
+import { useCommentStore, type CommentField } from '@/stores/commentStore';
+import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
+import { serializeUserComments } from '@/ai/commentContext';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -140,9 +144,26 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     top: number;
     left: number;
     text: string;
+    editor: Editor;
+    field: CommentField;
+    from: number;
+    to: number;
+    segmentGroupId: string | undefined;
   }>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const selectionTokenRef = useRef<number>(0);
+
+  // 코멘트 입력 popover 상태
+  const [commentPopover, setCommentPopover] = useState<null | {
+    top: number;
+    left: number;
+    excerpt: string;
+    editor: Editor;
+    field: CommentField;
+    from: number;
+    to: number;
+    segmentGroupId: string | undefined;
+  }>(null);
 
   // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
   const [sourceWordCount, setSourceWordCount] = useState(0);
@@ -171,7 +192,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     }
   };
 
-  const scheduleAddToChatBubble = useCallback((editor: Editor) => {
+  const scheduleAddToChatBubble = useCallback((editor: Editor, field: CommentField) => {
     const { from, to } = editor.state.selection;
     if (from === to) {
       clearSelectionTimer();
@@ -186,6 +207,21 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       return;
     }
 
+    // 선택 범위가 속한 블록의 segmentGroupId 추출(중복 구절 모호성 완화)
+    let segmentGroupId: string | undefined;
+    try {
+      const resolved = editor.state.doc.resolve(from);
+      for (let depth = resolved.depth; depth >= 0; depth--) {
+        const sg = resolved.node(depth).attrs?.segmentGroupId;
+        if (typeof sg === 'string' && sg) {
+          segmentGroupId = sg;
+          break;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // 드래그 후 1초 정도 멈추면 버튼 표시
     clearSelectionTimer();
     setAddToChatBubble(null);
@@ -198,17 +234,17 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       try {
         const coords = editor.view.coordsAtPos(to);
         const top = Math.max(8, coords.top - 36);
-        const left = Math.min(window.innerWidth - 140, Math.max(8, coords.left));
-        setAddToChatBubble({ top, left, text: selectedText });
+        const left = Math.min(window.innerWidth - 200, Math.max(8, coords.left));
+        setAddToChatBubble({ top, left, text: selectedText, editor, field, from, to, segmentGroupId });
       } catch {
         // ignore
       }
     }, 1000);
   }, []);
 
-  const attachSelectionWatcher = useCallback((editor: Editor) => {
+  const attachSelectionWatcher = useCallback((editor: Editor, field: CommentField) => {
     // TipTap 이벤트로 selection 변화 감지
-    const onSelection = (): void => scheduleAddToChatBubble(editor);
+    const onSelection = (): void => scheduleAddToChatBubble(editor, field);
     const onBlur = (): void => {
       clearSelectionTimer();
       setAddToChatBubble(null);
@@ -225,6 +261,46 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       editor.off('blur', onBlur);
     };
   }, [scheduleAddToChatBubble]);
+
+  // 선택 범위에 코멘트 추가: 마크 적용 + commentStore 저장
+  const handleSaveComment = useCallback(
+    (
+      ctx: {
+        editor: Editor;
+        field: CommentField;
+        from: number;
+        to: number;
+        excerpt: string;
+        segmentGroupId: string | undefined;
+      },
+      commentText: string,
+    ): void => {
+      const trimmed = commentText.trim();
+      if (!trimmed) return;
+
+      const created = useCommentStore.getState().addComment({
+        field: ctx.field,
+        excerpt: ctx.excerpt,
+        comment: trimmed,
+        ...(ctx.segmentGroupId ? { segmentGroupId: ctx.segmentGroupId } : {}),
+      });
+
+      // 선택 범위에 commentId 마크 적용
+      // (에디터 onUpdate → setTarget/SourceDocument → write-through 저장으로 마크가 영속됨)
+      ctx.editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: ctx.from, to: ctx.to })
+        .setComment(created.id)
+        .run();
+
+      // 코멘트 본문 영속(프로젝트 저장 경로에서 commentStore를 함께 저장)
+      void useProjectStore.getState().saveProject();
+
+      setCommentPopover(null);
+    },
+    [],
+  );
 
   const openTranslatePreview = useCallback(async (extraMessage?: string): Promise<void> => {
     if (!project) return;
@@ -283,6 +359,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       }
 
       const trimmedMessage = extraMessage?.trim();
+      // 인라인 코멘트 → excerpt 직렬화 후 주입 (source/target 양쪽 모두 번역 맥락으로 전달)
+      const serializedComments = serializeUserComments(
+        useCommentStore.getState().comments,
+      );
       const { doc } = await translateWithStreaming({
         project,
         sourceDocJson,
@@ -290,6 +370,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         projectContext,
         translatorPersona,
         glossary,
+        ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => {
           setStreamingText(text);
@@ -548,8 +629,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
     const cleaners: Array<() => void> = [];
-    if (sourceEditor) cleaners.push(attachSelectionWatcher(sourceEditor));
-    if (targetEditor) cleaners.push(attachSelectionWatcher(targetEditor));
+    if (sourceEditor) cleaners.push(attachSelectionWatcher(sourceEditor, 'source'));
+    if (targetEditor) cleaners.push(attachSelectionWatcher(targetEditor, 'target'));
     return () => {
       cleaners.forEach((fn) => fn());
       clearSelectionTimer();
@@ -865,9 +946,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         {...(polishPreviewError ? { onRetry: openPolishPreview } : {})}
       />
 
-      {/* TipTap Add to chat 버튼 (드래그 후 1초) */}
-      {addToChatBubble && (
-        <AddToChatButton
+      {/* TipTap Add to chat / 코멘트 버튼 (드래그 후 1초) */}
+      {addToChatBubble && !commentPopover && (
+        <div
           style={{
             position: 'fixed',
             top: addToChatBubble.top,
@@ -875,16 +956,73 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             zIndex: 80,
             zoom: 1 / useUIStore.getState().editorZoom,
           }}
+          className="flex items-center gap-1"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            const text = addToChatBubble.text.trim();
-            if (!text) return;
-            // 채팅 패널 열기
-            useUIStore.getState().openActiveChat();
-            appendComposerText(text);
-            requestComposerFocus();
-            setAddToChatBubble(null);
-          }}
+        >
+          <AddToChatButton
+            onClick={() => {
+              const text = addToChatBubble.text.trim();
+              if (!text) return;
+              // 채팅 패널 열기
+              useUIStore.getState().openActiveChat();
+              appendComposerText(text);
+              requestComposerFocus();
+              setAddToChatBubble(null);
+            }}
+          />
+          <button
+            type="button"
+            title={t('comment.addButton', '코멘트')}
+            className="
+              inline-flex items-center gap-1.5
+              px-3 py-1.5 rounded-lg font-medium
+              text-editor-text bg-editor-surface backdrop-blur-sm
+              border border-editor-border
+              shadow-lg shadow-black/10 dark:shadow-black/30
+              hover:brightness-95 dark:hover:brightness-110 active:scale-95
+            "
+            onClick={() => {
+              const b = addToChatBubble;
+              setCommentPopover({
+                top: b.top + 32,
+                left: b.left,
+                excerpt: b.text.trim(),
+                editor: b.editor,
+                field: b.field,
+                from: b.from,
+                to: b.to,
+                segmentGroupId: b.segmentGroupId,
+              });
+              setAddToChatBubble(null);
+            }}
+          >
+            <MessageSquareText className="w-4 h-4" />
+            {t('comment.addButton', '코멘트')}
+          </button>
+        </div>
+      )}
+
+      {/* 코멘트 입력 popover */}
+      {commentPopover && (
+        <CommentInputPopover
+          top={commentPopover.top}
+          left={commentPopover.left}
+          excerpt={commentPopover.excerpt}
+          zoom={1 / useUIStore.getState().editorZoom}
+          onSave={(text) =>
+            handleSaveComment(
+              {
+                editor: commentPopover.editor,
+                field: commentPopover.field,
+                from: commentPopover.from,
+                to: commentPopover.to,
+                excerpt: commentPopover.excerpt,
+                segmentGroupId: commentPopover.segmentGroupId,
+              },
+              text,
+            )
+          }
+          onCancel={() => setCommentPopover(null)}
         />
       )}
     </div>

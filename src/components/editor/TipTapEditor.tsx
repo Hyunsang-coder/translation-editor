@@ -18,6 +18,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
+import { CommentMark } from '@/editor/extensions/CommentMark';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -77,6 +78,7 @@ function TipTapEditor({
       Highlight.configure({ multicolor: false }),
       Subscript,
       Superscript,
+      CommentMark,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: panelType === 'source' ? 'sourceExcerpt' : 'targetExcerpt',

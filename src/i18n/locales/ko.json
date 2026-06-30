@@ -326,6 +326,13 @@
       "replaceAll": "모두 치환"
     }
   },
+  "comment": {
+    "addButton": "코멘트",
+    "inputPlaceholder": "코멘트를 입력하세요…",
+    "empty": "코멘트가 없습니다.",
+    "resolve": "해결로 표시",
+    "unresolve": "미해결로 표시"
+  },
   "review": {
     "title": "검수",
     "progress": "검수 진행 중...",

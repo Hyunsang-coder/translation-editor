@@ -26,6 +26,7 @@ pub mod ai;
 pub mod attachments;
 pub mod block;
 pub mod chat;
+pub mod comments;
 pub mod confluence;
 pub mod connector;
 pub mod export;

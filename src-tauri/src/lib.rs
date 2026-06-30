@@ -437,6 +437,8 @@ pub fn run() {
             commands::chat::load_chat_sessions,
             commands::chat::save_chat_project_settings,
             commands::chat::load_chat_project_settings,
+            commands::comments::save_comments,
+            commands::comments::load_comments,
             commands::glossary::import_glossary_csv,
             commands::glossary::import_glossary_excel,
             commands::glossary::search_glossary,

@@ -36,6 +36,18 @@ pub struct RecentProjectRow {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentRow {
+    pub id: String,
+    pub field: String,
+    pub segment_group_id: Option<String>,
+    pub excerpt: String,
+    pub comment: String,
+    pub resolved: bool,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct McpServerRow {
     pub id: String,
     pub name: String,
@@ -1478,6 +1490,63 @@ impl Database {
         Ok(())
     }
 
+    /// 프로젝트 코멘트 전체 교체 저장 (delete-all + insert)
+    pub fn save_comments(
+        &mut self,
+        project_id: &str,
+        comments: &[CommentRow],
+    ) -> Result<(), IteError> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM comments WHERE project_id = ?1", [project_id])?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO comments (
+                    id, project_id, field, segment_group_id, excerpt, comment, resolved, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for c in comments {
+                stmt.execute(rusqlite::params![
+                    c.id,
+                    project_id,
+                    c.field,
+                    c.segment_group_id,
+                    c.excerpt,
+                    c.comment,
+                    c.resolved as i64,
+                    c.created_at,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 프로젝트별 코멘트 목록 조회
+    pub fn load_comments(&self, project_id: &str) -> Result<Vec<CommentRow>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, field, segment_group_id, excerpt, comment, resolved, created_at
+             FROM comments WHERE project_id = ?1 ORDER BY created_at ASC",
+        )?;
+
+        let iter = stmt.query_map([project_id], |row| {
+            Ok(CommentRow {
+                id: row.get(0)?,
+                field: row.get(1)?,
+                segment_group_id: row.get(2)?,
+                excerpt: row.get(3)?,
+                comment: row.get(4)?,
+                resolved: row.get::<_, i64>(5)? != 0,
+                created_at: row.get(6)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
     /// MCP 서버 저장 (Insert or Update)
     pub fn save_mcp_server(&self, server: &McpServerRow) -> Result<(), IteError> {
         self.conn.execute(
@@ -1902,5 +1971,57 @@ mod tests {
             db.upsert_auto_snapshot(&project.id, "자동 저장 10:00", "not-valid-json", None);
 
         assert!(result.is_err(), "잘못된 JSON은 에러를 반환해야 한다");
+    }
+
+    #[test]
+    fn save_and_load_comments_roundtrip() {
+        use crate::db::CommentRow;
+
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let mut db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-comments-test");
+        db.save_project(&project).expect("failed to save project");
+
+        let comments = vec![
+            CommentRow {
+                id: "cmt_a".to_string(),
+                field: "source".to_string(),
+                segment_group_id: Some("segment-1".to_string()),
+                excerpt: "Hello".to_string(),
+                comment: "인사말 톤 확인".to_string(),
+                resolved: false,
+                created_at: 1000,
+            },
+            CommentRow {
+                id: "cmt_b".to_string(),
+                field: "target".to_string(),
+                segment_group_id: None,
+                excerpt: "안녕하세요".to_string(),
+                comment: "존댓말 유지".to_string(),
+                resolved: true,
+                created_at: 2000,
+            },
+        ];
+
+        db.save_comments(&project.id, &comments)
+            .expect("failed to save comments");
+
+        let loaded = db.load_comments(&project.id).expect("failed to load comments");
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].id, "cmt_a");
+        assert_eq!(loaded[0].segment_group_id.as_deref(), Some("segment-1"));
+        assert!(!loaded[0].resolved);
+        assert_eq!(loaded[1].id, "cmt_b");
+        assert!(loaded[1].resolved);
+
+        // 전체 교체 저장: 빈 배열로 저장하면 모두 삭제
+        db.save_comments(&project.id, &[])
+            .expect("failed to clear comments");
+        let after_clear = db
+            .load_comments(&project.id)
+            .expect("failed to load after clear");
+        assert!(after_clear.is_empty());
     }
 }

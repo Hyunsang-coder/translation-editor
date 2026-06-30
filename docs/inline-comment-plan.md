@@ -1,6 +1,20 @@
 # 인라인 마킹 + 코멘트 기능 구현 계획
 
-> **상태**: 계획 확정, 구현 미착수. 새 세션에서 구현 시작.
+> **상태(2026-06-30 업데이트)**: 첫 슬라이스(Phase 1+2+3a+3b+4) **구현·검증 완료**.
+> 영속 방식은 **신규 `comments` 테이블**로 확정·구현. tsc clean, 유닛 616 pass, cargo 11 pass.
+> **다음 슬라이스**: ① CommentListPanel 마운트(UI 토글+사이드바+에디터 스크롤), ② 3c 폴리싱, ③ 3d 리뷰, ④ 3e 채팅 주입.
+>
+> 구현된 파일: `src/editor/extensions/CommentMark.ts`, `src/stores/commentStore.ts`,
+> `src/tauri/comments.ts`, `src/ai/commentContext.ts`(serializeUserComments),
+> `src/components/comment/CommentInputPopover.tsx`,
+> `src-tauri`(schema `comments` 테이블 + `save_comments`/`load_comments` + `CommentRow`),
+> `EditorCanvasTipTap.tsx`(버블 옆 코멘트 버튼→popover→마크+스토어, 번역 주입),
+> `markdownConverter.ts`(CommentMarkForConversion: schema 등록+Markdown 무시),
+> projectStore(load/save 하이드레이션 + 고아 정리 `collectLiveCommentIds`/`pruneOrphans`).
+> `CommentListPanel.tsx`는 만들었다가 **이번 슬라이스에선 제거**(다음 슬라이스에 마운트와 함께 재생성).
+>
+> --- 아래는 원래 계획(참고용) ---
+>
 > **이번 슬라이스 범위 (확정)**: Phase 1 + 2 + **3b(번역/재번역 경로만)**.
 > 폴리싱(3c)·리뷰(3d)·채팅(3e)은 첫 슬라이스 검증 후 다음 슬라이스로 미룬다.
 > 이유: 한 번에 4곳 다 연결하면 검증 표면이 너무 커짐. 번역 경로로 end-to-end 먼저 닫는다.
