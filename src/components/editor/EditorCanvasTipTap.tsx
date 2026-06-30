@@ -33,15 +33,11 @@ import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover'
 import { serializeUserComments } from '@/ai/commentContext';
 import { collectCommentIdsInRange, removeCommentMark } from '@/editor/utils/commentNavigation';
 
-interface EditorCanvasProps {
-  focusMode: boolean;
-}
-
 /**
  * TipTap 기반 에디터 캔버스
  * Notion 스타일의 리치 텍스트 편집 환경
  */
-export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Element {
+export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
   const sourceDocument = useProjectStore((s) => s.sourceDocument);
@@ -61,7 +57,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
   const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
   const addToast = useUIStore((s) => s.addToast);
+  const focusMode = useUIStore((s) => s.focusMode);
+  const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
+  const toggleSourceOnlyMode = useUIStore((s) => s.toggleSourceOnlyMode);
 
 
   // Source/Target 패널별 폰트 설정
@@ -760,6 +759,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     ? comments.find((c) => c.id === commentDetailPopover.commentId)
     : undefined;
 
+  const showSource = !focusMode;
+  const showTarget = !sourceOnlyMode;
+  const showSplitHandle = showSource && showTarget;
+
   return (
     <div className="flex-1 h-full flex flex-col min-w-0 bg-editor-surface">
       {/* Header */}
@@ -830,9 +833,9 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       <div className="flex-1 min-h-0 min-w-0 relative">
       <PanelGroup orientation="horizontal" className="h-full min-h-0 min-w-0" id="editor-panels">
         {/* Source Panel */}
-        {!focusMode && (
+        {showSource && (
           <>
-            <Panel id="source" defaultSize="50" minSize="20" className="min-w-0">
+            <Panel id="source" defaultSize={showTarget ? '50' : '100'} minSize="20" className="min-w-0">
               <div
                 className="h-full flex flex-col min-w-0"
                 style={{
@@ -840,19 +843,30 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                   '--editor-line-height': sourceLineHeight,
                 } as CSSProperties}
               >
-                <div className="h-8 px-4 flex items-center justify-between bg-editor-bg border-b border-editor-border">
+                <div className="h-8 px-4 flex items-center justify-between border-b border-sky-500/20 bg-sky-500/[0.05] dark:bg-sky-400/[0.07]">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-sky-800/80 dark:text-sky-200/90">
                       {t('editor.source').toUpperCase()}
                     </span>
-                    <button
-                      type="button"
-                      onClick={toggleFocusMode}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-amber-600 hover:bg-amber-500/10 transition-colors"
-                      title={t('editor.hideSource')}
-                    >
-                      {t('editor.hideSource')}
-                    </button>
+                    {sourceOnlyMode ? (
+                      <button
+                        type="button"
+                        onClick={toggleSourceOnlyMode}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-sky-700 hover:bg-sky-500/10 dark:hover:text-sky-300 transition-colors"
+                        title={t('editor.showTarget')}
+                      >
+                        {t('editor.showTarget')}
+                      </button>
+                    ) : showTarget ? (
+                      <button
+                        type="button"
+                        onClick={toggleFocusMode}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-sky-700 hover:bg-sky-500/10 dark:hover:text-sky-300 transition-colors"
+                        title={t('editor.hideSource')}
+                      >
+                        {t('editor.hideSource')}
+                      </button>
+                    ) : null}
                   </div>
                   <span className="text-[10px] text-editor-muted">
                     {sourceWordCount.toLocaleString()} {t('editor.words')}
@@ -890,12 +904,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 </div>
               </div>
             </Panel>
-            <PanelResizeHandle className="w-1 bg-editor-border hover:bg-primary-500 transition-colors cursor-col-resize z-10" />
+            {showSplitHandle && (
+              <PanelResizeHandle className="w-1 bg-editor-border hover:bg-primary-500 transition-colors cursor-col-resize z-10" />
+            )}
           </>
         )}
 
         {/* Target Panel */}
-        <Panel id="target" defaultSize={focusMode ? "100" : "50"} minSize="20" className="min-w-0">
+        {showTarget && (
+        <Panel id="target" defaultSize={showSource ? '50' : '100'} minSize="20" className="min-w-0">
           <div
             className="h-full flex flex-col min-w-0"
             style={{
@@ -903,21 +920,30 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
               '--editor-line-height': targetLineHeight,
             } as CSSProperties}
           >
-            <div className="h-8 px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg">
+            <div className="h-8 px-4 flex items-center justify-between border-b border-emerald-500/20 bg-emerald-500/[0.05] dark:bg-emerald-400/[0.07]">
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/80 dark:text-emerald-200/90">
                   {t('editor.target').toUpperCase()}
                 </span>
-                {focusMode && (
+                {focusMode ? (
                   <button
                     type="button"
                     onClick={toggleFocusMode}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-amber-600 hover:bg-amber-500/10 transition-colors"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-emerald-700 hover:bg-emerald-500/10 dark:hover:text-emerald-300 transition-colors"
                     title={t('editor.showSource')}
                   >
                     {t('editor.showSource')}
                   </button>
-                )}
+                ) : showSource ? (
+                  <button
+                    type="button"
+                    onClick={toggleSourceOnlyMode}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-emerald-700 hover:bg-emerald-500/10 dark:hover:text-emerald-300 transition-colors"
+                    title={t('editor.hideTarget')}
+                  >
+                    {t('editor.hideTarget')}
+                  </button>
+                ) : null}
                 <Select
                   value={project.metadata.targetLanguage || ''}
                   onChange={setTargetLanguage}
@@ -974,6 +1000,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             </div>
           </div>
         </Panel>
+        )}
       </PanelGroup>
 
       </div>

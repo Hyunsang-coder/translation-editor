@@ -294,8 +294,10 @@
     },
     "review": "Review",
     "reviewTitle": "Translation Review",
-    "hideSource": "Hide",
+    "hideSource": "Hide Source",
     "showSource": "Show Source",
+    "hideTarget": "Hide Translation",
+    "showTarget": "Show Translation",
     "zoom": {
       "reset": "Reset Zoom"
     },

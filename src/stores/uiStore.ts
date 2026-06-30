@@ -39,12 +39,18 @@ interface UIState extends EditorUIState {
 
   // Editor zoom (CSS zoom, 0.5~2.0)
   editorZoom: number;
+
+  // Focus Mode (원문/번역 단일 패널 보기)
+  focusMode: boolean;
+  sourceOnlyMode: boolean;
 }
 
 interface UIActions {
   // Focus Mode
   toggleFocusMode: () => void;
   setFocusMode: (focusMode: boolean) => void;
+  toggleSourceOnlyMode: () => void;
+  setSourceOnlyMode: (sourceOnlyMode: boolean) => void;
 
   // Panel
   setActivePanel: (panel: 'source' | 'target' | 'chat') => void;
@@ -147,6 +153,7 @@ export const useUIStore = create<UIStore>()(
     (set, get) => ({
       // Initial State
       focusMode: false,
+      sourceOnlyMode: false,
       activePanel: 'target',
       selectedBlockId: null,
       showDiff: false,
@@ -183,11 +190,25 @@ export const useUIStore = create<UIStore>()(
 
       // Focus Mode
       toggleFocusMode: (): void => {
-        set((state) => ({ focusMode: !state.focusMode }));
+        set((state) => ({
+          focusMode: !state.focusMode,
+          sourceOnlyMode: false,
+        }));
       },
 
       setFocusMode: (focusMode: boolean): void => {
-        set({ focusMode });
+        set({ focusMode, ...(focusMode ? { sourceOnlyMode: false } : {}) });
+      },
+
+      toggleSourceOnlyMode: (): void => {
+        set((state) => ({
+          sourceOnlyMode: !state.sourceOnlyMode,
+          focusMode: false,
+        }));
+      },
+
+      setSourceOnlyMode: (sourceOnlyMode: boolean): void => {
+        set({ sourceOnlyMode, ...(sourceOnlyMode ? { focusMode: false } : {}) });
       },
 
       // Panel
@@ -807,6 +828,7 @@ export const useUIStore = create<UIStore>()(
         theme: state.theme,
         language: state.language,
         focusMode: state.focusMode,
+        sourceOnlyMode: state.sourceOnlyMode,
         projectSidebarCollapsed: state.projectSidebarCollapsed,
         projectSidebarWidth: state.projectSidebarWidth,
         isPanelsSwapped: state.isPanelsSwapped,

@@ -390,6 +390,7 @@ export type SidebarTab = PanelType;
  */
 export interface EditorUIState {
   focusMode: boolean;
+  sourceOnlyMode: boolean;
   activePanel: 'source' | 'target' | 'chat';
   selectedBlockId: string | null;
   showDiff: boolean;

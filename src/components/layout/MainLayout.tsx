@@ -22,9 +22,8 @@ const ReviewTestPanel = lazy(() =>
  * 각 패널은 자체적으로 접힌 상태(아이콘만)와 펼친 상태를 가짐
  */
 export function MainLayout(): JSX.Element {
-  const { focusMode, devTestPanelOpen, toggleDevTestPanel } = useUIStore(
+  const { devTestPanelOpen, toggleDevTestPanel } = useUIStore(
     useShallow((s) => ({
-      focusMode: s.focusMode,
       devTestPanelOpen: s.devTestPanelOpen,
       toggleDevTestPanel: s.toggleDevTestPanel,
     }))
@@ -120,7 +119,7 @@ export function MainLayout(): JSX.Element {
         <div className="flex-1 min-w-[400px] min-h-0">
           {project ? (
             <ErrorBoundary name="Editor">
-              <EditorCanvasTipTap focusMode={focusMode} />
+              <EditorCanvasTipTap />
             </ErrorBoundary>
           ) : (
             <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
