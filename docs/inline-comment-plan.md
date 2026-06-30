@@ -16,7 +16,14 @@
 > - `EditorCanvasTipTap`: 헤더에 코멘트 버튼(개수 배지)→`openCommentsPanel`.
 > - i18n: `comment.title`/`jumpTo`/`emptyHint` 추가(ko/en).
 >
-> **다음 슬라이스**: ① 3c 폴리싱, ② 3d 리뷰, ③ 3e 채팅 주입.
+> **3c 폴리싱 주입 구현·검증 완료**: tsc clean, 유닛 623 pass(신규 3).
+> - `serializeUserComments(comments, { field?, leadIn? })`로 확장 — 기본 동작은 불변(번역 경로 영향 없음).
+>   폴리싱은 `{ field: 'target', leadIn: '…다듬을 때 반드시 반영…' }`로 호출(폴리싱은 target만 다룸).
+> - `polishDocument.ts`: `PolishTargetDocumentParams.userComments?` + `buildPolishSystemPrompt`/`buildPolishMessages` 주입
+>   (styleRules 다음 위치, 번역 경로와 동일 패턴).
+> - `EditorCanvasTipTap.openPolishPreview`에서 target 코멘트 직렬화 전달.
+>
+> **다음 슬라이스**: ① 3d 리뷰, ② 3e 채팅 주입.
 >
 > 구현된 파일: `src/editor/extensions/CommentMark.ts`, `src/stores/commentStore.ts`,
 > `src/tauri/comments.ts`, `src/ai/commentContext.ts`(serializeUserComments),

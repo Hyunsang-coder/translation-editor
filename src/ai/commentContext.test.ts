@@ -52,4 +52,30 @@ describe('serializeUserComments', () => {
     expect(result).toContain('1. "bar" — use term X');
     expect(result).not.toContain('2.');
   });
+
+  it('filters by field when options.field is given (polishing → target only)', () => {
+    const comments = [
+      makeComment({ id: 'a', field: 'source', excerpt: 'src', comment: 'source note' }),
+      makeComment({ id: 'b', field: 'target', excerpt: 'tgt', comment: 'target note' }),
+    ];
+    const result = serializeUserComments(comments, { field: 'target' });
+
+    expect(result).toContain('1. "tgt" — target note');
+    expect(result).not.toContain('src');
+    expect(result).not.toContain('source note');
+  });
+
+  it('returns empty string when no comment matches the field filter', () => {
+    const comments = [makeComment({ id: 'a', field: 'source' })];
+    expect(serializeUserComments(comments, { field: 'target' })).toBe('');
+  });
+
+  it('uses a custom leadIn when provided', () => {
+    const comments = [makeComment({ id: 'a', excerpt: 'foo', comment: 'bar' })];
+    const result = serializeUserComments(comments, { leadIn: 'POLISH LEAD-IN:' });
+
+    expect(result).toContain('[사용자 코멘트]');
+    expect(result).toContain('POLISH LEAD-IN:');
+    expect(result).not.toContain('번역 시 반드시');
+  });
 });

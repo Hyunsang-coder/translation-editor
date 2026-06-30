@@ -447,10 +447,19 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
 
     try {
       const targetDocJson = targetEditorRef.current.getJSON() as TipTapDocJson;
+      // 폴리싱은 target 문서만 다루므로 target field 코멘트만 주입
+      const serializedComments = serializeUserComments(
+        useCommentStore.getState().comments,
+        {
+          field: 'target',
+          leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 다듬을 때 반드시 반영하세요:',
+        },
+      );
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson,
         targetLanguage: project.metadata.targetLanguage,
         styleRules: translationRules,
+        ...(serializedComments ? { userComments: serializedComments } : {}),
         onToken: (text) => setPolishStreamingText(text),
         abortSignal: abortController.signal,
       });
