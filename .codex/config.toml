@@ -1,0 +1,8 @@
+sandbox_mode = "workspace-write"
+
+[mcp_servers.oddeyes]
+command = "npx"
+args = [
+    "-y",
+    "oddeyes-desktop-mcp",
+]
