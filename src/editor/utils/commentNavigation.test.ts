@@ -4,7 +4,7 @@ import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { CommentMark } from '@/editor/extensions/CommentMark';
-import { findCommentRange, removeCommentMark } from './commentNavigation';
+import { findCommentRange, removeCommentMark, collectCommentIdsInRange } from './commentNavigation';
 
 function makeEditor(html: string) {
   const editor = new Editor({
@@ -46,6 +46,27 @@ describe('commentNavigation', () => {
   it('removeCommentMark is a safe no-op for an orphan id', () => {
     const editor = makeEditor('<p>plain</p>');
     expect(removeCommentMark(editor, 'cmt_none')).toBe(false);
+    editor.destroy();
+  });
+
+  it('collectCommentIdsInRange returns ids overlapping the range, deduped in order', () => {
+    const editor = makeEditor(
+      '<p><span data-comment-id="cmt_1">aa</span>bb<span data-comment-id="cmt_2">cc</span></p>',
+    );
+    // 문서 전체 범위
+    const ids = collectCommentIdsInRange(editor.state.doc, 0, editor.state.doc.content.size);
+    expect(ids).toEqual(['cmt_1', 'cmt_2']);
+    editor.destroy();
+  });
+
+  it('collectCommentIdsInRange excludes marks outside the range', () => {
+    const editor = makeEditor(
+      '<p><span data-comment-id="cmt_1">aa</span>bb<span data-comment-id="cmt_2">cc</span></p>',
+    );
+    // 첫 마크 범위만 (cmt_1 = pos 1~3)
+    const range = findCommentRange(editor.state.doc, 'cmt_1')!;
+    const ids = collectCommentIdsInRange(editor.state.doc, range.from, range.to);
+    expect(ids).toEqual(['cmt_1']);
     editor.destroy();
   });
 });

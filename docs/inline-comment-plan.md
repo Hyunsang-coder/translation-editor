@@ -30,7 +30,14 @@
 > - `ReviewPanel.handleRunReview`: 청크별로 `chunk.segments`의 groupId 집합으로 한정 직렬화
 >   (대조 검수는 source/target 양쪽 코멘트 모두 맥락 사용).
 >
-> **다음 슬라이스**: 3e 채팅 주입.
+> **3e 채팅 주입 구현·검증 완료**: tsc clean, 유닛 627 pass(신규 2).
+> - `collectCommentIdsInRange(doc, from, to)` 헬퍼 추가(commentNavigation) — 선택 범위와 겹치는
+>   코멘트 마크 id 수집(등장순 dedupe).
+> - `EditorCanvasTipTap`의 Add-to-Chat onClick: 선택 범위에 걸린 코멘트를 `> 코멘트: {comment}`로
+>   excerpt 아래 첨부해 composer에 전달.
+>
+> **🎉 LLM 주입 4경로(번역/폴리싱/검수/채팅) 모두 완료. 인라인 코멘트 기능 end-to-end 닫힘.**
+> 남은 선택 작업: (옵션) 청킹 번역 경로 코멘트 지원, E2E 시나리오.
 >
 > 구현된 파일: `src/editor/extensions/CommentMark.ts`, `src/stores/commentStore.ts`,
 > `src/tauri/comments.ts`, `src/ai/commentContext.ts`(serializeUserComments),

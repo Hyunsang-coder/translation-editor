@@ -30,6 +30,7 @@ import { MessageSquareText } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { serializeUserComments } from '@/ai/commentContext';
+import { collectCommentIdsInRange } from '@/editor/utils/commentNavigation';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -985,9 +986,30 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             onClick={() => {
               const text = addToChatBubble.text.trim();
               if (!text) return;
+              // 선택 범위에 걸린 인라인 코멘트가 있으면 함께 첨부
+              const commentLines: string[] = [];
+              try {
+                const ids = collectCommentIdsInRange(
+                  addToChatBubble.editor.state.doc,
+                  addToChatBubble.from,
+                  addToChatBubble.to,
+                );
+                const store = useCommentStore.getState();
+                for (const id of ids) {
+                  const c = store.getComment(id);
+                  if (c && c.comment.trim()) {
+                    commentLines.push(`> ${t('comment.title', '코멘트')}: ${c.comment.trim()}`);
+                  }
+                }
+              } catch {
+                // 코멘트 수집 실패는 무시(텍스트만 첨부)
+              }
+              const composed = commentLines.length > 0
+                ? `${text}\n${commentLines.join('\n')}`
+                : text;
               // 채팅 패널 열기
               useUIStore.getState().openActiveChat();
-              appendComposerText(text);
+              appendComposerText(composed);
               requestComposerFocus();
               setAddToChatBubble(null);
             }}

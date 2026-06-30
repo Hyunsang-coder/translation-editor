@@ -54,6 +54,36 @@ export function scrollToComment(editor: Editor, commentId: string): boolean {
 }
 
 /**
+ * 주어진 위치 범위 [from, to)와 겹치는 코멘트 마크의 commentId 목록을 수집한다.
+ * Add-to-Chat 시 선택 범위에 걸린 코멘트를 함께 전달하기 위해 사용.
+ *
+ * @returns 문서 등장 순서대로 중복 제거된 commentId 배열
+ */
+export function collectCommentIdsInRange(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  doc.nodesBetween(from, to, (node: ProseMirrorNode): boolean | void => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      if (mark.type.name === 'comment') {
+        const id = mark.attrs?.commentId;
+        if (typeof id === 'string' && id && !seen.has(id)) {
+          seen.add(id);
+          ids.push(id);
+        }
+      }
+    }
+  });
+
+  return ids;
+}
+
+/**
  * 해당 commentId 마크를 문서에서 제거한다(코멘트 삭제 시 마크 동시 제거용).
  * 마크가 이미 사라진 경우(고아)에도 안전하게 no-op.
  * @returns 마크를 제거했으면 true
