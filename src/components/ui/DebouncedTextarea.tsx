@@ -4,12 +4,18 @@ interface DebouncedTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElem
   value: string;
   onDebouncedChange: (value: string) => void;
   debounceDelay?: number;
+  /**
+   * 매 입력마다(디바운스 없이) 즉시 호출. 리렌더를 유발하지 않는 ref 갱신 등
+   * "최신 값"이 디바운스 지연 없이 필요한 소비자를 위한 훅.
+   */
+  onLiveChange?: (value: string) => void;
 }
 
 export function DebouncedTextarea({
   value: initialValue,
   onDebouncedChange,
   debounceDelay = 500,
+  onLiveChange,
   ...props
 }: DebouncedTextareaProps): JSX.Element {
   const [value, setValue] = useState(initialValue);
@@ -31,6 +37,7 @@ export function DebouncedTextarea({
     const newValue = e.target.value;
     setValue(newValue);
     latestValueRef.current = newValue;
+    onLiveChange?.(newValue);
     setIsTyping(true);
 
     if (timerRef.current) {

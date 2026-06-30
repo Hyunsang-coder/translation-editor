@@ -16,6 +16,7 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import DOMPurify from 'dompurify';
 import { stripHtml } from '@/utils/hash';
+import { countTotalWords } from '@/utils/wordCounter';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
@@ -52,14 +53,6 @@ function normalizeDiffText(text: string): string {
  */
 function prepareDiffText(text: string): string {
   return normalizeDiffText(text);
-}
-
-/**
- * 단어 수 계산 (공백 기준)
- */
-function countWords(text: string): number {
-  if (!text || text.trim().length === 0) return 0;
-  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 interface TranslatePreviewModalProps {
@@ -252,10 +245,12 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   // 단어 수 계산
   const sourceWordCount = useMemo(() => {
     if (!sourceHtml) return 0;
-    return countWords(stripHtml(sourceHtml));
+    // placeholder 이미지([Image] 라벨)가 단어로 집계되지 않도록 공용 카운터 사용
+    return countTotalWords(sourceHtml);
   }, [sourceHtml]);
 
-  const translationWordCount = useMemo(() => countWords(translatedTextRaw), [translatedTextRaw]);
+  // source/translation 단어 수는 동일 알고리즘(countTotalWords)으로 세어 분량 비교가 일관되게 한다.
+  const translationWordCount = useMemo(() => countTotalWords(translatedTextRaw), [translatedTextRaw]);
 
   // docJson이 비동기로 들어오므로, 에디터가 이미 생성된 뒤에도 content를 갱신해줘야 합니다.
   useEffect(() => {
@@ -454,7 +449,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
               <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-editor-muted">
-                    {t('editor.sourceLabel')} {countWords(originalText).toLocaleString()} {t('editor.words')}
+                    {t('editor.sourceLabel')} {countTotalWords(originalText).toLocaleString()} {t('editor.words')}
                   </span>
                   {finalElapsedSeconds !== null && (
                     <span className="text-[10px] text-primary-500 tabular-nums">

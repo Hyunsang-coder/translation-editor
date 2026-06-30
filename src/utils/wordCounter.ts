@@ -35,6 +35,8 @@ export function preprocessContent(content: string): string {
   return content
     // 이미지/미디어 제거 (번역 불필요)
     .replace(/<img[^>]*>/gi, '')
+    // ImagePlaceholder 확장이 렌더링하는 placeholder div (아이콘+[Image] 라벨이 단어로 집계되는 것 방지)
+    .replace(/<div[^>]*data-type=["']image["'][\s\S]*?<\/div>/gi, '')
     .replace(/<video[\s\S]*?<\/video>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/<ac:image[\s\S]*?\/>/gi, '')

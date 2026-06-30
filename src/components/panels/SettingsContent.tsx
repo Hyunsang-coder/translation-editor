@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -8,6 +9,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { useUIStore } from '@/stores/uiStore';
+import { PromptPresetMenu } from '@/components/panels/PromptPresetMenu';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -32,6 +34,18 @@ export function SettingsContent(): JSX.Element {
     })));
   const settingsKey = project?.id ?? 'none';
 
+  // 프리셋 저장/덮어쓰기/dirty 판정이 디바운스 지연 없는 "현재 입력값"을 보도록
+  // textarea의 live 값을 추적한다. (store 값은 500ms 디바운스 후에야 갱신됨)
+  const [liveValues, setLiveValues] = useState({
+    persona: translatorPersona,
+    rules: translationRules,
+    context: projectContext,
+  });
+  // store 값(프로젝트 전환/프리셋 적용 등 외부 변경)과 동기화
+  useEffect(() => {
+    setLiveValues({ persona: translatorPersona, rules: translationRules, context: projectContext });
+  }, [translatorPersona, translationRules, projectContext]);
+
   return (
     <div className="h-full min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translator Persona */}
@@ -44,15 +58,13 @@ export function SettingsContent(): JSX.Element {
               {t('settings.translatorPersonaDescription')}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setTranslatorPersona('')}
-            >
-              {t('common.clear')}
-            </button>
-          </div>
+          <PromptPresetMenu
+            key={`preset-persona-${settingsKey}`}
+            kind="persona"
+            currentValue={liveValues.persona}
+            onApply={setTranslatorPersona}
+            onClear={() => setTranslatorPersona('')}
+          />
         </div>
         <DebouncedTextarea
           key={`translator-persona-${settingsKey}`}
@@ -60,6 +72,7 @@ export function SettingsContent(): JSX.Element {
           className="w-full min-h-[3.5rem] text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
           value={translatorPersona}
           onDebouncedChange={setTranslatorPersona}
+          onLiveChange={(v) => setLiveValues((prev) => ({ ...prev, persona: v }))}
           placeholder={t('settings.translatorPersonaPlaceholder')}
           rows={2}
         />
@@ -75,15 +88,13 @@ export function SettingsContent(): JSX.Element {
               {t('settings.translationRulesDescription')}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setTranslationRules('')}
-            >
-              {t('common.clear')}
-            </button>
-          </div>
+          <PromptPresetMenu
+            key={`preset-rules-${settingsKey}`}
+            kind="rules"
+            currentValue={liveValues.rules}
+            onApply={setTranslationRules}
+            onClear={() => setTranslationRules('')}
+          />
         </div>
         <DebouncedTextarea
           key={`translation-rules-${settingsKey}`}
@@ -91,6 +102,7 @@ export function SettingsContent(): JSX.Element {
           className="w-full h-32 text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={translationRules}
           onDebouncedChange={setTranslationRules}
+          onLiveChange={(v) => setLiveValues((prev) => ({ ...prev, rules: v }))}
           placeholder={t('settings.translationRulesPlaceholder')}
         />
       </section>
@@ -105,15 +117,13 @@ export function SettingsContent(): JSX.Element {
               {t('settings.projectContextDescription')}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-xs text-primary-500 hover:text-primary-600"
-              onClick={() => setProjectContext('')}
-            >
-              {t('common.clear')}
-            </button>
-          </div>
+          <PromptPresetMenu
+            key={`preset-context-${settingsKey}`}
+            kind="context"
+            currentValue={liveValues.context}
+            onApply={setProjectContext}
+            onClear={() => setProjectContext('')}
+          />
         </div>
         <DebouncedTextarea
           key={`project-context-${settingsKey}`}
@@ -121,6 +131,7 @@ export function SettingsContent(): JSX.Element {
           className="w-full h-32 text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
           value={projectContext}
           onDebouncedChange={setProjectContext}
+          onLiveChange={(v) => setLiveValues((prev) => ({ ...prev, context: v }))}
           placeholder={t('settings.projectContextPlaceholder')}
         />
       </section>

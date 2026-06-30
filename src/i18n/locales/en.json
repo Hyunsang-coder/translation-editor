@@ -54,7 +54,19 @@
     "attachmentErrorUnsupportedType": "Unsupported file type: {{type}}",
     "attachmentErrorPathBlocked": "Access to this path is blocked by security policy.",
     "attachmentErrorFileNotFound": "File not found or access denied.",
-    "attachmentErrorUnknown": "Failed to attach the file."
+    "attachmentErrorUnknown": "Failed to attach the file.",
+    "presetMenu": "Presets",
+    "presetNamePlaceholder": "e.g. Game translator",
+    "presetEmpty": "No saved presets",
+    "presetApplied": "Applied preset '{{name}}'.",
+    "presetOverwriteNamed": "Overwrite '{{name}}'",
+    "presetOverwritten": "Overwrote preset '{{name}}'.",
+    "presetSaveAsNew": "Save current value as new preset",
+    "presetClearField": "Clear field",
+    "presetSaveEmptyValue": "The field is empty — nothing to save.",
+    "presetNameRequired": "Please enter a preset name.",
+    "presetSaved": "Preset saved.",
+    "presetDeleteConfirm": "Delete this preset?"
   },
   "appSettings": {
     "title": "App Settings",

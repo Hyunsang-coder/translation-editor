@@ -54,7 +54,19 @@
     "attachmentErrorUnsupportedType": "지원하지 않는 파일 형식입니다: {{type}}",
     "attachmentErrorPathBlocked": "보안 정책에 의해 접근이 차단된 경로입니다.",
     "attachmentErrorFileNotFound": "파일을 찾을 수 없거나 접근 권한이 없습니다.",
-    "attachmentErrorUnknown": "첨부 파일 추가에 실패했습니다."
+    "attachmentErrorUnknown": "첨부 파일 추가에 실패했습니다.",
+    "presetMenu": "프리셋",
+    "presetNamePlaceholder": "예: 게임 번역가",
+    "presetEmpty": "저장된 프리셋이 없습니다",
+    "presetApplied": "'{{name}}' 프리셋을 적용했습니다.",
+    "presetOverwriteNamed": "'{{name}}' 덮어쓰기",
+    "presetOverwritten": "'{{name}}' 프리셋을 덮어썼습니다.",
+    "presetSaveAsNew": "현재 값을 새 프리셋으로 저장",
+    "presetClearField": "입력란 지우기",
+    "presetSaveEmptyValue": "입력란이 비어 있어 저장할 수 없습니다.",
+    "presetNameRequired": "프리셋 이름을 입력하세요.",
+    "presetSaved": "프리셋이 저장되었습니다.",
+    "presetDeleteConfirm": "이 프리셋을 삭제할까요?"
   },
   "appSettings": {
     "title": "앱 설정",
