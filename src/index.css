@@ -473,14 +473,13 @@
 .source-editor .ProseMirror table,
 .target-editor .ProseMirror table {
   table-layout: fixed;
-  width: max-content;
-  min-width: 100%;
+  width: auto;
 }
 
 .source-editor .ProseMirror .tableWrapper,
 .target-editor .ProseMirror .tableWrapper {
-  width: max-content;
-  min-width: 100%;
+  width: fit-content;
+  max-width: none;
   overflow: visible;
 }
 
