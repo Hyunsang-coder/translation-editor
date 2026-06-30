@@ -19,6 +19,7 @@ import { useReviewStore } from '@/stores/reviewStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { CommentMark } from '@/editor/extensions/CommentMark';
+import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -31,6 +32,7 @@ export interface TipTapEditorProps {
   onEditorReady?: (editor: Editor) => void;
   onSearchOpen?: () => void;
   onSearchOpenWithReplace?: () => void;
+  onCommentClick?: (payload: { commentId: string; top: number; left: number }) => void;
 }
 
 function TipTapEditor({
@@ -42,6 +44,7 @@ function TipTapEditor({
   onEditorReady,
   onSearchOpen,
   onSearchOpenWithReplace,
+  onCommentClick,
 }: TipTapEditorProps): JSX.Element {
   const { t } = useTranslation();
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
@@ -100,6 +103,8 @@ function TipTapEditor({
   }, [imageExtension, pasteLinkPreserve, t, panelType]);
 
   const lastContentRef = useRef<string>(content);
+  const onCommentClickRef = useRef(onCommentClick);
+  onCommentClickRef.current = onCommentClick;
 
   const editor = useEditor({
     extensions,
@@ -108,6 +113,25 @@ function TipTapEditor({
     editorProps: {
       attributes: {
         class: 'tiptap-editor focus:outline-none',
+      },
+      handleDOMEvents: {
+        click: (_view, event) => {
+          const handler = onCommentClickRef.current;
+          if (!handler) return false;
+          const commentId = getCommentIdFromDomTarget(event.target);
+          if (!commentId) return false;
+
+          const el = (event.target as Element).closest('[data-comment-id]');
+          if (!el) return false;
+
+          const rect = el.getBoundingClientRect();
+          handler({
+            commentId,
+            top: Math.min(window.innerHeight - 120, rect.bottom + 6),
+            left: Math.min(window.innerWidth - 320, Math.max(8, rect.left)),
+          });
+          return true;
+        },
       },
       transformPastedHTML: (html) => {
         // 항상 최신 설정값을 읽어서 stale closure 문제 방지

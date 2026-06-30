@@ -93,4 +93,29 @@ describe('TranslatePreviewModal', () => {
       expect(onApply).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('로딩 중 닫기 클릭 시 요청을 취소한다', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onCancel = vi.fn();
+
+    render(
+      <TranslatePreviewModal
+        open
+        title="preview"
+        docJson={null}
+        sourceHtml="<p>source</p>"
+        originalHtml="<p>original</p>"
+        isLoading
+        onClose={onClose}
+        onCancel={onCancel}
+        onApply={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'common.close' }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

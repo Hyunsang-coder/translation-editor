@@ -186,6 +186,14 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     })();
   };
 
+  const handleRequestClose = useCallback((): void => {
+    if (isLoading && onCancel) {
+      onCancel();
+      return;
+    }
+    onClose();
+  }, [isLoading, onCancel, onClose]);
+
   const content = useMemo(() => docJson ?? null, [docJson]);
 
   const extensions = useMemo(() => [
@@ -261,7 +269,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   }, [editor, docJson]);
 
   return (
-    <Modal open onClose={onClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
+    <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
       <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
@@ -318,7 +326,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
             <button
               type="button"
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-editor-bg text-editor-text hover:bg-editor-border transition-colors"
-              onClick={onClose}
+              onClick={handleRequestClose}
               title={t('common.close')}
             >
               {t('common.close')}

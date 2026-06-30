@@ -45,10 +45,12 @@ function buildPolishSystemPrompt(params: {
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
   userComments?: string | undefined;
+  polishMessage?: string | undefined;
 }): string {
   const targetLanguage = params.targetLanguage?.trim() || 'Target';
   const rules = params.styleRules?.trim();
   const userComments = params.userComments?.trim();
+  const polishMessage = params.polishMessage?.trim();
 
   return [
     `You are a native ${targetLanguage} editor.`,
@@ -67,6 +69,7 @@ function buildPolishSystemPrompt(params: {
     '',
     ...(rules ? ['Style/translation rules to respect:', rules, ''] : []),
     ...(userComments ? [userComments, ''] : []),
+    ...(polishMessage ? ['Additional user instructions for this polishing run:', polishMessage, ''] : []),
   ].join('\n').trim();
 }
 
@@ -75,6 +78,7 @@ function buildPolishMessages(params: {
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
   userComments?: string | undefined;
+  polishMessage?: string | undefined;
 }) {
   const cfg = getAiConfig({ useFor: 'translation' });
 
@@ -99,6 +103,7 @@ function buildPolishMessages(params: {
     targetLanguage: params.targetLanguage,
     styleRules: params.styleRules,
     userComments: params.userComments,
+    polishMessage: params.polishMessage,
   });
 
   const estimatedInputTokens = estimateMarkdownTokens(targetMarkdown);
@@ -165,6 +170,8 @@ export interface PolishTargetDocumentParams {
   targetDocJson: TipTapDocJson;
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
+  /** 폴리싱 실행 전 사용자가 입력한 추가 지시사항. */
+  polishMessage?: string | undefined;
   /** 직렬화된 사용자 인라인 코멘트(target field만). serializeUserComments 결과. */
   userComments?: string | undefined;
   onToken?: (accumulatedText: string) => void;

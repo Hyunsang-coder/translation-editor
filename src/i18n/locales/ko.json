@@ -255,7 +255,16 @@
     "previewTitle": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "polishPreviewTitle": "폴리싱 미리보기",
     "polishCancelled": "폴리싱이 취소되었습니다.",
+    "polishModal": {
+      "title": "폴리싱",
+      "description": "현재 번역문을 원어민 관점에서 자연스럽게 다듬습니다.",
+      "messageLabel": "추가 지시사항",
+      "optional": "(선택)",
+      "placeholder": "예: 더 격식체로 다듬고 제품 용어는 유지해주세요.",
+      "execute": "폴리싱 실행"
+    },
     "addToChat": "선택한 텍스트를 채팅 입력창에 추가",
+    "addToChatLabel": "채팅에 추가",
     "loadingProject": "프로젝트를 불러오는 중...",
     "source": "원문",
     "target": "번역문",
@@ -329,6 +338,9 @@
   "comment": {
     "title": "코멘트",
     "addButton": "코멘트",
+    "viewButton": "코멘트 보기",
+    "viewWithExcerpt": "코멘트: {{excerpt}}",
+    "resolvedBadge": "해결됨",
     "inputPlaceholder": "코멘트를 입력하세요…",
     "empty": "코멘트가 없습니다.",
     "emptyHint": "에디터에서 텍스트를 선택해 코멘트를 추가하세요.",

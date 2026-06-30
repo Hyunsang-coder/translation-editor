@@ -67,6 +67,19 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(userPrompt).not.toContain('Source (');
   });
 
+  it('사용자 추가 지시사항을 폴리싱 프롬프트에 포함한다', async () => {
+    await polishTargetDocumentWithStreaming({
+      targetDocJson,
+      polishMessage: 'Make the tone more formal without changing product terminology.',
+    });
+
+    const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+    const systemPrompt = String(messages[0]?.content);
+
+    expect(systemPrompt).toContain('Additional user instructions for this polishing run:');
+    expect(systemPrompt).toContain('Make the tone more formal without changing product terminology.');
+  });
+
   it('취소 신호가 이미 있으면 호출하지 않는다', async () => {
     const abortController = new AbortController();
     abortController.abort();

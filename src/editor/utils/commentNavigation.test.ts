@@ -4,7 +4,7 @@ import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { CommentMark } from '@/editor/extensions/CommentMark';
-import { findCommentRange, removeCommentMark, collectCommentIdsInRange } from './commentNavigation';
+import { findCommentRange, removeCommentMark, collectCommentIdsInRange, getCommentIdFromDomTarget } from './commentNavigation';
 
 function makeEditor(html: string) {
   const editor = new Editor({
@@ -68,5 +68,15 @@ describe('commentNavigation', () => {
     const ids = collectCommentIdsInRange(editor.state.doc, range.from, range.to);
     expect(ids).toEqual(['cmt_1']);
     editor.destroy();
+  });
+
+  it('getCommentIdFromDomTarget finds commentId from nested click target', () => {
+    document.body.innerHTML = '<span data-comment-id="cmt_dom">hello</span>';
+    const span = document.querySelector('[data-comment-id="cmt_dom"]')!;
+    const textNode = span.firstChild!;
+    expect(getCommentIdFromDomTarget(textNode)).toBe('cmt_dom');
+    expect(getCommentIdFromDomTarget(span)).toBe('cmt_dom');
+    expect(getCommentIdFromDomTarget(document.body)).toBeNull();
+    document.body.innerHTML = '';
   });
 });

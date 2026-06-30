@@ -84,6 +84,24 @@ export function collectCommentIdsInRange(
 }
 
 /**
+ * DOM 클릭 이벤트 대상에서 가장 가까운 commentId를 찾는다.
+ */
+export function getCommentIdFromDomTarget(target: EventTarget | null): string | null {
+  if (!target) return null;
+
+  let el: Element | null = null;
+  if (target instanceof Element) {
+    el = target.closest('[data-comment-id]');
+  } else if (target instanceof Node) {
+    el = target.parentElement?.closest('[data-comment-id]') ?? null;
+  }
+
+  if (!el) return null;
+  const id = el.getAttribute('data-comment-id');
+  return typeof id === 'string' && id ? id : null;
+}
+
+/**
  * 해당 commentId 마크를 문서에서 제거한다(코멘트 삭제 시 마크 동시 제거용).
  * 마크가 이미 사라진 경우(고아)에도 안전하게 no-op.
  * @returns 마크를 제거했으면 true

@@ -24,13 +24,14 @@ import { stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
-import { AddToChatButton } from '@/components/ui/AddToChatButton';
+import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { MessageSquareText } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
+import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
 import { serializeUserComments } from '@/ai/commentContext';
-import { collectCommentIdsInRange } from '@/editor/utils/commentNavigation';
+import { collectCommentIdsInRange, removeCommentMark } from '@/editor/utils/commentNavigation';
 
 interface EditorCanvasProps {
   focusMode: boolean;
@@ -77,6 +78,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
 
   const commentCount = useCommentStore((s) => s.comments.length);
+  const comments = useCommentStore((s) => s.comments);
 
   // 활성화된 프로바이더의 모델만 표시
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
@@ -137,6 +139,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const [polishLoading, setPolishLoading] = useState(false);
   const [polishStreamingText, setPolishStreamingText] = useState<string | null>(null);
   const polishAbortController = useRef<AbortController | null>(null);
+  const [polishModalOpen, setPolishModalOpen] = useState(false);
+  const [polishMessage, setPolishMessage] = useState('');
 
   // 재번역 지시사항 모달 (타겟에 내용이 이미 있을 때)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
@@ -153,6 +157,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     from: number;
     to: number;
     segmentGroupId: string | undefined;
+    existingComments: Array<{ id: string; excerpt: string }>;
   }>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const selectionTokenRef = useRef<number>(0);
@@ -167,6 +172,15 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     from: number;
     to: number;
     segmentGroupId: string | undefined;
+  }>(null);
+
+  // 코멘트 상세 popover 상태 (마크 클릭 / 선택 메뉴)
+  const [commentDetailPopover, setCommentDetailPopover] = useState<null | {
+    top: number;
+    left: number;
+    commentId: string;
+    editor: Editor;
+    field: CommentField;
   }>(null);
 
   // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
@@ -239,7 +253,24 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         const coords = editor.view.coordsAtPos(to);
         const top = Math.max(8, coords.top - 36);
         const left = Math.min(window.innerWidth - 200, Math.max(8, coords.left));
-        setAddToChatBubble({ top, left, text: selectedText, editor, field, from, to, segmentGroupId });
+        const commentIds = collectCommentIdsInRange(editor.state.doc, from, to);
+        const store = useCommentStore.getState();
+        const existingComments = commentIds.flatMap((id) => {
+          const comment = store.getComment(id);
+          return comment ? [{ id: comment.id, excerpt: comment.excerpt }] : [];
+        });
+        setCommentDetailPopover(null);
+        setAddToChatBubble({
+          top,
+          left,
+          text: selectedText,
+          editor,
+          field,
+          from,
+          to,
+          segmentGroupId,
+          existingComments,
+        });
       } catch {
         // ignore
       }
@@ -265,6 +296,54 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       editor.off('blur', onBlur);
     };
   }, [scheduleAddToChatBubble]);
+
+  const openCommentDetail = useCallback((params: {
+    commentId: string;
+    editor: Editor;
+    field: CommentField;
+    top: number;
+    left: number;
+  }): void => {
+    clearSelectionTimer();
+    setAddToChatBubble(null);
+    setCommentPopover(null);
+    setCommentDetailPopover(params);
+  }, []);
+
+  const handleSourceCommentClick = useCallback((payload: { commentId: string; top: number; left: number }) => {
+    const editor = sourceEditorRef.current;
+    if (!editor) return;
+    openCommentDetail({ ...payload, editor, field: 'source' });
+  }, [openCommentDetail]);
+
+  const handleTargetCommentClick = useCallback((payload: { commentId: string; top: number; left: number }) => {
+    const editor = targetEditorRef.current;
+    if (!editor) return;
+    openCommentDetail({ ...payload, editor, field: 'target' });
+  }, [openCommentDetail]);
+
+  const handleUpdateComment = useCallback((commentId: string, text: string): void => {
+    useCommentStore.getState().updateComment(commentId, { comment: text });
+    void useProjectStore.getState().saveProject();
+  }, []);
+
+  const handleToggleCommentResolve = useCallback((commentId: string): void => {
+    const comment = useCommentStore.getState().getComment(commentId);
+    if (!comment) return;
+    useCommentStore.getState().resolveComment(commentId, !comment.resolved);
+    void useProjectStore.getState().saveProject();
+  }, []);
+
+  const handleDeleteComment = useCallback((commentId: string, editor: Editor): void => {
+    removeCommentMark(editor, commentId);
+    useCommentStore.getState().removeComment(commentId);
+    setCommentDetailPopover(null);
+    void useProjectStore.getState().saveProject();
+  }, []);
+
+  const closeCommentDetail = useCallback((): void => {
+    setCommentDetailPopover(null);
+  }, []);
 
   // 선택 범위에 코멘트 추가: 마크 적용 + commentStore 저장
   const handleSaveComment = useCallback(
@@ -421,7 +500,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     [targetDocument],
   );
 
-  const openPolishPreview = useCallback(async (): Promise<void> => {
+  const openPolishPreview = useCallback(async (extraMessage?: string): Promise<void> => {
     if (!project) return;
 
     if (!hasTargetContent) {
@@ -456,11 +535,13 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
           leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 다듬을 때 반드시 반영하세요:',
         },
       );
+      const trimmedMessage = extraMessage?.trim();
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson,
         targetLanguage: project.metadata.targetLanguage,
         styleRules: translationRules,
         ...(serializedComments ? { userComments: serializedComments } : {}),
+        ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
         onToken: (text) => setPolishStreamingText(text),
         abortSignal: abortController.signal,
       });
@@ -479,8 +560,21 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   }, [addToast, hasTargetContent, project, t, translationRules]);
 
   const handlePolishClick = useCallback(() => {
-    void openPolishPreview();
-  }, [openPolishPreview]);
+    if (!project) return;
+    if (!hasTargetContent) {
+      addToast({
+        type: 'warning',
+        message: t('review.emptyTarget', '번역문이 비어있습니다. 번역을 먼저 실행해주세요.'),
+      });
+      return;
+    }
+    if (!targetEditorRef.current) {
+      addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      return;
+    }
+    setPolishMessage('');
+    setPolishModalOpen(true);
+  }, [addToast, hasTargetContent, project, t]);
 
   // 번역 취소 핸들러
   const handleTranslateCancel = useCallback((): void => {
@@ -570,6 +664,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
     void openTranslatePreview(retranslateMessage);
   }, [openTranslatePreview, retranslateMessage]);
 
+  const handlePolishRetry = useCallback((): void => {
+    void openPolishPreview(polishMessage);
+  }, [openPolishPreview, polishMessage]);
+
   // Source 에디터 준비 완료 콜백
   const handleSourceEditorReady = useCallback((editor: Editor) => {
     sourceEditorRef.current = editor;
@@ -657,6 +755,10 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       </div>
     );
   }
+
+  const activeDetailComment = commentDetailPopover
+    ? comments.find((c) => c.id === commentDetailPopover.commentId)
+    : undefined;
 
   return (
     <div className="flex-1 h-full flex flex-col min-w-0 bg-editor-surface">
@@ -771,6 +873,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                     className="h-full"
                     onEditorReady={handleSourceEditorReady}
                     onSearchOpen={handleSourceSearchOpen}
+                    onCommentClick={handleSourceCommentClick}
                   />
                   {/* 호버 복사 버튼 */}
                   <button
@@ -854,6 +957,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
                 onEditorReady={handleTargetEditorReady}
                 onSearchOpen={handleTargetSearchOpen}
                 onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
+                onCommentClick={handleTargetCommentClick}
               />
               {/* 호버 복사 버튼 */}
               <button
@@ -873,6 +977,67 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
       </PanelGroup>
 
       </div>
+
+      {/* 폴리싱 지시사항 모달 */}
+      {polishModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-4 py-3 border-b border-editor-border">
+              <h3 className="text-sm font-semibold text-editor-text">
+                {t('editor.polishModal.title', '폴리싱')}
+              </h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-editor-muted">
+                {t('editor.polishModal.description', '현재 번역문을 원어민 관점에서 자연스럽게 다듬습니다.')}
+              </p>
+              <div>
+                <label className="text-xs font-medium text-editor-text">
+                  {t('editor.polishModal.messageLabel', '추가 지시사항')}
+                  <span className="ml-1 text-editor-muted font-normal">
+                    {t('editor.polishModal.optional', '(선택)')}
+                  </span>
+                </label>
+                <textarea
+                  value={polishMessage}
+                  onChange={(e) => setPolishMessage(e.target.value)}
+                  placeholder={t('editor.polishModal.placeholder', '예: 더 격식체로 다듬고 제품 용어는 유지해주세요.')}
+                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      setPolishModalOpen(false);
+                      void openPolishPreview(polishMessage);
+                    }
+                    if (e.key === 'Escape') {
+                      setPolishModalOpen(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPolishModalOpen(false)}
+                className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+              >
+                {t('common.cancel', '취소')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPolishModalOpen(false);
+                  void openPolishPreview(polishMessage);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors"
+              >
+                {t('editor.polishModal.execute', '폴리싱 실행')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 재번역 지시사항 모달 (타겟에 이미 내용이 있을 때 번역 버튼 클릭 시) */}
       {retranslateModalOpen && (
@@ -966,84 +1131,76 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
         }}
         onApply={applyPolishPreview}
         onCancel={handlePolishCancel}
-        {...(polishPreviewError ? { onRetry: openPolishPreview } : {})}
+        {...(polishPreviewError ? { onRetry: handlePolishRetry } : {})}
       />
 
-      {/* TipTap Add to chat / 코멘트 버튼 (드래그 후 1초) */}
-      {addToChatBubble && !commentPopover && (
-        <div
+      {/* TipTap 선택 액션 메뉴 (드래그 후 1초) */}
+      {addToChatBubble && !commentPopover && !commentDetailPopover && (
+        <SelectionActionMenu
+          existingComments={addToChatBubble.existingComments}
           style={{
             position: 'fixed',
             top: addToChatBubble.top,
             left: addToChatBubble.left,
             zIndex: 80,
             zoom: 1 / useUIStore.getState().editorZoom,
+            backgroundColor: 'color-mix(in srgb, var(--editor-surface) 90%, transparent)',
           }}
-          className="flex items-center gap-1"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <AddToChatButton
-            onClick={() => {
-              const text = addToChatBubble.text.trim();
-              if (!text) return;
-              // 선택 범위에 걸린 인라인 코멘트가 있으면 함께 첨부
-              const commentLines: string[] = [];
-              try {
-                const ids = collectCommentIdsInRange(
-                  addToChatBubble.editor.state.doc,
-                  addToChatBubble.from,
-                  addToChatBubble.to,
-                );
-                const store = useCommentStore.getState();
-                for (const id of ids) {
-                  const c = store.getComment(id);
-                  if (c && c.comment.trim()) {
-                    commentLines.push(`> ${t('comment.title', '코멘트')}: ${c.comment.trim()}`);
-                  }
+          onAddToChat={() => {
+            const text = addToChatBubble.text.trim();
+            if (!text) return;
+            // 선택 범위에 걸린 인라인 코멘트가 있으면 함께 첨부
+            const commentLines: string[] = [];
+            try {
+              const ids = collectCommentIdsInRange(
+                addToChatBubble.editor.state.doc,
+                addToChatBubble.from,
+                addToChatBubble.to,
+              );
+              const store = useCommentStore.getState();
+              for (const id of ids) {
+                const c = store.getComment(id);
+                if (c && c.comment.trim()) {
+                  commentLines.push(`> ${t('comment.title', '코멘트')}: ${c.comment.trim()}`);
                 }
-              } catch {
-                // 코멘트 수집 실패는 무시(텍스트만 첨부)
               }
-              const composed = commentLines.length > 0
-                ? `${text}\n${commentLines.join('\n')}`
-                : text;
-              // 채팅 패널 열기
-              useUIStore.getState().openActiveChat();
-              appendComposerText(composed);
-              requestComposerFocus();
-              setAddToChatBubble(null);
-            }}
-          />
-          <button
-            type="button"
-            title={t('comment.addButton', '코멘트')}
-            className="
-              inline-flex items-center gap-1.5
-              px-3 py-1.5 rounded-lg font-medium
-              text-editor-text bg-editor-surface backdrop-blur-sm
-              border border-editor-border
-              shadow-lg shadow-black/10 dark:shadow-black/30
-              hover:brightness-95 dark:hover:brightness-110 active:scale-95
-            "
-            onClick={() => {
-              const b = addToChatBubble;
-              setCommentPopover({
-                top: b.top + 32,
-                left: b.left,
-                excerpt: b.text.trim(),
-                editor: b.editor,
-                field: b.field,
-                from: b.from,
-                to: b.to,
-                segmentGroupId: b.segmentGroupId,
-              });
-              setAddToChatBubble(null);
-            }}
-          >
-            <MessageSquareText className="w-4 h-4" />
-            {t('comment.addButton', '코멘트')}
-          </button>
-        </div>
+            } catch {
+              // 코멘트 수집 실패는 무시(텍스트만 첨부)
+            }
+            const composed = commentLines.length > 0
+              ? `${text}\n${commentLines.join('\n')}`
+              : text;
+            useUIStore.getState().openActiveChat();
+            appendComposerText(composed);
+            requestComposerFocus();
+            setAddToChatBubble(null);
+          }}
+          onAddComment={() => {
+            const b = addToChatBubble;
+            setCommentPopover({
+              top: b.top + getSelectionActionMenuHeight(b.existingComments.length),
+              left: b.left,
+              excerpt: b.text.trim(),
+              editor: b.editor,
+              field: b.field,
+              from: b.from,
+              to: b.to,
+              segmentGroupId: b.segmentGroupId,
+            });
+            setAddToChatBubble(null);
+          }}
+          onViewComment={(commentId) => {
+            const b = addToChatBubble;
+            openCommentDetail({
+              commentId,
+              editor: b.editor,
+              field: b.field,
+              top: b.top + getSelectionActionMenuHeight(b.existingComments.length),
+              left: b.left,
+            });
+            setAddToChatBubble(null);
+          }}
+        />
       )}
 
       {/* 코멘트 입력 popover */}
@@ -1067,6 +1224,20 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             )
           }
           onCancel={() => setCommentPopover(null)}
+        />
+      )}
+
+      {/* 코멘트 상세 popover */}
+      {commentDetailPopover && activeDetailComment && (
+        <CommentDetailPopover
+          top={commentDetailPopover.top}
+          left={commentDetailPopover.left}
+          comment={activeDetailComment}
+          zoom={1 / useUIStore.getState().editorZoom}
+          onSave={(text) => handleUpdateComment(commentDetailPopover.commentId, text)}
+          onToggleResolve={() => handleToggleCommentResolve(commentDetailPopover.commentId)}
+          onDelete={() => handleDeleteComment(commentDetailPopover.commentId, commentDetailPopover.editor)}
+          onCancel={closeCommentDetail}
         />
       )}
     </div>

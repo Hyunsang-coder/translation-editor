@@ -255,7 +255,16 @@
     "previewTitle": "Translation Preview (Entire Source → Entire Target)",
     "polishPreviewTitle": "Polish Preview",
     "polishCancelled": "Polishing was cancelled.",
+    "polishModal": {
+      "title": "Polish",
+      "description": "Polish the current target text so it reads naturally to native readers.",
+      "messageLabel": "Additional Instructions",
+      "optional": "(Optional)",
+      "placeholder": "Example: Make it more formal and keep product terminology unchanged.",
+      "execute": "Polish"
+    },
     "addToChat": "Add selected text to chat input",
+    "addToChatLabel": "Add to chat",
     "loadingProject": "Loading project...",
     "source": "Source",
     "target": "Target",
@@ -329,6 +338,9 @@
   "comment": {
     "title": "Comments",
     "addButton": "Comment",
+    "viewButton": "View comment",
+    "viewWithExcerpt": "Comment: {{excerpt}}",
+    "resolvedBadge": "Resolved",
     "inputPlaceholder": "Write a comment…",
     "empty": "No comments yet.",
     "emptyHint": "Select text in the editor to add a comment.",
