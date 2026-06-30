@@ -323,9 +323,9 @@ export interface Glossary {
 // ============================================
 
 /**
- * 고정 패널 타입 (settings, review)
+ * 고정 패널 타입 (settings, review, comments)
  */
-export type FixedPanelType = 'settings' | 'review';
+export type FixedPanelType = 'settings' | 'review' | 'comments';
 
 /**
  * 채팅 패널 타입 — 세션 ID를 포함하는 template literal
@@ -342,7 +342,7 @@ export type PanelType = FixedPanelType | ChatPanelType;
 // --- PanelType Runtime Helpers ---
 
 export function isFixedPanel(panel: PanelType): panel is FixedPanelType {
-  return panel === 'settings' || panel === 'review';
+  return panel === 'settings' || panel === 'review' || panel === 'comments';
 }
 
 export function isChatPanel(panel: PanelType): panel is ChatPanelType {

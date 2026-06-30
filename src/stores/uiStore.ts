@@ -89,6 +89,7 @@ interface UIActions {
   openPanel: (panel: PanelType) => void;
   openPanelOnSide: (side: SidebarSide, panel: PanelType) => void;
   openReviewPanel: () => void;
+  openCommentsPanel: () => void;
   toggleSettingsPanel: () => void;
   toggleReviewPanel: () => void;
   toggleChatVisibility: () => void;
@@ -158,7 +159,7 @@ export const useUIStore = create<UIStore>()(
       devTestPanelOpen: false,
 
       // === Docking Sidebar - 기본값 ===
-      leftSidebar: { collapsed: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
+      leftSidebar: { collapsed: false, panels: ['settings', 'review', 'comments'], activePanel: 'settings', width: 250 },
       rightSidebar: { collapsed: false, panels: [], activePanel: null, width: 250 },
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
@@ -285,6 +286,24 @@ export const useUIStore = create<UIStore>()(
           // 어디에도 없으면 left에 추가
           const sb = state.leftSidebar;
           set({ leftSidebar: { ...sb, collapsed: false, panels: [...sb.panels, 'review'], activePanel: 'review' } });
+        }
+      },
+
+      // Comments Panel (delegates to docking model) — openReviewPanel과 동일 패턴
+      openCommentsPanel: (): void => {
+        const state = get();
+        const side: SidebarSide | null =
+          state.leftSidebar.panels.includes('comments') ? 'left'
+            : state.rightSidebar.panels.includes('comments') ? 'right'
+              : null;
+
+        if (side) {
+          const key = sidebarKey(side);
+          const sb = state[key];
+          set({ [key]: { ...sb, collapsed: false, activePanel: 'comments' as PanelType } });
+        } else {
+          const sb = state.leftSidebar;
+          set({ leftSidebar: { ...sb, collapsed: false, panels: [...sb.panels, 'comments'], activePanel: 'comments' } });
         }
       },
 
@@ -706,7 +725,7 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const data = persisted as Record<string, unknown>;
 
@@ -756,6 +775,28 @@ export const useUIStore = create<UIStore>()(
               if (sb.activePanel === 'chat') {
                 sb.activePanel = (sb.panels as string[])[0] ?? null;
               }
+            }
+          }
+        }
+
+        // v4 이하 → v5: 'comments' 고정 패널 추가(idempotent).
+        // review 탭이 있는 사이드에 함께 두고, 없으면 left에 추가. 이미 있으면 no-op.
+        if (version < 5) {
+          const hasComments = (['leftSidebar', 'rightSidebar'] as const).some((side) => {
+            const sb = data[side] as Record<string, unknown> | undefined;
+            return Array.isArray(sb?.panels) && (sb.panels as string[]).includes('comments');
+          });
+          if (!hasComments) {
+            const reviewSide = (['leftSidebar', 'rightSidebar'] as const).find((side) => {
+              const sb = data[side] as Record<string, unknown> | undefined;
+              return Array.isArray(sb?.panels) && (sb.panels as string[]).includes('review');
+            });
+            const targetSide = reviewSide ?? 'leftSidebar';
+            const sb = data[targetSide] as Record<string, unknown> | undefined;
+            if (sb && Array.isArray(sb.panels)) {
+              (sb.panels as string[]).push('comments');
+            } else {
+              data[targetSide] = { collapsed: false, panels: ['comments'], activePanel: 'comments', width: 250 };
             }
           }
         }

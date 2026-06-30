@@ -1,12 +1,13 @@
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare } from 'lucide-react';
+import { Settings, Search, MessageSquare, MessageSquareText } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { MAX_CHAT_SESSIONS } from '@/stores/chatStore.types';
 import { resolveLayout, getMaxSidebarWidth } from '@/stores/layoutResolver';
 import { SettingsContent } from '@/components/panels/SettingsContent';
 import { ReviewPanel } from '@/components/review/ReviewPanel';
+import { CommentListPanel } from '@/components/comment/CommentListPanel';
 import { ChatContent } from '@/components/chat/ChatContent';
 import { useResizeHandle } from '@/hooks/useResizeHandle';
 import { usePanelDrag } from '@/hooks/usePanelDrag';
@@ -18,14 +19,15 @@ interface UnifiedSidebarProps {
   side: SidebarSide;
 }
 
-const FIXED_PANEL_META: Record<'settings' | 'review', { icon: typeof Settings; labelKey: string }> = {
+const FIXED_PANEL_META: Record<'settings' | 'review' | 'comments', { icon: typeof Settings; labelKey: string }> = {
   settings: { icon: Settings, labelKey: 'chat.settings' },
   review:   { icon: Search, labelKey: 'review.title' },
+  comments: { icon: MessageSquareText, labelKey: 'comment.title' },
 };
 
 function getPanelIcon(panel: PanelType): typeof Settings {
   if (isChatPanel(panel)) return MessageSquare;
-  return FIXED_PANEL_META[panel as 'settings' | 'review']?.icon ?? Settings;
+  return FIXED_PANEL_META[panel as 'settings' | 'review' | 'comments']?.icon ?? Settings;
 }
 
 function getPanelLabel(panel: PanelType, t: (key: string) => string, sessions: { id: string; name: string }[]): string {
@@ -34,7 +36,7 @@ function getPanelLabel(panel: PanelType, t: (key: string) => string, sessions: {
     const session = sessions.find((s) => s.id === sessionId);
     return session?.name ?? t('chat.title');
   }
-  const meta = FIXED_PANEL_META[panel as 'settings' | 'review'];
+  const meta = FIXED_PANEL_META[panel as 'settings' | 'review' | 'comments'];
   return meta ? t(meta.labelKey) : panel;
 }
 
@@ -196,6 +198,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
     if (!activePanel) return null;
     if (activePanel === 'settings') return <SettingsContent />;
     if (activePanel === 'review') return <ReviewPanel />;
+    if (activePanel === 'comments') return <CommentListPanel />;
     if (isChatPanel(activePanel)) {
       const sessionId = getChatSessionId(activePanel);
       return sessionId ? <ChatContent side={side} sessionId={sessionId} /> : null;

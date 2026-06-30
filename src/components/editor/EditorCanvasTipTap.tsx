@@ -57,6 +57,7 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const translatorPersona = useChatStore((s) => s.translatorPersona);
 
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
+  const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
   const addToast = useUIStore((s) => s.addToast);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
 
@@ -73,6 +74,8 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
   const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
 
   const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
+
+  const commentCount = useCommentStore((s) => s.comments.length);
 
   // 활성화된 프로바이더의 모델만 표시
   const enabledPresets = useMemo((): SelectOptionGroup[] => {
@@ -697,6 +700,16 @@ export function EditorCanvasTipTap({ focusMode }: EditorCanvasProps): JSX.Elemen
             data-testid="editor-polish-button"
           >
             {t('review.polish', '폴리싱')}
+          </button>
+          <button
+            type="button"
+            onClick={() => openCommentsPanel()}
+            className="px-2 py-1 rounded text-xs font-semibold text-editor-text border border-editor-border hover:bg-editor-bg flex items-center gap-1 transition-colors"
+            title={t('comment.title', '코멘트')}
+            data-testid="editor-comments-button"
+          >
+            <MessageSquareText className="w-3.5 h-3.5" />
+            {commentCount > 0 && <span className="tabular-nums">{commentCount}</span>}
           </button>
         </div>
       </div>

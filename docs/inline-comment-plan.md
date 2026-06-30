@@ -2,7 +2,21 @@
 
 > **상태(2026-06-30 업데이트)**: 첫 슬라이스(Phase 1+2+3a+3b+4) **구현·검증 완료**.
 > 영속 방식은 **신규 `comments` 테이블**로 확정·구현. tsc clean, 유닛 616 pass, cargo 11 pass.
-> **다음 슬라이스**: ① CommentListPanel 마운트(UI 토글+사이드바+에디터 스크롤), ② 3c 폴리싱, ③ 3d 리뷰, ④ 3e 채팅 주입.
+>
+> **2번째 슬라이스(CommentListPanel 마운트) 구현·검증 완료**: 코멘트 패널을 docking sidebar의
+> 신규 고정 패널 `'comments'`로 추가(review와 동일 패턴). tsc clean, 유닛 620 pass(신규 4).
+> - `FixedPanelType`에 `'comments'` 추가(`isFixedPanel` 갱신).
+> - `uiStore`: 기본 `leftSidebar.panels`에 `'comments'` 추가, `openCommentsPanel()` 액션,
+>   persist v4→v5 마이그레이션(기존 사용자에 `comments` 탭 idempotent 추가).
+> - `CommentListPanel.tsx`(신규): source/target 그룹핑, 클릭→마크 위치 스크롤, resolve 토글,
+>   삭제(마크+스토어 동시 제거 후 saveProject).
+> - `commentNavigation.ts`(+`.test.ts`, 신규): `findCommentRange`/`scrollToComment`/`removeCommentMark`
+>   — 위치는 commentId 마크에서 직접 탐색(excerpt 검색 아님).
+> - `UnifiedSidebar`: meta/icon/renderContent에 comments 등록.
+> - `EditorCanvasTipTap`: 헤더에 코멘트 버튼(개수 배지)→`openCommentsPanel`.
+> - i18n: `comment.title`/`jumpTo`/`emptyHint` 추가(ko/en).
+>
+> **다음 슬라이스**: ① 3c 폴리싱, ② 3d 리뷰, ③ 3e 채팅 주입.
 >
 > 구현된 파일: `src/editor/extensions/CommentMark.ts`, `src/stores/commentStore.ts`,
 > `src/tauri/comments.ts`, `src/ai/commentContext.ts`(serializeUserComments),

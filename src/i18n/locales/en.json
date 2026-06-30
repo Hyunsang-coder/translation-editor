@@ -327,9 +327,12 @@
     }
   },
   "comment": {
+    "title": "Comments",
     "addButton": "Comment",
     "inputPlaceholder": "Write a comment…",
     "empty": "No comments yet.",
+    "emptyHint": "Select text in the editor to add a comment.",
+    "jumpTo": "Show location in editor",
     "resolve": "Mark as resolved",
     "unresolve": "Mark as unresolved"
   },
