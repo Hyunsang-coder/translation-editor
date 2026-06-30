@@ -72,6 +72,13 @@ pub fn validate_file_size(path: &std::path::Path, max_size: u64) -> CommandResul
     Ok(size)
 }
 
+fn is_macos_user_temp_path(path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    // macOS std::env::temp_dir() → /var/folders/... (canonical: /private/var/folders/...)
+    path_str.starts_with("/private/var/folders/")
+        || path_str.starts_with("/var/folders/")
+}
+
 fn is_blocked_path(path: &Path) -> bool {
     let path_str = path.to_string_lossy();
 
@@ -91,6 +98,12 @@ fn is_blocked_path(path: &Path) -> bool {
     // Unix/Linux/macOS Blocklist
     #[cfg(not(target_os = "windows"))]
     {
+        // 사용자 임시 디렉토리(클립보드/드래그앤드롭 업로드)는 허용
+        #[cfg(target_os = "macos")]
+        if is_macos_user_temp_path(path) {
+            return false;
+        }
+
         // 정확한 접두사 매칭을 위해 starts_with 사용
         // 단, /usr/local/bin 같은 사용자 툴 경로는 허용할 수도 있으나,
         // 보수적으로 시스템 영역(/usr, /etc, /var) 전체를 막는 것이 안전함.
@@ -113,4 +126,31 @@ fn is_blocked_path(path: &Path) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macos_user_temp_path_is_allowed() {
+        let path = Path::new("/private/var/folders/zz/abc/T/oddeyes-uploads/img.png");
+        assert!(!is_blocked_path(path));
+    }
+
+    #[test]
+    fn macos_system_var_path_is_blocked() {
+        let path = Path::new("/private/var/db/system.db");
+        assert!(is_blocked_path(path));
+    }
+
+    #[test]
+    fn validate_path_allows_file_in_temp_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("clipboard-test.png");
+        std::fs::write(&file, b"png").expect("write");
+
+        let result = validate_path(&file.to_string_lossy());
+        assert!(result.is_ok(), "expected ok, got {:?}", result);
+    }
 }

@@ -489,6 +489,25 @@ resizeImageForApi()   // Progressive resize for API limits
 // 두 파이프라인 모두 이미지를 LLM 전송 전 제거
 ```
 
+## Chat Composer Image Attachments
+
+```typescript
+// Paste / drag-drop / file picker → composerAttachments (not DB attachments table)
+// useChatComposerHandlers.ts
+handleComposerPaste(event)  // sync: web DataTransfer image OR schedule Tauri native read
+attachClipboardImage()      // save_temp_image → addComposerAttachment
+
+// ChatComposerEditor.tsx — paste capture listener (before ProseMirror)
+dom.addEventListener('paste', handlePasteCapture, true);
+
+// Tauri native fallback (WKWebView has no image in clipboardData)
+// src/tauri/clipboardImage.ts → readImage() → rgbaToPngBlob()
+```
+
+**Flow**: clipboard bytes → `save_temp_image` (`temp_dir/oddeyes-uploads`) → `preview_attachment` → `composerAttachments` with `thumbnailDataUrl` (auto-resized for API limits).
+
+**File picker** uses existing paths (no temp file). **Clipboard/drag-drop** require temp staging + `validate_path` allowlist for macOS `/var/folders/`.
+
 ## Review Feature
 
 ```typescript

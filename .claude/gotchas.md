@@ -132,15 +132,19 @@ Critical implementation warnings learned from past issues.
 
 53. **ChatComposerEditor clearContent**: Use `editor.clearComposerContent()` (custom method) instead of `editor.commands.clearContent()` directly, as it also resets `lastSetContentRef` to prevent stale content restoration.
 
+54. **Chat Clipboard Image Paste (Tauri)**: WKWebView paste 이벤트의 `clipboardData`에 이미지가 없는 경우가 많음(macOS 스크린샷 등). `ChatComposerEditor`는 `paste` capture 리스너 + `useChatComposerHandlers.handleComposerPaste`로 처리하고, Web `DataTransfer`에 이미지가 없으면 `@tauri-apps/plugin-clipboard-manager` `readImage()`로 네이티브 fallback. `text/plain`이 있으면 텍스트 붙여넣기를 우선(이미지 fallback 스킵). 플러그인 등록(`lib.rs`) + capability `clipboard-manager:allow-read-image` 필수.
+
+55. **Chat Composer Temp Image Path**: 클립보드/드래그앤드롭 이미지는 `save_temp_image` → `std::env::temp_dir()/oddeyes-uploads`에 저장 후 `preview_attachment`로 DTO 생성. macOS에서는 canonical path가 `/private/var/folders/...`이므로 `validate_path()`가 `/private/var` 전체를 차단하면 첨부가 silent fail함. `/private/var/folders/`, `/var/folders/`는 사용자 임시 디렉토리로 허용.
+
 ## Image Handling
 
-54. **Chat Image Auto-Resize**: `src/utils/imageResize.ts` provides Canvas API-based image resizing. `resizeImageForApi()` progressively reduces resolution (2048→1536→1024→768px) and quality (85%→70%) until image fits within API limits.
+56. **Chat Image Auto-Resize**: `src/utils/imageResize.ts` provides Canvas API-based image resizing. `resizeImageForApi()` progressively reduces resolution (2048→1536→1024→768px) and quality (85%→70%) until image fits within API limits.
 
-55. **Chat Image Context Retention**: `prompt.ts` → `mapRecentMessagesToHistory()` includes images from the last 3 user messages (`MAX_HISTORY_IMAGES_MESSAGES = 3`) in chat history. Older messages retain text only.
+57. **Chat Image Context Retention**: `prompt.ts` → `mapRecentMessagesToHistory()` includes images from the last 3 user messages (`MAX_HISTORY_IMAGES_MESSAGES = 3`) in chat history. Older messages retain text only.
 
-56. **Image Message Immutability**: Messages with `imageAttachments` are treated as immutable inputs. Edit and Replay buttons are hidden for these messages to preserve input snapshot integrity.
+58. **Image Message Immutability**: Messages with `imageAttachments` are treated as immutable inputs. Edit and Replay buttons are hidden for these messages to preserve input snapshot integrity.
 
-57. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear.
+59. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear.
 
 ## Build / Platform
 
@@ -172,7 +176,7 @@ Critical implementation warnings learned from past issues.
 
 63. **HTML Paste Sanitization**: Use `htmlNormalizer.ts` with DOMPurify for pasted HTML (especially from Confluence). Validates URL protocols, strips dangerous attributes, normalizes inline styles.
 
-64. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils/mod.rs` for all file import commands (CSV, Excel). Blocks access to system directories.
+64. **Path Validation in Rust**: Use `validate_path()` from `src-tauri/src/utils.rs` for all file import commands. Blocks system directories (`/etc`, `/usr/bin`, `/private/var/db` 등). macOS 사용자 임시 폴더(`/private/var/folders/`, `/var/folders/`)는 `save_temp_image` 업로드 경로이므로 예외 허용.
 
 116. **Console Log Content Leakage**: `saveProject`의 디버그 로그에서 사용자 콘텐츠(`content.slice(0, 100)`)를 출력하지 않도록 주의. `console.debug`로 최소 정보(projectId, blocksCount)만 기록. 프로덕션 빌드에서도 브라우저 콘솔에 노출됨.
 

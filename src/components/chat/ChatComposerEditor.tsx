@@ -36,6 +36,8 @@ export interface ChatComposerEditorProps {
   className?: string;
   /** 에디터 인스턴스 접근용 콜백 */
   onEditorReady?: (editor: Editor) => void;
+  /** 클립보드 이미지 붙여넣기 (true면 TipTap 기본 paste 차단) */
+  onImagePaste?: (event: ClipboardEvent) => boolean;
 }
 
 export function ChatComposerEditor({
@@ -46,9 +48,12 @@ export function ChatComposerEditor({
   placeholder = '메시지를 입력하세요...',
   className = '',
   onEditorReady,
+  onImagePaste,
 }: ChatComposerEditorProps): JSX.Element {
   // IME 입력 상태 추적 (한글 조합 중 Enter 방지)
   const isComposingRef = useRef(false);
+  const onImagePasteRef = useRef(onImagePaste);
+  onImagePasteRef.current = onImagePaste;
 
   // 외부에서 content 변경 시 에디터 업데이트 (sync direction: content -> editor)
   const lastSetContentRef = useRef<string>('');
@@ -132,7 +137,7 @@ export function ChatComposerEditor({
     },
   });
 
-  // IME 이벤트 핸들러
+  // IME 이벤트 핸들러 + 클립보드 이미지 붙여넣기 (capture: ProseMirror보다 먼저 처리)
   useEffect(() => {
     if (!editor) return;
 
@@ -146,12 +151,23 @@ export function ChatComposerEditor({
       isComposingRef.current = false;
     };
 
+    const handlePasteCapture = (event: ClipboardEvent) => {
+      const handler = onImagePasteRef.current;
+      if (!handler) return;
+      if (handler(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
     dom.addEventListener('compositionstart', handleCompositionStart);
     dom.addEventListener('compositionend', handleCompositionEnd);
+    dom.addEventListener('paste', handlePasteCapture, true);
 
     return () => {
       dom.removeEventListener('compositionstart', handleCompositionStart);
       dom.removeEventListener('compositionend', handleCompositionEnd);
+      dom.removeEventListener('paste', handlePasteCapture, true);
     };
   }, [editor]);
 

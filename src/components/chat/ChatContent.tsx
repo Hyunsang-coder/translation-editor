@@ -286,7 +286,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [updateMessage, sessionId]);
 
   // 붙여넣기/첨부 핸들러
-  const { handlePaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
+  const { handleComposerPaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
 
   // sessionId prop이 변경되면 해당 세션으로 전환
   useEffect(() => {
@@ -543,7 +543,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             className="w-full max-h-[200px] px-3 pt-2.5 pb-10 bg-transparent overflow-y-auto"
             data-ite-chat-composer
             data-testid="chat-composer-container"
-            onPaste={handlePaste}
           >
             <ChatComposerEditor
               content={localComposerText}
@@ -551,6 +550,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               onSubmit={() => void sendCurrent()}
               disabled={isLoading}
               placeholder={isDragging ? t('chat.dropToAttach') : t('chat.composerPlaceholder')}
+              onImagePaste={handleComposerPaste}
               onEditorReady={(editor) => {
                 editorRef.current = editor;
               }}

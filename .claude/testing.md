@@ -105,6 +105,8 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/editor/extensions/SearchHighlight.test.ts` | 5 | SearchHighlight normalization |
 | `src/stores/aiConfigStore.test.ts` | 9 | Key loading latch, concurrent call prevention, secure persistence handling |
 | `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
+| `src/utils/clipboardImage.test.ts` | 4 | Clipboard image extraction from `DataTransfer` |
+| `src-tauri/src/utils.rs` (`utils::tests`) | 3 | `validate_path` macOS temp allowlist |
 | `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
 | `src/stores/historyStore.test.ts` | 16 | History store snapshot create/list race/rename/createSnapshotIfChanged behavior |
 | `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |

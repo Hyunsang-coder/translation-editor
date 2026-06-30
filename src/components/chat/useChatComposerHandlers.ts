@@ -1,41 +1,64 @@
 import { useCallback } from 'react';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { readNativeClipboardImageBlob } from '@/tauri/clipboardImage';
 import { saveTempImage } from '@/tauri/attachments';
 import { pickChatAttachmentFile } from '@/tauri/dialog';
-import { fileToBytes, isImageMimeType } from '@/utils/fileUtils';
+import { fileToBytes } from '@/utils/fileUtils';
+import {
+  extractClipboardImageFromDataTransfer,
+  type ClipboardImagePayload,
+} from '@/utils/clipboardImage';
+
+async function attachClipboardImage(
+  image: ClipboardImagePayload,
+  addComposerAttachment: (path: string) => Promise<void>,
+): Promise<void> {
+  const bytes = await fileToBytes(image.blob);
+  const path = await saveTempImage(bytes, image.filename);
+  await addComposerAttachment(path);
+}
+
+function hasMeaningfulPastedText(dataTransfer: DataTransfer | null): boolean {
+  const pastedText = dataTransfer?.getData('text/plain')?.trim();
+  return Boolean(pastedText);
+}
 
 /**
  * 채팅 컴포저의 붙여넣기/첨부파일 핸들러
  */
 export function useChatComposerHandlers(addComposerAttachment: (path: string) => Promise<void>) {
-  // 클립보드 붙여넣기 핸들러 (이미지)
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-
-    for (const item of items) {
-      if (isImageMimeType(item.type)) {
-        e.preventDefault();
-
-        const blob = item.getAsFile();
-        if (!blob) continue;
-
-        const ext = item.type.split('/')[1] || 'png';
-        const filename = `clipboard-${Date.now()}.${ext}`;
-
-        try {
-          const bytes = await fileToBytes(blob);
-          const path = await saveTempImage(bytes, filename);
-          await addComposerAttachment(path);
-        } catch (error) {
-          console.error('Failed to process pasted image:', error);
-        }
-        return;
-      }
+  const handleComposerPaste = useCallback((event: ClipboardEvent): boolean => {
+    const webImage = extractClipboardImageFromDataTransfer(event.clipboardData);
+    if (webImage) {
+      void attachClipboardImage(webImage, addComposerAttachment).catch((error) => {
+        console.error('Failed to process pasted image:', error);
+      });
+      return true;
     }
-    // 텍스트 붙여넣기는 기본 동작 유지
+
+    if (hasMeaningfulPastedText(event.clipboardData)) {
+      return false;
+    }
+
+    if (!isTauriRuntime()) {
+      return false;
+    }
+
+    void readNativeClipboardImageBlob()
+      .then((blob) => {
+        if (!blob) return;
+        return attachClipboardImage(
+          { blob, filename: `clipboard-${Date.now()}.png` },
+          addComposerAttachment,
+        );
+      })
+      .catch((error) => {
+        console.error('Failed to read native clipboard image:', error);
+      });
+
+    return true;
   }, [addComposerAttachment]);
 
-  // 파일 첨부 버튼 클릭 핸들러
   const handleAttachClick = useCallback(async () => {
     if (!isTauriRuntime()) return;
     const path = await pickChatAttachmentFile();
@@ -44,5 +67,5 @@ export function useChatComposerHandlers(addComposerAttachment: (path: string) =>
     }
   }, [addComposerAttachment]);
 
-  return { handlePaste, handleAttachClick };
+  return { handleComposerPaste, handleAttachClick };
 }

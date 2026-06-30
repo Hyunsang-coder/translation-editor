@@ -138,8 +138,14 @@ Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
 
 #### Path Traversal Prevention
 - Rust-side path validation for file imports
-- Blocks system directories (`/etc`, `/System`, `C:\Windows`)
-- Implementation: `src-tauri/src/utils/mod.rs` → `validate_path()`
+- Blocks system directories (`/etc`, `/System`, `C:\Windows`, `/private/var/db`)
+- macOS user temp (`/private/var/folders/`, `/var/folders/`) allowed for `oddeyes-uploads` clipboard/drag-drop staging
+- Implementation: `src-tauri/src/utils.rs` → `validate_path()`
+
+#### Clipboard (Desktop)
+- `@tauri-apps/plugin-clipboard-manager` for native image read when WKWebView paste omits binary data
+- Capability: `clipboard-manager:allow-read-image`
+- Frontend: `src/tauri/clipboardImage.ts`, `src/utils/clipboardImage.ts`
 
 #### DoS Prevention
 - Translation Rules: 10,000 chars
@@ -176,7 +182,8 @@ Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
   - Responsive layout: `useResponsiveLayout` hook auto-collapses panels on narrow screens
   - Panel state persists across sessions (localStorage via Zustand)
   - **Chat Composer**:
-  - `+` button for attachments/web search toggle
+  - `+` button for file attachments / web search toggle
+  - Cmd+V clipboard image paste (Tauri: native `readImage` fallback when WebView `DataTransfer` is empty)
   - Enter to send, Shift+Enter for newline
   - IME-aware Enter handling
 - **Modal 통합**: `Modal.tsx` 공통 래퍼 (Focus trap, ESC/오버레이 닫기). ReviewModal, TranslatePreviewModal, AppSettingsModal, UpdateModal 등에서 사용.
