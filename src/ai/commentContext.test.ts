@@ -78,4 +78,27 @@ describe('serializeUserComments', () => {
     expect(result).toContain('POLISH LEAD-IN:');
     expect(result).not.toContain('번역 시 반드시');
   });
+
+  it('filters by segmentGroupIds: comments with an id pass only if in the set', () => {
+    const comments = [
+      makeComment({ id: 'a', segmentGroupId: 'sg1', excerpt: 'in', comment: 'keep' }),
+      makeComment({ id: 'b', segmentGroupId: 'sg2', excerpt: 'out', comment: 'drop' }),
+    ];
+    const result = serializeUserComments(comments, { segmentGroupIds: new Set(['sg1']) });
+
+    expect(result).toContain('1. "in" — keep');
+    expect(result).not.toContain('out');
+    expect(result).not.toContain('drop');
+  });
+
+  it('segmentGroupIds filter always includes comments without a segmentGroupId', () => {
+    const comments = [
+      makeComment({ id: 'a', segmentGroupId: undefined, excerpt: 'noid', comment: 'always' }),
+      makeComment({ id: 'b', segmentGroupId: 'sg9', excerpt: 'other', comment: 'drop' }),
+    ];
+    const result = serializeUserComments(comments, { segmentGroupIds: new Set(['sg1']) });
+
+    expect(result).toContain('1. "noid" — always');
+    expect(result).not.toContain('other');
+  });
 });

@@ -23,7 +23,14 @@
 >   (styleRules 다음 위치, 번역 경로와 동일 패턴).
 > - `EditorCanvasTipTap.openPolishPreview`에서 target 코멘트 직렬화 전달.
 >
-> **다음 슬라이스**: ① 3d 리뷰, ② 3e 채팅 주입.
+> **3d 리뷰 주입 구현·검증 완료**: tsc clean, 유닛 625 pass(신규 2).
+> - `serializeUserComments`에 `segmentGroupIds?: Set<string>` 옵션 추가 — segmentGroupId가 있는
+>   코멘트는 집합에 포함될 때만 통과(청크 범위 한정), id 없는 코멘트는 항상 포함.
+> - `runReview.ts`: `RunReviewParams.userComments?` + user content에 코멘트 섹션 주입.
+> - `ReviewPanel.handleRunReview`: 청크별로 `chunk.segments`의 groupId 집합으로 한정 직렬화
+>   (대조 검수는 source/target 양쪽 코멘트 모두 맥락 사용).
+>
+> **다음 슬라이스**: 3e 채팅 주입.
 >
 > 구현된 파일: `src/editor/extensions/CommentMark.ts`, `src/stores/commentStore.ts`,
 > `src/tauri/comments.ts`, `src/ai/commentContext.ts`(serializeUserComments),

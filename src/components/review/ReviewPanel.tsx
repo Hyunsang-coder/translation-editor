@@ -7,6 +7,8 @@ import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { runReview } from '@/ai/review/runReview';
+import { serializeUserComments } from '@/ai/commentContext';
+import { useCommentStore } from '@/stores/commentStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
@@ -214,6 +216,17 @@ export function ReviewPanel(): JSX.Element {
           // Issue #13 Fix: 각 청크 처리 시 최신 번역 규칙 가져오기
           const currentRules = useChatStore.getState().translationRules;
 
+          // 인라인 코멘트 → 이 청크의 세그먼트 범위로 한정해 직렬화 후 주입
+          // (대조 검수는 source/target 양쪽 코멘트 모두 맥락으로 사용)
+          const chunkGroupIds = new Set(chunk.segments.map((s) => s.groupId));
+          const serializedComments = serializeUserComments(
+            useCommentStore.getState().comments,
+            {
+              segmentGroupIds: chunkGroupIds,
+              leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 검수 시 맥락으로 반드시 고려하세요:',
+            },
+          );
+
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
           // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
           const response = await runReview({
@@ -222,6 +235,7 @@ export function ReviewPanel(): JSX.Element {
             glossary: glossaryText,
             sourceLanguage: detectSourceLanguage(chunk.segments),
             targetLanguage: project.metadata.targetLanguage,
+            ...(serializedComments ? { userComments: serializedComments } : {}),
             abortSignal: controller.signal,
             onToken: (text) => setStreamingText(text),
           });

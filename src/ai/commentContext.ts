@@ -5,6 +5,12 @@ export interface SerializeUserCommentsOptions {
   field?: CommentField;
   /** 헤더 다음 안내 문구 교체. 미지정 시 번역용 기본 문구. */
   leadIn?: string;
+  /**
+   * segmentGroupId 화이트리스트. 지정 시, segmentGroupId가 있는 코멘트는
+   * 이 집합에 포함될 때만 통과(특정 청크/세그먼트 범위로 한정).
+   * segmentGroupId가 없는 코멘트는 항상 포함.
+   */
+  segmentGroupIds?: Set<string>;
 }
 
 /**
@@ -19,9 +25,15 @@ export function serializeUserComments(
   comments: UserComment[],
   options: SerializeUserCommentsOptions = {},
 ): string {
+  const { field, segmentGroupIds } = options;
   const entries = comments
     .filter((c) => c.resolved !== true)
-    .filter((c) => (options.field ? c.field === options.field : true))
+    .filter((c) => (field ? c.field === field : true))
+    .filter((c) => {
+      // segmentGroupId 화이트리스트: id가 있는 코멘트만 검사, 없으면 항상 통과
+      if (!segmentGroupIds || !c.segmentGroupId) return true;
+      return segmentGroupIds.has(c.segmentGroupId);
+    })
     .map((c) => ({ excerpt: c.excerpt.trim(), comment: c.comment.trim() }))
     .filter((c) => c.excerpt !== '' && c.comment !== '');
 

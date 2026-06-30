@@ -26,6 +26,8 @@ export interface RunReviewParams {
   sourceLanguage?: string | undefined;
   /** Target 언어 (예: "English", "영어") */
   targetLanguage?: string | undefined;
+  /** 직렬화된 사용자 인라인 코멘트(serializeUserComments 결과). 청크 범위로 한정 가능. */
+  userComments?: string | undefined;
   abortSignal?: AbortSignal;
   onToken?: (accumulated: string) => void;
 }
@@ -53,6 +55,9 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   }
   if (params.glossary?.trim()) {
     userContentParts.push(`## 용어집\n${params.glossary.trim()}`);
+  }
+  if (params.userComments?.trim()) {
+    userContentParts.push(params.userComments.trim());
   }
 
   const segmentsText = params.segments
