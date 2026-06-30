@@ -103,7 +103,11 @@ function TipTapEditor({
   }, [imageExtension, pasteLinkPreserve, t, panelType]);
 
   const lastContentRef = useRef<string>(content);
+  const onSearchOpenRef = useRef(onSearchOpen);
+  const onSearchOpenWithReplaceRef = useRef(onSearchOpenWithReplace);
   const onCommentClickRef = useRef(onCommentClick);
+  onSearchOpenRef.current = onSearchOpen;
+  onSearchOpenWithReplaceRef.current = onSearchOpenWithReplace;
   onCommentClickRef.current = onCommentClick;
 
   const editor = useEditor({
@@ -147,7 +151,7 @@ function TipTapEditor({
         const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f';
         if (isSearchShortcut) {
           event.preventDefault();
-          onSearchOpen?.();
+          onSearchOpenRef.current?.();
           return true;
         }
 
@@ -156,7 +160,7 @@ function TipTapEditor({
           const isReplaceShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'h';
           if (isReplaceShortcut) {
             event.preventDefault();
-            onSearchOpenWithReplace?.();
+            onSearchOpenWithReplaceRef.current?.();
             return true;
           }
         }

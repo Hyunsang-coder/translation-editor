@@ -164,10 +164,20 @@ export function SearchBar({
     setShowReplace((prev) => !prev);
   }, [panelType]);
 
+  const closeFromSearchShortcut = useCallback(() => {
+    onClose();
+    editor?.commands.focus();
+  }, [editor, onClose]);
+
   // 핸들러: 검색 입력 키보드 이벤트
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
+      const isSearchShortcut = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f';
+      if (isSearchShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeFromSearchShortcut();
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'Enter') {
@@ -179,13 +189,18 @@ export function SearchBar({
         }
       }
     },
-    [onClose, handleNextMatch, handlePrevMatch]
+    [closeFromSearchShortcut, onClose, handleNextMatch, handlePrevMatch]
   );
 
   // 핸들러: 치환 입력 키보드 이벤트
   const handleReplaceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
+      const isSearchShortcut = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f';
+      if (isSearchShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeFromSearchShortcut();
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'Enter') {
@@ -193,7 +208,7 @@ export function SearchBar({
         handleReplace();
       }
     },
-    [onClose, handleReplace]
+    [closeFromSearchShortcut, onClose, handleReplace]
   );
 
   if (!isOpen) {

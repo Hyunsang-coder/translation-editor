@@ -716,7 +716,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   // 검색바 핸들러
   const handleSourceSearchOpen = useCallback(() => {
-    setSourceSearchOpen(true);
+    setSourceSearchOpen((prev) => !prev);
   }, []);
 
   const handleSourceSearchClose = useCallback(() => {
@@ -725,7 +725,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const handleTargetSearchOpen = useCallback(() => {
     setTargetSearchReplaceMode(false);
-    setTargetSearchOpen(true);
+    setTargetSearchOpen((prev) => !prev);
   }, []);
 
   const handleTargetSearchOpenWithReplace = useCallback(() => {
