@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare, Clock3, Download } from 'lucide-react';
+import { Settings, MessageSquare, Clock3, Download, PanelLeft, PanelLeftOpen } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
@@ -14,13 +14,14 @@ import { ExportModal } from '@/components/export/ExportModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, openReviewPanel, toggleChatVisibility, leftSidebar, rightSidebar } =
+  const { openPanel, toggleChatVisibility, leftSidebar, rightSidebar, projectSidebarCollapsed, toggleProjectSidebar } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
-      openReviewPanel: s.openReviewPanel,
       toggleChatVisibility: s.toggleChatVisibility,
       leftSidebar: s.leftSidebar,
       rightSidebar: s.rightSidebar,
+      projectSidebarCollapsed: s.projectSidebarCollapsed,
+      toggleProjectSidebar: s.toggleProjectSidebar,
     })));
   const project = useProjectStore((s) => s.project);
 const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -60,12 +61,6 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
   const handleProjectSettings = () => {
     if (!project) return;
     openPanel('settings');
-    setDropdownOpen(false);
-  };
-
-  const handleReview = () => {
-    if (!project) return;
-    openReviewPanel();
     setDropdownOpen(false);
   };
 
@@ -114,15 +109,25 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
   }, []);
 
   return (
-    <header className="h-[45px] border-b border-editor-border bg-editor-surface flex items-center justify-between px-4">
-      {/* 프로젝트 정보 */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-editor-text">
+    <header className="h-10 border-b border-editor-border bg-editor-surface flex items-center justify-between px-2 shrink-0">
+      {/* 좌측: 사이드바 토글 + 프로젝트 제목 */}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <button
+          type="button"
+          onClick={toggleProjectSidebar}
+          className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
+          title={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
+          aria-label={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
+          data-testid="toolbar-sidebar-toggle"
+        >
+          {projectSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeft size={18} />}
+        </button>
+        <h1 className="text-sm font-semibold text-editor-text truncate">
           {project?.metadata.title ?? t('common.untitledProject')}
         </h1>
       </div>
 
-      {/* 툴바 액션 */}
+      {/* 우측: 줌 인디케이터 + Tools 메뉴 */}
       <div className="flex items-center gap-2">
         {/* Chrome-style zoom indicator */}
         {zoomVisible && (
@@ -173,18 +178,6 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
               >
                 <MessageSquare size={16} />
                 <span>{t('toolbar.aiChat')}</span>
-              </button>
-              <div role="separator" className="h-px bg-editor-border" />
-              <button
-                role="menuitem"
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleReview}
-                disabled={!project}
-                data-testid="toolbar-menu-review"
-              >
-                <Search size={16} />
-                <span>{t('toolbar.review')}</span>
               </button>
               <div role="separator" className="h-px bg-editor-border" />
               <button

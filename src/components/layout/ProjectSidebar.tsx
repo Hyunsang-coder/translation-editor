@@ -23,7 +23,7 @@ type NewProjectForm = {
   domain: ProjectDomain;
 };
 
-export function ProjectSidebar(): JSX.Element {
+export function ProjectSidebar(): JSX.Element | null {
   const { t } = useTranslation();
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
   const toggleProjectSidebar = useUIStore((s) => s.toggleProjectSidebar);
@@ -99,32 +99,9 @@ export function ProjectSidebar(): JSX.Element {
     }
   }, [renamingId]);
 
-  // 접힌 상태: 아이콘만 표시
+  // 접힌 상태: 완전히 숨김 (Codex 스타일). 다시 열기는 상단 헤더의 토글 버튼으로.
   if (projectSidebarCollapsed) {
-    return (
-      <div className="w-12 h-full flex flex-col items-center py-2 bg-editor-surface border-r border-editor-border">
-        <button
-          type="button"
-          onClick={toggleProjectSidebar}
-          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('projectSidebar.projects')}
-        >
-          <FolderOpen size={20} />
-        </button>
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setShowAppSettings(true)}
-          className="p-2.5 rounded-lg hover:bg-editor-border transition-colors text-editor-muted hover:text-editor-text"
-          title={t('projectSidebar.appSettings')}
-        >
-          <Cog size={20} />
-        </button>
-        {showAppSettings && (
-          <AppSettingsModal onClose={() => setShowAppSettings(false)} />
-        )}
-      </div>
-    );
+    return null;
   }
 
   const getUniqueTitle = (baseTitle: string): string => {

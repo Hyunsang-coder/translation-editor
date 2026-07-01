@@ -100,12 +100,10 @@ export function MainLayout(): JSX.Element {
   return (
     <div className="flex flex-col h-screen">
       <ToastHost />
-      {/* 상단 툴바 */}
-      <Toolbar />
 
-      {/* 메인 에디터 영역 */}
+      {/* 메인 영역: [ProjectSidebar] | [LeftSidebar] | (슬림 헤더 + 에디터) | [RightSidebar] */}
       <main ref={zoomContainerRef} className="flex-1 flex overflow-hidden min-h-0 relative">
-        {/* 프로젝트 사이드바 (항상 렌더링, 자체적으로 접힘 처리) */}
+        {/* 프로젝트 사이드바 (접히면 완전히 숨김) */}
         <ProjectSidebar />
 
         {/* 좌측 사이드바 (프로젝트 있을 때만) */}
@@ -115,34 +113,40 @@ export function MainLayout(): JSX.Element {
           </ErrorBoundary>
         )}
 
-        {/* 에디터 캔버스 (TipTap) */}
-        <div className="flex-1 min-w-[400px] min-h-0">
-          {project ? (
-            <ErrorBoundary name="Editor">
-              <EditorCanvasTipTap />
-            </ErrorBoundary>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
-              {/* Empty State Content */}
-              <div className="max-w-md text-center space-y-8">
-                <div className="space-y-4">
-                  <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
-                  <p className="text-editor-muted leading-relaxed">
-                    문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
-                    기존 프로젝트가 있다면 왼쪽 사이드바에서 선택할 수 있습니다.
-                  </p>
+        {/* 콘텐츠 컬럼: 슬림 헤더(사이드바 토글 + Tools) + 에디터 */}
+        <div className="flex-1 min-w-[400px] min-h-0 flex flex-col">
+          {/* 상단 슬림 헤더 — 사이드바 폭만큼이 아니라 콘텐츠 영역만 덮음 */}
+          <Toolbar />
+
+          {/* 에디터 캔버스 (TipTap) */}
+          <div className="flex-1 min-h-0">
+            {project ? (
+              <ErrorBoundary name="Editor">
+                <EditorCanvasTipTap />
+              </ErrorBoundary>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center bg-editor-bg text-editor-text p-8">
+                {/* Empty State Content */}
+                <div className="max-w-md text-center space-y-8">
+                  <div className="space-y-4">
+                    <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
+                    <p className="text-editor-muted leading-relaxed">
+                      문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
+                      기존 프로젝트가 있다면 왼쪽 사이드바에서 선택할 수 있습니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreateProject}
+                    disabled={isCreating}
+                    className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreating ? '생성 중...' : '새 프로젝트 시작하기'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCreateProject}
-                  disabled={isCreating}
-                  className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCreating ? '생성 중...' : '새 프로젝트 시작하기'}
-                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* 우측 사이드바 (프로젝트 있을 때만) */}

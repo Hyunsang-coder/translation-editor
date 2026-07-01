@@ -26,7 +26,7 @@ import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { MessageSquareText } from 'lucide-react';
+import { MessageSquareText, Sparkles } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -806,51 +806,60 @@ export function EditorCanvasTipTap(): JSX.Element {
             size="sm"
             className="min-w-[130px]"
           />
-          <button
-            type="button"
-            onClick={handleTranslateClick}
-            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
-            disabled={translateLoading}
-            title={t('editor.translateTitle')}
-            data-testid="editor-translate-button"
-          >
-            {translateLoading ? (
-              <>
-                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>{t('editor.translating')}</span>
-              </>
-            ) : (
-              t('editor.translate')
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => openReviewPanel()}
-            className="px-2 py-1 rounded text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
-            title={t('editor.reviewTitle', '번역 검수')}
-            data-testid="editor-review-button"
-          >
-            {t('editor.review', '검수')}
-          </button>
-          <button
-            type="button"
-            onClick={handlePolishClick}
-            className="px-2 py-1 rounded text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            disabled={!hasTargetContent || polishLoading}
-            title={t('review.polish', '폴리싱')}
-            data-testid="editor-polish-button"
-          >
-            {t('review.polish', '폴리싱')}
-          </button>
+          {/* AI 작업 워크플로 (번역 → 검수 → 폴리싱) — segmented control */}
+          <div className="inline-flex items-stretch rounded-md border border-editor-border overflow-hidden bg-editor-bg">
+            <button
+              type="button"
+              onClick={handleTranslateClick}
+              className="px-2.5 py-1 text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
+              disabled={translateLoading}
+              title={t('editor.translateTitle')}
+              data-testid="editor-translate-button"
+            >
+              {translateLoading ? (
+                <>
+                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>{t('editor.translating')}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{t('editor.translate')}</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => openReviewPanel()}
+              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface transition-colors"
+              title={t('editor.reviewTitle', '번역 검수')}
+              data-testid="editor-review-button"
+            >
+              {t('editor.review', '검수')}
+            </button>
+            <button
+              type="button"
+              onClick={handlePolishClick}
+              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              disabled={!hasTargetContent || polishLoading}
+              title={t('review.polish', '폴리싱')}
+              data-testid="editor-polish-button"
+            >
+              {t('review.polish', '폴리싱')}
+            </button>
+          </div>
+          {/* 코멘트 — 워크플로와 분리된 유틸리티 */}
           <button
             type="button"
             onClick={() => openCommentsPanel()}
-            className="px-2 py-1 rounded text-xs font-semibold text-editor-text border border-editor-border hover:bg-editor-bg flex items-center gap-1 transition-colors"
+            className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border flex items-center gap-1 transition-colors relative"
             title={t('comment.title', '코멘트')}
             data-testid="editor-comments-button"
           >
-            <MessageSquareText className="w-3.5 h-3.5" />
-            {commentCount > 0 && <span className="tabular-nums">{commentCount}</span>}
+            <MessageSquareText className="w-4 h-4" />
+            {commentCount > 0 && (
+              <span className="tabular-nums text-[11px] font-semibold text-editor-text">{commentCount}</span>
+            )}
           </button>
         </div>
       </div>

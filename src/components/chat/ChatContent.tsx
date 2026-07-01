@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Paperclip } from 'lucide-react';
+import { isTauriRuntime } from '@/tauri/invoke';
 import { useChatStore } from '@/stores/chatStore';
 import {
   useChatComposerState,
@@ -577,6 +579,24 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                     data-ite-composer-menu
                     className="absolute bottom-10 left-0 w-52 rounded-xl border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50"
                   >
+                    {isTauriRuntime() && (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => {
+                            setComposerMenuOpen(false);
+                            void handleAttachClick();
+                          }}
+                          disabled={isLoading}
+                          data-testid="chat-attach-file"
+                        >
+                          <Paperclip size={16} className="text-editor-muted" />
+                          <span className="flex-1 text-left">{t('chat.attachFile')}</span>
+                        </button>
+                        <div role="separator" className="h-px bg-editor-border" />
+                      </>
+                    )}
                     <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -644,32 +664,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 </div>
               )}
               </div>
-
-              {/* 파일 첨부 버튼 */}
-              <button
-                type="button"
-                className="w-7 h-7 rounded-full border border-editor-border bg-editor-bg text-editor-muted
-                           hover:bg-editor-border hover:text-editor-text transition-colors flex items-center justify-center"
-                title={t('chat.attachFile')}
-                aria-label={t('chat.attachFileAriaLabel')}
-                onClick={() => void handleAttachClick()}
-                disabled={isLoading}
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                  />
-                </svg>
-              </button>
             </div>
 
             <div className="pointer-events-auto ml-auto flex items-center gap-1 min-w-0">
