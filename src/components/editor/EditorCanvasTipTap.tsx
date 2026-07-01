@@ -183,6 +183,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   }>(null);
   const selectionTimerRef = useRef<number | null>(null);
   const selectionTokenRef = useRef<number>(0);
+  // 사용자가 명시적으로 메뉴를 닫은 선택 범위 — 같은 범위엔 메뉴를 다시 띄우지 않는다.
+  const dismissedSelectionRef = useRef<{ field: CommentField; from: number; to: number } | null>(null);
 
   // 코멘트 입력 popover 상태
   const [commentPopover, setCommentPopover] = useState<null | {
@@ -239,6 +241,16 @@ export function EditorCanvasTipTap(): JSX.Element {
       setAddToChatBubble(null);
       return;
     }
+
+    // 사용자가 방금 명시적으로 닫은 바로 그 범위면 메뉴를 다시 띄우지 않는다.
+    // (선택이 다른 범위로 바뀌면 기록을 비워 다시 뜨도록 한다.)
+    const dismissed = dismissedSelectionRef.current;
+    if (dismissed && dismissed.field === field && dismissed.from === from && dismissed.to === to) {
+      clearSelectionTimer();
+      setAddToChatBubble(null);
+      return;
+    }
+    dismissedSelectionRef.current = null;
 
     const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
     if (!selectedText) {
@@ -321,6 +333,17 @@ export function EditorCanvasTipTap(): JSX.Element {
       editor.off('blur', onBlur);
     };
   }, [scheduleAddToChatBubble]);
+
+  // 메뉴만 닫기 (닫기 버튼 / 메뉴 바깥 클릭). 선택 영역은 그대로 유지한다.
+  const dismissAddToChatBubble = useCallback((): void => {
+    setAddToChatBubble((prev) => {
+      if (prev) {
+        dismissedSelectionRef.current = { field: prev.field, from: prev.from, to: prev.to };
+      }
+      return null;
+    });
+    clearSelectionTimer();
+  }, []);
 
   const openCommentDetail = useCallback((params: {
     commentId: string;
@@ -772,6 +795,19 @@ export function EditorCanvasTipTap(): JSX.Element {
       clearSelectionTimer();
     };
   }, [sourceEditor, targetEditor, attachSelectionWatcher]);
+
+  // 선택 액션 메뉴가 열려 있을 때, 메뉴 바깥(에디터 밖 여백/다른 UI)을 클릭하면
+  // 메뉴만 닫고 선택 영역은 유지한다. 에디터 본문 클릭은 selectionUpdate가 처리한다.
+  useEffect(() => {
+    if (!addToChatBubble) return;
+    const onPointerDown = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-selection-action-menu]')) return;
+      dismissAddToChatBubble();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [addToChatBubble, dismissAddToChatBubble]);
 
   if (!project) {
     return (
@@ -1262,6 +1298,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             });
             setAddToChatBubble(null);
           }}
+          onClose={dismissAddToChatBubble}
         />
       )}
 

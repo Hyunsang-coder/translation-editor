@@ -66,13 +66,15 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
 
   useEffect(() => {
     if (!open) return;
-    function onDocClick(e: MouseEvent): void {
+    function onDocPointerDown(e: MouseEvent): void {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         close();
       }
     }
-    document.addEventListener('click', onDocClick);
-    return () => document.removeEventListener('click', onDocClick);
+    // click(버블) 대신 mousedown 사용 — 저장/입력 버튼 클릭이 리렌더로 사라지며
+    // 후속 click이 컨테이너 바깥으로 오인되는 경합을 피한다.
+    document.addEventListener('mousedown', onDocPointerDown);
+    return () => document.removeEventListener('mousedown', onDocPointerDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -95,7 +97,15 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
       addToast({ type: 'warning', message: t('settings.presetNameRequired') });
       return;
     }
-    const id = addPreset(kind, nameInput, currentValue);
+    let id: string | null;
+    try {
+      id = addPreset(kind, nameInput, currentValue);
+    } catch (err) {
+      // addPreset / persist 저장 중 예외(ID 생성 실패, localStorage 쓰기 실패 등)
+      console.error('[PromptPreset] save failed:', err);
+      addToast({ type: 'error', message: t('settings.presetSaveError') });
+      return;
+    }
     if (id) {
       addToast({ type: 'success', message: t('settings.presetSaved') });
       setAppliedId(id);

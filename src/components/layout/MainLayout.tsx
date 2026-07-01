@@ -101,7 +101,11 @@ export function MainLayout(): JSX.Element {
     <div className="flex flex-col h-screen">
       <ToastHost />
 
-      {/* 메인 영역: [ProjectSidebar] | [LeftSidebar] | (슬림 헤더 + 에디터) | [RightSidebar] */}
+      {/* 전역 상단 헤더 밴드 — 창 전체 폭을 덮어 아래 모든 영역(목록/사이드바/에디터)이
+          현재 프로젝트에 속함을 위계로 드러낸다. (프로젝트가 있을 때만) */}
+      {project && <Toolbar />}
+
+      {/* 메인 영역: [ProjectSidebar] | [LeftSidebar] | 에디터 | [RightSidebar] */}
       <main ref={zoomContainerRef} className="flex-1 flex overflow-hidden min-h-0 relative">
         {/* 프로젝트 사이드바 (접히면 완전히 숨김) */}
         <ProjectSidebar />
@@ -113,11 +117,8 @@ export function MainLayout(): JSX.Element {
           </ErrorBoundary>
         )}
 
-        {/* 콘텐츠 컬럼: 슬림 헤더(사이드바 토글 + Tools) + 에디터 */}
+        {/* 콘텐츠 컬럼: 에디터 */}
         <div className="flex-1 min-w-[400px] min-h-0 flex flex-col">
-          {/* 상단 슬림 헤더 — 사이드바 폭만큼이 아니라 콘텐츠 영역만 덮음 */}
-          <Toolbar />
-
           {/* 에디터 캔버스 (TipTap) */}
           <div className="flex-1 min-h-0">
             {project ? (

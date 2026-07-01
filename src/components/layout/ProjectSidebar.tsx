@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Cog } from 'lucide-react';
+import { Cog } from 'lucide-react';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import {
@@ -26,7 +26,6 @@ type NewProjectForm = {
 export function ProjectSidebar(): JSX.Element | null {
   const { t } = useTranslation();
   const projectSidebarCollapsed = useUIStore((s) => s.projectSidebarCollapsed);
-  const toggleProjectSidebar = useUIStore((s) => s.toggleProjectSidebar);
   const projectSidebarWidth = useUIStore((s) => s.projectSidebarWidth);
   const setProjectSidebarWidth = useUIStore((s) => s.setProjectSidebarWidth);
 
@@ -276,20 +275,9 @@ export function ProjectSidebar(): JSX.Element | null {
 
   return (
     <div className="h-full flex flex-col bg-editor-surface border-r border-editor-border relative" style={{ width: projectSidebarWidth }}>
-      <div className="h-10 px-3 flex items-center justify-between border-b border-editor-border shrink-0">
-        {/* Toggle (접기) */}
-        <button
-          type="button"
-          onClick={toggleProjectSidebar}
-          className="p-1 rounded hover:bg-editor-border transition-colors text-editor-muted"
-          title={t('projectSidebar.collapse', '접기')}
-        >
-          <FolderOpen size={18} />
-        </button>
-
-        {/* Title */}
-        <div className="text-xs font-semibold text-editor-text flex-1 ml-2">{t('projectSidebar.projects')}</div>
-
+      <div className="h-10 px-3 flex items-center border-b border-editor-border shrink-0">
+        {/* Title (접기 토글은 상단 헤더 밴드로 이동) */}
+        <div className="text-xs font-semibold text-editor-text flex-1">{t('projectSidebar.projects')}</div>
       </div>
 
       {showNew && (

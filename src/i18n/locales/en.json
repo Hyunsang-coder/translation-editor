@@ -66,6 +66,7 @@
     "presetSaveEmptyValue": "The field is empty — nothing to save.",
     "presetNameRequired": "Please enter a preset name.",
     "presetSaved": "Preset saved.",
+    "presetSaveError": "Failed to save the preset. Please try again.",
     "presetDeleteConfirm": "Delete this preset?"
   },
   "appSettings": {

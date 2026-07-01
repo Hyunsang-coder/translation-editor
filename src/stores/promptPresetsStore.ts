@@ -43,8 +43,16 @@ const FIELD_BY_KIND: Record<PromptPresetKind, keyof Pick<
 };
 
 function generateId(): string {
-  // crypto.randomUUID는 ghostMask 등 앱 전반에서 사용 중 (브라우저/Tauri 모두 지원)
-  return crypto.randomUUID();
+  // crypto.randomUUID는 secure context에서만 보장됨. 일부 WebView/비보안 컨텍스트에서
+  // undefined이거나 예외를 던질 수 있어 fallback을 둔다.
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // fall through to fallback
+  }
+  return `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export const usePromptPresetsStore = create<PromptPresetsState>()(

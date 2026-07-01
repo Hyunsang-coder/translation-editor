@@ -110,7 +110,7 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
     <header className="h-10 border-b border-editor-border bg-editor-surface flex items-center justify-between px-2 shrink-0">
-      {/* 좌측: 사이드바 토글 + 프로젝트 제목 */}
+      {/* 좌측: 사이드바 토글 + 프로젝트 제목 (아래 영역이 이 프로젝트 소속임을 나타냄) */}
       <div className="flex items-center gap-1.5 min-w-0">
         <button
           type="button"

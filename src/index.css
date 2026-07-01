@@ -198,7 +198,7 @@
   .chat-markdown h4,
   .chat-markdown h5,
   .chat-markdown h6 {
-    @apply text-xs font-semibold my-2 leading-relaxed;
+    @apply text-sm font-semibold my-2 leading-relaxed;
   }
 
   .chat-markdown p {
@@ -238,11 +238,11 @@
   }
 
   .chat-markdown code {
-    @apply bg-editor-surface px-1.5 py-0.5 rounded text-xs font-mono break-all;
+    @apply bg-editor-surface px-1.5 py-0.5 rounded text-sm font-mono break-all;
   }
 
   .chat-markdown pre code {
-    @apply bg-transparent p-0 text-xs break-normal;
+    @apply bg-transparent p-0 text-sm break-normal;
   }
 
   .chat-markdown img {
@@ -255,7 +255,7 @@
 
   .chat-markdown th,
   .chat-markdown td {
-    @apply border border-editor-border px-3 py-1.5 text-xs;
+    @apply border border-editor-border px-3 py-1.5 text-sm;
   }
 
   .chat-markdown th {

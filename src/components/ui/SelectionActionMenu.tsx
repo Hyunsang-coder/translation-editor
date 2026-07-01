@@ -1,4 +1,4 @@
-import { Eye, MessagesSquare, StickyNote } from 'lucide-react';
+import { Eye, MessagesSquare, StickyNote, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export interface SelectionExistingComment {
@@ -11,11 +11,15 @@ interface SelectionActionMenuProps {
   onAddToChat: () => void;
   onAddComment: () => void;
   onViewComment: (commentId: string) => void;
+  /** 메뉴만 닫기 (텍스트 선택은 유지) */
+  onClose: () => void;
   style?: React.CSSProperties;
   className?: string;
 }
 
 const ITEM_HEIGHT = 38;
+/** 상단 닫기 버튼 헤더 행의 높이(px) */
+const CLOSE_HEADER_HEIGHT = 29;
 
 /**
  * 텍스트 선택 후 표시되는 세로 액션 메뉴 (채팅 추가 / 코멘트).
@@ -25,6 +29,7 @@ export function SelectionActionMenu({
   onAddToChat,
   onAddComment,
   onViewComment,
+  onClose,
   style,
   className = '',
 }: SelectionActionMenuProps): JSX.Element {
@@ -46,6 +51,7 @@ export function SelectionActionMenu({
 
   return (
     <div
+      data-selection-action-menu
       style={style}
       className={`
         min-w-[10rem] max-w-[14rem] overflow-hidden rounded-xl
@@ -56,6 +62,18 @@ export function SelectionActionMenu({
       `.trim()}
       onMouseDown={(e) => e.preventDefault()}
     >
+      <div className="flex items-center justify-end border-b border-editor-border px-1.5 py-1">
+        <button
+          type="button"
+          className="rounded p-1 text-editor-muted hover:bg-editor-border/60 hover:text-editor-text transition-colors"
+          title={t('common.close')}
+          aria-label={t('common.close')}
+          onClick={onClose}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       <button
         type="button"
         className={itemClassName}
@@ -108,5 +126,5 @@ export function getSelectionActionMenuHeight(existingCommentCount = 0): number {
   const commentItems = existingCommentCount > 0
     ? Math.min(existingCommentCount, 3)
     : 1;
-  return (1 + commentItems) * ITEM_HEIGHT + 8;
+  return CLOSE_HEADER_HEIGHT + (1 + commentItems) * ITEM_HEIGHT + 8;
 }
