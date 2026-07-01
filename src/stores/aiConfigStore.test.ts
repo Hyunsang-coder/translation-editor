@@ -1,5 +1,29 @@
-import { describe, it, expect } from 'vitest';
-import { migrateAiConfig, getErrorMessage } from './aiConfigStore';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+
+const secureStoreMock = vi.hoisted(() => ({
+  getSecureSecret: vi.fn(),
+  setSecureSecret: vi.fn(),
+}));
+
+vi.mock('@/tauri/secureStore', () => secureStoreMock);
+
+import { migrateAiConfig, getErrorMessage, useAiConfigStore } from './aiConfigStore';
+
+function createDeferred<T = void>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushPromises(): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+  }
+}
 
 describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
   it('claude-opus-4-6 → 4-7 → 4-8 누적 rename', () => {
@@ -139,5 +163,94 @@ describe('aiConfigStore - loadSecureKeys 로직 검증', () => {
 
     // loadingPromise 기반 dedup 체크
     expect(content).toMatch(/if\s*\(loadingPromise\)/);
+  });
+});
+
+describe('aiConfigStore - API key bundle persist ordering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAiConfigStore.getState().clearApiKeysAfterSecureStorageReset();
+  });
+
+  it('serializes bundle writes so an older slow write cannot overwrite the latest keys', async () => {
+    const firstWrite = createDeferred<void>();
+    const persistedBundles: Array<{ openai?: string; anthropic?: string }> = [];
+
+    secureStoreMock.setSecureSecret
+      .mockImplementationOnce((_id: string, json: string) => {
+        persistedBundles.push(JSON.parse(json));
+        return firstWrite.promise;
+      })
+      .mockImplementationOnce((_id: string, json: string) => {
+        persistedBundles.push(JSON.parse(json));
+        return Promise.resolve();
+      });
+
+    useAiConfigStore.getState().setOpenaiApiKey('sk-openai');
+
+    await flushPromises();
+    expect(secureStoreMock.setSecureSecret).toHaveBeenCalledTimes(1);
+    expect(persistedBundles).toEqual([{ openai: 'sk-openai' }]);
+
+    useAiConfigStore.getState().setAnthropicApiKey('sk-anthropic');
+    await flushPromises();
+    expect(secureStoreMock.setSecureSecret).toHaveBeenCalledTimes(1);
+
+    firstWrite.resolve();
+    await flushPromises();
+
+    expect(secureStoreMock.setSecureSecret).toHaveBeenCalledTimes(2);
+    expect(persistedBundles).toEqual([
+      { openai: 'sk-openai' },
+      { openai: 'sk-openai', anthropic: 'sk-anthropic' },
+    ]);
+    expect(useAiConfigStore.getState().secureKeyPersistError).toBeUndefined();
+  });
+
+  it('coalesces same-tick key changes into a single latest bundle write', async () => {
+    const persistedBundles: Array<{ openai?: string; anthropic?: string }> = [];
+    secureStoreMock.setSecureSecret.mockImplementation((_id: string, json: string) => {
+      persistedBundles.push(JSON.parse(json));
+      return Promise.resolve();
+    });
+
+    useAiConfigStore.getState().setOpenaiApiKey('sk-openai');
+    useAiConfigStore.getState().setAnthropicApiKey('sk-anthropic');
+
+    await flushPromises();
+
+    expect(secureStoreMock.setSecureSecret).toHaveBeenCalledTimes(1);
+    expect(persistedBundles).toEqual([
+      { openai: 'sk-openai', anthropic: 'sk-anthropic' },
+    ]);
+  });
+
+  it('continues the queue after an older write fails and persists the latest bundle', async () => {
+    const firstWrite = createDeferred<void>();
+    const persistedBundles: Array<{ openai?: string; anthropic?: string }> = [];
+
+    secureStoreMock.setSecureSecret
+      .mockImplementationOnce((_id: string, json: string) => {
+        persistedBundles.push(JSON.parse(json));
+        return firstWrite.promise;
+      })
+      .mockImplementationOnce((_id: string, json: string) => {
+        persistedBundles.push(JSON.parse(json));
+        return Promise.resolve();
+      });
+
+    useAiConfigStore.getState().setOpenaiApiKey('sk-openai');
+    await flushPromises();
+    useAiConfigStore.getState().setAnthropicApiKey('sk-anthropic');
+
+    firstWrite.reject(new Error('stale write failed'));
+    await flushPromises();
+
+    expect(secureStoreMock.setSecureSecret).toHaveBeenCalledTimes(2);
+    expect(persistedBundles).toEqual([
+      { openai: 'sk-openai' },
+      { openai: 'sk-openai', anthropic: 'sk-anthropic' },
+    ]);
+    expect(useAiConfigStore.getState().secureKeyPersistError).toBeUndefined();
   });
 });

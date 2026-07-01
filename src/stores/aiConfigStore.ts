@@ -82,6 +82,32 @@ export function getErrorMessage(err: unknown): string {
 let keysLoaded = false;
 let loadingPromise: Promise<void> | null = null;
 let persistVersion = 0;
+let keyPersistQueue: Promise<void> = Promise.resolve();
+
+function enqueuePersistAllKeys(
+  keys: ApiKeysBundle,
+  version: number,
+  set: (partial: Partial<AiConfigState>) => void,
+): void {
+  keyPersistQueue = keyPersistQueue
+    .catch(() => {
+      // 이전 저장 실패가 이후 최신 저장을 막지 않도록 큐를 계속 진행합니다.
+    })
+    .then(async () => {
+      if (version !== persistVersion) return;
+      try {
+        await persistAllKeys(keys);
+        if (version === persistVersion) {
+          set({ secureKeyPersistError: undefined });
+        }
+      } catch (err) {
+        if (version !== persistVersion) return;
+        const message = getErrorMessage(err);
+        console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
+        set({ secureKeyPersistError: message });
+      }
+    });
+}
 
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
@@ -241,30 +267,20 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           const next = normalizeKey(key);
           set({ openaiApiKey: next, secureKeyPersistError: undefined });
           const state = get();
-          void persistAllKeys({
+          enqueuePersistAllKeys({
             openai: next,
             anthropic: state.anthropicApiKey,
-          }).catch((err) => {
-            if (version !== persistVersion) return;
-            const message = getErrorMessage(err);
-            console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
-            set({ secureKeyPersistError: message });
-          });
+          }, version, set);
         },
         setAnthropicApiKey: (key) => {
           const version = ++persistVersion;
           const next = normalizeKey(key);
           set({ anthropicApiKey: next, secureKeyPersistError: undefined });
           const state = get();
-          void persistAllKeys({
+          enqueuePersistAllKeys({
             openai: state.openaiApiKey,
             anthropic: next,
-          }).catch((err) => {
-            if (version !== persistVersion) return;
-            const message = getErrorMessage(err);
-            console.warn(`[aiConfigStore] Failed to persist API keys bundle:`, message);
-            set({ secureKeyPersistError: message });
-          });
+          }, version, set);
           // API Key 삭제 시 해당 provider 비활성화
           if (!next && state.anthropicEnabled && state.openaiEnabled) {
             set({ anthropicEnabled: false });

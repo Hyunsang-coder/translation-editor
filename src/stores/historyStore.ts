@@ -13,10 +13,12 @@ import { useProjectStore } from '@/stores/projectStore';
 
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
+  snapshotsProjectId: string | null;
   isLoading: boolean;
   isLoadingSnapshot: boolean;
   error: string | null;
   latestBlocksHash: string | null;
+  latestBlocksHashProjectId: string | null;
 }
 
 interface HistoryActions {
@@ -49,17 +51,19 @@ function toErrorMessage(error: unknown): string {
 
 const initialState: HistoryState = {
   snapshots: [],
+  snapshotsProjectId: null,
   isLoading: false,
   isLoadingSnapshot: false,
   error: null,
   latestBlocksHash: null,
+  latestBlocksHashProjectId: null,
 };
 
 let loadHistoryRequestSeq = 0;
 let autoSnapshotTimer: number | null = null;
 let autoSnapshotInFlight = false;
 let lastCheckedChangeAt = 0;
-let createSnapshotIfChangedInFlight = false;
+const createSnapshotIfChangedQueues = new Map<string, Promise<string | null>>();
 // stopAutoSnapshotWatch 호출 후 in-flight Promise가 다른 프로젝트 state를 오염시키지
 // 않도록, 실행 시점의 projectId를 캡처해 완료 시 검증한다.
 let autoSnapshotActiveProjectId: string | null = null;
@@ -69,6 +73,36 @@ function isLatestRequest(requestSeq: number): boolean {
   return requestSeq === loadHistoryRequestSeq;
 }
 
+function getProjectScopedHash(state: HistoryState, projectId: string): string | null {
+  return state.latestBlocksHashProjectId === null || state.latestBlocksHashProjectId === projectId
+    ? state.latestBlocksHash
+    : null;
+}
+
+function getProjectScopedSnapshots(
+  state: HistoryState,
+  projectId: string,
+): HistorySnapshotMeta[] {
+  return state.snapshotsProjectId === null || state.snapshotsProjectId === projectId
+    ? state.snapshots
+    : [];
+}
+
+function enqueueSnapshotIfChanged(
+  projectId: string,
+  task: () => Promise<string | null>,
+): Promise<string | null> {
+  const previous = createSnapshotIfChangedQueues.get(projectId) ?? Promise.resolve(null);
+  const queued = previous.catch(() => null).then(task);
+  const cleanup = queued.finally(() => {
+    if (createSnapshotIfChangedQueues.get(projectId) === cleanup) {
+      createSnapshotIfChangedQueues.delete(projectId);
+    }
+  });
+  createSnapshotIfChangedQueues.set(projectId, cleanup);
+  return cleanup;
+}
+
 export const useHistoryStore = create<HistoryStore>((set, get) => ({
   ...initialState,
 
@@ -76,7 +110,14 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     const requestSeq = ++loadHistoryRequestSeq;
     if (!projectId) {
       if (!isLatestRequest(requestSeq)) return;
-      set({ snapshots: [], isLoading: false, error: null, latestBlocksHash: null });
+      set({
+        snapshots: [],
+        snapshotsProjectId: null,
+        isLoading: false,
+        error: null,
+        latestBlocksHash: null,
+        latestBlocksHashProjectId: null,
+      });
       return;
     }
 
@@ -84,7 +125,13 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     try {
       const snapshots = await tauriListHistory(projectId);
       if (!isLatestRequest(requestSeq)) return;
-      set({ snapshots, isLoading: false });
+      set({
+        snapshots,
+        snapshotsProjectId: projectId,
+        isLoading: false,
+        latestBlocksHash: snapshots.length > 0 ? null : '',
+        latestBlocksHashProjectId: projectId,
+      });
 
       // Pre-compute latest snapshot hash in background
       if (snapshots.length > 0) {
@@ -93,14 +140,20 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
           tauriGetSnapshot({ projectId, snapshotId: latest.id })
             .then((s) => {
               if (s.snapshotJson && isLatestRequest(requestSeq)) {
-                set({ latestBlocksHash: hashContent(s.snapshotJson) });
+                set({
+                  latestBlocksHash: hashContent(s.snapshotJson),
+                  latestBlocksHashProjectId: projectId,
+                });
               }
             })
-            .catch(() => {});
+            .catch(() => {
+              if (!isLatestRequest(requestSeq)) return;
+              set({ latestBlocksHash: '', latestBlocksHashProjectId: projectId });
+            });
         }
       } else {
         // 스냅샷이 없는 신규 프로젝트 — 빈 sentinel로 초기화해서 auto snapshot이 진행되도록 함
-        set({ latestBlocksHash: '' });
+        set({ latestBlocksHash: '', latestBlocksHashProjectId: projectId });
       }
     } catch (error) {
       if (!isLatestRequest(requestSeq)) return;
@@ -132,13 +185,16 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     // Update hash cache after successful creation — guard with requestSeq to
     // prevent stale project's hash from overwriting the current project's cache.
     if (isLatestRequest(requestSeq)) {
-      set({ latestBlocksHash: hashContent(blocksJson) });
+      set({
+        latestBlocksHash: hashContent(blocksJson),
+        latestBlocksHashProjectId: projectId,
+      });
     }
 
     try {
       const snapshots = await tauriListHistory(projectId);
       if (!isLatestRequest(requestSeq)) return snapshotId;
-      set({ snapshots });
+      set({ snapshots, snapshotsProjectId: projectId });
     } catch (error) {
       if (!isLatestRequest(requestSeq)) return snapshotId;
       console.warn('[history] snapshot created but list refresh failed:', error);
@@ -148,10 +204,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   },
 
   createSnapshotIfChanged: async ({ projectId, description, blocks, chatSummary }): Promise<string | null> => {
-    if (createSnapshotIfChangedInFlight) return null;
-    createSnapshotIfChangedInFlight = true;
-    try {
-      const { latestBlocksHash, snapshots, getSnapshot, createSnapshot } = get();
+    return enqueueSnapshotIfChanged(projectId, async () => {
+      const state = get();
+      const latestBlocksHash = getProjectScopedHash(state, projectId);
+      const snapshots = getProjectScopedSnapshots(state, projectId);
+      const { getSnapshot, createSnapshot } = state;
       const currentHash = hashContent(JSON.stringify(blocks));
 
       // Cached hash available — fast path comparison
@@ -175,9 +232,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       }
 
       return await createSnapshot({ projectId, description, blocks, ...(chatSummary !== undefined ? { chatSummary } : {}) });
-    } finally {
-      createSnapshotIfChangedInFlight = false;
-    }
+    });
   },
 
   getSnapshot: async ({ projectId, snapshotId }): Promise<HistorySnapshot> => {
@@ -200,7 +255,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
       await tauriDeleteSnapshot({ projectId, snapshotId });
       const snapshots = await tauriListHistory(projectId);
       if (!isLatestRequest(requestSeq)) return;
-      set({ snapshots });
+      set({ snapshots, snapshotsProjectId: projectId });
     } catch (error) {
       if (!isLatestRequest(requestSeq)) throw error;
       const message = toErrorMessage(error);
@@ -237,11 +292,10 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
     autoSnapshotInFlight = false;
     lastCheckedChangeAt = 0;
     autoSnapshotActiveProjectId = null;
+    createSnapshotIfChangedQueues.clear();
 
     loadHistoryRequestSeq += 1;
-    // latestBlocksHash는 유지 — null로 리셋하면 히스토리 창 재오픈 시
-    // hash 재계산 전 autoSnapshot tick이 불필요한 저장을 유발함
-    set({ ...initialState, latestBlocksHash: get().latestBlocksHash });
+    set({ ...initialState });
   },
 
   startAutoSnapshotWatch: (): void => {
@@ -269,10 +323,10 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
         lastCheckedChangeAt = lastChangeAt;
         const blocks = materializeBlocksForSnapshot();
         if (blocks) {
-          const { latestBlocksHash } = get();
+          const { latestBlocksHash, latestBlocksHashProjectId } = get();
           const currentHash = hashContent(JSON.stringify(blocks));
 
-          if (latestBlocksHash === null) {
+          if (latestBlocksHashProjectId !== project.id || latestBlocksHash === null) {
             // Hash not yet initialized — wait for loadHistory to populate it,
             // then compare on next tick to avoid duplicate snapshots on session start.
             autoSnapshotTimer = window.setTimeout(tick, 500);
@@ -297,13 +351,13 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
             .then(({ created }) => {
               // stopAutoSnapshotWatch 또는 프로젝트 전환으로 projectId가 달라진 경우 폐기
               if (autoSnapshotActiveProjectId !== snapshotProjectId) return;
-              set({ latestBlocksHash: currentHash });
+              set({ latestBlocksHash: currentHash, latestBlocksHashProjectId: snapshotProjectId });
               // 새로 생성된 경우에만 목록 갱신
               if (created) {
                 void tauriListHistory(snapshotProjectId)
                   .then((snapshots) => {
                     if (autoSnapshotActiveProjectId !== snapshotProjectId) return;
-                    set({ snapshots });
+                    set({ snapshots, snapshotsProjectId: snapshotProjectId });
                   })
                   .catch(() => {});
               } else {

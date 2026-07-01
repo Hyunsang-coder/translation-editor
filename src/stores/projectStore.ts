@@ -217,6 +217,7 @@ let writeThroughTimer: number | null = null;
 let autoSaveTimer: number | null = null;
 let autoSaveInFlight = false;
 let saveInFlight: Promise<void> | null = null;
+let saveQueued = false;
 let hydrateCommentsRequestSeq = 0;
 
 /**
@@ -692,11 +693,13 @@ export const useProjectStore = create<ProjectStore>()(
       // 프로젝트 저장 (Tauri 백엔드 호출 예정)
       saveProject: async (): Promise<void> => {
         if (saveInFlight) {
+          saveQueued = true;
           return saveInFlight;
         }
 
-        const savePromise = (async (): Promise<void> => {
-          const { project, targetDocument, sourceDocument, targetDocHandle } = get();
+        const saveOnce = async (): Promise<void> => {
+          const snapshot = get();
+          const { project, targetDocument, sourceDocument, targetDocHandle } = snapshot;
 
           console.warn('[saveProject] called, projectId:', project?.id);
 
@@ -731,7 +734,19 @@ export const useProjectStore = create<ProjectStore>()(
             await tauriSaveProject(projectToSave);
             await persistCommentsForProject(projectToSave.id);
 
-            if (get().project?.id !== projectToSave.id) {
+            const current = get();
+            if (current.project?.id !== projectToSave.id) {
+              return;
+            }
+
+            const changedDuringSave =
+              current.project !== project ||
+              current.targetDocument !== targetDocument ||
+              current.sourceDocument !== sourceDocument ||
+              current.targetDocHandle !== targetDocHandle;
+
+            if (changedDuringSave) {
+              saveQueued = true;
               return;
             }
 
@@ -758,11 +773,20 @@ export const useProjectStore = create<ProjectStore>()(
             });
             throw normalizedError;
           }
-        })();
+        };
 
-        saveInFlight = savePromise.finally(() => {
-          saveInFlight = null;
-        });
+        saveQueued = false;
+        saveInFlight = (async (): Promise<void> => {
+          try {
+            do {
+              saveQueued = false;
+              await saveOnce();
+            } while (saveQueued);
+          } finally {
+            saveQueued = false;
+            saveInFlight = null;
+          }
+        })();
 
         return saveInFlight;
       },

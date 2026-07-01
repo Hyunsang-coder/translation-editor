@@ -24,6 +24,12 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+async function flushPromises(): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    await Promise.resolve();
+  }
+}
+
 const blockFixture: Record<string, EditorBlock> = {
   'target-1': {
     id: 'target-1',
@@ -115,6 +121,23 @@ describe('historyStore', () => {
         description: 'new',
       },
     ]);
+  });
+
+  it('loadHistory에서 최신 스냅샷 hash 조회가 실패해도 프로젝트 hash sentinel을 설정한다', async () => {
+    tauriHistoryMock.listHistory.mockResolvedValue([
+      {
+        id: 'snapshot-1',
+        timestamp: 100,
+        description: 'existing',
+      },
+    ]);
+    tauriHistoryMock.getSnapshot.mockRejectedValue(new Error('snapshot load failed'));
+
+    await useHistoryStore.getState().loadHistory('project-1');
+    await flushPromises();
+
+    expect(useHistoryStore.getState().latestBlocksHash).toBe('');
+    expect(useHistoryStore.getState().latestBlocksHashProjectId).toBe('project-1');
   });
 
   it('renameSnapshot은 성공 시 목록의 description을 갱신한다', async () => {
@@ -408,7 +431,7 @@ describe('createSnapshotIfChanged — 버그 5: TOCTOU 동시 호출 방지', ()
     useHistoryStore.getState().reset();
   });
 
-  it('동시에 두 번 호출하면 두 번째는 null을 반환하고 createSnapshot은 1회만 호출된다', async () => {
+  it('동일 내용으로 동시에 두 번 호출하면 두 번째는 첫 번째 저장을 기다린 뒤 중복 생성 없이 null을 반환한다', async () => {
     useHistoryStore.setState({
       latestBlocksHash: null,
       snapshots: [],
@@ -430,44 +453,83 @@ describe('createSnapshotIfChanged — 버그 5: TOCTOU 동시 호출 방지', ()
       blocks: blockFixture,
     });
 
-    // 두 번째는 in-flight guard에 의해 즉시 null
-    expect(await call2).toBeNull();
+    let call2Settled = false;
+    void call2.then(() => {
+      call2Settled = true;
+    });
+    await flushPromises();
+    expect(call2Settled).toBe(false);
 
     // 첫 번째 완료
     deferredCreate.resolve('snapshot-1');
     expect(await call1).toBe('snapshot-1');
+    expect(await call2).toBeNull();
 
-    // createSnapshot은 단 1회만 호출되어야 함
+    // 같은 내용이므로 createSnapshot은 단 1회만 호출되어야 함
     expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
   });
 
-  it('첫 번째 호출 완료 후 두 번째 호출은 정상적으로 실행된다', async () => {
+  it('다른 내용으로 동시에 두 번 호출하면 두 번째도 첫 번째 후에 정상 저장된다', async () => {
     useHistoryStore.setState({
       latestBlocksHash: null,
       snapshots: [],
     });
 
+    const deferredCreate = createDeferred<string>();
     tauriHistoryMock.createSnapshot
-      .mockResolvedValueOnce('snapshot-1')
+      .mockReturnValueOnce(deferredCreate.promise)
       .mockResolvedValueOnce('snapshot-2');
     tauriHistoryMock.listHistory.mockResolvedValue([]);
 
-    // 첫 번째 완료 대기
-    await useHistoryStore.getState().createSnapshotIfChanged({
+    const call1 = useHistoryStore.getState().createSnapshotIfChanged({
       projectId: 'project-1',
       description: 'first',
       blocks: blockFixture,
     });
-
-    // latestBlocksHash가 blockFixture로 채워짐
-    // blockFixture2는 다르므로 두 번째 호출은 스냅샷 생성해야 함
-    const result = await useHistoryStore.getState().createSnapshotIfChanged({
+    const call2 = useHistoryStore.getState().createSnapshotIfChanged({
       projectId: 'project-1',
       description: 'second',
       blocks: blockFixture2,
     });
 
-    expect(result).toBe('snapshot-2');
+    await flushPromises();
+    expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
+    deferredCreate.resolve('snapshot-1');
+
+    expect(await call1).toBe('snapshot-1');
+    expect(await call2).toBe('snapshot-2');
     expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it('다른 프로젝트의 latestBlocksHash는 현재 프로젝트 변경 판단에 사용하지 않는다', async () => {
+    useHistoryStore.setState({
+      latestBlocksHash: hashContent(JSON.stringify(blockFixture)),
+      latestBlocksHashProjectId: 'project-old',
+      snapshots: [],
+      snapshotsProjectId: 'project-old',
+    });
+    tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-new-project');
+    tauriHistoryMock.listHistory.mockResolvedValue([]);
+
+    const result = await useHistoryStore.getState().createSnapshotIfChanged({
+      projectId: 'project-new',
+      description: 'new project snapshot',
+      blocks: blockFixture,
+    });
+
+    expect(result).toBe('snapshot-new-project');
+    expect(tauriHistoryMock.createSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('reset은 프로젝트 전환 시 이전 프로젝트 hash를 보존하지 않는다', () => {
+    useHistoryStore.setState({
+      latestBlocksHash: 'old-project-hash',
+      latestBlocksHashProjectId: 'project-old',
+    });
+
+    useHistoryStore.getState().reset();
+
+    expect(useHistoryStore.getState().latestBlocksHash).toBeNull();
+    expect(useHistoryStore.getState().latestBlocksHashProjectId).toBeNull();
   });
 });
