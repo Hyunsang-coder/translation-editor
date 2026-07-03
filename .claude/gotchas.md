@@ -12,11 +12,11 @@ Critical implementation warnings learned from past issues.
 
 4. **TipTap Decoration Cross-Node Search**: Use `buildTextWithPositions()` to build full text/position mapping before searching. Simple `indexOf` on individual nodes fails for text spanning node boundaries.
 
-5. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `useEditorStore.getState().clearEditors()` when switching projects to prevent memory leaks from stale editor references.
+5. **TipTap Editor Cleanup**: Always call `editor.destroy()` in useEffect cleanup. Use `useEditorStore.getState().clearEditors()` when switching projects to prevent memory leaks from stale editor references. **After `clearEditors()`, re-register live editor instances** if the canvas component is not remounted on project switch (`EditorCanvasTipTap` reuses TipTap instances — only `content` prop changes). Without re-registration, `onEditorReady` won't fire again and cross-component features (review apply, comments) see `targetEditor === null`.
 
 6. **Editor Search Shortcut Scope**: Search (Cmd+F) triggers on Source panel, Replace (Cmd+H) triggers on Target panel only. Both shortcuts require panel focus to avoid global conflicts.
 
-7. **Editor Store for Cross-Component Access**: Use `useEditorStore` (Zustand) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions). Access via `useEditorStore.getState().sourceEditor` / `.targetEditor`.
+7. **Editor Store for Cross-Component Access**: Use `useEditorStore` (Zustand) to access editor instances from non-editor components (e.g., ReviewPanel applying suggestions). Access via `useEditorStore.getState().sourceEditor` / `.targetEditor`. Highlights may still render (ProseMirror plugin inside live editor) even when the store reference is stale — if apply fails with "Target 에디터가 아직 준비되지 않았습니다", check store registration after project switch, not editor visibility.
 
 8. **ProseMirror Base Style Override**: `.ProseMirror` base styles (`px-6 py-4`, `min-h-[200px]`) apply to all TipTap editors. For chat composer, explicitly override with `.chat-composer-tiptap` using `@apply px-0 py-0 min-h-0`. Check full CSS inheritance chain when modifying UI.
 
@@ -42,7 +42,7 @@ Critical implementation warnings learned from past issues.
 
 18. **GPT-5 Temperature Handling**: GPT-5 series doesn't support temperature parameter. In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to exclude temperature.
 
-18a. **Opus 4.7+ Sampling Parameter Guard**: Claude Opus 4.7 returns 400 if `temperature`, `top_p`, or `top_k` is set to a non-default value. `client.ts` uses `isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model)` to skip the temperature option. Adaptive thinking, prefill removal, and new tokenizer (1.0–1.35x token count) are documented in the Anthropic migration guide; only the temperature guard is enforced in code today.
+18a. **Opus 4.7+ / Sonnet 5 Sampling & Thinking Guards**: Claude Opus 4.7+ and Sonnet 5 return 400 if non-default `temperature` is sent. GPT-5 series also rejects temperature. **Use `resolveModelCallOptions(cfg, useFor)`** (`src/ai/modelCallOptions.ts`) as the single source of truth — do NOT duplicate guards in `client.ts` and `backendCompletion.ts` separately. LangChain path: `createChatModel`. Tauri path: `getModelCallArgs` → Rust `ai.rs` (`adaptive_thinking`, `output_config.effort` / `reasoning_effort`). Anthropic `effort: 'high'` is the server default (no-op); real uplift on OpenAI review uses `reasoning_effort: 'high'`.
 
 19. **LangChain Image Format Unification**: LangChain handles both OpenAI and Anthropic vision with the same `image_url` format. LangChain `@langchain/anthropic` internally converts to Anthropic's native `source` format. Do NOT use provider-specific image formats in `chat.ts`.
 
@@ -87,6 +87,12 @@ Critical implementation warnings learned from past issues.
 35. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 
 36. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation.
+
+148. **Review Apply Ambiguity Guards (F1/F2)**: `findExcerptRange` returns null when the same text appears multiple times without `segmentGroupId` (refuse wrong replacement). `findBestSentenceMatch` also returns null when multiple sentences exceed the similarity threshold document-wide. Fuzzy matching respects `segmentRange` when `segmentGroupId` is present.
+
+149. **Review Quote Stripping Deferred to Apply (F6)**: `parseReviewResult` preserves wrapping quotes in excerpts/suggestions. `resolveReplacementText` strips quotes from suggestions only when the matched document text is not wrapped. Use `getWrappingQuotePair` (balance-aware) — never strip at parse time.
+
+150. **Block-Boundary Replace Guard (F3)**: `rangeCrossesBlockBoundary` prevents replace operations spanning multiple ProseMirror blocks (paragraph merge). Used in `reviewApply.ts` and `SearchHighlight.ts` replace commands.
 
 147. **Review Naturalness Criteria**: 검수 프롬프트에는 누락/오역/왜곡/일관성뿐 아니라 원어민이 보기에 어색한 collocation, 표현, 문장 구조도 명시해야 한다. 단, 검수는 이슈 제안만 생성하고 문서를 자동 수정하지 않는다.
 

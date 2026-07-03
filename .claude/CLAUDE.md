@@ -50,7 +50,7 @@ echo 'ANTHROPIC_API_KEY=...' >> .env.local
 
 ### Key Directories
 ```
-src/ai/           # AI integration (chat.ts, translateDocument.ts, review/, tools/confluenceTools.ts)
+src/ai/           # AI integration (chat.ts, translateDocument.ts, review/, modelCallOptions.ts, tools/)
 src/editor/       # TipTap extensions
 src/stores/       # Zustand stores (chatStore: 7 슬라이스)
 src/components/   # React components
@@ -84,7 +84,18 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-06-30)
+## Recent Updates (2026-07-03)
+
+- **코드 리뷰 수정 계획 F1–F13 구현 완료** (`docs/code-review-fix-plan.md`): 검수 적용 안전성(F1–F3), 선택 적용 병합(F4/F5), 따옴표 처리(F6), Tauri AI 옵션 통합(F7/F8), 채팅 스크롤(F9/F10), 진단성/위생(F11/F12), 출력 토큰 상향(F13). 상세는 계획 문서 및 아래 항목 참조.
+- **검수 적용 안전성 (F1–F3)**: `reviewApply.ts` — 세그먼트 범위 fuzzy 매칭, 다중 매치 모호 시 교체 포기, 블록 경계 교체 차단. `SearchHighlight.ts` — find/replace도 동일 가드.
+- **선택 적용 병합 (F4/F5)**: 전체 선택 시 `mergeDocBySelection` 우회(full apply). `docBlockDiff` — 평탄 텍스트 블록만 문장 단위 diff, 중첩 구조는 swap 단위.
+- **따옴표 처리 (F6)**: parse 시 보존, apply 시 `resolveReplacementText`로 문서 컨텍스트 기반 조건부 벗김. `getWrappingQuotePair`로 균형 인용만 strip.
+- **AI 모델 호출 옵션 통합 (F7/F8)**: `src/ai/modelCallOptions.ts` — `resolveModelCallOptions(cfg, useFor)`가 LangChain(`client.ts`)과 Tauri(`backendCompletion.ts` → Rust `ai.rs`)의 temperature/adaptive thinking/effort를 일원화. Sonnet 5 temperature 400 방지 포함.
+- **출력 토큰 상향 (F13)**: `REVIEW_MAX_TOKENS` 16384, `DEFAULT_CHAT_MAX_TOKENS` 8192 (thinking 토큰이 max_tokens 예산을 잠식하는 무음 truncation 방지).
+- **채팅 스크롤 (F9/F10)**: `useChatScroll` — smooth 자동 스크롤 중간 프레임이 stick-to-bottom을 해제하지 않도록 `isAutoScrolling` 플래그. `ChatContent.sendCurrent`에서 본인 전송 시 `scrollToBottom()`.
+- **프로젝트 전환 후 검수 적용 실패 수정**: `EditorCanvasTipTap`은 프로젝트로 remount되지 않아 TipTap 인스턴스가 재사용되는데, `switchProjectById`의 `clearEditors()`만 호출되어 `editorStore.targetEditor`가 null로 방치되던 버그. `project?.id` 변경 시 살아있는 에디터를 스토어에 재등록하는 effect 추가.
+
+### Previous (2026-06-30)
 
 - **Chat clipboard image paste (Tauri)**: 채팅 컴포저 Cmd+V 이미지 붙여넣기 지원. WKWebView `clipboardData` 미노출 시 `tauri-plugin-clipboard-manager` `readImage()` fallback. macOS `validate_path`가 `/private/var/folders/` 임시 업로드 경로를 차단하던 버그 수정.
 

@@ -36,11 +36,35 @@ useEditorStore.getState().setTargetEditor(editor)
 useEditorStore.getState().clearEditors()  // 메모리 누수 방지
 
 // 호출 위치:
-// - EditorCanvasTipTap에서 에디터 생성 후 store에 등록
-// - projectStore.switchProjectById()에서 에디터 초기화 시 clearEditors() 호출
+// - EditorCanvasTipTap.handleSource/TargetEditorReady → store 등록
+// - projectStore.switchProjectById() → clearEditors() (stale 참조 제거)
+// - EditorCanvasTipTap: project?.id 변경 시 살아있는 에디터 재등록 (인스턴스 재사용 대비)
+
+// ⚠️ EditorCanvasTipTap은 project로 remount되지 않음 (내용 prop만 교체).
+// clearEditors() 후 onEditorReady가 다시 호출되지 않으면 store가 null로 남아
+// ReviewPanel 적용 등이 "에디터 준비 안 됨"으로 실패할 수 있음 → 재등록 effect 필수.
 
 // ❌ 구식 패턴 (제거됨):
 // src/editor/editorRegistry.ts (모놀리스 전역 변수)
+```
+
+### Model Call Options (AI — LangChain + Tauri 공통)
+```typescript
+// src/ai/modelCallOptions.ts — temperature / adaptive thinking / effort 일원화
+import { resolveModelCallOptions } from '@/ai/modelCallOptions';
+
+const opts = resolveModelCallOptions(cfg, useFor); // useFor: 'translation' | 'chat' | 'review'
+
+// LangChain: client.ts → createChatModel
+// Tauri: backendCompletion.ts → getModelCallArgs → aiComplete/aiStream
+// Rust: src-tauri/src/commands/ai.rs — adaptive_thinking, effort 필드
+
+// 규칙 요약:
+// - Opus 4.7+ / Sonnet 5 / gpt-5*: temperature 미전달 (400 방지)
+// - Opus 4.7+: adaptiveThinking + effort high (Anthropic effort high는 서버 기본값이라 no-op)
+// - Sonnet 5: adaptiveThinking; review일 때만 effort high
+// - OpenAI gpt-5: review일 때만 reasoning_effort high
+// - runReview Tauri 경로: streamWithTauriAiBackend({ useFor: 'review', ... })
 ```
 
 ### Plugin Keys (중앙화)

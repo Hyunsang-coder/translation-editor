@@ -96,11 +96,17 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/ai/prompt.test.ts` | 19 | `detectRequestType`, `buildBlockContextText` |
 | `src/ai/polishDocument.test.ts` | 2 | Target-only polishing prompt and payload behavior |
 | `src/ai/review/parseReviewResult.test.ts` | 33 | `parseReviewResult`, `deduplicateIssues` |
-| `src/ai/review/runReview.test.ts` | 12 (3 skip) | Review pipeline, chunk processing, native-naturalness criteria |
+| `src/ai/review/runReview.test.ts` | 13 (3 skip) | Review pipeline, max_tokens 16384, Tauri useFor |
+| `src/ai/modelCallOptions.test.ts` | 7 | `resolveModelCallOptions` per model/useFor |
+| `src/ai/backendCompletion.test.ts` | 8 | Tauri backend temperature/thinking/effort args |
+| `src/ai/client.test.ts` | 4 | `createChatModel` sampling guards |
 | `src/ai/translateDocument.test.ts` | 28 (5 skip) | `isTimeoutError`, `isRetryableTranslationError`, `formatTranslationError` |
 | `src/ai/config.test.ts` | 3 | 테스트 환경 API 키 fallback 우선순위 검증 |
 | `src/ai/tools/buildAlignedChunks.test.ts` | 8 | `buildAlignedChunks`, `buildAlignedChunksAsync` |
-| `src/components/review/reviewApply.test.ts` | 8 | Review suggestion apply logic |
+| `src/components/review/reviewApply.test.ts` | varies | Review suggestion apply + F1/F2/F3/F6 guards |
+| `src/components/review/reviewApply.integration.test.ts` | 5 | Parse → highlight → apply E2E |
+| `src/components/chat/useChatScroll.test.ts` | 3 | F9 auto-scroll flag logic |
+| `src/utils/docBlockDiff.test.ts` | varies | F5 flat-block swap vs sentence diff |
 | `src/editor/extensions/ReviewHighlight.test.ts` | 6 | ReviewHighlight decoration |
 | `src/editor/extensions/SearchHighlight.test.ts` | 5 | SearchHighlight normalization |
 | `src/stores/aiConfigStore.test.ts` | 9 | Key loading latch, concurrent call prevention, secure persistence handling |

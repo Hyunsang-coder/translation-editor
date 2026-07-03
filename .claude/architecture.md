@@ -56,6 +56,8 @@
 - Document split into chunks → sequential AI review → Markdown parsing
 - Output format: Markdown with `---REVIEW_START/END---` markers (required `Suggestion` field)
 - Results displayed in table with Apply/Copy/Ignore actions
+- **Tauri path**: `streamWithTauriAiBackend({ useFor: 'review' })` — model options via `resolveModelCallOptions` (thinking/effort/temperature)
+- **Apply safety**: ambiguity guards (multi-match, fuzzy segment scope), block-boundary replace guard, conditional quote stripping at apply time
 - **Comparison Review** (대조 검수): Source↔Target comparison plus target naturalness checks
 - **Retranslation**: Uses `translateWithStreaming()` with all project settings (translationRules, projectContext, translatorPersona, glossary) + reviewIssues context
 

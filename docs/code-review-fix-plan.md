@@ -1,5 +1,7 @@
 # 코드 리뷰 수정 계획 (2026-07-03)
 
+> **구현 상태: ✅ 완료 (2026-07-03)** — F1–F13 전항목 + 프로젝트 전환 후 `editorStore` 재등록 버그 수정(`852bfbd`). 검증: `npx tsc --noEmit`, `npm run test:run` (747), `cargo test` (14). 선택 항목 미적용: F13-3(truncation 사용자 토스트), F13-4(client.ts dead branch 정리).
+
 > 대상: `git diff @{upstream}...HEAD` 범위(v2.6.x 검수/폴리싱/선택적용/채팅스크롤/모델설정 변경) 코드 리뷰에서 확정된 발견 사항.
 > 멀티에이전트 리뷰(finder 4 + verifier 19+3)로 발견·적대적 검증 완료. 각 항목은 **진단 → 수정안 → 검증 기준** 순.
 > 구현 시 준수: Surgical > Sweeping (여기 명시된 변경만), 기존 스타일 유지, 완료 전 `npx tsc --noEmit` + `npm run test:run` (+Rust 변경 시 `cargo test`).
