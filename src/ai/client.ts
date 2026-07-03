@@ -33,8 +33,9 @@ export function createChatModel(
 
     // Opus 4.7+, Sonnet 5는 non-default temperature/top_p/top_k를 400 에러로 거부
     // (Opus 정규식은 4.7/4.8/4.9 및 2자리 이상 버전까지 자동 커버)
-    const rejectsSamplingParams = /^claude-opus-4-(7|[89]|\d{2,})/.test(model)
-      || /^claude-sonnet-5/.test(model);
+    const isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model);
+    const isSonnet5 = /^claude-sonnet-5/.test(model);
+    const rejectsSamplingParams = isOpus47Plus || isSonnet5;
     const temperatureOption = (!rejectsSamplingParams && cfg.temperature !== undefined)
       ? { temperature: cfg.temperature } : {};
 
@@ -43,11 +44,20 @@ export function createChatModel(
       ? { maxTokens: options.maxTokens }
       : (useFor === 'translation' ? { maxTokens: DEFAULT_TRANSLATION_MAX_TOKENS } : { maxTokens: DEFAULT_CHAT_MAX_TOKENS });
 
+    // Opus 4.7+는 thinking이 기본 꺼짐 상태이므로 adaptive thinking + effort high를 명시 설정.
+    // Sonnet 5는 생략 시 adaptive가 기본이므로 thinking만 명시(effort는 기본값 high 유지).
+    const thinkingOption = isOpus47Plus
+      ? { thinking: { type: 'adaptive' as const }, outputConfig: { effort: 'high' as const } }
+      : isSonnet5
+        ? { thinking: { type: 'adaptive' as const } }
+        : {};
+
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
       model,
       ...temperatureOption,
       ...maxTokensOption,
+      ...thinkingOption,
       ...(tauriFetch
         ? { clientOptions: { fetch: tauriFetch, dangerouslyAllowBrowser: true } }
         : {}),
