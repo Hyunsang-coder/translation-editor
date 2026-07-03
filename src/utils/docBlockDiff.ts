@@ -72,9 +72,30 @@ export function extractBlockText(node: TipTapNodeJson): string {
   return parts.join('\n');
 }
 
-/** 비교용 키: 공백 정규화만 수행 (표현 차이는 실제 변경으로 취급) */
+/**
+ * 비교용 키: 공백 정규화만 수행 (표현 차이는 실제 변경으로 취급).
+ * 주의: extractBlockText는 marks/attrs를 무시하므로, 텍스트가 같고 마크/attrs만
+ * 다른 블록은 'keep'으로 분류되어 unit이 되지 않는다(부분 선택 시 원본이 유지됨).
+ */
 function blockKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 문장 단위 부분 병합이 안전한 평탄 블록 판정: 인라인 text 노드만 포함.
+ * (listItem은 단일 paragraph 하나만 담는 경우에 한해 평탄으로 본다.)
+ *
+ * 평탄하지 않은 블록(중첩 리스트/다중 문단/hardBreak/인라인 이미지 등)을 문장
+ * 세분화하면 rebuildLeaf가 구조를 파괴하므로, 이런 블록은 통째 swap으로 강등한다.
+ */
+function isFlatTextBlock(node: TipTapNodeJson): boolean {
+  if (node.type === 'listItem') {
+    const content = node.content ?? [];
+    return content.length === 1 && content[0]!.type === 'paragraph' && isFlatTextBlock(content[0]!);
+  }
+  return (node.content ?? []).every(
+    (child) => child.type === 'text' || child.text !== undefined,
+  );
 }
 
 function getBlocks(doc: TipTapDocJson): TipTapNodeJson[] {
@@ -160,7 +181,12 @@ function pairBlocks(
     return { kind: 'listPair', original, polished, itemNodes };
   }
 
-  if (SENTENCE_REFINABLE_TYPES.has(originalType) && SENTENCE_REFINABLE_TYPES.has(polishedType)) {
+  if (
+    SENTENCE_REFINABLE_TYPES.has(originalType) &&
+    SENTENCE_REFINABLE_TYPES.has(polishedType) &&
+    isFlatTextBlock(original) &&
+    isFlatTextBlock(polished)
+  ) {
     const parts = buildSentenceParts(state, blockLabel, extractBlockText(original), extractBlockText(polished));
     return { kind: 'pair', original, polished, parts };
   }
@@ -256,7 +282,12 @@ export function buildDocDiffPlan(
   return { units: state.units, nodes };
 }
 
-/** 부분 병합된 텍스트로 leaf 블록 재구성 (원본 type/attrs 유지, 인라인 marks는 유실) */
+/**
+ * 부분 병합된 텍스트로 leaf 블록 재구성 (원본 type/attrs 유지).
+ * 한계: 평탄 블록(isFlatTextBlock)만 도달하며, 부분 병합 시 블록 전체의 인라인
+ * marks가 유실된다(선택하지 않은 equal 문장 포함). equal 파트를 plain text로
+ * 재조립하는 설계상 한계로, 이 함수는 중첩 구조를 만들지 않는다.
+ */
 function rebuildLeaf(original: TipTapNodeJson, text: string): TipTapNodeJson {
   const content = text ? [{ type: 'text', text }] : [];
   if (original.type === 'listItem') {

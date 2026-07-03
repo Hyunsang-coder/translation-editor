@@ -20,6 +20,31 @@ function list(...itemTexts: string[]): Record<string, unknown> {
   };
 }
 
+/** paragraph + 중첩 bulletList를 가진 listItem 하나로 이루어진 bulletList */
+function nestedList(parentText: string, childText: string): Record<string, unknown> {
+  return {
+    type: 'bulletList',
+    content: [
+      {
+        type: 'listItem',
+        content: [p(parentText), list(childText)],
+      },
+    ],
+  };
+}
+
+/** text + hardBreak + text 인라인을 가진 paragraph */
+function paraWithBreak(a: string, b: string): Record<string, unknown> {
+  return {
+    type: 'paragraph',
+    content: [
+      { type: 'text', text: a },
+      { type: 'hardBreak' },
+      { type: 'text', text: b },
+    ],
+  };
+}
+
 function doc(...blocks: Record<string, unknown>[]): TipTapDocJson {
   return { type: 'doc', content: blocks };
 }
@@ -197,5 +222,69 @@ describe('mergeDocBySelection', () => {
     const mergedItems = mergedList.content as unknown[];
     const originalItems = originalList.content as unknown[];
     expect(mergedItems[1]).toBe(originalItems[1]);
+  });
+});
+
+describe('평탄하지 않은 블록은 통째 swap (F5)', () => {
+  it('중첩 리스트 항목은 문장 세분화 대신 항목 통째 swap이 된다', () => {
+    const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));
+    const b = doc(nestedList('Parent new sentence.', 'Child new sentence.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    // 평탄하지 않은 listItem이라 문장 단위 unit이 아니라 항목 통째 swap 1개
+    expect(plan.units).toHaveLength(1);
+  });
+
+  it('중첩 리스트 항목 선택 시 polished 통째 반영 + 중첩 구조/marks 보존', () => {
+    const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));
+    const b = doc(nestedList('Parent new sentence.', 'Child new sentence.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    const merged = mergeDocBySelection(a, plan, allUnitIds(plan));
+
+    const mergedList = (merged.content as Array<Record<string, unknown>>)[0]!;
+    const item = (mergedList.content as Array<Record<string, unknown>>)[0]!;
+    // paragraph + 중첩 bulletList 두 자식 구조가 보존됨
+    expect((item.content as unknown[]).length).toBe(2);
+    // \n 리터럴이 text 노드로 남지 않음 (rebuildLeaf 평탄화 파괴 없음)
+    expect(JSON.stringify(item)).not.toContain('\\n');
+    expect(extractBlockText(item)).toContain('Child new sentence.');
+  });
+
+  it('중첩 리스트 항목 미선택 시 원본 통째 유지', () => {
+    const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));
+    const b = doc(nestedList('Parent new sentence.', 'Child new sentence.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    const merged = mergeDocBySelection(a, plan, new Set());
+
+    const mergedList = (merged.content as Array<Record<string, unknown>>)[0]!;
+    const item = (mergedList.content as Array<Record<string, unknown>>)[0]!;
+    expect(extractBlockText(item)).toContain('Child old sentence.');
+  });
+
+  it('hardBreak 포함 문단은 swap으로 강등되고 구조가 보존된다', () => {
+    const a = doc(paraWithBreak('Line one here.', 'Line two here.'));
+    const b = doc(paraWithBreak('Line one changed.', 'Line two changed.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    expect(plan.units).toHaveLength(1);
+
+    const merged = mergeDocBySelection(a, plan, allUnitIds(plan));
+    const para = (merged.content as Array<Record<string, unknown>>)[0]!;
+    const hasBreak = (para.content as Array<Record<string, unknown>>).some(
+      (c) => c.type === 'hardBreak',
+    );
+    expect(hasBreak).toBe(true);
+  });
+
+  it('평탄 문단은 기존처럼 문장 부분 병합이 유지된다 (회귀 방지)', () => {
+    const a = doc(p('Alpha old one. Same middle here. Beta old two.'));
+    const b = doc(p('Alpha new one. Same middle here. Beta new two.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    const merged = mergeDocBySelection(a, plan, new Set([plan.units[0]!.id]));
+
+    expect(mergedTexts(merged)).toEqual(['Alpha new one. Same middle here. Beta old two.']);
   });
 });

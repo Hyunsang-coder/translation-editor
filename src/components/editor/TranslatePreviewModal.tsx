@@ -223,7 +223,15 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     setIsApplying(true);
     void (async () => {
       try {
-        if (selectiveActive && diffPlan && originalDocJson && onApplySelective) {
+        if (
+          selectiveActive &&
+          diffPlan &&
+          originalDocJson &&
+          onApplySelective &&
+          // 부분 선택일 때만 병합. 전체 선택이면 full apply로 우회해 diff 표현력의
+          // 한계(마크/공백/노드타입-only 변경이 unit이 되지 않음)로 인한 유실을 막는다.
+          selectedCount < changeUnits.length
+        ) {
           const merged = mergeDocBySelection(originalDocJson, diffPlan, selectedUnitIds);
           await onApplySelective(merged);
         } else {
