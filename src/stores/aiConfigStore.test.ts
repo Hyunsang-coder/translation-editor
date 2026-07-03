@@ -53,12 +53,12 @@ describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
     expect(result.chatModel).toBe('gpt-5.4-mini');
   });
 
-  it('claude-sonnet-4-6 / claude-haiku-4-5 등 다른 모델은 그대로 유지', () => {
+  it('claude-haiku-4-5 등 rename 대상이 아닌 모델은 그대로 유지', () => {
     const result = migrateAiConfig(
-      { translationModel: 'claude-sonnet-4-6', chatModel: 'claude-haiku-4-5' },
+      { translationModel: 'gpt-5.5', chatModel: 'claude-haiku-4-5' },
       8,
     );
-    expect(result.translationModel).toBe('claude-sonnet-4-6');
+    expect(result.translationModel).toBe('gpt-5.5');
     expect(result.chatModel).toBe('claude-haiku-4-5');
   });
 
@@ -78,6 +78,35 @@ describe('aiConfigStore - migrate v8 → v10 (GPT-5.5 / Opus 4.8)', () => {
     );
     expect(result.translationModel).toBe('claude-opus-4-8');
     expect(result.chatModel).toBe('claude-opus-4-8');
+  });
+});
+
+describe('aiConfigStore - migrate v10 → v11 (Sonnet 4.6 → Sonnet 5)', () => {
+  it('claude-sonnet-4-6 → claude-sonnet-5 rename', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-sonnet-4-6', chatModel: 'claude-sonnet-4-6' },
+      10,
+    );
+    expect(result.translationModel).toBe('claude-sonnet-5');
+    expect(result.chatModel).toBe('claude-sonnet-5');
+  });
+
+  it('claude-haiku-4-5 등 다른 모델은 그대로 유지', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-haiku-4-5', chatModel: 'gpt-5.5' },
+      10,
+    );
+    expect(result.translationModel).toBe('claude-haiku-4-5');
+    expect(result.chatModel).toBe('gpt-5.5');
+  });
+
+  it('v5(과거 버전)에서도 최종적으로 sonnet-5까지 누적 마이그레이션', () => {
+    const result = migrateAiConfig(
+      { translationModel: 'claude-sonnet-4-5', chatModel: 'claude-sonnet-4-5' },
+      5,
+    );
+    expect(result.translationModel).toBe('claude-sonnet-5');
+    expect(result.chatModel).toBe('claude-sonnet-5');
   });
 });
 

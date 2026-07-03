@@ -48,19 +48,34 @@ describe('createChatModel - Opus 4.8 sampling parameter guard', () => {
     expect('temperature' in callArgs).toBe(false);
   });
 
-  it('claude-sonnet-4-6 호출 시에는 temperature가 정상 전달됨 (회귀 방지)', async () => {
+  it('claude-haiku-4-5 호출 시에는 temperature가 정상 전달됨 (회귀 방지)', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
     useAiConfigStore.setState({
-      translationModel: 'claude-sonnet-4-6',
-      chatModel: 'claude-sonnet-4-6',
+      translationModel: 'claude-haiku-4-5',
+      chatModel: 'claude-haiku-4-5',
     });
     const { createChatModel } = await import('@/ai/client');
 
     createChatModel(undefined, { useFor: 'chat' });
 
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.model).toBe('claude-haiku-4-5');
     expect(callArgs.temperature).toBe(0.7);
+  });
+
+  it('claude-sonnet-5 호출 시 temperature가 전달되지 않음', async () => {
+    vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
+    useAiConfigStore.setState({
+      translationModel: 'claude-sonnet-5',
+      chatModel: 'claude-sonnet-5',
+    });
+    const { createChatModel } = await import('@/ai/client');
+
+    createChatModel(undefined, { useFor: 'chat' });
+
+    const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs.model).toBe('claude-sonnet-5');
+    expect('temperature' in callArgs).toBe(false);
   });
 
   it('modelOverride로 claude-opus-4-8을 직접 지정해도 temperature 차단', async () => {
