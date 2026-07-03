@@ -58,15 +58,17 @@ describe('검수 통합: 파싱 → 하이라이트 → 적용', () => {
     editor = null;
   });
 
-  it('새 프롬프트 형식 응답이 파싱되고 따옴표가 제거된다', () => {
+  it('새 프롬프트 형식 응답이 파싱되고 곡선 따옴표는 원본 보존된다 (F6: 벗기기는 적용 단계로 지연)', () => {
     const issues = parseReviewResult(AI_RESPONSE);
 
     expect(issues).toHaveLength(1);
+    // F6: parse 단계에서는 곡선 따옴표를 벗기지 않고 원문을 보존한다.
+    // (실제 벗기기 여부는 적용 시 문서 컨텍스트로 판단 — resolveReplacementText)
     expect(issues[0]!.targetExcerpt).toBe(
-      'Can accurately understand the given problem and solution when executing the task, well enough to explain them.',
+      '\u201cCan accurately understand the given problem and solution when executing the task, well enough to explain them.\u201d',
     );
     expect(issues[0]!.suggestedFix).toBe(
-      'Can understand the given problem and solution well enough to explain them at the time of performing the task.',
+      '\u201cCan understand the given problem and solution well enough to explain them at the time of performing the task.\u201d',
     );
   });
 
