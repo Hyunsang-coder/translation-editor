@@ -341,6 +341,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     createSession(t('chat.title'));
   }, [side, project?.id, isHydrating, chatSessions.length, createSession, t]);
 
+  // 스크롤 관리 (sendCurrent에서 scrollToBottom을 참조하므로 먼저 선언)
+  const { messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
+    useChatScroll(chatPanelOpen, displaySession?.messages.length, streamingContent?.length ?? 0);
+
   const sendCurrent = useCallback(async (): Promise<void> => {
     if (!localComposerText.trim() || !displaySession?.id) return;
     if (globalIsLoading) {
@@ -360,12 +364,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editorRef.current as any)?.clearComposerContent?.();
 
-    await sendMessage(message, sessionId);
-  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, addToast, t]);
+    // 위로 스크롤한 상태에서 본인이 전송하면 화면이 따라가야 자연스럽다.
+    // scrollToBottom()이 shouldStickToBottomRef=true로 되돌려 이후 응답 스트리밍 follow도 복구된다.
+    scrollToBottom();
 
-  // 스크롤 관리
-  const { messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
-    useChatScroll(chatPanelOpen, displaySession?.messages.length, streamingContent?.length ?? 0);
+    await sendMessage(message, sessionId);
+  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, addToast, t, scrollToBottom]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {

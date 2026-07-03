@@ -12,12 +12,15 @@ export function useChatScroll(
 ) {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  // smooth 스크롤 애니메이션의 중간 프레임이 stick-to-bottom을 해제하지 않도록 하는 플래그
+  const isAutoScrollingRef = useRef(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    if (behavior === 'smooth') isAutoScrollingRef.current = true;
     container.scrollTo({
       top: container.scrollHeight,
       behavior,
@@ -50,6 +53,22 @@ export function useChatScroll(
     return () => cancelAnimationFrame(frame);
   }, [streamingContentLength, chatPanelOpen, scrollToBottom]);
 
+  // 사용자 개입(애니메이션 중 wheel/터치)이 자동 스크롤 플래그에 갇히지 않도록 해제
+  useEffect(() => {
+    if (!chatPanelOpen) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const cancelAutoScroll = () => {
+      isAutoScrollingRef.current = false;
+    };
+    container.addEventListener('wheel', cancelAutoScroll, { passive: true });
+    container.addEventListener('touchmove', cancelAutoScroll, { passive: true });
+    return () => {
+      container.removeEventListener('wheel', cancelAutoScroll);
+      container.removeEventListener('touchmove', cancelAutoScroll);
+    };
+  }, [chatPanelOpen]);
+
   // 스크롤 위치 감지 (맨 아래가 아니면 버튼 표시)
   const handleMessagesScroll = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -57,6 +76,11 @@ export function useChatScroll(
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const isAtBottom = scrollHeight - scrollTop - clientHeight < BOTTOM_THRESHOLD_PX;
+    if (isAutoScrollingRef.current) {
+      // 자동 스크롤 애니메이션 프레임: bottom 도달 시 플래그 해제, stickiness/버튼은 건드리지 않음
+      if (isAtBottom) isAutoScrollingRef.current = false;
+      return;
+    }
     shouldStickToBottomRef.current = isAtBottom;
     setShowScrollToBottom(!isAtBottom);
   }, []);
