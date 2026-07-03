@@ -14,6 +14,8 @@ import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from 
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
 import { searchGlossary } from '@/tauri/glossary';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
+import { applySuggestionToEditor } from '@/components/review/reviewApply';
+import { useEditorStore } from '@/stores/editorStore';
 import { stripHtml } from '@/utils/hash';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { tipTapJsonToHtml } from '@/utils/markdownConverter';
@@ -102,6 +104,8 @@ export function ReviewPanel(): JSX.Element {
   // 재번역 상태 (TranslatePreviewModal 연동)
   const [retranslatePreviewOpen, setRetranslatePreviewOpen] = useState(false);
   const [retranslatePreviewDoc, setRetranslatePreviewDoc] = useState<TipTapDocJson | null>(null);
+  // 선택 적용 diff 기준: 재번역 시작 시점의 Target 문서 스냅샷
+  const [retranslateOriginalDocJson, setRetranslateOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [retranslateLoading, setRetranslateLoading] = useState(false);
   const [retranslateError, setRetranslateError] = useState<string | null>(null);
   const [retranslateStreamingText, setRetranslateStreamingText] = useState<string>('');
@@ -319,6 +323,62 @@ export function ReviewPanel(): JSX.Element {
   }, [t]);
 
   /**
+   * 오역/문법 등 유형: targetExcerpt를 에디터에서 찾아 suggestedFix로 교체
+   * 성공 시 이슈를 목록에서 제거 (Ctrl+Z로 되돌리기 가능)
+   */
+  const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
+    const { addToast } = useUIStore.getState();
+    const targetEditor = useEditorStore.getState().targetEditor;
+
+    if (!targetEditor || targetEditor.isDestroyed) {
+      addToast({
+        type: 'error',
+        message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.'),
+      });
+      return;
+    }
+
+    let status: ReturnType<typeof applySuggestionToEditor>;
+    try {
+      status = applySuggestionToEditor(targetEditor, issue);
+    } catch (error) {
+      console.error('[ReviewPanel] apply suggestion failed:', error, {
+        targetExcerpt: issue.targetExcerpt,
+        segmentGroupId: issue.segmentGroupId,
+      });
+      addToast({
+        type: 'error',
+        message: t('review.applyError.notFound', '텍스트를 찾을 수 없습니다. 문서가 변경되었을 수 있어요.'),
+      });
+      return;
+    }
+
+    if (status === 'applied' || status === 'applied-fuzzy') {
+      deleteIssue(issue.id);
+      addToast({
+        type: 'success',
+        message: status === 'applied-fuzzy'
+          ? t('review.fuzzyMatchApplied', '유사 매칭으로 수정 제안이 적용되었습니다.')
+          : t('review.applySuccess', '수정 제안이 적용되었습니다.'),
+      });
+    } else if (status === 'not-found') {
+      console.warn('[ReviewPanel] suggestion target not found:', {
+        targetExcerpt: issue.targetExcerpt,
+        segmentGroupId: issue.segmentGroupId,
+      });
+      addToast({
+        type: 'error',
+        message: t('review.applyError.notFound', '텍스트를 찾을 수 없습니다. 문서가 변경되었을 수 있어요.'),
+      });
+    } else {
+      addToast({
+        type: 'error',
+        message: t('review.applyError.missingData', '수정 제안 데이터가 없습니다.'),
+      });
+    }
+  }, [deleteIssue, t]);
+
+  /**
    * 재번역 버튼 클릭 - 중간 모달 열기
    */
   const handleRetranslateClick = useCallback(() => {
@@ -364,6 +424,12 @@ export function ReviewPanel(): JSX.Element {
     setRetranslateError(null);
     setRetranslatePreviewDoc(null);
     setRetranslateStreamingText('');
+
+    // 선택 적용 diff 기준: 현재 Target 문서 스냅샷
+    const targetEditor = useEditorStore.getState().targetEditor;
+    setRetranslateOriginalDocJson(
+      targetEditor ? (targetEditor.getJSON() as TipTapDocJson) : null,
+    );
 
     const controller = new AbortController();
     retranslateAbortController.current = controller;
@@ -444,19 +510,20 @@ export function ReviewPanel(): JSX.Element {
   const handleRetranslateClose = useCallback(() => {
     setRetranslatePreviewOpen(false);
     setRetranslatePreviewDoc(null);
+    setRetranslateOriginalDocJson(null);
     setRetranslateError(null);
     setRetranslateStreamingText('');
   }, []);
 
   /**
-   * 재번역 결과를 에디터에 적용
+   * 재번역 결과(전체 또는 선택 병합본)를 에디터에 적용
    */
-  const handleApplyRetranslation = useCallback(() => {
+  const applyRetranslationDoc = useCallback((doc: TipTapDocJson) => {
     const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
-    if (!retranslatePreviewDoc || !project) return;
+    if (!project) return;
 
     // TipTapDocJson을 HTML로 변환하여 target document에 적용
-    const html = tipTapJsonToHtml(retranslatePreviewDoc);
+    const html = tipTapJsonToHtml(doc);
     useProjectStore.getState().setTargetDocument(html);
 
     // 검수 결과 초기화
@@ -485,7 +552,12 @@ export function ReviewPanel(): JSX.Element {
       type: 'success',
       message: t('review.retranslate.applied', '재번역이 적용되었습니다.'),
     });
-  }, [retranslatePreviewDoc, resetReview, handleRetranslateClose, t]);
+  }, [resetReview, handleRetranslateClose, t]);
+
+  const handleApplyRetranslation = useCallback(() => {
+    if (!retranslatePreviewDoc) return;
+    applyRetranslationDoc(retranslatePreviewDoc);
+  }, [retranslatePreviewDoc, applyRetranslationDoc]);
 
   const handleReset = useCallback(() => {
     if (isReviewing) {
@@ -581,6 +653,7 @@ export function ReviewPanel(): JSX.Element {
                   onToggleCheck={toggleIssueCheck}
                   onDelete={deleteIssue}
                   onCopy={handleCopySuggestion}
+                  onApply={handleApplySuggestion}
                   onToggleAll={() => setAllIssuesChecked(!allChecked)}
                   allChecked={allChecked}
                   totalIssuesFound={totalIssuesFound}
@@ -624,6 +697,7 @@ export function ReviewPanel(): JSX.Element {
               onToggleCheck={toggleIssueCheck}
               onDelete={deleteIssue}
               onCopy={handleCopySuggestion}
+              onApply={handleApplySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
               totalIssuesFound={totalIssuesFound}
@@ -700,6 +774,8 @@ export function ReviewPanel(): JSX.Element {
         isLoading={retranslateLoading}
         error={retranslateError}
         streamingText={retranslateStreamingText}
+        originalDocJson={retranslateOriginalDocJson}
+        onApplySelective={applyRetranslationDoc}
         onClose={handleRetranslateClose}
         onApply={handleApplyRetranslation}
         onCancel={handleRetranslateCancel}

@@ -15,6 +15,7 @@ interface ReviewResultsTableProps {
   onToggleAll?: () => void;
   onDelete?: (issueId: string) => void;
   onCopy?: (issue: ReviewIssue) => void;
+  onApply?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
   severityFilter?: IssueSeverity[];
@@ -74,6 +75,7 @@ export function ReviewResultsTable({
   onToggleAll,
   onDelete,
   onCopy,
+  onApply,
   allChecked = false,
   totalIssuesFound = 0,
   severityFilter,
@@ -372,6 +374,18 @@ export function ReviewResultsTable({
                       {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
                     </span>
                     <div className="flex items-center gap-1.5">
+                      {/* 적용 가능 조건: 교체 앵커(targetExcerpt)와 제안이 모두 있을 때.
+                          완전 누락((missing) → targetExcerpt 없음)은 삽입 위치를 특정할 수 없어 복사만 제공 */}
+                      {issue.suggestedFix && issue.targetExcerpt && onApply && (
+                        <button
+                          type="button"
+                          onClick={() => onApply(issue)}
+                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                          title={t('review.apply', '적용')}
+                        >
+                          {t('review.apply', '적용')}
+                        </button>
+                      )}
                       {issue.suggestedFix && onCopy && (
                         <button
                           type="button"

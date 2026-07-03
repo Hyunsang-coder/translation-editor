@@ -157,6 +157,8 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const [polishPreviewOpen, setPolishPreviewOpen] = useState(false);
   const [polishPreviewDoc, setPolishPreviewDoc] = useState<TipTapDocJson | null>(null);
+  // 선택 적용 diff 기준: 폴리싱 시작 시점의 Target 문서 스냅샷
+  const [polishOriginalDocJson, setPolishOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [polishPreviewError, setPolishPreviewError] = useState<string | null>(null);
   const [polishLoading, setPolishLoading] = useState(false);
   const [polishStreamingText, setPolishStreamingText] = useState<string | null>(null);
@@ -575,6 +577,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     try {
       const targetDocJson = targetEditorRef.current.getJSON() as TipTapDocJson;
+      setPolishOriginalDocJson(targetDocJson);
       // 폴리싱은 target 문서만 다루므로 target field 코멘트만 주입
       const serializedComments = serializeUserComments(
         useCommentStore.getState().comments,
@@ -677,14 +680,13 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishStreamingText(null);
   }, []);
 
-  const applyPolishPreview = useCallback((): void => {
-    if (!polishPreviewDoc) return;
+  const applyPolishDoc = useCallback((doc: TipTapDocJson): void => {
     if (!targetEditorRef.current) {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
       return;
     }
 
-    replaceDocContent(targetEditorRef.current, polishPreviewDoc, { addToHistory: true });
+    replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
     setPolishPreviewOpen(false);
 
     setTargetFlash(true);
@@ -705,7 +707,12 @@ export function EditorCanvasTipTap(): JSX.Element {
         });
       }
     }
-  }, [polishPreviewDoc, addToast, t, createSnapshotIfChanged]);
+  }, [addToast, t, createSnapshotIfChanged]);
+
+  const applyPolishPreview = useCallback((): void => {
+    if (!polishPreviewDoc) return;
+    applyPolishDoc(polishPreviewDoc);
+  }, [polishPreviewDoc, applyPolishDoc]);
 
   // 번역 재시도 핸들러
   const handleTranslateRetry = useCallback((): void => {
@@ -826,7 +833,7 @@ export function EditorCanvasTipTap(): JSX.Element {
   const showSplitHandle = showSource && showTarget;
 
   return (
-    <div className="flex-1 h-full flex flex-col min-w-0 bg-editor-surface">
+    <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
       {/* Header */}
       <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
         <div className="flex items-center gap-3">
@@ -1224,6 +1231,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         isLoading={polishLoading}
         error={polishPreviewError}
         streamingText={polishStreamingText}
+        originalDocJson={polishOriginalDocJson}
+        onApplySelective={applyPolishDoc}
         onClose={() => {
           setPolishPreviewOpen(false);
         }}

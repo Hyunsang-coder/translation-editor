@@ -19,6 +19,8 @@ import { stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
+import { SelectiveDiffList } from '@/components/editor/SelectiveDiffList';
+import { buildDocDiffPlan, mergeDocBySelection } from '@/utils/docBlockDiff';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 
 /**
@@ -67,6 +69,10 @@ interface TranslatePreviewModalProps {
   progress?: { completed: number; total: number } | null;
   /** 스트리밍 중 실시간 Markdown 텍스트 */
   streamingText?: string | null;
+  /** 선택 적용 모드: 결과와 비교할 원본 Target 문서 JSON (onApplySelective와 함께 제공 시 변경사항 탭에서 문단별 선택 가능) */
+  originalDocJson?: TipTapDocJson | null;
+  /** 선택된 변경 그룹만 병합한 문서로 적용 */
+  onApplySelective?: (mergedDoc: TipTapDocJson) => void | Promise<void>;
   onClose: () => void;
   onApply: () => void | Promise<void>;
   onCancel?: () => void;
@@ -98,6 +104,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     error,
     progress,
     streamingText,
+    originalDocJson,
+    onApplySelective,
     onClose,
     onApply,
     onCancel,
@@ -173,13 +181,54 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     };
   }, [isLoading, docJson, error, startTimer, stopTimer]);
 
+  // 선택 적용 모드: 원본/결과 문서를 문장 단위 변경 unit으로 분해
+  const diffPlan = useMemo(
+    () =>
+      docJson && originalDocJson && onApplySelective
+        ? buildDocDiffPlan(originalDocJson, docJson)
+        : null,
+    [docJson, originalDocJson, onApplySelective],
+  );
+  const changeUnits = useMemo(() => diffPlan?.units ?? [], [diffPlan]);
+  const [selectedUnitIds, setSelectedUnitIds] = useState<ReadonlySet<string>>(new Set());
+  // 결과 도착 시 기본값: 전체 선택
+  useEffect(() => {
+    setSelectedUnitIds(new Set(changeUnits.map((u) => u.id)));
+  }, [changeUnits]);
+
+  const selectiveActive = changeUnits.length > 0;
+  const selectedCount = selectedUnitIds.size;
+
+  const toggleUnit = useCallback((id: string) => {
+    setSelectedUnitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllUnits = useCallback(() => {
+    setSelectedUnitIds((prev) =>
+      prev.size === changeUnits.length ? new Set() : new Set(changeUnits.map((u) => u.id)),
+    );
+  }, [changeUnits]);
+
   // Apply 핸들러 래퍼
   const handleApply = (): void => {
     if (isApplying) return;
     setIsApplying(true);
     void (async () => {
       try {
-        await onApply();
+        if (selectiveActive && diffPlan && originalDocJson && onApplySelective) {
+          const merged = mergeDocBySelection(originalDocJson, diffPlan, selectedUnitIds);
+          await onApplySelective(merged);
+        } else {
+          await onApply();
+        }
       } finally {
         setIsApplying(false);
       }
@@ -310,7 +359,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
               type="button"
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5"
               onClick={handleApply}
-              disabled={isLoading || !docJson || isApplying}
+              disabled={isLoading || !docJson || isApplying || (selectiveActive && selectedCount === 0)}
               title={t('common.apply')}
               data-testid="translate-preview-apply-button"
             >
@@ -319,6 +368,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                   <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>{t('common.loading')}</span>
                 </>
+              ) : selectiveActive && selectedCount < changeUnits.length ? (
+                t('editor.applySelected', '선택한 {{count}}개 적용', { count: selectedCount })
               ) : (
                 t('common.apply')
               )}
@@ -440,11 +491,20 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
           ) : viewMode === 'diff' && originalText.trim().length > 0 ? (
             <div className="h-full flex flex-col overflow-hidden">
               <div className="flex-1 min-h-0 relative">
-                <VisualDiffViewer
-                  original={originalText}
-                  suggested={translatedText}
-                  className="h-full border-none rounded-none"
-                />
+                {selectiveActive ? (
+                  <SelectiveDiffList
+                    units={changeUnits}
+                    selectedIds={selectedUnitIds}
+                    onToggle={toggleUnit}
+                    onToggleAll={toggleAllUnits}
+                  />
+                ) : (
+                  <VisualDiffViewer
+                    original={originalText}
+                    suggested={translatedText}
+                    className="h-full border-none rounded-none"
+                  />
+                )}
                 {isApplying && (
                   <div className="absolute inset-0 bg-editor-bg/80 backdrop-blur-[1px] flex items-center justify-center z-10">
                     <div className="flex flex-col items-center gap-3">

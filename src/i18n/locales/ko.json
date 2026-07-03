@@ -256,6 +256,16 @@
     "previewTitle": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "polishPreviewTitle": "폴리싱 미리보기",
     "polishCancelled": "폴리싱이 취소되었습니다.",
+    "applySelected": "선택한 {{count}}개 적용",
+    "selectiveDiff": {
+      "changedCount": "변경 {{total}}개 중 {{selected}}개 선택",
+      "selectAll": "전체 선택",
+      "selectChange": "변경 선택",
+      "original": "기존",
+      "suggested": "제안",
+      "added": "(추가)",
+      "removed": "(삭제)"
+    },
     "polishModal": {
       "title": "폴리싱",
       "description": "현재 번역문을 원어민 관점에서 자연스럽게 다듬습니다.",

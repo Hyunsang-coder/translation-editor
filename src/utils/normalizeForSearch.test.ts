@@ -3,6 +3,7 @@ import {
   applyUnicodeNormalization,
   normalizeForSearch,
   stripMarkdownInline,
+  stripWrappingQuotes,
   buildNormalizedTextWithMapping,
 } from './normalizeForSearch';
 
@@ -185,5 +186,42 @@ describe('buildNormalizedTextWithMapping', () => {
     const result = buildNormalizedTextWithMapping('   ');
     expect(result.normalizedText).toBe('');
     expect(result.indexMap).toEqual([]);
+  });
+});
+
+describe('stripWrappingQuotes', () => {
+  it('직선 큰따옴표 감싸기를 제거한다', () => {
+    expect(stripWrappingQuotes('"hello world"')).toBe('hello world');
+  });
+
+  it('곡선 큰따옴표 감싸기를 제거한다', () => {
+    expect(stripWrappingQuotes('“hello world”')).toBe('hello world');
+  });
+
+  it('CJK 꺾쇠 따옴표 감싸기를 제거한다', () => {
+    expect(stripWrappingQuotes('「안녕 세상」')).toBe('안녕 세상');
+    expect(stripWrappingQuotes('『안녕 세상』')).toBe('안녕 세상');
+  });
+
+  it('짝이 맞지 않으면 그대로 반환한다', () => {
+    expect(stripWrappingQuotes('"hello world')).toBe('"hello world');
+    expect(stripWrappingQuotes('hello world"')).toBe('hello world"');
+  });
+
+  it('내부 따옴표는 유지한다', () => {
+    expect(stripWrappingQuotes('"say "hi" now"')).toBe('say "hi" now');
+  });
+
+  it('따옴표가 없으면 그대로 반환한다', () => {
+    expect(stripWrappingQuotes('hello world')).toBe('hello world');
+  });
+
+  it('앞뒤 공백을 제거한 뒤 판단한다', () => {
+    expect(stripWrappingQuotes('  "hello world"  ')).toBe('hello world');
+  });
+
+  it('빈 문자열과 따옴표만 있는 경우를 처리한다', () => {
+    expect(stripWrappingQuotes('')).toBe('');
+    expect(stripWrappingQuotes('""')).toBe('');
   });
 });

@@ -4,12 +4,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
-import {
-  normalizeForSearch,
-  buildNormalizedTextWithMapping,
-} from '@/utils/normalizeForSearch';
-import { findSegmentRange, buildTextWithPositions } from '@/editor/extensions/SearchHighlight';
-import { hasSegmentGroupId, normalizeSegmentGroupId } from '@/components/review/reviewApply';
+import { buildExcerptSearchContext, findExcerptRange } from '@/components/review/reviewApply';
 import { pluginKeys } from '@/editor/plugins/pluginKeys';
 
 export interface ReviewHighlightOptions {
@@ -32,86 +27,22 @@ export function createReviewDecorations(
   excerptField: 'sourceExcerpt' | 'targetExcerpt',
 ): DecorationSet {
   const decorations: Decoration[] = [];
-  const { text: fullText, positions } = buildTextWithPositions(doc);
-
-  // 에디터 텍스트도 정규화하고 원본 인덱스 매핑 구축
-  const { normalizedText: normalizedFullText, indexMap: fullTextIndexMap } =
-    buildNormalizedTextWithMapping(fullText);
-
-  const hasSegmentGroups = hasSegmentGroupId(doc);
+  // 텍스트/매핑은 한 번만 계산해 이슈별 검색에 재사용
+  const searchContext = buildExcerptSearchContext(doc);
 
   issues.forEach((issue) => {
-    const rawSearchText = issue[excerptField];
-    if (!rawSearchText || rawSearchText.length === 0) {
+    const range = findExcerptRange(doc, issue[excerptField], issue.segmentGroupId, searchContext);
+    if (!range) {
       return;
     }
 
-    // 검색 텍스트 정규화 (마크다운 서식 + 공백 정규화)
-    const searchText = normalizeForSearch(rawSearchText);
-    if (searchText.length === 0) {
-      return;
-    }
-
-    const normalizedSegmentGroupId = normalizeSegmentGroupId(issue.segmentGroupId);
-    const segmentRange = normalizedSegmentGroupId
-      ? findSegmentRange(doc, normalizedSegmentGroupId)
-      : null;
-    if (issue.segmentGroupId && hasSegmentGroups && !segmentRange) {
-      return;
-    }
-
-    let normalizedIndex = -1;
-    let searchFrom = 0;
-
-    while ((normalizedIndex = normalizedFullText.indexOf(searchText, searchFrom)) !== -1) {
-      if (normalizedIndex >= fullTextIndexMap.length) {
-        break;
-      }
-
-      // 정규화된 인덱스 → 원본 텍스트 인덱스 → 문서 위치
-      const originalStartIndex = fullTextIndexMap[normalizedIndex];
-      if (originalStartIndex === undefined) {
-        searchFrom = normalizedIndex + 1;
-        continue;
-      }
-
-      const normalizedEndIndex = normalizedIndex + searchText.length - 1;
-      const originalEndIndex =
-        normalizedEndIndex < fullTextIndexMap.length
-          ? fullTextIndexMap[normalizedEndIndex]
-          : undefined;
-
-      if (originalEndIndex === undefined) {
-        searchFrom = normalizedIndex + 1;
-        continue;
-      }
-
-      // 원본 텍스트 인덱스 → 문서 위치
-      const from = positions[originalStartIndex];
-      const to = positions[originalEndIndex];
-
-      if (from === undefined || to === undefined) {
-        searchFrom = normalizedIndex + 1;
-        continue;
-      }
-
-      const toExclusive = to + 1;
-      const inSegmentRange = !segmentRange || (from >= segmentRange.from && toExclusive <= segmentRange.to);
-
-      if (toExclusive > from && inSegmentRange) {
-        decorations.push(
-          Decoration.inline(from, toExclusive, {
-            class: highlightClass,
-            'data-issue-id': issue.id,
-            'data-issue-type': issue.type,
-          }),
-        );
-        break;
-      }
-
-      searchFrom = normalizedIndex + 1;
-    }
-
+    decorations.push(
+      Decoration.inline(range.from, range.to, {
+        class: highlightClass,
+        'data-issue-id': issue.id,
+        'data-issue-type': issue.type,
+      }),
+    );
   });
 
   return DecorationSet.create(doc, decorations);

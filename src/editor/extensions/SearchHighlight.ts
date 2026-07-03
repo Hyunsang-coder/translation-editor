@@ -57,6 +57,14 @@ export function buildTextWithPositions(doc: ProseMirrorNode): { text: string; po
   const positions: number[] = [];
 
   doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
+    // 블록(textblock) 경계에 개행 삽입:
+    // - 블록을 그대로 이어붙이면 여러 블록에 걸친 excerpt(줄바꿈 포함)가 매칭되지 않고,
+    //   반대로 경계를 넘는 거짓 인접 매치("problems.Can")가 생긴다.
+    // - 개행은 정규화 단계에서 공백으로 축소되며, 검색어는 trim되므로 매치 끝점이 되지 않는다.
+    if (node.isTextblock && text.length > 0 && !text.endsWith('\n')) {
+      text += '\n';
+      positions.push(pos);
+    }
     if (node.isText && node.text) {
       for (let i = 0; i < node.text.length; i++) {
         positions.push(pos + i);

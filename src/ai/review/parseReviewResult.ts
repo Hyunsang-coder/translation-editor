@@ -1,5 +1,6 @@
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { generateIssueId } from '@/stores/reviewStore';
+import { stripWrappingQuotes } from '@/utils/normalizeForSearch';
 
 /**
  * 문제 유형을 분류 (Two-Pass Review 타입)
@@ -133,16 +134,17 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const trimmed = line.trim();
 
       // **Source**: "텍스트" 또는 - **Source**: "텍스트"
+      // 곡선 따옴표(“ ”) 등으로 감싸진 경우도 stripWrappingQuotes로 제거 (에디터 매칭 실패 방지)
       const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?(.*?)"?\s*$/i);
       if (sourceMatch) {
-        sourceExcerpt = sourceMatch[1]?.trim() || '';
+        sourceExcerpt = stripWrappingQuotes(sourceMatch[1]?.trim() || '');
         continue;
       }
 
       // **Target**: "텍스트" 또는 (missing)
       const targetMatch = trimmed.match(/\*\*Target\*\*:\s*"?(.*?)"?\s*$/i);
       if (targetMatch) {
-        const val = targetMatch[1]?.trim() || '';
+        const val = stripWrappingQuotes(targetMatch[1]?.trim() || '');
         targetExcerpt = val === '(missing)' ? '' : val;
         continue;
       }
@@ -178,7 +180,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       // **Suggestion**: 제안
       const suggestionMatch = trimmed.match(/\*\*Suggestion\*\*:\s*(.+)/i);
       if (suggestionMatch) {
-        suggestion = suggestionMatch[1]?.trim() || '';
+        suggestion = stripWrappingQuotes(suggestionMatch[1]?.trim() || '');
         continue;
       }
     }

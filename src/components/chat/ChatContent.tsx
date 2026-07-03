@@ -364,8 +364,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, addToast, t]);
 
   // 스크롤 관리
-  const { messagesEndRef, messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
-    useChatScroll(chatPanelOpen, displaySession?.messages.length);
+  const { messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
+    useChatScroll(chatPanelOpen, displaySession?.messages.length, streamingContent?.length ?? 0);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
@@ -429,7 +429,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       <div className="relative flex-1 min-h-0">
         <div
           ref={messagesContainerRef}
-          className="h-full overflow-y-auto p-4 space-y-4"
+          className="h-full overflow-y-auto overscroll-contain p-4 space-y-4"
           onScroll={handleMessagesScroll}
         >
         {displaySession?.messages.map((message) => (
@@ -456,14 +456,13 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             {showStreamingSkeleton && renderAssistantSkeleton()}
           </div>
         )}
-        <div ref={messagesEndRef} />
         </div>
 
         {/* 최신 메시지로 스크롤 버튼 */}
         {showScrollToBottom && (
           <button
             type="button"
-            onClick={scrollToBottom}
+            onClick={() => scrollToBottom()}
             className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10
                        w-8 h-8 rounded-full bg-editor-bg border border-editor-border shadow-md
                        flex items-center justify-center

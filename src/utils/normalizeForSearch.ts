@@ -90,6 +90,34 @@ export function normalizeForSearch(text: string): string {
   );
 }
 
+/** 감싸는 따옴표 쌍 (여는 문자 → 닫는 문자) */
+const WRAPPING_QUOTE_PAIRS: ReadonlyArray<[string, string]> = [
+  ['"', '"'],
+  ['“', '”'], // “ ”
+  ['「', '」'], // 「 」
+  ['『', '』'], // 『 』
+  ['«', '»'], // « »
+];
+
+/**
+ * 텍스트 전체를 감싸는 대칭 따옴표 한 쌍을 제거
+ *
+ * AI가 excerpt/suggestion을 따옴표로 감싸 반환하는 경우가 있어
+ * 문서 매칭 전 또는 교체 텍스트 생성 시 사용합니다.
+ * 짝이 맞는 경우에만 제거하며 내부 따옴표는 유지합니다.
+ */
+export function stripWrappingQuotes(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return trimmed;
+
+  for (const [open, close] of WRAPPING_QUOTE_PAIRS) {
+    if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
+      return trimmed.slice(open.length, trimmed.length - close.length).trim();
+    }
+  }
+  return trimmed;
+}
+
 /**
  * 표시용 마크다운 서식 제거 (description 등)
  *

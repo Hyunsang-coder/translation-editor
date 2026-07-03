@@ -241,13 +241,13 @@ const OUTPUT_FORMAT = `## Output Format
 ## Translation Review Result
 
 ### Issue #1
-- **Source**: "[원문에서 문자 그대로 복사, 50자 이내]"
-- **Target**: "[번역문에서 문자 그대로 복사, 50자 이내]" 또는 (missing)
+- **Source**: "[원문에서 문제가 있는 문장 하나를 문자 그대로 복사]"
+- **Target**: "[번역문에서 문제가 있는 문장 하나를 문자 그대로 복사]" 또는 (missing)
 - **Type**: [Omission/Addition/Mistranslation/Grammar/Awkward/Terminology]
 - **Severity**: [1~5]
 - **SegmentGroupId**: [세그먼트 ID]
 - **Explanation**: [핵심만 1줄]
-- **Suggestion**: [수정된 Target 언어 번역문]
+- **Suggestion**: [Target 문장 전체를 수정한 완성 문장]
 
 ---
 
@@ -274,7 +274,12 @@ Review complete. No issues found.
 
 ## 작성 규칙 (필수!)
 - 각 이슈에는 SegmentGroupId와 Suggestion을 반드시 포함하세요.
-- Source/Target excerpt는 원문/번역문에서 문자 그대로 복사하세요.`;
+- Source/Target excerpt는 원문/번역문에서 문자 그대로 복사하세요.
+- Target과 Suggestion은 **정확히 한 문장**만 담으세요 (불릿 항목이면 그 항목의 문장 하나).
+  여러 문장·여러 불릿·단락 전체를 하나의 이슈에 합치지 말고, 문제가 여러 문장에 걸치면 문장별로 이슈를 분리하세요.
+- Suggestion은 Target 문장을 통째로 교체해 넣을 수 있는 완성된 문장이어야 합니다.
+- 누락(Omission): 문장 일부가 누락됐으면 Target에 그 미완성 문장을 그대로 넣고 Suggestion에 완성 문장을 제시하세요.
+  문장 전체가 번역문에 없을 때만 Target을 (missing)으로 표기하세요.`;
 
 // ============================================
 // 프롬프트 생성 함수

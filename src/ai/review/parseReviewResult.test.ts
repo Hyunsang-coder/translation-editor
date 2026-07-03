@@ -424,3 +424,45 @@ describe('deduplicateIssues', () => {
     expect(deduplicateIssues([])).toHaveLength(0);
   });
 });
+
+describe('감싸는 따옴표 제거', () => {
+  it('곡선 따옴표로 감싸진 Source/Target을 벗겨낸다', () => {
+    const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: “업무를 수행하는 시점에”
+- **Target**: “when executing the task,”
+- **Type**: Awkward
+- **Severity**: 2
+- **SegmentGroupId**: seg-001
+- **Explanation**: 번역투입니다
+- **Suggestion**: “At the time of performing the task,”
+---REVIEW_END---
+    `;
+
+    const issues = parseReviewResult(response);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.sourceExcerpt).toBe('업무를 수행하는 시점에');
+    expect(issues[0]?.targetExcerpt).toBe('when executing the task,');
+    expect(issues[0]?.suggestedFix).toBe('At the time of performing the task,');
+  });
+
+  it('직선 따옴표로 감싸진 Suggestion을 벗겨낸다', () => {
+    const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: "Hello"
+- **Target**: "안녕"
+- **Type**: Mistranslation
+- **Severity**: 5
+- **Suggestion**: "안녕하세요"
+---REVIEW_END---
+    `;
+
+    const issues = parseReviewResult(response);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.suggestedFix).toBe('안녕하세요');
+  });
+});

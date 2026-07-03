@@ -222,7 +222,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element {
   return (
     <aside
       ref={sidebarRef}
-      className={`shrink-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
+      className={`shrink-0 h-full min-h-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
       style={{ width }}
     >
       {/* Tab Header */}
