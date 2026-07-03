@@ -105,7 +105,7 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(result).toContain('---REVIEW_START---');
       expect(mocks.createChatModel).toHaveBeenCalledWith(
         undefined,
-        { useFor: 'translation', maxTokens: 4096 },
+        { useFor: 'review', maxTokens: 4096 },
       );
       expect(mocks.stream).toHaveBeenCalledTimes(1);
 

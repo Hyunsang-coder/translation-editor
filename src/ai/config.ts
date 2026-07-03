@@ -56,13 +56,13 @@ function isTestRuntime(): boolean {
   return getEnvString('MODE') === 'test' || process.env.VITEST === 'true';
 }
 
-export function getAiConfig(options?: { useFor?: 'translation' | 'chat' }): AiConfig {
+export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'review' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
 
-  // 2. 용도에 따른 모델 선택
+  // 2. 용도에 따른 모델 선택 (review는 번역 모델을 재사용)
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
-  const rawModel = useFor === 'translation' ? store.translationModel : store.chatModel;
+  const rawModel = (useFor === 'translation' || useFor === 'review') ? store.translationModel : store.chatModel;
 
   // 3. 모델명에서 provider 자동 결정
   const provider: AiProvider = rawModel.startsWith('claude') ? 'anthropic' : 'openai';

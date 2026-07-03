@@ -83,7 +83,7 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
  * @returns AI 응답 텍스트 (JSON 형식)
  */
 export async function runReview(params: RunReviewParams): Promise<string> {
-  const cfg = getAiConfig({ useFor: 'translation' });
+  const cfg = getAiConfig({ useFor: 'review' });
   const promptMessages = buildReviewMessages(params);
 
   if (params.abortSignal?.aborted) {
@@ -105,8 +105,8 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   // 도구 없이 직접 스트리밍 (1회 호출)
   let result = '';
   try {
-    // useFor: 'translation'으로 설정하여 Responses API 비활성화 (성능 향상)
-    const model = createChatModel(undefined, { useFor: 'translation', maxTokens: REVIEW_MAX_TOKENS });
+    // useFor: 'review'로 설정하여 Responses API 비활성화(성능 향상) + reasoning/thinking effort를 high로 상향
+    const model = createChatModel(undefined, { useFor: 'review', maxTokens: REVIEW_MAX_TOKENS });
     const messages = [
       new SystemMessage(promptMessages[0]!.content),
       new HumanMessage(promptMessages[1]!.content),
