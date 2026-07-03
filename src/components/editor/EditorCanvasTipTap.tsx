@@ -754,6 +754,17 @@ export function EditorCanvasTipTap(): JSX.Element {
     };
   }, []);
 
+  // 프로젝트 전환 시 projectStore.switchProjectById가 clearEditors()로 스토어를 비우지만,
+  // EditorCanvasTipTap은 프로젝트로 remount되지 않아(내용 prop만 교체) 에디터 인스턴스가
+  // 재사용된다. 그 결과 onEditorReady가 다시 호출되지 않아 스토어가 null로 남고,
+  // 검수 적용 등 store.targetEditor를 읽는 기능이 "에디터 준비 안 됨"으로 실패한다.
+  // 프로젝트가 바뀔 때마다 살아있는 에디터를 스토어에 다시 등록해 이를 방지한다.
+  useEffect(() => {
+    const store = useEditorStore.getState();
+    if (sourceEditor && !sourceEditor.isDestroyed) store.setSourceEditor(sourceEditor);
+    if (targetEditor && !targetEditor.isDestroyed) store.setTargetEditor(targetEditor);
+  }, [project?.id, sourceEditor, targetEditor]);
+
   // 검색바 핸들러
   const handleSourceSearchOpen = useCallback(() => {
     setSourceSearchOpen((prev) => !prev);
