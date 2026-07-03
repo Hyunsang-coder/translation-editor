@@ -86,6 +86,7 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-03)
 
+- **릴리스 빌드 시간 최적화**: 태그 빌드가 캐시를 전혀 복원하지 못하던 문제(태그 ref 캐시는 다른 태그에서 접근 불가) 해결. ① `warm-cache.yml` — main push(src-tauri/crates 변경 시)/주간 cron에서 릴리스 프로필 빌드로 rust-cache+sccache 워밍, ② `ci.yml` — main push마다 unit+cargo test 실행 및 verify 캐시 저장, ③ `build.yml` — `build`가 `verify`를 기다리지 않고 병렬 실행(publish에서 게이트), 캐시는 `shared-key`로 main 캐시 복원 전용(`save-if: false`), ④ `Cargo.toml` — `lto = "thin"` 전환으로 링크 시간 단축. 기대: 릴리스 벽시계 ~24분 → ~8–10분(warm cache 기준).
 - **코드 리뷰 수정 계획 F1–F13 구현 완료** (`docs/code-review-fix-plan.md`): 검수 적용 안전성(F1–F3), 선택 적용 병합(F4/F5), 따옴표 처리(F6), Tauri AI 옵션 통합(F7/F8), 채팅 스크롤(F9/F10), 진단성/위생(F11/F12), 출력 토큰 상향(F13). 상세는 계획 문서 및 아래 항목 참조.
 - **검수 적용 안전성 (F1–F3)**: `reviewApply.ts` — 세그먼트 범위 fuzzy 매칭, 다중 매치 모호 시 교체 포기, 블록 경계 교체 차단. `SearchHighlight.ts` — find/replace도 동일 가드.
 - **선택 적용 병합 (F4/F5)**: 전체 선택 시 `mergeDocBySelection` 우회(full apply). `docBlockDiff` — 평탄 텍스트 블록만 문장 단위 diff, 중첩 구조는 swap 단위.

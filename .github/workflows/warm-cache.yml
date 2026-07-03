@@ -1,0 +1,85 @@
+name: Warm Release Cache
+
+# 태그 push에서 실행되는 Build 워크플로는 다른 태그가 저장한 캐시를 복원할 수 없다
+# (GitHub Actions 캐시는 같은 ref 또는 default 브랜치의 캐시만 복원 가능).
+# 이 워크플로가 main에서 릴리스 프로필 빌드를 수행해 rust-cache/sccache를 채워두면,
+# 태그 빌드가 main 캐시를 복원해 의존성 컴파일을 건너뛴다.
+# 주간 cron은 7일 미사용 캐시 자동 삭제를 방지한다.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src-tauri/**'
+      - 'crates/**'
+      - '.github/workflows/warm-cache.yml'
+  schedule:
+    - cron: '0 21 * * 0' # 매주 월요일 06:00 KST
+  workflow_dispatch:
+
+concurrency:
+  group: warm-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            targets: 'aarch64-apple-darwin x86_64-apple-darwin'
+            shared-key: release-universal-apple-darwin
+          - platform: windows-latest
+            targets: 'x86_64-pc-windows-msvc'
+            shared-key: release-x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ${{ matrix.shared-key }}
+          cache-on-failure: true
+
+      - name: Add Rust targets
+        shell: bash
+        run: |
+          for target in ${{ matrix.targets }}; do
+            rustup target add "$target"
+          done
+
+      - name: Install dependencies
+        run: npm ci
+
+      # generate_context!가 컴파일 타임에 dist와 번들 리소스를 요구하므로
+      # tauri.conf.json의 beforeBuildCommand와 동일하게 준비한다.
+      - name: Build frontend and MCP bundle
+        run: npm ci --prefix oddeyes-desktop-mcp && npm run oddeyes-desktop-mcp:build && npm run build
+
+      - name: Build release (warm cache)
+        shell: bash
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+        run: |
+          for target in ${{ matrix.targets }}; do
+            cargo build --release --manifest-path src-tauri/Cargo.toml --target "$target"
+          done

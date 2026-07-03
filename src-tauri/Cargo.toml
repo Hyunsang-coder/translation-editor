@@ -58,7 +58,8 @@ incremental = true
 
 [profile.release]
 codegen-units = 1
-lto = true
+# thin LTO: fat 대비 링크 시간 절반 이하, 바이너리 크기 차이는 수 % 수준
+lto = "thin"
 opt-level = "s"
 panic = "abort"
 strip = true

@@ -51,10 +51,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # 태그 ref에서 저장한 캐시는 다른 태그에서 복원 불가하므로 저장하지 않는다.
+      # 복원은 CI 워크플로(main)가 저장한 shared-key 캐시를 사용한다.
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          shared-key: verify
+          save-if: false
           cache-on-failure: true
 
       - name: Install dependencies
@@ -69,8 +73,10 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+  # verify와 병렬 실행 (verify는 publish-release에서 게이트).
+  # 빌드가 verify 완료를 기다리지 않아 크리티컬 패스에서 ~5분 제거.
   build:
-    needs: [create-release, verify]
+    needs: [create-release]
     permissions:
       contents: write
     strategy:
@@ -101,10 +107,13 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
 
+      # Warm Release Cache 워크플로(main)가 저장한 캐시를 복원만 한다.
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          shared-key: release-${{ matrix.target }}
+          save-if: false
           cache-on-failure: true
 
       - name: Add macOS universal targets
@@ -154,7 +163,7 @@ jobs:
           .github/scripts/generate-release-notes.sh "${GITHUB_REF#refs/tags/}" "${{ github.repository }}"
 
   publish-release:
-    needs: [create-release, build]
+    needs: [create-release, verify, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write

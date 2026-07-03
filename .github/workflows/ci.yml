@@ -1,0 +1,48 @@
+name: CI
+
+# main push마다 verify와 동일한 테스트를 실행하고 dev 프로필 캐시를 저장한다.
+# Build 워크플로의 verify job이 이 캐시(shared-key: verify)를 복원한다.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: verify
+          cache-on-failure: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build MCP extension bundle
+        run: npm ci --prefix oddeyes-desktop-mcp && npm run oddeyes-desktop-mcp:build
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
