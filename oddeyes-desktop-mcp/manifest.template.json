@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "oddeyes-desktop",
   "display_name": "OddEyes Desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Connect Claude Desktop to a running OddEyes app and send preview-first translation actions.",
   "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and translation context from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
   "author": {
@@ -58,6 +58,14 @@
     {
       "name": "oddeyes_set_translation_context",
       "description": "Update OddEyes translation rules, persona, and/or project context (replace or append)."
+    },
+    {
+      "name": "oddeyes_log_quality_records",
+      "description": "Append quality-ledger records (findings/fixes/verdicts, including rejected ones) to the OddEyes SQLite ledger."
+    },
+    {
+      "name": "oddeyes_get_quality_records",
+      "description": "Query the OddEyes quality ledger with filters (since, stage, disposition, promotionStatus, limit) for mining."
     }
   ],
   "keywords": [

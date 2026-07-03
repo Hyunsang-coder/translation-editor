@@ -72,7 +72,9 @@ vi.mock('@/desktop/translationPreviewActions', () => ({
 
 const ingestSpy = vi.fn();
 vi.mock('@/stores/reviewStore', () => ({
-  useReviewStore: { getState: () => ({ ingestExternalReview: ingestSpy }) },
+  useReviewStore: {
+    getState: () => ({ ingestExternalReview: ingestSpy, getAllIssues: () => [] }),
+  },
 }));
 
 import { initializeOddEyesAppBridge } from './oddeyesAppBridge';

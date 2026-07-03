@@ -8,6 +8,7 @@ import { registerDocumentTools } from "./tools/documents.js";
 import { registerPreviewTools } from "./tools/preview.js";
 import { registerReviewTools } from "./tools/review.js";
 import { registerContextTools } from "./tools/context.js";
+import { registerQualityTools } from "./tools/quality.js";
 
 const transportMode = process.env.ODDEYES_DESKTOP_MCP_TRANSPORT === "http" ? "http" : "stdio";
 const httpPort = Number(process.env.ODDEYES_DESKTOP_MCP_PORT ?? "9977");
@@ -32,6 +33,7 @@ function createMcpServer(): McpServer {
   registerPreviewTools(server, callBridge);
   registerReviewTools(server, callBridge);
   registerContextTools(server, callBridge);
+  registerQualityTools(server, callBridge);
 
   return server;
 }

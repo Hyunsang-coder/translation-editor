@@ -1,6 +1,6 @@
 {
   "name": "oddeyes-desktop-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that connects Claude Desktop to OddEyes.ai translation editor",
   "type": "module",
   "bin": {

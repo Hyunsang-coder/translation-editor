@@ -81,6 +81,15 @@ export async function pickExportDocumentPath(
   return path ?? null;
 }
 
+export async function pickQualityLedgerPath(defaultName = 'quality-ledger'): Promise<string | null> {
+  const path = await save({
+    title: 'Export Quality Ledger',
+    defaultPath: `${defaultName}.jsonl`,
+    filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }],
+  });
+  return path ?? null;
+}
+
 export async function pickChatAttachmentFile(): Promise<string | null> {
   const file = await open({
     title: '첨부할 파일/이미지 선택',
