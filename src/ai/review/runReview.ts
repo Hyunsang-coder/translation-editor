@@ -32,7 +32,9 @@ export interface RunReviewParams {
   onToken?: (accumulated: string) => void;
 }
 
-const REVIEW_MAX_TOKENS = 4096;
+// thinking 토큰이 max_tokens에 합산되는 하드 캡이므로(Anthropic adaptive / GPT-5 reasoning),
+// Sonnet 5 기본 adaptive thinking이 예산을 잠식해 이슈 목록이 무음 truncation되는 것을 방지.
+const REVIEW_MAX_TOKENS = 16384;
 
 function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   const systemPrompt = buildReviewPrompt();

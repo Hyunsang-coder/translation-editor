@@ -13,7 +13,9 @@ export const GPT4O_MAX_OUTPUT_TOKENS = 16_384;
 
 // 용도별 기본 출력 토큰
 export const DEFAULT_TRANSLATION_MAX_TOKENS = 8_192;
-export const DEFAULT_CHAT_MAX_TOKENS = 4_096;
+// Opus 4.7+ 채팅은 adaptive thinking이 실제로 활성(client.ts)이라 thinking이
+// max_tokens를 잠식한다. 답변이 문장 중간에 잘리지 않도록 여유를 둔다.
+export const DEFAULT_CHAT_MAX_TOKENS = 8_192;
 
 // 컨텍스트 안전 마진 (입력 + 출력이 컨텍스트를 넘지 않도록)
 export const CONTEXT_SAFETY_MARGIN = 0.9;

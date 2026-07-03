@@ -105,7 +105,7 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(result).toContain('---REVIEW_START---');
       expect(mocks.createChatModel).toHaveBeenCalledWith(
         undefined,
-        { useFor: 'review', maxTokens: 4096 },
+        { useFor: 'review', maxTokens: 16384 },
       );
       expect(mocks.stream).toHaveBeenCalledTimes(1);
 
@@ -134,7 +134,7 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
         maxTokens?: number;
         messages?: Array<{ role: string; content: string }>;
       };
-      expect(callArgs.maxTokens).toBe(4096);
+      expect(callArgs.maxTokens).toBe(16384);
       expect(callArgs.messages?.[0]?.role).toBe('system');
       expect(callArgs.messages?.[1]?.content).toContain('Source (English): This guide provides detailed instructions');
       expect(callArgs.messages?.[1]?.content).toContain('Target (Spanish): Esta guía proporciona instrucciones detalladas');
