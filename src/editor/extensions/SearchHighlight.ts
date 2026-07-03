@@ -127,6 +127,25 @@ export function filterMatchesInRange(
 }
 
 /**
+ * 범위가 textblock 경계를 넘는지 판정 (교체 시 문단 병합 방지용).
+ *
+ * 하이라이트/매칭은 블록 경계를 넘어도 유용하지만, `tr.replaceWith`로 경계를
+ * 걸친 범위를 단일 텍스트 노드로 교체하면 ProseMirror가 두 문단을 병합한다.
+ * 교체 직전 이 가드로 걸러 문단/리스트 구조 파괴를 막는다.
+ *
+ * @param to - exclusive 끝 위치 (마지막 문자 위치 to-1로 resolve)
+ */
+export function rangeCrossesBlockBoundary(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): boolean {
+  const $from = doc.resolve(from);
+  const $to = doc.resolve(Math.max(from, to - 1));
+  return !$from.sameParent($to);
+}
+
+/**
  * 검색어에 대한 모든 매치 찾기
  * 양방향 정규화: 에디터 텍스트와 검색어 모두 정규화하여 비교
  */
@@ -428,6 +447,11 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             return false;
           }
 
+          // 블록 경계를 넘는 매치는 교체 시 문단이 병합되므로 건너뜀
+          if (rangeCrossesBlockBoundary(editor.state.doc, match.from, match.to)) {
+            return false;
+          }
+
           if (dispatch) {
             // 현재 매치 텍스트 치환 (plain text로 교체, mark 제거)
             tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
@@ -448,9 +472,17 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             return false;
           }
 
+          // 블록 경계를 넘는 매치는 교체 시 문단이 병합되므로 제외 (나머지는 계속 교체)
+          const replaceable = storage.matches.filter(
+            (match) => !rangeCrossesBlockBoundary(editor.state.doc, match.from, match.to),
+          );
+          if (replaceable.length === 0) {
+            return false;
+          }
+
           if (dispatch) {
             // 뒤에서부터 치환 (위치 변경 방지)
-            const sortedMatches = [...storage.matches].sort((a, b) => b.from - a.from);
+            const sortedMatches = [...replaceable].sort((a, b) => b.from - a.from);
 
             for (const match of sortedMatches) {
               tr.replaceWith(match.from, match.to, editor.schema.text(replacement));

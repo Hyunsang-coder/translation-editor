@@ -3,6 +3,7 @@ import {
   filterMatchesInRange,
   findSegmentRange,
   buildTextWithPositions,
+  rangeCrossesBlockBoundary,
 } from '@/editor/extensions/SearchHighlight';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
@@ -102,19 +103,31 @@ export function findExcerptRange(
 
   for (const searchText of candidates) {
     if (searchText.length === 0) continue;
-    const range = findNormalizedTextRange(searchText, segmentRange, context);
-    if (range) return range;
+    const ranges = findNormalizedTextRanges(searchText, segmentRange, context, 2);
+    if (ranges.length === 1) return ranges[0]!;
+    if (ranges.length > 1) {
+      // 세그먼트로 좁혀지지 않은 다중 매치는 위치가 모호 → 교체 포기
+      // (구 filterMatchesBySegment의 다중 매치 가드 시맨틱 복원, 비세그먼트 문서 포함)
+      if (!segmentRange) return null;
+      // 세그먼트 내 다중 매치는 기존대로 첫 매치 (범위가 이미 좁음)
+      return ranges[0]!;
+    }
   }
   return null;
 }
 
-/** 정규화된 검색 텍스트를 컨텍스트에서 찾아 첫 유효 범위 반환 */
-function findNormalizedTextRange(
+/**
+ * 정규화된 검색 텍스트의 유효 매치를 최대 limit개 수집.
+ * 다중 매치 모호성 판정을 위해 첫 매치에서 멈추지 않고 limit까지 수집한다.
+ */
+function findNormalizedTextRanges(
   searchText: string,
   segmentRange: { from: number; to: number } | null,
   ctx: ExcerptSearchContext,
-): { from: number; to: number } | null {
+  limit: number,
+): Array<{ from: number; to: number }> {
   const { positions, normalizedFullText, fullTextIndexMap } = ctx;
+  const results: Array<{ from: number; to: number }> = [];
 
   let normalizedIndex = -1;
   let searchFrom = 0;
@@ -155,13 +168,14 @@ function findNormalizedTextRange(
       !segmentRange || (from >= segmentRange.from && toExclusive <= segmentRange.to);
 
     if (toExclusive > from && inSegmentRange) {
-      return { from, to: toExclusive };
+      results.push({ from, to: toExclusive });
+      if (results.length >= limit) break;
     }
 
     searchFrom = normalizedIndex + 1;
   }
 
-  return null;
+  return results;
 }
 
 /**
@@ -248,10 +262,15 @@ export interface SentenceMatch {
 /**
  * excerpt와 가장 유사한 문장을 문서에서 찾는다 (단어 Dice 유사도).
  * 블록(textblock) 내부에서만 문장을 구성하므로 반환 범위가 블록 경계를 넘지 않습니다.
+ *
+ * @param segmentRange - 지정 시 이 범위 안의 블록만 문장 후보로 사용 (segmentGroupId 제한).
+ *   범위 밖(null)일 때는 문서 전체를 스캔하되, threshold 이상 후보가 2개 이상이면
+ *   위치가 모호하므로 null을 반환한다(엉뚱한 세그먼트 문장 교체 방지).
  */
 export function findBestSentenceMatch(
   doc: ProseMirrorNode,
   rawExcerpt: string | undefined,
+  segmentRange?: { from: number; to: number } | null,
 ): SentenceMatch | null {
   if (!rawExcerpt) return null;
 
@@ -259,9 +278,14 @@ export function findBestSentenceMatch(
   if (excerptTokens.size < MIN_EXCERPT_TOKENS) return null;
 
   let best: SentenceMatch | null = null;
+  let qualifying = 0; // threshold 이상 후보 수 (segmentRange 없을 때 모호성 판정용)
 
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return undefined;
+    // 범위 밖 textblock은 문장 후보에서 제외 (블록 전체가 범위 안일 때만 처리)
+    if (segmentRange && (pos < segmentRange.from || pos + node.nodeSize > segmentRange.to)) {
+      return false;
+    }
 
     // 블록 내 텍스트와 문서 위치 매핑 (인라인 비텍스트 노드는 건너뜀)
     let blockText = '';
@@ -284,16 +308,22 @@ export function findBestSentenceMatch(
 
       const sentenceText = blockText.slice(s, e);
       const similarity = diceSimilarity(excerptTokens, tokenizeForSimilarity(sentenceText));
-      if (similarity >= SENTENCE_SIMILARITY_THRESHOLD && (!best || similarity > best.similarity)) {
-        const from = blockPositions[s];
-        const toBase = blockPositions[e - 1];
-        if (from !== undefined && toBase !== undefined) {
-          best = { from, to: toBase + 1, similarity, sentenceText };
+      if (similarity >= SENTENCE_SIMILARITY_THRESHOLD) {
+        qualifying++;
+        if (!best || similarity > best.similarity) {
+          const from = blockPositions[s];
+          const toBase = blockPositions[e - 1];
+          if (from !== undefined && toBase !== undefined) {
+            best = { from, to: toBase + 1, similarity, sentenceText };
+          }
         }
       }
     }
     return false; // textblock 내부는 이미 처리
   });
+
+  // 세그먼트로 제한되지 않은 전체 스캔에서 후보가 여럿이면 모호 → 포기
+  if (!segmentRange && qualifying > 1) return null;
 
   return best;
 }
@@ -321,7 +351,12 @@ export function resolveSuggestionRange(
     return { from: exact.from, to: exact.to, fuzzy: false };
   }
 
-  const sentence = findBestSentenceMatch(doc, targetExcerpt);
+  // fuzzy 폴백도 exact 경로와 동일한 세그먼트 가드를 적용한다.
+  const normalizedId = normalizeSegmentGroupId(segmentGroupId);
+  const segmentRange = normalizedId ? findSegmentRange(doc, normalizedId) : null;
+  if (segmentGroupId && hasSegmentGroupId(doc) && !segmentRange) return null;
+
+  const sentence = findBestSentenceMatch(doc, targetExcerpt, segmentRange);
   if (!sentence) return null;
   if (replacement.length < sentence.sentenceText.length * REPLACEMENT_MIN_LENGTH_RATIO) {
     return null;
@@ -348,6 +383,12 @@ export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): App
     baseReplacement,
   );
   if (!resolved) return 'not-found';
+
+  // exact 경로가 블록 경계를 넘으면 교체 시 문단이 병합되므로 포기.
+  // (fuzzy 경로는 findBestSentenceMatch가 블록 내부로 한정하므로 이 가드에 걸리지 않음.)
+  if (rangeCrossesBlockBoundary(state.doc, resolved.from, resolved.to)) {
+    return 'not-found';
+  }
 
   const matchedText = state.doc.textBetween(resolved.from, resolved.to, '\n');
   const replacement = resolveReplacementText(baseReplacement, matchedText);

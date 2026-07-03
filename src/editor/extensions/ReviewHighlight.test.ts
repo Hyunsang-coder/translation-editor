@@ -161,8 +161,33 @@ describe('ReviewHighlight segment range', () => {
     expect(found).toHaveLength(0);
   });
 
-  it('segmentGroupId가 없으면 첫 매치를 하이라이트', () => {
+  it('segmentGroupId 없이 동일 문구가 여러 곳이면 모호 → 하이라이트하지 않는다 (F2)', () => {
+    // 이전에는 첫 매치를 하이라이트했으나, 위치를 특정할 수 없는 모호한 이슈이므로
+    // 이제 apply/하이라이트 모두 포기한다 (구 filterMatchesBySegment 시맨틱 복원).
     const doc = buildDoc('Hello world', 'Hello world');
+    const issues = [
+      {
+        id: 'issue-1',
+        segmentOrder: 1,
+        segmentGroupId: undefined,
+        sourceExcerpt: '',
+        targetExcerpt: 'Hello world',
+        suggestedFix: '',
+        type: 'mistranslation' as IssueType,
+        severity: 'major' as IssueSeverity,
+        description: '',
+        checked: true,
+      },
+    ];
+
+    const decorations = createReviewDecorations(doc, issues, 'review-highlight', 'targetExcerpt');
+    const found = decorations.find();
+
+    expect(found).toHaveLength(0);
+  });
+
+  it('segmentGroupId 없이 유일한 매치는 하이라이트한다 (F2)', () => {
+    const doc = buildDoc('Hello world', 'Second paragraph');
     const issues = [
       {
         id: 'issue-1',

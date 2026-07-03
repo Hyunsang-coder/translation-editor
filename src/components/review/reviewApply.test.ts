@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Schema } from '@tiptap/pm/model';
 import type { SearchMatch } from '@/editor/extensions/SearchHighlight';
-import { findSegmentRange } from '@/editor/extensions/SearchHighlight';
+import { findSegmentRange, rangeCrossesBlockBoundary } from '@/editor/extensions/SearchHighlight';
 import {
   filterMatchesBySegment,
   findExcerptRange,
@@ -147,6 +147,21 @@ describe('findExcerptRange', () => {
     expect(findExcerptRange(doc, '<strong></strong>', undefined)).toBeNull();
     expect(findExcerptRange(doc, '', undefined)).toBeNull();
   });
+
+  it('segmentGroupId 없이 동일 excerpt가 여러 곳이면 모호 → null (F2)', () => {
+    const doc = buildDoc('Hello world', 'Hello world');
+    expect(findExcerptRange(doc, 'Hello world', undefined)).toBeNull();
+  });
+
+  it('동일 excerpt 여러 곳 + 유효 segmentGroupId면 해당 세그먼트 매치 (F2)', () => {
+    const doc = buildDoc('Hello world', 'Hello world');
+    const range = findExcerptRange(doc, 'Hello world', 'seg-2');
+    const seg2 = findSegmentRange(doc, 'seg-2');
+
+    expect(range).not.toBeNull();
+    expect(range!.from).toBeGreaterThanOrEqual(seg2!.from);
+    expect(range!.to).toBeLessThanOrEqual(seg2!.to);
+  });
 });
 
 describe('deriveReplacementText', () => {
@@ -237,6 +252,26 @@ describe('findBestSentenceMatch', () => {
     const doc = buildDoc(SENT_1, SENT_2);
     expect(findBestSentenceMatch(doc, '')).toBeNull();
   });
+
+  it('segmentGroupId 없음 + 유사 후보 2개면 모호 → null (F1)', () => {
+    const doc = buildDoc(SENT_2, SENT_2); // 두 세그먼트 모두 SENT_2 (동일 유사도)
+    const excerpt =
+      'Can understand the given problem and solution accurately enough to explain them when executing the task.';
+    expect(findBestSentenceMatch(doc, excerpt)).toBeNull();
+  });
+
+  it('segmentRange가 지정되면 해당 범위 내 문장만 매치한다 (F1)', () => {
+    const doc = buildDoc(SENT_2, SENT_2);
+    const excerpt =
+      'Can understand the given problem and solution accurately enough to explain them when executing the task.';
+    const seg2 = findSegmentRange(doc, 'seg-2');
+
+    const match = findBestSentenceMatch(doc, excerpt, seg2);
+
+    expect(match).not.toBeNull();
+    expect(match!.from).toBeGreaterThanOrEqual(seg2!.from);
+    expect(match!.to).toBeLessThanOrEqual(seg2!.to);
+  });
 });
 
 describe('resolveSuggestionRange', () => {
@@ -271,6 +306,50 @@ describe('resolveSuggestionRange', () => {
     const resolved = resolveSuggestionRange(doc, excerpt, undefined, 'short bit');
 
     expect(resolved).toBeNull();
+  });
+
+  it('fuzzy 폴백이 segmentGroupId 범위 안에서만 매치된다 (F1)', () => {
+    const doc = buildDoc(SENT_2, SENT_2); // seg-1, seg-2 동일 문장
+    const excerpt =
+      'Can understand the given problem and solution accurately enough to explain them when executing the task.';
+    const replacement =
+      'Can understand the given problem and solution well enough to explain them at the time of performing the task.';
+
+    const resolved = resolveSuggestionRange(doc, excerpt, 'seg-2', replacement);
+    const seg2 = findSegmentRange(doc, 'seg-2');
+
+    expect(resolved).not.toBeNull();
+    expect(resolved!.fuzzy).toBe(true);
+    expect(resolved!.from).toBeGreaterThanOrEqual(seg2!.from);
+    expect(resolved!.to).toBeLessThanOrEqual(seg2!.to);
+  });
+
+  it('fuzzy 폴백도 세그먼트를 못 찾으면 null (F1)', () => {
+    const doc = buildDoc(SENT_2, SENT_2);
+    const excerpt =
+      'Can understand the given problem and solution accurately enough to explain them when executing the task.';
+    const replacement =
+      'Can understand the given problem and solution well enough to explain them at the time of performing the task.';
+
+    expect(resolveSuggestionRange(doc, excerpt, 'missing-seg', replacement)).toBeNull();
+  });
+});
+
+describe('rangeCrossesBlockBoundary (F3)', () => {
+  it('블록 내부 범위는 경계를 넘지 않는다', () => {
+    const doc = buildRichDoc();
+    const range = findExcerptRange(doc, 'Can distinguish what they do and do not know.', undefined);
+    expect(range).not.toBeNull();
+    expect(rangeCrossesBlockBoundary(doc, range!.from, range!.to)).toBe(false);
+  });
+
+  it('블록 경계를 넘는 범위를 감지한다', () => {
+    const doc = buildRichDoc();
+    const excerpt = 'engineers are expected to understand problems.\n\n- Can distinguish what they do';
+    const range = findExcerptRange(doc, excerpt, undefined);
+    // 매칭(하이라이트)은 여전히 성공하지만 교체는 경계를 넘음
+    expect(range).not.toBeNull();
+    expect(rangeCrossesBlockBoundary(doc, range!.from, range!.to)).toBe(true);
   });
 });
 
