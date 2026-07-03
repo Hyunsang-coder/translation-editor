@@ -11,6 +11,7 @@ import {
   buildNormalizedTextWithMapping,
   stripMarkdownInline,
   stripWrappingQuotes,
+  getWrappingQuotePair,
 } from '@/utils/normalizeForSearch';
 import { stripHtml } from '@/utils/hash';
 import type { ReviewIssue } from '@/stores/reviewStore';
@@ -163,9 +164,26 @@ function findNormalizedTextRange(
   return null;
 }
 
-/** suggestedFix에서 HTML/인라인 마크다운/감싸는 따옴표를 제거해 에디터에 넣을 plain text 생성 */
+/**
+ * suggestedFix에서 HTML/인라인 마크다운을 제거해 에디터에 넣을 기본 plain text 생성.
+ * 감싸는 따옴표는 여기서 제거하지 않는다 — 인용 대사 손상을 막기 위해 apply 시점에
+ * 문서 대상 텍스트 기준으로 조건부 제거(resolveReplacementText)한다.
+ */
 export function deriveReplacementText(suggestedFix: string): string {
-  return stripWrappingQuotes(stripMarkdownInline(stripHtml(suggestedFix)).trim());
+  return stripMarkdownInline(stripHtml(suggestedFix)).trim();
+}
+
+/**
+ * 교체 텍스트의 감싸는 따옴표 처리 결정:
+ * - 문서 대상(matchedText)이 같은 성격의 따옴표로 감싸여 있으면(= 인용 대사)
+ *   suggestion의 따옴표는 콘텐츠 → 유지.
+ * - 문서 대상은 안 감싸져 있는데 suggestion만 감싸져 있으면 AI 아티팩트 → 제거.
+ */
+export function resolveReplacementText(baseReplacement: string, matchedText: string): string {
+  const pair = getWrappingQuotePair(baseReplacement);
+  if (!pair) return baseReplacement;
+  const docWrapped = getWrappingQuotePair(matchedText) !== null;
+  return docWrapped ? baseReplacement : stripWrappingQuotes(baseReplacement);
 }
 
 // ============================================
@@ -319,17 +337,20 @@ export type ApplySuggestionStatus = 'applied' | 'applied-fuzzy' | 'not-found' | 
  * plain text로 교체하며(marks 제거) history에 기록되어 Ctrl+Z 가능.
  */
 export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): ApplySuggestionStatus {
-  const replacement = deriveReplacementText(issue.suggestedFix);
-  if (!issue.targetExcerpt || !replacement) return 'missing-data';
+  const baseReplacement = deriveReplacementText(issue.suggestedFix);
+  if (!issue.targetExcerpt || !baseReplacement) return 'missing-data';
 
   const { state } = editor.view;
   const resolved = resolveSuggestionRange(
     state.doc,
     issue.targetExcerpt,
     issue.segmentGroupId,
-    replacement,
+    baseReplacement,
   );
   if (!resolved) return 'not-found';
+
+  const matchedText = state.doc.textBetween(resolved.from, resolved.to, '\n');
+  const replacement = resolveReplacementText(baseReplacement, matchedText);
 
   const tr = state.tr.replaceWith(resolved.from, resolved.to, state.schema.text(replacement));
   editor.view.dispatch(tr);

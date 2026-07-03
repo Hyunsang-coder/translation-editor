@@ -100,22 +100,53 @@ const WRAPPING_QUOTE_PAIRS: ReadonlyArray<[string, string]> = [
 ];
 
 /**
+ * 텍스트 전체를 감싸는 대칭 따옴표 한 쌍을 반환 (없으면 null).
+ *
+ * 균형 인지형: 여는 따옴표가 문자열 끝에서 닫히는 "단일 wrap"인 경우에만
+ * 유효한 쌍으로 판정합니다. 아래 경우는 wrap이 아닌 것으로 보고 null 반환:
+ * - 같은 문자 pair(예: ")에서 내부에 같은 문자가 또 있으면 (예: `"a" b "c"`)
+ * - 서로 다른 문자 pair(예: «»)에서 여는 것이 문자열 중간에 닫히면 (예: `«a» b «c»`)
+ */
+export function getWrappingQuotePair(text: string): [string, string] | null {
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return null;
+
+  for (const [open, close] of WRAPPING_QUOTE_PAIRS) {
+    if (!trimmed.startsWith(open) || !trimmed.endsWith(close)) continue;
+    const inner = trimmed.slice(open.length, trimmed.length - close.length);
+    if (open === close) {
+      if (inner.includes(open)) continue; // "a" b "c" — 단일 wrap 아님
+    } else {
+      let depth = 1;
+      let closedEarly = false;
+      for (const ch of inner) {
+        if (ch === open) depth++;
+        else if (ch === close && --depth === 0) {
+          closedEarly = true; // 중간에 닫힘 — wrap 아님
+          break;
+        }
+      }
+      if (closedEarly) continue;
+    }
+    return [open, close];
+  }
+  return null;
+}
+
+/**
  * 텍스트 전체를 감싸는 대칭 따옴표 한 쌍을 제거
  *
  * AI가 excerpt/suggestion을 따옴표로 감싸 반환하는 경우가 있어
  * 문서 매칭 전 또는 교체 텍스트 생성 시 사용합니다.
- * 짝이 맞는 경우에만 제거하며 내부 따옴표는 유지합니다.
+ * 균형이 맞는 단일 wrap일 때만 제거하며 내부 따옴표는 유지합니다.
+ * (불균형 다중 인용 `"Stop," he said. "It's over."` 등은 손대지 않음.)
  */
 export function stripWrappingQuotes(text: string): string {
   const trimmed = text.trim();
-  if (trimmed.length < 2) return trimmed;
-
-  for (const [open, close] of WRAPPING_QUOTE_PAIRS) {
-    if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
-      return trimmed.slice(open.length, trimmed.length - close.length).trim();
-    }
-  }
-  return trimmed;
+  const pair = getWrappingQuotePair(trimmed);
+  if (!pair) return trimmed;
+  const [open, close] = pair;
+  return trimmed.slice(open.length, trimmed.length - close.length).trim();
 }
 
 /**

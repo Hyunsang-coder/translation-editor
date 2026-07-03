@@ -41,17 +41,20 @@ function extractJsonObject(text: string): object | null {
 
 `applySuggestionToEditor(editor, issue)` (reviewApply.ts):
 
-1. `deriveReplacementText()` - suggestedFix에서 HTML/인라인 Markdown/감싸는 따옴표 제거
+1. `deriveReplacementText()` - suggestedFix에서 HTML/인라인 Markdown 제거 (감싸는 따옴표는 유지)
 2. `resolveSuggestionRange()` - 적용 범위 결정:
    - 정확 매칭 (`findExcerptRange`, 감싸는 따옴표 관용 포함, segmentGroupId 범위 제한)
    - 실패 시 `findBestSentenceMatch()` - 단어 Dice 유사도 ≥ 0.6 문장 전체 교체 (fuzzy).
      교체문이 문장 대비 40% 미만 길이면 유실 위험으로 포기
-3. `tr.replaceWith()` - plain text 교체 (history 기록 → Ctrl+Z 가능)
-4. 성공 시 `deleteIssue()` - 이슈 삭제 (fuzzy면 `review.fuzzyMatchApplied` 토스트)
+3. `resolveReplacementText()` - 문서 대상이 같은 따옴표 pair로 감싸여 있으면(=인용 대사)
+   suggestion 따옴표 유지, 아니면(AI 아티팩트) `stripWrappingQuotes()`로 제거
+4. `tr.replaceWith()` - plain text 교체 (history 기록 → Ctrl+Z 가능)
+5. 성공 시 `deleteIssue()` - 이슈 삭제 (fuzzy면 `review.fuzzyMatchApplied` 토스트)
 
 검수 프롬프트는 Target/Suggestion을 **완전한 문장 단위**로 요구 (reviewTool.ts OUTPUT_FORMAT) —
-문장 전체 교체가 안전하도록 하기 위함. 파서(parseReviewResult.ts)는 excerpt/suggestion의
-감싸는 따옴표(직선·곡선)를 `stripWrappingQuotes()`로 제거.
+문장 전체 교체가 안전하도록 하기 위함. 파서(parseReviewResult.ts)는 excerpt/suggestion을
+**원본 그대로 보존**한다(감싸는 따옴표 판단은 apply 시점에서 문서 기준으로 수행). `stripWrappingQuotes()`는
+균형 인지형이라 불균형 다중 인용(`"Stop," he said. "It's over."`)은 손대지 않는다.
 
 하이라이트는 ReviewHighlight plugin이 `tr.docChanged` 시 자동 재계산하므로 별도 가드 불필요
 (과거 cross-store subscription + `isApplyingSuggestion` 가드 패턴은 제거됨).

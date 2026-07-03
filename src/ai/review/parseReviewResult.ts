@@ -1,6 +1,5 @@
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { generateIssueId } from '@/stores/reviewStore';
-import { stripWrappingQuotes } from '@/utils/normalizeForSearch';
 
 /**
  * 문제 유형을 분류 (Two-Pass Review 타입)
@@ -134,17 +133,18 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const trimmed = line.trim();
 
       // **Source**: "텍스트" 또는 - **Source**: "텍스트"
-      // 곡선 따옴표(“ ”) 등으로 감싸진 경우도 stripWrappingQuotes로 제거 (에디터 매칭 실패 방지)
+      // 직선 따옴표는 regex의 옵셔널 "?로 벗겨지지만, 곡선/CJK 따옴표는 콘텐츠일 수
+      // 있으므로 원본 그대로 보존한다(감싸기 판단은 apply 시점에서 문서 기준으로 수행).
       const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?(.*?)"?\s*$/i);
       if (sourceMatch) {
-        sourceExcerpt = stripWrappingQuotes(sourceMatch[1]?.trim() || '');
+        sourceExcerpt = sourceMatch[1]?.trim() || '';
         continue;
       }
 
       // **Target**: "텍스트" 또는 (missing)
       const targetMatch = trimmed.match(/\*\*Target\*\*:\s*"?(.*?)"?\s*$/i);
       if (targetMatch) {
-        const val = stripWrappingQuotes(targetMatch[1]?.trim() || '');
+        const val = targetMatch[1]?.trim() || '';
         targetExcerpt = val === '(missing)' ? '' : val;
         continue;
       }
@@ -180,7 +180,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       // **Suggestion**: 제안
       const suggestionMatch = trimmed.match(/\*\*Suggestion\*\*:\s*(.+)/i);
       if (suggestionMatch) {
-        suggestion = stripWrappingQuotes(suggestionMatch[1]?.trim() || '');
+        suggestion = suggestionMatch[1]?.trim() || '';
         continue;
       }
     }

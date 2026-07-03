@@ -6,6 +6,7 @@ import {
   filterMatchesBySegment,
   findExcerptRange,
   deriveReplacementText,
+  resolveReplacementText,
   findBestSentenceMatch,
   resolveSuggestionRange,
 } from './reviewApply';
@@ -164,6 +165,32 @@ describe('deriveReplacementText', () => {
   it('빈 값은 빈 문자열을 반환한다', () => {
     expect(deriveReplacementText('')).toBe('');
     expect(deriveReplacementText('<em></em>')).toBe('');
+  });
+
+  it('감싸는 따옴표는 여기서 제거하지 않는다 (apply 시점 조건부 처리)', () => {
+    expect(deriveReplacementText('「도망쳐, 어서!」')).toBe('「도망쳐, 어서!」');
+    expect(deriveReplacementText('"Run, now!"')).toBe('"Run, now!"');
+  });
+});
+
+describe('resolveReplacementText', () => {
+  it('문서 대상이 인용 대사면 suggestion 따옴표를 유지한다', () => {
+    expect(resolveReplacementText('「도망쳐, 어서!」', '「도망쳐!」')).toBe('「도망쳐, 어서!」');
+    expect(resolveReplacementText('“Run, now!”', '“Run!”')).toBe('“Run, now!”');
+  });
+
+  it('문서 대상이 비인용이면 suggestion의 감싸는 따옴표를 제거한다', () => {
+    expect(resolveReplacementText('"Run, now!"', 'Run now')).toBe('Run, now!');
+    expect(resolveReplacementText('「도망쳐!」', '도망쳐')).toBe('도망쳐!');
+  });
+
+  it('suggestion이 감싸져 있지 않으면 그대로 반환한다', () => {
+    expect(resolveReplacementText('plain text', '무엇이든')).toBe('plain text');
+  });
+
+  it('불균형 다중 인용은 감싸기로 보지 않아 그대로 유지한다', () => {
+    const text = '"Stop," he said. "It\'s over."';
+    expect(resolveReplacementText(text, 'nothing')).toBe(text);
   });
 });
 

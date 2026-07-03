@@ -4,6 +4,7 @@ import {
   normalizeForSearch,
   stripMarkdownInline,
   stripWrappingQuotes,
+  getWrappingQuotePair,
   buildNormalizedTextWithMapping,
 } from './normalizeForSearch';
 
@@ -208,8 +209,22 @@ describe('stripWrappingQuotes', () => {
     expect(stripWrappingQuotes('hello world"')).toBe('hello world"');
   });
 
-  it('내부 따옴표는 유지한다', () => {
-    expect(stripWrappingQuotes('"say "hi" now"')).toBe('say "hi" now');
+  it('중첩된 다른 pair는 유지한다 (단일 wrap)', () => {
+    expect(stripWrappingQuotes('「say 「hi」 now」')).toBe('say 「hi」 now');
+  });
+
+  it('불균형 다중 인용은 손대지 않는다 (같은 pair)', () => {
+    // "Stop," he said. "It's over." — 독립된 두 인용, 단일 wrap 아님
+    expect(stripWrappingQuotes('"Stop," he said. "It\'s over."')).toBe(
+      '"Stop," he said. "It\'s over."',
+    );
+    expect(stripWrappingQuotes('"a"b"')).toBe('"a"b"');
+  });
+
+  it('불균형 다중 인용은 손대지 않는다 (다른 pair)', () => {
+    expect(stripWrappingQuotes('«Bonjour» dit-il. «Adieu»')).toBe(
+      '«Bonjour» dit-il. «Adieu»',
+    );
   });
 
   it('따옴표가 없으면 그대로 반환한다', () => {
@@ -223,5 +238,18 @@ describe('stripWrappingQuotes', () => {
   it('빈 문자열과 따옴표만 있는 경우를 처리한다', () => {
     expect(stripWrappingQuotes('')).toBe('');
     expect(stripWrappingQuotes('""')).toBe('');
+  });
+});
+
+describe('getWrappingQuotePair', () => {
+  it('감싸는 pair를 반환한다', () => {
+    expect(getWrappingQuotePair('"hello"')).toEqual(['"', '"']);
+    expect(getWrappingQuotePair('「안녕」')).toEqual(['「', '」']);
+  });
+
+  it('단일 wrap이 아니면 null', () => {
+    expect(getWrappingQuotePair('"Stop," he said. "It\'s over."')).toBeNull();
+    expect(getWrappingQuotePair('«Bonjour» dit-il. «Adieu»')).toBeNull();
+    expect(getWrappingQuotePair('no quotes')).toBeNull();
   });
 });

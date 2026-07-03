@@ -425,8 +425,8 @@ describe('deduplicateIssues', () => {
   });
 });
 
-describe('감싸는 따옴표 제거', () => {
-  it('곡선 따옴표로 감싸진 Source/Target을 벗겨낸다', () => {
+describe('감싸는 따옴표 처리', () => {
+  it('곡선/CJK 따옴표는 원본대로 보존한다 (감싸기 판단은 apply 시점)', () => {
     const response = `
 ---REVIEW_START---
 ### Issue #1
@@ -443,12 +443,12 @@ describe('감싸는 따옴표 제거', () => {
     const issues = parseReviewResult(response);
 
     expect(issues).toHaveLength(1);
-    expect(issues[0]?.sourceExcerpt).toBe('업무를 수행하는 시점에');
-    expect(issues[0]?.targetExcerpt).toBe('when executing the task,');
-    expect(issues[0]?.suggestedFix).toBe('At the time of performing the task,');
+    expect(issues[0]?.sourceExcerpt).toBe('“업무를 수행하는 시점에”');
+    expect(issues[0]?.targetExcerpt).toBe('“when executing the task,”');
+    expect(issues[0]?.suggestedFix).toBe('“At the time of performing the task,”');
   });
 
-  it('직선 따옴표로 감싸진 Suggestion을 벗겨낸다', () => {
+  it('Source/Target 직선 따옴표는 regex 옵셔널 "?로 벗겨지고 Suggestion은 원본 보존', () => {
     const response = `
 ---REVIEW_START---
 ### Issue #1
@@ -463,6 +463,10 @@ describe('감싸는 따옴표 제거', () => {
     const issues = parseReviewResult(response);
 
     expect(issues).toHaveLength(1);
-    expect(issues[0]?.suggestedFix).toBe('안녕하세요');
+    // Source/Target 라인 regex는 끝의 "?로 직선 따옴표 1쌍을 벗겨낸다
+    expect(issues[0]?.sourceExcerpt).toBe('Hello');
+    expect(issues[0]?.targetExcerpt).toBe('안녕');
+    // Suggestion regex는 (.+)라 따옴표를 보존 → apply 시점에서 문서 기준 조건부 제거
+    expect(issues[0]?.suggestedFix).toBe('"안녕하세요"');
   });
 });
