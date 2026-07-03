@@ -434,7 +434,8 @@
     "copyError": "Failed to copy to clipboard.",
     "applyError": {
       "missingData": "No suggestion data available.",
-      "notFound": "Text not found in translation. The document may have changed."
+      "notFound": "Text not found in translation. The document may have changed.",
+      "unexpected": "An unexpected error occurred while applying the fix."
     },
     "applyConfirm": {
       "delete": "Suggested fix is empty. Delete the selected text?",

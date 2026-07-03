@@ -342,13 +342,15 @@ export function ReviewPanel(): JSX.Element {
     try {
       status = applySuggestionToEditor(targetEditor, issue);
     } catch (error) {
+      // 예상 실패(not-found/missing-data)는 반환값으로 신호되므로, 여기 도달하는 것은
+      // dispatch 중 plugin/React 오류 등 예기치 못한 예외다. not-found로 오진단하지 않는다.
       console.error('[ReviewPanel] apply suggestion failed:', error, {
         targetExcerpt: issue.targetExcerpt,
         segmentGroupId: issue.segmentGroupId,
       });
       addToast({
         type: 'error',
-        message: t('review.applyError.notFound', '텍스트를 찾을 수 없습니다. 문서가 변경되었을 수 있어요.'),
+        message: t('review.applyError.unexpected', '수정 제안 적용 중 오류가 발생했습니다.'),
       });
       return;
     }

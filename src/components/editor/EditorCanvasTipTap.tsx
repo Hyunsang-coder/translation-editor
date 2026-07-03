@@ -680,6 +680,16 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishStreamingText(null);
   }, []);
 
+  // 폴리싱 미리보기 종료 시 스냅샷 상태를 함께 정리 (ReviewPanel handleRetranslateClose와 대칭).
+  // 재열기 경로가 항상 재스냅샷하므로 correctness 이슈는 아니지만, 문서 JSON 상주를 방지한다.
+  const handlePolishClose = useCallback((): void => {
+    setPolishPreviewOpen(false);
+    setPolishPreviewDoc(null);
+    setPolishOriginalDocJson(null);
+    setPolishPreviewError(null);
+    setPolishStreamingText(null);
+  }, []);
+
   const applyPolishDoc = useCallback((doc: TipTapDocJson): void => {
     if (!targetEditorRef.current) {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
@@ -687,7 +697,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
 
     replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
-    setPolishPreviewOpen(false);
+    handlePolishClose();
 
     setTargetFlash(true);
     setTimeout(() => setTargetFlash(false), 1000);
@@ -707,7 +717,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         });
       }
     }
-  }, [addToast, t, createSnapshotIfChanged]);
+  }, [addToast, t, createSnapshotIfChanged, handlePolishClose]);
 
   const applyPolishPreview = useCallback((): void => {
     if (!polishPreviewDoc) return;
@@ -1233,9 +1243,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         streamingText={polishStreamingText}
         originalDocJson={polishOriginalDocJson}
         onApplySelective={applyPolishDoc}
-        onClose={() => {
-          setPolishPreviewOpen(false);
-        }}
+        onClose={handlePolishClose}
         onApply={applyPolishPreview}
         onCancel={handlePolishCancel}
         {...(polishPreviewError ? { onRetry: handlePolishRetry } : {})}
