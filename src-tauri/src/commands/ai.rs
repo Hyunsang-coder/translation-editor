@@ -24,6 +24,10 @@ pub struct AiCompleteArgs {
     pub max_tokens: u32,
     pub messages: Vec<AiMessage>,
     pub temperature: Option<f32>,
+    /// Anthropic adaptive thinking (thinking: {type: "adaptive"})
+    pub adaptive_thinking: Option<bool>,
+    /// Anthropic output_config.effort / OpenAI reasoning_effort
+    pub effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -113,6 +117,12 @@ async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> 
     if let Some(temperature) = args.temperature {
         body["temperature"] = json!(temperature);
     }
+    if args.adaptive_thinking == Some(true) {
+        body["thinking"] = json!({ "type": "adaptive" });
+    }
+    if let Some(effort) = &args.effort {
+        body["output_config"] = json!({ "effort": effort });
+    }
 
     let response = client
         .post("https://api.anthropic.com/v1/messages")
@@ -177,6 +187,9 @@ async fn complete_openai(client: &reqwest::Client, args: &AiCompleteArgs) -> Com
 
     if args.model.starts_with("gpt-5") {
         body["max_completion_tokens"] = json!(args.max_tokens);
+        if let Some(effort) = &args.effort {
+            body["reasoning_effort"] = json!(effort);
+        }
     } else {
         body["max_tokens"] = json!(args.max_tokens);
         if let Some(temperature) = args.temperature {
@@ -272,6 +285,10 @@ pub struct AiStreamArgs {
     pub max_tokens: u32,
     pub messages: Vec<AiMessage>,
     pub temperature: Option<f32>,
+    /// Anthropic adaptive thinking (thinking: {type: "adaptive"})
+    pub adaptive_thinking: Option<bool>,
+    /// Anthropic output_config.effort / OpenAI reasoning_effort
+    pub effort: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -335,6 +352,12 @@ async fn stream_anthropic(
     }
     if let Some(temperature) = args.temperature {
         body["temperature"] = json!(temperature);
+    }
+    if args.adaptive_thinking == Some(true) {
+        body["thinking"] = json!({ "type": "adaptive" });
+    }
+    if let Some(effort) = &args.effort {
+        body["output_config"] = json!({ "effort": effort });
     }
 
     let mut response = client
@@ -430,6 +453,9 @@ async fn stream_openai(
 
     if args.model.starts_with("gpt-5") {
         body["max_completion_tokens"] = json!(args.max_tokens);
+        if let Some(effort) = &args.effort {
+            body["reasoning_effort"] = json!(effort);
+        }
     } else {
         body["max_tokens"] = json!(args.max_tokens);
         if let Some(temperature) = args.temperature {

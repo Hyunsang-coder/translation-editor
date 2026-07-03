@@ -85,6 +85,38 @@ describe('backendCompletion', () => {
     expect('temperature' in args).toBe(false);
   });
 
+  it('Opus 4.7+ 백엔드 completion 호출에는 adaptiveThinking·effort를 전달 (F7)', async () => {
+    const cfg: AiConfig = {
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      anthropicApiKey: 'sk-ant-test',
+      maxRecentMessages: 20,
+    };
+
+    await completeWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
+
+    const args = mocks.aiComplete.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args.adaptiveThinking).toBe(true);
+    expect(args.effort).toBe('high');
+  });
+
+  it('GPT-5 review 스트리밍에는 effort=high, 기본(translation)에는 미전달 (F8)', async () => {
+    const cfg: AiConfig = {
+      provider: 'openai',
+      model: 'gpt-5.5',
+      openaiApiKey: 'sk-test',
+      maxRecentMessages: 20,
+    };
+
+    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096, useFor: 'review' });
+    const reviewArgs = mocks.aiStream.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(reviewArgs.effort).toBe('high');
+
+    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
+    const translateArgs = mocks.aiStream.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect('effort' in translateArgs).toBe(false);
+  });
+
   it('abortSignal 있는 completion은 cancellable streaming backend를 사용', async () => {
     const cfg: AiConfig = {
       provider: 'openai',

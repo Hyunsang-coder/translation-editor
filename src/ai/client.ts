@@ -3,6 +3,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { getAiConfig } from '@/ai/config';
 import { DEFAULT_TRANSLATION_MAX_TOKENS, DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
+import { resolveModelCallOptions } from '@/ai/modelCallOptions';
 import i18n from '@/i18n/config';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { getTauriResilientFetch } from '@/ai/tauriFetch';
@@ -26,43 +27,28 @@ export function createChatModel(
   const useTauriFetch = isTauriRuntime();
   const tauriFetch = useTauriFetch ? getTauriResilientFetch() : undefined;
 
+  // 모델별 호출 옵션(temperature/thinking/effort)은 modelCallOptions에서 일괄 결정.
+  // modelOverride가 있으면 그 모델 기준으로 판정해야 하므로 model을 덮어써 전달한다.
+  const callOptions = resolveModelCallOptions({ ...cfg, model }, useFor);
+
   // Anthropic (Claude)
   if (cfg.provider === 'anthropic') {
     if (!cfg.anthropicApiKey) {
       throw new Error(i18n.t('errors.anthropicApiKeyMissing'));
     }
 
-    // Opus 4.7+, Sonnet 5는 non-default temperature/top_p/top_k를 400 에러로 거부
-    // (Opus 정규식은 4.7/4.8/4.9 및 2자리 이상 버전까지 자동 커버)
-    const isOpus47Plus = /^claude-opus-4-(7|[89]|\d{2,})/.test(model);
-    const isSonnet5 = /^claude-sonnet-5/.test(model);
-    const rejectsSamplingParams = isOpus47Plus || isSonnet5;
-    const temperatureOption = (!rejectsSamplingParams && cfg.temperature !== undefined)
-      ? { temperature: cfg.temperature } : {};
-
     // Claude는 max_tokens 기본값이 낮으므로 명시적 설정 (review는 번역과 동일 취급)
     const maxTokensOption = options?.maxTokens
       ? { maxTokens: options.maxTokens }
       : ((useFor === 'translation' || isReview) ? { maxTokens: DEFAULT_TRANSLATION_MAX_TOKENS } : { maxTokens: DEFAULT_CHAT_MAX_TOKENS });
 
-    // Opus 4.7+는 thinking이 기본 꺼짐 상태이므로 adaptive thinking + effort high를 명시 설정.
-    // Sonnet 5는 생략 시 adaptive가 기본이므로 thinking만 명시하고,
-    // review일 때만 effort를 high로 올려 검수 품질을 우선한다(그 외에는 서버 기본값 high 유지).
-    const thinkingOption = isOpus47Plus
-      ? { thinking: { type: 'adaptive' as const }, outputConfig: { effort: 'high' as const } }
-      : isSonnet5
-        ? {
-            thinking: { type: 'adaptive' as const },
-            ...(isReview ? { outputConfig: { effort: 'high' as const } } : {}),
-          }
-        : {};
-
     return new ChatAnthropic({
       apiKey: cfg.anthropicApiKey,
       model,
-      ...temperatureOption,
+      ...(callOptions.temperature !== undefined ? { temperature: callOptions.temperature } : {}),
       ...maxTokensOption,
-      ...thinkingOption,
+      ...(callOptions.adaptiveThinking ? { thinking: { type: 'adaptive' as const } } : {}),
+      ...(callOptions.effort ? { outputConfig: { effort: callOptions.effort } } : {}),
       ...(tauriFetch
         ? { clientOptions: { fetch: tauriFetch, dangerouslyAllowBrowser: true } }
         : {}),
@@ -75,10 +61,6 @@ export function createChatModel(
       throw new Error(i18n.t('errors.openaiApiKeyMissing'));
     }
 
-    // GPT-5.2, GPT-5-mini 등 최신 모델은 temperature 파라미터를 지원하지 않거나 무시해야 함
-    const isGpt5 = model.startsWith('gpt-5');
-    const temperatureOption = isGpt5 ? {} : (cfg.temperature !== undefined ? { temperature: cfg.temperature } : {});
-
     // 번역 모드에서는 max_tokens를 높게 설정하여 긴 문서도 완전히 번역되도록 함
     // GPT-5 시리즈는 400k 컨텍스트 윈도우 지원, 출력 토큰도 충분히 확보
     // options.maxTokens가 명시적으로 전달되면 해당 값 사용 (review는 번역과 동일 취급)
@@ -86,15 +68,12 @@ export function createChatModel(
       ? { maxTokens: options.maxTokens }
       : ((useFor === 'translation' || isReview) ? { maxTokens: 65536 } : {});
 
-    // review일 때만 reasoning effort를 high로 올려 검수 품질을 우선한다.
-    const reasoningOption = isReview ? { reasoning: { effort: 'high' as const } } : {};
-
     return new ChatOpenAI({
       apiKey: cfg.openaiApiKey,
       model,
-      ...temperatureOption,
+      ...(callOptions.temperature !== undefined ? { temperature: callOptions.temperature } : {}),
       ...maxTokensOption,
-      ...reasoningOption,
+      ...(callOptions.effort ? { reasoning: { effort: callOptions.effort } } : {}),
       // OpenAI built-in tools(web/file search 등) 사용을 위해 chat 용도에서는 Responses API를 우선 사용
       ...(useFor === 'chat' ? { useResponsesApi: true } : {}),
       ...(tauriFetch

@@ -14,6 +14,10 @@ export interface AiCompleteArgs {
   maxTokens: number;
   messages: AiCompletionMessage[];
   temperature?: number | undefined;
+  /** Anthropic adaptive thinking (thinking: {type: "adaptive"}) */
+  adaptiveThinking?: boolean | undefined;
+  /** Anthropic output_config.effort / OpenAI reasoning_effort */
+  effort?: string | undefined;
 }
 
 export interface AiCompleteResponse {
