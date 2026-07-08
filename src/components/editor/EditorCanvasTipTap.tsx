@@ -721,7 +721,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     // NOTE(제품 결정 필요, 코드리뷰 2026-07-07 §7): "요청 후 사용자 편집" 충돌을
     // 하드 차단할지 경고 후 강제 적용할지 미정 — 보수적 기본값으로 경고 토스트 + 중단.
     const currentRevision = computeTargetRevision();
-    if (meta.targetRevision !== null && currentRevision !== null && meta.targetRevision !== currentRevision) {
+    // 요청 시점 리비전을 캡처했는데(=meta.targetRevision !== null) 현재 리비전을
+    // 계산하지 못하면(에디터 파괴/변환 예외로 null), "변경 없음"을 확신할 수 없다.
+    // 이 경우 가드를 통째로 건너뛰면 stale 번역이 사용자 편집을 소리 없이 덮으므로,
+    // 보수적으로 적용을 중단한다(§검증 불가 → 차단).
+    if (meta.targetRevision !== null && meta.targetRevision !== currentRevision) {
       addToast({
         type: 'warning',
         message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
@@ -810,7 +814,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 보수적 기본값으로 경고 토스트 + 중단. (선택 적용 병합도 요청 시점 스냅샷 기준이므로
     // 편집 후 적용하면 편집분이 소리 없이 사라진다)
     const currentRevision = computeTargetRevision();
-    if (meta.targetRevision !== null && currentRevision !== null && meta.targetRevision !== currentRevision) {
+    // 요청 시점 리비전을 캡처했는데 현재 리비전을 계산하지 못하면(null) 변경 여부를
+    // 확신할 수 없으므로, 가드를 건너뛰지 않고 보수적으로 중단한다(F4). 선택 적용
+    // 병합도 요청 시점 스냅샷 기준이라 검증 실패 시 편집분이 소리 없이 사라진다.
+    if (meta.targetRevision !== null && meta.targetRevision !== currentRevision) {
       addToast({
         type: 'warning',
         message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),

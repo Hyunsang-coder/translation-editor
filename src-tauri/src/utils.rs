@@ -150,7 +150,13 @@ fn is_blocked_path(path: &Path) -> bool {
         // 자격증명 탈취 경로로 쓰이는 디렉토리만 추가로 차단한다.
         if let Ok(home) = std::env::var("HOME") {
             if !home.trim().is_empty() {
-                let home_path = Path::new(&home);
+                // 검사 대상 path는 caller(validate_path)가 canonicalize한 값이므로,
+                // home_path도 canonicalize해야 접두사 비교가 성립한다. $HOME 자체가
+                // 심볼릭 링크(예: /Users 링크, 네트워크 홈)면 raw home_path는
+                // canonical path의 접두사가 아니게 되어 .ssh/.aws 차단이 우회된다.
+                let home_path = Path::new(&home)
+                    .canonicalize()
+                    .unwrap_or_else(|_| PathBuf::from(&home));
                 let sensitive_rel: &[&str] = &[
                     ".ssh",
                     ".gnupg",
@@ -215,6 +221,31 @@ mod tests {
         // 일반 문서 경로는 여전히 허용
         let doc = Path::new(&home).join("Documents/export.md");
         assert!(!is_blocked_path(&doc));
+
+        // F5: $HOME 자체가 심볼릭 링크여도 canonical 경로가 차단돼야 한다.
+        // 임시 디렉토리 안에 (real 홈 대역) + (그것을 가리키는 링크)를 만들고,
+        // 링크를 통해 접근한 .ssh를 canonicalize한 경로로 검사한다.
+        // is_blocked_path가 내부적으로 실제 $HOME을 읽으므로, 여기서는 fix의 핵심인
+        // "canonicalize된 home_path가 링크 해소 경로의 접두사가 된다"만 직접 검증한다.
+        {
+            use std::os::unix::fs::symlink;
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let real = tmp.path().join("real_home");
+            std::fs::create_dir_all(real.join(".ssh")).expect("mkdir .ssh");
+            let link = tmp.path().join("link_home");
+            symlink(&real, &link).expect("symlink");
+
+            // fix 후 home_path는 canonicalize되어 real_home이 됨.
+            let home_canonical = link.canonicalize().expect("canonicalize link");
+            // 링크 경유 .ssh를 canonicalize → real_home/.ssh
+            let via_link = link.join(".ssh").canonicalize().expect("canonicalize .ssh");
+            assert!(
+                via_link.starts_with(home_canonical.join(".ssh")),
+                "canonicalize된 home 접두사 매칭 실패: {:?} vs {:?}",
+                via_link,
+                home_canonical
+            );
+        }
     }
 
     #[test]
