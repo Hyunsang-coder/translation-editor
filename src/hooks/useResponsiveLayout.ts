@@ -6,17 +6,17 @@ import { useUIStore } from '@/stores/uiStore';
  * 윈도우 너비가 해당 값 미만으로 내려가면 패널이 접히거나 숨겨짐
  *
  * 패널 너비 기준:
- * - ProjectSidebar: 210px (축소: 48px)
- * - LeftSidebar: 250px (축소: 48px)
- * - RightSidebar: 250px (축소: 48px)
+ * - ProjectSidebar: 210px (축소: 48px → 숨김: 0px)
+ * - LeftSidebar: 250px (숨김: 0px)
+ * - RightSidebar: 250px (숨김: 0px)
  * - Editor 최소: 400px
  */
 export const BREAKPOINTS = {
   /** ProjectSidebar 축소 (210px → 48px) - 모든 패널 열림 상태 기준 */
   PROJECT_SIDEBAR_COLLAPSE: 1200,
-  /** LeftSidebar 접힘 */
+  /** LeftSidebar 완전 숨김(폭 0) */
   LEFT_SIDEBAR_CLOSE: 1000,
-  /** RightSidebar 접힘 */
+  /** RightSidebar 완전 숨김(폭 0) */
   RIGHT_SIDEBAR_CLOSE: 800,
   /** ProjectSidebar 완전 숨김 (48px → 0px) */
   PROJECT_SIDEBAR_HIDE: 600,
@@ -57,7 +57,7 @@ export function useResponsiveLayout(): void {
       const {
         setProjectSidebarCollapsed,
         setProjectSidebarHidden,
-        setSidebarCollapsedSide,
+        setSidebarHiddenSide,
       } = useUIStore.getState();
 
       // 1순위: ProjectSidebar
@@ -68,14 +68,14 @@ export function useResponsiveLayout(): void {
         setProjectSidebarCollapsed(true);
       }
 
-      // 2순위: LeftSidebar
+      // 2순위: LeftSidebar → 완전 숨김(폭 0)
       if (width < BREAKPOINTS.LEFT_SIDEBAR_CLOSE) {
-        setSidebarCollapsedSide('left', true);
+        setSidebarHiddenSide('left', true);
       }
 
-      // 3순위: RightSidebar
+      // 3순위: RightSidebar → 완전 숨김(폭 0)
       if (width < BREAKPOINTS.RIGHT_SIDEBAR_CLOSE) {
-        setSidebarCollapsedSide('right', true);
+        setSidebarHiddenSide('right', true);
       }
     };
 

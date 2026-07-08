@@ -2,6 +2,8 @@
   "common": {
     "clear": "Clear",
     "close": "Close",
+    "hide": "Hide",
+    "show": "Show",
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
@@ -477,8 +479,6 @@
     "openChat": "Open Chat",
     "askAnything": "Ask anything",
     "newChat": "New Chat",
-    "moveToRight": "Move to Right",
-    "moveToLeft": "Move to Left",
     "closePanel": "Close Panel",
     "minimizePanel": "Minimize chat",
     "pinPanel": "Pin chat",
@@ -602,6 +602,8 @@
     "noDocument": "No document to export."
   },
   "sidebar": {
-    "openOnOtherSide": "Open on Other Side"
+    "openOnOtherSide": "Open on Other Side",
+    "showLeft": "Show side panel",
+    "showRight": "Show chat panel"
   }
 }

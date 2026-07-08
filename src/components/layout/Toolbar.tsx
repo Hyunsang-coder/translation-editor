@@ -82,8 +82,8 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
     setDropdownOpen(false);
   };
   const isAnyChatVisible = (
-    (!leftSidebar.collapsed && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
-    || (!rightSidebar.collapsed && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
+    (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    || (!rightSidebar.hidden && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
   );
 
   // Chrome-style zoom indicator: show on change, auto-hide after 2s

@@ -368,7 +368,7 @@ export type SidebarSide = 'left' | 'right';
  * panels 배열에 도킹된 패널 목록을 순서대로 유지
  */
 export interface DockingSidebarState {
-  collapsed: boolean;
+  hidden: boolean;              // 폭 0으로 완전 숨김 (접힘 아이콘 레일 개념 제거)
   panels: PanelType[];          // 이 사이드에 도킹된 패널 목록 (순서 유지)
   activePanel: PanelType | null; // 현재 보이는 패널
   width: number;                // px, 200-600

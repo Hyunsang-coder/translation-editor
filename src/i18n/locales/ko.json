@@ -2,6 +2,8 @@
   "common": {
     "clear": "지우기",
     "close": "닫기",
+    "hide": "숨기기",
+    "show": "표시",
     "save": "저장",
     "delete": "삭제",
     "edit": "편집",
@@ -477,8 +479,6 @@
     "openChat": "채팅 열기",
     "askAnything": "무엇이든 물어보세요",
     "newChat": "새 채팅",
-    "moveToRight": "오른쪽으로 이동",
-    "moveToLeft": "왼쪽으로 이동",
     "closePanel": "패널 닫기",
     "minimizePanel": "채팅창 최소화",
     "pinPanel": "채팅창 고정",
@@ -602,6 +602,8 @@
     "noDocument": "내보낼 문서가 없습니다."
   },
   "sidebar": {
-    "openOnOtherSide": "반대편에도 열기"
+    "openOnOtherSide": "반대편에도 열기",
+    "showLeft": "사이드 패널 표시",
+    "showRight": "채팅 패널 표시"
   }
 }

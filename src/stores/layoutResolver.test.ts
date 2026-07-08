@@ -6,8 +6,8 @@ import { LAYOUT } from '@/constants/layout';
 function makeInput(overrides: Partial<LayoutInput> = {}): LayoutInput {
   return {
     windowWidth: 1440,
-    leftSidebar: { collapsed: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
-    rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 260 },
+    leftSidebar: { hidden: false, panels: ['settings', 'review'], activePanel: 'settings', width: 250 },
+    rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 260 },
     projectSidebarCollapsed: false,
     projectSidebarHidden: false,
     ...overrides,
@@ -23,8 +23,8 @@ describe('resolveLayout', () => {
 
   it('양쪽 사이드바 600px → 비례 축소', () => {
     const input = makeInput({
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 600 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 600 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 600 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 600 },
     });
     const result = resolveLayout(input);
     // 1440 - 160 - 400(EDITOR_MIN) = 880 budget for sidebars
@@ -39,8 +39,8 @@ describe('resolveLayout', () => {
     const input = makeInput({
       windowWidth: 1000,
       projectSidebarCollapsed: true, // 48px
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 400 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 400 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 400 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 400 },
     });
     const result = resolveLayout(input);
     // 1000 - 48(project collapsed) - 400(EDITOR_MIN) = 552 budget
@@ -50,47 +50,47 @@ describe('resolveLayout', () => {
     expect(result.right).toBe(276);
   });
 
-  it('한쪽 접힘 → 접힌 쪽은 COLLAPSED, 열린 쪽만 조정', () => {
+  it('한쪽 숨김 → 숨긴 쪽은 폭 0, 열린 쪽만 조정', () => {
     const input = makeInput({
       windowWidth: 900,
       projectSidebarCollapsed: true,
-      leftSidebar: { collapsed: true, panels: ['settings'], activePanel: 'settings', width: 400 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
+      leftSidebar: { hidden: true, panels: ['settings'], activePanel: 'settings', width: 400 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
     });
     const result = resolveLayout(input);
-    // left는 collapsed → 48px 고정
-    expect(result.left).toBe(LAYOUT.SIDEBAR_COLLAPSED);
+    // left는 hidden → 0px
+    expect(result.left).toBe(0);
     // budget = 900 - 48(project) - 400(editor) = 452
-    // budgetForOpen = 452 - 48(left collapsed) = 404
-    // right desired 500 > 404 → 404
-    expect(result.right).toBe(404);
+    // budgetForOpen = 452 - 0(left hidden) = 452
+    // right desired 500 > 452 → 452
+    expect(result.right).toBe(452);
   });
 
-  it('빈 사이드바는 SIDEBAR_EMPTY 크기', () => {
+  it('빈 사이드바는 폭 0', () => {
     const input = makeInput({
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 250 },
-      rightSidebar: { collapsed: false, panels: [], activePanel: null, width: 250 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 250 },
+      rightSidebar: { hidden: false, panels: [], activePanel: null, width: 250 },
     });
     const result = resolveLayout(input);
-    expect(result.right).toBe(LAYOUT.SIDEBAR_EMPTY);
+    expect(result.right).toBe(0);
   });
 
-  it('양쪽 다 접혀있으면 그대로', () => {
+  it('양쪽 다 숨겨있으면 둘 다 폭 0', () => {
     const input = makeInput({
-      leftSidebar: { collapsed: true, panels: ['settings'], activePanel: 'settings', width: 500 },
-      rightSidebar: { collapsed: true, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
+      leftSidebar: { hidden: true, panels: ['settings'], activePanel: 'settings', width: 500 },
+      rightSidebar: { hidden: true, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
     });
     const result = resolveLayout(input);
-    expect(result.left).toBe(LAYOUT.SIDEBAR_COLLAPSED);
-    expect(result.right).toBe(LAYOUT.SIDEBAR_COLLAPSED);
+    expect(result.left).toBe(0);
+    expect(result.right).toBe(0);
   });
 
   it('프로젝트 사이드바 숨김 → 더 많은 공간 확보', () => {
     const input = makeInput({
       windowWidth: 1000,
       projectSidebarHidden: true,
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 300 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 300 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 300 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 300 },
     });
     const result = resolveLayout(input);
     // 1000 - 0(hidden) - 400(editor) = 600 budget
@@ -102,8 +102,8 @@ describe('resolveLayout', () => {
     const input = makeInput({
       windowWidth: 600,
       projectSidebarHidden: true,
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 400 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 400 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 400 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 400 },
     });
     const result = resolveLayout(input);
     // budget = 600 - 0 - 400 = 200
@@ -116,8 +116,8 @@ describe('resolveLayout', () => {
     const input = makeInput({
       windowWidth: 1200,
       projectSidebarCollapsed: false,
-      leftSidebar: { collapsed: false, panels: ['settings'], activePanel: 'settings', width: 300 },
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 600 },
+      leftSidebar: { hidden: false, panels: ['settings'], activePanel: 'settings', width: 300 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 600 },
     });
     const result = resolveLayout(input);
     // budget = 1200 - 160 - 400 = 640
@@ -139,17 +139,17 @@ describe('getMaxSidebarWidth', () => {
 
   it('반대쪽이 크면 이쪽 최대값 줄어듦', () => {
     const input = makeInput({
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
     });
     // 1440 - 160 - 500 - 400 = 380
     expect(getMaxSidebarWidth(input, 'left')).toBe(380);
   });
 
-  it('반대쪽 접혀있으면 더 많은 공간', () => {
+  it('반대쪽 숨겨있으면 더 많은 공간', () => {
     const input = makeInput({
-      rightSidebar: { collapsed: true, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
+      rightSidebar: { hidden: true, panels: ['chat:1'], activePanel: 'chat:1', width: 500 },
     });
-    // 1440 - 160 - 48(collapsed) - 400 = 832 → min(600, 832) = 600
+    // 1440 - 160 - 0(hidden) - 400 = 880 → min(600, 880) = 600
     expect(getMaxSidebarWidth(input, 'left')).toBe(LAYOUT.SIDEBAR_MAX);
   });
 
@@ -157,7 +157,7 @@ describe('getMaxSidebarWidth', () => {
     const input = makeInput({
       windowWidth: 600,
       projectSidebarHidden: true,
-      rightSidebar: { collapsed: false, panels: ['chat:1'], activePanel: 'chat:1', width: 300 },
+      rightSidebar: { hidden: false, panels: ['chat:1'], activePanel: 'chat:1', width: 300 },
     });
     // 600 - 0 - 300 - 400 = -100 → max(200, -100) = 200
     expect(getMaxSidebarWidth(input, 'left')).toBe(LAYOUT.SIDEBAR_MIN);

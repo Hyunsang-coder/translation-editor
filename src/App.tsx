@@ -58,8 +58,8 @@ function App(): JSX.Element {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showAppSettingsModal, setShowAppSettingsModal] = useState(false);
   const isViewChatOn = (
-    (!leftSidebar.collapsed && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
-    || (!rightSidebar.collapsed && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
+    (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    || (!rightSidebar.hidden && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
   );
 
   useEffect(() => {

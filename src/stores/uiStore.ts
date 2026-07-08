@@ -89,8 +89,8 @@ interface UIActions {
 
   // === Docking Sidebar Actions ===
   setActivePanel_side: (side: SidebarSide, panel: PanelType) => void;
-  toggleSidebarCollapse: (side: SidebarSide) => void;
-  setSidebarCollapsedSide: (side: SidebarSide, collapsed: boolean) => void;
+  toggleSidebarHidden: (side: SidebarSide) => void;
+  setSidebarHiddenSide: (side: SidebarSide, hidden: boolean) => void;
   setSidebarWidthSide: (side: SidebarSide, width: number) => void;
   openPanel: (panel: PanelType) => void;
   openPanelOnSide: (side: SidebarSide, panel: PanelType) => void;
@@ -104,7 +104,7 @@ interface UIActions {
   findPanelSide: (panel: PanelType) => SidebarSide | null;
 
   // === Chat Session Panel Actions ===
-  addChatPanel: (sessionId: string, preferSide?: SidebarSide) => void;
+  addChatPanel: (sessionId: string) => void;
   removeChatPanel: (sessionId: string) => void;
   syncChatPanels: (sessionIds: string[]) => void;
   openActiveChat: () => void;
@@ -166,8 +166,8 @@ export const useUIStore = create<UIStore>()(
       devTestPanelOpen: false,
 
       // === Docking Sidebar - 기본값 ===
-      leftSidebar: { collapsed: false, panels: ['settings', 'review', 'comments'], activePanel: 'settings', width: 250 },
-      rightSidebar: { collapsed: false, panels: [], activePanel: null, width: 250 },
+      leftSidebar: { hidden: false, panels: ['settings', 'review', 'comments'], activePanel: 'settings', width: 250 },
+      rightSidebar: { hidden: false, panels: [], activePanel: null, width: 250 },
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
       sourceFontSize: 14,
@@ -298,15 +298,15 @@ export const useUIStore = create<UIStore>()(
           const key = sidebarKey(side);
           const sb = state[key];
           // 이미 열려있으면 triggerReview
-          if (!sb.collapsed && sb.activePanel === 'review') {
+          if (!sb.hidden && sb.activePanel === 'review') {
             useReviewStore.getState().triggerReview();
             return;
           }
-          set({ [key]: { ...sb, collapsed: false, activePanel: 'review' as PanelType } });
+          set({ [key]: { ...sb, hidden: false, activePanel: 'review' as PanelType } });
         } else {
           // 어디에도 없으면 left에 추가
           const sb = state.leftSidebar;
-          set({ leftSidebar: { ...sb, collapsed: false, panels: [...sb.panels, 'review'], activePanel: 'review' } });
+          set({ leftSidebar: { ...sb, hidden: false, panels: [...sb.panels, 'review'], activePanel: 'review' } });
         }
       },
 
@@ -321,10 +321,10 @@ export const useUIStore = create<UIStore>()(
         if (side) {
           const key = sidebarKey(side);
           const sb = state[key];
-          set({ [key]: { ...sb, collapsed: false, activePanel: 'comments' as PanelType } });
+          set({ [key]: { ...sb, hidden: false, activePanel: 'comments' as PanelType } });
         } else {
           const sb = state.leftSidebar;
-          set({ leftSidebar: { ...sb, collapsed: false, panels: [...sb.panels, 'comments'], activePanel: 'comments' } });
+          set({ leftSidebar: { ...sb, hidden: false, panels: [...sb.panels, 'comments'], activePanel: 'comments' } });
         }
       },
 
@@ -351,10 +351,10 @@ export const useUIStore = create<UIStore>()(
         if (side) {
           const key = sidebarKey(side);
           const sb = state[key];
-          if (sb.collapsed) {
-            set({ [key]: { ...sb, collapsed: false, activePanel: 'settings' as PanelType } });
+          if (sb.hidden) {
+            set({ [key]: { ...sb, hidden: false, activePanel: 'settings' as PanelType } });
           } else if (sb.activePanel === 'settings') {
-            set({ [key]: { ...sb, collapsed: true } });
+            set({ [key]: { ...sb, hidden: true } });
           } else {
             set({ [key]: { ...sb, activePanel: 'settings' as PanelType } });
           }
@@ -369,10 +369,10 @@ export const useUIStore = create<UIStore>()(
         if (side) {
           const key = sidebarKey(side);
           const sb = state[key];
-          if (sb.collapsed) {
-            set({ [key]: { ...sb, collapsed: false, activePanel: 'review' as PanelType } });
+          if (sb.hidden) {
+            set({ [key]: { ...sb, hidden: false, activePanel: 'review' as PanelType } });
           } else if (sb.activePanel === 'review') {
-            set({ [key]: { ...sb, collapsed: true } });
+            set({ [key]: { ...sb, hidden: true } });
           } else {
             set({ [key]: { ...sb, activePanel: 'review' as PanelType } });
           }
@@ -395,7 +395,7 @@ export const useUIStore = create<UIStore>()(
 
         const isChatVisibleOn = (side: SidebarSide): boolean => {
           const sb = side === 'left' ? state.leftSidebar : state.rightSidebar;
-          return !sb.collapsed && sb.activePanel !== null && isChatPanel(sb.activePanel);
+          return !sb.hidden && sb.activePanel !== null && isChatPanel(sb.activePanel);
         };
 
         const anyVisibleChat = chatSides.some(isChatVisibleOn);
@@ -409,8 +409,8 @@ export const useUIStore = create<UIStore>()(
             const sb = state[key];
             const fallbackPanel = sb.panels.find((panel) => !isChatPanel(panel)) ?? null;
             updates[key] = fallbackPanel
-              ? { ...sb, activePanel: fallbackPanel, collapsed: false }
-              : { ...sb, collapsed: true };
+              ? { ...sb, activePanel: fallbackPanel, hidden: false }
+              : { ...sb, hidden: true };
           }
         } else {
           // On: chat 패널이 있는 모든 사이드를 펼치고 chat 탭 활성화
@@ -422,7 +422,7 @@ export const useUIStore = create<UIStore>()(
               ?? sb.panels.find(isChatPanel)
               ?? null;
             if (!chatPanel) continue;
-            updates[key] = { ...sb, collapsed: false, activePanel: chatPanel };
+            updates[key] = { ...sb, hidden: false, activePanel: chatPanel };
           }
         }
 
@@ -446,14 +446,14 @@ export const useUIStore = create<UIStore>()(
         set((state) => ({ [key]: { ...state[key], activePanel: panel } }));
       },
 
-      toggleSidebarCollapse: (side: SidebarSide): void => {
+      toggleSidebarHidden: (side: SidebarSide): void => {
         const key = sidebarKey(side);
-        set((state) => ({ [key]: { ...state[key], collapsed: !state[key].collapsed } }));
+        set((state) => ({ [key]: { ...state[key], hidden: !state[key].hidden } }));
       },
 
-      setSidebarCollapsedSide: (side: SidebarSide, collapsed: boolean): void => {
+      setSidebarHiddenSide: (side: SidebarSide, hidden: boolean): void => {
         const key = sidebarKey(side);
-        set((state) => ({ [key]: { ...state[key], collapsed } }));
+        set((state) => ({ [key]: { ...state[key], hidden } }));
       },
 
       setSidebarWidthSide: (side: SidebarSide, width: number): void => {
@@ -473,7 +473,7 @@ export const useUIStore = create<UIStore>()(
               : null;
         if (side) {
           const key = sidebarKey(side);
-          set({ [key]: { ...state[key], collapsed: false, activePanel: panel } });
+          set({ [key]: { ...state[key], hidden: false, activePanel: panel } });
         }
       },
 
@@ -481,15 +481,21 @@ export const useUIStore = create<UIStore>()(
         const key = sidebarKey(side);
         const sb = get()[key];
         if (sb.panels.includes(panel)) {
-          set({ [key]: { ...sb, collapsed: false, activePanel: panel } });
+          set({ [key]: { ...sb, hidden: false, activePanel: panel } });
         } else {
           // 패널이 없으면 추가
-          set({ [key]: { ...sb, collapsed: false, panels: [...sb.panels, panel], activePanel: panel } });
+          set({ [key]: { ...sb, hidden: false, panels: [...sb.panels, panel], activePanel: panel } });
         }
       },
 
       movePanel: (panel: PanelType, from: SidebarSide, to: SidebarSide): void => {
         if (from === to) return;
+
+        // 역할 잠금(side lock): 좌=고정패널 전용, 우=채팅 전용.
+        // 드래그·우클릭·+버튼 3경로가 모두 이 한 곳을 통과하므로 여기서 차단하면 전부 막힌다.
+        if (to === 'left' && isChatPanel(panel)) return;
+        if (to === 'right' && !isChatPanel(panel)) return;
+
         const state = get();
         const fromKey = sidebarKey(from);
         const toKey = sidebarKey(to);
@@ -507,12 +513,12 @@ export const useUIStore = create<UIStore>()(
           ? (newFromPanels[0] ?? null)
           : fromSb.activePanel;
 
-        // from이 비면 자동 collapse
-        const fromCollapsed = newFromPanels.length === 0 ? true : fromSb.collapsed;
+        // from이 비면 자동 숨김
+        const fromHidden = newFromPanels.length === 0 ? true : fromSb.hidden;
 
         set({
-          [fromKey]: { ...fromSb, panels: newFromPanels, activePanel: fromActive, collapsed: fromCollapsed },
-          [toKey]: { ...toSb, panels: newToPanels, activePanel: panel, collapsed: false },
+          [fromKey]: { ...fromSb, panels: newFromPanels, activePanel: fromActive, hidden: fromHidden },
+          [toKey]: { ...toSb, panels: newToPanels, activePanel: panel, hidden: false },
         });
       },
 
@@ -535,14 +541,15 @@ export const useUIStore = create<UIStore>()(
       },
 
       // === Chat Session Panel Actions ===
-      addChatPanel: (sessionId: string, preferSide?: SidebarSide): void => {
+      addChatPanel: (sessionId: string): void => {
         const panel: ChatPanelType = chatPanelId(sessionId);
         const state = get();
         // 이미 어느 쪽에든 있으면 무시
         if (state.leftSidebar.panels.includes(panel) || state.rightSidebar.panels.includes(panel)) return;
-        const key = sidebarKey(preferSide ?? 'right');
+        // 채팅은 우측 전용 — preferSide로 좌측이 요청돼도 우측에 도킹
+        const key = sidebarKey('right');
         const sb = state[key];
-        set({ [key]: { ...sb, panels: [...sb.panels, panel], activePanel: panel, collapsed: false } });
+        set({ [key]: { ...sb, panels: [...sb.panels, panel], activePanel: panel, hidden: false } });
       },
 
       removeChatPanel: (sessionId: string): void => {
@@ -554,7 +561,7 @@ export const useUIStore = create<UIStore>()(
           if (sb.panels.includes(panel)) {
             const newPanels = sb.panels.filter((p) => p !== panel);
             const newActive = sb.activePanel === panel ? (newPanels[0] ?? null) : sb.activePanel;
-            updates[side] = { ...sb, panels: newPanels, activePanel: newActive, collapsed: newPanels.length === 0 ? true : sb.collapsed };
+            updates[side] = { ...sb, panels: newPanels, activePanel: newActive, hidden: newPanels.length === 0 ? true : sb.hidden };
           }
         }
         if (Object.keys(updates).length > 0) set(updates);
@@ -564,60 +571,45 @@ export const useUIStore = create<UIStore>()(
         const state = get();
         const validPanels = new Set<PanelType>(sessionIds.map(chatPanelId));
         const updates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
-        const preLeftChatCount = state.leftSidebar.panels.filter(isChatPanel).length;
-        const preRightChatCount = state.rightSidebar.panels.filter(isChatPanel).length;
-        const preActiveChatSide: SidebarSide | null =
-          state.leftSidebar.activePanel && isChatPanel(state.leftSidebar.activePanel)
-            ? 'left'
-            : state.rightSidebar.activePanel && isChatPanel(state.rightSidebar.activePanel)
-              ? 'right'
-              : null;
-        const preferredRestoreSide: SidebarSide =
-          preActiveChatSide
-          ?? (preLeftChatCount > preRightChatCount ? 'left'
-            : preRightChatCount > preLeftChatCount ? 'right'
-              : 'right');
 
-        for (const side of ['leftSidebar', 'rightSidebar'] as const) {
-          const sb = state[side];
-          // stale chat 패널 제거
-          const cleaned = sb.panels.filter((p) => !isChatPanel(p) || validPanels.has(p));
-          if (cleaned.length !== sb.panels.length) {
-            const newActive = sb.activePanel && !cleaned.includes(sb.activePanel)
-              ? (cleaned[0] ?? null)
-              : sb.activePanel;
-            updates[side] = { ...sb, panels: cleaned, activePanel: newActive };
-          }
+        // 채팅은 우측 전용. 좌측에 도킹된 유효 chat은 우측으로 옮기고,
+        // 좌/우의 stale chat은 제거한다. (역할 정규화 + stale 정리 동시 수행)
+
+        // 좌측: 모든 chat 제거 (유효한 것은 우측 이동 대상으로 수집)
+        const leftSb = state.leftSidebar;
+        const leftChatToMove = leftSb.panels.filter((p) => isChatPanel(p) && validPanels.has(p));
+        const leftCleaned: PanelType[] = leftSb.panels.filter((p) => !isChatPanel(p));
+        if (leftCleaned.length !== leftSb.panels.length) {
+          const newActive = leftSb.activePanel && !leftCleaned.includes(leftSb.activePanel)
+            ? (leftCleaned[0] ?? null)
+            : leftSb.activePanel;
+          updates.leftSidebar = { ...leftSb, panels: leftCleaned, activePanel: newActive };
         }
 
-        // 세션이 있지만 어디에도 패널이 없으면, right에 첫 번째 세션 추가
-        const leftPanels = updates.leftSidebar?.panels ?? state.leftSidebar.panels;
-        const rightPanels = updates.rightSidebar?.panels ?? state.rightSidebar.panels;
-        const allPanels = [...leftPanels, ...rightPanels];
-        const existingChatPanels = new Set(allPanels.filter(isChatPanel));
+        // 우측: stale chat 제거
+        const rightSb = state.rightSidebar;
+        const rightCleaned: PanelType[] = rightSb.panels.filter((p) => !isChatPanel(p) || validPanels.has(p));
+        const rightActive = rightSb.activePanel && !rightCleaned.includes(rightSb.activePanel)
+          ? (rightCleaned[0] ?? null)
+          : rightSb.activePanel;
 
-        // 누락된 세션 패널 복구:
-        // 1) 기존 chat이 한쪽에 있으면 그쪽에 복구
-        // 2) 양쪽 모두 없으면, 정리 전(chat stale 포함) 선호 사이드로 복구
+        // 우측에 이미 있는 chat + 좌측에서 옮겨온 chat을 합친 뒤, 누락 세션 복구
+        const rightExistingChat = new Set<PanelType>(rightCleaned.filter(isChatPanel));
+        const movedFromLeft = leftChatToMove.filter((p) => !rightExistingChat.has(p));
+        const afterMove = [...rightCleaned, ...movedFromLeft];
+        const afterMoveChat = new Set(afterMove.filter(isChatPanel));
         const missingPanels = sessionIds
           .map(chatPanelId)
-          .filter((panel) => !existingChatPanels.has(panel));
+          .filter((panel) => !afterMoveChat.has(panel));
 
-        if (missingPanels.length > 0) {
-          const leftHasChat = leftPanels.some(isChatPanel);
-          const rightHasChat = rightPanels.some(isChatPanel);
-          const restoreSide: SidebarSide =
-            leftHasChat && !rightHasChat ? 'left'
-              : rightHasChat && !leftHasChat ? 'right'
-                : preferredRestoreSide;
-          const restoreKey = sidebarKey(restoreSide);
-          const restoreSidebar = updates[restoreKey] ?? state[restoreKey];
-          const nextPanels = [...restoreSidebar.panels, ...missingPanels];
-          updates[restoreKey] = {
-            ...restoreSidebar,
-            panels: nextPanels,
-            activePanel: restoreSidebar.activePanel ?? missingPanels[0] ?? null,
-            collapsed: false,
+        const nextRightPanels = [...afterMove, ...missingPanels];
+        const restoredCount = movedFromLeft.length + missingPanels.length;
+        if (restoredCount > 0 || rightCleaned.length !== rightSb.panels.length) {
+          updates.rightSidebar = {
+            ...rightSb,
+            panels: nextRightPanels,
+            activePanel: rightActive ?? movedFromLeft[0] ?? missingPanels[0] ?? null,
+            hidden: restoredCount > 0 ? false : rightSb.hidden,
           };
         }
 
@@ -631,7 +623,7 @@ export const useUIStore = create<UIStore>()(
           const sb = state[side];
           // 현재 activePanel이 chat이면 열기
           if (sb.activePanel && isChatPanel(sb.activePanel)) {
-            set({ [side]: { ...sb, collapsed: false } });
+            set({ [side]: { ...sb, hidden: false } });
             return;
           }
         }
@@ -640,7 +632,7 @@ export const useUIStore = create<UIStore>()(
           const sb = state[side];
           const chatPanel = sb.panels.find(isChatPanel);
           if (chatPanel) {
-            set({ [side]: { ...sb, collapsed: false, activePanel: chatPanel } });
+            set({ [side]: { ...sb, hidden: false, activePanel: chatPanel } });
             return;
           }
         }
@@ -653,7 +645,7 @@ export const useUIStore = create<UIStore>()(
           for (const s of ['rightSidebar', 'leftSidebar'] as const) {
             const chatPanel = refreshed[s].panels.find(isChatPanel);
             if (chatPanel) {
-              set({ [s]: { ...refreshed[s], collapsed: false, activePanel: chatPanel } });
+              set({ [s]: { ...refreshed[s], hidden: false, activePanel: chatPanel } });
               return;
             }
           }
@@ -748,7 +740,7 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const data = persisted as Record<string, unknown>;
 
@@ -822,6 +814,57 @@ export const useUIStore = create<UIStore>()(
               data[targetSide] = { collapsed: false, panels: ['comments'], activePanel: 'comments', width: 250 };
             }
           }
+        }
+
+        // v5 이하 → v6: collapsed→hidden 리네임 + 역할 정규화.
+        // 좌=고정패널 전용, 우=채팅 전용. 위반 패널(좌측 chat, 우측 fixed)을 재배치한다.
+        if (version < 6) {
+          const isChat = (p: string): boolean => p.startsWith('chat:');
+          const left = data.leftSidebar as Record<string, unknown> | undefined;
+          const right = data.rightSidebar as Record<string, unknown> | undefined;
+          const leftPanels = Array.isArray(left?.panels) ? (left!.panels as string[]) : [];
+          const rightPanels = Array.isArray(right?.panels) ? (right!.panels as string[]) : [];
+
+          // 위반 패널 수집
+          const chatFromLeft = leftPanels.filter(isChat);
+          const fixedFromRight = rightPanels.filter((p) => !isChat(p));
+
+          // 정규화된 패널 목록 (중복 제거)
+          let nextLeft = [
+            ...leftPanels.filter((p) => !isChat(p)),
+            ...fixedFromRight.filter((p) => !leftPanels.includes(p)),
+          ];
+          // 좌측은 고정 패널 전용 바이므로 최소 한 개는 보장한다.
+          // (구 컨텍스트 메뉴로 고정 패널을 전부 우측으로 옮긴 뒤 삭제된 상태 등에서 좌측이 비어
+          //  hidden:false + panels:[] 로 렌더 null이 되면 되살림 진입점이 사라지는 dead-end 방지)
+          if (nextLeft.length === 0) {
+            nextLeft = ['settings', 'review', 'comments'];
+          }
+          const nextRight = [
+            ...rightPanels.filter(isChat),
+            ...chatFromLeft.filter((p) => !rightPanels.includes(p)),
+          ];
+
+          const normalizeSide = (
+            sb: Record<string, unknown> | undefined,
+            nextPanels: string[],
+          ): Record<string, unknown> => {
+            const base = sb ?? {};
+            const prevActive = base.activePanel as string | null | undefined;
+            const activePanel = prevActive && nextPanels.includes(prevActive)
+              ? prevActive
+              : (nextPanels[0] ?? null);
+            const hidden = 'hidden' in base ? Boolean(base.hidden) : Boolean(base.collapsed);
+            return {
+              hidden,
+              panels: nextPanels,
+              activePanel,
+              width: (base.width as number) ?? 250,
+            };
+          };
+
+          data.leftSidebar = normalizeSide(left, nextLeft);
+          data.rightSidebar = normalizeSide(right, nextRight);
         }
 
         return data;

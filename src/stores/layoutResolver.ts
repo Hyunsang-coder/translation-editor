@@ -24,10 +24,10 @@ export interface ResolvedWidths {
   right: number;
 }
 
-/** 사이드바가 차지하는 desired 너비 (접힘/빈 상태 포함) */
+/** 사이드바가 차지하는 desired 너비 (숨김/빈 상태 포함) */
 function getDesiredWidth(sidebar: DockingSidebarState): number {
-  if (sidebar.panels.length === 0) return LAYOUT.SIDEBAR_EMPTY;
-  if (sidebar.collapsed) return LAYOUT.SIDEBAR_COLLAPSED;
+  if (sidebar.hidden) return 0;            // 완전 숨김 최우선
+  if (sidebar.panels.length === 0) return 0; // 빈 바도 폭 0
   return sidebar.width;
 }
 
@@ -55,8 +55,8 @@ export function resolveLayout(input: LayoutInput): ResolvedWidths {
   const leftDesired = getDesiredWidth(input.leftSidebar);
   const rightDesired = getDesiredWidth(input.rightSidebar);
 
-  const leftOpen = input.leftSidebar.panels.length > 0 && !input.leftSidebar.collapsed;
-  const rightOpen = input.rightSidebar.panels.length > 0 && !input.rightSidebar.collapsed;
+  const leftOpen = input.leftSidebar.panels.length > 0 && !input.leftSidebar.hidden;
+  const rightOpen = input.rightSidebar.panels.length > 0 && !input.rightSidebar.hidden;
 
   // 열린 사이드바가 없으면 그대로
   if (!leftOpen && !rightOpen) {

@@ -171,12 +171,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
 
-  // side+sessionId가 있으면 해당 sidebar의 collapsed+activePanel로 판단
+  // side+sessionId가 있으면 해당 sidebar의 hidden+activePanel로 판단
   const chatPanelOpen = useUIStore((s) => {
     if (side && sessionId) {
       const sb = side === 'left' ? s.leftSidebar : s.rightSidebar;
       const panelId = chatPanelId(sessionId);
-      return !sb.collapsed && sb.activePanel === panelId;
+      return !sb.hidden && sb.activePanel === panelId;
     }
     return true;
   });
