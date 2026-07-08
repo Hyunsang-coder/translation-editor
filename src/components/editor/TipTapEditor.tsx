@@ -11,17 +11,29 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
+import { registerEditorSyncFlush, getDocSyncEpoch } from '@/stores/projectStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { CommentMark } from '@/editor/extensions/CommentMark';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+
+/**
+ * onChange/onJsonChange 디바운스 간격 (P1).
+ * onUpdate마다 getHTML()+getJSON()(둘 다 O(문서))을 실행하면 대형 문서에서 키 입력당
+ * 수십 ms 랙이 생기므로, store 동기화를 디바운스한다. 저장 자체가 write-through 500ms
+ * 디바운스라 정합성 손실은 없다. 유실 방지 flush 경로:
+ * - projectStore.saveProject / materializeBlocksForSnapshot / switchProjectById가
+ *   registerEditorSyncFlush로 등록된 flush를 먼저 실행
+ * - blur / 에디터 destroy 시점에 자체 flush
+ */
+const SYNC_DEBOUNCE_MS = 250;
 
 export interface TipTapEditorProps {
   panelType: 'source' | 'target';
@@ -110,6 +122,56 @@ function TipTapEditor({
   onSearchOpenWithReplaceRef.current = onSearchOpenWithReplace;
   onCommentClickRef.current = onCommentClick;
 
+  // ─── 디바운스된 store 동기화 (P1) ─────────────────────────────────────────
+  const onChangeRef = useRef(onChange);
+  const onJsonChangeRef = useRef(onJsonChange);
+  onChangeRef.current = onChange;
+  onJsonChangeRef.current = onJsonChange;
+
+  const editorInstanceRef = useRef<Editor | null>(null);
+  const syncTimerRef = useRef<number | null>(null);
+  // 스케줄 시점의 문서 동기화 세대. 프로젝트가 교체되면(loadProject) 세대가 증가하므로,
+  // 이전 프로젝트에서 스케줄된 flush가 늦게 발화해 새 프로젝트 store를 덮는 것을 막는다.
+  const scheduledEpochRef = useRef<number>(0);
+
+  const emitPendingSync = useCallback((): void => {
+    const ed = editorInstanceRef.current;
+    if (!ed || ed.isDestroyed) return;
+    if (scheduledEpochRef.current !== getDocSyncEpoch()) return;
+    const html = ed.getHTML();
+    if (html === lastContentRef.current) return;
+    lastContentRef.current = html;
+    onChangeRef.current?.(html);
+    onJsonChangeRef.current?.(ed.getJSON() as Record<string, unknown>);
+  }, []);
+
+  /** pending 디바운스가 있으면 즉시 반영. 없으면 no-op(불필요한 직렬화 방지). */
+  const flushPendingSync = useCallback((): void => {
+    if (syncTimerRef.current === null) return;
+    window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = null;
+    emitPendingSync();
+  }, [emitPendingSync]);
+
+  const cancelPendingSync = useCallback((): void => {
+    if (syncTimerRef.current !== null) {
+      window.clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSync = useCallback((ed: Editor): void => {
+    editorInstanceRef.current = ed;
+    scheduledEpochRef.current = getDocSyncEpoch();
+    if (syncTimerRef.current !== null) {
+      window.clearTimeout(syncTimerRef.current);
+    }
+    syncTimerRef.current = window.setTimeout(() => {
+      syncTimerRef.current = null;
+      emitPendingSync();
+    }, SYNC_DEBOUNCE_MS);
+  }, [emitPendingSync]);
+
   const editor = useEditor({
     extensions,
     content,
@@ -191,20 +253,22 @@ function TipTapEditor({
       },
     },
     onCreate: ({ editor: ed }) => {
+      editorInstanceRef.current = ed;
       lastContentRef.current = ed.getHTML();
-      if (onJsonChange) {
-        onJsonChange(ed.getJSON() as Record<string, unknown>);
-      }
+      // 초기 JSON 캐시는 즉시 push (에디터 마운트 전 AI 도구 접근 대비)
+      onJsonChangeRef.current?.(ed.getJSON() as Record<string, unknown>);
     },
     onUpdate: ({ editor: ed }) => {
-      const html = ed.getHTML();
-      lastContentRef.current = html;
-      if (onChange) {
-        onChange(html);
-      }
-      if (onJsonChange) {
-        onJsonChange(ed.getJSON() as Record<string, unknown>);
-      }
+      // 키 입력마다 직렬화하지 않고 디바운스로 묶는다 (P1).
+      scheduleSync(ed);
+    },
+    onBlur: () => {
+      // 포커스 이탈은 편집 단위 종료 신호 — pending 변경을 즉시 반영
+      flushPendingSync();
+    },
+    onDestroy: () => {
+      // destroy 이벤트는 view 해체 전에 발생하므로 마지막 pending 변경을 회수할 수 있다
+      flushPendingSync();
     },
   }, [extensions]);
 
@@ -212,8 +276,21 @@ function TipTapEditor({
   useEffect(() => {
     if (!editor) return;
     if (content === lastContentRef.current) return;
+    // 외부 교체(프로젝트 전환/스냅샷 복원 등)는 pending 편집보다 우선한다.
+    // pending flush를 폐기하지 않으면 교체 직후 stale 편집이 store를 되돌릴 수 있다.
+    cancelPendingSync();
     replaceDocContent(editor, content, { addToHistory: false });
-  }, [editor, content]);
+    // 교체된 prop 값을 동기화 기준으로 삼는다. (replaceDocContent의 onUpdate가 스케줄한
+    // 디바운스는 이후 정규화 차이가 있을 때만 echo를 store로 내보낸다)
+    lastContentRef.current = content;
+  }, [editor, content, cancelPendingSync]);
+
+  // 저장/스냅샷/프로젝트 전환 시 projectStore가 pending 동기화를 강제 flush할 수 있도록 등록
+  useEffect(() => {
+    if (!editor) return;
+    editorInstanceRef.current = editor;
+    return registerEditorSyncFlush(flushPendingSync);
+  }, [editor, flushPendingSync]);
 
   // 에디터 준비 완료 콜백
   useEffect(() => {

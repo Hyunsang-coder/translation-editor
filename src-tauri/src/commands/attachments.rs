@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -163,26 +164,30 @@ pub async fn preview_attachment(args: PreviewAttachmentArgs) -> CommandResult<At
     })
 }
 
-/// 로컬 파일을 바이트로 읽습니다.
-/// - 이미지 멀티모달(vision) 입력을 위해 프론트에서 base64로 변환할 때 사용합니다.
+/// 로컬 파일을 base64 문자열로 읽습니다.
+/// - 이미지 멀티모달(vision) 입력용. number[] JSON 직렬화(5MB 이미지 → ~20MB JSON)
+///   비용을 피하기 위해 base64 문자열 하나로 반환합니다. (P5)
 /// - 파일이 사라졌거나 접근 불가하면 에러를 반환합니다.
 #[tauri::command]
-pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<Vec<u8>> {
+pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<String> {
     // utils::validate_path (Blocklist 적용)
     let path = validate_path(&args.path)?;
 
     // 파일 크기 검증 (이미지 100MB 제한)
     validate_file_size(&path, MAX_IMAGE_ATTACHMENT_SIZE)?;
 
-    fs::read(&path).map_err(|e| CommandError {
+    let bytes = fs::read(&path).map_err(|e| CommandError {
         code: "READ_ERROR".to_string(),
         message: format!("Failed to read file: {}", e),
         details: None,
-    })
+    })?;
+
+    Ok(BASE64.encode(bytes))
 }
 
+// async: DB 접근 명령이 메인 스레드(이벤트 루프)를 점유하지 않도록 스레드풀에서 실행 (C1 연관)
 #[tauri::command]
-pub fn list_attachments(
+pub async fn list_attachments(
     project_id: String,
     db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<AttachmentDto>> {
@@ -211,8 +216,9 @@ pub fn list_attachments(
         .collect())
 }
 
+// async: DB 접근 명령이 메인 스레드(이벤트 루프)를 점유하지 않도록 스레드풀에서 실행 (C1 연관)
 #[tauri::command]
-pub fn delete_attachment(id: String, db_state: State<'_, DbState>) -> CommandResult<()> {
+pub async fn delete_attachment(id: String, db_state: State<'_, DbState>) -> CommandResult<()> {
     let db = db_state.acquire()?;
 
     db.delete_attachment(&id).map_err(CommandError::from)?;
@@ -315,9 +321,30 @@ fn extract_pptx_text(path: &Path) -> Result<String, String> {
 
 /// 이미지 바이트를 임시 파일로 저장하고 경로를 반환합니다.
 /// - 드래그앤드롭 또는 클립보드에서 이미지를 붙여넣을 때 사용합니다.
-/// - 프론트엔드에서 File/Blob을 바이트 배열로 변환하여 전송합니다.
+/// - 프론트엔드에서 File/Blob을 base64 문자열로 변환하여 전송합니다.
+///   (number[] JSON 직렬화로 인한 UI 프리즈 방지, P5)
 #[tauri::command]
-pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<String> {
+pub async fn save_temp_image(bytes_base64: String, filename: String) -> CommandResult<String> {
+    // base64 길이 기준 사전 검증 (대용량 디코딩 방지, base64는 원본의 약 4/3 크기)
+    if bytes_base64.len() > MAX_TEMP_IMAGE_SIZE / 3 * 4 + 4 {
+        return Err(CommandError {
+            code: "FILE_TOO_LARGE".to_string(),
+            message: format!(
+                "이미지 크기가 너무 큽니다: {}MB (최대 10MB)",
+                bytes_base64.len() / 4 * 3 / (1024 * 1024)
+            ),
+            details: None,
+        });
+    }
+
+    let bytes = BASE64
+        .decode(bytes_base64.as_bytes())
+        .map_err(|e| CommandError {
+            code: "INVALID_BASE64".to_string(),
+            message: format!("이미지 데이터 디코딩 실패: {}", e),
+            details: None,
+        })?;
+
     // 이미지 크기 검증 (10MB 제한)
     if bytes.len() > MAX_TEMP_IMAGE_SIZE {
         return Err(CommandError {
@@ -375,8 +402,9 @@ pub async fn save_temp_image(bytes: Vec<u8>, filename: String) -> CommandResult<
 
 /// 오래된 임시 이미지 파일을 정리합니다.
 /// - 앱 시작 시 호출하여 24시간 이상 된 임시 파일을 삭제합니다.
+// async: 디렉토리 순회/삭제가 메인 스레드를 점유하지 않도록 스레드풀에서 실행 (C1 연관)
 #[tauri::command]
-pub fn cleanup_temp_images() -> CommandResult<u32> {
+pub async fn cleanup_temp_images() -> CommandResult<u32> {
     let temp_dir = std::env::temp_dir().join("oddeyes-uploads");
 
     if !temp_dir.exists() {

@@ -1,6 +1,20 @@
 use crate::error::{CommandError, CommandResult};
 use std::path::{Path, PathBuf};
 
+/// 로그 미리보기용 UTF-8 안전 절단.
+/// 바이트 인덱스 슬라이싱(`&s[..n]`)은 멀티바이트 문자 경계에서 패닉하므로,
+/// `max_bytes` 이하의 가장 가까운 문자 경계까지만 자른다.
+pub fn truncate_utf8(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// 시스템 중요 디렉토리 접근을 차단하는 Blocklist 검증 함수
 /// - canonicalize()로 경로 정규화 후, 차단 목록과 비교합니다.
 pub fn validate_path(path_str: &str) -> CommandResult<PathBuf> {
@@ -93,6 +107,13 @@ fn is_blocked_path(path: &Path) -> bool {
         {
             return true;
         }
+        // 시작 프로그램 폴더(로그인 시 자동 실행) 및 SSH 키 경로 차단 (지속성/자격증명 접근 방지)
+        if lower.contains(r"\start menu\programs\startup")
+            || lower.contains(r"\.ssh\")
+            || lower.ends_with(r"\.ssh")
+        {
+            return true;
+        }
     }
 
     // Unix/Linux/macOS Blocklist
@@ -123,6 +144,30 @@ fn is_blocked_path(path: &Path) -> bool {
         {
             return true;
         }
+
+        // 홈 디렉토리 내 민감 경로 차단 (SSH 키, 로그인 자동 실행 등록 등)
+        // 홈 전체 allowlist 전환은 UX 영향이 커서 하지 않고, 지속성 공격 및
+        // 자격증명 탈취 경로로 쓰이는 디렉토리만 추가로 차단한다.
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.trim().is_empty() {
+                let home_path = Path::new(&home);
+                let sensitive_rel: &[&str] = &[
+                    ".ssh",
+                    ".gnupg",
+                    ".aws",
+                    ".config/autostart",
+                    // macOS 로그인 시 자동 실행 (지속성 공격 경로)
+                    "Library/LaunchAgents",
+                    "Library/LaunchDaemons",
+                    "Library/Keychains",
+                ];
+                for rel in sensitive_rel {
+                    if path.starts_with(home_path.join(rel)) {
+                        return true;
+                    }
+                }
+            }
+        }
     }
 
     false
@@ -152,5 +197,37 @@ mod tests {
 
         let result = validate_path(&file.to_string_lossy());
         assert!(result.is_ok(), "expected ok, got {:?}", result);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn home_sensitive_paths_are_blocked() {
+        let home = std::env::var("HOME").expect("HOME should be set in tests");
+        let ssh_key = Path::new(&home).join(".ssh/id_ed25519");
+        assert!(is_blocked_path(&ssh_key));
+
+        let launch_agent = Path::new(&home).join("Library/LaunchAgents/com.evil.persist.plist");
+        assert!(is_blocked_path(&launch_agent));
+
+        let autostart = Path::new(&home).join(".config/autostart/evil.desktop");
+        assert!(is_blocked_path(&autostart));
+
+        // 일반 문서 경로는 여전히 허용
+        let doc = Path::new(&home).join("Documents/export.md");
+        assert!(!is_blocked_path(&doc));
+    }
+
+    #[test]
+    fn truncate_utf8_respects_char_boundaries() {
+        // "한"은 3바이트: 4바이트 절단 요청 시 경계(3)까지 후퇴
+        let s = "한국어테스트";
+        assert_eq!(truncate_utf8(s, 4), "한");
+        assert_eq!(truncate_utf8(s, 6), "한국");
+        // 길이 이하 요청은 원본 그대로
+        assert_eq!(truncate_utf8(s, 1000), s);
+        // ASCII는 그대로 절단
+        assert_eq!(truncate_utf8("abcdef", 3), "abc");
+        // 경계 0까지 후퇴하는 극단 케이스
+        assert_eq!(truncate_utf8("한", 1), "");
     }
 }

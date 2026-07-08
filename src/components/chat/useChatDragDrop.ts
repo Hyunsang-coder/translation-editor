@@ -3,7 +3,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { saveTempImage } from '@/tauri/attachments';
 import { pickChatAttachmentFile } from '@/tauri/dialog';
-import { fileToBytes, isImageFile } from '@/utils/fileUtils';
+import { isImageFile } from '@/utils/fileUtils';
 
 /**
  * Tauri 드래그 앤 드롭 + HTML5 fallback + 클립보드 이미지 붙여넣기
@@ -119,8 +119,8 @@ export function useChatDragDrop(
 
       if (isImageFile(file)) {
         try {
-          const bytes = await fileToBytes(file);
-          const path = await saveTempImage(bytes, file.name);
+          // P5: File(Blob) → base64 문자열로 직접 IPC (number[] 직렬화 프리즈 방지)
+          const path = await saveTempImage(file, file.name);
           await addComposerAttachment(path);
         } catch (error) {
           console.error('Failed to process dropped image:', error);

@@ -29,6 +29,8 @@ export function createChatModel(
 
   // 모델별 호출 옵션(temperature/thinking/effort)은 modelCallOptions에서 일괄 결정.
   // modelOverride가 있으면 그 모델 기준으로 판정해야 하므로 model을 덮어써 전달한다.
+  // 모델 지원 여부 가드(예: reasoning_effort는 gpt-5 계열만)는 전부 resolveModelCallOptions에
+  // 있으므로, 이 파일은 반환된 옵션을 판정 없이 그대로 전달한다. (A3)
   const callOptions = resolveModelCallOptions({ ...cfg, model }, useFor);
 
   // Anthropic (Claude)

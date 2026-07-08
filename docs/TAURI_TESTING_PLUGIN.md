@@ -68,7 +68,8 @@ OddEyes 앱을 **Tauri 런타임 기준으로 자동화 테스트**하기 위한
 
 - WebSocket 바인딩: `127.0.0.1`만 허용
 - 기본 포트: `9876` (`TAURI_TEST_PORT`로 오버라이드)
-- 인증: Bearer 토큰 필수 (`TAURI_TEST_TOKEN` 없으면 실행 시 랜덤 생성)
+- 인증: Bearer 토큰 필수 (`TAURI_TEST_TOKEN` 미설정 시 서버 미기동, 상수 시간 비교)
+- Origin 검증: 브라우저 Origin은 tauri/dev 서버 origin만 허용 (Origin 헤더 없는 비브라우저 클라이언트는 허용)
 - 연결 수: 단일 클라이언트만 허용
 
 ## 6. 앱 통합 스펙

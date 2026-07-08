@@ -268,7 +268,7 @@ impl NotionMcpClient {
 
         debug!(
             "[NotionMCP] Response: {}",
-            &response_text[..response_text.len().min(200)]
+            crate::utils::truncate_utf8(&response_text, 200)
         );
 
         // 응답이 비어있는 경우 (일부 알림 요청에 대한 응답)

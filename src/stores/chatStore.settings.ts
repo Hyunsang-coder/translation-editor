@@ -215,6 +215,10 @@ export function createAttachmentActions(set: ChatSet, get: ChatGet) {
     set({ isAttachmentLoading: true });
     try {
       const newAtt = await attachFile(projectId, path);
+      // L5: 첨부 처리 중 프로젝트가 전환됐으면 새 프로젝트 UI에 유령 첨부가 남지 않도록 무시
+      // (DB에는 저장되므로 원 프로젝트로 돌아오면 hydrate 시 목록에 나타남.
+      //  isAttachmentLoading은 hydrateForProject가 false로 리셋함)
+      if (get().loadedProjectId !== projectId) return;
       set((state) => ({
         attachments: [...state.attachments, newAtt],
         isAttachmentLoading: false,
@@ -222,10 +226,13 @@ export function createAttachmentActions(set: ChatSet, get: ChatGet) {
     } catch (e) {
       console.error('[chatStore] attachFile failed (raw):', e);
       const message = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e);
-      set({
-        isAttachmentLoading: false,
-        error: message,
-      });
+      // L5: 프로젝트가 전환됐으면 새 프로젝트 상태에 stale 에러를 쓰지 않음
+      if (get().loadedProjectId === projectId) {
+        set({
+          isAttachmentLoading: false,
+          error: message,
+        });
+      }
       throw e; // UI에서 토스트로 표시할 수 있도록 re-throw
     }
   };

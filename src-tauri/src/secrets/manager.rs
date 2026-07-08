@@ -79,6 +79,10 @@ pub struct SecretManager {
     mutation_lock: Arc<Mutex<()>>,
     /// 초기화 상태
     state: Arc<RwLock<InitState>>,
+    /// 초기화 본체를 직렬화하는 락.
+    /// 이중 초기화가 진행되면 서로 다른 마스터키가 생성될 수 있고,
+    /// "Keychain 저장 키 != 메모리 키" 상태가 되면 다음 실행에서 전체 복호화가 실패한다.
+    init_lock: Arc<Mutex<()>>,
     /// app_data_dir 경로
     app_data_dir: Arc<RwLock<Option<PathBuf>>>,
 }
@@ -101,6 +105,7 @@ impl SecretManager {
             cache: Arc::new(RwLock::new(HashMap::new())),
             mutation_lock: Arc::new(Mutex::new(())),
             state: Arc::new(RwLock::new(InitState::NotInitialized)),
+            init_lock: Arc::new(Mutex::new(())),
             app_data_dir: Arc::new(RwLock::new(None)),
         }
     }
@@ -118,6 +123,15 @@ impl SecretManager {
     ///   `security find-generic-password -s "com.ite.app" -a "ite:master_key_v1" -w`
     /// - **일반 문자열** (새 환경): 아무 문자열이나 입력하면 SHA-256 해싱으로 키 생성
     fn dev_master_key() -> Option<[u8; MASTER_KEY_LEN]> {
+        // 릴리스 빌드에서는 환경변수 우회를 허용하지 않는다 (Keychain 우회 방지).
+        //
+        // 참고: 여기서 KDF를 Argon2id/scrypt+솔트로 강화하는 것도 검토했으나,
+        // 기존 dev vault(SHA-256 기반 키)와의 호환이 깨지므로 유지한다.
+        // 약한 passphrase는 vault 유출 시 GPU 브루트포스에 취약하니 개발 전용으로만 쓸 것.
+        if !cfg!(debug_assertions) {
+            return None;
+        }
+
         let val = std::env::var("ITE_DEV_MASTER_KEY").ok()?;
         if val.is_empty() {
             return None;
@@ -156,35 +170,44 @@ impl SecretManager {
     ///    - `ITE_DEV_MASTER_KEY` 환경변수가 있으면 Keychain 대신 사용
     /// 2. vault 파일이 있으면 복호화하여 캐시에 로드
     pub async fn initialize(&self) -> Result<(), SecretManagerError> {
-        // 이미 초기화되었는지 확인 (동시 호출 시 대기)
-        // 키체인 프롬프트 응답 대기를 고려하여 60초 타임아웃
-        const MAX_WAIT_MS: u64 = 60_000;
-        const POLL_INTERVAL_MS: u64 = 50;
-        let mut waited_ms: u64 = 0;
+        // 빠른 경로: 이미 초기화 완료
+        if *self.state.read().await == InitState::Ready {
+            return Ok(());
+        }
 
-        loop {
-            // Write lock으로 상태 확인 + 전환을 atomic하게 처리 (TOCTOU 방지)
+        // 초기화 본체를 init_lock으로 직렬화한다 (이중 초기화 원천 차단).
+        //
+        // 타임아웃이 나도 상태를 리셋하지 않는다: 원래 초기화가 Keychain 프롬프트 대기로
+        // 여전히 실행 중일 수 있고, 리셋하면 두 번째 초기화가 시작되어 서로 다른
+        // 마스터키가 생성될 수 있다 (다음 실행에서 전체 복호화 실패: 2026-07-07 리뷰 C6).
+        // 키체인 프롬프트 응답 대기를 고려하여 60초 타임아웃.
+        const MAX_WAIT_SECS: u64 = 60;
+        let _init_guard = match tokio::time::timeout(
+            tokio::time::Duration::from_secs(MAX_WAIT_SECS),
+            self.init_lock.lock(),
+        )
+        .await
+        {
+            Ok(guard) => guard,
+            Err(_) => {
+                warn!(
+                    "[SecretManager] Timed out (60s) waiting for in-flight initialization; \
+                    state NOT reset (the original initialization may still be running)"
+                );
+                return Err(SecretManagerError::PreviousInitFailed(
+                    "Timeout waiting for initialization (60s). \
+                    This may happen if the Keychain prompt was not answered. \
+                    The original initialization is still in progress; try again later."
+                        .to_string(),
+                ));
+            }
+        };
+
+        // 락 획득 후 재확인: 대기하는 동안 다른 초기화가 완료했을 수 있다
+        {
             let mut state = self.state.write().await;
             match &*state {
                 InitState::Ready => return Ok(()),
-                InitState::Initializing => {
-                    // 다른 곳에서 초기화 중 - 완료될 때까지 대기 (timeout 적용)
-                    drop(state);
-                    if waited_ms >= MAX_WAIT_MS {
-                        // 60초 후에도 초기화 중이면 hang으로 간주, 상태 리셋하여 재시도 가능하게
-                        warn!("[SecretManager] Initialization timeout (60s), resetting state for retry");
-                        *self.state.write().await = InitState::NotInitialized;
-                        return Err(SecretManagerError::PreviousInitFailed(
-                            "Timeout waiting for initialization (60s). \
-                            This may happen if Keychain prompt was not answered. \
-                            Retrying..."
-                                .to_string(),
-                        ));
-                    }
-                    tokio::time::sleep(tokio::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
-                    waited_ms += POLL_INTERVAL_MS;
-                    continue;
-                }
                 InitState::Failed(msg) => {
                     // A failed Keychain interaction can be transient: the prompt may have
                     // been dismissed, the keychain may have been locked, or macOS may not
@@ -194,27 +217,26 @@ impl SecretManager {
                         "[SecretManager] Previous initialization failed, retrying: {}",
                         msg
                     );
-                    *state = InitState::Initializing;
-                    drop(state);
-                    break;
                 }
-                InitState::NotInitialized => {
-                    // Atomic: check + transition under the same write lock
-                    *state = InitState::Initializing;
-                    drop(state);
-                    break;
-                }
+                _ => {}
             }
+            *state = InitState::Initializing;
         }
 
         info!("[SecretManager] Initializing...");
 
         // 1. 마스터키 로드 또는 생성
-        //    ITE_DEV_MASTER_KEY 환경변수가 있으면 Keychain 우회
+        //    ITE_DEV_MASTER_KEY 환경변수가 있으면 Keychain 우회 (debug 빌드 한정)
+        //    keyring get/set_password는 블로킹 OS 호출(프롬프트 포함)이므로 spawn_blocking으로 이관
         let master_key = if let Some(dev_key) = Self::dev_master_key() {
             dev_key
         } else {
-            match self.load_master_key_from_keychain() {
+            let load_result = tokio::task::spawn_blocking(Self::load_master_key_from_keychain)
+                .await
+                .map_err(|e| {
+                    SecretManagerError::Keychain(format!("Keychain task join error: {}", e))
+                })?;
+            match load_result {
                 Ok(key) => {
                     info!("[SecretManager] Master key loaded from keychain");
                     key
@@ -223,7 +245,20 @@ impl SecretManager {
                     // 마스터키가 없으면 새로 생성
                     info!("[SecretManager] No master key found, generating new one...");
                     let new_key = Self::generate_master_key();
-                    if let Err(e) = self.save_master_key_to_keychain(&new_key) {
+                    let save_result = {
+                        let key_copy = new_key;
+                        tokio::task::spawn_blocking(move || {
+                            Self::save_master_key_to_keychain(&key_copy)
+                        })
+                        .await
+                        .map_err(|e| {
+                            SecretManagerError::Keychain(format!(
+                                "Keychain task join error: {}",
+                                e
+                            ))
+                        })?
+                    };
+                    if let Err(e) = save_result {
                         // 키체인 저장 실패 시 Failed 상태로 전환
                         let error_msg = format!("Failed to save master key to keychain: {}", e);
                         warn!("[SecretManager] {}", error_msg);
@@ -475,7 +510,12 @@ impl SecretManager {
             None
         };
 
-        let keychain_deleted = Self::delete_master_key_from_keychain()?;
+        // keyring delete_password는 블로킹 OS 호출이므로 spawn_blocking으로 이관
+        let keychain_deleted = tokio::task::spawn_blocking(Self::delete_master_key_from_keychain)
+            .await
+            .map_err(|e| {
+                SecretManagerError::Keychain(format!("Keychain task join error: {}", e))
+            })??;
 
         *self.cache.write().await = HashMap::new();
         *self.master_key.write().await = None;
@@ -500,7 +540,9 @@ impl SecretManager {
     }
 
     /// Keychain에서 마스터키 로드
-    fn load_master_key_from_keychain(&self) -> Result<[u8; MASTER_KEY_LEN], SecretManagerError> {
+    ///
+    /// 블로킹 OS 호출(프롬프트 대기 포함)이므로 async 컨텍스트에서는 spawn_blocking으로 감싼다.
+    fn load_master_key_from_keychain() -> Result<[u8; MASTER_KEY_LEN], SecretManagerError> {
         let entry = Entry::new(KEYCHAIN_SERVICE, MASTER_KEY_KEYCHAIN_KEY)
             .map_err(|e| SecretManagerError::Keychain(e.to_string()))?;
 
@@ -526,10 +568,9 @@ impl SecretManager {
     }
 
     /// Keychain에 마스터키 저장
-    fn save_master_key_to_keychain(
-        &self,
-        key: &[u8; MASTER_KEY_LEN],
-    ) -> Result<(), SecretManagerError> {
+    ///
+    /// 블로킹 OS 호출이므로 async 컨텍스트에서는 spawn_blocking으로 감싼다.
+    fn save_master_key_to_keychain(key: &[u8; MASTER_KEY_LEN]) -> Result<(), SecretManagerError> {
         let entry = Entry::new(KEYCHAIN_SERVICE, MASTER_KEY_KEYCHAIN_KEY)
             .map_err(|e| SecretManagerError::Keychain(e.to_string()))?;
 

@@ -256,6 +256,8 @@
     "previewTitle": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "polishPreviewTitle": "폴리싱 미리보기",
     "polishCancelled": "폴리싱이 취소되었습니다.",
+    "applyCancelledProjectSwitched": "프로젝트가 전환되어 적용을 취소했습니다.",
+    "applyCancelledDocChanged": "번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.",
     "applySelected": "선택한 {{count}}개 적용",
     "selectiveDiff": {
       "changedCount": "변경 {{total}}개 중 {{selected}}개 선택",

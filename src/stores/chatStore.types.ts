@@ -152,11 +152,20 @@ export interface ChatActions {
 
   // Persistence (project-scoped)
   hydrateForProject: (projectId: string | null) => Promise<void>;
+  /**
+   * debounce 타이머를 취소하고 즉시 저장합니다 (Safe Exit 등).
+   * projectId 재검증은 persistNow 내부(loadedProjectId/isHydrating 검사)에서 수행됩니다.
+   */
+  flushPersist: () => Promise<void>;
 
   // Streaming 상태 관리 (성능 최적화: 배열 갱신 없이 단일 필드만 업데이트)
   setStreamingContent: (content: string) => void;
   setStreamingMetadata: (metadata: ChatMessage['metadata']) => void;
-  finalizeStreaming: () => void;
+  /**
+   * 스트리밍 내용을 메시지 배열에 커밋합니다.
+   * assistantId를 명시 전달하면 현재 streamingMessageId와 일치할 때만 커밋합니다 (L1 소유권 가드).
+   */
+  finalizeStreaming: (assistantId?: string) => void;
 }
 
 // ── Composite Type ─────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
 mod schema;
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rusqlite::backup::Backup;
 use rusqlite::Connection;
@@ -150,7 +150,11 @@ fn validate_glossary_rows(
 }
 
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
-pub struct DbState(pub Mutex<Database>);
+///
+/// `Arc`로 감싼 이유: async 커맨드에서 `spawn_blocking` 클로저로 DB 핸들을 move하기 위함.
+/// std MutexGuard를 await 너머로 들고 갈 수 없으므로, 락은 반드시 클로저 안에서만 잡는다.
+/// (`commands::run_db_task` 참조)
+pub struct DbState(pub Arc<Mutex<Database>>);
 
 /// 데이터베이스 래퍼 (commands::AcquireDb trait에서 MutexGuard<Database> 반환용으로 pub)
 pub struct Database {
@@ -661,7 +665,7 @@ impl Database {
 
     /// 채팅 세션을 프로젝트에 저장 (최대 5개 유지)
     /// - 정책: 최근 활동(마지막 메시지 timestamp) 기준으로 정렬 후 상위 5개만 저장
-    /// - 세션당 메시지는 최근 30개만 저장 (스토리지 부담 방지)
+    /// - 세션당 메시지는 최근 MAX_MESSAGES_PER_SESSION(100)개만 저장 (스토리지 부담 방지)
     pub fn save_chat_sessions(
         &self,
         project_id: &str,
@@ -959,6 +963,38 @@ impl Database {
             "DELETE FROM blocks WHERE id = ?1 AND project_id = ?2",
             [block_id, project_id],
         )?;
+        Ok(())
+    }
+
+    /// 블록 분할 결과를 단일 트랜잭션으로 저장.
+    /// update와 insert 중 하나만 성공하면 콘텐츠가 중복/유실되므로 원자적으로 커밋한다.
+    pub fn apply_block_split(
+        &self,
+        updated_original: &EditorBlock,
+        new_block: &EditorBlock,
+        project_id: &str,
+    ) -> Result<(), IteError> {
+        let tx = self.conn.unchecked_transaction()?;
+        self.update_block(updated_original, project_id)?;
+        self.insert_block(new_block, project_id)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// 블록 병합 결과를 단일 트랜잭션으로 저장.
+    /// 병합 블록 업데이트와 나머지 블록 삭제가 부분 실패하면 콘텐츠가 중복되므로 원자적으로 커밋한다.
+    pub fn apply_block_merge(
+        &self,
+        merged_block: &EditorBlock,
+        removed_block_ids: &[String],
+        project_id: &str,
+    ) -> Result<(), IteError> {
+        let tx = self.conn.unchecked_transaction()?;
+        self.update_block(merged_block, project_id)?;
+        for block_id in removed_block_ids {
+            self.delete_block(block_id, project_id)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

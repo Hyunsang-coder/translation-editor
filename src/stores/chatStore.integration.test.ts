@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   createChatModel: vi.fn(),
   searchGlossary: vi.fn(),
   webInvoke: vi.fn(),
+  attachFile: vi.fn(),
+  deleteAttachment: vi.fn(),
+  listAttachments: vi.fn(),
+  previewAttachment: vi.fn(),
+  readImageAsDataUrl: vi.fn(),
 }));
 
 vi.mock('@/ai/chat', () => ({
@@ -24,6 +29,14 @@ vi.mock('@/ai/client', () => ({
 
 vi.mock('@/tauri/glossary', () => ({
   searchGlossary: mocks.searchGlossary,
+}));
+
+vi.mock('@/tauri/attachments', () => ({
+  attachFile: mocks.attachFile,
+  deleteAttachment: mocks.deleteAttachment,
+  listAttachments: mocks.listAttachments,
+  previewAttachment: mocks.previewAttachment,
+  readImageAsDataUrl: mocks.readImageAsDataUrl,
 }));
 
 /**
@@ -72,6 +85,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       currentSessionId: null,
       currentSession: null,
       isLoading: false,
+      isAttachmentLoading: false,
       isFinalizingStreaming: false,
       streamingMessageId: null,
       streamingSessionId: null,
@@ -81,6 +95,8 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       statusMessage: null,
       abortController: null,
       composerAttachments: [],
+      attachments: [],
+      loadedProjectId: null,
       webSearchEnabled: true,
     });
   });
@@ -325,6 +341,170 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         }),
         expect.any(Object),
       );
+    });
+  });
+
+  describe('L1: 스트림 완료 경로 소유권(epoch) 가드', () => {
+    it('취소 후 늦게 resolve된 요청 A가 새 요청 B의 스트리밍 상태를 덮지 않음', async () => {
+      // Arrange: 세션 + 지연 resolve 가능한 스트림 2개
+      useChatStore.getState().createSession('Chat');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      let resolveA!: (value: string) => void;
+      let resolveB!: (value: string) => void;
+      mocks.streamAssistantReply
+        .mockImplementationOnce(() => new Promise<string>((res) => { resolveA = res; }))
+        .mockImplementationOnce(() => new Promise<string>((res) => { resolveB = res; }));
+
+      // Act 1: 요청 A 시작
+      const promiseA = useChatStore.getState().sendMessage('A 질문', sessionId);
+      await vi.waitFor(() => {
+        expect(useChatStore.getState().streamingMessageId).not.toBeNull();
+      });
+      const userMessageA = useChatStore
+        .getState()
+        .sessions.find((s) => s.id === sessionId)!
+        .messages.find((m) => m.role === 'user')!;
+
+      // Act 2: A 취소 (deleteMessageFrom = 실제 취소 트리거와 동일 경로)
+      useChatStore.getState().deleteMessageFrom(userMessageA.id, sessionId);
+      expect(useChatStore.getState().abortController).toBeNull();
+
+      // Act 3: 새 요청 B 시작
+      const promiseB = useChatStore.getState().sendMessage('B 질문', sessionId);
+      await vi.waitFor(() => {
+        expect(useChatStore.getState().streamingMessageId).not.toBeNull();
+      });
+      const bPlaceholderId = useChatStore.getState().streamingMessageId!;
+      const bController = useChatStore.getState().abortController;
+      expect(bController).not.toBeNull();
+
+      // Act 4: A가 뒤늦게 정상 resolve (마지막 청크 후 abort된 시나리오)
+      resolveA('A 응답');
+      await promiseA;
+
+      // Assert: A의 후속 코드가 B의 진행 상태를 파괴하지 않음
+      const stateAfterA = useChatStore.getState();
+      expect(stateAfterA.streamingMessageId).toBe(bPlaceholderId);
+      expect(stateAfterA.abortController).toBe(bController);
+      expect(stateAfterA.isLoading).toBe(true);
+      const bPlaceholderAfterA = stateAfterA.sessions
+        .find((s) => s.id === sessionId)!
+        .messages.find((m) => m.id === bPlaceholderId)!;
+      expect(bPlaceholderAfterA.content).toBe(''); // A의 내용이 B placeholder에 커밋되지 않음
+
+      // Act 5: B 정상 완료
+      resolveB('B 응답');
+      await promiseB;
+
+      // Assert: B의 응답만 커밋되고 A의 응답은 어디에도 없음
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)!;
+      const bMessage = session.messages.find((m) => m.id === bPlaceholderId)!;
+      expect(bMessage.content).toBe('B 응답');
+      expect(session.messages.some((m) => m.content === 'A 응답')).toBe(false);
+      expect(useChatStore.getState().isLoading).toBe(false);
+      expect(useChatStore.getState().abortController).toBeNull();
+    });
+
+    it('abort된 요청의 빈 assistant placeholder가 제거됨 (L5)', async () => {
+      // Arrange: abort 시 AbortError로 reject되는 스트림
+      useChatStore.getState().createSession('Chat');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      mocks.streamAssistantReply.mockImplementationOnce(
+        (input: { abortSignal?: AbortSignal }) =>
+          new Promise<string>((_res, reject) => {
+            input.abortSignal?.addEventListener('abort', () => {
+              reject(new DOMException('Request aborted', 'AbortError'));
+            });
+          }),
+      );
+
+      // Act: 전송 후 abort
+      const promise = useChatStore.getState().sendMessage('안녕하세요', sessionId);
+      await vi.waitFor(() => {
+        expect(useChatStore.getState().streamingMessageId).not.toBeNull();
+      });
+      useChatStore.getState().abortController!.abort();
+      await promise;
+
+      // Assert: 빈 placeholder는 제거되고 사용자 메시지만 남음, 상태 리셋
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)!;
+      expect(session.messages).toHaveLength(1);
+      expect(session.messages[0]?.role).toBe('user');
+      expect(useChatStore.getState().isLoading).toBe(false);
+      expect(useChatStore.getState().streamingMessageId).toBeNull();
+      expect(useChatStore.getState().abortController).toBeNull();
+      expect(useChatStore.getState().error).toBeNull();
+    });
+
+    it('finalizeStreaming은 명시된 assistantId가 현재 스트리밍 메시지와 다르면 커밋하지 않음', () => {
+      // Arrange: placeholder + 스트리밍 상태
+      useChatStore.getState().createSession('Chat');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      const placeholderId = useChatStore
+        .getState()
+        .addMessage({ role: 'assistant', content: '' }, sessionId)!;
+      useChatStore.setState({
+        streamingMessageId: placeholderId,
+        streamingSessionId: sessionId,
+        streamingContent: '스트리밍 내용',
+        isLoading: true,
+      });
+
+      // Act 1: 다른 id로 finalize 시도 → 무시
+      useChatStore.getState().finalizeStreaming('other-message-id');
+
+      // Assert 1: 커밋되지 않고 스트리밍 상태 유지
+      const sessionAfterMismatch = useChatStore.getState().sessions.find((s) => s.id === sessionId)!;
+      expect(sessionAfterMismatch.messages.find((m) => m.id === placeholderId)?.content).toBe('');
+      expect(useChatStore.getState().streamingMessageId).toBe(placeholderId);
+      expect(useChatStore.getState().isLoading).toBe(true);
+
+      // Act 2: 올바른 id로 finalize → 커밋
+      useChatStore.getState().finalizeStreaming(placeholderId);
+
+      // Assert 2
+      const sessionAfterCommit = useChatStore.getState().sessions.find((s) => s.id === sessionId)!;
+      expect(sessionAfterCommit.messages.find((m) => m.id === placeholderId)?.content).toBe('스트리밍 내용');
+      expect(useChatStore.getState().streamingMessageId).toBeNull();
+      expect(useChatStore.getState().isLoading).toBe(false);
+    });
+  });
+
+  describe('L5: attachFile 프로젝트 전환 가드', () => {
+    const attachmentDto = {
+      id: 'att-1',
+      filename: 'doc.pdf',
+      fileType: 'pdf',
+      fileSize: 100,
+      extractedTextLength: 10,
+      filePath: '/tmp/doc.pdf',
+      createdAt: 0,
+      updatedAt: 0,
+    };
+
+    it('첨부 처리 중 프로젝트가 전환되면 첨부 목록에 append하지 않음 (유령 첨부 방지)', async () => {
+      useChatStore.setState({ loadedProjectId: 'project-a', attachments: [] });
+      mocks.attachFile.mockImplementation(async () => {
+        // 첨부 저장 중 프로젝트 전환 시뮬레이션
+        useChatStore.setState({ loadedProjectId: 'project-b' });
+        return attachmentDto;
+      });
+
+      await useChatStore.getState().attachFile('/tmp/doc.pdf');
+
+      expect(useChatStore.getState().attachments).toHaveLength(0);
+    });
+
+    it('프로젝트가 유지되면 정상적으로 append', async () => {
+      useChatStore.setState({ loadedProjectId: 'project-a', attachments: [] });
+      mocks.attachFile.mockResolvedValue(attachmentDto);
+
+      await useChatStore.getState().attachFile('/tmp/doc.pdf');
+
+      expect(useChatStore.getState().attachments).toHaveLength(1);
+      expect(useChatStore.getState().isAttachmentLoading).toBe(false);
     });
   });
 });

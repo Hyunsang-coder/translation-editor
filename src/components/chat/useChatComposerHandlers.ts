@@ -3,7 +3,6 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { readNativeClipboardImageBlob } from '@/tauri/clipboardImage';
 import { saveTempImage } from '@/tauri/attachments';
 import { pickChatAttachmentFile } from '@/tauri/dialog';
-import { fileToBytes } from '@/utils/fileUtils';
 import {
   extractClipboardImageFromDataTransfer,
   type ClipboardImagePayload,
@@ -13,8 +12,8 @@ async function attachClipboardImage(
   image: ClipboardImagePayload,
   addComposerAttachment: (path: string) => Promise<void>,
 ): Promise<void> {
-  const bytes = await fileToBytes(image.blob);
-  const path = await saveTempImage(bytes, image.filename);
+  // P5: Blob → base64 문자열로 직접 IPC (number[] 직렬화 프리즈 방지)
+  const path = await saveTempImage(image.blob, image.filename);
   await addComposerAttachment(path);
 }
 

@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 import type { ChatStore } from './chatStore.types';
 import { DEFAULT_TRANSLATOR_PERSONA } from './chatStore.types';
-import { createPersistHelpers } from './chatStore.persist';
+import { createPersistHelpers, clearPersistTimer } from './chatStore.persist';
 import { createSessionActions, createMessageActions } from './chatStore.session';
 import { createAiActions, createStreamingActions } from './chatStore.ai';
 import {
@@ -82,6 +82,13 @@ export const useChatStore = create<ChatStore>((set, get) => {
     ...contextBlockActions,
     ...attachmentActions,
     ...utilityActions,
+
+    // ── Persistence flush (Safe Exit 등 즉시 저장 경로) ────────────────
+    // debounce 타이머를 취소하고 즉시 저장. projectId 재검증은 persistNow 내부에서 수행.
+    flushPersist: async (): Promise<void> => {
+      clearPersistTimer();
+      await persistNow();
+    },
   };
 });
 

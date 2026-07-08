@@ -17,7 +17,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 type ToolCallableSpec = { name: string; invoke: (arg: Record<string, unknown>) => Promise<unknown> };
 import { v4 as uuidv4 } from 'uuid';
 import { isTauriRuntime } from '@/tauri/invoke';
-import { readFileBytes } from '@/tauri/attachments';
+import { readFileBase64 } from '@/tauri/attachments';
 import { extractChunkContent } from '@/ai/extractChunkContent';
 
 function uniqueStrings(items: string[]): string[] {
@@ -801,16 +801,6 @@ function isImageExt(ext: string): boolean {
   return e === 'png' || e === 'jpg' || e === 'jpeg' || e === 'webp' || e === 'gif';
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  // btoa는 Latin-1 문자열을 기대하므로 chunk로 변환합니다.
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
 async function maybeReplaceLastHumanMessageWithImages(params: {
   messages: BaseMessage[];
   userText: string;
@@ -843,16 +833,15 @@ async function maybeReplaceLastHumanMessageWithImages(params: {
       if (img.thumbnailDataUrl) {
         dataUrl = img.thumbnailDataUrl;
       } else if (img.filePath && isTauriRuntime()) {
-        // 없으면 원본 파일을 읽어서 base64 변환
-        const raw = await readFileBytes(img.filePath);
-        const bytes = new Uint8Array(raw);
-        if (bytes.length > MAX_IMAGE_BYTES) {
-          const sizeMB = (bytes.length / 1024 / 1024).toFixed(1);
+        // 없으면 원본 파일을 base64로 읽음 (number[] JSON IPC 회피, P5)
+        const base64 = await readFileBase64(img.filePath);
+        const approxBytes = Math.ceil((base64.length * 3) / 4);
+        if (approxBytes > MAX_IMAGE_BYTES) {
+          const sizeMB = (approxBytes / 1024 / 1024).toFixed(1);
           const limitMB = (MAX_IMAGE_BYTES / 1024 / 1024).toFixed(0);
           warnings.push(`- ${img.filename}: 파일이 너무 커서(${sizeMB}MB, ${providerName} 최대 ${limitMB}MB) 제외됨`);
           continue;
         }
-        const base64 = bytesToBase64(bytes);
         const ext = img.fileType.toLowerCase() === 'jpg' ? 'jpeg' : img.fileType.toLowerCase();
         dataUrl = `data:image/${ext};base64,${base64}`;
       } else {

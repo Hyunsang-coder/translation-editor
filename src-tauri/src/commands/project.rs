@@ -1,11 +1,14 @@
 //! Project Commands
 //!
 //! 프로젝트 관리 관련 Tauri 명령어
+//!
+//! save_project는 blocks 전량 delete+insert를 수행하므로, 메인 스레드 실행 시
+//! 대형 문서에서 UI가 얼어붙는다. 모든 커맨드를 async + `run_db_task`로 실행한다.
 
 use serde::Deserialize;
 use tauri::State;
 
-use super::AcquireDb;
+use super::run_db_task;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::IteProject;
@@ -26,9 +29,9 @@ pub struct LoadProjectArgs {
 
 /// 새 프로젝트 생성
 #[tauri::command]
-pub fn create_project(
+pub async fn create_project(
     args: CreateProjectArgs,
-    db_state: State<DbState>,
+    db_state: State<'_, DbState>,
 ) -> CommandResult<IteProject> {
     let now = chrono::Utc::now().timestamp_millis();
     let project_id = uuid::Uuid::new_v4().to_string();
@@ -109,28 +112,33 @@ pub fn create_project(
         blocks,
     };
 
-    let db = db_state.acquire()?;
-
-    db.save_project(&project).map_err(CommandError::from)?;
-
-    Ok(project)
+    run_db_task(&db_state, move |db| {
+        db.save_project(&project).map_err(CommandError::from)?;
+        Ok(project)
+    })
+    .await
 }
 
 /// 프로젝트 로드
 #[tauri::command]
-pub fn load_project(args: LoadProjectArgs, db_state: State<DbState>) -> CommandResult<IteProject> {
-    let db = db_state.acquire()?;
-
-    db.load_project(&args.project_id)
-        .map_err(CommandError::from)
+pub async fn load_project(
+    args: LoadProjectArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<IteProject> {
+    run_db_task(&db_state, move |db| {
+        db.load_project(&args.project_id)
+            .map_err(CommandError::from)
+    })
+    .await
 }
 
 /// 프로젝트 저장
 #[tauri::command]
-pub fn save_project(project: IteProject, db_state: State<DbState>) -> CommandResult<()> {
-    let db = db_state.acquire()?;
-
-    db.save_project(&project).map_err(CommandError::from)
+pub async fn save_project(project: IteProject, db_state: State<'_, DbState>) -> CommandResult<()> {
+    run_db_task(&db_state, move |db| {
+        db.save_project(&project).map_err(CommandError::from)
+    })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,92 +149,93 @@ pub struct DuplicateProjectArgs {
 
 /// 프로젝트 복제
 #[tauri::command]
-pub fn duplicate_project(
+pub async fn duplicate_project(
     args: DuplicateProjectArgs,
-    db_state: State<DbState>,
+    db_state: State<'_, DbState>,
 ) -> CommandResult<IteProject> {
-    let db = db_state.acquire()?;
+    run_db_task(&db_state, move |db| {
+        let original = db
+            .load_project(&args.project_id)
+            .map_err(CommandError::from)?;
+        let now = chrono::Utc::now().timestamp_millis();
+        let new_project_id = uuid::Uuid::new_v4().to_string();
 
-    let original = db
-        .load_project(&args.project_id)
-        .map_err(CommandError::from)?;
-    let now = chrono::Utc::now().timestamp_millis();
-    let new_project_id = uuid::Uuid::new_v4().to_string();
+        // 기존 block ID → 새 block ID 매핑
+        let mut block_id_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for old_id in original.blocks.keys() {
+            block_id_map.insert(old_id.clone(), uuid::Uuid::new_v4().to_string());
+        }
 
-    // 기존 block ID → 새 block ID 매핑
-    let mut block_id_map: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    for old_id in original.blocks.keys() {
-        block_id_map.insert(old_id.clone(), uuid::Uuid::new_v4().to_string());
-    }
-
-    // 블록 복제 (새 ID 발급)
-    let mut new_blocks = std::collections::HashMap::new();
-    for (old_id, block) in &original.blocks {
-        let new_id = block_id_map[old_id].clone();
-        new_blocks.insert(
-            new_id.clone(),
-            crate::models::EditorBlock {
-                id: new_id,
-                block_type: block.block_type.clone(),
-                content: block.content.clone(),
-                hash: block.hash.clone(),
-                metadata: crate::models::BlockMetadata {
-                    author: block.metadata.author.clone(),
-                    created_at: now,
-                    updated_at: now,
-                    tags: block.metadata.tags.clone(),
-                    comments: block.metadata.comments.clone(),
+        // 블록 복제 (새 ID 발급)
+        let mut new_blocks = std::collections::HashMap::new();
+        for (old_id, block) in &original.blocks {
+            let new_id = block_id_map[old_id].clone();
+            new_blocks.insert(
+                new_id.clone(),
+                crate::models::EditorBlock {
+                    id: new_id,
+                    block_type: block.block_type.clone(),
+                    content: block.content.clone(),
+                    hash: block.hash.clone(),
+                    metadata: crate::models::BlockMetadata {
+                        author: block.metadata.author.clone(),
+                        created_at: now,
+                        updated_at: now,
+                        tags: block.metadata.tags.clone(),
+                        comments: block.metadata.comments.clone(),
+                    },
                 },
+            );
+        }
+
+        // 세그먼트 복제 (새 ID + block ID 매핑)
+        let new_segments: Vec<crate::models::SegmentGroup> = original
+            .segments
+            .iter()
+            .map(|seg| crate::models::SegmentGroup {
+                group_id: uuid::Uuid::new_v4().to_string(),
+                source_ids: seg
+                    .source_ids
+                    .iter()
+                    .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
+                    .collect(),
+                target_ids: seg
+                    .target_ids
+                    .iter()
+                    .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
+                    .collect(),
+                is_aligned: seg.is_aligned,
+                order: seg.order,
+            })
+            .collect();
+
+        let new_project = IteProject {
+            id: new_project_id,
+            version: original.version.clone(),
+            metadata: crate::models::ProjectMetadata {
+                title: format!("{} (copy)", original.metadata.title),
+                description: original.metadata.description.clone(),
+                domain: original.metadata.domain.clone(),
+                target_language: original.metadata.target_language.clone(),
+                created_at: now,
+                updated_at: now,
+                author: original.metadata.author.clone(),
+                glossary_paths: original.metadata.glossary_paths.clone(),
+                settings: original.metadata.settings.clone(),
             },
-        );
-    }
+            segments: new_segments,
+            blocks: new_blocks,
+        };
 
-    // 세그먼트 복제 (새 ID + block ID 매핑)
-    let new_segments: Vec<crate::models::SegmentGroup> = original
-        .segments
-        .iter()
-        .map(|seg| crate::models::SegmentGroup {
-            group_id: uuid::Uuid::new_v4().to_string(),
-            source_ids: seg
-                .source_ids
-                .iter()
-                .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
-                .collect(),
-            target_ids: seg
-                .target_ids
-                .iter()
-                .map(|id| block_id_map.get(id).cloned().unwrap_or_else(|| id.clone()))
-                .collect(),
-            is_aligned: seg.is_aligned,
-            order: seg.order,
-        })
-        .collect();
+        db.save_project(&new_project).map_err(CommandError::from)?;
 
-    let new_project = IteProject {
-        id: new_project_id,
-        version: original.version.clone(),
-        metadata: crate::models::ProjectMetadata {
-            title: format!("{} (copy)", original.metadata.title),
-            description: original.metadata.description.clone(),
-            domain: original.metadata.domain.clone(),
-            target_language: original.metadata.target_language.clone(),
-            created_at: now,
-            updated_at: now,
-            author: original.metadata.author.clone(),
-            glossary_paths: original.metadata.glossary_paths.clone(),
-            settings: original.metadata.settings.clone(),
-        },
-        segments: new_segments,
-        blocks: new_blocks,
-    };
+        // 채팅 프로젝트 설정 복제 (시스템 프롬프트, 레퍼런스 노트 등)
+        if let Ok(Some(settings_json)) = db.load_chat_project_settings(&args.project_id) {
+            let _ = db.save_chat_project_settings(&new_project.id, &settings_json, now);
+        }
 
-    db.save_project(&new_project).map_err(CommandError::from)?;
-
-    // 채팅 프로젝트 설정 복제 (시스템 프롬프트, 레퍼런스 노트 등)
-    if let Ok(Some(settings_json)) = db.load_chat_project_settings(&args.project_id) {
-        let _ = db.save_chat_project_settings(&new_project.id, &settings_json, now);
-    }
-
-    Ok(new_project)
+        Ok(new_project)
+    })
+    .await
 }

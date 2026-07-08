@@ -123,7 +123,12 @@ impl NotionClient {
             page_size: page_size.or(Some(20)),
         };
 
-        info!("[Notion] Searching: {:?}", request_body);
+        // 검색어 원문은 준민감 정보이므로 로깅하지 않는다 (길이/옵션만 기록)
+        info!(
+            "[Notion] Searching (query_len: {}, page_size: {:?})",
+            request_body.query.as_deref().map(str::len).unwrap_or(0),
+            request_body.page_size
+        );
 
         let response = self
             .http

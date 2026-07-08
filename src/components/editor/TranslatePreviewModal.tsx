@@ -18,6 +18,7 @@ import DOMPurify from 'dompurify';
 import { stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
 import type { TipTapDocJson } from '@/ai/translateDocument';
+import { useTranslationPreviewStore, type PreviewStreamingChannel } from '@/stores/translationPreviewStore';
 import { VisualDiffViewer } from '@/components/ui/VisualDiffViewer';
 import { SelectiveDiffList } from '@/components/editor/SelectiveDiffList';
 import { buildDocDiffPlan, mergeDocBySelection } from '@/utils/docBlockDiff';
@@ -67,8 +68,14 @@ interface TranslatePreviewModalProps {
   error?: string | null;
   /** 청크 분할 번역 진행률 */
   progress?: { completed: number; total: number } | null;
-  /** 스트리밍 중 실시간 Markdown 텍스트 */
+  /** 스트리밍 중 실시간 Markdown 텍스트 (prop 경로 — ReviewPanel 등 기존 호출부 호환) */
   streamingText?: string | null;
+  /**
+   * P4: 스트리밍 텍스트를 translationPreviewStore 채널에서 직접 구독.
+   * 지정 시 모달만 토큰 델타로 리렌더되고, 캔버스(부모)는 리렌더되지 않는다.
+   * streamingText prop보다 우선한다.
+   */
+  streamingChannel?: PreviewStreamingChannel;
   /** 선택 적용 모드: 결과와 비교할 원본 Target 문서 JSON (onApplySelective와 함께 제공 시 변경사항 탭에서 문단별 선택 가능) */
   originalDocJson?: TipTapDocJson | null;
   /** 선택된 변경 그룹만 병합한 문서로 적용 */
@@ -103,7 +110,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     isLoading,
     error,
     progress,
-    streamingText,
+    streamingText: streamingTextProp,
+    streamingChannel,
     originalDocJson,
     onApplySelective,
     onClose,
@@ -111,6 +119,12 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     onCancel,
     onRetry,
   } = props;
+
+  // P4: 채널이 지정되면 store를 직접 구독(캔버스 리렌더 없이 모달만 갱신), 아니면 prop 사용
+  const streamingTextFromStore = useTranslationPreviewStore((s) =>
+    streamingChannel ? s.streaming[streamingChannel] : null,
+  );
+  const streamingText = streamingChannel ? streamingTextFromStore : streamingTextProp;
 
   const [viewMode, setViewMode] = useState<'preview' | 'diff'>(() => {
     // originalHtml이 있고 내용이 있으면 기본적으로 diff 모드

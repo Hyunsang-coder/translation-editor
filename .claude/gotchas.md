@@ -76,7 +76,7 @@ Critical implementation warnings learned from past issues.
 
 30. **Review Streaming Text State**: `reviewStore.streamingText` stores current chunk's AI response for real-time display. Updated via `onToken` callback in `runReview()`. Preserved after completion for debugging.
 
-31. **Review Severity Filter**: `reviewStore.severityFilter`는 `Set<IssueSeverity>`로 기본값 `['critical', 'major']`. 프롬프트는 항상 모든 이슈(Critical/Major/Minor) 검출하고 UI에서 severity 필터로 표시 제어. `ReviewIntensity` 타입은 삭제됨 — LLM이 프롬프트 필터링 지시를 무시하는 문제 때문에 UI 필터링으로 전환.
+31. **Review Severity Filter**: `reviewStore.severityFilter`는 `IssueSeverity[]`로 기본값 `['critical', 'major', 'minor']`(전부 표시). 프롬프트는 항상 모든 이슈(Critical/Major/Minor) 검출하고 UI에서 severity 필터로 표시 제어. `ReviewIntensity` 타입은 삭제됨 — LLM이 프롬프트 필터링 지시를 무시하는 문제 때문에 UI 필터링으로 전환.
 
 32. **Review API Optimization**: Use `runReview()` from `src/ai/review/runReview.ts` for review operations instead of chat infrastructure. This bypasses tool calling and Responses API for significantly faster response times.
 
@@ -238,7 +238,7 @@ Critical implementation warnings learned from past issues.
 
 88. **shouldNormalizePastedHtml 보안 검사**: `style=`, `javascript:`, `data:text`, `data:application` 포함 여부를 검사하여 인라인 스타일 변환 및 XSS 공격 차단. 단순 텍스트는 정규화 건너뜀.
 
-89. **SQLite WAL Mode**: `Database::new()`에서 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;` 설정. 쓰기 중 읽기 가능, 동시성 대폭 향상. 단일 Mutex 연결 병목 완화.
+89. **SQLite WAL Mode**: `Database::new()`에서 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;` 설정. 단, 앱은 커넥션 1개를 `Arc<Mutex<Database>>`로 공유하므로 앱 내부 읽기/쓰기는 어차피 직렬화됨. WAL의 실익은 크래시 내구성과 외부 프로세스 리더(백업 등)이며, 앱 내부 동시성 향상은 없음.
 
 117. **SQLite Migration Pattern**: `db/mod.rs`의 `run_migrations()`에서 `SELECT column FROM table LIMIT 0`으로 컬럼 존재 여부 확인 후 `ALTER TABLE ADD COLUMN` 실행. `CREATE TABLE IF NOT EXISTS`는 새 DB에만 적용되므로, 기존 DB에는 별도 마이그레이션 필요.
 

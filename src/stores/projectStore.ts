@@ -22,6 +22,7 @@ import { htmlToTipTapJson } from '@/utils/markdownConverter';
 import { useEditorStore } from '@/stores/editorStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useCommentStore } from '@/stores/commentStore';
+import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 
 // ============================================
 // Store State Interface
@@ -63,26 +64,6 @@ interface ProjectState {
    * - generateText()로 plain text 추출 가능 (stripHtml보다 성능 우수)
    */
   targetDocJson: TipTapDocJson | null;
-
-  /**
-   * Target 단일 문서에서 Apply를 위한 pending diff (1차: offset 기반)
-   */
-  pendingDocDiff: null | {
-    startOffset: number;
-    endOffset: number;
-    originalText: string;
-    suggestedText: string;
-    sessionId?: string;
-    /**
-     * Monaco tracked range decoration id (비영속)
-     * - 사용자가 다른 곳을 편집해도 범위가 따라가도록, accept 시점에 최신 offset을 재계산하는 용도
-     */
-    trackedDecorationId?: string;
-    /**
-     * 어떤 assistant message로부터 생성되었는지(연결용)
-     */
-    originMessageId?: string;
-  };
 
   /**
    * Pending Edit 세션 기록
@@ -153,16 +134,6 @@ interface ProjectActions {
   rebuildTargetDocument: () => void;
   rebuildSourceDocument: () => void;
 
-  // Diff preview (Target 단일 문서)
-  openDocDiffPreview: (params: {
-    startOffset: number;
-    endOffset: number;
-    suggestedText: string;
-    originMessageId?: string;
-  }) => void;
-  setPendingDocDiffTrackedDecorationId: (params: { sessionId: string; decorationId: string }) => void;
-  acceptDocDiff: () => void;
-  rejectDocDiff: () => void;
   finalizeEditSession: (params: { sessionId: string; status: EditSession['status'] }) => void;
 
   // Apply Anchor (요청 시점에 위치 추적)
@@ -219,6 +190,48 @@ let autoSaveInFlight = false;
 let saveInFlight: Promise<void> | null = null;
 let saveQueued = false;
 let hydrateCommentsRequestSeq = 0;
+// L5: 프로젝트 전환 세대 토큰 — 연속 전환 시 마지막 요청만 반영(last-click-wins)
+let switchProjectSeq = 0;
+
+// ─── 에디터 debounce 동기화 flush 훅 (P1) ────────────────────────────────────
+// TipTapEditor의 onChange/onJsonChange는 타이핑 성능을 위해 디바운스된다.
+// 저장/스냅샷/프로젝트 전환은 최신 문서가 필요하므로, 등록된 flush를 먼저 실행해
+// pending 편집을 store에 반영한다.
+
+type EditorSyncFlush = () => void;
+const editorSyncFlushes = new Set<EditorSyncFlush>();
+
+/** TipTapEditor가 마운트 시 자신의 flush 함수를 등록한다. 반환값은 해제 함수. */
+export function registerEditorSyncFlush(flush: EditorSyncFlush): () => void {
+  editorSyncFlushes.add(flush);
+  return () => {
+    editorSyncFlushes.delete(flush);
+  };
+}
+
+/** 등록된 모든 에디터의 pending onChange/onJsonChange를 즉시 store에 반영한다. */
+export function flushPendingEditorSyncs(): void {
+  for (const flush of Array.from(editorSyncFlushes)) {
+    try {
+      flush();
+    } catch {
+      // flush 실패가 저장/전환을 막지 않도록 무시
+    }
+  }
+}
+
+// 문서 동기화 세대(epoch): 프로젝트가 교체될 때마다 증가한다.
+// 이전 프로젝트에서 스케줄된 디바운스 flush가 늦게 도착해 새 프로젝트 문서를
+// 덮어쓰지 않도록, TipTapEditor는 스케줄 시점의 epoch와 발화 시점의 epoch를 비교한다.
+let docSyncEpoch = 0;
+
+export function getDocSyncEpoch(): number {
+  return docSyncEpoch;
+}
+
+function bumpDocSyncEpoch(): void {
+  docSyncEpoch++;
+}
 
 /**
  * 두 에디터의 현재 문서에서 살아있는 commentId 집합을 수집.
@@ -412,13 +425,13 @@ export const useProjectStore = create<ProjectStore>()(
       sourceDocument: '',
       sourceDocJson: null,
       targetDocJson: null,
-      pendingDocDiff: null,
       targetDocHandle: null,
       editSessions: [],
       applyAnchor: null,
 
       // 프로젝트 초기화
       initializeProject: async (): Promise<void> => {
+        bumpDocSyncEpoch();
         set({ isLoading: true, error: null });
         try {
           const { lastProjectId } = get();
@@ -613,11 +626,16 @@ export const useProjectStore = create<ProjectStore>()(
       // 이전 프로젝트를 저장하려면 호출 전에 saveProject()를 먼저 호출하거나,
       // switchProjectById()를 사용하세요.
       loadProject: (project: ITEProject, options?: { hydrateComments?: boolean }): void => {
+        // P1: 프로젝트 교체 세대 증가 — 이전 프로젝트에서 스케줄된 에디터 디바운스 flush가
+        // 늦게 발화해 새 프로젝트 문서를 덮어쓰는 것을 방지
+        bumpDocSyncEpoch();
         // write-through 타이머 취소 (이전 프로젝트가 새 프로젝트 상태로 저장되는 것 방지)
         if (writeThroughTimer !== null) {
           window.clearTimeout(writeThroughTimer);
           writeThroughTimer = null;
         }
+        // L3: 이전 프로젝트 기준의 Desktop 번역 프리뷰가 새 프로젝트 위에 남지 않도록 정리
+        useTranslationPreviewStore.getState().clearPreview();
 
         const td = buildTargetDocument(project);
         const sd = buildSourceDocument(project);
@@ -632,8 +650,7 @@ export const useProjectStore = create<ProjectStore>()(
           // AI 도구용 TipTap JSON 초기화 (에디터 마운트 전에도 접근 가능)
           sourceDocJson: htmlToTipTapJson(sd.text),
           targetDocJson: htmlToTipTapJson(td.text),
-          // pendingDocDiff / pendingDiffs 초기화 (이전 프로젝트의 diff가 남아있으면 문제)
-          pendingDocDiff: null,
+          // pendingDiffs 초기화 (이전 프로젝트의 diff가 남아있으면 문제)
           pendingDiffs: {},
           editSessions: [],
         });
@@ -664,6 +681,9 @@ export const useProjectStore = create<ProjectStore>()(
         createAndSetNewProject();
 
         function createAndSetNewProject(): void {
+          bumpDocSyncEpoch();
+          // L3: 이전 프로젝트 기준의 Desktop 번역 프리뷰 정리
+          useTranslationPreviewStore.getState().clearPreview();
           const initialProject = createInitialProject();
           const nextProject: ITEProject = {
             ...initialProject,
@@ -698,6 +718,8 @@ export const useProjectStore = create<ProjectStore>()(
         }
 
         const saveOnce = async (): Promise<void> => {
+          // P1: 디바운스로 아직 store에 반영되지 않은 에디터 편집을 스냅샷 전에 flush
+          flushPendingEditorSyncs();
           const snapshot = get();
           const { project, targetDocument, sourceDocument, targetDocHandle } = snapshot;
 
@@ -736,6 +758,7 @@ export const useProjectStore = create<ProjectStore>()(
 
             const current = get();
             if (current.project?.id !== projectToSave.id) {
+              set({ isLoading: false, saveStatus: 'idle' });
               return;
             }
 
@@ -792,6 +815,9 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       materializeBlocksForSnapshot: (): Record<string, EditorBlock> | null => {
+        // P1: 스냅샷 호출부(번역/폴리싱 적용 직후, 히스토리 자동 스냅샷 등)가 디바운스로
+        // 뒤처진 문서를 캡처하지 않도록 pending 에디터 동기화를 먼저 flush한다.
+        flushPendingEditorSyncs();
         const { project, targetDocument, sourceDocument, targetDocHandle } = get();
         if (!project) return null;
         // now=0 고정: snapshot hash 비교용이므로 timestamp가 달라지면 안 됨
@@ -806,31 +832,45 @@ export const useProjectStore = create<ProjectStore>()(
 
       // 프로젝트 전환(auto-save-and-switch)
       switchProjectById: async (projectId: string): Promise<void> => {
-        const { project, isDirty, stopAutoSave, startAutoSave, saveProject, loadProject } = get();
+        const { project, stopAutoSave, startAutoSave, saveProject, loadProject } = get();
         if (!projectId) return;
         if (project?.id === projectId) return;
 
+        // L5: 전환 세대 토큰 — 전환이 겹치면(연속 클릭) 마지막 요청만 반영한다.
+        // stale 전환은 await 재개 시점에 조용히 중단해 last-click-wins를 보장한다.
+        const seq = ++switchProjectSeq;
+        const isStaleSwitch = (): boolean => seq !== switchProjectSeq;
+
         stopAutoSave();
+        // P1/L5: 디바운스로 아직 store에 반영되지 않은 에디터 편집을 먼저 flush해
+        // 아래 isDirty 판정과 저장에서 마지막 편집분이 유실되지 않게 한다.
+        flushPendingEditorSyncs();
         // 에디터 상태 정리 (이전 프로젝트의 에디터 참조 제거)
         useEditorStore.getState().clearEditors();
-        // Issue #5 수정: 프로젝트 전환 시작 시 pendingDocDiff 즉시 정리
-        // loadProject()에서도 정리하지만, 전환 시작 시점에 명시적으로 정리하여
-        // 비동기 작업 중 stale diff 참조 방지
-        set({ isLoading: true, error: null, pendingDocDiff: null });
+        // L3: 이전 프로젝트 기준의 Desktop 번역 프리뷰 정리 (loadProject에서도 정리하지만,
+        // 비동기 전환 중 stale 프리뷰가 apply되지 않도록 시작 시점에 즉시 정리)
+        useTranslationPreviewStore.getState().clearPreview();
+        set({ isLoading: true, error: null });
 
         try {
-          if (isDirty) {
+          if (get().isDirty) {
             await saveProject();
           }
+          if (isStaleSwitch()) return;
 
           const loaded = await tauriLoadProject(projectId);
+          if (isStaleSwitch()) return;
           loadProject(loaded);
 
           // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출
           // React useEffect 의존 대신 직접 호출하여 race condition 방지
+          // (hydrateForProject/hydrateCommentsForProject는 내부에 자체 세대 가드가 있어,
+          //  loadProject 반영 이후의 늦은 완료가 새 전환 상태를 덮지 않는다)
           await useChatStore.getState().hydrateForProject(loaded.id);
           await hydrateCommentsForProject(loaded.id);
         } catch (e) {
+          // stale 전환의 에러가 최신 전환의 상태를 덮지 않도록 무시
+          if (isStaleSwitch()) return;
           const switchError = e instanceof Error ? e : new Error('Failed to switch project');
           set({
             error: switchError.message,
@@ -838,10 +878,13 @@ export const useProjectStore = create<ProjectStore>()(
           });
           throw switchError;
         } finally {
-          // historyStore 상태 초기화: autoSnapshotTimer/activeProjectId 정리
-          const { useHistoryStore } = await import('@/stores/historyStore');
-          useHistoryStore.getState().reset();
-          startAutoSave();
+          // 최신 전환만 정리를 수행 (stale 전환의 finally가 진행 중인 전환을 방해하지 않도록)
+          if (!isStaleSwitch()) {
+            // historyStore 상태 초기화: autoSnapshotTimer/activeProjectId 정리
+            const { useHistoryStore } = await import('@/stores/historyStore');
+            useHistoryStore.getState().reset();
+            startAutoSave();
+          }
         }
       },
 
@@ -897,97 +940,9 @@ export const useProjectStore = create<ProjectStore>()(
         set({ sourceDocument: sd.text });
       },
 
-      openDocDiffPreview: (params): void => {
-        const { targetDocument, editSessions } = get();
-        const sessionId = uuidv4();
-        const start = Math.max(0, Math.min(params.startOffset, targetDocument.length));
-        const end = Math.max(start, Math.min(params.endOffset, targetDocument.length));
-        const originalText = targetDocument.slice(start, end);
-
-        const diff = createDiffResult(sessionId, originalText, params.suggestedText);
-
-        set({
-          pendingDocDiff: {
-            startOffset: start,
-            endOffset: end,
-            originalText,
-            suggestedText: params.suggestedText,
-            sessionId,
-            ...(params.originMessageId ? { originMessageId: params.originMessageId } : {}),
-          },
-          editSessions: [
-            ...editSessions,
-            {
-              id: sessionId,
-              createdAt: Date.now(),
-              kind: 'edit',
-              target: 'targetDocument',
-              anchorRange: { startOffset: start, endOffset: end },
-              baseText: originalText,
-              suggestedText: params.suggestedText,
-              diff,
-              status: 'pending',
-              ...(params.originMessageId ? { originMessageId: params.originMessageId } : {}),
-            },
-          ],
-        });
-      },
-
-      setPendingDocDiffTrackedDecorationId: ({ sessionId, decorationId }): void => {
-        const { pendingDocDiff } = get();
-        if (!pendingDocDiff) return;
-        if (pendingDocDiff.sessionId !== sessionId) return;
-        set({
-          pendingDocDiff: {
-            ...pendingDocDiff,
-            trackedDecorationId: decorationId,
-          },
-        });
-      },
-
-      acceptDocDiff: (): void => {
-        const { pendingDocDiff, targetDocument, targetDocHandle } = get();
-        if (!pendingDocDiff) return;
-        const { startOffset, endOffset, suggestedText, sessionId, trackedDecorationId } = pendingDocDiff;
-
-        const resolved =
-          trackedDecorationId && targetDocHandle?.getDecorationOffsets
-            ? targetDocHandle.getDecorationOffsets(trackedDecorationId)
-            : null;
-
-        const start = Math.max(
-          0,
-          Math.min(resolved?.startOffset ?? startOffset, targetDocument.length),
-        );
-        const end = Math.max(
-          start,
-          Math.min(resolved?.endOffset ?? endOffset, targetDocument.length),
-        );
-        const next =
-          targetDocument.slice(0, start) + suggestedText + targetDocument.slice(end);
-
-        set({
-          targetDocument: next,
-          pendingDocDiff: null,
-          isDirty: true,
-          lastChangeAt: Date.now(),
-        });
-        scheduleWriteThroughSave(set, get);
-
-        if (sessionId) {
-          get().finalizeEditSession({ sessionId, status: 'kept' });
-        }
-      },
-
-      rejectDocDiff: (): void => {
-        const { pendingDocDiff } = get();
-        set({ pendingDocDiff: null });
-        const sessionId = pendingDocDiff?.sessionId;
-        if (sessionId) {
-          get().finalizeEditSession({ sessionId, status: 'discarded' });
-        }
-      },
-
+      // NOTE: Monaco 시대의 pendingDocDiff/openDocDiffPreview/acceptDocDiff/rejectDocDiff는
+      // 전역 참조가 없어 제거됨 (코드리뷰 2026-07-07 §L5). editSessions/applyAnchor/
+      // targetDocHandle도 외부 참조가 없는 잔재이나, 이번 정리 범위 밖이라 유지.
       finalizeEditSession: ({ sessionId, status }): void => {
         const { editSessions } = get();
         const idx = editSessions.findIndex((s) => s.id === sessionId);

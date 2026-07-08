@@ -11,6 +11,13 @@ use tracing::{debug, info, warn};
 /// 재사용 HTTP 클라이언트 (커넥션 풀링)
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(reqwest::Client::new);
 
+/// 토큰 갱신 single-flight 락.
+/// 동시 요청이 같은(구) refresh_token으로 갱신을 중복 시도하면, rotation을 쓰는
+/// provider에서 뒤늦은 쪽이 invalid_grant로 실패한다 (2026-07-07 리뷰 C2와 동일 패턴).
+/// 락 획득 후 vault를 다시 읽어 만료 여부를 재확인(double-check)한다.
+static CONNECTOR_REFRESH_LOCK: Lazy<tokio::sync::Mutex<()>> =
+    Lazy::new(|| tokio::sync::Mutex::new(()));
+
 /// 토큰 만료 전 갱신 여유 시간 (5분)
 const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
 
@@ -191,57 +198,67 @@ pub async fn connector_set_token(
 pub async fn connector_get_token(connector_id: String) -> Result<Option<String>, String> {
     let key = get_vault_key(&connector_id);
 
-    match SECRETS.get(&key).await {
-        Ok(Some(token_json)) => {
-            let mut token: ConnectorToken = serde_json::from_str(&token_json)
-                .map_err(|e| format!("Failed to parse token: {}", e))?;
+    let token: ConnectorToken = match SECRETS.get(&key).await {
+        Ok(Some(token_json)) => serde_json::from_str(&token_json)
+            .map_err(|e| format!("Failed to parse token: {}", e))?,
+        Ok(None) => return Ok(None),
+        Err(e) => return Err(format!("Failed to get token: {}", e)),
+    };
 
-            // 만료 확인 및 자동 갱신
-            if token.is_expired() {
-                debug!(
-                    "[Connector] Token expired or expiring soon for {}",
-                    connector_id
-                );
+    // 유효하면 그대로 반환
+    if !token.is_expired() {
+        return Ok(Some(token.access_token));
+    }
 
-                if token.can_refresh() {
-                    // 자동 갱신 시도
-                    match try_refresh_token(&connector_id, &token).await {
-                        Ok(new_token) => {
-                            // 갱신된 토큰을 vault에 저장
-                            let new_token_json =
-                                serde_json::to_string(&new_token).map_err(|e| {
-                                    format!("Failed to serialize refreshed token: {}", e)
-                                })?;
-                            SECRETS
-                                .set(&key, &new_token_json)
-                                .await
-                                .map_err(|e| format!("Failed to save refreshed token: {}", e))?;
+    debug!(
+        "[Connector] Token expired or expiring soon for {}",
+        connector_id
+    );
 
-                            token = new_token;
-                        }
-                        Err(e) => {
-                            warn!(
-                                "[Connector] Token refresh failed for {}: {}",
-                                connector_id, e
-                            );
-                            // 갱신 실패 시 만료된 토큰은 사용 불가
-                            return Ok(None);
-                        }
-                    }
-                } else {
-                    // refresh_token이 없으면 갱신 불가
-                    warn!(
-                        "[Connector] No refresh token available for {}",
-                        connector_id
-                    );
-                    return Ok(None);
-                }
-            }
+    if !token.can_refresh() {
+        // refresh_token이 없으면 갱신 불가
+        warn!(
+            "[Connector] No refresh token available for {}",
+            connector_id
+        );
+        return Ok(None);
+    }
 
-            Ok(Some(token.access_token))
+    // 갱신 single-flight: 동시 갱신이 같은(구) refresh_token을 재사용하지 않도록 직렬화
+    let _refresh_guard = CONNECTOR_REFRESH_LOCK.lock().await;
+
+    // double-check: 락 대기 중 다른 요청이 이미 갱신을 끝냈을 수 있으므로 vault를 다시 읽는다
+    let token: ConnectorToken = match SECRETS.get(&key).await {
+        Ok(Some(token_json)) => serde_json::from_str(&token_json)
+            .map_err(|e| format!("Failed to parse token: {}", e))?,
+        Ok(None) => return Ok(None),
+        Err(e) => return Err(format!("Failed to get token: {}", e)),
+    };
+    if !token.is_expired() {
+        return Ok(Some(token.access_token));
+    }
+
+    // 자동 갱신 시도
+    match try_refresh_token(&connector_id, &token).await {
+        Ok(new_token) => {
+            // 갱신된 토큰을 vault에 저장
+            let new_token_json = serde_json::to_string(&new_token)
+                .map_err(|e| format!("Failed to serialize refreshed token: {}", e))?;
+            SECRETS
+                .set(&key, &new_token_json)
+                .await
+                .map_err(|e| format!("Failed to save refreshed token: {}", e))?;
+
+            Ok(Some(new_token.access_token))
         }
-        Ok(None) => Ok(None),
-        Err(e) => Err(format!("Failed to get token: {}", e)),
+        Err(e) => {
+            warn!(
+                "[Connector] Token refresh failed for {}: {}",
+                connector_id, e
+            );
+            // 갱신 실패 시 만료된 토큰은 사용 불가 (저장된 토큰은 삭제하지 않음)
+            Ok(None)
+        }
     }
 }
 

@@ -2,7 +2,7 @@ import type { SearchMatch } from '@/editor/extensions/SearchHighlight';
 import {
   filterMatchesInRange,
   findSegmentRange,
-  buildTextWithPositions,
+  buildDocSearchIndex,
   rangeCrossesBlockBoundary,
 } from '@/editor/extensions/SearchHighlight';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
@@ -55,16 +55,24 @@ export interface ExcerptSearchContext {
   normalizedFullText: string;
   fullTextIndexMap: number[];
   hasSegmentGroups: boolean;
+  /**
+   * segmentGroupId → 세그먼트 범위 맵 (문서 1회 순회로 구축).
+   * 이슈마다 findSegmentRange로 문서 전체를 재스캔(O(k·n))하지 않기 위한 캐시로,
+   * 각 항목은 findSegmentRange(doc, id)와 동일한 결과를 갖는다.
+   */
+  segmentRanges: Map<string, { from: number; to: number }>;
 }
 
 export function buildExcerptSearchContext(doc: ProseMirrorNode): ExcerptSearchContext {
-  const { text, positions } = buildTextWithPositions(doc);
+  // 텍스트/위치/세그먼트 범위를 한 번의 순회로 구축 (P2 최적화)
+  const { text, positions, segmentRanges } = buildDocSearchIndex(doc);
   const { normalizedText, indexMap } = buildNormalizedTextWithMapping(text);
   return {
     positions,
     normalizedFullText: normalizedText,
     fullTextIndexMap: indexMap,
-    hasSegmentGroups: hasSegmentGroupId(doc),
+    hasSegmentGroups: segmentRanges.size > 0,
+    segmentRanges,
   };
 }
 
@@ -87,8 +95,9 @@ export function findExcerptRange(
   const context = ctx ?? buildExcerptSearchContext(doc);
 
   const normalizedSegmentGroupId = normalizeSegmentGroupId(segmentGroupId);
+  // 컨텍스트에 사전 계산된 세그먼트 범위 사용 (findSegmentRange와 동일 결과, 전체 스캔 제거)
   const segmentRange = normalizedSegmentGroupId
-    ? findSegmentRange(doc, normalizedSegmentGroupId)
+    ? context.segmentRanges.get(normalizedSegmentGroupId) ?? null
     : null;
   if (segmentGroupId && context.hasSegmentGroups && !segmentRange) {
     return null;

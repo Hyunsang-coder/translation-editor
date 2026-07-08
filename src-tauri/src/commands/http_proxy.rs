@@ -8,8 +8,8 @@
 //! 여기서는 네트워크 바이트만 전달한다.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -19,6 +19,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 use url::Url;
 
+use super::CancelHandle;
 use crate::error::{CommandError, CommandResult};
 
 /// 백엔드 프록시를 허용할 호스트 (오픈 프록시화 방지)
@@ -27,6 +28,53 @@ const ALLOWED_HOSTS: &[&str] = &[
     "api.anthropic.com",
     "generativelanguage.googleapis.com",
 ];
+
+/// 리다이렉트 최대 추종 횟수 (각 hop마다 allowlist 재검증)
+const MAX_REDIRECT_HOPS: usize = 5;
+
+/// 프록시용 공유 reqwest 클라이언트 (Tauri State로 보관).
+///
+/// - 커넥션 풀 재사용 (호출마다 Client::new() 방지)
+/// - redirect: 각 hop에서 https + allowlist 호스트를 재검증하는 커스텀 정책.
+///   허용 호스트의 오픈 리다이렉트를 통한 SSRF를 차단한다.
+/// - `read_timeout`은 chunk 간 idle 시간 기준이라 스트리밍(SSE)에 안전하다.
+///   전체 timeout은 정상 스트리밍도 끊으므로 사용하지 않는다.
+pub struct ProxyHttpClient(pub reqwest::Client);
+
+impl ProxyHttpClient {
+    pub fn new() -> Self {
+        let policy = reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() > MAX_REDIRECT_HOPS {
+                return attempt.stop();
+            }
+            let url = attempt.url();
+            let host_allowed = url
+                .host_str()
+                .map(|h| ALLOWED_HOSTS.contains(&h))
+                .unwrap_or(false);
+            if url.scheme() == "https" && host_allowed {
+                attempt.follow()
+            } else {
+                // 검증 실패 시 3xx 응답을 그대로 반환 (추종하지 않음)
+                attempt.stop()
+            }
+        });
+        let client = reqwest::Client::builder()
+            .redirect(policy)
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(300))
+            .build()
+            // builder 실패는 극히 드문 경우이며, 이때는 기본 클라이언트로 degrade한다.
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self(client)
+    }
+}
+
+impl Default for ProxyHttpClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// 요청에 그대로 전달하면 안 되는(또는 reqwest가 관리하는) 헤더
 fn is_skipped_request_header(name: &str) -> bool {
@@ -69,22 +117,24 @@ pub enum HttpProxyEvent {
 
 #[derive(Default)]
 pub struct HttpProxyRegistry {
-    inner: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    inner: Mutex<HashMap<String, Arc<CancelHandle>>>,
 }
 
 impl HttpProxyRegistry {
-    fn register(&self, id: &str) -> Arc<AtomicBool> {
+    fn register(&self, id: &str) -> Arc<CancelHandle> {
         let mut map = self.inner.lock().expect("http proxy registry poisoned");
         map.entry(id.to_string())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+            .or_insert_with(|| Arc::new(CancelHandle::new()))
             .clone()
     }
 
     fn cancel(&self, id: &str) {
-        let mut map = self.inner.lock().expect("http proxy registry poisoned");
-        map.entry(id.to_string())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-            .store(true, Ordering::SeqCst);
+        // 미등록 id에 엔트리를 만들지 않는다.
+        // (요청 종료 후 도착한 늦은 cancel이 엔트리를 만들어 영구 잔류하는 누수 방지)
+        let map = self.inner.lock().expect("http proxy registry poisoned");
+        if let Some(handle) = map.get(id) {
+            handle.cancel();
+        }
     }
 
     fn remove(&self, id: &str) {
@@ -145,16 +195,16 @@ fn build_header_map(headers: &[(String, String)]) -> HeaderMap {
 }
 
 async fn run_proxy(
+    client: &reqwest::Client,
     args: &HttpProxyArgs,
     on_event: &Channel<HttpProxyEvent>,
-    cancel: &Arc<AtomicBool>,
+    cancel: &CancelHandle,
 ) -> CommandResult<()> {
     validate_url(&args.url)?;
 
     let method = Method::from_bytes(args.method.to_ascii_uppercase().as_bytes())
         .map_err(|e| proxy_error("HTTP_PROXY_METHOD", format!("잘못된 메서드: {e}")))?;
 
-    let client = reqwest::Client::new();
     let mut request = client
         .request(method, &args.url)
         .headers(build_header_map(&args.headers));
@@ -162,10 +212,13 @@ async fn run_proxy(
         request = request.body(body.clone());
     }
 
-    let mut response = request
-        .send()
-        .await
-        .map_err(|e| proxy_error("HTTP_PROXY_NETWORK", e.to_string()))?;
+    // 연결/헤더 대기 중에도 취소가 즉시 반영되도록 select!로 감싼다
+    let mut response = tokio::select! {
+        _ = cancel.cancelled() => return Ok(()),
+        result = request.send() => {
+            result.map_err(|e| proxy_error("HTTP_PROXY_NETWORK", e.to_string()))?
+        }
+    };
 
     // Head 이벤트: 상태/헤더 먼저 전달
     let status = response.status();
@@ -190,13 +243,16 @@ async fn run_proxy(
 
     // 바디 스트리밍
     loop {
-        if cancel.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             return Ok(());
         }
-        let chunk = response
-            .chunk()
-            .await
-            .map_err(|e| proxy_error("HTTP_PROXY_NETWORK", e.to_string()))?;
+        // chunk 대기 중에도 취소가 즉시 반영되도록 select!로 감싼다.
+        // read_timeout(idle 기준) 덕분에 서버 무응답 시에도 유한 시간 내에 반환된다.
+        let chunk = tokio::select! {
+            _ = cancel.cancelled() => return Ok(()),
+            chunk = response.chunk() => chunk
+                .map_err(|e| proxy_error("HTTP_PROXY_NETWORK", e.to_string()))?,
+        };
         let Some(bytes) = chunk else { break };
         if bytes.is_empty() {
             continue;
@@ -220,9 +276,10 @@ pub async fn http_proxy_stream(
     args: HttpProxyArgs,
     on_event: Channel<HttpProxyEvent>,
     registry: State<'_, HttpProxyRegistry>,
+    client: State<'_, ProxyHttpClient>,
 ) -> CommandResult<()> {
     let cancel = registry.register(&args.request_id);
-    let result = run_proxy(&args, &on_event, &cancel).await;
+    let result = run_proxy(&client.0, &args, &on_event, &cancel).await;
     registry.remove(&args.request_id);
     result
 }

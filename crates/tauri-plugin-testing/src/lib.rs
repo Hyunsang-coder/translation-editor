@@ -19,7 +19,14 @@ use tokio::{
     sync::oneshot,
     time::timeout,
 };
-use tokio_tungstenite::{accept_async, tungstenite::protocol::Message};
+use tokio_tungstenite::{
+    accept_async, accept_hdr_async,
+    tungstenite::{
+        handshake::server::{ErrorResponse, Request, Response as HandshakeResponse},
+        http::StatusCode,
+        protocol::Message,
+    },
+};
 use uuid::Uuid;
 
 const BRIDGE_RESPONSE_EVENT: &str = "plugin:testing://bridge-response";
@@ -96,11 +103,12 @@ pub fn init<R: Runtime + 'static>() -> TauriPlugin<R> {
         .and_then(|v| v.parse::<u16>().ok())
         .unwrap_or(9876);
 
-    let token = std::env::var("TAURI_TEST_TOKEN").unwrap_or_else(|_| {
-        let fallback = "tauri-testing-token".to_string();
-        eprintln!("[tauri-plugin-testing] TAURI_TEST_TOKEN not set; using fallback token.");
-        fallback
-    });
+    // 보안: 고정 fallback 토큰은 사용하지 않는다.
+    // TAURI_TEST_TOKEN 미설정 시 서버를 아예 기동하지 않는다 (setup에서 처리).
+    let token = std::env::var("TAURI_TEST_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
 
     let pending_map: PendingMap = Arc::new(Mutex::new(HashMap::new()));
 
@@ -128,9 +136,17 @@ pub fn init<R: Runtime + 'static>() -> TauriPlugin<R> {
                 return Ok(());
             }
 
+            // 토큰 미설정 시 서버를 기동하지 않는다. 고정 fallback 토큰으로
+            // 기동하면 로컬의 다른 프로세스/브라우저 페이지가 인증을 통과할 수 있다.
+            let Some(token_for_server) = token else {
+                eprintln!(
+                    "[tauri-plugin-testing] TAURI_TEST_TOKEN is not set; refusing to start the testing bridge server. Set TAURI_TEST_TOKEN to a secret value to enable it."
+                );
+                return Ok(());
+            };
+
             let app_handle = app.clone();
             let pending_for_server = pending_map.clone();
-            let token_for_server = token.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = run_server(app_handle, pending_for_server, port, token_for_server).await {
                     eprintln!("[tauri-plugin-testing] WebSocket server stopped: {err}");
@@ -205,7 +221,7 @@ async fn handle_connection<R: Runtime + 'static>(
     pending: PendingMap,
     token: String,
 ) -> Result<(), String> {
-    let mut ws = accept_async(stream)
+    let mut ws = accept_hdr_async(stream, origin_guard)
         .await
         .map_err(|e| format!("ws handshake failed: {e}"))?;
 
@@ -233,7 +249,7 @@ async fn handle_connection<R: Runtime + 'static>(
     let auth = serde_json::from_str::<AuthMessage>(&auth_text)
         .map_err(|e| format!("invalid auth message: {e}"))?;
 
-    if auth.kind != "auth" || auth.token != token {
+    if auth.kind != "auth" || !constant_time_token_eq(&token, &auth.token) {
         let _ = ws
             .send(Message::Text(
                 json!({"type":"error","message":"unauthorized"})
@@ -303,6 +319,71 @@ async fn handle_connection<R: Runtime + 'static>(
     }
 
     Ok(())
+}
+
+/// WebSocket 핸드셰이크 시 Origin 헤더를 검증한다.
+/// Origin이 없으면 비브라우저 클라이언트(Node MCP 클라이언트 등)로 간주해 허용하고,
+/// 있으면 Tauri 앱/dev 서버 origin만 허용한다. 그 외 브라우저 페이지는 거부해
+/// 악성 웹 페이지가 로컬 브리지에 접속하는 것을 차단한다.
+fn origin_guard(
+    request: &Request,
+    response: HandshakeResponse,
+) -> Result<HandshakeResponse, ErrorResponse> {
+    let origin = request
+        .headers()
+        .get("origin")
+        .and_then(|value| value.to_str().ok());
+
+    if is_allowed_origin(origin) {
+        Ok(response)
+    } else {
+        eprintln!(
+            "[tauri-plugin-testing] rejected websocket connection from disallowed origin: {}",
+            origin.unwrap_or("<non-utf8>")
+        );
+        let mut forbidden = ErrorResponse::new(Some("origin not allowed".to_string()));
+        *forbidden.status_mut() = StatusCode::FORBIDDEN;
+        Err(forbidden)
+    }
+}
+
+fn is_allowed_origin(origin: Option<&str>) -> bool {
+    const ALLOWED_ORIGINS: [&str; 4] = [
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+    ];
+
+    match origin {
+        None => true,
+        Some(value) => ALLOWED_ORIGINS
+            .iter()
+            .any(|allowed| value.eq_ignore_ascii_case(allowed)),
+    }
+}
+
+/// 상수 시간 토큰 비교. 일치 여부와 무관하게 기대 토큰 길이만큼 항상
+/// XOR 누적을 수행한다. 길이가 달라도 즉시 반환하지 않고 더미 바이트(0)와
+/// 비교를 계속한 뒤 길이 차이를 결과에 반영해 타이밍 부채널을 줄인다.
+fn constant_time_token_eq(expected: &str, provided: &str) -> bool {
+    let expected_bytes = expected.as_bytes();
+    let provided_bytes = provided.as_bytes();
+
+    let mut diff = expected_bytes.len() ^ provided_bytes.len();
+    for (index, expected_byte) in expected_bytes.iter().enumerate() {
+        let provided_byte = provided_bytes.get(index).copied().unwrap_or(0);
+        diff |= usize::from(expected_byte ^ provided_byte);
+    }
+
+    diff == 0
+}
+
+/// 타임아웃/에러 경로에서 pending map 엔트리를 정리해 누수를 방지한다.
+fn remove_pending_entry(pending: &PendingMap, request_id: &str) {
+    if let Ok(mut map) = pending.lock() {
+        map.remove(request_id);
+    }
 }
 
 async fn handle_rpc_request<R: Runtime + 'static>(
@@ -422,20 +503,27 @@ async fn call_bridge_method<R: Runtime + 'static>(
         .unwrap_or(5000)
         .clamp(100, 120_000);
 
-    let received = timeout(Duration::from_millis(timeout_ms + 500), rx)
-        .await
-        .map_err(|_| RpcError {
-            code: -32001,
-            message: format!("timeout waiting for response: {method}"),
-            data: None,
-        })
-        .and_then(|inner| {
-            inner.map_err(|_| RpcError {
+    let received = match timeout(Duration::from_millis(timeout_ms + 500), rx).await {
+        Ok(Ok(payload)) => payload,
+        Ok(Err(_)) => {
+            // 채널이 닫힌 경우에도 pending 엔트리가 남아 있을 수 있으므로 정리한다.
+            remove_pending_entry(pending, &request_id);
+            return Err(RpcError {
                 code: -32002,
                 message: "bridge response channel closed".to_string(),
                 data: None,
-            })
-        })?;
+            });
+        }
+        Err(_) => {
+            // 타임아웃 시 pending 엔트리를 제거해 HashMap 영구 누적을 방지한다.
+            remove_pending_entry(pending, &request_id);
+            return Err(RpcError {
+                code: -32001,
+                message: format!("timeout waiting for response: {method}"),
+                data: None,
+            });
+        }
+    };
 
     if let Some(error) = received.error {
         return Err(error);

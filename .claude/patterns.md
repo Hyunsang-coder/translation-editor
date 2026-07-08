@@ -553,7 +553,7 @@ dom.addEventListener('paste', handlePasteCapture, true);
 // ProseMirror Decoration-based, auto-recalculates on doc change
 
 // Severity Filter: reviewStore.severityFilter (IssueSeverity[])
-// 기본값: ['critical', 'major'] — Minor 숨김
+// 기본값: ['critical', 'major', 'minor'] (모든 severity 표시)
 // useShallow 호환을 위해 Set 대신 배열 사용
 // UI: ReviewResultsTable의 severity 배지가 클릭 가능한 토글 버튼
 // 필터링: ReviewResultsTable 내부에서 filteredIssues로 표시
@@ -783,11 +783,12 @@ const methods = { 'oddeyes.setTranslationContext': async (p) => setTranslationCo
 //    + manifest.template.json tools 배열에 도구명 추가 (Claude Desktop UI 메타데이터)
 ```
 
-**현재 도구** (`oddeyes-desktop-mcp` v0.2.0, 10개):
+**현재 도구** (`oddeyes-desktop-mcp` v0.3.0, 12개):
 - 읽기: `get_status`, `get_source_document`, `get_target_document`, `get_translation_context`, `get_translation_preview`
 - 쓰기(preview-first): `set_translation_preview`, `apply_translation_preview`, `discard_translation_preview`
 - 쓰기(검수): `set_review_issues` → `reviewStore.ingestExternalReview` (highlight를 위해 `targetExcerpt` verbatim 필수)
 - 쓰기(컨텍스트): `set_translation_context` → `chatStore` 세터 (persona/rules/projectContext, replace|append)
+- 품질 장부: `get_quality_records`, `log_quality_records`
 
 **함정**:
 - **영속화는 `loadedProjectId` 필요** — 프로젝트 미로드 시 store 메모리엔 반영되나 SQLite 미저장 → bridge에서 `project` 없으면 거부.

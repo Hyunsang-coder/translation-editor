@@ -22,6 +22,7 @@ import {
   tryExtractWebSearchQuery,
   extractTextFromAiMessage,
   inferSuggestionFromAssistantText,
+  createIncrementalGhostRestorer,
 } from './chatStore.helpers';
 
 // ── ExecuteAiReply Params ──────────────────────────────────────────────
@@ -41,9 +42,13 @@ interface ExecuteAiReplyParams {
   persistOnSuccess?: boolean;
 }
 
+type ToolEnabledModelInvokeOptions = { signal?: AbortSignal };
+
 type ToolEnabledModel = {
-  invoke: (input: string) => Promise<unknown>;
-  bindTools?: (tools: Array<Record<string, unknown>>) => { invoke: (input: string) => Promise<unknown> };
+  invoke: (input: string, options?: ToolEnabledModelInvokeOptions) => Promise<unknown>;
+  bindTools?: (tools: Array<Record<string, unknown>>) => {
+    invoke: (input: string, options?: ToolEnabledModelInvokeOptions) => Promise<unknown>;
+  };
 };
 
 interface BuiltInWebSearchSpec {
@@ -70,6 +75,19 @@ function getBuiltInWebSearchSpec(provider: string): BuiltInWebSearchSpec | null 
   return null;
 }
 
+/**
+ * AbortError 판별
+ * - DOMException이 Error를 상속하지 않거나 cross-realm(instanceof 불일치)인 환경도
+ *   커버하도록 name 프로퍼티로 판단합니다.
+ */
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 function buildWebSearchPrompt(webQuery: string): string {
   return [
     '웹 검색을 수행한 뒤, 아래 형식으로 간결하게 정리해 주세요.',
@@ -90,6 +108,29 @@ export function createAiActions(
 ) {
   const { schedulePersist } = helpers;
 
+  /**
+   * abort/에러로 스트리밍이 중단됐을 때 내용이 비어 있는 assistant placeholder를 제거합니다.
+   * (L5: abort 후 빈 말풍선이 세션에 영속되는 문제 방지)
+   * - 메시지 id 기준 제거라 다른 요청의 메시지에는 영향이 없습니다.
+   */
+  const removeEmptyAssistantPlaceholder = (sessionId: string, messageId: string | null): void => {
+    if (!messageId) return;
+    const session = get().sessions.find((s) => s.id === sessionId);
+    const message = session?.messages.find((m) => m.id === messageId);
+    if (!session || !message) return;
+    if (message.role !== 'assistant') return;
+    if ((message.content ?? '').trim().length > 0) return;
+
+    const updatedSession = {
+      ...session,
+      messages: session.messages.filter((m) => m.id !== messageId),
+    };
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === sessionId ? updatedSession : s)),
+      ...(sessionId === state.currentSessionId ? { currentSession: updatedSession } : {}),
+    }));
+  };
+
   // ── 공통 AI 응답 파이프라인 (sendMessage / replayMessage 공용) ──────────
 
   const executeAiReply = async (params: ExecuteAiReplyParams): Promise<void> => {
@@ -107,8 +148,15 @@ export function createAiActions(
     const maskedUserContent = maskGhostChips(content, maskSession);
 
     // AbortController: 단일 in-flight 요청 추적
+    // L1: 이 컨트롤러를 클로저에 보관하고, 완료/에러 상태를 쓰기 전마다 store의
+    // 컨트롤러와 비교해 "아직 이 요청이 스트리밍 상태의 소유자인지"를 검증합니다.
+    // (취소/전환된 요청 A의 후속 코드가 새 요청 B의 상태를 덮어쓰는 것 방지)
     const abortController = new AbortController();
+    const ownsStream = (): boolean => get().abortController === abortController;
     set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
+
+    // catch 경로에서도 이 요청의 placeholder를 식별할 수 있도록 try 밖에 보관
+    let assistantId: string | null = null;
 
     try {
       const cfg = getAiConfig();
@@ -168,7 +216,7 @@ export function createAiActions(
       const recent: ChatMessage[] = priorMessages;
 
       // Assistant 빈 메시지 추가 (스트리밍 버블)
-      const assistantId = get().addMessage({
+      assistantId = get().addMessage({
         role: 'assistant',
         content: '',
         metadata: { model: cfg.model, toolCallsInProgress: [] },
@@ -177,16 +225,23 @@ export function createAiActions(
         set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
       }
 
+      // P3: 토큰마다 전체 텍스트를 다시 복원(O(L^2))하지 않도록 증분 복원기 사용
+      const restoreStreamingText = createIncrementalGhostRestorer(maskSession);
+
       // 기본 콜백 + extraCallbacks 머지
+      // L1: 각 콜백은 소유권을 잃은 뒤 도착한 지연 이벤트가 새 요청의 상태를
+      // 오염시키지 않도록 ownsStream()을 먼저 확인합니다.
       const callbacks: StreamCallbacks = {
         onToken: (full) => {
+          if (!ownsStream()) return;
           if (get().statusMessage !== '답변 생성 중...') {
             set({ statusMessage: '답변 생성 중...' });
           }
-          set({ streamingContent: restoreGhostChips(full, maskSession) });
+          set({ streamingContent: restoreStreamingText(full) });
         },
         onToolCall: (evt) => {
           if (!assistantId) return;
+          if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
 
           if (evt.phase === 'start') {
@@ -238,6 +293,7 @@ export function createAiActions(
           });
         },
         onToolsUsed: (toolsUsed) => {
+          if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
           set({
             streamingMetadata: { ...currentMetadata, toolsUsed },
@@ -274,6 +330,15 @@ export function createAiActions(
         callbacks,
       );
 
+      // L1: 소유권(epoch) 가드. streamAssistantReply는 청크 사이에서만 abort를
+      // 확인하므로, 마지막 청크 이후 취소/전환된 요청도 정상 resolve될 수 있습니다.
+      // 소유권을 잃었으면 새 요청의 상태(streamingContent/streamingMessageId 등)를
+      // 덮지 않도록 즉시 중단하고, 이 요청의 빈 placeholder만 정리합니다.
+      if (!ownsStream()) {
+        removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+        return;
+      }
+
       // Finalization
       if (assistantId) {
         const restored = restoreGhostChips(replyMasked, maskSession);
@@ -288,7 +353,8 @@ export function createAiActions(
         }
 
         set({ streamingContent: restored });
-        get().finalizeStreaming();
+        // L1: 이 요청의 placeholder id를 명시 전달 (다른 요청의 placeholder에 커밋 방지)
+        get().finalizeStreaming(assistantId);
       }
 
       set({ abortController: null });
@@ -297,7 +363,11 @@ export function createAiActions(
       }
     } catch (error) {
       // AbortError는 정상적인 취소이므로 에러로 표시하지 않음
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (isAbortError(error)) {
+        // L5: abort로 커밋되지 못한 빈 assistant placeholder 제거 (빈 말풍선 영속 방지)
+        removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+        // L1: 이미 다른 요청이 시작됐으면 그 요청의 진행 상태를 건드리지 않음
+        if (!ownsStream()) return;
         set({
           isLoading: false,
           streamingMessageId: null,
@@ -311,7 +381,12 @@ export function createAiActions(
         return;
       }
 
-      const assistantId = get().streamingMessageId;
+      // L1: stale 요청의 에러가 새 요청의 상태/메시지를 오염시키지 않도록 중단
+      if (!ownsStream()) {
+        removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+        return;
+      }
+
       const errText = error instanceof Error ? error.message : 'AI 응답 생성 실패';
       if (assistantId) {
         get().updateMessage(assistantId, {
@@ -416,7 +491,11 @@ export function createAiActions(
         return;
       }
 
-      set({ isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
+      // L1: /web 검색 경로도 abortSignal 연결 + 소유권(epoch) 가드 적용
+      // (프로젝트 전환 시 hydrateForProject의 abort로 취소 가능해짐)
+      const webAbortController = new AbortController();
+      const ownsWebSearch = (): boolean => get().abortController === webAbortController;
+      set({ abortController: webAbortController, isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
       const cfg = getAiConfig();
       const webSearchSpec = getBuiltInWebSearchSpec(cfg.provider);
@@ -441,9 +520,15 @@ export function createAiActions(
               ? modelAny.bindTools(webSearchSpec.bindTools)
               : modelAny;
 
-          const ai = await modelWithSearch.invoke(buildWebSearchPrompt(webQuery));
+          const ai = await modelWithSearch.invoke(buildWebSearchPrompt(webQuery), { signal: webAbortController.signal });
           text = extractTextFromAiMessage(ai);
           if (text.trim()) toolsUsed.push(webSearchSpec.toolName);
+        }
+
+        // L1: 완료 시점 소유권 재검증. 취소/전환된 검색이 새 요청 상태를 덮지 않도록
+        if (!ownsWebSearch()) {
+          removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+          return;
         }
 
         if (assistantId) {
@@ -451,16 +536,28 @@ export function createAiActions(
         } else {
           addMessage({ role: 'assistant', content: text }, effectiveSessionId);
         }
-        set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: null, statusMessage: null });
+        set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: null, statusMessage: null, abortController: null });
         schedulePersist();
       } catch (e) {
+        // 취소는 에러로 표시하지 않고 빈 placeholder만 정리
+        if (isAbortError(e)) {
+          removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+          if (!ownsWebSearch()) return;
+          set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: null, statusMessage: null, abortController: null });
+          return;
+        }
+        // L1: 소유권을 잃은 stale 에러는 새 요청 상태를 건드리지 않음
+        if (!ownsWebSearch()) {
+          removeEmptyAssistantPlaceholder(effectiveSessionId, assistantId);
+          return;
+        }
         const errText = e instanceof Error ? e.message : '웹 검색 실패';
         if (assistantId) {
           updateMessage(assistantId, { content: `⚠️ ${errText}`, metadata: { toolCallsInProgress: [] } }, effectiveSessionId);
         } else {
           addMessage({ role: 'assistant', content: `⚠️ ${errText}` }, effectiveSessionId);
         }
-        set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: errText, statusMessage: null });
+        set({ isLoading: false, streamingMessageId: null, streamingSessionId: null, error: errText, statusMessage: null, abortController: null });
       }
       return;
     }
@@ -552,9 +649,17 @@ export function createStreamingActions(set: ChatSet, get: ChatGet) {
     set({ streamingMetadata: metadata });
   };
 
-  const finalizeStreaming = (): void => {
+  /**
+   * 스트리밍 내용을 메시지 배열에 커밋합니다.
+   * @param assistantId 커밋 대상 placeholder id (호출자가 명시 전달 권장).
+   *   L1: 현재 streamingMessageId와 다르면 다른 요청(새 스트림)의 상태이므로 커밋하지 않습니다.
+   */
+  const finalizeStreaming = (assistantId?: string): void => {
     const { streamingMessageId, streamingSessionId, streamingContent, streamingMetadata, isFinalizingStreaming } = get();
     if (!streamingMessageId) return;
+
+    // L1: 소유권 가드. 명시된 assistantId가 현재 스트리밍 메시지가 아니면 스킵
+    if (assistantId !== undefined && assistantId !== streamingMessageId) return;
 
     // Race Condition 방지: 이미 finalization 진행 중이면 스킵
     if (isFinalizingStreaming) return;

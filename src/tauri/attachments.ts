@@ -40,19 +40,42 @@ export async function previewAttachment(path: string): Promise<AttachmentDto> {
     return await invoke<AttachmentDto>('preview_attachment', { args: { path } });
 }
 
-export async function readFileBytes(path: string): Promise<number[]> {
-    return await invoke<number[]>('read_file_bytes', { args: { path } });
+/**
+ * 로컬 파일을 base64 문자열로 읽습니다.
+ * - number[] JSON 직렬화(5MB 이미지 → ~20MB JSON) 비용을 피하기 위해
+ *   Rust에서 base64로 인코딩해 문자열 하나로 전달합니다. (P5)
+ */
+export async function readFileBase64(path: string): Promise<string> {
+    return await invoke<string>('read_file_bytes', { args: { path } });
 }
 
 /**
- * 이미지 바이트를 임시 파일로 저장하고 경로를 반환
+ * Blob을 base64 문자열로 변환합니다 (data URL prefix 제거).
+ */
+export async function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result ?? '');
+            const commaIdx = result.indexOf(',');
+            resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'));
+        reader.readAsDataURL(blob);
+    });
+}
+
+/**
+ * 이미지 Blob을 임시 파일로 저장하고 경로를 반환
  * - 드래그앤드롭 또는 클립보드에서 이미지를 붙여넣을 때 사용
- * @param bytes 이미지 바이트 배열
+ * - number[] JSON 직렬화 비용을 피하기 위해 base64 문자열로 IPC합니다. (P5)
+ * @param blob 이미지 Blob (File 포함)
  * @param filename 원본 파일명 (확장자 포함)
  * @returns 저장된 임시 파일 경로
  */
-export async function saveTempImage(bytes: number[], filename: string): Promise<string> {
-    return await invoke<string>('save_temp_image', { bytes, filename });
+export async function saveTempImage(blob: Blob, filename: string): Promise<string> {
+    const bytesBase64 = await blobToBase64(blob);
+    return await invoke<string>('save_temp_image', { bytesBase64, filename });
 }
 
 /**
@@ -78,24 +101,13 @@ export async function readImageAsDataUrl(
     maxSizeBytes: number = MAX_IMAGE_SIZE_BYTES
 ): Promise<string | null> {
     try {
-        const bytes = await readFileBytes(path);
+        const base64 = await readFileBase64(path);
 
-        // 보안: 파일 크기 검증 (메모리 고갈 방지)
-        if (bytes.length > maxSizeBytes) {
-            throw new ImageSizeExceededError(bytes.length, maxSizeBytes);
+        // 보안: 파일 크기 검증 (메모리 고갈 방지) - base64는 원본의 약 4/3 크기
+        const approxBytes = Math.ceil((base64.length * 3) / 4);
+        if (approxBytes > maxSizeBytes) {
+            throw new ImageSizeExceededError(approxBytes, maxSizeBytes);
         }
-
-        const uint8Array = new Uint8Array(bytes);
-
-        // Uint8Array를 base64로 변환
-        let binary = '';
-        for (let i = 0; i < uint8Array.length; i++) {
-            const byte = uint8Array[i];
-            if (byte !== undefined) {
-                binary += String.fromCharCode(byte);
-            }
-        }
-        const base64 = btoa(binary);
 
         // MIME 타입 결정
         const mimeType = fileType.toLowerCase() === 'jpg' ? 'image/jpeg'

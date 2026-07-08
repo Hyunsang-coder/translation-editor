@@ -1,6 +1,72 @@
 /**
  * chatStore 순수 헬퍼 함수 (상태 의존성 없음)
  */
+import { restoreGhostChips, type GhostMaskSession } from '@/utils/ghostMask';
+
+// Ghost 토큰 형태: ⟦ITE_GHOST:<uuid>:<idx>⟧ (약 55자). 여유를 둔 상한.
+const GHOST_TOKEN_MAX_LEN = 96;
+const GHOST_TOKEN_OPEN = '⟦';
+const GHOST_TOKEN_CLOSE = '⟧';
+// 스트림 연속성 검증용 suffix 길이 (도구 호출 스텝 전환 등으로 누적 텍스트가 리셋되는 경우 감지)
+const CONTINUITY_CHECK_LEN = 32;
+
+/**
+ * 스트리밍 onToken(full)마다 전체 텍스트를 다시 복원하면 O(L^2)이 되므로,
+ * 이미 복원이 확정된 prefix는 캐시하고 "미완성 ghost 토큰 가능 구간"만 보류하는
+ * 증분 복원기를 생성합니다. (P3: 토큰마다 restoreGhostChips(full) 재처리 방지)
+ *
+ * - 마지막 여는 괄호(⟦)가 닫히지 않았고 토큰 최대 길이 이내면 해당 구간의 복원을 보류합니다.
+ * - 누적 텍스트가 줄어들거나 연속성이 깨지면(도구 호출 스텝 재시작 등) 전체를 재계산합니다.
+ */
+export function createIncrementalGhostRestorer(
+  session: GhostMaskSession,
+): (fullMaskedText: string) => string {
+  let committedRawLength = 0;
+  let committedRawSuffix = '';
+  let restoredPrefix = '';
+
+  return (fullMaskedText: string): string => {
+    // 스트림 재시작(도구 호출 스텝 전환, 이미지 fallback 등) 감지 시 전체 재계산
+    const suffixStart = Math.max(0, committedRawLength - committedRawSuffix.length);
+    if (
+      fullMaskedText.length < committedRawLength ||
+      (committedRawLength > 0 &&
+        fullMaskedText.slice(suffixStart, committedRawLength) !== committedRawSuffix)
+    ) {
+      committedRawLength = 0;
+      committedRawSuffix = '';
+      restoredPrefix = '';
+    }
+
+    const tail = fullMaskedText.slice(committedRawLength);
+    const lastOpen = tail.lastIndexOf(GHOST_TOKEN_OPEN);
+
+    let safeLength: number;
+    if (lastOpen === -1) {
+      safeLength = tail.length;
+    } else if (tail.indexOf(GHOST_TOKEN_CLOSE, lastOpen) !== -1) {
+      // 마지막 여는 괄호가 닫혔으므로 미완성 토큰 없음
+      safeLength = tail.length;
+    } else if (tail.length - lastOpen > GHOST_TOKEN_MAX_LEN) {
+      // ghost 토큰이라기엔 너무 긴 미닫힘 괄호: 일반 텍스트로 간주
+      safeLength = tail.length;
+    } else {
+      // 미완성 ghost 토큰 후보: 닫힐 때까지 복원 보류
+      safeLength = lastOpen;
+    }
+
+    if (safeLength > 0) {
+      restoredPrefix += restoreGhostChips(tail.slice(0, safeLength), session);
+      committedRawLength += safeLength;
+      committedRawSuffix = fullMaskedText.slice(
+        Math.max(0, committedRawLength - CONTINUITY_CHECK_LEN),
+        committedRawLength,
+      );
+    }
+
+    return restoredPrefix + fullMaskedText.slice(committedRawLength);
+  };
+}
 
 export function tryExtractWebSearchQuery(raw: string): string | null {
   const t = (raw ?? '').trim();

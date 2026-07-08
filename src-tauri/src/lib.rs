@@ -282,9 +282,13 @@ pub fn run() {
             db.initialize()?;
 
             // 앱 상태로 데이터베이스 관리
-            app.manage(db::DbState(std::sync::Mutex::new(db)));
+            // Arc: async 커맨드가 spawn_blocking 클로저로 DB 핸들을 move하기 위함 (commands::run_db_task)
+            app.manage(db::DbState(std::sync::Arc::new(std::sync::Mutex::new(db))));
             app.manage(commands::ai::AiStreamRegistry::default());
             app.manage(commands::http_proxy::HttpProxyRegistry::default());
+            // 공유 reqwest 클라이언트 (커넥션 풀 재사용 + connect/read timeout)
+            app.manage(commands::ai::AiHttpClient::new());
+            app.manage(commands::http_proxy::ProxyHttpClient::new());
             app.manage(desktop_mcp::DesktopMcpState::new(
                 desktop_mcp_runtime.clone(),
             ));
@@ -300,7 +304,9 @@ pub fn run() {
             mcp::set_app_handle(app.handle().clone());
 
             // 앱 시작 시 오래된 임시 이미지 파일 정리 (24시간 이상 경과된 파일)
-            if let Ok(deleted) = commands::attachments::cleanup_temp_images() {
+            if let Ok(deleted) =
+                tauri::async_runtime::block_on(commands::attachments::cleanup_temp_images())
+            {
                 if deleted > 0 {
                     info!("[startup] Cleaned up {} old temp image(s)", deleted);
                 }

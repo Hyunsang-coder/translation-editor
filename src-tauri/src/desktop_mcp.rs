@@ -238,10 +238,43 @@ fn write_bridge_info(path: &Path, runtime: &DesktopMcpRuntime) -> Result<(), Str
 
     let serialized = serde_json::to_string_pretty(&payload)
         .map_err(|e| format!("Failed to serialize desktop MCP bridge metadata: {e}"))?;
-    fs::write(path, serialized)
+    write_private_file(path, serialized.as_bytes())?;
+
+    Ok(())
+}
+
+/// 브리지 토큰이 포함된 파일을 소유자 전용 권한(0600)으로 기록한다.
+/// unix: 생성 시점부터 mode(0o600)으로 열고, 과거 버전이 0644로 만들어 둔
+/// 기존 파일에도 권한을 명시적으로 재적용한다. windows: ACL 조정 없이
+/// 기본 쓰기로 처리한다 (사용자 프로필 디렉터리는 기본적으로 소유자 전용).
+#[cfg(unix)]
+fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(|e| format!("Failed to open desktop MCP bridge metadata file: {e}"))?;
+
+    // mode(0o600)은 파일이 새로 생성될 때만 적용되므로,
+    // 이미 존재하던 파일에도 권한을 강제한다.
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .map_err(|e| format!("Failed to set desktop MCP bridge metadata permissions: {e}"))?;
+
+    file.write_all(contents)
         .map_err(|e| format!("Failed to write desktop MCP bridge metadata: {e}"))?;
 
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), String> {
+    fs::write(path, contents)
+        .map_err(|e| format!("Failed to write desktop MCP bridge metadata: {e}"))
 }
 
 // ── Claude Desktop config auto-registration ──
@@ -487,5 +520,39 @@ mod tests {
         let config = fs::read_to_string(bridge_info_path).unwrap();
         assert!(config.contains("bridgePort"));
         assert!(config.contains("bridge-token"));
+    }
+
+    /// 토큰 파일은 소유자 전용 권한(0600)이어야 한다.
+    /// 기존 파일이 넓은 권한(0644)으로 남아 있어도 재기록 시 0600으로 강제된다.
+    #[cfg(unix)]
+    #[test]
+    fn bridge_metadata_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempdir().unwrap();
+        let runtime = DesktopMcpRuntime {
+            bridge_port: 9966,
+            bridge_token: "bridge-token".to_string(),
+        };
+        let bridge_info_path = temp
+            .path()
+            .join(MCP_BRIDGE_INFO_DIR)
+            .join(MCP_BRIDGE_INFO_FILENAME);
+
+        write_bridge_info(&bridge_info_path, &runtime).unwrap();
+        let mode = fs::metadata(&bridge_info_path)
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+
+        // 과거 버전이 만든 0644 파일도 재기록 시 0600으로 강제되는지 확인
+        fs::set_permissions(&bridge_info_path, fs::Permissions::from_mode(0o644)).unwrap();
+        write_bridge_info(&bridge_info_path, &runtime).unwrap();
+        let mode = fs::metadata(&bridge_info_path)
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 }

@@ -73,4 +73,31 @@ describe('resolveModelCallOptions', () => {
     expect(opts.temperature).toBe(0.3);
     expect(opts.effort).toBeUndefined();
   });
+
+  // A3: reasoning_effort는 gpt-5 계열만 지원하므로 비 gpt-5 모델은 review여도 effort 미포함
+  it('gpt-4o review → effort 없음 (reasoning_effort 미지원 모델 가드), temperature 유지', () => {
+    const opts = resolveModelCallOptions(
+      cfg({ provider: 'openai', model: 'gpt-4o', temperature: 0.3 }),
+      'review',
+    );
+    expect(opts.effort).toBeUndefined();
+    expect(opts.temperature).toBe(0.3);
+  });
+
+  it('gpt-5.4-mini review → effort high (gpt-5 계열), temperature 없음', () => {
+    const opts = resolveModelCallOptions(
+      cfg({ provider: 'openai', model: 'gpt-5.4-mini', temperature: 0.7 }),
+      'review',
+    );
+    expect(opts.effort).toBe('high');
+    expect(opts.temperature).toBeUndefined();
+  });
+
+  it('mock provider review, 비 gpt-5 모델 → effort 없음 (OpenAI fallback 경로)', () => {
+    const opts = resolveModelCallOptions(
+      cfg({ provider: 'mock', model: 'gpt-4o-mini' }),
+      'review',
+    );
+    expect(opts.effort).toBeUndefined();
+  });
 });

@@ -436,24 +436,29 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           className="h-full overflow-y-auto overscroll-contain p-4 space-y-4"
           onScroll={handleMessagesScroll}
         >
-        {displaySession?.messages.map((message) => (
-          <ChatMessageItem
-            key={message.id}
-            message={message}
-            isStreaming={streamingMessageId === message.id}
-            streamingContent={streamingContent}
-            streamingMetadata={streamingMetadata}
-            showStreamingSkeleton={showStreamingSkeleton}
-            statusMessage={statusMessage}
-            onEdit={handleEditMessage}
-            onReplay={handleReplayMessage}
-            onDelete={handleDeleteMessage}
-            onAppendToRules={handleAppendToRules}
-            onAppendToContext={handleAppendToContext}
-            onAppendToPersona={handleAppendToPersona}
-            onUpdateMessageMetadata={handleUpdateMessageMetadata}
-          />
-        ))}
+        {displaySession?.messages.map((message) => {
+          // P3: 스트리밍 관련 prop은 스트리밍 중인 메시지에만 전달.
+          // 나머지 아이템은 토큰마다 prop이 변하지 않아 memo 비교가 즉시 통과한다.
+          const isMessageStreaming = streamingMessageId === message.id;
+          return (
+            <ChatMessageItem
+              key={message.id}
+              message={message}
+              isStreaming={isMessageStreaming}
+              streamingContent={isMessageStreaming ? streamingContent : null}
+              streamingMetadata={isMessageStreaming ? streamingMetadata : null}
+              showStreamingSkeleton={isMessageStreaming ? showStreamingSkeleton : false}
+              statusMessage={isMessageStreaming ? statusMessage : null}
+              onEdit={handleEditMessage}
+              onReplay={handleReplayMessage}
+              onDelete={handleDeleteMessage}
+              onAppendToRules={handleAppendToRules}
+              onAppendToContext={handleAppendToContext}
+              onAppendToPersona={handleAppendToPersona}
+              onUpdateMessageMetadata={handleUpdateMessageMetadata}
+            />
+          );
+        })}
 
         {isLoading && (!streamingMessageId || !streamingBubbleExists) && (
           <div className="chat-message chat-message-ai">

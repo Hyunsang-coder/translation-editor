@@ -71,7 +71,8 @@ function getProviderApiKey(cfg: AiConfig): string | undefined {
 /**
  * 백엔드(Rust) aiComplete/aiStream에 넘길 모델별 호출 옵션.
  * createChatModel과 동일한 modelCallOptions 소스를 공유해 두 경로가 어긋나지 않는다.
- * (F7: thinking/effort 전달, F8: Sonnet 5 temperature 400 방지)
+ * (F7: thinking/effort 전달, F8: Sonnet 5 temperature 400 방지,
+ *  A3: effort의 모델 지원 가드도 resolveModelCallOptions가 담당하므로 여기서는 그대로 전달)
  */
 function getModelCallArgs(
   cfg: AiConfig,

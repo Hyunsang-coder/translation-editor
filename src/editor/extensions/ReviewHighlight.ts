@@ -14,6 +14,9 @@ export interface ReviewHighlightOptions {
 
 const reviewHighlightPluginKey = pluginKeys.reviewHighlight;
 
+/** 편집 중 decoration 전체 재계산을 지연하는 idle 디바운스 시간 (ms) */
+const REVIEW_HIGHLIGHT_REFRESH_DEBOUNCE_MS = 300;
+
 /**
  * 문서에서 텍스트를 찾아 Decoration 생성
  * - 노드 경계를 넘는 텍스트도 검색 가능
@@ -89,13 +92,15 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
               return DecorationSet.empty;
             }
 
-            // 문서가 변경되었거나 meta에 refresh 플래그가 있으면 재계산
-            if (tr.docChanged || tr.getMeta('reviewHighlightRefresh')) {
+            // meta refresh(highlightNonce 갱신 또는 디바운스된 재계산 요청) 시에만 전체 재계산
+            if (tr.getMeta('reviewHighlightRefresh')) {
               const checkedIssues = getCheckedIssues();
               return createReviewDecorations(newState.doc, checkedIssues, highlightClass, excerptField);
             }
 
-            // 변경 없으면 기존 decoration 유지 (position mapping)
+            // P2 최적화: 편집(docChanged) 시에는 기존 decoration 위치만 매핑하고,
+            // 이슈별 excerpt 재검색(O(k·n))은 디바운스된 refresh(view.update)로 지연.
+            // 적용(reviewApply) 경로는 적용 시점에 항상 재검색하므로 정확성에 영향 없음.
             return oldDecorationSet.map(tr.mapping, tr.doc);
           },
         },
@@ -104,6 +109,32 @@ export const ReviewHighlight = Extension.create<ReviewHighlightOptions>({
           decorations(state) {
             return reviewHighlightPluginKey.getState(state);
           },
+        },
+
+        view: () => {
+          let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+          return {
+            update: (view, prevState) => {
+              if (view.state.doc === prevState.doc) return;
+              if (!useReviewStore.getState().highlightEnabled) return;
+
+              // 편집이 멈춘 뒤 한 번만 전체 재계산 (키 입력당 재계산 방지)
+              if (refreshTimer !== null) clearTimeout(refreshTimer);
+              refreshTimer = setTimeout(() => {
+                refreshTimer = null;
+                if (view.isDestroyed) return;
+                if (!useReviewStore.getState().highlightEnabled) return;
+                view.dispatch(view.state.tr.setMeta('reviewHighlightRefresh', true));
+              }, REVIEW_HIGHLIGHT_REFRESH_DEBOUNCE_MS);
+            },
+            destroy: () => {
+              if (refreshTimer !== null) {
+                clearTimeout(refreshTimer);
+                refreshTimer = null;
+              }
+            },
+          };
         },
       }),
     ];

@@ -4,8 +4,8 @@
 //! These commands route retry requests through the Tauri backend where CORS does not apply.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,35 @@ use serde_json::{json, Value};
 use tauri::ipc::Channel;
 use tauri::State;
 
+use super::CancelHandle;
 use crate::error::{CommandError, CommandResult};
+
+/// AI provider 호출용 공유 reqwest 클라이언트 (Tauri State로 보관).
+///
+/// 호출마다 `Client::new()`를 만들면 커넥션 풀이 재사용되지 않으므로 하나를 공유한다.
+/// - `connect_timeout`: TCP/TLS 연결 지연을 유한하게 제한
+/// - `read_timeout`: chunk 간 idle 시간 기준이라 스트리밍(SSE)에 안전하다.
+///   전체 timeout은 정상 스트리밍도 중간에 끊으므로 사용하지 않는다.
+pub struct AiHttpClient(pub reqwest::Client);
+
+impl AiHttpClient {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(300))
+            .build()
+            // builder 실패는 시스템 TLS 백엔드 문제 등 극히 드문 경우이며,
+            // 이때는 timeout 없는 기본 클라이언트로 degrade한다.
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self(client)
+    }
+}
+
+impl Default for AiHttpClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,6 +104,80 @@ fn provider_error(provider: &str, status: StatusCode, body: &str) -> CommandErro
     )
 }
 
+/// 초기 응답이 429/5xx면 지수 백오프로 재시도한다 (스트리밍 시작 전에만).
+///
+/// - `Retry-After` 헤더(초 단위)가 있으면 존중한다.
+/// - 반환값 `None`은 취소를 뜻한다 (cancel 핸들이 있을 때만 발생).
+/// - 스트리밍이 시작된 뒤(chunk 수신 중)에는 재시도하지 않는다: 이 함수는
+///   응답 헤더 수신까지만 담당하므로 그 조건이 구조적으로 보장된다.
+async fn send_with_retry(
+    request: reqwest::RequestBuilder,
+    cancel: Option<&CancelHandle>,
+) -> CommandResult<Option<reqwest::Response>> {
+    // 최초 시도 이후 추가 재시도 횟수 (총 4회 전송)
+    const MAX_RETRIES: u32 = 3;
+    // Retry-After가 과도하게 커도 이 값 이상 기다리지 않는다
+    const MAX_DELAY_SECS: u64 = 30;
+
+    let mut attempt: u32 = 0;
+    loop {
+        if let Some(c) = cancel {
+            if c.is_cancelled() {
+                return Ok(None);
+            }
+        }
+
+        let req = request.try_clone().ok_or_else(|| {
+            command_error("AI_REQUEST_ERROR", "AI 요청을 복제할 수 없습니다.", None)
+        })?;
+
+        // 연결/헤더 대기 중에도 취소가 즉시 반영되도록 select!로 감싼다
+        let send_result = match cancel {
+            Some(c) => tokio::select! {
+                _ = c.cancelled() => return Ok(None),
+                result = req.send() => result,
+            },
+            None => req.send().await,
+        };
+        let response =
+            send_result.map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+
+        let status = response.status();
+        let retryable = status.as_u16() == 429 || status.is_server_error();
+        if !retryable || attempt >= MAX_RETRIES {
+            return Ok(Some(response));
+        }
+
+        // Retry-After(초) 존중, 없으면 지수 백오프 (1s, 2s, 4s)
+        let retry_after_secs = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok());
+        let delay_secs = retry_after_secs
+            .unwrap_or(1u64 << attempt.min(4))
+            .min(MAX_DELAY_SECS);
+        drop(response);
+
+        tracing::warn!(
+            "[AI] Provider returned {} (attempt {}), retrying in {}s...",
+            status,
+            attempt + 1,
+            delay_secs
+        );
+
+        let backoff = tokio::time::sleep(Duration::from_secs(delay_secs));
+        match cancel {
+            Some(c) => tokio::select! {
+                _ = c.cancelled() => return Ok(None),
+                _ = backoff => {}
+            },
+            None => backoff.await,
+        }
+        attempt += 1;
+    }
+}
+
 fn split_anthropic_messages(messages: &[AiMessage]) -> (Option<String>, Vec<Value>) {
     let mut system_parts = Vec::new();
     let mut request_messages = Vec::new();
@@ -124,14 +226,15 @@ async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> 
         body["output_config"] = json!({ "effort": effort });
     }
 
-    let response = client
+    let request = client
         .post("https://api.anthropic.com/v1/messages")
         .header("x-api-key", &args.api_key)
         .header("anthropic-version", "2023-06-01")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        .json(&body);
+
+    let response = send_with_retry(request, None)
+        .await?
+        .ok_or_else(|| command_error("AI_CANCELLED", "요청이 취소되었습니다.", None))?;
 
     let status = response.status();
     let text = response
@@ -197,13 +300,14 @@ async fn complete_openai(client: &reqwest::Client, args: &AiCompleteArgs) -> Com
         }
     }
 
-    let response = client
+    let request = client
         .post("https://api.openai.com/v1/chat/completions")
         .bearer_auth(&args.api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        .json(&body);
+
+    let response = send_with_retry(request, None)
+        .await?
+        .ok_or_else(|| command_error("AI_CANCELLED", "요청이 취소되었습니다.", None))?;
 
     let status = response.status();
     let text = response
@@ -235,7 +339,10 @@ async fn complete_openai(client: &reqwest::Client, args: &AiCompleteArgs) -> Com
 }
 
 #[tauri::command]
-pub async fn ai_complete(args: AiCompleteArgs) -> CommandResult<AiCompleteResponse> {
+pub async fn ai_complete(
+    args: AiCompleteArgs,
+    client: State<'_, AiHttpClient>,
+) -> CommandResult<AiCompleteResponse> {
     if args.api_key.trim().is_empty() {
         return Err(command_error(
             "AI_API_KEY_MISSING",
@@ -251,10 +358,9 @@ pub async fn ai_complete(args: AiCompleteArgs) -> CommandResult<AiCompleteRespon
         ));
     }
 
-    let client = reqwest::Client::new();
     let text = match args.provider.as_str() {
-        "anthropic" => complete_anthropic(&client, &args).await?,
-        "openai" => complete_openai(&client, &args).await?,
+        "anthropic" => complete_anthropic(&client.0, &args).await?,
+        "openai" => complete_openai(&client.0, &args).await?,
         other => {
             return Err(command_error(
                 "AI_PROVIDER_UNSUPPORTED",
@@ -297,25 +403,27 @@ pub enum AiStreamEvent {
     Delta { text: String },
 }
 
-/// stream_id별 취소 플래그 레지스트리. (락은 짧게만 잡고 await 구간을 넘기지 않는다)
+/// stream_id별 취소 핸들 레지스트리. (락은 짧게만 잡고 await 구간을 넘기지 않는다)
 #[derive(Default)]
 pub struct AiStreamRegistry {
-    inner: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    inner: Mutex<HashMap<String, Arc<CancelHandle>>>,
 }
 
 impl AiStreamRegistry {
-    fn register(&self, id: &str) -> Arc<AtomicBool> {
+    fn register(&self, id: &str) -> Arc<CancelHandle> {
         let mut map = self.inner.lock().expect("ai stream registry poisoned");
         map.entry(id.to_string())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+            .or_insert_with(|| Arc::new(CancelHandle::new()))
             .clone()
     }
 
     fn cancel(&self, id: &str) {
-        let mut map = self.inner.lock().expect("ai stream registry poisoned");
-        map.entry(id.to_string())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-            .store(true, Ordering::SeqCst);
+        // 미등록 id에 엔트리를 만들지 않는다.
+        // (스트림 종료 후 도착한 늦은 cancel이 엔트리를 만들어 영구 잔류하는 누수 방지)
+        let map = self.inner.lock().expect("ai stream registry poisoned");
+        if let Some(handle) = map.get(id) {
+            handle.cancel();
+        }
     }
 
     fn remove(&self, id: &str) {
@@ -338,7 +446,7 @@ async fn stream_anthropic(
     client: &reqwest::Client,
     args: &AiStreamArgs,
     on_event: &Channel<AiStreamEvent>,
-    cancel: &Arc<AtomicBool>,
+    cancel: &CancelHandle,
 ) -> CommandResult<String> {
     let (system, messages) = split_anthropic_messages(&args.messages);
     let mut body = json!({
@@ -360,15 +468,17 @@ async fn stream_anthropic(
         body["output_config"] = json!({ "effort": effort });
     }
 
-    let mut response = client
+    let request = client
         .post("https://api.anthropic.com/v1/messages")
         .header("x-api-key", &args.api_key)
         .header("anthropic-version", "2023-06-01")
         .header("accept", "text/event-stream")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        .json(&body);
+
+    // 429/5xx는 스트리밍 시작 전에 한해 백오프 재시도. None이면 취소된 것.
+    let Some(mut response) = send_with_retry(request, Some(cancel)).await? else {
+        return Ok(String::new());
+    };
 
     let status = response.status();
     if !status.is_success() {
@@ -379,13 +489,16 @@ async fn stream_anthropic(
     let mut acc = String::new();
     let mut buffer = String::new();
     loop {
-        if cancel.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             return Ok(acc);
         }
-        let chunk = response
-            .chunk()
-            .await
-            .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        // chunk 대기 중에도 취소가 즉시 반영되도록 select!로 감싼다.
+        // read_timeout(idle 기준) 덕분에 서버 무응답 시에도 유한 시간 내에 반환된다.
+        let chunk = tokio::select! {
+            _ = cancel.cancelled() => return Ok(acc),
+            chunk = response.chunk() => chunk
+                .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?,
+        };
         let Some(bytes) = chunk else { break };
         buffer.push_str(&String::from_utf8_lossy(&bytes));
 
@@ -432,7 +545,7 @@ async fn stream_openai(
     client: &reqwest::Client,
     args: &AiStreamArgs,
     on_event: &Channel<AiStreamEvent>,
-    cancel: &Arc<AtomicBool>,
+    cancel: &CancelHandle,
 ) -> CommandResult<String> {
     let messages = args
         .messages
@@ -463,14 +576,16 @@ async fn stream_openai(
         }
     }
 
-    let mut response = client
+    let request = client
         .post("https://api.openai.com/v1/chat/completions")
         .bearer_auth(&args.api_key)
         .header("accept", "text/event-stream")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        .json(&body);
+
+    // 429/5xx는 스트리밍 시작 전에 한해 백오프 재시도. None이면 취소된 것.
+    let Some(mut response) = send_with_retry(request, Some(cancel)).await? else {
+        return Ok(String::new());
+    };
 
     let status = response.status();
     if !status.is_success() {
@@ -481,13 +596,14 @@ async fn stream_openai(
     let mut acc = String::new();
     let mut buffer = String::new();
     loop {
-        if cancel.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             return Ok(acc);
         }
-        let chunk = response
-            .chunk()
-            .await
-            .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?;
+        let chunk = tokio::select! {
+            _ = cancel.cancelled() => return Ok(acc),
+            chunk = response.chunk() => chunk
+                .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?,
+        };
         let Some(bytes) = chunk else { break };
         buffer.push_str(&String::from_utf8_lossy(&bytes));
 
@@ -528,6 +644,7 @@ pub async fn ai_stream(
     args: AiStreamArgs,
     on_event: Channel<AiStreamEvent>,
     registry: State<'_, AiStreamRegistry>,
+    client: State<'_, AiHttpClient>,
 ) -> CommandResult<AiCompleteResponse> {
     if args.api_key.trim().is_empty() {
         return Err(command_error(
@@ -545,10 +662,9 @@ pub async fn ai_stream(
     }
 
     let cancel = registry.register(&args.stream_id);
-    let client = reqwest::Client::new();
     let result = match args.provider.as_str() {
-        "anthropic" => stream_anthropic(&client, &args, &on_event, &cancel).await,
-        "openai" => stream_openai(&client, &args, &on_event, &cancel).await,
+        "anthropic" => stream_anthropic(&client.0, &args, &on_event, &cancel).await,
+        "openai" => stream_openai(&client.0, &args, &on_event, &cancel).await,
         other => Err(command_error(
             "AI_PROVIDER_UNSUPPORTED",
             format!("지원하지 않는 AI provider입니다: {other}"),

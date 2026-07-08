@@ -46,6 +46,12 @@ fn escape_html(s: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+/// 준민감 식별자(client_id 등) 로그 마스킹: 앞 4자만 노출
+fn mask_id(value: &str) -> String {
+    let prefix: String = value.chars().take(4).collect();
+    format!("{}****", prefix)
+}
+
 /// OAuth 토큰 (영속화 가능)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OAuthToken {
@@ -127,6 +133,11 @@ pub struct AtlassianOAuth {
     callback_shutdown_tx: Arc<Mutex<Option<tokio::sync::mpsc::Sender<()>>>>,
     /// 초기화 완료 여부
     initialized: Arc<Mutex<bool>>,
+    /// 토큰 갱신 single-flight 락.
+    /// 동시 요청이 같은(구) refresh_token으로 갱신을 중복 시도하면, refresh token
+    /// rotation 때문에 뒤늦은 쪽이 invalid_grant로 실패하며 방금 갱신된 유효 토큰까지
+    /// 삭제하는 race가 발생한다 (2026-07-07 리뷰 C2).
+    refresh_lock: Arc<Mutex<()>>,
 }
 
 impl AtlassianOAuth {
@@ -138,6 +149,7 @@ impl AtlassianOAuth {
             callback_tx: Arc::new(Mutex::new(None)),
             callback_shutdown_tx: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
+            refresh_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -153,7 +165,11 @@ impl AtlassianOAuth {
         // 저장된 클라이언트 로드
         if let Ok(Some(client_json)) = SECRETS.get(VAULT_MCP_CLIENT).await {
             if let Ok(client) = serde_json::from_str::<RegisteredClient>(&client_json) {
-                info!("[OAuth] Loaded client_id from vault: {}", client.client_id);
+                // client_id는 준민감 정보이므로 마스킹하여 로깅
+                info!(
+                    "[OAuth] Loaded client_id from vault: {}",
+                    mask_id(&client.client_id)
+                );
                 *self.registered_client.lock().await = Some(client);
             }
         }
@@ -212,6 +228,11 @@ impl AtlassianOAuth {
     }
 
     /// 유효한 액세스 토큰 가져오기 (필요 시 자동 갱신)
+    ///
+    /// 갱신은 refresh_lock으로 single-flight화한다:
+    /// 1) 락 획득 후 만료 여부를 재확인(double-check)하여, 앞선 요청이 이미 갱신했으면 스킵
+    /// 2) 갱신 실패 시에도 "실패한 refresh_token이 현재 저장된 것과 동일할 때"만 삭제하여,
+    ///    그 사이 갱신/재인증으로 저장된 새 토큰을 파괴하지 않는다
     pub async fn get_access_token(&self) -> Option<String> {
         let _ = self.initialize().await;
 
@@ -224,17 +245,48 @@ impl AtlassianOAuth {
             }
         };
 
-        // 만료된 경우 갱신 시도
+        // 만료된 경우 갱신 시도 (single-flight)
         if needs_refresh {
-            info!("[OAuth] Token expired, attempting refresh...");
-            match self.refresh_token().await {
-                Ok(()) => info!("[OAuth] Token refreshed successfully"),
-                Err(e) => {
-                    warn!("[OAuth] Token refresh failed: {}", e);
-                    // 만료된 토큰 삭제 (메모리 + vault) - 호출자가 재인증 트리거하도록
-                    *self.token.lock().await = None;
-                    let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
-                    return None;
+            // tokio Mutex이므로 await 너머로 보유해도 안전하다 (std Mutex 금지 규칙과 무관)
+            let _refresh_guard = self.refresh_lock.lock().await;
+
+            // double-check: 락 대기 중 다른 요청이 이미 갱신을 끝냈을 수 있다
+            let (still_expired, refresh_token_in_use) = {
+                let token = self.token.lock().await;
+                match token.as_ref() {
+                    Some(t) => (t.is_expired(), t.refresh_token.clone()),
+                    None => return None,
+                }
+            };
+
+            if still_expired {
+                info!("[OAuth] Token expired, attempting refresh...");
+                match self.refresh_token().await {
+                    Ok(()) => info!("[OAuth] Token refreshed successfully"),
+                    Err(e) => {
+                        warn!("[OAuth] Token refresh failed: {}", e);
+                        // 삭제는 실패한 refresh_token이 현재 저장된 것과 동일할 때만 수행.
+                        // (동시 재인증 등으로 새 토큰이 저장됐다면 보존해야 한다)
+                        let should_delete = {
+                            let mut token = self.token.lock().await;
+                            let current_refresh =
+                                token.as_ref().and_then(|t| t.refresh_token.clone());
+                            if current_refresh == refresh_token_in_use {
+                                *token = None;
+                                true
+                            } else {
+                                warn!(
+                                    "[OAuth] Stored token changed during refresh; keeping it"
+                                );
+                                false
+                            }
+                        };
+                        if should_delete {
+                            let _ = SECRETS.delete(VAULT_MCP_TOKEN).await;
+                            return None;
+                        }
+                        // 새 토큰이 존재하므로 아래에서 그대로 반환
+                    }
                 }
             }
         }
@@ -280,7 +332,8 @@ impl AtlassianOAuth {
             if client.registered_port == port {
                 info!(
                     "[OAuth] Reusing existing client: {} (port {})",
-                    client.client_id, port
+                    mask_id(&client.client_id),
+                    port
                 );
                 return Ok(client);
             }
@@ -313,11 +366,8 @@ impl AtlassianOAuth {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            let body_preview = if body.len() > 200 {
-                &body[..200]
-            } else {
-                &body
-            };
+            // 바이트 슬라이싱은 멀티바이트 경계에서 패닉하므로 UTF-8 안전 절단 사용
+            let body_preview = crate::utils::truncate_utf8(&body, 200);
             return Err(format!(
                 "Client registration failed with status {}: {}",
                 status, body_preview
@@ -329,7 +379,10 @@ impl AtlassianOAuth {
             .await
             .map_err(|e| format!("Failed to parse registration response: {}", e))?;
 
-        info!("[OAuth] Client registered: {}", reg_response.client_id);
+        info!(
+            "[OAuth] Client registered: {}",
+            mask_id(&reg_response.client_id)
+        );
 
         let registered = RegisteredClient {
             client_id: reg_response.client_id,
@@ -371,28 +424,40 @@ impl AtlassianOAuth {
 
     /// OAuth 인증 플로우 시작
     pub async fn start_auth_flow(&self) -> Result<String, String> {
-        // Single-flight guard: 이미 진행 중인 OAuth 플로우가 있으면 거부
-        {
-            let existing = self.pending_pkce.lock().await;
-            if existing.is_some() {
-                return Err("OAuth flow already in progress. Please wait or cancel.".to_string());
-            }
-        }
-
-        // 1) 먼저 콜백 서버 포트를 확보 (바인딩 실패 시 여기서 에러 반환)
-        let (listener, bound_port) = Self::bind_callback_listener().await?;
-
-        // 2) 확보된 포트로 클라이언트 등록 (포트 변경 시 자동 재등록)
-        let registered_client = self.register_client(bound_port).await?;
-
+        // PKCE 값을 먼저 생성하고, single-flight 검사와 예약을 하나의 락 스코프에서 수행한다.
+        // (검사 후 별도 쓰기로 나누면 동시 호출 2건이 모두 통과하는 TOCTOU가 생긴다)
         let code_verifier = Self::generate_code_verifier();
         let code_challenge = Self::generate_code_challenge(&code_verifier);
         let state = Self::generate_state();
 
-        *self.pending_pkce.lock().await = Some(PkceData {
-            code_verifier: code_verifier.clone(),
-            state: state.clone(),
-        });
+        {
+            let mut pending = self.pending_pkce.lock().await;
+            if pending.is_some() {
+                return Err("OAuth flow already in progress. Please wait or cancel.".to_string());
+            }
+            *pending = Some(PkceData {
+                code_verifier: code_verifier.clone(),
+                state: state.clone(),
+            });
+        }
+
+        // 1) 먼저 콜백 서버 포트를 확보 (실패 시 예약 해제 후 에러 반환)
+        let (listener, bound_port) = match Self::bind_callback_listener().await {
+            Ok(v) => v,
+            Err(e) => {
+                *self.pending_pkce.lock().await = None;
+                return Err(e);
+            }
+        };
+
+        // 2) 확보된 포트로 클라이언트 등록 (포트 변경 시 자동 재등록, 실패 시 예약 해제)
+        let registered_client = match self.register_client(bound_port).await {
+            Ok(v) => v,
+            Err(e) => {
+                *self.pending_pkce.lock().await = None;
+                return Err(e);
+            }
+        };
 
         let redirect_uri = format!("http://localhost:{}/callback", bound_port);
         let auth_url = format!(
@@ -405,7 +470,8 @@ impl AtlassianOAuth {
             code_challenge
         );
 
-        info!("[OAuth] Authorization URL: {}", auth_url);
+        // 전체 URL에는 client_id/state가 포함되므로 엔드포인트만 로깅
+        info!("[OAuth] Opening authorization URL ({})", MCP_AUTH_URL);
 
         let (tx, rx) = oneshot::channel();
         *self.callback_tx.lock().await = Some(tx);
@@ -838,5 +904,59 @@ impl AtlassianOAuth {
 impl Default for AtlassianOAuth {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_token(expires_in: Option<i64>, issued_at: i64, refresh: Option<&str>) -> OAuthToken {
+        OAuthToken {
+            access_token: "access".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in,
+            refresh_token: refresh.map(str::to_string),
+            scope: None,
+            issued_at,
+        }
+    }
+
+    #[test]
+    fn token_expiry_uses_refresh_margin() {
+        let now = chrono::Utc::now().timestamp();
+        // 만료까지 10분 남음: 유효
+        assert!(!make_token(Some(600), now, None).is_expired());
+        // 만료까지 1분 남음: margin(5분) 이내이므로 갱신 필요
+        assert!(make_token(Some(60), now, None).is_expired());
+        // expires_in 없음: 만료로 간주하지 않음
+        assert!(!make_token(None, now, None).is_expired());
+    }
+
+    /// C2 삭제 가드의 핵심 비교 로직: "실패한 refresh_token이 현재 저장된 것과 동일할 때"만 삭제.
+    /// get_access_token 내부와 동일한 Option<String> 비교 의미론을 검증한다.
+    #[test]
+    fn refresh_token_delete_guard_comparison() {
+        let now = chrono::Utc::now().timestamp();
+        let failed = make_token(Some(0), now - 100, Some("old-rt")).refresh_token;
+
+        // 저장된 토큰이 그대로면 삭제 대상
+        let stored_same = make_token(Some(0), now - 100, Some("old-rt")).refresh_token;
+        assert_eq!(stored_same, failed);
+
+        // 그 사이 rotation으로 새 refresh_token이 저장됐다면 보존 대상
+        let stored_rotated = make_token(Some(3600), now, Some("new-rt")).refresh_token;
+        assert_ne!(stored_rotated, failed);
+
+        // 재인증으로 refresh_token 없는 토큰이 저장된 경우도 보존 대상
+        let stored_no_refresh = make_token(Some(3600), now, None).refresh_token;
+        assert_ne!(stored_no_refresh, failed);
+    }
+
+    #[test]
+    fn mask_id_keeps_only_prefix() {
+        assert_eq!(mask_id("client-1234567890"), "clie****");
+        assert_eq!(mask_id("ab"), "ab****");
+        assert_eq!(mask_id(""), "****");
     }
 }

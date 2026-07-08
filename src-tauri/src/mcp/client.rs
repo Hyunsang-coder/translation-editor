@@ -74,20 +74,19 @@ impl McpClient {
 
         debug!("[MCP] connect() called");
 
-        // 이미 연결 중이거나 연결된 경우
+        // 상태 확인 + is_connecting 전환을 하나의 write 락에서 수행.
+        // (read 락으로 확인 후 별도 write로 전환하면 동시 connect 2건이 모두 통과하는
+        //  TOCTOU가 생겨 OAuth/initialize가 이중 실행된다: 2026-07-07 리뷰 C7)
         {
-            let status = self.status.read().await;
+            let mut status = self.status.write().await;
             if status.is_connected || status.is_connecting {
                 debug!("[MCP] Already connected or connecting, skipping");
                 return Ok(());
             }
+            status.is_connecting = true;
+            status.error = None;
+            emit_mcp_status_changed(&status);
         }
-
-        self.update_status(|s| {
-            s.is_connecting = true;
-            s.error = None;
-        })
-        .await;
 
         // OAuth 토큰 확인 (재시도 대상 아님 - 사용자 인터랙션 필요)
         debug!("[MCP] Checking OAuth token...");
@@ -321,7 +320,7 @@ impl McpClient {
         debug!(
             "[MCP] Response ({}): {}",
             content_type,
-            &response_text[..response_text.len().min(200)]
+            crate::utils::truncate_utf8(&response_text, 200)
         );
 
         // 응답이 비어있는 경우 (일부 알림 요청에 대한 응답)
@@ -356,7 +355,7 @@ impl McpClient {
             .ok_or_else(|| {
                 format!(
                     "No data field in SSE response: {}",
-                    &body[..body.len().min(200)]
+                    crate::utils::truncate_utf8(body, 200)
                 )
             })?;
 

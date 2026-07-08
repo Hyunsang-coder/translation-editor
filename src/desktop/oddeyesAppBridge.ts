@@ -1,5 +1,6 @@
 import { applyDesktopTranslationPreview, discardDesktopTranslationPreview } from '@/desktop/translationPreviewActions';
 import { useChatStore } from '@/stores/chatStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
@@ -38,6 +39,19 @@ declare global {
 }
 
 function getDocJson(kind: 'source' | 'target'): TipTapDocJson {
+  // 살아있는 에디터가 최우선: 스토어의 DocJson/HTML 캐시는 에디터 onChange 디바운스(P1)로
+  // 최대 수백 ms 뒤처질 수 있다. revision(set 시점)과 apply 시점 재검증(L3)이 같은 소스를
+  // 보도록 에디터 → 스토어 JSON → 스토어 HTML 순으로 읽는다.
+  const { sourceEditor, targetEditor } = useEditorStore.getState();
+  const editor = kind === 'source' ? sourceEditor : targetEditor;
+  if (editor && !editor.isDestroyed) {
+    try {
+      return editor.getJSON() as TipTapDocJson;
+    } catch {
+      // 직렬화 실패 시 스토어 캐시로 폴백
+    }
+  }
+
   const projectStore = useProjectStore.getState();
   const direct = kind === 'source' ? projectStore.sourceDocJson : projectStore.targetDocJson;
   if (direct) {
@@ -119,6 +133,14 @@ async function getTranslationContext(): Promise<unknown> {
 
 async function setTranslationPreview(params: BridgeParams): Promise<unknown> {
   const projectStore = useProjectStore.getState();
+  const project = projectStore.project;
+  if (!project) throw new Error('No project loaded');
+
+  // 외부 호출자가 projectId를 넘기면 현재 프로젝트와 일치해야 한다 (setReviewIssues와 대칭).
+  if (typeof params.projectId === 'string' && params.projectId.length > 0 && params.projectId !== project.id) {
+    throw new Error(`Project mismatch: expected ${project.id}, got ${params.projectId}`);
+  }
+
   const format = params.format === 'tiptap_json' ? 'tiptap_json' : 'markdown';
   const title = typeof params.title === 'string' && params.title.trim().length > 0
     ? params.title.trim()
@@ -126,6 +148,11 @@ async function setTranslationPreview(params: BridgeParams): Promise<unknown> {
   const summary = typeof params.summary === 'string' ? params.summary : null;
   const intent = typeof params.intent === 'string' ? params.intent : 'external';
 
+  // L3: revision은 호출자가 넘기면 검증하고, 안 넘기면 set 시점 현재값을 자동 캡처한다.
+  // projectId도 마찬가지로 set 시점의 현재 프로젝트를 항상 기록한다. 이 두 값은
+  // applyDesktopTranslationPreview가 apply 시점에 재검증하는 기준이 된다.
+  // (외부 MCP 파라미터 스키마의 필수화는 oddeyes-desktop-mcp/Rust 쪽 변경이 필요하므로,
+  //  하위 호환을 위해 미전달 시 자동 캡처 방식을 사용한다.)
   const sourceRevision = assertRevision('source', params.sourceRevision);
   const targetRevision = assertRevision('target', params.targetRevision);
   const docJson = format === 'tiptap_json'
@@ -141,6 +168,7 @@ async function setTranslationPreview(params: BridgeParams): Promise<unknown> {
     targetRevision,
     summary,
     intent: intent as 'translate' | 'revise' | 'review_fix' | 'external',
+    projectId: project.id,
   });
 
   return {
@@ -188,6 +216,12 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 async function setReviewIssues(params: BridgeParams): Promise<unknown> {
+  // ── 신뢰경계 (S4) ─────────────────────────────────────────────────────────
+  // 여기로 들어오는 issues의 description/suggestedFix/excerpt는 외부(Claude Desktop
+  // 브리지)가 주입한 "비신뢰 텍스트"다. 이 함수는 타입/심각도 정규화와 빈 excerpt 드롭만
+  // 수행하며, 주입 텍스트는 이후 reviewStore → 검수 UI/재번역·수정 프롬프트로 흘러간다.
+  // 프롬프트에 삽입하는 조립부(reviewStore/src/ai 계열)에서 <untrusted> 구분자 마킹과
+  // "지시문으로 실행 금지" 정책을 적용해야 한다. (해당 파일은 이 세션 범위 밖 — 리뷰 §S4)
   const project = useProjectStore.getState().project;
   if (!project) throw new Error('No project loaded');
 
@@ -250,6 +284,11 @@ async function setReviewIssues(params: BridgeParams): Promise<unknown> {
 type ContextField = 'translatorPersona' | 'translationRules' | 'projectContext';
 
 async function setTranslationContext(params: BridgeParams): Promise<unknown> {
+  // ── 신뢰경계 (S4) ─────────────────────────────────────────────────────────
+  // persona/rules/projectContext는 외부(Claude Desktop 브리지)가 주입한 "비신뢰 텍스트"이며,
+  // chatStore 세터를 거쳐 이후 번역/채팅 시스템 프롬프트에 그대로 삽입된다.
+  // 프롬프트 조립부(src/ai/chat.ts, translateDocument.ts 등)에서 <untrusted> 구분자 마킹과
+  // "지시문으로 실행 금지" 정책을 적용해야 한다. (해당 파일은 이 세션 범위 밖 — 리뷰 §S4)
   const project = useProjectStore.getState().project;
   if (!project) throw new Error('No project loaded');
 

@@ -108,6 +108,19 @@ interface ReviewActions {
   handleChunkError: (chunkIndex: number, error: Error) => void;
 
   /**
+   * 검수 실행 슬롯 원자적 획득 (이중 실행 방지, L4).
+   * 이미 검수 중이면 false를 반환하고, 아니면 isReviewing을 즉시 true로 만든다.
+   * chunk 빌드 등 비동기 준비 단계보다 먼저 호출해 이중 실행 창을 제거한다.
+   * 획득 후 startReview에 도달하지 못하면 releaseReviewRun으로 반납해야 한다.
+   */
+  acquireReviewRun: (projectId: string) => boolean;
+
+  /**
+   * acquireReviewRun으로 획득한 실행 슬롯을 검수 시작 전에 반납 (준비 단계 실패/중단 시).
+   */
+  releaseReviewRun: () => void;
+
+  /**
    * 검수 시작 상태로 전환
    */
   startReview: (chunksOverride?: AlignedChunk[]) => void;
@@ -215,6 +228,10 @@ type ReviewStore = ReviewState & ReviewActions;
 let cachedAllIssues: ReviewIssue[] = [];
 let cachedNonce: number = -1;
 
+// initializeReview 경합 가드: A→B 빠른 전환 시 늦게 끝난 A의 set이 B 상태를 덮지 않도록
+// (projectStore hydrateCommentsForProject의 requestSeq 패턴과 동일)
+let initializeReviewRequestSeq = 0;
+
 // ============================================
 // Store Implementation
 // ============================================
@@ -241,14 +258,19 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   ...initialState,
 
   initializeReview: async (project: ITEProject) => {
-    const { initializedProjectId, results, highlightNonce } = get();
+    const { initializedProjectId, results } = get();
     // 이미 같은 프로젝트로 초기화되어 있고 검수 결과가 있으면 스킵 (탭 전환 시 상태 유지)
     // 검수 결과가 없으면 항상 재초기화 (resetReview 후 또는 첫 진입)
     if (initializedProjectId === project.id && results.length > 0) {
       return;
     }
+    const requestSeq = ++initializeReviewRequestSeq;
     // 비동기 청킹으로 메인 스레드 블로킹 방지
     const chunks = await buildAlignedChunksAsync(project);
+    // 늦게 도착한 stale 초기화가 더 최신 초기화 결과를 덮지 않도록 가드
+    if (requestSeq !== initializeReviewRequestSeq) return;
+    // 이 프로젝트에서 이미 검수 실행이 시작됐으면(acquireReviewRun) 실행 상태를 덮지 않음
+    if (get().isReviewing && get().initializedProjectId === project.id) return;
     set({
       chunks,
       currentChunkIndex: 0,
@@ -257,8 +279,23 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       progress: { completed: 0, total: chunks.length },
       initializedProjectId: project.id,
       highlightEnabled: false,  // 초기화 시 기존 하이라이트 무효화
-      highlightNonce: highlightNonce + 1,  // 에디터에 변경 알림
+      highlightNonce: get().highlightNonce + 1,  // 에디터에 변경 알림
     });
+  },
+
+  acquireReviewRun: (projectId: string) => {
+    if (get().isReviewing) return false;
+    set({
+      isReviewing: true,
+      initializedProjectId: projectId,
+      progress: { completed: 0, total: 0 },
+      streamingText: '',
+    });
+    return true;
+  },
+
+  releaseReviewRun: () => {
+    set({ isReviewing: false });
   },
 
   addResult: (result: ReviewResult) => {
@@ -470,7 +507,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
 // ============================================
 // 문서 변경 시 하이라이트 처리
 // ============================================
-// ReviewHighlight.ts의 ProseMirror plugin이 tr.docChanged 감지 시 자동으로 재계산
-// - 찾을 수 있는 이슈는 계속 하이라이트 유지
-// - 편집으로 텍스트가 변경되어 못 찾으면 자연스럽게 제거됨
+// ReviewHighlight.ts의 ProseMirror plugin이 문서 변경을 처리
+// - 편집 중에는 기존 데코레이션을 tr.mapping으로 위치만 이동 (키 입력당 O(n) 재계산 방지)
+// - 전체 재계산은 300ms idle 디바운스 후 또는 highlightNonce 갱신(refreshEditorHighlight) 시 수행
+// - 편집으로 텍스트가 변경되어 못 찾으면 재계산 시점에 자연스럽게 제거됨
 // - 이전에는 cross-store subscription으로 전체 무효화했으나 제거됨

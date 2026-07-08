@@ -104,7 +104,8 @@ export function ReviewPanel(): JSX.Element {
   const getCheckedIssues = useReviewStore((s) => s.getCheckedIssues);
   const setStreamingText = useReviewStore((s) => s.setStreamingText);
 
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  // 검수 루프 중단 컨트롤러 (프로젝트 전환 effect에서도 abort할 수 있도록 ref로 보관)
+  const reviewAbortRef = useRef<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // 품질 장부 맥락 (WP-A1): 앱 대조 리뷰의 origin 기본값. content_type=도메인.
@@ -143,8 +144,32 @@ export function ReviewPanel(): JSX.Element {
     return () => clearInterval(interval);
   }, [isReviewing]);
 
+  // 프로젝트 전환 감지용 이전 ID (마운트 시 abort 방지 위해 현재 ID로 초기화)
+  const prevProjectIdRef = useRef<string | null>(project?.id ?? null);
+
   // 패널이 열릴 때 초기화 (스토어에서 프로젝트 ID 체크하여 중복 초기화 방지)
+  // 프로젝트가 전환되면 진행 중인 검수/재번역을 즉시 중단한다 (L4):
+  // 검수 루프가 계속 돌면 구 프로젝트 이슈가 새 프로젝트 상태/품질 장부에 주입된다.
+  // (switchProjectById에는 review abort 신호가 없으므로 패널 로컬에서 동일 효과 구현)
   useEffect(() => {
+    const nextId = project?.id ?? null;
+    if (prevProjectIdRef.current !== nextId) {
+      prevProjectIdRef.current = nextId;
+
+      // 진행 중 검수 루프 중단
+      reviewAbortRef.current?.abort();
+      reviewAbortRef.current = null;
+
+      // 진행 중 재번역 중단 + 프리뷰/설정 모달 닫기 (다른 프로젝트 문서에 적용 방지)
+      retranslateAbortController.current?.abort();
+      setRetranslateModalOpen(false);
+      setRetranslatePreviewOpen(false);
+      setRetranslatePreviewDoc(null);
+      setRetranslateOriginalDocJson(null);
+      setRetranslateLoading(false);
+      setRetranslateError(null);
+      setRetranslateStreamingText('');
+    }
     if (project) {
       initializeReview(project);
     }
@@ -168,6 +193,9 @@ export function ReviewPanel(): JSX.Element {
     const project = useProjectStore.getState().project;
     if (!project) return;
 
+    // 이중 실행 가드 (L4): 이미 검수 중이면 무시
+    if (useReviewStore.getState().isReviewing) return;
+
     // Pre-check: 변환 파이프라인 거치기 전에 원본 HTML로 직접 빈 문서 검증
     // buildAlignedChunksAsync의 markdown 변환은 <p></p> 등을 빈 문자열로 정확히 변환하지 못할 수 있음
     const { sourceDocument, targetDocument } = useProjectStore.getState();
@@ -183,10 +211,24 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
+    // 이중 실행 창 제거 (L4): chunk 빌드(await) 전에 실행 슬롯을 원자적으로 획득해
+    // isReviewing을 즉시 true로 만든다. (위 가드~여기까지 동기 구간이라 재진입 불가)
+    if (!useReviewStore.getState().acquireReviewRun(project.id)) return;
+
+    // 프로젝트 전환 감지용 스냅샷 (L4): 루프/장부 기록은 이 ID 기준으로만 수행
+    const startProjectId = project.id;
+    setElapsedSeconds(0);
+
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
+
+    // chunk 빌드 동안 프로젝트가 전환됐으면 중단
+    // (상태는 새 프로젝트의 initializeReview가 재설정하므로 여기서 건드리지 않음)
+    if (useProjectStore.getState().project?.id !== startProjectId) return;
+
     if (freshChunks.length === 0) {
+      useReviewStore.getState().releaseReviewRun();
       useUIStore.getState().addToast({
         type: 'warning',
         message: t('review.emptyDocument', '검수할 내용이 없습니다. 원문과 번역문을 먼저 입력해주세요.'),
@@ -198,8 +240,7 @@ export function ReviewPanel(): JSX.Element {
     chunksRef.current = freshChunks;
 
     const controller = new AbortController();
-    setAbortController(controller);
-    setElapsedSeconds(0);
+    reviewAbortRef.current = controller;
     startReview(freshChunks);
 
     // Trade-off: glossary lookup uses only the first chunk (same as reviewTool.ts).
@@ -231,6 +272,8 @@ export function ReviewPanel(): JSX.Element {
     try {
       for (let i = 0; i < freshChunks.length; i++) {
         if (controller.signal.aborted) break;
+        // 프로젝트 전환 감지 (L4): 구 프로젝트 이슈가 새 프로젝트 상태/장부에 주입되는 것 방지
+        if (useProjectStore.getState().project?.id !== startProjectId) break;
 
         const chunk = freshChunks[i]!;
 
@@ -262,6 +305,14 @@ export function ReviewPanel(): JSX.Element {
             onToken: (text) => setStreamingText(text),
           });
 
+          // await 동안 프로젝트가 전환/취소됐으면 이 청크 결과는 폐기 (L4)
+          if (
+            controller.signal.aborted ||
+            useProjectStore.getState().project?.id !== startProjectId
+          ) {
+            break;
+          }
+
           // Issue #8 Fix: parseReviewResult try-catch 래핑
           let issues: ReturnType<typeof parseReviewResult>;
           try {
@@ -278,22 +329,35 @@ export function ReviewPanel(): JSX.Element {
           });
 
           // 품질 장부: 생성된 이슈를 proposed로 적재 (best-effort, WP-A1 요구사항 2-①)
+          // 반드시 검수를 시작한 프로젝트 ID(startProjectId)로 기록 (전환 시 장부 오염 방지, L4)
           if (issues.length > 0) {
-            const ledgerProjectId = useProjectStore.getState().project?.id;
-            if (ledgerProjectId) {
-              void recordIssuesProposed(ledgerProjectId, issues, ledgerContext());
-            }
+            void recordIssuesProposed(startProjectId, issues, ledgerContext());
           }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') {
+            break;
+          }
+          // 전환 후 도착한 에러는 새 프로젝트 진행 상태를 오염시키지 않도록 폐기 (L4)
+          if (useProjectStore.getState().project?.id !== startProjectId) {
             break;
           }
           handleChunkError(i, error instanceof Error ? error : new Error('Unknown error'));
         }
       }
     } finally {
-      finishReview();
-      setAbortController(null);
+      // abort(취소/프로젝트 전환)나 전환 후에는 검수 상태를 건드리지 않는다:
+      // - 취소는 handleCancel이 이미 finishReview()를 호출
+      // - 전환은 새 프로젝트의 initializeReview가 상태를 재설정
+      // 여기서 무조건 finishReview()하면 이후 시작된 새 검수를 완료 처리해버릴 수 있다.
+      if (
+        !controller.signal.aborted &&
+        useProjectStore.getState().project?.id === startProjectId
+      ) {
+        finishReview();
+      }
+      if (reviewAbortRef.current === controller) {
+        reviewAbortRef.current = null;
+      }
     }
   }, [
     startReview,
@@ -311,12 +375,12 @@ export function ReviewPanel(): JSX.Element {
   }, [handleRunReview]);
 
   const handleCancel = useCallback(() => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null); // 메모리 누수 방지: abort 후 즉시 참조 해제
+    if (reviewAbortRef.current) {
+      reviewAbortRef.current.abort();
+      reviewAbortRef.current = null; // 메모리 누수 방지: abort 후 즉시 참조 해제
     }
     finishReview();
-  }, [abortController, finishReview]);
+  }, [finishReview]);
 
   /**
    * 누락 유형: suggestedFix를 클립보드에 복사
@@ -438,6 +502,10 @@ export function ReviewPanel(): JSX.Element {
    * 체크된 이슈를 반영하여 재번역 실행
    */
   const handleRetranslateExecute = useCallback(async () => {
+    // 이중 클릭/재진입 가드 (L5): 실행 중이면 무시
+    // (controller는 아래 동기 구간에서 세팅되고 finally에서 해제되므로 재진입 창이 없음)
+    if (retranslateAbortController.current) return;
+
     const checkedIssues = getCheckedIssues();
     // 실행 시점의 최신 프로젝트 참조 (async 중 프로젝트 전환 대비)
     const currentProject = useProjectStore.getState().project;
@@ -530,7 +598,10 @@ export function ReviewPanel(): JSX.Element {
       }
     } finally {
       setRetranslateLoading(false);
-      retranslateAbortController.current = null;
+      // 본인 컨트롤러일 때만 해제 (이중 실행 가드의 기준값 보호)
+      if (retranslateAbortController.current === controller) {
+        retranslateAbortController.current = null;
+      }
     }
   }, [getCheckedIssues, retranslateMessage, t]);
 
@@ -913,7 +984,8 @@ export function ReviewPanel(): JSX.Element {
               <button
                 type="button"
                 onClick={handleRetranslateExecute}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                disabled={retranslateLoading}
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
               >
                 {t('review.retranslate.modal.execute', '재번역 실행')}
               </button>

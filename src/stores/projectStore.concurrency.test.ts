@@ -31,6 +31,7 @@ vi.mock('@/stores/chatStore', () => ({
 
 import { useProjectStore } from './projectStore';
 import { useCommentStore } from './commentStore';
+import { useTranslationPreviewStore } from './translationPreviewStore';
 
 function createDeferred<T = void>() {
   let resolve: (value: T | PromiseLike<T>) => void = () => {};
@@ -62,9 +63,9 @@ function block(id: string, type: EditorBlock['type'], content: string): EditorBl
   };
 }
 
-function makeProject(targetContent = '<p>first</p>'): ITEProject {
+function makeProject(targetContent = '<p>first</p>', id = 'project-1'): ITEProject {
   return {
-    id: 'project-1',
+    id,
     version: '1.0.0',
     metadata: {
       title: 'Project',
@@ -118,7 +119,6 @@ describe('projectStore save concurrency', () => {
       sourceDocument: '<p>source</p>',
       sourceDocJson: null,
       targetDocJson: null,
-      pendingDocDiff: null,
       pendingDiffs: {},
       editSessions: [],
       applyAnchor: null,
@@ -185,5 +185,85 @@ describe('projectStore save concurrency', () => {
     expect(tauriCommentsMock.saveComments.mock.calls[1]?.[1]).toEqual([
       expect.objectContaining({ id: comment.id, comment: 'after' }),
     ]);
+  });
+});
+
+describe('projectStore switchProjectById concurrency (L5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tauriStorageMock.listProjectIds.mockResolvedValue([]);
+    tauriCommentsMock.loadComments.mockResolvedValue([]);
+    tauriCommentsMock.saveComments.mockResolvedValue(undefined);
+    tauriProjectMock.saveProject.mockResolvedValue(undefined);
+    chatStoreMock.hydrateForProject.mockResolvedValue(undefined);
+    useProjectStore.getState().stopAutoSave();
+
+    const project = makeProject();
+    useProjectStore.setState({
+      project,
+      isDirty: false,
+      isLoading: false,
+      error: null,
+      lastProjectId: project.id,
+      lastChangeAt: 1,
+      lastSavedAt: 0,
+      saveStatus: 'idle',
+      lastSaveError: null,
+      targetDocument: '<p>first</p>',
+      sourceDocument: '<p>source</p>',
+      sourceDocJson: null,
+      targetDocJson: null,
+      pendingDiffs: {},
+      editSessions: [],
+      applyAnchor: null,
+      targetDocHandle: null,
+    });
+    useCommentStore.getState().clear();
+    useTranslationPreviewStore.getState().clearPreview();
+  });
+
+  it('applies only the latest switch when switches overlap (last-click-wins)', async () => {
+    const projectB = makeProject('<p>b</p>', 'project-B');
+    const projectC = makeProject('<p>c</p>', 'project-C');
+
+    const loadB = createDeferred<ITEProject>();
+    const loadC = createDeferred<ITEProject>();
+    tauriProjectMock.loadProject.mockImplementation((id: string) =>
+      id === 'project-B' ? loadB.promise : loadC.promise,
+    );
+
+    const switchB = useProjectStore.getState().switchProjectById('project-B');
+    const switchC = useProjectStore.getState().switchProjectById('project-C');
+
+    // C(더 최신 클릭)가 먼저 완료되고 B(이전 클릭)가 나중에 완료되는 최악의 순서.
+    // 세대 토큰이 없으면 B가 마지막에 적용되어 last-click-wins가 깨진다.
+    loadC.resolve(projectC);
+    await flushPromises();
+    loadB.resolve(projectB);
+    await Promise.all([switchB, switchC]);
+    await flushPromises();
+
+    expect(useProjectStore.getState().project?.id).toBe('project-C');
+    useProjectStore.getState().stopAutoSave();
+  });
+
+  it('clears the desktop translation preview when switching projects (L3)', async () => {
+    useTranslationPreviewStore.getState().setPreview({
+      docJson: { type: 'doc', content: [] },
+      projectId: 'project-1',
+      targetRevision: 'rev-1',
+    });
+    expect(useTranslationPreviewStore.getState().open).toBe(true);
+
+    const projectB = makeProject('<p>b</p>', 'project-B');
+    tauriProjectMock.loadProject.mockResolvedValue(projectB);
+
+    await useProjectStore.getState().switchProjectById('project-B');
+
+    const preview = useTranslationPreviewStore.getState();
+    expect(preview.open).toBe(false);
+    expect(preview.docJson).toBeNull();
+    expect(preview.projectId).toBeNull();
+    useProjectStore.getState().stopAutoSave();
   });
 });

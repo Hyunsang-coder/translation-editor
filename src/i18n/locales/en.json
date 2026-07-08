@@ -256,6 +256,8 @@
     "previewTitle": "Translation Preview (Entire Source → Entire Target)",
     "polishPreviewTitle": "Polish Preview",
     "polishCancelled": "Polishing was cancelled.",
+    "applyCancelledProjectSwitched": "Apply was cancelled because the project was switched.",
+    "applyCancelledDocChanged": "Apply was cancelled because the document was edited after the request. Please review the document and run again.",
     "applySelected": "Apply {{count}} selected",
     "selectiveDiff": {
       "changedCount": "{{selected}} of {{total}} changes selected",

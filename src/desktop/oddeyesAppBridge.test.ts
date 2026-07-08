@@ -41,12 +41,23 @@ vi.mock('@/stores/chatStore', () => ({
   },
 }));
 
+const setPreviewSpy = vi.fn();
+
 vi.mock('@/stores/translationPreviewStore', () => ({
   useTranslationPreviewStore: {
     getState: () => ({
       open: false,
       docJson: null,
-      setPreview: vi.fn(),
+      setPreview: setPreviewSpy,
+    }),
+  },
+}));
+
+vi.mock('@/stores/editorStore', () => ({
+  useEditorStore: {
+    getState: () => ({
+      sourceEditor: null,
+      targetEditor: null,
     }),
   },
 }));
@@ -145,6 +156,52 @@ describe('oddeyesAppBridge — setReviewIssues', () => {
   it('projectId 불일치 시 거부 (함정 5)', async () => {
     await expect(callBridge('oddeyes.setReviewIssues', { projectId: 'other', issues: [] }))
       .rejects.toThrow('Project mismatch');
+  });
+});
+
+describe('oddeyesAppBridge — setTranslationPreview (L3)', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    setPreviewSpy.mockClear();
+  });
+
+  it('set 시점의 projectId와 revision을 자동 캡처해 store에 기록', async () => {
+    const res = await callBridge('oddeyes.setTranslationPreview', {
+      content: '# translated',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(setPreviewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'test-project',
+      // hashContent가 mock이므로 상수 해시 — set 시점 현재 revision이 자동 기록됨
+      sourceRevision: 'mock-hash-123',
+      targetRevision: 'mock-hash-123',
+    }));
+  });
+
+  it('projectId 불일치 시 거부 (setReviewIssues와 대칭)', async () => {
+    await expect(callBridge('oddeyes.setTranslationPreview', {
+      projectId: 'other-project',
+      content: '# translated',
+    })).rejects.toThrow('Project mismatch');
+    expect(setPreviewSpy).not.toHaveBeenCalled();
+  });
+
+  it('호출자가 넘긴 targetRevision이 현재와 다르면 거부', async () => {
+    await expect(callBridge('oddeyes.setTranslationPreview', {
+      targetRevision: 'stale-revision',
+      content: '# translated',
+    })).rejects.toThrow('target document revision mismatch');
+    expect(setPreviewSpy).not.toHaveBeenCalled();
+  });
+
+  it('호출자가 넘긴 targetRevision이 현재와 같으면 통과', async () => {
+    const res = await callBridge('oddeyes.setTranslationPreview', {
+      targetRevision: 'mock-hash-123',
+      content: '# translated',
+    }) as Record<string, unknown>;
+    expect(res.ok).toBe(true);
+    expect(setPreviewSpy).toHaveBeenCalledTimes(1);
   });
 });
 

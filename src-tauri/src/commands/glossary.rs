@@ -1,11 +1,12 @@
 //! Glossary Commands
 //!
 //! 로컬 글로서리(CSV) 임포트 및 검색 API
+//! 임포트는 파일 파싱 + 배치 insert로 무거울 수 있어 async + `run_db_task`로 실행한다.
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use super::AcquireDb;
+use super::run_db_task;
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::utils::{validate_file_size, validate_path};
@@ -44,62 +45,64 @@ pub struct ImportGlossaryExcelArgs {
 
 /// CSV 글로서리 임포트
 #[tauri::command]
-pub fn import_glossary_csv(
+pub async fn import_glossary_csv(
     args: ImportGlossaryCsvArgs,
-    db_state: State<DbState>,
+    db_state: State<'_, DbState>,
 ) -> CommandResult<ImportGlossaryResult> {
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
     validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
 
-    let mut db = db_state.acquire()?;
+    run_db_task(&db_state, move |db| {
+        let replace = args.replace_project_scope.unwrap_or(false);
+        let (inserted, updated, skipped, warnings) = db
+            .import_glossary_csv(
+                &args.project_id,
+                validated_path.to_string_lossy().as_ref(),
+                replace,
+            )
+            .map_err(CommandError::from)?;
 
-    let replace = args.replace_project_scope.unwrap_or(false);
-    let (inserted, updated, skipped, warnings) = db
-        .import_glossary_csv(
-            &args.project_id,
-            validated_path.to_string_lossy().as_ref(),
-            replace,
-        )
-        .map_err(CommandError::from)?;
-
-    Ok(ImportGlossaryResult {
-        inserted,
-        updated,
-        skipped,
-        warnings,
+        Ok(ImportGlossaryResult {
+            inserted,
+            updated,
+            skipped,
+            warnings,
+        })
     })
+    .await
 }
 
 /// Excel(.xlsx/.xls) 글로서리 임포트
 #[tauri::command]
-pub fn import_glossary_excel(
+pub async fn import_glossary_excel(
     args: ImportGlossaryExcelArgs,
-    db_state: State<DbState>,
+    db_state: State<'_, DbState>,
 ) -> CommandResult<ImportGlossaryResult> {
     // 경로 검증 (시스템 디렉토리 접근 차단)
     let validated_path = validate_path(&args.path)?;
 
     validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
 
-    let mut db = db_state.acquire()?;
+    run_db_task(&db_state, move |db| {
+        let replace = args.replace_project_scope.unwrap_or(false);
+        let (inserted, updated, skipped, warnings) = db
+            .import_glossary_excel(
+                &args.project_id,
+                validated_path.to_string_lossy().as_ref(),
+                replace,
+            )
+            .map_err(CommandError::from)?;
 
-    let replace = args.replace_project_scope.unwrap_or(false);
-    let (inserted, updated, skipped, warnings) = db
-        .import_glossary_excel(
-            &args.project_id,
-            validated_path.to_string_lossy().as_ref(),
-            replace,
-        )
-        .map_err(CommandError::from)?;
-
-    Ok(ImportGlossaryResult {
-        inserted,
-        updated,
-        skipped,
-        warnings,
+        Ok(ImportGlossaryResult {
+            inserted,
+            updated,
+            skipped,
+            warnings,
+        })
     })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,28 +129,29 @@ pub struct GlossaryEntryDto {
 
 /// 글로서리 검색(비벡터, rule-based)
 #[tauri::command]
-pub fn search_glossary(
+pub async fn search_glossary(
     args: SearchGlossaryArgs,
-    db_state: State<DbState>,
+    db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<GlossaryEntryDto>> {
-    let db = db_state.acquire()?;
+    run_db_task(&db_state, move |db| {
+        let limit = args.limit.unwrap_or(12).min(50);
+        let rows = db
+            .search_glossary_in_text(&args.project_id, &args.query, args.domain.as_deref(), limit)
+            .map_err(CommandError::from)?;
 
-    let limit = args.limit.unwrap_or(12).min(50);
-    let rows = db
-        .search_glossary_in_text(&args.project_id, &args.query, args.domain.as_deref(), limit)
-        .map_err(CommandError::from)?;
-
-    Ok(rows
-        .into_iter()
-        .map(|r| GlossaryEntryDto {
-            id: r.id,
-            source: r.source,
-            target: r.target,
-            notes: r.notes,
-            domain: r.domain,
-            case_sensitive: r.case_sensitive,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-        })
-        .collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| GlossaryEntryDto {
+                id: r.id,
+                source: r.source,
+                target: r.target,
+                notes: r.notes,
+                domain: r.domain,
+                case_sensitive: r.case_sensitive,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            })
+            .collect())
+    })
+    .await
 }

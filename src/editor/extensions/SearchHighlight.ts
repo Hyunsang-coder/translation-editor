@@ -35,6 +35,12 @@ export interface SearchHighlightStorage {
   caseSensitive: boolean;
   matches: SearchMatch[];
   currentIndex: number;
+  /**
+   * 문서 편집 후 matches가 아직 재계산되지 않은 상태.
+   * 키 입력마다 전체 재계산(O(n))을 하지 않도록 디바운스로 지연하되,
+   * 매치 위치를 사용하는 커맨드(replace/navigate)는 실행 전 즉시 재계산한다.
+   */
+  matchesStale: boolean;
 }
 
 // ============================================
@@ -47,16 +53,39 @@ export const searchHighlightPluginKey = pluginKeys.searchHighlight;
 // Helper Functions
 // ============================================
 
+export interface DocSearchIndex {
+  text: string;
+  positions: number[];
+  /** segmentGroupId → 해당 세그먼트 블록들의 문서 범위 (min from, max to) */
+  segmentRanges: Map<string, { from: number; to: number }>;
+}
+
 /**
- * 문서의 전체 텍스트와 위치 매핑 구축
- * 노드 경계를 넘는 텍스트 검색을 위해 필요
- * (SearchHighlight / ReviewHighlight 공용)
+ * 문서 텍스트/위치 매핑과 segmentGroupId→범위 맵을 한 번의 순회로 구축.
+ * 이슈(k개)마다 findSegmentRange로 문서 전체(O(n))를 재스캔하지 않도록
+ * ReviewHighlight/reviewApply의 excerpt 검색 컨텍스트에서 사용한다 (O(k·n) → O(n+k)).
+ *
+ * segmentRanges의 각 항목은 findSegmentRange(doc, id)와 동일한 결과
+ * (해당 id를 가진 노드들의 최소 시작~최대 끝)를 갖는다.
  */
-export function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
+export function buildDocSearchIndex(doc: ProseMirrorNode): DocSearchIndex {
   let text = '';
   const positions: number[] = [];
+  const segmentRanges = new Map<string, { from: number; to: number }>();
 
   doc.descendants((node: ProseMirrorNode, pos: number): boolean | void => {
+    const segmentGroupId: unknown = node.attrs?.segmentGroupId;
+    if (typeof segmentGroupId === 'string' && segmentGroupId.length > 0) {
+      const nodeEnd = pos + node.nodeSize;
+      const existing = segmentRanges.get(segmentGroupId);
+      if (!existing) {
+        segmentRanges.set(segmentGroupId, { from: pos, to: nodeEnd });
+      } else {
+        if (pos < existing.from) existing.from = pos;
+        if (nodeEnd > existing.to) existing.to = nodeEnd;
+      }
+    }
+
     // 블록(textblock) 경계에 개행 삽입:
     // - 블록을 그대로 이어붙이면 여러 블록에 걸친 excerpt(줄바꿈 포함)가 매칭되지 않고,
     //   반대로 경계를 넘는 거짓 인접 매치("problems.Can")가 생긴다.
@@ -73,6 +102,16 @@ export function buildTextWithPositions(doc: ProseMirrorNode): { text: string; po
     }
   });
 
+  return { text, positions, segmentRanges };
+}
+
+/**
+ * 문서의 전체 텍스트와 위치 매핑 구축
+ * 노드 경계를 넘는 텍스트 검색을 위해 필요
+ * (SearchHighlight / ReviewHighlight 공용)
+ */
+export function buildTextWithPositions(doc: ProseMirrorNode): { text: string; positions: number[] } {
+  const { text, positions } = buildDocSearchIndex(doc);
   return { text, positions };
 }
 
@@ -203,6 +242,33 @@ function findMatches(
   return matches;
 }
 
+/** 편집 중 매치 전체 재계산을 지연하는 idle 디바운스 시간 (ms) */
+const SEARCH_MATCH_REFRESH_DEBOUNCE_MS = 300;
+
+/**
+ * storage.matches를 현재 문서 기준으로 재계산하고 currentIndex를 범위 내로 조정.
+ * (구 docChanged 동기 재계산 경로와 동일한 시맨틱)
+ */
+function recomputeMatches(storage: SearchHighlightStorage, doc: ProseMirrorNode): void {
+  storage.matches = findMatches(doc, storage.searchTerm, storage.caseSensitive);
+  if (storage.currentIndex >= storage.matches.length) {
+    storage.currentIndex = Math.max(0, storage.matches.length - 1);
+  }
+  if (storage.matches.length === 0) {
+    storage.currentIndex = -1;
+  }
+  storage.matchesStale = false;
+}
+
+/**
+ * 매치 위치를 실제로 사용하기 전에 stale이면 즉시 재계산.
+ * replace 계열의 안전성(블록 경계 가드, 정확한 교체 범위)은 이 즉시 재계산으로 유지된다.
+ */
+function ensureMatchesFresh(storage: SearchHighlightStorage, doc: ProseMirrorNode): void {
+  if (!storage.matchesStale) return;
+  recomputeMatches(storage, doc);
+}
+
 /**
  * 가장 가까운 scrollable ancestor를 찾는다.
  * view.dom이 항상 scroll container가 아닐 수 있으므로
@@ -315,6 +381,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
       caseSensitive: false,
       matches: [] as SearchMatch[],
       currentIndex: 0,
+      matchesStale: false,
     };
   },
 
@@ -329,6 +396,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 매치 재계산
           storage.matches = findMatches(editor.state.doc, term, storage.caseSensitive);
           storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
+          storage.matchesStale = false;
 
           // 디버깅: 검색 결과 로그 (개발 환경에서만)
           if (process.env.NODE_ENV === 'development') {
@@ -368,6 +436,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           // 매치 재계산
           storage.matches = findMatches(editor.state.doc, storage.searchTerm, value);
           storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
+          storage.matchesStale = false;
 
           if (dispatch) {
             tr.setMeta(searchHighlightPluginKey, { refresh: true });
@@ -381,6 +450,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
         () =>
         ({ editor, tr, dispatch }) => {
           const storage = this.storage;
+          ensureMatchesFresh(storage, editor.state.doc);
 
           if (storage.matches.length === 0) {
             return false;
@@ -408,6 +478,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
         () =>
         ({ editor, tr, dispatch }) => {
           const storage = this.storage;
+          ensureMatchesFresh(storage, editor.state.doc);
 
           if (storage.matches.length === 0) {
             return false;
@@ -437,6 +508,8 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
         (replacement: string) =>
         ({ editor, tr, dispatch }) => {
           const storage = this.storage;
+          // 안전 가드: 편집으로 stale해진 위치로 교체하지 않도록 실행 직전 재계산
+          ensureMatchesFresh(storage, editor.state.doc);
 
           if (storage.matches.length === 0 || storage.currentIndex < 0) {
             return false;
@@ -455,9 +528,10 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           if (dispatch) {
             // 현재 매치 텍스트 치환 (plain text로 교체, mark 제거)
             tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
-            dispatch(tr);
-            // dispatch 후 plugin apply가 동기적으로 실행되어
+            // refresh meta로 plugin apply가 동기적으로
             // storage.matches 재계산 + currentIndex 조정 + decoration 갱신 완료
+            tr.setMeta(searchHighlightPluginKey, { refresh: true });
+            dispatch(tr);
           }
 
           return true;
@@ -467,6 +541,8 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
         (replacement: string) =>
         ({ editor, tr, dispatch }) => {
           const storage = this.storage;
+          // 안전 가드: 편집으로 stale해진 위치로 교체하지 않도록 실행 직전 재계산
+          ensureMatchesFresh(storage, editor.state.doc);
 
           if (storage.matches.length === 0) {
             return false;
@@ -488,8 +564,9 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
               tr.replaceWith(match.from, match.to, editor.schema.text(replacement));
             }
 
+            // refresh meta로 plugin apply가 동기적으로 matches 재계산 완료
+            tr.setMeta(searchHighlightPluginKey, { refresh: true });
             dispatch(tr);
-            // dispatch 후 plugin apply가 동기적으로 matches 재계산 완료
             // replaceAll 후에는 인덱스를 0으로 리셋
             storage.currentIndex = storage.matches.length > 0 ? 0 : -1;
           }
@@ -504,6 +581,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           storage.searchTerm = '';
           storage.matches = [];
           storage.currentIndex = -1;
+          storage.matchesStale = false;
 
           if (dispatch) {
             tr.setMeta(searchHighlightPluginKey, { refresh: true });
@@ -517,6 +595,7 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
         (index: number) =>
         ({ editor, tr, dispatch }) => {
           const storage = this.storage;
+          ensureMatchesFresh(storage, editor.state.doc);
 
           if (index < 0 || index >= storage.matches.length) {
             return false;
@@ -559,18 +638,12 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
             // 메타 정보로 갱신 요청 확인
             const meta = tr.getMeta(searchHighlightPluginKey);
 
-            if (meta?.refresh || tr.docChanged) {
-              // 문서 변경 시 매치 재계산
-              if (tr.docChanged && storage.searchTerm) {
-                storage.matches = findMatches(newState.doc, storage.searchTerm, storage.caseSensitive);
-                // 인덱스 범위 조정
-                if (storage.currentIndex >= storage.matches.length) {
-                  storage.currentIndex = Math.max(0, storage.matches.length - 1);
-                }
-                if (storage.matches.length === 0) {
-                  storage.currentIndex = -1;
-                }
+            if (meta?.refresh) {
+              // 이 트랜잭션에서 문서가 바뀌었거나(교체 커맨드) 이전 편집으로 stale이면 재계산
+              if (storage.searchTerm && (tr.docChanged || storage.matchesStale)) {
+                recomputeMatches(storage, newState.doc);
               }
+              storage.matchesStale = false;
 
               return createSearchDecorations(
                 newState.doc,
@@ -579,6 +652,16 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
                 searchClass,
                 currentClass
               );
+            }
+
+            if (tr.docChanged) {
+              // P2 최적화: 키 입력마다 매치 전체 재계산(O(n))을 하지 않고
+              // stale 마킹 후 기존 decoration 위치만 매핑. 전체 재계산은
+              // 디바운스된 refresh(view.update) 또는 매치를 사용하는 커맨드 직전에 수행.
+              if (storage.searchTerm) {
+                storage.matchesStale = true;
+              }
+              return oldDecorationSet.map(tr.mapping, tr.doc);
             }
 
             // 변경 없으면 기존 decoration 유지 (position mapping)
@@ -590,6 +673,32 @@ export const SearchHighlight = Extension.create<SearchHighlightOptions, SearchHi
           decorations(state) {
             return searchHighlightPluginKey.getState(state);
           },
+        },
+
+        view: () => {
+          let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+          return {
+            update: (view, prevState) => {
+              if (view.state.doc === prevState.doc) return;
+              if (!storage.searchTerm || !storage.matchesStale) return;
+
+              if (refreshTimer !== null) clearTimeout(refreshTimer);
+              refreshTimer = setTimeout(() => {
+                refreshTimer = null;
+                if (view.isDestroyed || !storage.matchesStale) return;
+                view.dispatch(
+                  view.state.tr.setMeta(searchHighlightPluginKey, { refresh: true }),
+                );
+              }, SEARCH_MATCH_REFRESH_DEBOUNCE_MS);
+            },
+            destroy: () => {
+              if (refreshTimer !== null) {
+                clearTimeout(refreshTimer);
+                refreshTimer = null;
+              }
+            },
+          };
         },
       }),
     ];

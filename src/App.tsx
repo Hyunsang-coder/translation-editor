@@ -17,6 +17,8 @@ import { UpdateModal } from '@/components/ui/UpdateModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+import { useChatStore } from '@/stores/chatStore';
+import { flushDebouncedFields } from '@/components/ui/DebouncedTextarea';
 import { isChatPanel } from '@/types';
 import { useHistoryStore } from '@/stores/historyStore';
 import { DesktopTranslationPreviewHost } from '@/components/editor/DesktopTranslationPreviewHost';
@@ -270,20 +272,33 @@ function App(): JSX.Element {
       let allowClose = false;
       const unlisten = await appWindow.onCloseRequested(async (event) => {
         if (allowClose) return;
+        // 비동기 flush/저장이 끝나기 전에 창이 닫히지 않도록 우선 종료 보류
+        event.preventDefault();
+
+        // C3: 채팅(CHAT_PERSIST_DEBOUNCE_MS)/설정(DebouncedTextarea) debounce 대기분 flush.
+        // 종료 직전 ~1.5초 내 변경이 유실되지 않도록 타이머를 취소하고 즉시 저장한다.
+        try {
+          flushDebouncedFields(); // 설정 필드 pending 값 → chatStore로 동기 커밋
+          await useChatStore.getState().flushPersist(); // persist 타이머 취소 + 즉시 저장
+        } catch (e) {
+          // flush 실패가 종료를 막지는 않음 (best-effort)
+          console.warn('[App] Failed to flush chat/settings state on close:', e);
+        }
+
         const { isDirty, saveProject } = useProjectStore.getState();
         if (isDirty) {
-          // Prevent closing immediately
-          event.preventDefault();
           try {
             await saveProject();
-            allowClose = true;
-            await appWindow.close();
           } catch (e) {
             console.error('Failed to save on close:', e);
             const message = e instanceof Error ? e.message : 'Failed to save project before exit';
             useProjectStore.getState().setError(`저장 실패로 종료가 취소되었습니다: ${message}`);
+            return; // 저장 실패 시 종료 취소 (기존 동작 유지)
           }
         }
+
+        allowClose = true;
+        await appWindow.close();
       });
       return unlisten;
     };

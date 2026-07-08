@@ -18,9 +18,10 @@ import {
 import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { MODEL_PRESETS } from '@/ai/config';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
-import { stripHtml } from '@/utils/hash';
+import { hashContent, stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
 import { searchGlossary } from '@/tauri/glossary';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
@@ -153,7 +154,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   const [translateLoading, setTranslateLoading] = useState(false);
-  const [streamingText, setStreamingText] = useState<string | null>(null);
   const translateAbortController = useRef<AbortController | null>(null);
 
   const [polishPreviewOpen, setPolishPreviewOpen] = useState(false);
@@ -162,10 +162,38 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [polishOriginalDocJson, setPolishOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [polishPreviewError, setPolishPreviewError] = useState<string | null>(null);
   const [polishLoading, setPolishLoading] = useState(false);
-  const [polishStreamingText, setPolishStreamingText] = useState<string | null>(null);
   const polishAbortController = useRef<AbortController | null>(null);
   const [polishModalOpen, setPolishModalOpen] = useState(false);
   const [polishMessage, setPolishMessage] = useState('');
+
+  // P4: 번역/폴리싱 스트리밍 텍스트는 캔버스 state가 아니라 translationPreviewStore 채널에
+  // 기록한다(표시는 TranslatePreviewModal이 채널을 직접 구독). 델타마다 두 TipTap 에디터를
+  // 포함한 캔버스 전체가 리렌더되는 것을 방지한다.
+  const setStreamingChannelText = useCallback((channel: 'translate' | 'polish', text: string | null): void => {
+    useTranslationPreviewStore.getState().setStreamingText(channel, text);
+  }, []);
+
+  // L2: 번역/폴리싱 요청 시작 시점의 프로젝트/Target 리비전 스냅샷.
+  // EditorCanvasTipTap은 프로젝트 전환 시 remount되지 않으므로(아래 재등록 effect 주석 참조),
+  // Apply 시점에 이 메타와 현재 상태를 재검증해 다른 프로젝트 문서에 적용되는 것을 막는다.
+  interface PreviewRequestMeta {
+    projectId: string;
+    targetRevision: string | null;
+  }
+  const translateRequestMetaRef = useRef<PreviewRequestMeta | null>(null);
+  const polishRequestMetaRef = useRef<PreviewRequestMeta | null>(null);
+
+  // Target 문서 리비전: 살아있는 에디터 기준(store 캐시는 디바운스로 뒤처질 수 있음).
+  // Desktop 브리지(oddeyesAppBridge)와 동일 산식(markdown 변환 후 hashContent).
+  const computeTargetRevision = useCallback((): string | null => {
+    const ed = targetEditorRef.current;
+    if (!ed || ed.isDestroyed) return null;
+    try {
+      return hashContent(tipTapJsonToMarkdownForTranslation(ed.getJSON() as Record<string, unknown>));
+    } catch {
+      return null;
+    }
+  }, []);
 
   // 재번역 지시사항 모달 (타겟에 내용이 이미 있을 때)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
@@ -458,7 +486,14 @@ export function EditorCanvasTipTap(): JSX.Element {
     setTranslatePreviewDoc(null);
     setTranslatePreviewOpen(true);
     setTranslateLoading(true);
-    setStreamingText(null);
+    setStreamingChannelText('translate', null);
+
+    // L2: 요청 시작 시점의 프로젝트/Target 리비전 캡처 (Apply 시 재검증)
+    const requestMeta = {
+      projectId: project.id,
+      targetRevision: computeTargetRevision(),
+    };
+    translateRequestMetaRef.current = requestMeta;
 
     // AbortController 생성
     const abortController = new AbortController();
@@ -507,13 +542,20 @@ export function EditorCanvasTipTap(): JSX.Element {
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => {
-          setStreamingText(text);
+          setStreamingChannelText('translate', text);
         },
         abortSignal: abortController.signal,
       });
+      // L2: 완료 시점 재검증 — 취소되었거나(프로젝트 전환 effect의 abort 포함),
+      // 이 요청이 더 이상 활성 요청이 아니거나, 프로젝트가 바뀌었으면 결과를 버린다.
+      if (abortController.signal.aborted) return;
+      if (translateAbortController.current !== abortController) return;
+      if (useProjectStore.getState().project?.id !== requestMeta.projectId) return;
       setTranslatePreviewDoc(doc);
-      setStreamingText(null); // 완료 후 스트리밍 텍스트 초기화
+      setStreamingChannelText('translate', null); // 완료 후 스트리밍 텍스트 초기화
     } catch (e) {
+      // stale 요청(그 사이 새 요청 시작)이 새 요청의 상태를 덮지 않도록 가드
+      if (translateAbortController.current !== abortController) return;
       // 취소된 경우
       if (abortController.signal.aborted) {
         setTranslatePreviewError('번역이 취소되었습니다.');
@@ -522,8 +564,11 @@ export function EditorCanvasTipTap(): JSX.Element {
         setTranslatePreviewError(formatTranslationError(e));
       }
     } finally {
-      setTranslateLoading(false);
-      translateAbortController.current = null;
+      // 소유권 확인 후에만 정리 (stale 요청의 finally가 새 요청 상태를 파괴하지 않도록)
+      if (translateAbortController.current === abortController) {
+        setTranslateLoading(false);
+        translateAbortController.current = null;
+      }
     }
   }, [
     project,
@@ -532,6 +577,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     translatorPersona,
     addToast,
     t,
+    computeTargetRevision,
+    setStreamingChannelText,
   ]);
 
   // 번역 버튼 클릭 핸들러: 타겟에 내용이 있으면 재번역 모달 먼저 표시
@@ -571,7 +618,14 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishPreviewDoc(null);
     setPolishPreviewOpen(true);
     setPolishLoading(true);
-    setPolishStreamingText(null);
+    setStreamingChannelText('polish', null);
+
+    // L2: 요청 시작 시점의 프로젝트/Target 리비전 캡처 (Apply 시 재검증)
+    const requestMeta = {
+      projectId: project.id,
+      targetRevision: computeTargetRevision(),
+    };
+    polishRequestMetaRef.current = requestMeta;
 
     const abortController = new AbortController();
     polishAbortController.current = abortController;
@@ -594,22 +648,30 @@ export function EditorCanvasTipTap(): JSX.Element {
         styleRules: translationRules,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
-        onToken: (text) => setPolishStreamingText(text),
+        onToken: (text) => setStreamingChannelText('polish', text),
         abortSignal: abortController.signal,
       });
+      // L2: 완료 시점 재검증 (취소/전환/새 요청 시작 시 결과 폐기)
+      if (abortController.signal.aborted) return;
+      if (polishAbortController.current !== abortController) return;
+      if (useProjectStore.getState().project?.id !== requestMeta.projectId) return;
       setPolishPreviewDoc(doc);
-      setPolishStreamingText(null);
+      setStreamingChannelText('polish', null);
     } catch (error) {
+      // stale 요청이 새 요청의 상태를 덮지 않도록 가드
+      if (polishAbortController.current !== abortController) return;
       if (abortController.signal.aborted) {
         setPolishPreviewError(t('editor.polishCancelled', '폴리싱이 취소되었습니다.'));
       } else {
         setPolishPreviewError(formatTranslationError(error));
       }
     } finally {
-      setPolishLoading(false);
-      polishAbortController.current = null;
+      if (polishAbortController.current === abortController) {
+        setPolishLoading(false);
+        polishAbortController.current = null;
+      }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules]);
+  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;
@@ -635,13 +697,39 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     setTranslateLoading(false);
     setTranslatePreviewOpen(false);
-    setStreamingText(null);
-  }, []);
+    setStreamingChannelText('translate', null);
+  }, [setStreamingChannelText]);
 
   const applyTranslatePreview = useCallback((): void => {
     if (!translatePreviewDoc) return;
     if (!targetEditorRef.current) {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      return;
+    }
+
+    // L2 가드 ①: 요청 시점 프로젝트와 현재 프로젝트가 다르면 적용 금지.
+    // (프로젝트 전환 effect가 모달을 닫지만, 전환 경합/모달 잔존 케이스의 최종 방어선)
+    const meta = translateRequestMetaRef.current;
+    const currentProjectId = useProjectStore.getState().project?.id ?? null;
+    if (!meta || !currentProjectId || meta.projectId !== currentProjectId) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
+      });
+      setTranslatePreviewOpen(false);
+      setTranslatePreviewDoc(null);
+      return;
+    }
+
+    // L2 가드 ②: 같은 프로젝트라도 요청 이후 Target이 수정되었으면 적용을 중단한다.
+    // NOTE(제품 결정 필요, 코드리뷰 2026-07-07 §7): "요청 후 사용자 편집" 충돌을
+    // 하드 차단할지 경고 후 강제 적용할지 미정 — 보수적 기본값으로 경고 토스트 + 중단.
+    const currentRevision = computeTargetRevision();
+    if (meta.targetRevision !== null && currentRevision !== null && meta.targetRevision !== currentRevision) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
+      });
       return;
     }
 
@@ -669,6 +757,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           console.warn('[history] auto snapshot after translate failed:', err);
         });
       }
+      // 여기의 fresh project.id는 위 L2 가드 ①에 의해 요청 시점 프로젝트와 동일함이 보장된다.
       // 품질 장부: 번역 적용을 quality_run으로 기록 (best-effort, WP-A1 요구사항 2)
       void logQualityRun(project.id, {
         stage: 's1_translate',
@@ -681,7 +770,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         notes: 'applied',
       });
     }
-  }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged]);
+  }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged, computeTargetRevision]);
 
   const handlePolishCancel = useCallback((): void => {
     if (polishAbortController.current) {
@@ -689,8 +778,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     setPolishLoading(false);
     setPolishPreviewOpen(false);
-    setPolishStreamingText(null);
-  }, []);
+    setStreamingChannelText('polish', null);
+  }, [setStreamingChannelText]);
 
   // 폴리싱 미리보기 종료 시 스냅샷 상태를 함께 정리 (ReviewPanel handleRetranslateClose와 대칭).
   // 재열기 경로가 항상 재스냅샷하므로 correctness 이슈는 아니지만, 문서 JSON 상주를 방지한다.
@@ -699,12 +788,37 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishPreviewDoc(null);
     setPolishOriginalDocJson(null);
     setPolishPreviewError(null);
-    setPolishStreamingText(null);
-  }, []);
+    setStreamingChannelText('polish', null);
+  }, [setStreamingChannelText]);
 
   const applyPolishDoc = useCallback((doc: TipTapDocJson): void => {
     if (!targetEditorRef.current) {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      return;
+    }
+
+    // L2 가드 ①: 요청 시점 프로젝트와 현재 프로젝트가 다르면 적용 금지.
+    const meta = polishRequestMetaRef.current;
+    const currentProjectId = useProjectStore.getState().project?.id ?? null;
+    if (!meta || !currentProjectId || meta.projectId !== currentProjectId) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
+      });
+      handlePolishClose();
+      return;
+    }
+
+    // L2 가드 ②: 요청 이후 Target이 수정되었으면 적용 중단 (사용자 편집 유실 방지).
+    // NOTE(제품 결정 필요, 코드리뷰 2026-07-07 §7): 하드 차단 vs 경고 후 강제 적용 —
+    // 보수적 기본값으로 경고 토스트 + 중단. (선택 적용 병합도 요청 시점 스냅샷 기준이므로
+    // 편집 후 적용하면 편집분이 소리 없이 사라진다)
+    const currentRevision = computeTargetRevision();
+    if (meta.targetRevision !== null && currentRevision !== null && meta.targetRevision !== currentRevision) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
+      });
       return;
     }
 
@@ -740,7 +854,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         notes: 'applied',
       });
     }
-  }, [addToast, t, createSnapshotIfChanged, handlePolishClose]);
+  }, [addToast, t, createSnapshotIfChanged, handlePolishClose, computeTargetRevision]);
 
   const applyPolishPreview = useCallback((): void => {
     if (!polishPreviewDoc) return;
@@ -787,6 +901,28 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (sourceEditor && !sourceEditor.isDestroyed) store.setSourceEditor(sourceEditor);
     if (targetEditor && !targetEditor.isDestroyed) store.setTargetEditor(targetEditor);
   }, [project?.id, sourceEditor, targetEditor]);
+
+  // L2: 프로젝트 전환 시 진행 중인 번역/폴리싱 요청과 열린 프리뷰 모달을 정리한다.
+  // 이 컴포넌트는 프로젝트로 remount되지 않으므로(위 재등록 effect 주석 참조), 여기서
+  // 직접 abort + close하지 않으면 A 프로젝트의 번역이 B 프로젝트 위에 표시/적용될 수 있다.
+  // (마운트 첫 실행 시에는 모두 초기 상태라 no-op)
+  useEffect(() => {
+    translateAbortController.current?.abort();
+    polishAbortController.current?.abort();
+    translateRequestMetaRef.current = null;
+    polishRequestMetaRef.current = null;
+    setTranslatePreviewOpen(false);
+    setTranslatePreviewDoc(null);
+    setTranslatePreviewError(null);
+    setTranslateLoading(false);
+    setPolishPreviewOpen(false);
+    setPolishPreviewDoc(null);
+    setPolishOriginalDocJson(null);
+    setPolishPreviewError(null);
+    setPolishLoading(false);
+    setStreamingChannelText('translate', null);
+    setStreamingChannelText('polish', null);
+  }, [project?.id, setStreamingChannelText]);
 
   // 검색바 핸들러
   const handleSourceSearchOpen = useCallback(() => {
@@ -1257,7 +1393,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         originalHtml={targetDocument}
         isLoading={translateLoading}
         error={translatePreviewError}
-        streamingText={streamingText}
+        streamingChannel="translate"
         onClose={() => {
           setTranslatePreviewOpen(false);
         }}
@@ -1274,7 +1410,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         originalHtml={targetDocument}
         isLoading={polishLoading}
         error={polishPreviewError}
-        streamingText={polishStreamingText}
+        streamingChannel="polish"
         originalDocJson={polishOriginalDocJson}
         onApplySelective={applyPolishDoc}
         onClose={handlePolishClose}
