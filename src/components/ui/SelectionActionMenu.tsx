@@ -1,4 +1,4 @@
-import { Eye, MessagesSquare, StickyNote, X } from 'lucide-react';
+import { Eye, MessagesSquare, NotebookPen, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export interface SelectionExistingComment {
@@ -113,7 +113,7 @@ export function SelectionActionMenu({
           title={t('comment.addButton')}
           onClick={onAddComment}
         >
-          <StickyNote className="w-4 h-4 shrink-0 text-amber-500" />
+          <NotebookPen className="w-4 h-4 shrink-0 text-amber-500" />
           <span>{t('comment.addButton')}</span>
         </button>
       )}

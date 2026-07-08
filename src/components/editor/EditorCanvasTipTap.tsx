@@ -28,7 +28,7 @@ import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/util
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { StickyNote, Sparkles } from 'lucide-react';
+import { NotebookPen, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -86,6 +86,22 @@ export function EditorCanvasTipTap(): JSX.Element {
   const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
   const toggleSourceOnlyMode = useUIStore((s) => s.toggleSourceOnlyMode);
+
+  // 숨긴 사이드바 되살림 (에디터 헤더 양 끝) — 바 내부엔 UI가 없어 에디터 쪽에 노출.
+  // 좌측은 hidden뿐 아니라 panels 빈 상태(렌더 null)도 되살림 대상.
+  const leftSidebarInvisible = useUIStore((s) => s.leftSidebar.hidden || s.leftSidebar.panels.length === 0);
+  const rightSidebarHidden = useUIStore((s) => s.rightSidebar.hidden);
+  const revealLeftSidebar = useCallback(() => {
+    const sb = useUIStore.getState().leftSidebar;
+    if (sb.panels.length === 0) {
+      useUIStore.getState().openPanelOnSide('left', 'settings');
+    } else {
+      useUIStore.getState().setSidebarHiddenSide('left', false);
+    }
+  }, []);
+  const revealRightSidebar = useCallback(() => {
+    useUIStore.getState().openActiveChat();
+  }, []);
 
 
   // Source/Target 패널별 폰트 설정
@@ -1016,7 +1032,19 @@ export function EditorCanvasTipTap(): JSX.Element {
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
       {/* Header */}
       <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {leftSidebarInvisible && (
+            <button
+              type="button"
+              onClick={revealLeftSidebar}
+              className="p-1.5 -ml-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
+              title={t('sidebar.showLeft', 'Show side panel')}
+              aria-label={t('sidebar.showLeft', 'Show side panel')}
+              data-testid="reveal-sidebar-left"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          )}
           <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -1079,11 +1107,24 @@ export function EditorCanvasTipTap(): JSX.Element {
             title={t('comment.title', '코멘트')}
             data-testid="editor-comments-button"
           >
-            <StickyNote className="w-4 h-4" />
+            <NotebookPen className="w-4 h-4" />
             {commentCount > 0 && (
               <span className="tabular-nums text-[11px] font-semibold text-editor-text">{commentCount}</span>
             )}
           </button>
+          {/* 숨긴 채팅 바 되살림 */}
+          {rightSidebarHidden && (
+            <button
+              type="button"
+              onClick={revealRightSidebar}
+              className="p-1.5 -mr-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
+              title={t('sidebar.showRight', 'Show chat panel')}
+              aria-label={t('sidebar.showRight', 'Show chat panel')}
+              data-testid="reveal-sidebar-right"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
