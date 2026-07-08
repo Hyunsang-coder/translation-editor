@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Trash2, MessageSquareText } from 'lucide-react';
+import { Check, Trash2, StickyNote } from 'lucide-react';
 import { useCommentStore, type CommentField, type UserComment } from '@/stores/commentStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -107,7 +107,7 @@ export function CommentListPanel(): JSX.Element {
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
         {comments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <MessageSquareText size={28} className="mb-3 text-editor-muted/50" />
+            <StickyNote size={28} className="mb-3 text-editor-muted/50" />
             <p className="text-sm text-editor-muted">{t('comment.empty', '코멘트가 없습니다.')}</p>
             <p className="mt-1 text-xs text-editor-muted/70">
               {t('comment.emptyHint', '에디터에서 텍스트를 선택해 코멘트를 추가하세요.')}

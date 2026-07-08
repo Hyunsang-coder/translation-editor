@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, Search, MessageSquare, MessageSquareText } from 'lucide-react';
+import { Settings, Search, MessageSquare, StickyNote } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { MAX_CHAT_SESSIONS } from '@/stores/chatStore.types';
@@ -23,7 +23,7 @@ interface UnifiedSidebarProps {
 const FIXED_PANEL_META: Record<'settings' | 'review' | 'comments', { icon: typeof Settings; labelKey: string }> = {
   settings: { icon: Settings, labelKey: 'chat.settings' },
   review:   { icon: Search, labelKey: 'review.title' },
-  comments: { icon: MessageSquareText, labelKey: 'comment.title' },
+  comments: { icon: StickyNote, labelKey: 'comment.title' },
 };
 
 function getPanelIcon(panel: PanelType): typeof Settings {

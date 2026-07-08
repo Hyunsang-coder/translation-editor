@@ -28,7 +28,7 @@ import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/util
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { MessageSquareText, Sparkles } from 'lucide-react';
+import { StickyNote, Sparkles } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -1079,7 +1079,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             title={t('comment.title', '코멘트')}
             data-testid="editor-comments-button"
           >
-            <MessageSquareText className="w-4 h-4" />
+            <StickyNote className="w-4 h-4" />
             {commentCount > 0 && (
               <span className="tabular-nums text-[11px] font-semibold text-editor-text">{commentCount}</span>
             )}
