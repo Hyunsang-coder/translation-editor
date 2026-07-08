@@ -103,10 +103,14 @@ export async function readImageAsDataUrl(
     try {
         const base64 = await readFileBase64(path);
 
-        // 보안: 파일 크기 검증 (메모리 고갈 방지) - base64는 원본의 약 4/3 크기
-        const approxBytes = Math.ceil((base64.length * 3) / 4);
-        if (approxBytes > maxSizeBytes) {
-            throw new ImageSizeExceededError(approxBytes, maxSizeBytes);
+        // 보안: 파일 크기 검증 (메모리 고갈 방지).
+        // base64는 4문자당 3바이트이며, 끝의 '=' 패딩 개수만큼 원본 바이트가 줄어든다.
+        // ceil(len*3/4)는 패딩만큼 최대 2바이트 과대계상해 경계값(정확히 maxSizeBytes)을
+        // 오탐 거부하므로, 패딩을 빼 실제 디코딩 바이트 수를 정확히 구한다.
+        const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+        const decodedBytes = (base64.length * 3) / 4 - padding;
+        if (decodedBytes > maxSizeBytes) {
+            throw new ImageSizeExceededError(decodedBytes, maxSizeBytes);
         }
 
         // MIME 타입 결정

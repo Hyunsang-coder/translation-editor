@@ -4,17 +4,6 @@
  */
 
 /**
- * File 또는 Blob을 number[] 바이트 배열로 변환
- * - Tauri 커맨드로 바이너리 데이터를 전송할 때 사용
- * @param file File 또는 Blob 객체
- * @returns number[] 바이트 배열
- */
-export async function fileToBytes(file: File | Blob): Promise<number[]> {
-    const buffer = await file.arrayBuffer();
-    return Array.from(new Uint8Array(buffer));
-}
-
-/**
  * 이미지 MIME 타입인지 확인
  * @param type MIME 타입 문자열
  * @returns 이미지 타입 여부

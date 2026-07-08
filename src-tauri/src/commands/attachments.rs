@@ -5,7 +5,7 @@ use std::path::Path;
 use tauri::State;
 use uuid::Uuid;
 
-use super::AcquireDb;
+use super::{run_db_task, AcquireDb};
 use crate::db::DbState;
 use crate::error::{CommandError, CommandResult};
 use crate::models::{Attachment, AttachmentDto};
@@ -185,44 +185,45 @@ pub async fn read_file_bytes(args: ReadFileBytesArgs) -> CommandResult<String> {
     Ok(BASE64.encode(bytes))
 }
 
-// async: DB 접근 명령이 메인 스레드(이벤트 루프)를 점유하지 않도록 스레드풀에서 실행 (C1 연관)
+// async + run_db_task(spawn_blocking): DB 접근이 async 런타임 워커를 점유하지 않도록
+// blocking 스레드풀에서 실행 (C1 연관). 다른 DB 커맨드(block.rs 등)와 동일 패턴.
 #[tauri::command]
 pub async fn list_attachments(
     project_id: String,
     db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<AttachmentDto>> {
-    let db = db_state.acquire()?;
+    run_db_task(&db_state, move |db| {
+        let attachments = db.list_attachments(&project_id).map_err(CommandError::from)?;
 
-    let attachments = db
-        .list_attachments(&project_id)
-        .map_err(CommandError::from)?;
-
-    Ok(attachments
-        .into_iter()
-        .map(|a| {
-            let extracted_text_length = a.extracted_text.as_ref().map(|t| t.len() as i64);
-            AttachmentDto {
-                id: a.id,
-                filename: a.filename,
-                file_type: a.file_type,
-                file_size: a.file_size,
-                extracted_text: a.extracted_text,
-                extracted_text_length,
-                file_path: a.file_path,
-                created_at: a.created_at,
-                updated_at: a.updated_at,
-            }
-        })
-        .collect())
+        Ok(attachments
+            .into_iter()
+            .map(|a| {
+                let extracted_text_length = a.extracted_text.as_ref().map(|t| t.len() as i64);
+                AttachmentDto {
+                    id: a.id,
+                    filename: a.filename,
+                    file_type: a.file_type,
+                    file_size: a.file_size,
+                    extracted_text: a.extracted_text,
+                    extracted_text_length,
+                    file_path: a.file_path,
+                    created_at: a.created_at,
+                    updated_at: a.updated_at,
+                }
+            })
+            .collect())
+    })
+    .await
 }
 
-// async: DB 접근 명령이 메인 스레드(이벤트 루프)를 점유하지 않도록 스레드풀에서 실행 (C1 연관)
+// async + run_db_task(spawn_blocking): 위와 동일 이유로 blocking 스레드풀에서 실행 (C1 연관).
 #[tauri::command]
 pub async fn delete_attachment(id: String, db_state: State<'_, DbState>) -> CommandResult<()> {
-    let db = db_state.acquire()?;
-
-    db.delete_attachment(&id).map_err(CommandError::from)?;
-    Ok(())
+    run_db_task(&db_state, move |db| {
+        db.delete_attachment(&id).map_err(CommandError::from)?;
+        Ok(())
+    })
+    .await
 }
 
 fn extract_file_text(path: &Path, extension: &str) -> Result<String, String> {

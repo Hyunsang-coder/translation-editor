@@ -7,8 +7,12 @@ import { restoreGhostChips, type GhostMaskSession } from '@/utils/ghostMask';
 const GHOST_TOKEN_MAX_LEN = 96;
 const GHOST_TOKEN_OPEN = '⟦';
 const GHOST_TOKEN_CLOSE = '⟧';
-// 스트림 연속성 검증용 suffix 길이 (도구 호출 스텝 전환 등으로 누적 텍스트가 리셋되는 경우 감지)
-const CONTINUITY_CHECK_LEN = 32;
+// 스트림 연속성 검증용 suffix 길이 (도구 호출 스텝 전환 등으로 누적 텍스트가 리셋되는 경우 감지).
+// suffix window만 비교하므로, 재시작 텍스트가 같은 길이로 이 window를 우연히 재현하면서
+// 앞부분만 다르면 리셋을 놓쳐 스트리밍 버블이 일시적으로 깨진다(finalize가 전체 재계산으로
+// 교정하는 표시 글리치, 데이터 손실 없음). window를 넉넉히(128) 잡아 우연 충돌 확률을 낮춘다.
+// O(L) 전체 prefix 비교는 incremental 복원의 목적(토큰당 O(1))을 해치므로 하지 않는다.
+const CONTINUITY_CHECK_LEN = 128;
 
 /**
  * 스트리밍 onToken(full)마다 전체 텍스트를 다시 복원하면 O(L^2)이 되므로,

@@ -223,9 +223,14 @@ export function ReviewPanel(): JSX.Element {
     // 비동기로 처리하여 UI 블로킹 방지
     const freshChunks = await buildAlignedChunksAsync(project);
 
-    // chunk 빌드 동안 프로젝트가 전환됐으면 중단
-    // (상태는 새 프로젝트의 initializeReview가 재설정하므로 여기서 건드리지 않음)
-    if (useProjectStore.getState().project?.id !== startProjectId) return;
+    // chunk 빌드 동안 프로젝트가 전환됐으면 중단.
+    // 획득한 실행 슬롯을 반드시 반납한다: 새 프로젝트의 initializeReview가 상태를
+    // 재설정한다고 가정할 수 없다(사이드바 숨김으로 ReviewPanel이 언마운트되면 그
+    // effect가 안 돌아 isReviewing=true가 고착됨).
+    if (useProjectStore.getState().project?.id !== startProjectId) {
+      useReviewStore.getState().releaseReviewRun();
+      return;
+    }
 
     if (freshChunks.length === 0) {
       useReviewStore.getState().releaseReviewRun();
@@ -345,15 +350,18 @@ export function ReviewPanel(): JSX.Element {
         }
       }
     } finally {
-      // abort(취소/프로젝트 전환)나 전환 후에는 검수 상태를 건드리지 않는다:
-      // - 취소는 handleCancel이 이미 finishReview()를 호출
-      // - 전환은 새 프로젝트의 initializeReview가 상태를 재설정
-      // 여기서 무조건 finishReview()하면 이후 시작된 새 검수를 완료 처리해버릴 수 있다.
-      if (
-        !controller.signal.aborted &&
-        useProjectStore.getState().project?.id === startProjectId
-      ) {
+      const switched = useProjectStore.getState().project?.id !== startProjectId;
+      if (!controller.signal.aborted && !switched) {
+        // 정상 완료: 이슈 집계 + isReviewing=false
         finishReview();
+      } else if (switched && useReviewStore.getState().initializedProjectId === startProjectId) {
+        // 프로젝트 전환으로 조기 종료(switch effect가 abort + reviewAbortRef=null).
+        // 취소(handleCancel)는 !switched라 여기 안 걸리고 이미 finishReview()로 반납됨.
+        // 전환은 새 프로젝트의 initializeReview가 상태를 재설정한다고 가정할 수 없어
+        // (사이드바 숨김으로 ReviewPanel 언마운트 시 그 effect 미실행) isReviewing이
+        // 고착되므로 반납한다. initializedProjectId가 여전히 이 run(startProjectId)
+        // 소유일 때만 반납해, 그 사이 새로 시작/초기화된 검수 슬롯은 건드리지 않는다.
+        useReviewStore.getState().releaseReviewRun();
       }
       if (reviewAbortRef.current === controller) {
         reviewAbortRef.current = null;

@@ -88,9 +88,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const toggleSourceOnlyMode = useUIStore((s) => s.toggleSourceOnlyMode);
 
   // 숨긴 사이드바 되살림 (에디터 헤더 양 끝) — 바 내부엔 UI가 없어 에디터 쪽에 노출.
-  // 좌측은 hidden뿐 아니라 panels 빈 상태(렌더 null)도 되살림 대상.
+  // 좌/우 모두 hidden뿐 아니라 panels 빈 상태(렌더 null)도 되살림 대상 (좌우 대칭).
   const leftSidebarInvisible = useUIStore((s) => s.leftSidebar.hidden || s.leftSidebar.panels.length === 0);
-  const rightSidebarHidden = useUIStore((s) => s.rightSidebar.hidden);
+  const rightSidebarInvisible = useUIStore((s) => s.rightSidebar.hidden || s.rightSidebar.panels.length === 0);
   const revealLeftSidebar = useCallback(() => {
     const sb = useUIStore.getState().leftSidebar;
     if (sb.panels.length === 0) {
@@ -100,7 +100,14 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
   }, []);
   const revealRightSidebar = useCallback(() => {
-    useUIStore.getState().openActiveChat();
+    // 숨겨진 채팅 패널이 이미 있으면 un-hide만 (빈 세션을 새로 만들지 않음).
+    // panels가 비어 세울 게 없을 때만 openActiveChat이 세션을 생성/복구한다.
+    const sb = useUIStore.getState().rightSidebar;
+    if (sb.panels.length > 0) {
+      useUIStore.getState().setSidebarHiddenSide('right', false);
+    } else {
+      useUIStore.getState().openActiveChat();
+    }
   }, []);
 
 
@@ -1099,7 +1106,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             )}
           </button>
           {/* 숨긴 채팅 바 되살림 */}
-          {rightSidebarHidden && (
+          {rightSidebarInvisible && (
             <button
               type="button"
               onClick={revealRightSidebar}

@@ -18,22 +18,33 @@ use crate::error::{CommandError, CommandResult};
 
 /// AI provider 호출용 공유 reqwest 클라이언트 (Tauri State로 보관).
 ///
-/// 호출마다 `Client::new()`를 만들면 커넥션 풀이 재사용되지 않으므로 하나를 공유한다.
-/// - `connect_timeout`: TCP/TLS 연결 지연을 유한하게 제한
-/// - `read_timeout`: chunk 간 idle 시간 기준이라 스트리밍(SSE)에 안전하다.
-///   전체 timeout은 정상 스트리밍도 중간에 끊으므로 사용하지 않는다.
-pub struct AiHttpClient(pub reqwest::Client);
+/// 호출마다 `Client::new()`를 만들면 커넥션 풀이 재사용되지 않으므로 공유한다.
+/// 스트리밍과 단발(non-streaming) 경로는 `read_timeout`의 의미가 달라 클라이언트를 분리한다:
+/// - `streaming`: SSE 소비용. `read_timeout`은 chunk 간 idle 시간 기준이라 300s면 안전하고,
+///   전체 timeout은 정상 스트리밍도 중간에 끊으므로 두지 않는다.
+/// - `oneshot`: `ai_complete`(번역/폴리싱/검수의 백엔드 재시도 경로)용. 단발 응답은 본문이
+///   한 번에 도착하므로 `read_timeout`이 곧 first-byte(총 응답) 상한이 된다. reasoning 모델은
+///   300s를 넘길 수 있어 짧은 read_timeout이 정상 응답을 끊는다 → connect_timeout만 두고
+///   read_timeout은 생략한다.
+pub struct AiHttpClient {
+    pub streaming: reqwest::Client,
+    pub oneshot: reqwest::Client,
+}
 
 impl AiHttpClient {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
+        let streaming = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(15))
             .read_timeout(Duration::from_secs(300))
             .build()
             // builder 실패는 시스템 TLS 백엔드 문제 등 극히 드문 경우이며,
             // 이때는 timeout 없는 기본 클라이언트로 degrade한다.
             .unwrap_or_else(|_| reqwest::Client::new());
-        Self(client)
+        let oneshot = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { streaming, oneshot }
     }
 }
 
@@ -359,8 +370,8 @@ pub async fn ai_complete(
     }
 
     let text = match args.provider.as_str() {
-        "anthropic" => complete_anthropic(&client.0, &args).await?,
-        "openai" => complete_openai(&client.0, &args).await?,
+        "anthropic" => complete_anthropic(&client.oneshot, &args).await?,
+        "openai" => complete_openai(&client.oneshot, &args).await?,
         other => {
             return Err(command_error(
                 "AI_PROVIDER_UNSUPPORTED",
@@ -663,8 +674,8 @@ pub async fn ai_stream(
 
     let cancel = registry.register(&args.stream_id);
     let result = match args.provider.as_str() {
-        "anthropic" => stream_anthropic(&client.0, &args, &on_event, &cancel).await,
-        "openai" => stream_openai(&client.0, &args, &on_event, &cancel).await,
+        "anthropic" => stream_anthropic(&client.streaming, &args, &on_event, &cancel).await,
+        "openai" => stream_openai(&client.streaming, &args, &on_event, &cancel).await,
         other => Err(command_error(
             "AI_PROVIDER_UNSUPPORTED",
             format!("지원하지 않는 AI provider입니다: {other}"),
