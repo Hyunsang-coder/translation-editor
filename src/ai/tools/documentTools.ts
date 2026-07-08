@@ -1,6 +1,6 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore, flushPendingEditorSyncs } from '@/stores/projectStore';
 import { useReviewStore, type ReviewIssue, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
@@ -15,6 +15,9 @@ import { tipTapJsonToMarkdownForTranslation, type TipTapDocJson } from '@/utils/
  * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
 function resolveSourceDocumentMarkdown(): string {
+  // P1: TipTap 편집은 250ms 디바운스로 store에 반영된다. AI 도구가 최신 문서를
+  // 읽도록 pending 동기화를 먼저 flush한다(디바운스 창 안의 편집 누락 방지).
+  flushPendingEditorSyncs();
   const state = useProjectStore.getState();
   const { sourceDocJson, project, sourceDocument } = state;
 
@@ -46,6 +49,9 @@ function resolveSourceDocumentMarkdown(): string {
  * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
 function resolveTargetDocumentMarkdown(): string {
+  // P1: TipTap 편집은 250ms 디바운스로 store에 반영된다. AI 도구가 최신 문서를
+  // 읽도록 pending 동기화를 먼저 flush한다(디바운스 창 안의 편집 누락 방지).
+  flushPendingEditorSyncs();
   const state = useProjectStore.getState();
   const { targetDocJson, project, targetDocument } = state;
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
-import { useProjectStore } from '@/stores/projectStore';
+import { useProjectStore, flushPendingEditorSyncs } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { mcpClientManager } from '@/ai/mcp/McpClientManager';
@@ -284,6 +284,11 @@ function App(): JSX.Element {
           // flush 실패가 종료를 막지는 않음 (best-effort)
           console.warn('[App] Failed to flush chat/settings state on close:', e);
         }
+
+        // P1: TipTap 편집은 250ms 디바운스로 store에 반영된다. 종료 직전
+        // 디바운스 창(≤250ms) 안의 마지막 편집이 isDirty 판정에서 누락되지 않도록
+        // pending 동기화를 먼저 flush한다.
+        flushPendingEditorSyncs();
 
         const { isDirty, saveProject } = useProjectStore.getState();
         if (isDirty) {
