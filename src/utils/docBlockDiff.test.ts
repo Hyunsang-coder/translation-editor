@@ -73,6 +73,27 @@ describe('buildDocDiffPlan', () => {
     expect(buildDocDiffPlan(a, b).units).toHaveLength(0);
   });
 
+  it('한글 사이 공백만 다른 문단은 unit이 없다 (마크 경계 공백 오탐 방지)', () => {
+    // 폴리싱 결과가 볼드/링크 뒤에 공백을 흡수하거나 삽입해 "기능 은"↔"기능은"으로
+    // 벌어져도, 세분화 정규화로 오탐이 생기지 않아야 한다.
+    const a = doc(p('이 기능 은 매우 유용합니다.'));
+    const b = doc(p('이 기능은 매우 유용합니다.'));
+
+    expect(buildDocDiffPlan(a, b).units).toHaveLength(0);
+  });
+
+  it('실제 표현이 바뀐 문장만 unit이 되고, 뒤 문장은 공백 차이로 오탐되지 않는다', () => {
+    // 앞 문장은 실제로 바뀌고(유효 unit), 뒷 문장은 마크 경계 공백만 달라도 unit이 아님.
+    const a = doc(p('이 기능은 매우 유용합니다. 두 번째 문장 은 유지.'));
+    const b = doc(p('이 기능은 정말 유용합니다. 두 번째 문장은 유지.'));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(1);
+    expect(plan.units[0]!.originalText).toBe('이 기능은 매우 유용합니다.');
+    expect(plan.units[0]!.polishedText).toBe('이 기능은 정말 유용합니다.');
+  });
+
   it('문단 내 한 문장만 바뀌면 unit은 그 문장만 담는다', () => {
     const a = doc(p('First stays here. Second old sentence here.'));
     const b = doc(p('First stays here. Second new sentence here.'));

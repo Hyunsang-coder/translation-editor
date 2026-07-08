@@ -82,6 +82,33 @@ function blockKey(text: string): string {
 }
 
 /**
+ * 표시용 텍스트 정규화: 다중 공백/탭 → 단일 공백.
+ *
+ * 원본은 extractBlockText로 직접 직렬화되지만, 폴리싱 결과는 markdown 왕복
+ * (normalizeMarkdownWhitespace/fixMisalignedBoldMarks)을 거쳐 마크 경계 공백
+ * 규칙이 어긋난다. 표시 텍스트는 렌더링과 같아야 하므로 여분 공백만 정리하고
+ * 실제 어절 공백은 보존한다.
+ */
+function normalizeDisplay(text: string): string {
+  return text.replace(/[ \t]+/g, ' ');
+}
+
+/**
+ * 문장 비교용 키: 마크 경계에서 생기는 인위적 공백 비대칭 제거.
+ *
+ * 두 경로의 공백 규칙 차이("기능 은"↔"기능은")가 diffSentences에 흘러 오탐을
+ * 만든다. 비교 단계에서만 한글 음절 사이 공백을 모두 제거해 대칭을 맞춘다.
+ * 어절 공백까지 함께 사라지지만, 양쪽에 동일하게 적용되므로 실제 표현 차이
+ * (매우≠정말)는 그대로 남는다. 표시에는 절대 쓰지 않는다(normalizeDisplay 사용).
+ */
+function sentenceKey(text: string): string {
+  return text
+    .replace(/[ \t]+/g, ' ')
+    .replace(/([가-힯]) (?=[가-힯])/g, '$1')
+    .trim();
+}
+
+/**
  * 문장 단위 부분 병합이 안전한 평탄 블록 판정: 인라인 text 노드만 포함.
  * (listItem은 단일 paragraph 하나만 담는 경우에 한해 평탄으로 본다.)
  *
@@ -122,8 +149,8 @@ function addUnit(
   state.units.push({
     id,
     blockLabel,
-    originalText: originalText.trim(),
-    polishedText: polishedText.trim(),
+    originalText: normalizeDisplay(originalText).trim(),
+    polishedText: normalizeDisplay(polishedText).trim(),
   });
   return id;
 }
@@ -142,8 +169,15 @@ function buildSentenceParts(
 
   const flush = (): void => {
     if (!hasPending) return;
-    const unitId = addUnit(state, blockLabel, pendingRemoved, pendingAdded);
-    parts.push({ kind: 'change', unitId, originalText: pendingRemoved, polishedText: pendingAdded });
+    // 마크 경계 공백 비대칭만 다른 변경("기능 은"↔"기능은")은 실제 변경이 아니므로
+    // equal로 강등해 오탐 unit을 만들지 않는다. 원본(removed) 텍스트를 유지해
+    // 병합 결과가 원본 렌더링과 일치하게 한다.
+    if (sentenceKey(pendingRemoved) === sentenceKey(pendingAdded)) {
+      if (pendingRemoved) parts.push({ kind: 'equal', text: pendingRemoved });
+    } else {
+      const unitId = addUnit(state, blockLabel, pendingRemoved, pendingAdded);
+      parts.push({ kind: 'change', unitId, originalText: pendingRemoved, polishedText: pendingAdded });
+    }
     pendingRemoved = '';
     pendingAdded = '';
     hasPending = false;
