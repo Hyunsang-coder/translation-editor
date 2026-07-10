@@ -8,17 +8,48 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
  */
 export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
-export const MODEL_PRESETS = {
+export type ReasoningEffort = 'medium' | 'high';
+
+interface ModelPreset {
+  /** 설정 저장/UI 선택에 사용하는 고유 ID */
+  value: string;
+  label: string;
+  description: string;
+  /** value와 실제 API model ID가 다를 때 명시 */
+  apiModel?: string;
+  reasoningEffort?: ReasoningEffort;
+}
+
+export const MODEL_PRESETS: Record<'anthropic' | 'openai', readonly ModelPreset[]> = {
   anthropic: [
     { value: 'claude-opus-4-8', label: 'Opus 4.8', description: '높은 정확도, 복잡한 작업에 적합' },
     { value: 'claude-sonnet-5', label: 'Sonnet 5', description: '성능/속도/비용 균형 (권장)' },
     { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '빠른 응답, 낮은 비용' },
   ],
   openai: [
-    { value: 'gpt-5.5', label: 'GPT-5.5', description: '최신 모델, 최고 성능' },
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', description: '빠른 응답, 낮은 비용' },
+    {
+      value: 'gpt-5.6-sol-high',
+      label: 'GPT-5.6 Sol · High',
+      description: '최고 성능, 높은 추론 강도',
+      apiModel: 'gpt-5.6-sol',
+      reasoningEffort: 'high',
+    },
+    {
+      value: 'gpt-5.6-luna-high',
+      label: 'GPT-5.6 Luna · High',
+      description: '비용 효율 모델, 높은 추론 강도',
+      apiModel: 'gpt-5.6-luna',
+      reasoningEffort: 'high',
+    },
+    {
+      value: 'gpt-5.6-luna-medium',
+      label: 'GPT-5.6 Luna · Medium',
+      description: '빠른 응답과 비용 균형',
+      apiModel: 'gpt-5.6-luna',
+      reasoningEffort: 'medium',
+    },
   ],
-} as const;
+};
 
 export interface AiConfig {
   provider: AiProvider;
@@ -28,6 +59,8 @@ export interface AiConfig {
    * (값이 없으면 클라이언트에 temperature를 전달하지 않습니다.)
    */
   temperature?: number;
+  /** OpenAI Responses/Chat Completions reasoning effort */
+  reasoningEffort?: ReasoningEffort;
   openaiApiKey?: string;
   anthropicApiKey?: string;
   maxRecentMessages: number;
@@ -70,7 +103,8 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
   // 4. 해당 provider의 프리셋에서 모델 검증
   const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
   const presets = MODEL_PRESETS[presetKey];
-  const model = presets.some((p) => p.value === rawModel) ? rawModel : presets[0].value;
+  const preset = presets.find((p) => p.value === rawModel) ?? presets[0]!;
+  const model = preset.apiModel ?? preset.value;
 
   // 5. API Key 우선순위
   // - 런타임 앱: Store 값만 사용
@@ -85,6 +119,7 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
     provider,
     model,
     ...(temperature !== undefined ? { temperature } : {}),
+    ...(preset.reasoningEffort ? { reasoningEffort: preset.reasoningEffort } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: 20,

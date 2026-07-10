@@ -15,9 +15,9 @@ interface ApiKeysBundle {
 }
 
 interface AiConfigState {
-  // 번역용 모델 (예: gpt-5.5)
+  // 번역용 모델/추론 프리셋 (예: gpt-5.6-sol-high)
   translationModel: string;
-  // 채팅/질문용 모델 (예: gpt-5.4-mini)
+  // 채팅/질문용 모델/추론 프리셋 (예: gpt-5.6-luna-medium)
   chatModel: string;
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
@@ -112,8 +112,9 @@ function enqueuePersistAllKeys(
 // MODEL_PRESETS 정의 (순환 참조 회피)
 const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   openai: [
-    { value: 'gpt-5.5' },
-    { value: 'gpt-5.4-mini' },
+    { value: 'gpt-5.6-sol-high' },
+    { value: 'gpt-5.6-luna-high' },
+    { value: 'gpt-5.6-luna-medium' },
   ],
   anthropic: [
     { value: 'claude-sonnet-5' },
@@ -173,6 +174,16 @@ export function migrateAiConfig(
   // v10 → v11: Sonnet 4.6 → Sonnet 5
   if (version < 11) {
     const rename = (v: unknown) => v === 'claude-sonnet-4-6' ? 'claude-sonnet-5' : v;
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  // v11 → v12: 기존 OpenAI 모델을 GPT-5.6 모델+추론 강도 프리셋으로 이전
+  if (version < 12) {
+    const rename = (v: unknown) => {
+      if (v === 'gpt-5.5') return 'gpt-5.6-sol-high';
+      if (v === 'gpt-5.4-mini') return 'gpt-5.6-luna-medium';
+      return v;
+    };
     data.translationModel = rename(data.translationModel);
     data.chatModel = rename(data.chatModel);
   }
@@ -338,7 +349,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
           if (!enabled) {
             const openaiPresets = MODEL_PRESETS.openai;
-            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.5';
+            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.6-sol-high';
             if (state.translationModel.startsWith('claude')) {
               set({ translationModel: firstOpenaiModel });
             }
@@ -351,7 +362,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 11,
+      version: 12,
       migrate: (persisted: unknown, version: number) =>
         migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({

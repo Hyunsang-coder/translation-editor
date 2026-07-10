@@ -117,6 +117,22 @@ describe('backendCompletion', () => {
     expect('effort' in translateArgs).toBe(false);
   });
 
+  it('GPT-5.6 Luna medium 백엔드 호출에 실제 모델 ID와 effort=medium을 전달', async () => {
+    const cfg: AiConfig = {
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'medium',
+      openaiApiKey: 'sk-test',
+      maxRecentMessages: 20,
+    };
+
+    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
+
+    const args = mocks.aiStream.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args.model).toBe('gpt-5.6-luna');
+    expect(args.effort).toBe('medium');
+  });
+
   it('abortSignal 있는 completion은 cancellable streaming backend를 사용', async () => {
     const cfg: AiConfig = {
       provider: 'openai',

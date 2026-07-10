@@ -55,6 +55,20 @@ describe('resolveModelCallOptions', () => {
     expect(opts.adaptiveThinking).toBeUndefined();
   });
 
+  it('GPT-5.6 프리셋 effort는 용도와 관계없이 API 옵션에 적용', () => {
+    const high = resolveModelCallOptions(
+      cfg({ provider: 'openai', model: 'gpt-5.6-sol', reasoningEffort: 'high' }),
+      'chat',
+    );
+    const medium = resolveModelCallOptions(
+      cfg({ provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' }),
+      'translation',
+    );
+
+    expect(high.effort).toBe('high');
+    expect(medium.effort).toBe('medium');
+  });
+
   it('구형 Claude chat → temperature 유지', () => {
     const opts = resolveModelCallOptions(
       cfg({ provider: 'anthropic', model: 'claude-sonnet-4-6', temperature: 0.4 }),

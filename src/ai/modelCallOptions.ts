@@ -16,7 +16,7 @@ export interface ModelCallOptions {
   /** Anthropic adaptive thinking (Opus 4.7+/Sonnet 5) */
   adaptiveThinking?: boolean;
   /** Anthropic output_config.effort / OpenAI reasoning_effort */
-  effort?: 'high';
+  effort?: 'medium' | 'high';
 }
 
 /** Opus 4.7 이상(4.7/4.8/4.9 및 2자리 이상 버전) */
@@ -37,8 +37,9 @@ function isSonnet5(model: string): boolean {
  * - adaptiveThinking(Anthropic): Opus 4.7+는 기본 꺼짐이라 항상 명시,
  *   Sonnet 5는 생략 시 기본 adaptive지만 명시성/일관성을 위해 함께 설정.
  * - effort: Anthropic Opus 4.7+는 항상 'high'(서버 기본값이라 사실상 no-op),
- *   Sonnet 5는 review일 때만 'high'. OpenAI는 reasoning_effort를 지원하는
- *   gpt-5 계열이면서 review일 때만 'high'(실제 상향). gpt-4o 등 비 gpt-5 모델에
+ *   Sonnet 5는 review일 때만 'high'. OpenAI 프리셋에 reasoningEffort가 있으면
+ *   모든 용도에 해당 값을 전달하고, 없으면 gpt-5 계열 review에만 'high'를 쓴다.
+ *   gpt-4o 등 비 gpt-5 모델에
  *   reasoning_effort를 보내면 400이 나므로 여기서(모델 판정 지점) 가드한다.
  *   Rust 경로(commands/ai.rs)의 starts_with("gpt-5") 판정과 동일 기준. (A3)
  */
@@ -73,7 +74,11 @@ export function resolveModelCallOptions(cfg: AiConfig, useFor: ModelUseFor): Mod
   }
   // effort는 reasoning_effort를 지원하는 gpt-5 계열에만 포함한다.
   // 호출 경로(client.ts / backendCompletion.ts)는 이 결과를 신뢰해 그대로 전달한다. (A3)
-  if (isReview && isGpt5) opts.effort = 'high';
+  if (isGpt5 && cfg.reasoningEffort) {
+    opts.effort = cfg.reasoningEffort;
+  } else if (isReview && isGpt5) {
+    opts.effort = 'high';
+  }
 
   return opts;
 }
