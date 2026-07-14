@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import pkg from './package.json';
@@ -9,12 +9,16 @@ const appVersion = pkg.version;
 const host = process.env.TAURI_DEV_HOST || '127.0.0.1';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   // IMPORTANT:
   // - Vite는 config 평가 시점에 NODE_ENV가 기대와 다를 수 있어(production build에서도 undefined 등)
   //   `command`(serve/build) 기준으로 분기합니다.
   // - Tauri production(asset 프로토콜)에서는 상대 경로가 필요합니다.
   const isBuild = command === 'build';
+  // serve(dev / tauri:dev)에서만 .env* API 키를 프론트에 주입. production 번들에는 넣지 않음.
+  const env = loadEnv(mode, process.cwd(), '');
+  const devOpenAiKey = command === 'serve' ? (env.OPENAI_API_KEY ?? '') : '';
+  const devAnthropicKey = command === 'serve' ? (env.ANTHROPIC_API_KEY ?? '') : '';
 
   return {
     base: isBuild ? './' : '/',
@@ -29,6 +33,8 @@ export default defineConfig(({ command }) => {
       'process.version': JSON.stringify(process.version),
       global: 'window',
       __APP_VERSION__: JSON.stringify(appVersion),
+      __DEV_OPENAI_API_KEY__: JSON.stringify(devOpenAiKey),
+      __DEV_ANTHROPIC_API_KEY__: JSON.stringify(devAnthropicKey),
     },
 
     plugins: [

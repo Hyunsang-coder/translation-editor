@@ -89,6 +89,34 @@ function isTestRuntime(): boolean {
   return getEnvString('MODE') === 'test' || process.env.VITEST === 'true';
 }
 
+function isDevRuntime(): boolean {
+  return Boolean(import.meta.env.DEV);
+}
+
+/** 테스트 또는 Vite serve(dev/tauri:dev)에서만 .env* API 키 fallback 허용 */
+function allowEnvApiKeyFallback(): boolean {
+  return isTestRuntime() || isDevRuntime();
+}
+
+function getDevInjectedApiKey(kind: 'openai' | 'anthropic'): string | undefined {
+  // vite.config.ts define — serve에서만 실제 값, production build는 ''
+  const raw =
+    kind === 'openai'
+      ? (typeof __DEV_OPENAI_API_KEY__ !== 'undefined' ? __DEV_OPENAI_API_KEY__ : '')
+      : (typeof __DEV_ANTHROPIC_API_KEY__ !== 'undefined' ? __DEV_ANTHROPIC_API_KEY__ : '');
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getEnvApiKeyFallback(kind: 'openai' | 'anthropic'): string | undefined {
+  if (!allowEnvApiKeyFallback()) return undefined;
+  // vitest: process.env / tauri:dev(serve): __DEV_*__ inject
+  return (
+    getProcessEnvString(kind === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY') ||
+    getDevInjectedApiKey(kind)
+  );
+}
+
 export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'review' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
@@ -107,10 +135,11 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
   const model = preset.apiModel ?? preset.value;
 
   // 5. API Key 우선순위
-  // - 런타임 앱: Store 값만 사용
-  // - 테스트(vitest): Store 값이 없으면 process.env(.env.local 주입값)로 fallback
-  const openaiApiKey = store.openaiApiKey || (isTestRuntime() ? getProcessEnvString('OPENAI_API_KEY') : undefined);
-  const anthropicApiKey = store.anthropicApiKey || (isTestRuntime() ? getProcessEnvString('ANTHROPIC_API_KEY') : undefined);
+  // - Store(설정/secure store) 우선
+  // - 테스트·dev(serve): Store가 비어 있으면 .env/.env.local fallback
+  // - production 빌드: Store만 사용 (번들에 env 키를 넣지 않음)
+  const openaiApiKey = store.openaiApiKey || getEnvApiKeyFallback('openai');
+  const anthropicApiKey = store.anthropicApiKey || getEnvApiKeyFallback('anthropic');
 
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 

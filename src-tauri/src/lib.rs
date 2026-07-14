@@ -87,6 +87,12 @@ async fn seed_api_keys_bundle_from_env_if_missing() {
                     "[startup] Failed to seed ai/api_keys_bundle from env: {}",
                     err
                 );
+            } else {
+                info!(
+                    "[startup] Seeded API keys from env (openai={}, anthropic={})",
+                    bundle.openai.as_ref().is_some_and(|s| !s.is_empty()),
+                    bundle.anthropic.as_ref().is_some_and(|s| !s.is_empty())
+                );
             }
         }
         Err(err) => {
@@ -171,45 +177,51 @@ fn find_upwards(start: PathBuf, filename: &str, max_hops: usize) -> Option<PathB
     None
 }
 
-/// .env.local 파일에서 환경변수를 로드합니다.
+/// .env.local / .env 파일에서 환경변수를 로드합니다.
 ///
 /// # Safety (env mutation)
 /// 이 함수와 내부에서 호출하는 `dotenvy`, `try_load_env_lenient` 모두 `std::env::set_var`를
 /// 사용합니다. `set_var`는 멀티스레드 환경에서 안전하지 않지만, 이 함수는 `setup()` 콜백의
 /// 최상단에서 한 번만 호출되며, 이 시점에서 다른 스레드가 해당 환경변수를 읽지 않습니다.
 fn load_env_for_tauri_dev() {
-    // 1) 가장 단순한 케이스: CWD 기준 (.env.local)
-    if dotenvy::from_filename(".env.local").is_ok() {
-        return;
-    }
+    // 우선순위: .env.local → .env (이미 설정된 비어있지 않은 값은 덮어쓰지 않음)
+    let filenames = [".env.local", ".env"];
 
-    // 2) CWD가 프로젝트 루트가 아닐 수 있으니, 상위로 올라가며 탐색
-    let mut candidates: Vec<PathBuf> = vec![];
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(p) = find_upwards(cwd, ".env.local", 6) {
-            candidates.push(p);
+    for filename in filenames {
+        // 1) CWD 기준
+        if Path::new(filename).exists() {
+            if dotenvy::from_filename(filename).is_ok() {
+                continue;
+            }
+            let _ = try_load_env_lenient(Path::new(filename));
+            continue;
         }
-    }
 
-    // 3) 실행 파일 위치 기준으로도 탐색 (cargo run/tauri dev 환경 대응)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            if let Some(p) = find_upwards(dir.to_path_buf(), ".env.local", 8) {
+        // 2) CWD가 프로젝트 루트가 아닐 수 있으니, 상위로 올라가며 탐색
+        let mut candidates: Vec<PathBuf> = vec![];
+        if let Ok(cwd) = std::env::current_dir() {
+            if let Some(p) = find_upwards(cwd, filename, 6) {
                 candidates.push(p);
             }
         }
-    }
 
-    // 후보 중 하나라도 성공하면 OK
-    for p in candidates {
-        // strict 파서 우선
-        if dotenvy::from_path(&p).is_ok() {
-            return;
+        // 3) 실행 파일 위치 기준으로도 탐색 (cargo run/tauri dev 환경 대응)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                if let Some(p) = find_upwards(dir.to_path_buf(), filename, 8) {
+                    candidates.push(p);
+                }
+            }
         }
-        // strict 파서가 실패하면(예: markdown 포함), lenient 로더로 보강
-        if let Ok(loaded) = try_load_env_lenient(&p) {
-            if loaded > 0 {
-                return;
+
+        for p in candidates {
+            if dotenvy::from_path(&p).is_ok() {
+                break;
+            }
+            if let Ok(loaded) = try_load_env_lenient(&p) {
+                if loaded > 0 {
+                    break;
+                }
             }
         }
     }
@@ -253,8 +265,8 @@ pub fn run() {
 
     builder
         .setup(move |app| {
-            // Dev 환경에서 .env.local 을 로드 (Brave Search API 등 비밀키는 프론트에 노출하지 않고 백엔드에서 사용)
-            // - .env.local이 markdown(코드펜스 등)을 포함하면 dotenvy(strict)가 실패할 수 있어,
+            // Dev 환경에서 .env.local / .env 을 로드 (Brave Search API 등 비밀키는 프론트에 노출하지 않고 백엔드에서 사용)
+            // - 파일이 markdown(코드펜스 등)을 포함하면 dotenvy(strict)가 실패할 수 있어,
             //   strict 실패 시 lenient(KEY=VALUE 라인만) 로더로 보강합니다.
             // - production에서는 파일이 없을 수 있으므로 실패해도 무시합니다.
             // Note: load_env_for_tauri_dev()와 dotenvy::dotenv() 모두 내부에서

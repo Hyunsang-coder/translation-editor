@@ -50,6 +50,21 @@ function normalizeKey(key: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/** Vite serve(dev)에서만 주입된 .env* 키 — Settings UI에도 보이도록 스토어에 soft-fill */
+function getDevInjectedApiKeys(): { openai?: string; anthropic?: string } {
+  if (!import.meta.env.DEV) return {};
+  const openai = normalizeKey(
+    typeof __DEV_OPENAI_API_KEY__ !== 'undefined' ? __DEV_OPENAI_API_KEY__ : undefined,
+  );
+  const anthropic = normalizeKey(
+    typeof __DEV_ANTHROPIC_API_KEY__ !== 'undefined' ? __DEV_ANTHROPIC_API_KEY__ : undefined,
+  );
+  return {
+    ...(openai ? { openai } : {}),
+    ...(anthropic ? { anthropic } : {}),
+  };
+}
+
 // 번들로 묶어서 저장하는 함수
 async function persistAllKeys(keys: ApiKeysBundle): Promise<void> {
   const json = JSON.stringify(keys);
@@ -222,9 +237,10 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                 // 번들이 있으면 파싱해서 적용 (brave 키는 무시 - 제거됨)
                 try {
                   const bundle = JSON.parse(bundleJson) as ApiKeysBundle & { brave?: string };
+                  const devKeys = getDevInjectedApiKeys();
                   set({
-                    openaiApiKey: bundle.openai,
-                    anthropicApiKey: bundle.anthropic,
+                    openaiApiKey: normalizeKey(bundle.openai) || devKeys.openai,
+                    anthropicApiKey: normalizeKey(bundle.anthropic) || devKeys.anthropic,
                   });
                   keysLoaded = true;  // ✅ 성공 후에만 true
                   return; // 로드 완료
@@ -260,6 +276,15 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
                   anthropicApiKey: newBundle.anthropic,
                 });
                 await persistAllKeys(newBundle);
+              } else {
+                // 3. vault/레거시 키가 없으면 dev(.env*) 키를 세션에만 반영 (persist 없음)
+                const devKeys = getDevInjectedApiKeys();
+                if (devKeys.openai || devKeys.anthropic) {
+                  set({
+                    openaiApiKey: devKeys.openai,
+                    anthropicApiKey: devKeys.anthropic,
+                  });
+                }
               }
 
               keysLoaded = true;  // ✅ 마이그레이션도 성공
@@ -268,6 +293,14 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
               const message = getErrorMessage(err);
               console.warn(`[aiConfigStore] Failed to load secure keys:`, message);
               // keysLoaded remains false → 재시도 가능
+              // vault 실패해도 dev 키는 사용 가능하게 soft-fill
+              const devKeys = getDevInjectedApiKeys();
+              if (devKeys.openai || devKeys.anthropic) {
+                set({
+                  openaiApiKey: get().openaiApiKey || devKeys.openai,
+                  anthropicApiKey: get().anthropicApiKey || devKeys.anthropic,
+                });
+              }
             } finally {
               loadingPromise = null;
             }

@@ -83,4 +83,13 @@ describe('getAiConfig - test env fallback', () => {
     expect(cfg.provider).toBe('anthropic');
     expect(cfg.anthropicApiKey).toBe('env-anthropic-key');
   });
+
+  it('dev 런타임에서도 Store 키가 없으면 env fallback을 사용한다', () => {
+    // vitest는 import.meta.env.DEV=true 이므로 allowEnvApiKeyFallback이 켜진다.
+    process.env.OPENAI_API_KEY = 'dev-openai-key';
+
+    const cfg = getAiConfig({ useFor: 'chat' });
+
+    expect(cfg.openaiApiKey).toBe('dev-openai-key');
+  });
 });

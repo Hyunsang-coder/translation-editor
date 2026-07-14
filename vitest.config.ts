@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
 
+    define: {
+      // vite.config.ts와 동일한 심볼 — 미정의 시 ReferenceError 방지
+      // 테스트의 API 키는 아래 test.env(process.env)로만 주입한다.
+      __APP_VERSION__: JSON.stringify('0.0.0-test'),
+      __DEV_OPENAI_API_KEY__: JSON.stringify(''),
+      __DEV_ANTHROPIC_API_KEY__: JSON.stringify(''),
+    },
+
     test: {
       // jsdom 환경에서 React 컴포넌트 테스트
       environment: 'jsdom',
