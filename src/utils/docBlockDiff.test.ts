@@ -246,6 +246,273 @@ describe('mergeDocBySelection', () => {
   });
 });
 
+function orderedList(...itemTexts: string[]): Record<string, unknown> {
+  return {
+    type: 'orderedList',
+    content: itemTexts.map((text) => ({ type: 'listItem', content: [p(text)] })),
+  };
+}
+
+/** 변경 unit 중 기존/제안 텍스트가 모두 비어 있지 않은(치환) unit만 */
+function changeUnits(plan: ReturnType<typeof buildDocDiffPlan>) {
+  return plan.units.filter((u) => u.originalText.length > 0 && u.polishedText.length > 0);
+}
+
+function insertUnits(plan: ReturnType<typeof buildDocDiffPlan>) {
+  return plan.units.filter((u) => u.originalText.length === 0 && u.polishedText.length > 0);
+}
+
+function deleteUnits(plan: ReturnType<typeof buildDocDiffPlan>) {
+  return plan.units.filter((u) => u.originalText.length > 0 && u.polishedText.length === 0);
+}
+
+describe('유사도 기반 블록 짝짓기 (삽입/삭제로 위치가 밀릴 때)', () => {
+  it('중간 문단 삽입 + 다음 문단 수정 시 내용끼리 짝지어진다 (off-by-one 방지)', () => {
+    const a = doc(
+      p('First paragraph stays.'),
+      p('Second paragraph needs polish.'),
+      p('Third paragraph stays.'),
+    );
+    const b = doc(
+      p('First paragraph stays.'),
+      p('Brand new inserted paragraph.'),
+      p('Second paragraph looks polished.'),
+      p('Third paragraph stays.'),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Second paragraph needs polish.',
+        polishedText: 'Second paragraph looks polished.',
+      }),
+    ]);
+    expect(insertUnits(plan)).toEqual([
+      expect.objectContaining({ polishedText: 'Brand new inserted paragraph.' }),
+    ]);
+    // 잘못 짝지으면 "Second…" ↔ "Brand new…" 같은 치환 unit이 생긴다
+    expect(
+      changeUnits(plan).some((u) => u.polishedText.includes('Brand new')),
+    ).toBe(false);
+  });
+
+  it('중간 빈 문단(줄간격) 삽입 + 다음 문단 수정 시 내용끼리 짝지어진다', () => {
+    const a = doc(
+      p('Alpha stays here.'),
+      p('Beta needs a rewrite now.'),
+      p('Gamma stays here.'),
+    );
+    const b = doc(
+      p('Alpha stays here.'),
+      p(''), // 줄간격용 빈 문단
+      p('Beta gets a cleaner rewrite.'),
+      p('Gamma stays here.'),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Beta needs a rewrite now.',
+        polishedText: 'Beta gets a cleaner rewrite.',
+      }),
+    ]);
+    // 빈 문단 삽입 unit은 표시 텍스트가 비어 insertUnits 헬퍼에 안 잡히므로 merge로 검증
+    const merged = mergeDocBySelection(a, plan, allUnitIds(plan));
+    expect(mergedTexts(merged)).toEqual([
+      'Alpha stays here.',
+      '',
+      'Beta gets a cleaner rewrite.',
+      'Gamma stays here.',
+    ]);
+    expect(
+      changeUnits(plan).some((u) => u.originalText.includes('Beta') && u.polishedText === ''),
+    ).toBe(false);
+  });
+
+  it('연속 빈 문단 여러 개 삽입 후에도 아래 문단 수정이 올바른 unit이 된다', () => {
+    const a = doc(p('Keep this intro.'), p('Body text to polish carefully.'), p('Keep this outro.'));
+    const b = doc(
+      p('Keep this intro.'),
+      p(''),
+      p(''),
+      p('Body text polished carefully now.'),
+      p('Keep this outro.'),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Body text to polish carefully.',
+        polishedText: 'Body text polished carefully now.',
+      }),
+    ]);
+    const merged = mergeDocBySelection(a, plan, allUnitIds(plan));
+    expect(mergedTexts(merged)).toEqual([
+      'Keep this intro.',
+      '',
+      '',
+      'Body text polished carefully now.',
+      'Keep this outro.',
+    ]);
+  });
+
+  it('문단 삭제 + 이웃 문단 수정 시 삭제와 치환이 분리된다', () => {
+    const a = doc(
+      p('Lead paragraph here.'),
+      p('This middle paragraph will be removed.'),
+      p('Trail paragraph needs polish.'),
+    );
+    const b = doc(
+      p('Lead paragraph here.'),
+      p('Trail paragraph looks polished.'),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(deleteUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'This middle paragraph will be removed.',
+      }),
+    ]);
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Trail paragraph needs polish.',
+        polishedText: 'Trail paragraph looks polished.',
+      }),
+    ]);
+  });
+
+  it('전체 선택 merge 결과가 폴리싱 문서와 같다 (삽입+수정)', () => {
+    const a = doc(p('Stable one.'), p('Edit me please.'), p('Stable two.'));
+    const b = doc(p('Stable one.'), p('Inserted block.'), p('Edit me now.'), p('Stable two.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    const merged = mergeDocBySelection(a, plan, allUnitIds(plan));
+
+    expect(mergedTexts(merged)).toEqual([
+      'Stable one.',
+      'Inserted block.',
+      'Edit me now.',
+      'Stable two.',
+    ]);
+  });
+
+  it('미선택 merge는 원본 문단 순서를 유지한다 (삭제+수정)', () => {
+    const a = doc(p('Keep A.'), p('Delete B.'), p('Edit C old.'));
+    const b = doc(p('Keep A.'), p('Edit C new.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    const merged = mergeDocBySelection(a, plan, new Set());
+
+    expect(mergedTexts(merged)).toEqual(['Keep A.', 'Delete B.', 'Edit C old.']);
+  });
+
+  it('bullet list: 항목 삽입 + 다른 항목 수정 시 내용끼리 짝지어진다', () => {
+    const a = doc(list('First item stays.', 'Second item needs polish.', 'Third item stays.'));
+    const b = doc(list(
+      'First item stays.',
+      'Inserted bullet item.',
+      'Second item looks polished.',
+      'Third item stays.',
+    ));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Second item needs polish.',
+        polishedText: 'Second item looks polished.',
+      }),
+    ]);
+    expect(insertUnits(plan)).toEqual([
+      expect.objectContaining({ polishedText: 'Inserted bullet item.' }),
+    ]);
+  });
+
+  it('ordered list: 항목 삽입 + 다른 항목 수정 시 내용끼리 짝지어진다', () => {
+    const a = doc(orderedList('Step one stays.', 'Step two needs work.', 'Step three stays.'));
+    const b = doc(orderedList(
+      'Step one stays.',
+      'New step inserted here.',
+      'Step two looks better.',
+      'Step three stays.',
+    ));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Step two needs work.',
+        polishedText: 'Step two looks better.',
+      }),
+    ]);
+    expect(insertUnits(plan)).toEqual([
+      expect.objectContaining({ polishedText: 'New step inserted here.' }),
+    ]);
+  });
+
+  it('들여쓰기(중첩 리스트): 형제 항목 삽입 + 다른 항목 수정 시 내용끼리 짝지어진다', () => {
+    // 최상위 bulletList 안에서 평탄 listItem들이 밀릴 때 (중첩 구조 자체는 F5 swap)
+    const a = doc(list('Parent stays.', 'Child needs polish text.', 'Tail stays.'));
+    const b = doc(list(
+      'Parent stays.',
+      'Indented-looking new sibling.',
+      'Child polished text now.',
+      'Tail stays.',
+    ));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'Child needs polish text.',
+        polishedText: 'Child polished text now.',
+      }),
+    ]);
+    expect(insertUnits(plan)).toEqual([
+      expect.objectContaining({ polishedText: 'Indented-looking new sibling.' }),
+    ]);
+  });
+
+  it('중첩 리스트 통째 블록 사이에 빈 문단이 끼어도 아래 문단 수정이 유지된다', () => {
+    const a = doc(
+      nestedList('Nest parent old.', 'Nest child old.'),
+      p('After nest needs polish.'),
+    );
+    const b = doc(
+      nestedList('Nest parent old.', 'Nest child old.'),
+      p(''),
+      p('After nest looks polished.'),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(changeUnits(plan)).toEqual([
+      expect.objectContaining({
+        originalText: 'After nest needs polish.',
+        polishedText: 'After nest looks polished.',
+      }),
+    ]);
+  });
+
+  it('유사도가 낮은 문단끼리는 억지로 짝짓지 않고 삭제+삽입으로 나눈다', () => {
+    const a = doc(p('Completely different alpha content here.'), p('Shared tail stays.'));
+    const b = doc(p('Totally unrelated omega material now.'), p('Shared tail stays.'));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    //  alike 하지 않으면 치환 1개로 뭉개지기보다 delete+insert 또는 치환이 될 수 있음.
+    // 핵심: Shared tail은 unit이 아니어야 하고, alpha↔omega가 "Shared"와 섞이면 안 됨.
+    expect(plan.units.every((u) => !u.originalText.includes('Shared tail'))).toBe(true);
+    expect(plan.units.some((u) =>
+      u.originalText.includes('alpha') || u.polishedText.includes('omega'),
+    )).toBe(true);
+  });
+});
+
 describe('평탄하지 않은 블록은 통째 swap (F5)', () => {
   it('중첩 리스트 항목은 문장 세분화 대신 항목 통째 swap이 된다', () => {
     const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));

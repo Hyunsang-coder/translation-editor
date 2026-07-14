@@ -80,6 +80,25 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(systemPrompt).toContain('Make the tone more formal without changing product terminology.');
   });
 
+  it('프로젝트 컨텍스트와 페르소나를 폴리싱 프롬프트에 포함한다', async () => {
+    await polishTargetDocumentWithStreaming({
+      targetDocJson,
+      styleRules: 'Keep product names untranslated.',
+      projectContext: 'PUBG patch notes for competitive players.',
+      translatorPersona: 'Concise game localization editor.',
+    });
+
+    const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+    const systemPrompt = String(messages[0]?.content);
+
+    expect(systemPrompt).toContain('Style/translation rules to respect:');
+    expect(systemPrompt).toContain('Keep product names untranslated.');
+    expect(systemPrompt).toContain('[Project Context]');
+    expect(systemPrompt).toContain('PUBG patch notes for competitive players.');
+    expect(systemPrompt).toContain('Tone reference (stylistic guidance only; do not invent or drop meaning):');
+    expect(systemPrompt).toContain('Concise game localization editor.');
+  });
+
   it('취소 신호가 이미 있으면 호출하지 않는다', async () => {
     const abortController = new AbortController();
     abortController.abort();

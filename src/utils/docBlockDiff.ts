@@ -7,6 +7,7 @@
  *
  * 세분화 규칙:
  * - 최상위 블록을 텍스트로 정렬(diffArrays)
+ * - 변경 run 안에서는 인덱스 짝이 아니라 텍스트 유사도(Dice)로 재페어링
  * - 1:1로 짝지어진 블록은 문장 단위(diffSentences)로 세분화
  * - 리스트(bulletList/orderedList)는 항목(listItem) 단위로 재귀 정렬 후 문장 세분화
  * - 표/코드 등 구조 블록과 블록 추가/삭제는 통째로 하나의 unit
@@ -236,6 +237,90 @@ function pairBlocks(
   return { kind: 'swap', unitId, originalBlocks: [original], polishedBlocks: [polished] };
 }
 
+/** 변경 run 안에서 블록을 내용 유사도로 짝지을 최소 Dice 점수 */
+const BLOCK_PAIR_SIMILARITY_THRESHOLD = 0.45;
+
+function tokenizeBlockKey(key: string): Set<string> {
+  return new Set(
+    key
+      .toLowerCase()
+      .split(/\s+/)
+      .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+      .filter((word) => word.length > 0),
+  );
+}
+
+function diceSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const word of a) {
+    if (b.has(word)) intersection += 1;
+  }
+  return (2 * intersection) / (a.size + b.size);
+}
+
+/** 두 블록의 텍스트 유사도 (0~1). 빈 블록↔내용 블록은 0. */
+function blockSimilarity(original: TipTapNodeJson, polished: TipTapNodeJson): number {
+  const origKey = blockKey(extractBlockText(original));
+  const polKey = blockKey(extractBlockText(polished));
+  if (!origKey && !polKey) return 1;
+  if (!origKey || !polKey) return 0;
+  if (origKey === polKey) return 1;
+
+  let score = diceSimilarity(tokenizeBlockKey(origKey), tokenizeBlockKey(polKey));
+  // 타입이 다르면(문단↔리스트 등) 짝짓기 임계를 사실상 높이기 위해 감점
+  if ((original.type ?? '') !== (polished.type ?? '')) {
+    score *= 0.5;
+  }
+  return score;
+}
+
+/**
+ * 변경 run 내부에서 원본↔폴리싱 블록을 유사도로 짝짓는다.
+ * 반환: origIndex → polIndex (미매칭은 null).
+ */
+function matchBlocksBySimilarity(
+  origRun: TipTapNodeJson[],
+  polRun: TipTapNodeJson[],
+): Array<number | null> {
+  const matchPolForOrig: Array<number | null> = Array.from({ length: origRun.length }, () => null);
+  const usedPol = new Set<number>();
+
+  // 1) 완전 일치(정규화 키) 우선 — 빈 문단끼리도 포함
+  for (let i = 0; i < origRun.length; i++) {
+    const origKey = blockKey(extractBlockText(origRun[i]!));
+    for (let j = 0; j < polRun.length; j++) {
+      if (usedPol.has(j)) continue;
+      if (blockKey(extractBlockText(polRun[j]!)) === origKey) {
+        matchPolForOrig[i] = j;
+        usedPol.add(j);
+        break;
+      }
+    }
+  }
+
+  // 2) 남은 후보를 유사도 높은 순으로 탐욕 매칭
+  const candidates: Array<{ i: number; j: number; sim: number }> = [];
+  for (let i = 0; i < origRun.length; i++) {
+    if (matchPolForOrig[i] !== null) continue;
+    for (let j = 0; j < polRun.length; j++) {
+      if (usedPol.has(j)) continue;
+      const sim = blockSimilarity(origRun[i]!, polRun[j]!);
+      if (sim >= BLOCK_PAIR_SIMILARITY_THRESHOLD) {
+        candidates.push({ i, j, sim });
+      }
+    }
+  }
+  candidates.sort((a, b) => b.sim - a.sim || a.i - b.i || a.j - b.j);
+  for (const c of candidates) {
+    if (matchPolForOrig[c.i] !== null || usedPol.has(c.j)) continue;
+    matchPolForOrig[c.i] = c.j;
+    usedPol.add(c.j);
+  }
+
+  return matchPolForOrig;
+}
+
 /** 블록 배열을 정렬해 계획 노드 목록 생성 (리스트 항목 재귀에도 사용) */
 function buildNodes(
   state: BuildState,
@@ -261,29 +346,67 @@ function buildNodes(
     const origRun = originalBlocks.slice(oStart, origIndex);
     const polRun = polishedBlocks.slice(pStart, polIndex);
 
-    // 같은 위치의 블록끼리 짝지어 세분화, 남는 블록은 통째 추가/삭제 unit
-    const paired = Math.min(origRun.length, polRun.length);
-    for (let i = 0; i < paired; i++) {
-      nodes.push(pairBlocks(state, labelFor(oStart + i), origRun[i]!, polRun[i]!));
+    const matchPolForOrig = matchBlocksBySimilarity(origRun, polRun);
+    const matched: Array<{ oi: number; pj: number }> = [];
+    for (let oi = 0; oi < matchPolForOrig.length; oi++) {
+      const pj = matchPolForOrig[oi];
+      if (typeof pj === 'number') matched.push({ oi, pj });
     }
-    if (origRun.length > paired) {
-      const leftovers = origRun.slice(paired);
-      const unitId = addUnit(
-        state,
-        labelFor(oStart + paired),
-        leftovers.map(extractBlockText).join('\n'),
-        '',
-      );
-      nodes.push({ kind: 'swap', unitId, originalBlocks: leftovers, polishedBlocks: [] });
-    } else if (polRun.length > paired) {
-      const leftovers = polRun.slice(paired);
-      const unitId = addUnit(
-        state,
-        labelFor(oStart + paired),
-        '',
-        leftovers.map(extractBlockText).join('\n'),
-      );
-      nodes.push({ kind: 'swap', unitId, originalBlocks: [], polishedBlocks: leftovers });
+    matched.sort((a, b) => a.pj - b.pj || a.oi - b.oi);
+
+    const unmatchedOrig = new Set(
+      origRun.map((_, i) => i).filter((i) => matchPolForOrig[i] === null),
+    );
+    const matchedPol = new Set(matched.map((m) => m.pj));
+    const unmatchedPol = new Set(
+      polRun.map((_, j) => j).filter((j) => !matchedPol.has(j)),
+    );
+
+    const oiHintForInsert = (pj: number): number => {
+      let hint = 0;
+      for (const m of matched) {
+        if (m.pj < pj) hint = m.oi + 1;
+      }
+      return hint;
+    };
+
+    const emitDelete = (oi: number): void => {
+      const block = origRun[oi]!;
+      const unitId = addUnit(state, labelFor(oStart + oi), extractBlockText(block), '');
+      nodes.push({ kind: 'swap', unitId, originalBlocks: [block], polishedBlocks: [] });
+    };
+
+    const emitInsert = (pj: number): void => {
+      const block = polRun[pj]!;
+      const labelIndex = Math.min(oiHintForInsert(pj), Math.max(origRun.length - 1, 0));
+      const unitId = addUnit(state, labelFor(oStart + labelIndex), '', extractBlockText(block));
+      nodes.push({ kind: 'swap', unitId, originalBlocks: [], polishedBlocks: [block] });
+    };
+
+    let lastOi = -1;
+    let lastPj = -1;
+    for (const m of matched) {
+      for (let oi = lastOi + 1; oi < m.oi; oi++) {
+        if (unmatchedOrig.has(oi)) {
+          emitDelete(oi);
+          unmatchedOrig.delete(oi);
+        }
+      }
+      for (let pj = lastPj + 1; pj < m.pj; pj++) {
+        if (unmatchedPol.has(pj)) {
+          emitInsert(pj);
+          unmatchedPol.delete(pj);
+        }
+      }
+      nodes.push(pairBlocks(state, labelFor(oStart + m.oi), origRun[m.oi]!, polRun[m.pj]!));
+      lastOi = m.oi;
+      lastPj = m.pj;
+    }
+    for (let oi = lastOi + 1; oi < origRun.length; oi++) {
+      if (unmatchedOrig.has(oi)) emitDelete(oi);
+    }
+    for (let pj = lastPj + 1; pj < polRun.length; pj++) {
+      if (unmatchedPol.has(pj)) emitInsert(pj);
     }
 
     pendingOrigStart = null;

@@ -12,7 +12,7 @@ interface SelectiveDiffListProps {
 
 /**
  * 폴리싱/재번역 미리보기의 변경 단위 선택 목록.
- * 문장/문단 단위 변경마다 체크박스 + 기존/제안 텍스트(단어 단위 하이라이트)를 표시합니다.
+ * 문장/문단 단위 변경마다 체크박스 + 기존|제안 좌우 비교(단어 단위 하이라이트)를 표시합니다.
  */
 export function SelectiveDiffList({
   units,
@@ -25,23 +25,35 @@ export function SelectiveDiffList({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* 헤더: 전체 선택 + 카운트 */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-editor-border bg-editor-surface shrink-0">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={onToggleAll}
-            className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-            aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
-          />
-          <span className="text-xs text-editor-text">
-            {t('editor.selectiveDiff.changedCount', '변경 {{total}}개 중 {{selected}}개 선택', {
-              total: units.length,
-              selected: units.filter((u) => selectedIds.has(u.id)).length,
-            })}
+      {/* 헤더: 전체 선택 + 카운트 + 컬럼 라벨 */}
+      <div className="shrink-0 border-b border-editor-border bg-editor-surface">
+        <div className="flex items-center gap-3 px-4 py-2.5">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleAll}
+              className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+              aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
+            />
+            <span className="text-xs text-editor-text">
+              {t('editor.selectiveDiff.changedCount', '변경 {{total}}개 중 {{selected}}개 선택', {
+                total: units.length,
+                selected: units.filter((u) => selectedIds.has(u.id)).length,
+              })}
+            </span>
+          </label>
+        </div>
+        <div className="grid grid-cols-[auto_auto_1fr_1fr] gap-3 px-4 pb-2">
+          <span className="w-3.5" aria-hidden />
+          <span className="w-8" aria-hidden />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-red-500/80">
+            {t('editor.selectiveDiff.original', '기존')}
           </span>
-        </label>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-green-600/80">
+            {t('editor.selectiveDiff.suggested', '제안')}
+          </span>
+        </div>
       </div>
 
       {/* 변경 단위 목록 */}
@@ -73,7 +85,7 @@ function SelectiveDiffRow({
   const isInsertion = unit.originalText.length === 0;
   const isDeletion = unit.polishedText.length === 0;
 
-  // 단어 단위 diff (기존 줄에는 삭제, 제안 줄에는 삽입 하이라이트)
+  // 단어 단위 diff (기존 칸에는 삭제, 제안 칸에는 삽입 하이라이트)
   const wordParts = useMemo(
     () => (isInsertion || isDeletion ? null : Diff.diffWords(unit.originalText, unit.polishedText)),
     [unit.originalText, unit.polishedText, isInsertion, isDeletion],
@@ -81,7 +93,7 @@ function SelectiveDiffRow({
 
   return (
     <label
-      className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-editor-surface/60 ${
+      className={`grid grid-cols-[auto_auto_1fr_1fr] items-start gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-editor-surface/60 ${
         selected ? 'bg-primary-500/5' : ''
       }`}
     >
@@ -95,56 +107,62 @@ function SelectiveDiffRow({
       <span className="mt-0.5 shrink-0 text-[10px] text-editor-muted font-medium tabular-nums w-8">
         {unit.blockLabel}
       </span>
-      <div className="flex-1 min-w-0 space-y-1.5 text-[13px] leading-relaxed">
-        {!isInsertion && (
-          <div className="flex gap-2">
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-red-500/80 mt-0.5 w-7">
-              {t('editor.selectiveDiff.original', '기존')}
-            </span>
-            <span className="break-words whitespace-pre-wrap text-editor-muted">
-              {wordParts
-                ? wordParts.map((part, i) =>
-                    part.added ? null : part.removed ? (
-                      <span key={i} className="bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-100 line-through decoration-red-400 decoration-1 rounded-[2px] px-0.5">
-                        {part.value}
-                      </span>
-                    ) : (
-                      <span key={i}>{part.value}</span>
-                    ),
-                  )
-                : unit.originalText}
-              {isDeletion && (
-                <span className="ml-1 text-[10px] text-red-500/80">
-                  {t('editor.selectiveDiff.removed', '(삭제)')}
-                </span>
-              )}
-            </span>
-          </div>
+
+      {/* 기존 (좌) */}
+      <div className="min-w-0 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-editor-muted border-r border-editor-border/40 pr-3">
+        {isInsertion ? (
+          <span className="text-[10px] text-editor-muted/70 italic">—</span>
+        ) : wordParts ? (
+          wordParts.map((part, i) =>
+            part.added ? null : part.removed ? (
+              <span
+                key={i}
+                className="bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-100 line-through decoration-red-400 decoration-1 rounded-[2px] px-0.5"
+              >
+                {part.value}
+              </span>
+            ) : (
+              <span key={i}>{part.value}</span>
+            ),
+          )
+        ) : (
+          <>
+            {unit.originalText}
+            {isDeletion && (
+              <span className="ml-1 text-[10px] text-red-500/80">
+                {t('editor.selectiveDiff.removed', '(삭제)')}
+              </span>
+            )}
+          </>
         )}
-        {!isDeletion && (
-          <div className="flex gap-2">
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-green-600/80 mt-0.5 w-7">
-              {t('editor.selectiveDiff.suggested', '제안')}
-            </span>
-            <span className="break-words whitespace-pre-wrap text-editor-text">
-              {wordParts
-                ? wordParts.map((part, i) =>
-                    part.removed ? null : part.added ? (
-                      <span key={i} className="bg-green-200 dark:bg-green-900/50 text-green-900 dark:text-green-100 rounded-[2px] px-0.5">
-                        {part.value}
-                      </span>
-                    ) : (
-                      <span key={i}>{part.value}</span>
-                    ),
-                  )
-                : unit.polishedText}
-              {isInsertion && (
-                <span className="ml-1 text-[10px] text-green-600/80">
-                  {t('editor.selectiveDiff.added', '(추가)')}
-                </span>
-              )}
-            </span>
-          </div>
+      </div>
+
+      {/* 제안 (우) */}
+      <div className="min-w-0 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-editor-text">
+        {isDeletion ? (
+          <span className="text-[10px] text-editor-muted/70 italic">—</span>
+        ) : wordParts ? (
+          wordParts.map((part, i) =>
+            part.removed ? null : part.added ? (
+              <span
+                key={i}
+                className="bg-green-200 dark:bg-green-900/50 text-green-900 dark:text-green-100 rounded-[2px] px-0.5"
+              >
+                {part.value}
+              </span>
+            ) : (
+              <span key={i}>{part.value}</span>
+            ),
+          )
+        ) : (
+          <>
+            {unit.polishedText}
+            {isInsertion && (
+              <span className="ml-1 text-[10px] text-green-600/80">
+                {t('editor.selectiveDiff.added', '(추가)')}
+              </span>
+            )}
+          </>
         )}
       </div>
     </label>

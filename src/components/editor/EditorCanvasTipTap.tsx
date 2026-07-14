@@ -649,6 +649,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         targetDocJson,
         targetLanguage: project.metadata.targetLanguage,
         styleRules: translationRules,
+        projectContext,
+        translatorPersona,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
         onToken: (text) => setStreamingChannelText('polish', text),
@@ -674,7 +676,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         polishAbortController.current = null;
       }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText]);
+  }, [addToast, hasTargetContent, project, t, translationRules, projectContext, translatorPersona, computeTargetRevision, setStreamingChannelText]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;
