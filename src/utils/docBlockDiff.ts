@@ -9,8 +9,9 @@
  * - 최상위 블록을 텍스트로 정렬(diffArrays)
  * - 변경 run 안에서는 인덱스 짝이 아니라 텍스트 유사도(Dice)로 재페어링
  * - 1:1로 짝지어진 블록은 문장 단위(diffSentences)로 세분화
- * - 리스트(bulletList/orderedList)는 항목(listItem) 단위로 재귀 정렬 후 문장 세분화
- * - 표/코드 등 구조 블록과 블록 추가/삭제는 통째로 하나의 unit
+ * - 연속 변경·공백 정규화로 통째 hunk가 되어도 문장마다 별도 unit
+ * - 리스트(bulletList/orderedList)·listItem·표(table/row/cell)는 자식 단위로 재귀 후 문장 세분화
+ * - 코드/hardBreak 등 구조 블록과 블록 추가/삭제는 통째로 하나의 unit
  */
 
 import * as Diff from 'diff';
@@ -137,9 +138,18 @@ function getBlocks(doc: TipTapDocJson): TipTapNodeJson[] {
   return Array.isArray(content) ? (content as TipTapNodeJson[]) : [];
 }
 
-const LIST_TYPES = new Set(['bulletList', 'orderedList']);
+/** 자식 노드로 재귀 정렬하는 컨테이너 (리스트·listItem·표) */
+const RECURSIVE_CONTAINER_TYPES = new Set([
+  'bulletList',
+  'orderedList',
+  'listItem',
+  'table',
+  'tableRow',
+  'tableCell',
+  'tableHeader',
+]);
 /** 문장 단위 세분화가 안전한 텍스트 블록 (partial 병합 시 plain text로 재구성됨) */
-const SENTENCE_REFINABLE_TYPES = new Set(['paragraph', 'heading', 'listItem']);
+const SENTENCE_REFINABLE_TYPES = new Set(['paragraph', 'heading']);
 
 interface BuildState {
   unitSeq: number;
@@ -162,7 +172,95 @@ function addUnit(
   return id;
 }
 
-/** 두 텍스트를 문장 단위로 비교해 equal/change 파트 생성 (연속 변경 문장은 하나의 unit) */
+/**
+ * jsdiff `sentenceDiff.tokenize`과 동일: `.!?` + 공백에서 문장/공백 토큰 분리.
+ * flush 시 통째 hunk를 문장 단위로 다시 쪼갤 때 사용한다.
+ */
+function tokenizeSentences(text: string): string[] {
+  if (!text) return [];
+  const result: string[] = [];
+  let tokenStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (i === text.length - 1) {
+      result.push(text.slice(tokenStart));
+      break;
+    }
+    const ch = text[i]!;
+    const next = text[i + 1]!;
+    if ((ch === '.' || ch === '!' || ch === '?') && /\s/.test(next)) {
+      result.push(text.slice(tokenStart, i + 1));
+      let j = i + 1;
+      while (j + 1 < text.length && /\s/.test(text[j + 1]!)) j++;
+      result.push(text.slice(i + 1, j + 1));
+      tokenStart = j + 1;
+      i = j;
+    }
+  }
+  return result;
+}
+
+function isWhitespaceToken(token: string): boolean {
+  return /^\s+$/.test(token);
+}
+
+/** 문장 인덱스 뒤에 오는 공백 토큰 (없으면 null) */
+function whitespaceAfterSentence(tokens: string[], sentenceIndex: number): string | null {
+  let seen = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (isWhitespaceToken(token)) continue;
+    if (seen === sentenceIndex) {
+      const next = tokens[i + 1];
+      return next && isWhitespaceToken(next) ? next : null;
+    }
+    seen += 1;
+  }
+  return null;
+}
+
+/**
+ * 변경 hunk를 문장 단위 unit으로 분해해 parts에 추가.
+ * 문장 사이 공백이 달라 diffSentences가 통째로 묶은 경우에도 체크박스를 문장마다 둔다.
+ */
+function emitSentenceChangeParts(
+  state: BuildState,
+  blockLabel: string,
+  parts: SentencePart[],
+  removed: string,
+  added: string,
+): void {
+  const remTokens = tokenizeSentences(removed);
+  const addTokens = tokenizeSentences(added);
+  const remSentences = remTokens.filter((t) => !isWhitespaceToken(t));
+  const addSentences = addTokens.filter((t) => !isWhitespaceToken(t));
+
+  if (remSentences.length <= 1 && addSentences.length <= 1) {
+    const unitId = addUnit(state, blockLabel, removed, added);
+    parts.push({ kind: 'change', unitId, originalText: removed, polishedText: added });
+    return;
+  }
+
+  const n = Math.max(remSentences.length, addSentences.length);
+  for (let i = 0; i < n; i++) {
+    const originalText = remSentences[i] ?? '';
+    const polishedText = addSentences[i] ?? '';
+    if (sentenceKey(originalText) === sentenceKey(polishedText)) {
+      if (originalText) parts.push({ kind: 'equal', text: originalText });
+    } else {
+      const unitId = addUnit(state, blockLabel, originalText, polishedText);
+      parts.push({ kind: 'change', unitId, originalText, polishedText });
+    }
+    if (i < n - 1) {
+      const ws =
+        whitespaceAfterSentence(remTokens, i) ??
+        whitespaceAfterSentence(addTokens, i) ??
+        ' ';
+      parts.push({ kind: 'equal', text: ws });
+    }
+  }
+}
+
+/** 두 텍스트를 문장 단위로 비교해 equal/change 파트 생성 (문장마다 별도 unit) */
 function buildSentenceParts(
   state: BuildState,
   blockLabel: string,
@@ -182,8 +280,7 @@ function buildSentenceParts(
     if (sentenceKey(pendingRemoved) === sentenceKey(pendingAdded)) {
       if (pendingRemoved) parts.push({ kind: 'equal', text: pendingRemoved });
     } else {
-      const unitId = addUnit(state, blockLabel, pendingRemoved, pendingAdded);
-      parts.push({ kind: 'change', unitId, originalText: pendingRemoved, polishedText: pendingAdded });
+      emitSentenceChangeParts(state, blockLabel, parts, pendingRemoved, pendingAdded);
     }
     pendingRemoved = '';
     pendingAdded = '';
@@ -192,6 +289,8 @@ function buildSentenceParts(
 
   for (const change of Diff.diffSentences(originalText, polishedText)) {
     if (change.removed) {
+      // 직전 remove+add 쌍이 끝났으면 새 문장 변경 전에 flush (연속 변경 병합 방지)
+      if (hasPending && pendingAdded) flush();
       pendingRemoved += change.value;
       hasPending = true;
     } else if (change.added) {
@@ -217,7 +316,9 @@ function pairBlocks(
   const originalType = original.type ?? '';
   const polishedType = polished.type ?? '';
 
-  if (originalType === polishedType && LIST_TYPES.has(originalType)) {
+  // bulletList/orderedList/listItem/table*: 자식 단위로 재귀.
+  // 중첩 listItem·표 통째 swap이면 여러 문장/셀 변경이 체크 1개로 묶인다.
+  if (originalType === polishedType && RECURSIVE_CONTAINER_TYPES.has(originalType)) {
     const itemNodes = buildNodes(state, original.content ?? [], polished.content ?? [], () => blockLabel);
     return { kind: 'listPair', original, polished, itemNodes };
   }
@@ -232,7 +333,7 @@ function pairBlocks(
     return { kind: 'pair', original, polished, parts };
   }
 
-  // 표/코드 등 구조 블록: 통째로 교체하는 단일 unit
+  // 표/코드/hardBreak 등 구조 블록: 통째로 교체하는 단일 unit
   const unitId = addUnit(state, blockLabel, extractBlockText(original), extractBlockText(polished));
   return { kind: 'swap', unitId, originalBlocks: [original], polishedBlocks: [polished] };
 }

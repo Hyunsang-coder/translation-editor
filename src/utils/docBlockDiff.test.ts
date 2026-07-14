@@ -33,6 +33,38 @@ function nestedList(parentText: string, childText: string): Record<string, unkno
   };
 }
 
+/** Notion 스타일: 섹션 제목 문단 + 중첩 불릿을 담은 상위 listItem들 */
+function sectionList(
+  ...sections: Array<{ title: string; body?: string; bullets?: string[] }>
+): Record<string, unknown> {
+  return {
+    type: 'bulletList',
+    content: sections.map((section) => {
+      const children: Record<string, unknown>[] = [p(section.title)];
+      if (section.body) children.push(p(section.body));
+      if (section.bullets && section.bullets.length > 0) {
+        children.push(list(...section.bullets));
+      }
+      return { type: 'listItem', content: children };
+    }),
+  };
+}
+
+function tableCell(text: string, header = false): Record<string, unknown> {
+  return {
+    type: header ? 'tableHeader' : 'tableCell',
+    content: [p(text)],
+  };
+}
+
+function tableRow(...cells: Record<string, unknown>[]): Record<string, unknown> {
+  return { type: 'tableRow', content: cells };
+}
+
+function table(...rows: Record<string, unknown>[]): Record<string, unknown> {
+  return { type: 'table', content: rows };
+}
+
 /** text + hardBreak + text 인라인을 가진 paragraph */
 function paraWithBreak(a: string, b: string): Record<string, unknown> {
   return {
@@ -119,6 +151,50 @@ describe('buildDocDiffPlan', () => {
     expect(plan.units[1]!.polishedText).toBe('Beta new two.');
   });
 
+  it('연속 변경 문장도(사이에 동일 문장 없음) 각각 unit이 된다', () => {
+    const a = doc(p('Old one. Old two. Old three.'));
+    const b = doc(p('New one. New two. New three.'));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(3);
+    expect(plan.units.map((u) => [u.originalText, u.polishedText])).toEqual([
+      ['Old one.', 'New one.'],
+      ['Old two.', 'New two.'],
+      ['Old three.', 'New three.'],
+    ]);
+  });
+
+  it('문장 사이 공백만 달라도 연속 변경은 문장마다 unit이 된다', () => {
+    // 폴리싱/마크다운 왕복이 이중 공백을 단일 공백으로 정규화하면
+    // diffSentences가 문단 전체를 하나의 removed/added로 묶는다.
+    // 그 경우에도 flush에서 문장 단위로 다시 쪼개야 한다.
+    const a = doc(p('First old sentence.  Second old sentence.  Third old sentence.'));
+    const b = doc(p('First new sentence. Second new sentence. Third new sentence.'));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(3);
+    expect(plan.units.map((u) => [u.originalText, u.polishedText])).toEqual([
+      ['First old sentence.', 'First new sentence.'],
+      ['Second old sentence.', 'Second new sentence.'],
+      ['Third old sentence.', 'Third new sentence.'],
+    ]);
+  });
+
+  it('한 문장이 여러 문장으로 늘어나면 각각 unit이 된다', () => {
+    const a = doc(p('Keep prefix here. Short old. Keep suffix here.'));
+    const b = doc(p('Keep prefix here. First new. Second new. Keep suffix here.'));
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(2);
+    expect(plan.units[0]!.originalText).toBe('Short old.');
+    expect(plan.units[0]!.polishedText).toBe('First new.');
+    expect(plan.units[1]!.originalText).toBe('');
+    expect(plan.units[1]!.polishedText).toBe('Second new.');
+  });
+
   it('문단 추가는 originalText가 빈 unit이 된다', () => {
     const a = doc(p('First sentence here.'), p('Last sentence here.'));
     const b = doc(p('First sentence here.'), p('Inserted paragraph.'), p('Last sentence here.'));
@@ -200,6 +276,18 @@ describe('mergeDocBySelection', () => {
     const merged = mergeDocBySelection(a, plan, new Set([plan.units[0]!.id]));
 
     expect(mergedTexts(merged)).toEqual(['Alpha new one. Same middle here. Beta old two.']);
+  });
+
+  it('연속 변경 문장 중 일부만 선택하면 해당 문장만 반영된다', () => {
+    const a = doc(p('Old one.  Old two.  Old three.'));
+    const b = doc(p('New one. New two. New three.'));
+
+    const plan = buildDocDiffPlan(a, b);
+    expect(plan.units).toHaveLength(3);
+    const merged = mergeDocBySelection(a, plan, new Set([plan.units[0]!.id, plan.units[2]!.id]));
+
+    // 부분 병합은 원본 문장 사이 공백(이중 스페이스)을 유지한다
+    expect(mergedTexts(merged)).toEqual(['New one.  Old two.  New three.']);
   });
 
   it('부분 선택으로 재구성된 문단은 원본 attrs를 유지한다', () => {
@@ -513,17 +601,165 @@ describe('유사도 기반 블록 짝짓기 (삽입/삭제로 위치가 밀릴 �
   });
 });
 
+describe('중첩 listItem 재귀 세분화', () => {
+  it('섹션 제목+본문 / Direction 중첩 불릿은 각각 별도 unit이 된다 (폴리싱 미리보기 회귀)', () => {
+    // 스크린샷 케이스: 중첩 listItem이 통째 swap되면 Direction 불릿 3개가 체크 1개로 묶인다.
+    const a = doc(
+      sectionList(
+        {
+          title: 'Lessons Learned',
+          body: 'After completing the Level 1 Tutorial, users struggled to understand how to progress to the next content at the beginner level-stage.',
+        },
+        {
+          title: 'Direction',
+          bullets: [
+            'Bringing dormant users back into the loop through clearer, more intuitive UX.',
+            'Provide 70% clear information and 30% teasing content.',
+            'Express both user value and development intent.',
+          ],
+        },
+      ),
+    );
+    const b = doc(
+      sectionList(
+        {
+          title: 'Lessons Learned',
+          body: 'After completing the Level 1 Tutorial, users struggled to understand how to progress to the next content at the beginner level.',
+        },
+        {
+          title: 'Direction',
+          bullets: [
+            'Re-engaging dormant users through clearer, more intuitive UX.',
+            'Provide 70% clear, straightforward information and 30% teasing content.',
+            "Express both user value and Development's intent.",
+          ],
+        },
+      ),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(4);
+    expect(plan.units.map((u) => u.originalText)).toEqual([
+      'After completing the Level 1 Tutorial, users struggled to understand how to progress to the next content at the beginner level-stage.',
+      'Bringing dormant users back into the loop through clearer, more intuitive UX.',
+      'Provide 70% clear information and 30% teasing content.',
+      'Express both user value and development intent.',
+    ]);
+  });
+
+  it('중첩 불릿 중 일부만 선택하면 해당 항목만 반영된다', () => {
+    const a = doc(
+      sectionList({
+        title: 'Direction',
+        bullets: [
+          'Bringing dormant users back into the loop through clearer, more intuitive UX.',
+          'Provide 70% clear information and 30% teasing content.',
+          'Express both user value and development intent.',
+        ],
+      }),
+    );
+    const b = doc(
+      sectionList({
+        title: 'Direction',
+        bullets: [
+          'Re-engaging dormant users through clearer, more intuitive UX.',
+          'Provide 70% clear, straightforward information and 30% teasing content.',
+          "Express both user value and Development's intent.",
+        ],
+      }),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+    expect(plan.units).toHaveLength(3);
+    const merged = mergeDocBySelection(a, plan, new Set([plan.units[0]!.id]));
+
+    expect(extractBlockText((merged.content as Array<Record<string, unknown>>)[0]!)).toContain(
+      'Re-engaging dormant users',
+    );
+    expect(extractBlockText((merged.content as Array<Record<string, unknown>>)[0]!)).toContain(
+      'Provide 70% clear information and 30% teasing content.',
+    );
+    expect(extractBlockText((merged.content as Array<Record<string, unknown>>)[0]!)).toContain(
+      'development intent.',
+    );
+  });
+});
+
+describe('표(table) 셀/문장 재귀 세분화', () => {
+  it('표 안 여러 셀 변경은 셀·문장마다 unit이 된다', () => {
+    const a = doc(
+      table(
+        tableRow(tableCell('Col A', true), tableCell('Col B', true)),
+        tableRow(
+          tableCell('Old sentence one. Old sentence two.'),
+          tableCell('Keep this cell.'),
+        ),
+        tableRow(tableCell('Alpha old.'), tableCell('Beta old. Gamma old.')),
+      ),
+    );
+    const b = doc(
+      table(
+        tableRow(tableCell('Col A', true), tableCell('Col B', true)),
+        tableRow(
+          tableCell('New sentence one. New sentence two.'),
+          tableCell('Keep this cell.'),
+        ),
+        tableRow(tableCell('Alpha new.'), tableCell('Beta new. Gamma new.')),
+      ),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+
+    expect(plan.units).toHaveLength(5);
+    expect(plan.units.map((u) => [u.originalText, u.polishedText])).toEqual([
+      ['Old sentence one.', 'New sentence one.'],
+      ['Old sentence two.', 'New sentence two.'],
+      ['Alpha old.', 'Alpha new.'],
+      ['Beta old.', 'Beta new.'],
+      ['Gamma old.', 'Gamma new.'],
+    ]);
+  });
+
+  it('표 셀 문장 일부만 선택하면 해당 문장만 반영되고 표 구조는 유지된다', () => {
+    const a = doc(
+      table(
+        tableRow(tableCell('Keep header', true)),
+        tableRow(tableCell('Alpha old one. Beta old two.')),
+      ),
+    );
+    const b = doc(
+      table(
+        tableRow(tableCell('Keep header', true)),
+        tableRow(tableCell('Alpha new one. Beta new two.')),
+      ),
+    );
+
+    const plan = buildDocDiffPlan(a, b);
+    expect(plan.units).toHaveLength(2);
+    const merged = mergeDocBySelection(a, plan, new Set([plan.units[0]!.id]));
+
+    const mergedTable = (merged.content as Array<Record<string, unknown>>)[0]!;
+    expect(mergedTable.type).toBe('table');
+    expect((mergedTable.content as unknown[]).length).toBe(2);
+    expect(extractBlockText(mergedTable)).toContain('Alpha new one.');
+    expect(extractBlockText(mergedTable)).toContain('Beta old two.');
+    expect(extractBlockText(mergedTable)).toContain('Keep header');
+  });
+});
+
 describe('평탄하지 않은 블록은 통째 swap (F5)', () => {
-  it('중첩 리스트 항목은 문장 세분화 대신 항목 통째 swap이 된다', () => {
+  it('중첩 리스트 항목은 부모/자식 각각 unit으로 분리된다', () => {
     const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));
     const b = doc(nestedList('Parent new sentence.', 'Child new sentence.'));
 
     const plan = buildDocDiffPlan(a, b);
-    // 평탄하지 않은 listItem이라 문장 단위 unit이 아니라 항목 통째 swap 1개
-    expect(plan.units).toHaveLength(1);
+    expect(plan.units).toHaveLength(2);
+    expect(plan.units[0]!.originalText).toBe('Parent old sentence.');
+    expect(plan.units[1]!.originalText).toBe('Child old sentence.');
   });
 
-  it('중첩 리스트 항목 선택 시 polished 통째 반영 + 중첩 구조/marks 보존', () => {
+  it('중첩 리스트 항목 전체 선택 시 polished 반영 + 중첩 구조/marks 보존', () => {
     const a = doc(nestedList('Parent old sentence.', 'Child old sentence.'));
     const b = doc(nestedList('Parent new sentence.', 'Child new sentence.'));
 
