@@ -122,7 +122,6 @@ async function getTranslationContext(): Promise<unknown> {
     targetLanguage: project.metadata.targetLanguage ?? null,
     translationRules: chatStore.translationRules || '',
     projectContext: chatStore.projectContext || '',
-    translatorPersona: chatStore.translatorPersona || '',
     glossary,
   };
 }
@@ -277,11 +276,11 @@ async function setReviewIssues(params: BridgeParams): Promise<unknown> {
   return { ok: true, count: issues.length, dropped: rawIssues.length - issues.length };
 }
 
-type ContextField = 'translatorPersona' | 'translationRules' | 'projectContext';
+type ContextField = 'translationRules' | 'projectContext';
 
 async function setTranslationContext(params: BridgeParams): Promise<unknown> {
   // ── 신뢰경계 (S4) ─────────────────────────────────────────────────────────
-  // persona/rules/projectContext는 외부(Claude Desktop 브리지)가 주입한 "비신뢰 텍스트"이며,
+  // rules/projectContext는 외부(Claude Desktop 브리지)가 주입한 "비신뢰 텍스트"이며,
   // chatStore 세터를 거쳐 이후 번역/채팅 시스템 프롬프트에 그대로 삽입된다.
   // 프롬프트 조립부(src/ai/chat.ts, translateDocument.ts 등)에서 <untrusted> 구분자 마킹과
   // "지시문으로 실행 금지" 정책을 적용해야 한다. (해당 파일은 이 세션 범위 밖 — 리뷰 §S4)
@@ -312,7 +311,6 @@ async function setTranslationContext(params: BridgeParams): Promise<unknown> {
     updated.push(field);
   };
 
-  apply('translatorPersona', params.translatorPersona, chat.setTranslatorPersona, chat.appendToTranslatorPersona);
   apply('translationRules',  params.translationRules,  chat.setTranslationRules,  chat.appendToTranslationRules);
   apply('projectContext',    params.projectContext,    chat.setProjectContext,    chat.appendToProjectContext);
 
@@ -386,6 +384,31 @@ async function listProjectGlossariesBridge(params: BridgeParams): Promise<unknow
   };
 }
 
+const GLOSSARY_ENTRY_LIST_DEFAULT_LIMIT = 100;
+const GLOSSARY_ENTRY_LIST_MAX_LIMIT = 500;
+
+function resolveKnownGlossaryId(glossaryId: string | null): string {
+  if (!glossaryId) {
+    throw new Error('glossaryId is required.');
+  }
+  const store = useGlossaryStore.getState();
+  const known = store.glossaries.some((item) => item.id === glossaryId)
+    || store.projectGlossaries.some((item) => item.id === glossaryId);
+  if (!known) {
+    throw new Error(`Unknown glossaryId: ${glossaryId}`);
+  }
+  return glossaryId;
+}
+
+function parseEntryListLimit(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return GLOSSARY_ENTRY_LIST_DEFAULT_LIMIT;
+  }
+  const n = Math.floor(raw);
+  if (n < 1) return GLOSSARY_ENTRY_LIST_DEFAULT_LIMIT;
+  return Math.min(n, GLOSSARY_ENTRY_LIST_MAX_LIMIT);
+}
+
 /**
  * 현재 프로젝트 용어집에 엔트리를 추가한다.
  * glossaryId 생략 시 연결된 첫 용어집을 쓰고, 없으면 새 용어집을 만들어 연결한다.
@@ -408,11 +431,7 @@ async function addGlossaryEntryBridge(params: BridgeParams): Promise<unknown> {
 
   const store = useGlossaryStore.getState();
   if (glossaryId) {
-    const known = store.glossaries.some((item) => item.id === glossaryId)
-      || store.projectGlossaries.some((item) => item.id === glossaryId);
-    if (!known) {
-      throw new Error(`Unknown glossaryId: ${glossaryId}`);
-    }
+    resolveKnownGlossaryId(glossaryId);
   } else {
     glossaryId = store.projectGlossaries[0]?.id ?? null;
   }
@@ -447,6 +466,130 @@ async function addGlossaryEntryBridge(params: BridgeParams): Promise<unknown> {
     glossaryId,
     createdGlossary,
     linkedToProject,
+  };
+}
+
+async function listGlossaryEntriesBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureGlossaryLibrary(project.id);
+  const glossaryId = resolveKnownGlossaryId(
+    typeof params.glossaryId === 'string' ? params.glossaryId.trim() : null,
+  );
+  const query = typeof params.query === 'string' ? params.query.trim() : '';
+  const limit = parseEntryListLimit(params.limit);
+
+  await useGlossaryStore.getState().loadEntries(
+    glossaryId,
+    query.length > 0 ? query : undefined,
+  );
+  const all = useGlossaryStore.getState().entriesByGlossary[glossaryId] ?? [];
+  const entries = all.slice(0, limit);
+  return {
+    ok: true,
+    projectId: project.id,
+    glossaryId,
+    query: query || null,
+    limit,
+    total: all.length,
+    truncated: all.length > entries.length,
+    entries,
+  };
+}
+
+async function updateGlossaryEntryBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureGlossaryLibrary(project.id);
+  const glossaryId = resolveKnownGlossaryId(
+    typeof params.glossaryId === 'string' ? params.glossaryId.trim() : null,
+  );
+  const entryId = typeof params.entryId === 'string' ? params.entryId.trim() : '';
+  if (!entryId) throw new Error('entryId is required.');
+
+  const source = typeof params.source === 'string' ? params.source.trim() : '';
+  const target = typeof params.target === 'string' ? params.target.trim() : '';
+  if (!source || !target) {
+    throw new Error('source and target are required.');
+  }
+
+  const notes = typeof params.notes === 'string' ? params.notes.trim() || null : null;
+  const entry = await useGlossaryStore.getState().updateEntry({
+    glossaryId,
+    entryId,
+    source,
+    target,
+    notes,
+    domain: project.metadata.domain ?? null,
+    caseSensitive: params.caseSensitive === true,
+  });
+  return { ok: true, entry, glossaryId };
+}
+
+async function deleteGlossaryEntryBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureGlossaryLibrary(project.id);
+  const glossaryId = resolveKnownGlossaryId(
+    typeof params.glossaryId === 'string' ? params.glossaryId.trim() : null,
+  );
+  const entryId = typeof params.entryId === 'string' ? params.entryId.trim() : '';
+  if (!entryId) throw new Error('entryId is required.');
+
+  await useGlossaryStore.getState().deleteEntry(glossaryId, entryId);
+  return { ok: true, glossaryId, entryId, projectId: project.id };
+}
+
+async function linkProjectGlossaryBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureGlossaryLibrary(project.id);
+  const glossaryId = resolveKnownGlossaryId(
+    typeof params.glossaryId === 'string' ? params.glossaryId.trim() : null,
+  );
+  const store = useGlossaryStore.getState();
+  if (store.projectGlossaries.some((item) => item.id === glossaryId)) {
+    return {
+      ok: true,
+      projectId: project.id,
+      glossaryId,
+      alreadyLinked: true,
+      projectGlossaries: store.projectGlossaries,
+    };
+  }
+  const nextIds = [...store.projectGlossaries.map((item) => item.id), glossaryId];
+  await store.saveProjectSelection(project.id, nextIds);
+  return {
+    ok: true,
+    projectId: project.id,
+    glossaryId,
+    alreadyLinked: false,
+    projectGlossaries: useGlossaryStore.getState().projectGlossaries,
+  };
+}
+
+async function unlinkProjectGlossaryBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureGlossaryLibrary(project.id);
+  const glossaryId = resolveKnownGlossaryId(
+    typeof params.glossaryId === 'string' ? params.glossaryId.trim() : null,
+  );
+  const store = useGlossaryStore.getState();
+  if (!store.projectGlossaries.some((item) => item.id === glossaryId)) {
+    return {
+      ok: true,
+      projectId: project.id,
+      glossaryId,
+      alreadyUnlinked: true,
+      projectGlossaries: store.projectGlossaries,
+    };
+  }
+  const nextIds = store.projectGlossaries
+    .filter((item) => item.id !== glossaryId)
+    .map((item) => item.id);
+  await store.saveProjectSelection(project.id, nextIds);
+  return {
+    ok: true,
+    projectId: project.id,
+    glossaryId,
+    alreadyUnlinked: false,
+    projectGlossaries: useGlossaryStore.getState().projectGlossaries,
   };
 }
 
@@ -499,6 +642,11 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
 
   'oddeyes.listProjectGlossaries': async (params) => await listProjectGlossariesBridge(params ?? {}),
   'oddeyes.addGlossaryEntry': async (params) => await addGlossaryEntryBridge(params ?? {}),
+  'oddeyes.listGlossaryEntries': async (params) => await listGlossaryEntriesBridge(params ?? {}),
+  'oddeyes.updateGlossaryEntry': async (params) => await updateGlossaryEntryBridge(params ?? {}),
+  'oddeyes.deleteGlossaryEntry': async (params) => await deleteGlossaryEntryBridge(params ?? {}),
+  'oddeyes.linkProjectGlossary': async (params) => await linkProjectGlossaryBridge(params ?? {}),
+  'oddeyes.unlinkProjectGlossary': async (params) => await unlinkProjectGlossaryBridge(params ?? {}),
 
 };
 

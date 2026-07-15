@@ -45,7 +45,6 @@ function buildPolishSystemPrompt(params: {
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   glossary?: string | undefined;
   userComments?: string | undefined;
   polishMessage?: string | undefined;
@@ -53,7 +52,6 @@ function buildPolishSystemPrompt(params: {
   const targetLanguage = params.targetLanguage?.trim() || 'Target';
   const rules = params.styleRules?.trim();
   const projectContext = params.projectContext?.trim();
-  const persona = params.translatorPersona?.trim();
   const glossary = params.glossary?.trim();
   const userComments = params.userComments?.trim();
   const polishMessage = params.polishMessage?.trim();
@@ -90,13 +88,6 @@ function buildPolishSystemPrompt(params: {
           '',
         ]
       : []),
-    ...(persona
-      ? [
-          'Tone reference (stylistic guidance only; do not invent or drop meaning):',
-          persona,
-          '',
-        ]
-      : []),
     ...(userComments ? [userComments, ''] : []),
     ...(polishMessage ? ['Additional user instructions for this polishing run:', polishMessage, ''] : []),
   ].join('\n').trim();
@@ -107,7 +98,6 @@ function buildPolishMessages(params: {
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   glossary?: string | undefined;
   userComments?: string | undefined;
   polishMessage?: string | undefined;
@@ -135,7 +125,6 @@ function buildPolishMessages(params: {
     targetLanguage: params.targetLanguage,
     styleRules: params.styleRules,
     projectContext: params.projectContext,
-    translatorPersona: params.translatorPersona,
     glossary: params.glossary,
     userComments: params.userComments,
     polishMessage: params.polishMessage,
@@ -207,8 +196,6 @@ export interface PolishTargetDocumentParams {
   styleRules?: string | undefined;
   /** 프로젝트 컨텍스트(제품/도메인/톤 제약). 의미 추론용으로 쓰지 않음. */
   projectContext?: string | undefined;
-  /** 톤 참고용 페르소나. 스타일 가이드로만 사용. */
-  translatorPersona?: string | undefined;
   /** 프롬프트용 용어집 문자열 (`resolveGlossaryForPrompt` 결과). */
   glossary?: string | undefined;
   /** 폴리싱 실행 전 사용자가 입력한 추가 지시사항. */

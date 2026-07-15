@@ -13,7 +13,6 @@
  */
 import { create } from 'zustand';
 import type { ChatStore } from './chatStore.types';
-import { DEFAULT_TRANSLATOR_PERSONA } from './chatStore.types';
 import { createPersistHelpers, clearPersistTimer } from './chatStore.persist';
 import { createSessionActions, createMessageActions } from './chatStore.session';
 import { createAiActions, createStreamingActions } from './chatStore.ai';
@@ -63,7 +62,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
     composerFocusNonce: 0,
     pendingComposerFocus: null,
     pendingComposerAppend: null,
-    translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
     translationRules: '',
     projectContext: '',
     webSearchEnabled: true,
@@ -113,6 +111,5 @@ export {
   MAX_CHAT_SESSIONS,
   MAX_MESSAGES_PER_SESSION,
   CHAT_LENGTH_THRESHOLD,
-  DEFAULT_TRANSLATOR_PERSONA,
   TOOL_NAME_MAP,
 } from './chatStore.types';

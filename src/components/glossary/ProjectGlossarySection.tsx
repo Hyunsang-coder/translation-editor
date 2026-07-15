@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, BookOpen, Plus } from 'lucide-react';
+import { ArrowRight, BookOpen, Plus, X } from 'lucide-react';
 import { GlossaryManagerModal } from './GlossaryManagerModal';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -19,6 +19,7 @@ export function ProjectGlossarySection({
   const error = useGlossaryStore((state) => state.error);
   const loadLibrary = useGlossaryStore((state) => state.loadLibrary);
   const createEntry = useGlossaryStore((state) => state.createEntry);
+  const saveProjectSelection = useGlossaryStore((state) => state.saveProjectSelection);
   const saving = useGlossaryStore((state) => state.saving);
   const [managerOpen, setManagerOpen] = useState(false);
   const [glossaryId, setGlossaryId] = useState('');
@@ -65,13 +66,29 @@ export function ProjectGlossarySection({
     }
   };
 
+  const handleUnlink = async (unlinkId: string) => {
+    if (useGlossaryStore.getState().saving) return;
+    const nextIds = projectGlossaries
+      .filter((item) => item.id !== unlinkId)
+      .map((item) => item.id);
+    try {
+      await saveProjectSelection(projectId, nextIds);
+      addToast({ type: 'success', message: t('glossaryManager.unlinkedFromProject') });
+    } catch (caught) {
+      addToast({
+        type: 'error',
+        message: caught instanceof Error ? caught.message : String(caught),
+      });
+    }
+  };
+
   return (
     <>
       <section className="space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <h3 className="text-xs font-semibold text-editor-text">
-              4. {t('settings.glossary')}
+              3. {t('settings.glossary')}
             </h3>
             <span className="text-[10px] text-editor-muted">
               {t('settings.glossaryDescription')}
@@ -100,7 +117,7 @@ export function ProjectGlossarySection({
             {projectGlossaries.map((glossary, index) => (
               <div
                 key={glossary.id}
-                className="flex items-center gap-2 rounded-md border border-editor-border bg-editor-surface px-2.5 py-2"
+                className="group flex items-center gap-2 rounded-md border border-editor-border bg-editor-surface px-2.5 py-2"
               >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-[9px] font-semibold text-primary-500">
                   {index + 1}
@@ -111,6 +128,16 @@ export function ProjectGlossarySection({
                 <span className="text-[9px] tabular-nums text-editor-muted">
                   {t('glossaryManager.termCount', { count: glossary.entryCount })}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => void handleUnlink(glossary.id)}
+                  disabled={saving}
+                  className="rounded p-0.5 text-editor-muted opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
+                  aria-label={t('glossaryManager.unlinkFromProject', { name: glossary.name })}
+                  title={t('glossaryManager.unlinkFromProject', { name: glossary.name })}
+                >
+                  <X size={12} />
+                </button>
               </div>
             ))}
           </div>

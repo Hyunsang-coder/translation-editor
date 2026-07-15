@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "oddeyes-desktop",
   "display_name": "OddEyes Desktop",
-  "version": "0.4.0",
+  "version": "0.7.0",
   "description": "Connect Claude Desktop to a running OddEyes app and send preview-first translation actions.",
   "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and translation context from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
   "author": {
@@ -33,7 +33,7 @@
     },
     {
       "name": "oddeyes_get_translation_context",
-      "description": "Read translation rules, glossary, persona, and project context from OddEyes."
+      "description": "Read translation rules, glossary, and project context from OddEyes."
     },
     {
       "name": "oddeyes_get_translation_preview",
@@ -57,7 +57,7 @@
     },
     {
       "name": "oddeyes_set_translation_context",
-      "description": "Update OddEyes translation rules, persona, and/or project context (replace or append)."
+      "description": "Update OddEyes translation rules and/or project context (replace or append)."
     },
     {
       "name": "oddeyes_log_quality_records",
@@ -72,8 +72,28 @@
       "description": "List glossaries linked to the active OddEyes project and the full glossary library."
     },
     {
+      "name": "oddeyes_list_glossary_entries",
+      "description": "List entries in a glossary (optional query; default limit 100, max 500)."
+    },
+    {
       "name": "oddeyes_add_glossary_entry",
       "description": "Add a glossary term to the active OddEyes project (auto-links glossary when needed)."
+    },
+    {
+      "name": "oddeyes_update_glossary_entry",
+      "description": "Update an existing glossary entry (source, target, notes)."
+    },
+    {
+      "name": "oddeyes_delete_glossary_entry",
+      "description": "Permanently delete a glossary entry (no undo)."
+    },
+    {
+      "name": "oddeyes_link_project_glossary",
+      "description": "Link a library glossary to the active project (incremental, idempotent)."
+    },
+    {
+      "name": "oddeyes_unlink_project_glossary",
+      "description": "Unlink a glossary from the active project without deleting the library glossary."
     }
   ],
   "keywords": [

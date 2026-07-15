@@ -533,7 +533,7 @@ export function ReviewPanel(): JSX.Element {
     retranslateAbortController.current = controller;
 
     try {
-      const { translationRules, projectContext, translatorPersona } = useChatStore.getState();
+      const { translationRules, projectContext } = useChatStore.getState();
 
       // 용어집 검색 (문서 전역 윈도우)
       let glossary = '';
@@ -564,7 +564,6 @@ export function ReviewPanel(): JSX.Element {
         sourceDocJson,
         translationRules,
         projectContext,
-        translatorPersona,
         glossary,
         reviewIssues: checkedIssues,
         ...(serializedComments ? { userComments: serializedComments } : {}),

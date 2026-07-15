@@ -4,14 +4,14 @@ import { persist } from 'zustand/middleware';
 /**
  * Prompt Preset Library (전역)
  *
- * 페르소나 / 번역 규칙 / 프로젝트 컨텍스트를 각각 이름 붙여 여러 개 저장해두고
+ * 번역 규칙 / 프로젝트 컨텍스트를 각각 이름 붙여 여러 개 저장해두고
  * 어느 프로젝트에서든 목록에서 골라 입력란에 적용(수동)할 수 있게 한다.
  *
  * - 저장소: localStorage (zustand persist), 전역 공유 (프로젝트 무관)
  * - 시스템 프롬프트/도구 지침은 건드리지 않음. 적용 시 기존 setter를 호출할 뿐.
  */
 
-export type PromptPresetKind = 'persona' | 'rules' | 'context';
+export type PromptPresetKind = 'rules' | 'context';
 
 export interface PromptPreset {
   id: string;
@@ -20,7 +20,6 @@ export interface PromptPreset {
 }
 
 interface PromptPresetsState {
-  personaPresets: PromptPreset[];
   rulesPresets: PromptPreset[];
   contextPresets: PromptPreset[];
   /** 현재 값을 이름 붙여 프리셋으로 추가. 생성된 프리셋의 id 반환(빈 content면 미저장 후 null). */
@@ -35,12 +34,39 @@ interface PromptPresetsState {
 
 const FIELD_BY_KIND: Record<PromptPresetKind, keyof Pick<
   PromptPresetsState,
-  'personaPresets' | 'rulesPresets' | 'contextPresets'
+  'rulesPresets' | 'contextPresets'
 >> = {
-  persona: 'personaPresets',
   rules: 'rulesPresets',
   context: 'contextPresets',
 };
+
+interface PersistedPromptPresetsV1 {
+  personaPresets?: PromptPreset[];
+  rulesPresets?: PromptPreset[];
+  contextPresets?: PromptPreset[];
+}
+
+export function migratePromptPresets(
+  persistedState: unknown,
+  version: number,
+): Pick<PromptPresetsState, 'rulesPresets' | 'contextPresets'> {
+  const oldState = (persistedState ?? {}) as PersistedPromptPresetsV1;
+  const rulesPresets = Array.isArray(oldState.rulesPresets) ? [...oldState.rulesPresets] : [];
+  const contextPresets = Array.isArray(oldState.contextPresets) ? oldState.contextPresets : [];
+
+  if (version < 2 && Array.isArray(oldState.personaPresets)) {
+    const existingContents = new Set(rulesPresets.map((preset) => preset.content.trim()));
+    for (const preset of oldState.personaPresets) {
+      const content = preset.content.trim();
+      if (!content || existingContents.has(content)) continue;
+      const suffix = /[가-힣]/.test(preset.name) ? ' (페르소나)' : ' (persona)';
+      rulesPresets.push({ ...preset, name: `${preset.name}${suffix}`, content });
+      existingContents.add(content);
+    }
+  }
+
+  return { rulesPresets, contextPresets };
+}
 
 function generateId(): string {
   // crypto.randomUUID는 secure context에서만 보장됨. 일부 WebView/비보안 컨텍스트에서
@@ -58,7 +84,6 @@ function generateId(): string {
 export const usePromptPresetsStore = create<PromptPresetsState>()(
   persist(
     (set) => ({
-      personaPresets: [],
       rulesPresets: [],
       contextPresets: [],
 
@@ -104,9 +129,9 @@ export const usePromptPresetsStore = create<PromptPresetsState>()(
     }),
     {
       name: 'ite-prompt-presets',
-      version: 1,
+      version: 2,
+      migrate: migratePromptPresets,
       partialize: (state) => ({
-        personaPresets: state.personaPresets,
         rulesPresets: state.rulesPresets,
         contextPresets: state.contextPresets,
       }),

@@ -163,7 +163,6 @@ export function createAiActions(
       // fresh session 읽기 (caller가 truncation 등으로 변경했을 수 있음)
       const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
       const project = useProjectStore.getState().project;
-      const translatorPersona = get().translatorPersona;
       const webSearchEnabled = get().webSearchEnabled;
 
       const contextBlockIds = session?.contextBlockIds ?? [];
@@ -272,13 +271,6 @@ export function createAiActions(
                 ...nextMetadata,
                 suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
               };
-            } else if (evt.toolName === 'suggest_translator_persona' && evt.args.persona) {
-              const prev = nextMetadata.suggestedPersona ?? '';
-              const cleaned = cleanSuggestionContent(String(evt.args.persona));
-              nextMetadata = {
-                ...nextMetadata,
-                suggestedPersona: prev ? `${prev}; ${cleaned}` : cleaned,
-              };
             }
           }
 
@@ -305,7 +297,6 @@ export function createAiActions(
           contextBlocks,
           recentMessages: recent,
           userMessage: maskedUserContent,
-          translatorPersona,
           translationRules,
           ...(glossaryInjected ? { glossaryInjected } : {}),
           projectContext,
@@ -342,7 +333,7 @@ export function createAiActions(
 
         // Tool-call 누락 시 텍스트 기반 폴백 (Smart Buttons)
         const currentMetadata = get().streamingMetadata ?? {};
-        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext && !currentMetadata.suggestedPersona) {
+        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
           const inferred = inferSuggestionFromAssistantText(restored);
           if (inferred) {
             set({ streamingMetadata: { ...currentMetadata, ...inferred } });

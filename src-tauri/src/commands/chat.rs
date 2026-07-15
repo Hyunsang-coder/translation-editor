@@ -14,7 +14,8 @@ use crate::models::ChatSession;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatProjectSettings {
-    #[serde(alias = "systemPromptOverlay")]
+    /// Deprecated: migrated into translation_rules on load. Kept for JSON compat.
+    #[serde(default, alias = "systemPromptOverlay")]
     pub translator_persona: String,
     pub translation_rules: String,
     pub project_context: String,

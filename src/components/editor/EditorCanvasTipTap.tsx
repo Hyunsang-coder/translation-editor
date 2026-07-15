@@ -77,7 +77,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
   const projectContext = useChatStore((s) => s.projectContext);
-  const translatorPersona = useChatStore((s) => s.translatorPersona);
 
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
   const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
@@ -535,7 +534,6 @@ export function EditorCanvasTipTap(): JSX.Element {
         sourceDocJson,
         translationRules,
         projectContext,
-        translatorPersona,
         glossary,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
@@ -572,7 +570,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     project,
     translationRules,
     projectContext,
-    translatorPersona,
     addToast,
     t,
     computeTargetRevision,
@@ -666,7 +663,6 @@ export function EditorCanvasTipTap(): JSX.Element {
         targetLanguage: project.metadata.targetLanguage,
         styleRules: translationRules,
         projectContext,
-        translatorPersona,
         ...(glossary ? { glossary } : {}),
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
@@ -693,7 +689,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         polishAbortController.current = null;
       }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules, projectContext, translatorPersona, computeTargetRevision, setStreamingChannelText]);
+  }, [addToast, hasTargetContent, project, t, translationRules, projectContext, computeTargetRevision, setStreamingChannelText]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;

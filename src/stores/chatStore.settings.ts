@@ -71,14 +71,9 @@ export function createSettingsActions(
 ) {
   const { schedulePersist } = helpers;
 
-  const setTranslatorPersona = (persona: string): void => {
-    set({ translatorPersona: persona });
-    schedulePersist();
-  };
-
   /** 세미콜론 구분 스니펫을 불릿 포인트로 변환해 기존 필드에 추가 */
   const appendFormattedSnippet = (
-    fieldName: 'translatorPersona' | 'translationRules' | 'projectContext',
+    fieldName: 'translationRules' | 'projectContext',
     snippet: string,
   ): void => {
     const incoming = snippet.trim();
@@ -94,9 +89,6 @@ export function createSettingsActions(
     set({ [fieldName]: next });
     schedulePersist();
   };
-
-  const appendToTranslatorPersona = (snippet: string): void =>
-    appendFormattedSnippet('translatorPersona', snippet);
 
   const setTranslationRules = (rules: string): void => {
     set({ translationRules: rules });
@@ -141,8 +133,6 @@ export function createSettingsActions(
   };
 
   return {
-    setTranslatorPersona,
-    appendToTranslatorPersona,
     setTranslationRules,
     appendToTranslationRules,
     setProjectContext,

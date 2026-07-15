@@ -13,7 +13,7 @@ export function registerContextTools(
     "oddeyes_set_translation_context",
     {
       description:
-        "Update the OddEyes translation context: translatorPersona, translationRules, and/or projectContext. " +
+        "Update the OddEyes translation context: translationRules and/or projectContext. " +
         "Only the fields you provide are changed (omit a field to leave it untouched). " +
         "mode='replace' (default) overwrites the field; mode='append' adds your text to the end " +
         "(semicolon-separated items become bullet points). " +
@@ -21,15 +21,14 @@ export function registerContextTools(
         "Returns { ok, mode, updated } where `updated` lists the fields actually changed.",
       inputSchema: {
         projectId: z.string().optional(),
-        translatorPersona: z.string().optional(),
         translationRules: z.string().optional(),
         projectContext: z.string().optional(),
         mode: z.enum(["replace", "append"]).optional(),
       },
     },
-    async ({ projectId, translatorPersona, translationRules, projectContext, mode }) =>
+    async ({ projectId, translationRules, projectContext, mode }) =>
       textResult(await callBridge("oddeyes.setTranslationContext", {
-        projectId, translatorPersona, translationRules, projectContext, mode,
+        projectId, translationRules, projectContext, mode,
       })),
   );
 }

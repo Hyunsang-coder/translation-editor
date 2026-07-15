@@ -12,9 +12,9 @@ import {
   MAX_CHAT_SESSIONS,
   MAX_MESSAGES_PER_SESSION,
   CHAT_LENGTH_THRESHOLD,
-  DEFAULT_TRANSLATOR_PERSONA,
 } from './chatStore.types';
 import type { ChatSet, ChatGet, ChatStore } from './chatStore.types';
+import { mergePersonaIntoRules } from './chatStore.helpers';
 import {
   getHydrateRequestId,
   incrementHydrateRequestId,
@@ -75,7 +75,6 @@ export function createSessionActions(
         composerFocusNonce: 0,
         pendingComposerFocus: null,
         pendingComposerAppend: null,
-        translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
         translationRules: '',
         projectContext: '',
         webSearchEnabled: true,
@@ -102,7 +101,6 @@ export function createSessionActions(
       composerFocusNonce: 0,
       pendingComposerFocus: null,
       pendingComposerAppend: null,
-      translatorPersona: DEFAULT_TRANSLATOR_PERSONA,
       translationRules: '',
       projectContext: '',
       webSearchEnabled: true,
@@ -165,22 +163,21 @@ export function createSessionActions(
       };
 
       if (settingsRes) {
-        // Migration: systemPromptOverlay -> translatorPersona
+        // Migration: systemPromptOverlay / translatorPersona → translationRules
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const legacy = (settingsRes as any).systemPromptOverlay;
+        const legacyOverlay = (settingsRes as { systemPromptOverlay?: string }).systemPromptOverlay;
+        const legacyPersona = (settingsRes.translatorPersona ?? legacyOverlay ?? '').trim();
+        const migratedRules = mergePersonaIntoRules(
+          legacyPersona,
+          settingsRes.translationRules ?? '',
+        );
 
-        nextState.translatorPersona = settingsRes.translatorPersona?.trim()
-          ? settingsRes.translatorPersona
-          : (legacy || DEFAULT_TRANSLATOR_PERSONA);
-
-        nextState.translationRules = settingsRes.translationRules ?? '';
+        nextState.translationRules = migratedRules;
         nextState.projectContext = settingsRes.projectContext ?? '';
         nextState.composerText = settingsRes.composerText ?? '';
         nextState.webSearchEnabled = settingsRes.webSearchEnabled ?? false;
         nextState.translationContextSessionId = settingsRes.translationContextSessionId ?? null;
       } else {
-        // 설정이 없으면 기본값 유지
-        nextState.translatorPersona = DEFAULT_TRANSLATOR_PERSONA;
         nextState.translationRules = '';
         nextState.projectContext = '';
         nextState.composerText = '';
@@ -189,6 +186,11 @@ export function createSessionActions(
       }
 
       set(nextState);
+
+      // 레거시 persona가 rules로 흡수됐으면 다음 persist에서 DB 필드도 비워지도록 예약
+      if (settingsRes?.translatorPersona?.trim() || (settingsRes as { systemPromptOverlay?: string } | null)?.systemPromptOverlay?.trim()) {
+        schedulePersist();
+      }
 
       // uiStore 동기화: 실제 세션 ID로 chat 패널 갱신
       const sessionIds = migratedSessions.map((s) => s.id);

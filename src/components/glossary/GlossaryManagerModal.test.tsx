@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  createGlossary,
   createGlossaryEntry,
   importGlossaryCsv,
   listGlossaries,
   listGlossaryEntries,
   listProjectGlossaries,
+  setProjectGlossaries,
 } from '@/tauri/glossary';
 import { pickGlossaryCsvFile } from '@/tauri/dialog';
 import { useGlossaryStore } from '@/stores/glossaryStore';
@@ -60,6 +62,42 @@ describe('GlossaryManagerModal', () => {
     vi.mocked(listGlossaries).mockResolvedValue([glossary]);
     vi.mocked(listProjectGlossaries).mockResolvedValue([{ ...glossary, priority: 0 }]);
     vi.mocked(listGlossaryEntries).mockResolvedValue([]);
+  });
+
+  it('creates a glossary without auto-linking it to the project', async () => {
+    const user = userEvent.setup();
+    const created = {
+      id: 'g-new',
+      name: 'Library only',
+      description: null,
+      entryCount: 0,
+      createdAt: 3,
+      updatedAt: 3,
+    };
+    vi.mocked(createGlossary).mockResolvedValue(created);
+
+    render(
+      <GlossaryManagerModal
+        open
+        projectId="project-1"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findAllByText('PUBG 공통');
+    await user.click(screen.getByRole('button', { name: 'glossaryManager.newGlossary' }));
+    await user.type(screen.getByLabelText('glossaryManager.glossaryName'), 'Library only');
+    await user.click(screen.getByRole('button', { name: 'common.confirm' }));
+
+    await waitFor(() => {
+      expect(createGlossary).toHaveBeenCalledWith({
+        name: 'Library only',
+        description: null,
+      });
+    });
+    expect(setProjectGlossaries).not.toHaveBeenCalled();
+    expect(useGlossaryStore.getState().projectGlossaries.map((item) => item.id)).toEqual(['g-1']);
+    expect(useGlossaryStore.getState().glossaries.some((item) => item.id === 'g-new')).toBe(true);
   });
 
   it('shows saved glossaries and adds a manual term', async () => {

@@ -9,10 +9,6 @@ import {
 } from '@/ai/constants';
 import i18n from '@/i18n/config';
 
-/** Escape XML/HTML tags in user-provided content to prevent prompt injection */
-function escapeXmlTags(text: string): string {
-  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 import {
   translateInChunks,
   type TranslationProgressCallback,
@@ -146,7 +142,6 @@ function buildTranslationSetup(params: {
   sourceDocJson: TipTapDocJson;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   glossary?: string | undefined;
   reviewIssues?: ReviewIssue[] | undefined;
   retranslateMessage?: string | undefined;
@@ -180,12 +175,8 @@ function buildTranslationSetup(params: {
   const srcLang = 'Source';
   const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
 
-  const persona = params.translatorPersona?.trim()
-    ? `<user_persona>\n${escapeXmlTags(params.translatorPersona)}\n</user_persona>`
-    : '당신은 경험많은 전문 번역가입니다.';
-
   const systemLines: string[] = [
-    persona,
+    '당신은 경험많은 전문 번역가입니다.',
     `아래에 제공되는 Markdown 문서의 텍스트를 ${srcLang}에서 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '=== 중요: 출력 형식 ===',
@@ -357,7 +348,6 @@ export async function translateSourceDocToTargetDocJson(params: {
   sourceDocJson: TipTapDocJson;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   /** 용어집 (source = target 형식) */
   glossary?: string | undefined;
   /** 취소 신호 */
@@ -432,7 +422,6 @@ export interface StreamingTranslationParams {
   sourceDocJson: TipTapDocJson;
   translationRules?: string;
   projectContext?: string;
-  translatorPersona?: string;
   /** 용어집 (source = target 형식) */
   glossary?: string;
   /** 검수 이슈 (재번역 시 컨텍스트로 전달) */
@@ -573,7 +562,6 @@ export interface ChunkedTranslationParams {
   sourceDocJson: TipTapDocJson;
   translationRules?: string;
   projectContext?: string;
-  translatorPersona?: string;
   /** 용어집 (source = target 형식) */
   glossary?: string;
   /** 진행률 콜백 */
@@ -615,7 +603,6 @@ export async function translateSourceDocWithChunking(
     sourceDocJson,
     translationRules,
     projectContext,
-    translatorPersona,
     glossary,
     onProgress,
     abortSignal,
@@ -627,7 +614,6 @@ export async function translateSourceDocWithChunking(
     sourceDocJson: sourceDocJson as ChunkingTipTapDocJson,
     translationRules,
     projectContext,
-    translatorPersona,
     glossary,
     onProgress,
     abortSignal,
@@ -638,7 +624,6 @@ export async function translateSourceDocWithChunking(
         sourceDocJson: chunkParams.sourceDocJson as TipTapDocJson,
         translationRules: chunkParams.translationRules,
         projectContext: chunkParams.projectContext,
-        translatorPersona: chunkParams.translatorPersona,
         glossary: chunkParams.glossary,
         abortSignal,
       });

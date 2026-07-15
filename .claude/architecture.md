@@ -59,7 +59,7 @@
 - **Tauri path**: `streamWithTauriAiBackend({ useFor: 'review' })` — model options via `resolveModelCallOptions` (thinking/effort/temperature)
 - **Apply safety**: ambiguity guards (multi-match, fuzzy segment scope), block-boundary replace guard, conditional quote stripping at apply time
 - **Comparison Review** (대조 검수): Source↔Target comparison plus target naturalness checks
-- **Retranslation**: Uses `translateWithStreaming()` with all project settings (translationRules, projectContext, translatorPersona, glossary) + reviewIssues context
+- **Retranslation**: Uses `translateWithStreaming()` with all project settings (translationRules, projectContext, glossary) + reviewIssues context
 
 ### 3. Tool Calling Architecture
 
@@ -82,11 +82,11 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 - **OAuth Flow**: Lazy authentication - toggle enables tool, "Connect" initiates OAuth
 
 **Desktop Bridge MCP (역방향 — 외부 Claude가 앱을 제어)**: 위 셋이 앱→외부 서비스라면,
-`oddeyes-desktop-mcp`(Node, `.mcpb`/npx, npm `oddeyes-desktop-mcp@0.2.0`)는 외부 Claude Desktop이
+`oddeyes-desktop-mcp`(Node, `.mcpb`/npx, npm `oddeyes-desktop-mcp@0.7.0`)는 외부 Claude Desktop이
 실행 중인 앱을 읽고 쓰는 역방향 채널이다. WebSocket → `window.__ODDEYES_APP_BRIDGE__`
-(`src/desktop/oddeyesAppBridge.ts`) → Zustand store. 읽기 5종 + preview-first 쓰기 3종 +
-검수 주입(`set_review_issues` → reviewStore) + 컨텍스트 주입(`set_translation_context` → chatStore).
-상세 패턴은 `patterns.md`의 "Desktop Bridge MCP" 참조.
+(`src/desktop/oddeyesAppBridge.ts`) → Zustand store. 읽기(문서/컨텍스트/preview) + preview-first 쓰기 +
+검수 주입(`set_review_issues`) + 컨텍스트 주입(`set_translation_context`: rules/projectContext) +
+용어집(list/add/update/delete entry + link/unlink) + 품질 장부. 상세는 `patterns.md`의 "Desktop Bridge MCP".
 
 ### 5. State Management (Zustand Stores)
 

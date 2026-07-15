@@ -86,7 +86,6 @@ export function useChatMessageActions() {
       updateMessage: s.updateMessage,
       appendToTranslationRules: s.appendToTranslationRules,
       appendToProjectContext: s.appendToProjectContext,
-      appendToTranslatorPersona: s.appendToTranslatorPersona,
     }))
   );
 }

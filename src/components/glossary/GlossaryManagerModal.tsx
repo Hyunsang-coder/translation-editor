@@ -124,27 +124,13 @@ export function GlossaryManagerModal({
   const handleCreateGlossary = async () => {
     const state = useGlossaryStore.getState();
     if (state.loading || state.saving || !newGlossaryName.trim()) return;
-    let createdId: string;
     try {
-      const created = await createGlossary(newGlossaryName);
-      createdId = created.id;
+      await createGlossary(newGlossaryName);
       setNewGlossaryName('');
       setShowNewGlossary(false);
       addToast({ type: 'success', message: t('glossaryManager.glossaryCreated') });
     } catch (caught) {
       notifyError(caught);
-      return;
-    }
-    try {
-      await saveProjectSelection(projectId, [
-        ...projectGlossaries.map((item) => item.id),
-        createdId,
-      ]);
-    } catch (caught) {
-      addToast({
-        type: 'warning',
-        message: t('glossaryManager.createdButNotLinked'),
-      });
     }
   };
 
@@ -370,6 +356,7 @@ export function GlossaryManagerModal({
                     if (event.key === 'Escape') setShowNewGlossary(false);
                   }}
                   placeholder={t('glossaryManager.glossaryName')}
+                  aria-label={t('glossaryManager.glossaryName')}
                   className="w-full rounded border border-editor-border bg-editor-bg px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
                   autoFocus
                 />
@@ -387,7 +374,7 @@ export function GlossaryManagerModal({
                     onClick={() => void handleCreateGlossary()}
                     disabled={loading || !newGlossaryName.trim() || saving}
                     className="rounded bg-primary-500 p-1 text-white disabled:opacity-40"
-                    aria-label={t('glossaryManager.newGlossary')}
+                    aria-label={t('common.confirm')}
                   >
                     <Check size={14} />
                   </button>

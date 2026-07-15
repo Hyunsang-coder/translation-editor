@@ -46,7 +46,7 @@ export function registerDocumentTools(
   server.registerTool(
     "oddeyes_get_translation_context",
     {
-      description: "Get translation rules, glossary, persona, and project context from OddEyes.",
+      description: "Get translation rules, glossary, and project context from OddEyes.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

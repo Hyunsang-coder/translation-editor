@@ -20,7 +20,6 @@ vi.mock('@/stores/projectStore', () => ({
   },
 }));
 
-const setPersonaSpy = vi.fn();
 const setRulesSpy = vi.fn();
 const setContextSpy = vi.fn();
 const appendRulesSpy = vi.fn();
@@ -30,9 +29,6 @@ vi.mock('@/stores/chatStore', () => ({
     getState: () => ({
       translationRules: '',
       projectContext: '',
-      translatorPersona: '',
-      setTranslatorPersona: setPersonaSpy,
-      appendToTranslatorPersona: vi.fn(),
       setTranslationRules: setRulesSpy,
       appendToTranslationRules: appendRulesSpy,
       setProjectContext: setContextSpy,
@@ -102,8 +98,22 @@ const glossaryStore = {
       updatedAt: 1,
     },
   ],
+  entriesByGlossary: {} as Record<string, typeof glossaryEntry[]>,
   loadLibrary: vi.fn(async () => undefined),
+  loadEntries: vi.fn(async (glossaryId: string) => {
+    glossaryStore.entriesByGlossary[glossaryId] = [glossaryEntry];
+  }),
   createEntry: vi.fn(async () => glossaryEntry),
+  updateEntry: vi.fn(async ({ entryId, source, target, notes, caseSensitive }) => ({
+    ...glossaryEntry,
+    id: entryId,
+    source,
+    target,
+    notes: notes ?? null,
+    caseSensitive: caseSensitive ?? false,
+    updatedAt: 2,
+  })),
+  deleteEntry: vi.fn(async () => undefined),
   createGlossary: vi.fn(async () => ({
     id: 'g-new',
     name: 'Project glossary',
@@ -112,7 +122,7 @@ const glossaryStore = {
     createdAt: 2,
     updatedAt: 2,
   })),
-  saveProjectSelection: vi.fn(async () => undefined),
+  saveProjectSelection: vi.fn(async (_projectId: string, _ids: string[]) => undefined),
 };
 
 vi.mock('@/stores/glossaryStore', () => ({
@@ -185,6 +195,19 @@ describe('oddeyesAppBridge — getSource', () => {
     expect(result.format).toBe('markdown');
     expect(result).toHaveProperty('revision');
     expect(result).toHaveProperty('empty');
+  });
+});
+
+describe('oddeyesAppBridge — getTranslationContext', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+  });
+
+  it('rules/context를 반환하고 translator persona는 노출하지 않는다', async () => {
+    const result = await callBridge('oddeyes.getTranslationContext') as Record<string, unknown>;
+    expect(result).toHaveProperty('translationRules');
+    expect(result).toHaveProperty('projectContext');
+    expect(result).not.toHaveProperty('translatorPersona');
   });
 });
 
@@ -263,7 +286,6 @@ describe('oddeyesAppBridge — setTranslationPreview (L3)', () => {
 describe('oddeyesAppBridge — setTranslationContext', () => {
   beforeEach(() => {
     initializeOddEyesAppBridge();
-    setPersonaSpy.mockClear();
     setRulesSpy.mockClear();
     setContextSpy.mockClear();
     appendRulesSpy.mockClear();
@@ -275,7 +297,6 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
     }) as Record<string, unknown>;
     expect(res.updated).toEqual(['translationRules']);
     expect(setRulesSpy).toHaveBeenCalledWith('rule A');
-    expect(setPersonaSpy).not.toHaveBeenCalled();
     expect(setContextSpy).not.toHaveBeenCalled();
   });
 
@@ -294,10 +315,10 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
 
   it('빈 문자열 replace는 허용(비우기)', async () => {
     const res = await callBridge('oddeyes.setTranslationContext', {
-      translatorPersona: '',
+      projectContext: '',
     }) as Record<string, unknown>;
-    expect(res.updated).toEqual(['translatorPersona']);
-    expect(setPersonaSpy).toHaveBeenCalledWith('');
+    expect(res.updated).toEqual(['projectContext']);
+    expect(setContextSpy).toHaveBeenCalledWith('');
   });
 
   it('mode=append에서 빈 문자열은 스킵', async () => {
@@ -336,9 +357,13 @@ describe('oddeyesAppBridge — glossary', () => {
       },
     ];
     glossaryStore.loadLibrary.mockClear();
+    glossaryStore.loadEntries.mockClear();
     glossaryStore.createEntry.mockClear();
+    glossaryStore.updateEntry.mockClear();
+    glossaryStore.deleteEntry.mockClear();
     glossaryStore.createGlossary.mockClear();
     glossaryStore.saveProjectSelection.mockClear();
+    glossaryStore.entriesByGlossary = {};
   });
 
   it('lists project glossaries', async () => {
@@ -346,6 +371,38 @@ describe('oddeyesAppBridge — glossary', () => {
     expect(res.ok).toBe(true);
     expect(res.projectId).toBe('test-project');
     expect(res.projectGlossaries).toEqual(glossaryStore.projectGlossaries);
+  });
+
+  it('lists glossary entries with default limit', async () => {
+    const res = await callBridge('oddeyes.listGlossaryEntries', {
+      glossaryId: 'g-1',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(glossaryStore.loadEntries).toHaveBeenCalledWith('g-1', undefined);
+    expect(res.entries).toEqual([glossaryEntry]);
+    expect(res.limit).toBe(100);
+    expect(res.truncated).toBe(false);
+  });
+
+  it('truncates glossary entry list when over limit', async () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({
+      ...glossaryEntry,
+      id: `e-${i}`,
+      source: `term-${i}`,
+    }));
+    glossaryStore.loadEntries.mockImplementationOnce(async (glossaryId: string) => {
+      glossaryStore.entriesByGlossary[glossaryId] = many;
+    });
+
+    const res = await callBridge('oddeyes.listGlossaryEntries', {
+      glossaryId: 'g-1',
+      limit: 2,
+    }) as Record<string, unknown>;
+
+    expect(res.total).toBe(5);
+    expect((res.entries as unknown[]).length).toBe(2);
+    expect(res.truncated).toBe(true);
   });
 
   it('adds a glossary entry to the linked glossary', async () => {
@@ -362,6 +419,43 @@ describe('oddeyesAppBridge — glossary', () => {
       domain: 'game',
     }));
     expect(glossaryStore.createGlossary).not.toHaveBeenCalled();
+  });
+
+  it('updates a glossary entry', async () => {
+    const res = await callBridge('oddeyes.updateGlossaryEntry', {
+      glossaryId: 'g-1',
+      entryId: 'e-1',
+      source: 'Care Package',
+      target: '보급품 상자',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(glossaryStore.updateEntry).toHaveBeenCalledWith(expect.objectContaining({
+      glossaryId: 'g-1',
+      entryId: 'e-1',
+      source: 'Care Package',
+      target: '보급품 상자',
+    }));
+    expect((res.entry as { target: string }).target).toBe('보급품 상자');
+  });
+
+  it('deletes a glossary entry', async () => {
+    const res = await callBridge('oddeyes.deleteGlossaryEntry', {
+      glossaryId: 'g-1',
+      entryId: 'e-1',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(glossaryStore.deleteEntry).toHaveBeenCalledWith('g-1', 'e-1');
+    expect(res.entryId).toBe('e-1');
+  });
+
+  it('rejects update without entryId', async () => {
+    await expect(callBridge('oddeyes.updateGlossaryEntry', {
+      glossaryId: 'g-1',
+      source: 'A',
+      target: 'B',
+    })).rejects.toThrow('entryId is required');
   });
 
   it('creates and links a glossary when none are linked', async () => {
@@ -409,5 +503,69 @@ describe('oddeyesAppBridge — glossary', () => {
       source: 'A',
       target: 'B',
     })).rejects.toThrow('Project mismatch');
+  });
+
+  it('links a glossary to the project incrementally', async () => {
+    glossaryStore.glossaries = [
+      ...glossaryStore.glossaries,
+      {
+        id: 'g-2',
+        name: 'Extra',
+        description: null,
+        entryCount: 0,
+        createdAt: 3,
+        updatedAt: 3,
+      },
+    ];
+    glossaryStore.saveProjectSelection.mockImplementation(async (_projectId: string, ids: string[]) => {
+      glossaryStore.projectGlossaries = ids.map((id: string, priority: number) => {
+        const base = glossaryStore.glossaries.find((item) => item.id === id)!;
+        return { ...base, priority };
+      });
+    });
+
+    const res = await callBridge('oddeyes.linkProjectGlossary', {
+      glossaryId: 'g-2',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(res.alreadyLinked).toBe(false);
+    expect(glossaryStore.saveProjectSelection).toHaveBeenCalledWith('test-project', ['g-1', 'g-2']);
+  });
+
+  it('unlink is idempotent when already unlinked', async () => {
+    glossaryStore.glossaries = [
+      ...glossaryStore.glossaries,
+      {
+        id: 'g-2',
+        name: 'Extra',
+        description: null,
+        entryCount: 0,
+        createdAt: 3,
+        updatedAt: 3,
+      },
+    ];
+
+    const res = await callBridge('oddeyes.unlinkProjectGlossary', {
+      glossaryId: 'g-2',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(res.alreadyUnlinked).toBe(true);
+    expect(glossaryStore.saveProjectSelection).not.toHaveBeenCalled();
+  });
+
+  it('unlinks a linked glossary without deleting it', async () => {
+    glossaryStore.saveProjectSelection.mockImplementation(async () => {
+      glossaryStore.projectGlossaries = [];
+    });
+
+    const res = await callBridge('oddeyes.unlinkProjectGlossary', {
+      glossaryId: 'g-1',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(res.alreadyUnlinked).toBe(false);
+    expect(glossaryStore.saveProjectSelection).toHaveBeenCalledWith('test-project', []);
   });
 });

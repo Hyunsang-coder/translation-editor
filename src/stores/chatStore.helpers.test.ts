@@ -1,55 +1,23 @@
 /**
  * chatStore.helpers 순수 함수 테스트
- * - inferSuggestionFromAssistantText: persona 트리거 추가 검증
+ * - inferSuggestionFromAssistantText: rule/context 트리거 검증
  * - createIncrementalGhostRestorer: 스트리밍 증분 ghost chip 복원 (P3)
  */
 import { describe, it, expect } from 'vitest';
-import { inferSuggestionFromAssistantText, createIncrementalGhostRestorer } from './chatStore.helpers';
+import {
+  createIncrementalGhostRestorer,
+  inferSuggestionFromAssistantText,
+  mergePersonaIntoRules,
+} from './chatStore.helpers';
 import { restoreGhostChips, type GhostMaskSession } from '@/utils/ghostMask';
 
 describe('inferSuggestionFromAssistantText', () => {
-  // --- Persona 트리거 ---
-  describe('persona 트리거', () => {
-    it('[Add to Persona] 명시적 마커가 있으면 suggestedPersona를 반환', () => {
-      const text = 'IT 전문 한영 번역가; 자연스러운 구어체 선호 [Add to Persona]';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedPersona).toBeDefined();
-      expect(result!.suggestedPersona).toContain('IT 전문 한영 번역가');
-    });
-
-    it('한국어 트리거 "원하시면 버튼을 ... 페르소나"로 감지', () => {
-      const text = '게임 로컬라이저; 10년 경력\n원하시면 버튼을 눌러 페르소나에 추가하세요';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedPersona).toBeDefined();
-    });
-
-    it('"필요하시면 [Add to Persona]" 패턴 감지', () => {
-      const text = '의료 전문 번역가\n필요하시면 [Add to Persona] 버튼을 눌러 페르소나에 저장하세요';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedPersona).toBeDefined();
-    });
-
-    it('persona 트리거만 있으면 suggestedRule/suggestedContext는 없음', () => {
-      const text = 'IT 전문 번역가 [Add to Persona]';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedPersona).toBeDefined();
-      expect(result!.suggestedRule).toBeUndefined();
-      expect(result!.suggestedContext).toBeUndefined();
-    });
-  });
-
-  // --- 기존 트리거 회귀 ---
-  describe('기존 rule/context 트리거 회귀', () => {
+  describe('rule/context 트리거', () => {
     it('[Add to Rules] 마커로 suggestedRule 반환', () => {
       const text = '영문 대문자 통일 [Add to Rules]';
       const result = inferSuggestionFromAssistantText(text);
       expect(result).not.toBeNull();
       expect(result!.suggestedRule).toBeDefined();
-      expect(result!.suggestedPersona).toBeUndefined();
     });
 
     it('[Add to Context] 마커로 suggestedContext 반환', () => {
@@ -57,18 +25,16 @@ describe('inferSuggestionFromAssistantText', () => {
       const result = inferSuggestionFromAssistantText(text);
       expect(result).not.toBeNull();
       expect(result!.suggestedContext).toBeDefined();
-      expect(result!.suggestedPersona).toBeUndefined();
     });
   });
 
-  // --- 복합 트리거 ---
   describe('복합 트리거', () => {
-    it('Rule + Persona 동시 감지', () => {
-      const text = '영문 소문자 통일 [Add to Rules] [Add to Persona]';
+    it('Rule + Context 동시 감지', () => {
+      const text = '영문 소문자 통일 [Add to Rules] SaaS 프로젝트 [Add to Context]';
       const result = inferSuggestionFromAssistantText(text);
       expect(result).not.toBeNull();
       expect(result!.suggestedRule).toBeDefined();
-      expect(result!.suggestedPersona).toBeDefined();
+      expect(result!.suggestedContext).toBeDefined();
     });
   });
 
@@ -83,10 +49,20 @@ describe('inferSuggestionFromAssistantText', () => {
       expect(inferSuggestionFromAssistantText('')).toBeNull();
     });
 
-    it('"페르소나"만 언급하고 트리거 패턴 없으면 null', () => {
-      const result = inferSuggestionFromAssistantText('페르소나 설정을 확인해보세요.');
-      expect(result).toBeNull();
-    });
+  });
+});
+
+describe('mergePersonaIntoRules', () => {
+  it('legacy persona를 기존 규칙 앞에 병합한다', () => {
+    expect(mergePersonaIntoRules('게임 번역 전문가', '고유명사는 음차')).toBe(
+      '게임 번역 전문가\n\n고유명사는 음차',
+    );
+  });
+
+  it('이미 포함된 persona는 중복 추가하지 않는다', () => {
+    expect(mergePersonaIntoRules('게임 번역 전문가', '게임 번역 전문가\n\n고유명사는 음차')).toBe(
+      '게임 번역 전문가\n\n고유명사는 음차',
+    );
   });
 });
 

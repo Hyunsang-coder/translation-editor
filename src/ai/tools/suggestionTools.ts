@@ -62,33 +62,3 @@ export const suggestProjectContext = tool(
   }
 );
 
-/**
- * 번역가 페르소나 제안 도구
- * AI가 대화 중 번역가의 정체성/전문분야/톤 등을 파악하여 페르소나 설정을 제안할 때 호출합니다.
- */
-export const suggestTranslatorPersona = tool(
-  async (_args) => {
-    // 실제 저장은 하지 않고, UI에 "저장 제안"을 표시하기 위한 시그널 역할만 함
-    return { ok: true };
-  },
-  {
-    name: 'suggest_translator_persona',
-    description:
-      '번역가 페르소나(정체성/전문분야/톤/스타일)를 제안합니다 (예: IT 전문 한영 번역가, 10년 경력 게임 로컬라이저). ' +
-      '번역 스타일 규칙은 suggest_translation_rule, 프로젝트 맥락은 suggest_project_context를 사용하세요. ' +
-      '사용자가 [Add to Persona] 버튼을 눌러야 저장됩니다.',
-    schema: z.object({
-      persona: z
-        .string()
-        .min(1)
-        .max(2000)
-        .describe(
-          '번역가 페르소나 (정체성, 전문분야, 경력, 톤 등). ' +
-            '최대 3-5개 항목, 세미콜론(;)으로 구분. ' +
-            'GOOD: "IT/게임 전문 한영 번역가; 자연스러운 구어체 선호; 10년 경력" ' +
-            'NO PREAMBLE, NO MARKDOWN.'
-        ),
-    }),
-  }
-);
-

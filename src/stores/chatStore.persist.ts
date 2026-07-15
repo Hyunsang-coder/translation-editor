@@ -47,7 +47,8 @@ export function clearPersistTimer(): void {
 
 export function createPersistHelpers(get: ChatGet) {
   const buildChatSettings = (): ChatProjectSettings => ({
-    translatorPersona: get().translatorPersona,
+    // 레거시 필드: 항상 빈 문자열로 저장해 이전 persona 값을 지운다.
+    translatorPersona: '',
     translationRules: get().translationRules,
     projectContext: get().projectContext,
     composerText: get().composerText,

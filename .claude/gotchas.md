@@ -166,7 +166,7 @@ Critical implementation warnings learned from past issues.
 
 143. **Windows `Compress-Archive` 확장자 제한**: PowerShell `Compress-Archive`는 `.zip` 확장자만 지원. `.mcpb` 등 커스텀 확장자는 `NotSupportedArchiveFileExtension` 에러 발생. `.zip`으로 생성 후 rename 필요.
 
-144. **`oddeyes-desktop-mcp` 도구 추가 = 배포 3종 동기화 필수**: `src/tools/*.ts`에 도구를 등록하고 `index.ts`에 register하면 코드는 동작하지만, 클라이언트가 새 도구를 **못 본다**. ① `package.json` + `manifest.template.json` 버전 bump, ② `manifest.template.json`의 `tools` 배열에 도구명 추가(Claude Desktop UI 메타데이터), ③ `npm run build`로 `.mcpb` 재번들 **그리고** `npm publish`(npx 경로 사용 시)까지 해야 함. 사용 측은 `.mcpb` 재설치 또는 npx 캐시 무효화 후 클라이언트 재연결 필요. (이 MCP는 npm 레지스트리에 게시됨 — `npm view oddeyes-desktop-mcp version`으로 확인.)
+144. **`oddeyes-desktop-mcp` 도구/스키마 변경 = 배포 3종 동기화 필수**: `src/tools/*.ts`에 도구를 등록·스키마를 바꾸고 `index.ts`에 register하면 코드는 동작하지만, 클라이언트가 **옛 목록/필드**를 본다. ① `package.json` + `manifest.template.json` 버전 bump, ② `manifest.template.json`의 `tools` 배열(추가·설명 변경), ③ `npm run build`로 `.mcpb` 재번들 **그리고** `npm publish`(npx 경로 사용 시)까지 해야 함. 예: v0.7.0 glossary entry CRUD + link/unlink — 미배포 시 Desktop이 옛 스키마를 봄. 사용 측은 `.mcpb` 재설치 또는 npx 캐시 무효화 후 클라이언트 재연결. (`npm view oddeyes-desktop-mcp version`으로 확인.) Persona/참고 문서 MCP 도구는 의도적으로 없음. 용어집 생성(관리 UI)은 라이브러리만 추가하고 프로젝트 연결은 별도(토글/MCP link); 미연결 용어집 용어 추가는 orphan 방지로 자동 연결.
 
 ## Security
 
@@ -278,7 +278,7 @@ Critical implementation warnings learned from past issues.
 
 106. **Review Results Table Layout**: `ReviewResultsTable.tsx`는 `table-fixed` 레이아웃에서 고정 컬럼(체크박스, #, 심각도, 유형)을 하나로 통합하여 공간 효율성 향상. 1:2:3 비율(통합:수정제안:설명)로 설정하여 패널 리사이즈 시 균형있게 반응.
 
-107. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`, `translatorPersona`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.
+107. **Retranslation Project Settings**: `ReviewPanel.tsx`의 `handleRetranslate()`는 `useChatStore.getState()`에서 `translationRules`, `projectContext`를 가져오고, `searchGlossary()`로 용어집을 검색하여 재번역 시 모든 프로젝트 세팅 정보가 포함되도록 보장.
 
 108. **Focus Mode Button Location**: Focus Mode 토글 버튼은 상단 Toolbar가 아닌 에디터 패널 헤더(모델 선택 드롭다운 왼쪽)에 위치. 이모지 대신 텍스트("원문 숨기기"/"원문 보이기")로 표시하여 직관성 향상.
 

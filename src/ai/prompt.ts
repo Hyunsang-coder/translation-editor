@@ -10,11 +10,6 @@ import { stripHtml } from '@/utils/hash';
 
 export type RequestType = 'translate' | 'question' | 'general';
 
-/** Escape XML/HTML tags in user-provided content to prevent prompt injection */
-function escapeXmlTags(text: string): string {
-  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 // 토큰(문자) 최적화용 상한. GPT-5 시리즈 400k 컨텍스트 윈도우 기준으로 여유 있게 설정.
 const LIMITS = {
   translationRulesChars: 10000,
@@ -113,8 +108,6 @@ export interface PromptContext {
 }
 
 export interface PromptOptions {
-  /** 사용자 정의 번역기 페르소나 */
-  translatorPersona?: string;
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
 }
@@ -123,18 +116,13 @@ export interface PromptOptions {
 // 시스템 프롬프트 빌더
 // ============================================
 
-function buildBaseSystemPrompt(project: ITEProject | null, persona?: string): string {
+function buildBaseSystemPrompt(project: ITEProject | null): string {
   const domain = project?.metadata.domain ?? 'general';
   const src = 'Source';
   const tgt = project?.metadata.targetLanguage ?? 'Target';
 
-  // 사용자가 Persona를 설정했으면 XML 태그로 래핑하여 사용, 아니면 기본값
-  const personaBlock = persona?.trim()
-    ? `<user_persona>\n${escapeXmlTags(persona)}\n</user_persona>`
-    : '당신은 경험많은 전문 번역가입니다.';
-
   return [
-    personaBlock,
+    '당신은 경험많은 전문 번역가입니다.',
     '',
     `프로젝트: ${domain}`,
     `언어: ${src} → ${tgt}`,
@@ -147,9 +135,8 @@ function buildBaseSystemPrompt(project: ITEProject | null, persona?: string): st
   ].join('\n');
 }
 
-function buildTranslateSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
-  // 번역 모드: 사용자 Persona 반영
-  const base = buildBaseSystemPrompt(project, opts?.translatorPersona);
+function buildTranslateSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
+  const base = buildBaseSystemPrompt(project);
 
   return [
     base,
@@ -162,17 +149,11 @@ function buildTranslateSystemPrompt(project: ITEProject | null, opts?: PromptOpt
   ].join('\n');
 }
 
-function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOptions): string {
-  // 질문 모드: Persona 무시 (Systemically Controlled) - 기본 '전문 번역가' 페르소나 유지
-  // 단, 사용자가 설정한 Persona가 있다면 '컨텍스트'로만 제공하여 번역 방향성을 참고하게 함 (행동 지침 X)
-  const base = buildBaseSystemPrompt(project, undefined);
-  const personaContext = opts?.translatorPersona?.trim()
-    ? `\n[참고: 사용자가 설정한 번역 페르소나]\n<user_persona>\n${escapeXmlTags(opts.translatorPersona)}\n</user_persona>\n(이 페르소나는 번역 작업 시 적용됩니다. 질문 답변 시에는 참고만 하세요.)`
-    : '';
+function buildQuestionSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
+  const base = buildBaseSystemPrompt(project);
 
   return [
     base,
-    personaContext,
     '',
     '=== 질문 응답 모드 ===',
     '- 질문에 간결하게 답변합니다.',
@@ -188,7 +169,7 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
     '에디터 문서 대조/검수 지침:',
     '- 사용자가 에디터의 원문/번역문에 대해 "번역 맞아?", "고유명사/기관명 제대로 번역됐어?", "누락/오역 확인"처럼 대조가 필요한 요청을 하면, get_source_document / get_target_document를 호출해 근거를 확보합니다.',
     '- Confluence URL이나 페이지 ID가 언급된 요청은 에디터 문서가 아닌 외부 페이지이므로, 에디터 문서 도구 대신 Confluence 전용 도구를 사용하세요.',
-    '- 문서가 길면 query/maxChars를 사용해 필요한 구간만 가져오고, 그래도 부족할 때만 "검수할 구간을 선택해 달라"는 확인 요청을 0~1개 합니다.',
+    '- 문서가 길면 range/maxChars를 사용해 필요한 구간만 가져오고, 그래도 부족할 때만 "검수할 구간을 선택해 달라"는 확인 요청을 0~1개 합니다.',
     '',
     '채팅에서 가능한 것:',
     '- 부분 번역: 특정 문장, 단락, 선택 영역의 번역 요청',
@@ -205,7 +186,7 @@ function buildQuestionSystemPrompt(project: ITEProject | null, opts?: PromptOpti
 
 function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
   // 일반 모드도 질문 모드와 동일하게 처리
-  const base = buildBaseSystemPrompt(project, undefined);
+  const base = buildBaseSystemPrompt(project);
   return base;
 }
 
@@ -418,16 +399,12 @@ export async function buildTranslateOnlyMessages(
     targetLanguage?: string;
     translationRules?: string;
     projectContext?: string;
-    translatorPersona?: string;
   },
 ): Promise<BaseMessage[]> {
   const tgtLang = opts?.targetLanguage ?? 'Target';
-  const persona = opts?.translatorPersona?.trim()
-    ? `<user_persona>\n${escapeXmlTags(opts.translatorPersona)}\n</user_persona>`
-    : '당신은 경험많은 전문 번역가입니다.';
 
   const systemPrompt = [
-    persona,
+    '당신은 경험많은 전문 번역가입니다.',
     `다음 원문을 ${tgtLang}로 자연스럽게 번역하세요.`,
     '',
     '중요: 번역문만 출력하세요.',

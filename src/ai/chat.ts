@@ -3,7 +3,7 @@ import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
-import { suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona } from '@/ai/tools/suggestionTools';
+import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool, confluenceLoadPageTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
 import i18n from '@/i18n/config';
@@ -134,7 +134,6 @@ export interface GenerateReplyInput {
   contextBlocks: EditorBlock[];
   recentMessages: ChatMessage[];
   userMessage: string;
-  translatorPersona?: string;
   /** 번역 규칙 (사용자 입력) */
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
@@ -620,7 +619,7 @@ interface BuildToolSpecsResult {
 }
 
 async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpecsResult> {
-  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext, suggestTranslatorPersona];
+  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext];
 
   // 문서 도구
   if (input.includeSource) toolSpecs.push(getSourceDocumentTool);
@@ -700,10 +699,6 @@ function buildToolGuideMessage(params: {
   if (has('suggest_project_context')) {
     toolGuide.push('- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)');
   }
-  if (has('suggest_translator_persona')) {
-    toolGuide.push('- suggest_translator_persona: Translator Persona 저장 제안 생성(번역가 정체성/전문분야/톤)');
-  }
-
   // 웹 검색
   if (has('web_search')) {
     const providerHint = provider === 'openai' ? 'web_search_preview' : 'web_search';
@@ -785,12 +780,6 @@ function buildToolGuideMessage(params: {
     toolGuide.push('   → 응답: "[Add to Context] 버튼을 눌러 추가하세요"');
     toolGuide.push('');
     priority++;
-  }
-
-  if (has('suggest_translator_persona')) {
-    toolGuide.push(`${priority}. 번역가 정체성/전문분야/톤/스타일 발견`);
-    toolGuide.push('   → suggest_translator_persona');
-    toolGuide.push('   → 응답: "[Add to Persona] 버튼을 눌러 추가하세요"');
   }
 
   return new SystemMessage(toolGuide.join('\n'));
@@ -933,7 +922,6 @@ export async function streamAssistantReply(
       ...(targetDocument ? { targetDocument } : {}),
     },
     {
-      ...(input.translatorPersona ? { translatorPersona: input.translatorPersona } : {}),
       requestType,
     },
   );

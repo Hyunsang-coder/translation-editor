@@ -219,18 +219,6 @@ export interface ChatMessageMetadata {
   suggestedContext?: string;
 
   /**
-   * AI가 제안한 번역가 페르소나 (suggest_translator_persona Tool Call 결과)
-   * - 이 필드가 존재하면 UI에 [Add to Persona] 버튼이 표시됩니다.
-   */
-  suggestedPersona?: string;
-
-  /**
-   * Add to Persona 버튼을 이미 눌렀는지 여부
-   * - 중복 append 방지 및 버튼 숨김 용도
-   */
-  personaAdded?: boolean;
-
-  /**
    * 사용자 메시지에 첨부된 이미지 (채팅 UI 표시용)
    * - 전송 시점에 캡처되어 메시지에 저장됨
    * - thumbnailDataUrl은 base64 data URL로 저장되어 세션 간 유지됨

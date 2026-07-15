@@ -166,7 +166,6 @@ div[data-testid='chat-message-assistant']                         # 어시스턴
 ### Settings
 ```
 button[data-testid='app-settings-close-button']                   # 설정 닫기
-textarea[data-testid='settings-translator-persona']               # 번역가 페르소나
 textarea[data-testid='settings-translation-rules']                # 번역 규칙
 textarea[data-testid='settings-project-context']                  # 프로젝트 컨텍스트
 #anthropic-enabled                                                 # Anthropic 토글
@@ -385,15 +384,14 @@ async function ensureAnthropicEnabled(client) {
 }
 ```
 
-### Block 3: 프로젝트 설정 (페르소나/규칙/컨텍스트)
+### Block 3: 프로젝트 설정 (규칙/컨텍스트)
 
 ```javascript
-async function fillProjectSettings(client, { persona, rules, context }) {
+async function fillProjectSettings(client, { rules, context }) {
   await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-tools-button']" });
   await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-menu-settings']" });
-  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translator-persona']", timeout: 5000 });
+  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
 
-  if (persona) await callTool(client, 'tauri_dom_fill', { selector: "textarea[data-testid='settings-translator-persona']", value: persona });
   if (rules)   await callTool(client, 'tauri_dom_fill', { selector: "textarea[data-testid='settings-translation-rules']", value: rules });
   if (context)  await callTool(client, 'tauri_dom_fill', { selector: "textarea[data-testid='settings-project-context']", value: context });
   await sleep(700); // DebouncedTextarea 반영 대기

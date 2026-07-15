@@ -7,7 +7,6 @@ export const CHAT_PERSIST_DEBOUNCE_MS = 800;
 export const MAX_CHAT_SESSIONS = 5;
 export const MAX_MESSAGES_PER_SESSION = 1000;
 export const CHAT_LENGTH_THRESHOLD = 30;
-export const DEFAULT_TRANSLATOR_PERSONA = '';
 
 /** 도구 이름 → 한국어 표시명 매핑 (sendMessage/replayMessage 공용) */
 export const TOOL_NAME_MAP: Record<string, string> = {
@@ -17,7 +16,6 @@ export const TOOL_NAME_MAP: Record<string, string> = {
   'get_target_document': '번역문 문서 조회',
   'suggest_translation_rule': '번역 규칙 생성',
   'suggest_project_context': '프로젝트 맥락 분석',
-  'suggest_translator_persona': '페르소나 제안',
   'notion_search': 'Notion 검색',
   'notion_get_page': 'Notion 페이지 조회',
   'notion_query_database': 'Notion 데이터베이스 조회',
@@ -63,7 +61,6 @@ export interface ChatState {
     targetSessionId: string | null;
     nonce: number;
   } | null;
-  translatorPersona: string;
   translationRules: string;
   projectContext: string;
   /** 웹검색 사용 여부 (tool availability gate) */
@@ -131,8 +128,6 @@ export interface ChatActions {
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   setStatusMessage: (message: string | null) => void;
-  setTranslatorPersona: (persona: string) => void;
-  appendToTranslatorPersona: (snippet: string) => void;
   setTranslationRules: (rules: string) => void;
   appendToTranslationRules: (snippet: string) => void;
   setProjectContext: (memory: string) => void;

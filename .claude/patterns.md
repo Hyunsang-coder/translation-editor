@@ -193,7 +193,6 @@ polishDocument({
   model,
   translationRules,
   projectContext,
-  translatorPersona,
   signal,
   onToken,
 });
@@ -783,17 +782,22 @@ const methods = { 'oddeyes.setTranslationContext': async (p) => setTranslationCo
 //    + manifest.template.json tools 배열에 도구명 추가 (Claude Desktop UI 메타데이터)
 ```
 
-**현재 도구** (`oddeyes-desktop-mcp` v0.3.0, 12개):
+**현재 도구** (`oddeyes-desktop-mcp` v0.7.0, 19개):
 - 읽기: `get_status`, `get_source_document`, `get_target_document`, `get_translation_context`, `get_translation_preview`
 - 쓰기(preview-first): `set_translation_preview`, `apply_translation_preview`, `discard_translation_preview`
 - 쓰기(검수): `set_review_issues` → `reviewStore.ingestExternalReview` (highlight를 위해 `targetExcerpt` verbatim 필수)
-- 쓰기(컨텍스트): `set_translation_context` → `chatStore` 세터 (persona/rules/projectContext, replace|append)
+- 쓰기(컨텍스트): `set_translation_context` → `chatStore` 세터 (**`translationRules` / `projectContext`만**, replace|append). `translatorPersona`는 제거됨 — 톤·문체는 Rules로 통합.
+- 읽기(컨텍스트): `get_translation_context` → rules + projectContext + **source 기준 glossary 프롬프트 문자열** (구조화 entry 목록 아님)
+- 용어집: `list_project_glossaries`, `list_glossary_entries` (query + limit≤500), `add`/`update`/`delete` entry, `link_project_glossary` / `unlink_project_glossary` (incremental·idempotent; hard-delete 아님)
 - 품질 장부: `get_quality_records`, `log_quality_records`
+
+**범위 메모**: CSV import·참고 문서(attachments) MCP는 의도적으로 없음. 관리 UI에서 용어집 생성 시 자동 연결하지 않음(연결은 토글/MCP link). 미연결 용어집에 용어 추가 시에는 orphan 방지로 자동 연결 유지.
 
 **함정**:
 - **영속화는 `loadedProjectId` 필요** — 프로젝트 미로드 시 store 메모리엔 반영되나 SQLite 미저장 → bridge에서 `project` 없으면 거부.
 - **빈 문자열 vs 미제공** — `replace`에서 `''`는 비우기(허용), `append`에서 `''`는 무의미(스킵). `undefined`는 항상 스킵(부분 업데이트).
-- **배포 3종 동기화** — 도구 추가 시 ① `package.json`/`manifest` 버전 bump ② manifest `tools` 배열 ③ `.mcpb` 재번들 + npm publish(npx 경로). 빠뜨리면 코드는 동작하나 클라이언트가 새 도구를 못 봄.
+- **persona 재도입 금지** — MCP/bridge에 `translatorPersona`를 되돌리지 말 것. 레거시 값은 hydrate 시 `translationRules` 앞에 흡수.
+- **배포 3종 동기화** — 도구 추가/스키마 변경 시 ① `package.json`/`manifest` 버전 bump ② manifest `tools` 배열 ③ `.mcpb` 재번들 + npm publish(npx 경로). 빠뜨리면 코드는 동작하나 클라이언트가 옛 스키마(예: persona 필드)를 봄.
 
 ## Build Commands
 

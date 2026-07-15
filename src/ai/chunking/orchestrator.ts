@@ -31,7 +31,6 @@ export type SingleChunkTranslator = (params: {
   sourceDocJson: TipTapDocJson;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   glossary?: string | undefined;
   chunkIndex?: number | undefined;
   totalChunks?: number | undefined;
@@ -45,7 +44,6 @@ export interface ChunkedTranslationParams {
   sourceDocJson: TipTapDocJson;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
-  translatorPersona?: string | undefined;
   /** 용어집 (source = target 형식) */
   glossary?: string | undefined;
   /** 청크 설정 */
@@ -72,7 +70,6 @@ export async function translateInChunks(
     sourceDocJson,
     translationRules,
     projectContext,
-    translatorPersona,
     glossary,
     chunkConfig = {},
     onProgress,
@@ -98,7 +95,6 @@ export async function translateInChunks(
         sourceDocJson,
         translationRules,
         projectContext,
-        translatorPersona,
         glossary,
       });
 
@@ -191,7 +187,6 @@ export async function translateInChunks(
         sourceDocJson: chunkDoc,
         translationRules,
         projectContext,
-        translatorPersona,
         glossary,
         chunkIndex: i,
         totalChunks,
@@ -243,7 +238,6 @@ export async function retryFailedChunks(
     project,
     translationRules,
     projectContext,
-    translatorPersona,
     glossary,
     onProgress,
     translateSingleChunk,
@@ -286,7 +280,6 @@ export async function retryFailedChunks(
         sourceDocJson: chunkDoc,
         translationRules,
         projectContext,
-        translatorPersona,
         glossary,
         chunkIndex: index,
         totalChunks,

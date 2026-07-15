@@ -316,16 +316,11 @@ async function runWorkflow() {
     }
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='app-settings-close-button']" });
 
-    // 3) Open settings panel and fill persona/rules/context
+    // 3) Open settings panel and fill rules/context
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolsButtonSelector, timeout: 10000 });
     await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
     await callTool(client, 'tauri_dom_click', { selector: toolbarSettingsSelector });
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translator-persona']", timeout: 5000 });
-
-    await callTool(client, 'tauri_dom_fill', {
-      selector: "textarea[data-testid='settings-translator-persona']",
-      value: '기술 문서 번역 전문가. 간결하고 정확한 톤 유지.',
-    });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
     await callTool(client, 'tauri_dom_fill', {
       selector: "textarea[data-testid='settings-translation-rules']",
       value: '1) 용어 일관성 유지\n2) 문장은 짧게\n3) 불필요한 의역 금지',

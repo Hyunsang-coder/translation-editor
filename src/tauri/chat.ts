@@ -2,7 +2,8 @@ import type { ChatSession } from '@/types';
 import { invoke } from '@/tauri/invoke';
 
 export interface ChatProjectSettings {
-  translatorPersona: string;
+  /** @deprecated 로드 시 translationRules로 흡수. 저장 시 항상 빈 문자열. */
+  translatorPersona?: string;
   translationRules: string;
   /**
    * Project Context: 번역 시 참고할 추가 맥락 정보(배경 지식, 프로젝트 컨텍스트 등)
