@@ -6,8 +6,12 @@ import {
   Heading,
   Bold,
   Italic,
+  Underline,
   Strikethrough,
+  Highlighter,
   Code,
+  Subscript,
+  Superscript,
   List,
   ListOrdered,
   Quote,
@@ -141,6 +145,15 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
       </button>
       <button
         type="button"
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        className={`${btnBase} ${isActive('underline') ? btnActive : ''}`}
+        title={t('editor.menuBar.underlineTitle')}
+        aria-label={t('editor.menuBar.underline')}
+      >
+        <Underline size={ICON_SIZE} />
+      </button>
+      <button
+        type="button"
         onClick={() => editor.chain().focus().toggleStrike().run()}
         className={`${btnBase} ${isActive('strike') ? btnActive : ''}`}
         title={t('editor.menuBar.strikethrough')}
@@ -150,12 +163,39 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
       </button>
       <button
         type="button"
+        onClick={() => editor.chain().focus().toggleHighlight().run()}
+        className={`${btnBase} ${isActive('highlight') ? btnActive : ''}`}
+        title={t('editor.menuBar.highlightTitle')}
+        aria-label={t('editor.menuBar.highlight')}
+      >
+        <Highlighter size={ICON_SIZE} />
+      </button>
+      <button
+        type="button"
         onClick={() => editor.chain().focus().toggleCode().run()}
         className={`${btnBase} ${isActive('code') ? btnActive : ''}`}
         title={t('editor.menuBar.inlineCodeTitle')}
         aria-label={t('editor.menuBar.inlineCode')}
       >
         <Code size={ICON_SIZE} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleSubscript().run()}
+        className={`${btnBase} ${isActive('subscript') ? btnActive : ''}`}
+        title={t('editor.menuBar.subscriptTitle')}
+        aria-label={t('editor.menuBar.subscript')}
+      >
+        <Subscript size={ICON_SIZE} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleSuperscript().run()}
+        className={`${btnBase} ${isActive('superscript') ? btnActive : ''}`}
+        title={t('editor.menuBar.superscriptTitle')}
+        aria-label={t('editor.menuBar.superscript')}
+      >
+        <Superscript size={ICON_SIZE} />
       </button>
 
       {/* 구분선 */}

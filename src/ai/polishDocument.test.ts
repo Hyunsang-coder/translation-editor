@@ -99,6 +99,21 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(systemPrompt).toContain('Concise game localization editor.');
   });
 
+  it('용어집을 폴리싱 프롬프트에 포함하고 동의어 치환을 금지한다', async () => {
+    await polishTargetDocumentWithStreaming({
+      targetDocJson,
+      glossary: '- Care Package = 보급 상자\n- Blue Zone = 블루존',
+    });
+
+    const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+    const systemPrompt = String(messages[0]?.content);
+
+    expect(systemPrompt).toContain('[Glossary]');
+    expect(systemPrompt).toContain('Keep these preferred translations exactly. Do not substitute synonyms:');
+    expect(systemPrompt).toContain('- Care Package = 보급 상자');
+    expect(systemPrompt).toContain('- Blue Zone = 블루존');
+  });
+
   it('취소 신호가 이미 있으면 호출하지 않는다', async () => {
     const abortController = new AbortController();
     abortController.abort();

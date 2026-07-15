@@ -8,7 +8,7 @@ import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConnectorStore } from '@/stores/connectorStore';
-import { searchGlossary } from '@/tauri/glossary';
+import { formatGlossaryForPrompt, resolveGlossaryEntries } from '@/utils/glossaryInject';
 import {
   createGhostMaskSession,
   maskGhostChips,
@@ -181,28 +181,25 @@ export function createAiActions(
         : '';
       const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
 
-      // 로컬 글로서리 주입 (on-demand)
+      // 로컬 글로서리 주입 (on-demand, 문서 전역 윈도우)
       let glossaryInjected = '';
       try {
         if (project?.id) {
           const plainContext = contextBlocks
             .map((b) => stripHtml(b.content))
-            .join('\n')
-            .slice(0, 1200);
-          const q = [content, plainContext].filter(Boolean).join('\n').slice(0, 2000);
+            .join('\n');
+          const q = [content, plainContext].filter(Boolean).join('\n');
           const hits = q.trim().length
-            ? await searchGlossary({
+            ? await resolveGlossaryEntries({
               projectId: project.id,
-              query: q,
+              text: q,
               domain: project.metadata.domain,
               limit: 12,
             })
             : [];
           set({ lastInjectedGlossary: hits });
           if (hits.length > 0) {
-            const raw = hits
-              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-              .join('\n');
+            const raw = formatGlossaryForPrompt(hits);
             glossaryInjected = maskGhostChips(raw, maskSession);
           }
         } else {

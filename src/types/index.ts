@@ -298,24 +298,40 @@ export interface EditSession {
  */
 export interface GlossaryEntry {
   id: string;
+  glossaryId?: string;
   source: string;
   target: string;
-  notes?: string;
-  domain?: ProjectDomain;
+  notes?: string | null;
+  domain?: ProjectDomain | string | null;
   caseSensitive: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
 /**
- * 용어집
+ * 저장된 용어집 요약
  */
-export interface Glossary {
+export interface GlossarySummary {
   id: string;
   name: string;
-  entries: GlossaryEntry[];
+  description?: string | null;
+  entryCount: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * 현재 프로젝트에 연결된 용어집
+ */
+export interface ProjectGlossary extends GlossarySummary {
+  priority: number;
+}
+
+/**
+ * 용어집 상세
+ */
+export interface Glossary extends GlossarySummary {
+  entries: GlossaryEntry[];
 }
 
 // ============================================

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/stores/projectStore', () => ({
   useProjectStore: {
     getState: () => ({
-      project: { id: 'test-project', metadata: { title: 'Test' } },
+      project: { id: 'test-project', metadata: { title: 'Test', domain: 'game' } },
       sourceDocument: '<p>old source</p>',
       targetDocument: '<p>old target</p>',
       sourceDocJson: null,
@@ -64,6 +64,61 @@ vi.mock('@/stores/editorStore', () => ({
 
 vi.mock('@/tauri/glossary', () => ({
   searchGlossary: vi.fn(() => []),
+}));
+
+const glossaryEntry = {
+  id: 'e-1',
+  glossaryId: 'g-1',
+  source: 'Care Package',
+  target: '보급 상자',
+  notes: null,
+  domain: 'game',
+  caseSensitive: false,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+const glossaryStore = {
+  activeProjectId: 'test-project' as string | null,
+  loading: false,
+  glossaries: [
+    {
+      id: 'g-1',
+      name: 'PUBG',
+      description: null,
+      entryCount: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ],
+  projectGlossaries: [
+    {
+      id: 'g-1',
+      name: 'PUBG',
+      description: null,
+      entryCount: 0,
+      priority: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ],
+  loadLibrary: vi.fn(async () => undefined),
+  createEntry: vi.fn(async () => glossaryEntry),
+  createGlossary: vi.fn(async () => ({
+    id: 'g-new',
+    name: 'Project glossary',
+    description: null,
+    entryCount: 0,
+    createdAt: 2,
+    updatedAt: 2,
+  })),
+  saveProjectSelection: vi.fn(async () => undefined),
+};
+
+vi.mock('@/stores/glossaryStore', () => ({
+  useGlossaryStore: {
+    getState: () => glossaryStore,
+  },
 }));
 
 vi.mock('@/utils/hash', () => ({
@@ -251,5 +306,108 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
     }) as Record<string, unknown>;
     expect(res.updated).toEqual([]);
     expect(appendRulesSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('oddeyesAppBridge — glossary', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    glossaryStore.activeProjectId = 'test-project';
+    glossaryStore.loading = false;
+    glossaryStore.projectGlossaries = [
+      {
+        id: 'g-1',
+        name: 'PUBG',
+        description: null,
+        entryCount: 0,
+        priority: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    glossaryStore.glossaries = [
+      {
+        id: 'g-1',
+        name: 'PUBG',
+        description: null,
+        entryCount: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    glossaryStore.loadLibrary.mockClear();
+    glossaryStore.createEntry.mockClear();
+    glossaryStore.createGlossary.mockClear();
+    glossaryStore.saveProjectSelection.mockClear();
+  });
+
+  it('lists project glossaries', async () => {
+    const res = await callBridge('oddeyes.listProjectGlossaries') as Record<string, unknown>;
+    expect(res.ok).toBe(true);
+    expect(res.projectId).toBe('test-project');
+    expect(res.projectGlossaries).toEqual(glossaryStore.projectGlossaries);
+  });
+
+  it('adds a glossary entry to the linked glossary', async () => {
+    const res = await callBridge('oddeyes.addGlossaryEntry', {
+      source: 'Care Package',
+      target: '보급 상자',
+    }) as Record<string, unknown>;
+
+    expect(res.ok).toBe(true);
+    expect(glossaryStore.createEntry).toHaveBeenCalledWith(expect.objectContaining({
+      glossaryId: 'g-1',
+      source: 'Care Package',
+      target: '보급 상자',
+      domain: 'game',
+    }));
+    expect(glossaryStore.createGlossary).not.toHaveBeenCalled();
+  });
+
+  it('creates and links a glossary when none are linked', async () => {
+    glossaryStore.projectGlossaries = [];
+    glossaryStore.saveProjectSelection.mockImplementation(async () => {
+      glossaryStore.projectGlossaries = [
+        {
+          id: 'g-new',
+          name: 'Project glossary',
+          description: null,
+          entryCount: 0,
+          priority: 0,
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ];
+    });
+
+    const res = await callBridge('oddeyes.addGlossaryEntry', {
+      source: 'Blue Zone',
+      target: '블루존',
+    }) as Record<string, unknown>;
+
+    expect(glossaryStore.createGlossary).toHaveBeenCalled();
+    expect(glossaryStore.saveProjectSelection).toHaveBeenCalledWith('test-project', ['g-new']);
+    expect(glossaryStore.createEntry).toHaveBeenCalledWith(expect.objectContaining({
+      glossaryId: 'g-new',
+      source: 'Blue Zone',
+      target: '블루존',
+    }));
+    expect(res.createdGlossary).toBe(true);
+  });
+
+  it('rejects unknown glossaryId', async () => {
+    await expect(callBridge('oddeyes.addGlossaryEntry', {
+      glossaryId: 'missing',
+      source: 'A',
+      target: 'B',
+    })).rejects.toThrow('Unknown glossaryId');
+  });
+
+  it('rejects projectId mismatch', async () => {
+    await expect(callBridge('oddeyes.addGlossaryEntry', {
+      projectId: 'other',
+      source: 'A',
+      target: 'B',
+    })).rejects.toThrow('Project mismatch');
   });
 });

@@ -229,6 +229,8 @@ pub async fn duplicate_project(
         };
 
         db.save_project(&new_project).map_err(CommandError::from)?;
+        db.copy_project_glossary_links(&args.project_id, &new_project.id)
+            .map_err(CommandError::from)?;
 
         // 채팅 프로젝트 설정 복제 (시스템 프롬프트, 레퍼런스 노트 등)
         if let Ok(Some(settings_json)) = db.load_chat_project_settings(&args.project_id) {

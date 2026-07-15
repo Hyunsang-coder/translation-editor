@@ -46,6 +46,7 @@ function buildPolishSystemPrompt(params: {
   styleRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
+  glossary?: string | undefined;
   userComments?: string | undefined;
   polishMessage?: string | undefined;
 }): string {
@@ -53,6 +54,7 @@ function buildPolishSystemPrompt(params: {
   const rules = params.styleRules?.trim();
   const projectContext = params.projectContext?.trim();
   const persona = params.translatorPersona?.trim();
+  const glossary = params.glossary?.trim();
   const userComments = params.userComments?.trim();
   const polishMessage = params.polishMessage?.trim();
 
@@ -80,6 +82,14 @@ function buildPolishSystemPrompt(params: {
           '',
         ]
       : []),
+    ...(glossary
+      ? [
+          '[Glossary]',
+          'Keep these preferred translations exactly. Do not substitute synonyms:',
+          glossary,
+          '',
+        ]
+      : []),
     ...(persona
       ? [
           'Tone reference (stylistic guidance only; do not invent or drop meaning):',
@@ -98,6 +108,7 @@ function buildPolishMessages(params: {
   styleRules?: string | undefined;
   projectContext?: string | undefined;
   translatorPersona?: string | undefined;
+  glossary?: string | undefined;
   userComments?: string | undefined;
   polishMessage?: string | undefined;
 }) {
@@ -125,6 +136,7 @@ function buildPolishMessages(params: {
     styleRules: params.styleRules,
     projectContext: params.projectContext,
     translatorPersona: params.translatorPersona,
+    glossary: params.glossary,
     userComments: params.userComments,
     polishMessage: params.polishMessage,
   });
@@ -197,6 +209,8 @@ export interface PolishTargetDocumentParams {
   projectContext?: string | undefined;
   /** 톤 참고용 페르소나. 스타일 가이드로만 사용. */
   translatorPersona?: string | undefined;
+  /** 프롬프트용 용어집 문자열 (`resolveGlossaryForPrompt` 결과). */
+  glossary?: string | undefined;
   /** 폴리싱 실행 전 사용자가 입력한 추가 지시사항. */
   polishMessage?: string | undefined;
   /** 직렬화된 사용자 인라인 코멘트(target field만). serializeUserComments 결과. */

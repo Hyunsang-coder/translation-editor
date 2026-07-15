@@ -12,7 +12,7 @@ import { useCommentStore } from '@/stores/commentStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
-import { searchGlossary } from '@/tauri/glossary';
+import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { applySuggestionToEditor } from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
@@ -248,32 +248,7 @@ export function ReviewPanel(): JSX.Element {
     reviewAbortRef.current = controller;
     startReview(freshChunks);
 
-    // Trade-off: glossary lookup uses only the first chunk (same as reviewTool.ts).
-    let glossaryText = '';
-    try {
-      if (project.id && freshChunks[0]) {
-        const chunkText = freshChunks[0].segments
-          .map((s) => `${s.sourceText}\n${s.targetText}`)
-          .join('\n')
-          .slice(0, 4000);
-        if (chunkText.trim().length > 0) {
-          const hits = await searchGlossary({
-            projectId: project.id,
-            query: chunkText,
-            domain: project.metadata.domain,
-            limit: 40,
-          });
-          if (hits.length > 0) {
-            glossaryText = hits
-              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-              .join('\n');
-          }
-        }
-      }
-    } catch {
-      // Glossary 검색 실패 시 무시
-    }
-
+    // Trade-off: 예전에는 첫 청크만 검색했지만, 청크마다 검색해 후반 용어 누락을 줄인다.
     try {
       for (let i = 0; i < freshChunks.length; i++) {
         if (controller.signal.aborted) break;
@@ -296,6 +271,19 @@ export function ReviewPanel(): JSX.Element {
               leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 검수 시 맥락으로 반드시 고려하세요:',
             },
           );
+
+          let glossaryText = '';
+          if (project.id) {
+            const chunkText = chunk.segments
+              .map((s) => `${s.sourceText}\n${s.targetText}`)
+              .join('\n');
+            glossaryText = await resolveGlossaryForPrompt({
+              projectId: project.id,
+              text: chunkText,
+              domain: project.metadata.domain,
+              limit: 40,
+            });
+          }
 
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
           // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
@@ -547,23 +535,17 @@ export function ReviewPanel(): JSX.Element {
     try {
       const { translationRules, projectContext, translatorPersona } = useChatStore.getState();
 
-      // 용어집 검색
+      // 용어집 검색 (문서 전역 윈도우)
       let glossary = '';
       try {
         const sourceDocument = useProjectStore.getState().sourceDocument;
-        const query = (sourceDocument || '').slice(0, 2000);
-        if (query.trim() && currentProject.id) {
-          const hits = await searchGlossary({
+        if ((sourceDocument || '').trim() && currentProject.id) {
+          glossary = await resolveGlossaryForPrompt({
             projectId: currentProject.id,
-            query,
+            text: sourceDocument || '',
             domain: currentProject.metadata.domain,
             limit: 30,
           });
-          if (hits.length > 0) {
-            glossary = hits
-              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-              .join('\n');
-          }
         }
       } catch {
         // 용어집 검색 실패 무시

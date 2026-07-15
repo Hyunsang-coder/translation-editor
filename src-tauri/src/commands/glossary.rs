@@ -17,11 +17,12 @@ const MAX_GLOSSARY_SIZE: u64 = 10 * 1024 * 1024;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportGlossaryCsvArgs {
-    pub project_id: String,
+    /// 용어를 넣을 대상 용어집
+    pub glossary_id: String,
     /// CSV 파일 경로(로컬 파일 시스템)
     pub path: String,
-    /// true면 프로젝트 범위의 기존 엔트리를 모두 삭제 후 임포트
-    pub replace_project_scope: Option<bool>,
+    /// true면 해당 용어집의 기존 엔트리를 모두 삭제 후 임포트
+    pub replace_entries: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -36,11 +37,169 @@ pub struct ImportGlossaryResult {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportGlossaryExcelArgs {
-    pub project_id: String,
+    /// 용어를 넣을 대상 용어집
+    pub glossary_id: String,
     /// Excel 파일 경로(.xlsx/.xls)
     pub path: String,
-    /// true면 프로젝트 범위의 기존 엔트리를 모두 삭제 후 임포트
-    pub replace_project_scope: Option<bool>,
+    /// true면 해당 용어집의 기존 엔트리를 모두 삭제 후 임포트
+    pub replace_entries: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlossaryDto {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub entry_count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<crate::db::GlossaryRow> for GlossaryDto {
+    fn from(row: crate::db::GlossaryRow) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            entry_count: row.entry_count,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlossaryLibraryEntryDto {
+    pub id: String,
+    pub glossary_id: String,
+    pub source: String,
+    pub target: String,
+    pub notes: Option<String>,
+    pub domain: Option<String>,
+    pub case_sensitive: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<crate::db::GlossaryEntryRow> for GlossaryLibraryEntryDto {
+    fn from(row: crate::db::GlossaryEntryRow) -> Self {
+        Self {
+            id: row.id,
+            glossary_id: row.glossary_id,
+            source: row.source,
+            target: row.target,
+            notes: row.notes,
+            domain: row.domain,
+            case_sensitive: row.case_sensitive,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectGlossaryDto {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub entry_count: i64,
+    pub priority: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<crate::db::ProjectGlossaryRow> for ProjectGlossaryDto {
+    fn from(row: crate::db::ProjectGlossaryRow) -> Self {
+        Self {
+            id: row.glossary.id,
+            name: row.glossary.name,
+            description: row.glossary.description,
+            entry_count: row.glossary.entry_count,
+            priority: row.priority,
+            created_at: row.glossary.created_at,
+            updated_at: row.glossary.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGlossaryArgs {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameGlossaryArgs {
+    pub glossary_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateGlossaryArgs {
+    pub glossary_id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteGlossaryArgs {
+    pub glossary_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListGlossaryEntriesArgs {
+    pub glossary_id: String,
+    pub query: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGlossaryEntryArgs {
+    pub glossary_id: String,
+    pub source: String,
+    pub target: String,
+    pub notes: Option<String>,
+    pub domain: Option<String>,
+    pub case_sensitive: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateGlossaryEntryArgs {
+    pub entry_id: String,
+    pub source: String,
+    pub target: String,
+    pub notes: Option<String>,
+    pub domain: Option<String>,
+    pub case_sensitive: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteGlossaryEntryArgs {
+    pub entry_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectGlossariesArgs {
+    pub project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProjectGlossariesArgs {
+    pub project_id: String,
+    /// 배열 순서가 0부터 시작하는 정수 priority가 됩니다.
+    pub glossary_ids: Vec<String>,
 }
 
 /// CSV 글로서리 임포트
@@ -55,10 +214,10 @@ pub async fn import_glossary_csv(
     validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
 
     run_db_task(&db_state, move |db| {
-        let replace = args.replace_project_scope.unwrap_or(false);
+        let replace = args.replace_entries.unwrap_or(false);
         let (inserted, updated, skipped, warnings) = db
             .import_glossary_csv(
-                &args.project_id,
+                &args.glossary_id,
                 validated_path.to_string_lossy().as_ref(),
                 replace,
             )
@@ -86,10 +245,10 @@ pub async fn import_glossary_excel(
     validate_file_size(&validated_path, MAX_GLOSSARY_SIZE)?;
 
     run_db_task(&db_state, move |db| {
-        let replace = args.replace_project_scope.unwrap_or(false);
+        let replace = args.replace_entries.unwrap_or(false);
         let (inserted, updated, skipped, warnings) = db
             .import_glossary_excel(
-                &args.project_id,
+                &args.glossary_id,
                 validated_path.to_string_lossy().as_ref(),
                 replace,
             )
@@ -101,6 +260,174 @@ pub async fn import_glossary_excel(
             skipped,
             warnings,
         })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_glossaries(db_state: State<'_, DbState>) -> CommandResult<Vec<GlossaryDto>> {
+    run_db_task(&db_state, move |db| {
+        db.list_glossaries()
+            .map(|rows| rows.into_iter().map(GlossaryDto::from).collect())
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_glossary(
+    args: CreateGlossaryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<GlossaryDto> {
+    run_db_task(&db_state, move |db| {
+        db.create_glossary(&args.name, args.description.as_deref())
+            .map(GlossaryDto::from)
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_glossary(
+    args: UpdateGlossaryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<GlossaryDto> {
+    run_db_task(&db_state, move |db| {
+        db.update_glossary(&args.glossary_id, &args.name, args.description.as_deref())
+            .map(GlossaryDto::from)
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn rename_glossary(
+    args: RenameGlossaryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<()> {
+    run_db_task(&db_state, move |db| {
+        db.rename_glossary(&args.glossary_id, &args.name)
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_glossary(
+    args: DeleteGlossaryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<()> {
+    run_db_task(&db_state, move |db| {
+        db.delete_glossary(&args.glossary_id)
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_glossary_entries(
+    args: ListGlossaryEntriesArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<Vec<GlossaryLibraryEntryDto>> {
+    run_db_task(&db_state, move |db| {
+        db.list_glossary_entries(&args.glossary_id, args.query.as_deref())
+            .map(|rows| {
+                rows.into_iter()
+                    .map(GlossaryLibraryEntryDto::from)
+                    .collect()
+            })
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_glossary_entry(
+    args: CreateGlossaryEntryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<GlossaryLibraryEntryDto> {
+    run_db_task(&db_state, move |db| {
+        db.create_glossary_entry(
+            &args.glossary_id,
+            &args.source,
+            &args.target,
+            args.notes.as_deref(),
+            args.domain.as_deref(),
+            args.case_sensitive.unwrap_or(false),
+        )
+        .map(GlossaryLibraryEntryDto::from)
+        .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_glossary_entry(
+    args: UpdateGlossaryEntryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<GlossaryLibraryEntryDto> {
+    run_db_task(&db_state, move |db| {
+        db.update_glossary_entry(
+            &args.entry_id,
+            &args.source,
+            &args.target,
+            args.notes.as_deref(),
+            args.domain.as_deref(),
+            args.case_sensitive,
+        )
+        .map(GlossaryLibraryEntryDto::from)
+        .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_glossary_entry(
+    args: DeleteGlossaryEntryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<()> {
+    run_db_task(&db_state, move |db| {
+        db.delete_glossary_entry(&args.entry_id)
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_project_glossaries(
+    args: ProjectGlossariesArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<Vec<ProjectGlossaryDto>> {
+    run_db_task(&db_state, move |db| {
+        db.list_project_glossaries(&args.project_id)
+            .map(|rows| rows.into_iter().map(ProjectGlossaryDto::from).collect())
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn set_project_glossaries(
+    args: SetProjectGlossariesArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<Vec<ProjectGlossaryDto>> {
+    run_db_task(&db_state, move |db| {
+        db.set_project_glossaries(&args.project_id, &args.glossary_ids)
+            .map(|rows| rows.into_iter().map(ProjectGlossaryDto::from).collect())
+            .map_err(CommandError::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn reorder_project_glossaries(
+    args: SetProjectGlossariesArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<Vec<ProjectGlossaryDto>> {
+    run_db_task(&db_state, move |db| {
+        db.reorder_project_glossaries(&args.project_id, &args.glossary_ids)
+            .map(|rows| rows.into_iter().map(ProjectGlossaryDto::from).collect())
+            .map_err(CommandError::from)
     })
     .await
 }

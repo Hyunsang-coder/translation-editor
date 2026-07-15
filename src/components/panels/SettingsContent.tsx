@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useShallow } from 'zustand/shallow';
-import { pickGlossaryFile, pickDocumentFile } from '@/tauri/dialog';
-import { importGlossaryCsv, importGlossaryExcel } from '@/tauri/glossary';
+import { pickDocumentFile } from '@/tauri/dialog';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { useUIStore } from '@/stores/uiStore';
 import { PromptPresetMenu } from '@/components/panels/PromptPresetMenu';
+import { ProjectGlossarySection } from '@/components/glossary/ProjectGlossarySection';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -28,10 +28,7 @@ export function SettingsContent(): JSX.Element {
       attachments: s.attachments, attachFile: s.attachFile, deleteAttachment: s.deleteAttachment,
     })));
 
-  const { project, addGlossaryPath, removeGlossaryPath } =
-    useProjectStore(useShallow((s) => ({
-      project: s.project, addGlossaryPath: s.addGlossaryPath, removeGlossaryPath: s.removeGlossaryPath,
-    })));
+  const project = useProjectStore((s) => s.project);
   const settingsKey = project?.id ?? 'none';
 
   // 프리셋 저장/덮어쓰기/dirty 판정이 디바운스 지연 없는 "현재 입력값"을 보도록
@@ -137,89 +134,7 @@ export function SettingsContent(): JSX.Element {
       </section>
 
       {/* Section 4: Glossary */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold text-editor-text">4. {t('settings.glossary')}</h3>
-            <span className="text-[10px] text-editor-muted">
-              {t('settings.glossaryDescription')}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="px-2 py-1 rounded text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex-shrink-0"
-            onClick={() => {
-              void (async () => {
-                if (!isTauriRuntime() || !project) return;
-                const path = await pickGlossaryFile();
-                if (path) {
-                  try {
-                    const ext = path.split('.').pop()?.toLowerCase();
-                    const result = ext === 'csv'
-                      ? await importGlossaryCsv({ projectId: project.id, path, replaceProjectScope: false })
-                      : await importGlossaryExcel({ projectId: project.id, path, replaceProjectScope: false });
-                    addGlossaryPath(path);
-                    addToast({ type: 'success', message: t('settings.glossaryImportSuccess', { inserted: result.inserted, updated: result.updated, skipped: result.skipped }) });
-                    for (const warning of result.warnings) {
-                      addToast({ type: 'warning', message: t('settings.glossaryImportWarning', { warning }) });
-                    }
-                  } catch (err) {
-                    addToast({ type: 'error', message: String(err) });
-                  }
-                }
-              })();
-            }}
-          >
-            {t('settings.glossaryAttach')}
-          </button>
-        </div>
-
-        {project?.metadata.glossaryPaths && project.metadata.glossaryPaths.length > 0 ? (
-          <div className="space-y-1.5">
-            {project.metadata.glossaryPaths.map((p) => {
-              const filename = p.split('/').pop() || p.split('\\').pop() || p;
-              const ext = filename.split('.').pop()?.toLowerCase();
-              return (
-                <div
-                  key={p}
-                  className="group flex items-center justify-between p-2 rounded bg-editor-surface border border-editor-border hover:border-editor-text transition-colors"
-                  title={p}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs">
-                      {ext === 'csv' ? '📋' : '📊'}
-                    </span>
-                    <span className="text-[11px] text-editor-text font-medium truncate">
-                      {filename}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-editor-muted hover:text-red-500 transition-opacity"
-                    onClick={() => {
-                      void (async () => {
-                        const ok = await confirm(t('settings.glossaryDeleteConfirm', { filename }), {
-                          title: t('settings.glossaryDeleteTitle'),
-                          kind: 'warning',
-                        });
-                        if (ok) {
-                          removeGlossaryPath(p);
-                        }
-                      })();
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-xs text-editor-muted italic p-2 border border-dashed border-editor-border rounded">
-            {t('settings.glossaryNoFiles')}
-          </div>
-        )}
-      </section>
+      {project && <ProjectGlossarySection projectId={project.id} />}
 
       {/* Section 5: Attachments */}
       <section className="space-y-2">

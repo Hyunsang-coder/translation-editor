@@ -9,6 +9,7 @@ import { registerPreviewTools } from "./tools/preview.js";
 import { registerReviewTools } from "./tools/review.js";
 import { registerContextTools } from "./tools/context.js";
 import { registerQualityTools } from "./tools/quality.js";
+import { registerGlossaryTools } from "./tools/glossary.js";
 
 const transportMode = process.env.ODDEYES_DESKTOP_MCP_TRANSPORT === "http" ? "http" : "stdio";
 const httpPort = Number(process.env.ODDEYES_DESKTOP_MCP_PORT ?? "9977");
@@ -26,7 +27,7 @@ async function callBridge(method: string, params: Record<string, unknown> = {}):
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "oddeyes-desktop",
-    version: "0.1.0",
+    version: "0.4.0",
   });
 
   registerDocumentTools(server, callBridge);
@@ -34,6 +35,7 @@ function createMcpServer(): McpServer {
   registerReviewTools(server, callBridge);
   registerContextTools(server, callBridge);
   registerQualityTools(server, callBridge);
+  registerGlossaryTools(server, callBridge);
 
   return server;
 }

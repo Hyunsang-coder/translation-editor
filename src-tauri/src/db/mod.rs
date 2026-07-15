@@ -19,6 +19,7 @@ use crate::models::{
 #[derive(Debug, Clone)]
 pub struct GlossaryEntryRow {
     pub id: String,
+    pub glossary_id: String,
     pub source: String,
     pub target: String,
     pub notes: Option<String>,
@@ -26,6 +27,22 @@ pub struct GlossaryEntryRow {
     pub case_sensitive: bool,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct GlossaryRow {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub entry_count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectGlossaryRow {
+    pub glossary: GlossaryRow,
+    pub priority: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +166,28 @@ fn validate_glossary_rows(
     warnings
 }
 
+fn required_glossary_text(value: &str, field: &str) -> Result<String, IteError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(IteError::InvalidOperation(format!(
+            "{} is required.",
+            field
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn optional_glossary_text(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn normalize_glossary_source(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
 ///
 /// `Arc`로 감싼 이유: async 커맨드에서 `spawn_blocking` 클로저로 DB 핸들을 move하기 위함.
@@ -214,6 +253,152 @@ impl Database {
             self.conn
                 .execute_batch("ALTER TABLE history ADD COLUMN snapshot_json TEXT;")?;
         }
+
+        let has_glossary_description = self
+            .conn
+            .prepare("SELECT description FROM glossaries LIMIT 0")
+            .is_ok();
+        if !has_glossary_description {
+            self.conn
+                .execute_batch("ALTER TABLE glossaries ADD COLUMN description TEXT;")?;
+        }
+
+        self.migrate_named_glossaries()?;
+        Ok(())
+    }
+
+    /// project_id를 직접 소유하던 레거시 엔트리를 이름 있는 용어집으로 이동합니다.
+    ///
+    /// 테이블 재구성과 링크 생성을 한 트랜잭션에서 수행하므로 중간 실패 시 레거시
+    /// 스키마와 데이터가 그대로 롤백됩니다. glossary_id 컬럼이 이미 있으면 데이터
+    /// 마이그레이션을 건너뛰어 재실행에도 안전합니다.
+    fn migrate_named_glossaries(&self) -> Result<(), IteError> {
+        let mut columns = self.conn.prepare("PRAGMA table_info(glossary_entries)")?;
+        let column_names = columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(columns);
+
+        if !column_names.iter().any(|name| name == "glossary_id") {
+            let tx = self.conn.unchecked_transaction()?;
+            let now = chrono::Utc::now().timestamp_millis();
+
+            let legacy_project_ids = {
+                let mut stmt = tx.prepare(
+                    "SELECT DISTINCT project_id
+                     FROM glossary_entries
+                     WHERE project_id IS NOT NULL
+                     ORDER BY project_id",
+                )?;
+                let project_ids = stmt
+                    .query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                project_ids
+            };
+            let has_global_entries: bool = tx.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM glossary_entries WHERE project_id IS NULL
+                 )",
+                [],
+                |row| row.get::<_, i64>(0).map(|value| value != 0),
+            )?;
+
+            tx.execute_batch(
+                "CREATE TABLE glossary_entries_new (
+                    id TEXT PRIMARY KEY,
+                    glossary_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    notes TEXT,
+                    domain TEXT,
+                    case_sensitive INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY (glossary_id) REFERENCES glossaries(id) ON DELETE CASCADE
+                );",
+            )?;
+
+            for project_id in legacy_project_ids {
+                // 기존 파일 import가 사용하던 프로젝트 범위를 동일한 호환용 용어집으로
+                // 옮겨야 이후 replaceProjectScope가 업그레이드 전 항목까지 교체할 수 있다.
+                let glossary_id = format!("imported-{:x}", md5::compute(&project_id));
+                tx.execute(
+                    "INSERT INTO glossaries (id, name, created_at, updated_at)
+                     VALUES (?1, 'Imported glossary', ?2, ?2)",
+                    (&glossary_id, now),
+                )?;
+                tx.execute(
+                    "INSERT INTO glossary_entries_new (
+                        id, glossary_id, source, target, notes, domain,
+                        case_sensitive, created_at, updated_at
+                     )
+                     SELECT id, ?1, source, target, notes, domain,
+                            case_sensitive, created_at, updated_at
+                     FROM glossary_entries
+                     WHERE project_id = ?2",
+                    (&glossary_id, &project_id),
+                )?;
+
+                let project_exists: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?1)",
+                    [&project_id],
+                    |row| row.get::<_, i64>(0).map(|value| value != 0),
+                )?;
+                if project_exists {
+                    tx.execute(
+                        "INSERT INTO project_glossaries (project_id, glossary_id, priority)
+                         VALUES (?1, ?2, 0)",
+                        (&project_id, &glossary_id),
+                    )?;
+                }
+            }
+
+            if has_global_entries {
+                let global_glossary_id = uuid::Uuid::new_v4().to_string();
+                tx.execute(
+                    "INSERT INTO glossaries (id, name, created_at, updated_at)
+                     VALUES (?1, 'Global glossary', ?2, ?2)",
+                    (&global_glossary_id, now),
+                )?;
+                tx.execute(
+                    "INSERT INTO glossary_entries_new (
+                        id, glossary_id, source, target, notes, domain,
+                        case_sensitive, created_at, updated_at
+                     )
+                     SELECT id, ?1, source, target, notes, domain,
+                            case_sensitive, created_at, updated_at
+                     FROM glossary_entries
+                     WHERE project_id IS NULL",
+                    [&global_glossary_id],
+                )?;
+                tx.execute(
+                    "INSERT INTO project_glossaries (project_id, glossary_id, priority)
+                     SELECT p.id, ?1,
+                            COALESCE((
+                                SELECT MAX(pg.priority) + 1
+                                FROM project_glossaries pg
+                                WHERE pg.project_id = p.id
+                            ), 0)
+                     FROM projects p",
+                    [&global_glossary_id],
+                )?;
+            }
+
+            tx.execute_batch(
+                "DROP TABLE glossary_entries;
+                 ALTER TABLE glossary_entries_new RENAME TO glossary_entries;",
+            )?;
+            tx.commit()?;
+        }
+
+        self.conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_glossary_entries_glossary
+                ON glossary_entries(glossary_id);
+             CREATE INDEX IF NOT EXISTS idx_glossary_entries_source
+                ON glossary_entries(source);
+             CREATE INDEX IF NOT EXISTS idx_project_glossaries_priority
+                ON project_glossaries(project_id, priority);",
+        )?;
         Ok(())
     }
 
@@ -267,7 +452,7 @@ impl Database {
 
         tx.execute("DELETE FROM history WHERE project_id = ?1", [project_id])?;
         tx.execute(
-            "DELETE FROM glossary_entries WHERE project_id = ?1",
+            "DELETE FROM project_glossaries WHERE project_id = ?1",
             [project_id],
         )?;
         tx.execute(
@@ -287,7 +472,7 @@ impl Database {
     }
 
     /// 모든 프로젝트 삭제(연관 데이터 포함)
-    /// - 전역 용어집(project_id IS NULL)은 유지합니다.
+    /// - 앱 전역 용어집과 엔트리는 유지하고 프로젝트 링크만 제거합니다.
     pub fn delete_all_projects(&self) -> Result<(), IteError> {
         let tx = self.conn.unchecked_transaction()?;
 
@@ -295,10 +480,7 @@ impl Database {
         tx.execute("DELETE FROM chat_sessions", [])?;
         tx.execute("DELETE FROM chat_project_settings", [])?;
         tx.execute("DELETE FROM history", [])?;
-        tx.execute(
-            "DELETE FROM glossary_entries WHERE project_id IS NOT NULL",
-            [],
-        )?;
+        tx.execute("DELETE FROM project_glossaries", [])?;
         tx.execute("DELETE FROM quality_records", [])?;
         tx.execute("DELETE FROM quality_runs", [])?;
         tx.execute("DELETE FROM segments", [])?;
@@ -1018,17 +1200,530 @@ impl Database {
         .map_err(|_| IteError::BlockNotFound(block_id.to_string()))
     }
 
-    /// CSV 글로서리 임포트(project scope)
-    /// - replace=true면 해당 프로젝트 scope 엔트리를 전부 지우고 다시 넣음
+    pub fn list_glossaries(&self) -> Result<Vec<GlossaryRow>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT g.id, g.name, g.description, COUNT(e.id), g.created_at, g.updated_at
+             FROM glossaries g
+             LEFT JOIN glossary_entries e ON e.glossary_id = g.id
+             GROUP BY g.id, g.name, g.description, g.created_at, g.updated_at
+             ORDER BY lower(g.name), g.created_at, g.id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(GlossaryRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                entry_count: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(IteError::from)
+    }
+
+    pub fn create_glossary(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<GlossaryRow, IteError> {
+        let name = required_glossary_text(name, "Glossary name")?;
+        let description = optional_glossary_text(description);
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp_millis();
+        self.conn.execute(
+            "INSERT INTO glossaries (id, name, description, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?4)",
+            (&id, &name, description.as_deref(), now),
+        )?;
+        Ok(GlossaryRow {
+            id,
+            name,
+            description,
+            entry_count: 0,
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    pub fn rename_glossary(&self, glossary_id: &str, name: &str) -> Result<(), IteError> {
+        let name = required_glossary_text(name, "Glossary name")?;
+        let updated = self.conn.execute(
+            "UPDATE glossaries SET name = ?1, updated_at = ?2 WHERE id = ?3",
+            (&name, chrono::Utc::now().timestamp_millis(), glossary_id),
+        )?;
+        if updated == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary not found: {}",
+                glossary_id
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn update_glossary(
+        &self,
+        glossary_id: &str,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<GlossaryRow, IteError> {
+        let name = required_glossary_text(name, "Glossary name")?;
+        let description = optional_glossary_text(description);
+        let updated_at = chrono::Utc::now().timestamp_millis();
+        let updated = self.conn.execute(
+            "UPDATE glossaries
+             SET name = ?1, description = ?2, updated_at = ?3
+             WHERE id = ?4",
+            (&name, description.as_deref(), updated_at, glossary_id),
+        )?;
+        if updated == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary not found: {}",
+                glossary_id
+            )));
+        }
+        self.list_glossaries()?
+            .into_iter()
+            .find(|row| row.id == glossary_id)
+            .ok_or_else(|| {
+                IteError::InvalidOperation(format!("Glossary not found: {}", glossary_id))
+            })
+    }
+
+    pub fn delete_glossary(&self, glossary_id: &str) -> Result<(), IteError> {
+        let deleted = self
+            .conn
+            .execute("DELETE FROM glossaries WHERE id = ?1", [glossary_id])?;
+        if deleted == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary not found: {}",
+                glossary_id
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn list_glossary_entries(
+        &self,
+        glossary_id: &str,
+        query: Option<&str>,
+    ) -> Result<Vec<GlossaryEntryRow>, IteError> {
+        let query = optional_glossary_text(query);
+        let mut stmt = self.conn.prepare(
+            "SELECT id, glossary_id, source, target, notes, domain,
+                    case_sensitive, created_at, updated_at
+             FROM glossary_entries
+             WHERE glossary_id = ?1
+               AND (
+                    ?2 IS NULL
+                    OR instr(lower(source), lower(?2)) > 0
+                    OR instr(lower(target), lower(?2)) > 0
+                    OR instr(lower(COALESCE(notes, '')), lower(?2)) > 0
+               )
+             ORDER BY lower(source), source, created_at, id",
+        )?;
+        let rows = stmt.query_map((glossary_id, query.as_deref()), |row| {
+            Ok(GlossaryEntryRow {
+                id: row.get(0)?,
+                glossary_id: row.get(1)?,
+                source: row.get(2)?,
+                target: row.get(3)?,
+                notes: row.get(4)?,
+                domain: row.get(5)?,
+                case_sensitive: row.get::<_, i64>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(IteError::from)
+    }
+
+    fn validate_unique_glossary_source(
+        &self,
+        glossary_id: &str,
+        source: &str,
+        excluding_entry_id: Option<&str>,
+    ) -> Result<(), IteError> {
+        let normalized = normalize_glossary_source(source);
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, source FROM glossary_entries WHERE glossary_id = ?1")?;
+        let rows = stmt.query_map([glossary_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for row in rows {
+            let (id, existing_source) = row?;
+            if excluding_entry_id == Some(id.as_str()) {
+                continue;
+            }
+            if normalize_glossary_source(&existing_source) == normalized {
+                return Err(IteError::InvalidOperation(
+                    "An entry with the same source already exists in this glossary.".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn create_glossary_entry(
+        &self,
+        glossary_id: &str,
+        source: &str,
+        target: &str,
+        notes: Option<&str>,
+        domain: Option<&str>,
+        case_sensitive: bool,
+    ) -> Result<GlossaryEntryRow, IteError> {
+        let source = required_glossary_text(source, "Source")?;
+        let target = required_glossary_text(target, "Target")?;
+        let notes = optional_glossary_text(notes);
+        let domain = optional_glossary_text(domain);
+        self.validate_unique_glossary_source(glossary_id, &source, None)?;
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp_millis();
+        self.conn.execute(
+            "INSERT INTO glossary_entries (
+                id, glossary_id, source, target, notes, domain,
+                case_sensitive, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+            rusqlite::params![
+                id,
+                glossary_id,
+                source,
+                target,
+                notes,
+                domain,
+                case_sensitive as i64,
+                now
+            ],
+        )?;
+        Ok(GlossaryEntryRow {
+            id,
+            glossary_id: glossary_id.to_string(),
+            source,
+            target,
+            notes,
+            domain,
+            case_sensitive,
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_glossary_entry(
+        &self,
+        entry_id: &str,
+        source: &str,
+        target: &str,
+        notes: Option<&str>,
+        domain: Option<&str>,
+        case_sensitive: bool,
+    ) -> Result<GlossaryEntryRow, IteError> {
+        let glossary_id: String = self
+            .conn
+            .query_row(
+                "SELECT glossary_id FROM glossary_entries WHERE id = ?1",
+                [entry_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    IteError::InvalidOperation(format!("Glossary entry not found: {}", entry_id))
+                }
+                other => IteError::Database(other),
+            })?;
+        let source = required_glossary_text(source, "Source")?;
+        let target = required_glossary_text(target, "Target")?;
+        let notes = optional_glossary_text(notes);
+        let domain = optional_glossary_text(domain);
+        self.validate_unique_glossary_source(&glossary_id, &source, Some(entry_id))?;
+
+        let updated_at = chrono::Utc::now().timestamp_millis();
+        let updated = self.conn.execute(
+            "UPDATE glossary_entries
+             SET source = ?1, target = ?2, notes = ?3, domain = ?4,
+                 case_sensitive = ?5, updated_at = ?6
+             WHERE id = ?7 AND glossary_id = ?8",
+            rusqlite::params![
+                source,
+                target,
+                notes,
+                domain,
+                case_sensitive as i64,
+                updated_at,
+                entry_id,
+                &glossary_id
+            ],
+        )?;
+        if updated == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary entry not found: {}",
+                entry_id
+            )));
+        }
+        let created_at = self.conn.query_row(
+            "SELECT created_at FROM glossary_entries
+             WHERE id = ?1 AND glossary_id = ?2",
+            (entry_id, &glossary_id),
+            |row| row.get(0),
+        )?;
+        Ok(GlossaryEntryRow {
+            id: entry_id.to_string(),
+            glossary_id,
+            source,
+            target,
+            notes,
+            domain,
+            case_sensitive,
+            created_at,
+            updated_at,
+        })
+    }
+
+    pub fn delete_glossary_entry(&self, entry_id: &str) -> Result<(), IteError> {
+        let deleted = self
+            .conn
+            .execute("DELETE FROM glossary_entries WHERE id = ?1", [entry_id])?;
+        if deleted == 0 {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary entry not found: {}",
+                entry_id
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn list_project_glossaries(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<ProjectGlossaryRow>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT g.id, g.name, g.description, COUNT(e.id),
+                    g.created_at, g.updated_at, pg.priority
+             FROM project_glossaries pg
+             JOIN glossaries g ON g.id = pg.glossary_id
+             LEFT JOIN glossary_entries e ON e.glossary_id = g.id
+             WHERE pg.project_id = ?1
+             GROUP BY g.id, g.name, g.description, g.created_at, g.updated_at, pg.priority
+             ORDER BY pg.priority, g.id",
+        )?;
+        let rows = stmt.query_map([project_id], |row| {
+            Ok(ProjectGlossaryRow {
+                glossary: GlossaryRow {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    entry_count: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                },
+                priority: row.get(6)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(IteError::from)
+    }
+
+    fn validate_project_and_glossary_ids(
+        &self,
+        project_id: &str,
+        glossary_ids: &[String],
+    ) -> Result<(), IteError> {
+        let project_exists: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?1)",
+            [project_id],
+            |row| row.get::<_, i64>(0).map(|value| value != 0),
+        )?;
+        if !project_exists {
+            return Err(IteError::ProjectNotFound(project_id.to_string()));
+        }
+
+        let mut unique = std::collections::HashSet::new();
+        for glossary_id in glossary_ids {
+            if !unique.insert(glossary_id) {
+                return Err(IteError::InvalidOperation(format!(
+                    "Duplicate glossary id: {}",
+                    glossary_id
+                )));
+            }
+            let exists: bool = self.conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM glossaries WHERE id = ?1)",
+                [glossary_id],
+                |row| row.get::<_, i64>(0).map(|value| value != 0),
+            )?;
+            if !exists {
+                return Err(IteError::InvalidOperation(format!(
+                    "Glossary not found: {}",
+                    glossary_id
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_project_glossaries(
+        &self,
+        project_id: &str,
+        glossary_ids: &[String],
+    ) -> Result<Vec<ProjectGlossaryRow>, IteError> {
+        self.validate_project_and_glossary_ids(project_id, glossary_ids)?;
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM project_glossaries WHERE project_id = ?1",
+            [project_id],
+        )?;
+        for (priority, glossary_id) in glossary_ids.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO project_glossaries (project_id, glossary_id, priority)
+                 VALUES (?1, ?2, ?3)",
+                (project_id, glossary_id, priority as i64),
+            )?;
+        }
+        tx.commit()?;
+        self.list_project_glossaries(project_id)
+    }
+
+    pub fn reorder_project_glossaries(
+        &self,
+        project_id: &str,
+        glossary_ids: &[String],
+    ) -> Result<Vec<ProjectGlossaryRow>, IteError> {
+        self.validate_project_and_glossary_ids(project_id, glossary_ids)?;
+        let existing = self.list_project_glossaries(project_id)?;
+        let existing_ids = existing
+            .iter()
+            .map(|row| row.glossary.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let requested_ids = glossary_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<std::collections::HashSet<_>>();
+        if existing_ids != requested_ids || existing.len() != glossary_ids.len() {
+            return Err(IteError::InvalidOperation(
+                "Reorder must include every linked glossary exactly once.".to_string(),
+            ));
+        }
+        self.set_project_glossaries(project_id, glossary_ids)
+    }
+
+    pub fn copy_project_glossary_links(
+        &self,
+        source_project_id: &str,
+        target_project_id: &str,
+    ) -> Result<(), IteError> {
+        let source_imported_id = format!("imported-{:x}", md5::compute(source_project_id));
+        let target_imported_id = format!("imported-{:x}", md5::compute(target_project_id));
+        let tx = self.conn.unchecked_transaction()?;
+        let imported_priority = tx
+            .query_row(
+                "SELECT priority
+                 FROM project_glossaries
+                 WHERE project_id = ?1 AND glossary_id = ?2",
+                (source_project_id, &source_imported_id),
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+
+        tx.execute(
+            "INSERT INTO project_glossaries (project_id, glossary_id, priority)
+             SELECT ?1, glossary_id, priority
+             FROM project_glossaries
+             WHERE project_id = ?2 AND glossary_id != ?3
+             ORDER BY priority",
+            (target_project_id, source_project_id, &source_imported_id),
+        )?;
+
+        if let Some(priority) = imported_priority {
+            let now = chrono::Utc::now().timestamp_millis();
+            tx.execute(
+                "INSERT INTO glossaries (id, name, created_at, updated_at)
+                 VALUES (?1, 'Imported glossary', ?2, ?2)",
+                (&target_imported_id, now),
+            )?;
+            tx.execute(
+                "INSERT INTO project_glossaries (project_id, glossary_id, priority)
+                 VALUES (?1, ?2, ?3)",
+                (target_project_id, &target_imported_id, priority),
+            )?;
+
+            let entries = {
+                let mut stmt = tx.prepare(
+                    "SELECT source, target, notes, domain, case_sensitive,
+                            created_at, updated_at
+                     FROM glossary_entries
+                     WHERE glossary_id = ?1
+                     ORDER BY created_at, id",
+                )?;
+                let rows = stmt.query_map([&source_imported_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, i64>(5)?,
+                        row.get::<_, i64>(6)?,
+                    ))
+                })?;
+                rows.collect::<Result<Vec<_>, _>>()?
+            };
+
+            for (source, target, notes, domain, case_sensitive, created_at, updated_at) in entries {
+                let entry_id = format!(
+                    "{:x}",
+                    md5::compute(format!("{}|{}|{}", target_imported_id, source, target))
+                );
+                tx.execute(
+                    "INSERT INTO glossary_entries (
+                        id, glossary_id, source, target, notes, domain,
+                        case_sensitive, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    (
+                        entry_id,
+                        &target_imported_id,
+                        source,
+                        target,
+                        notes,
+                        domain,
+                        case_sensitive,
+                        created_at,
+                        updated_at,
+                    ),
+                )?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn require_glossary(&self, glossary_id: &str) -> Result<(), IteError> {
+        let exists: bool = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM glossaries WHERE id = ?1)",
+            [glossary_id],
+            |row| row.get::<_, i64>(0).map(|value| value != 0),
+        )?;
+        if !exists {
+            return Err(IteError::InvalidOperation(format!(
+                "Glossary not found: {}",
+                glossary_id
+            )));
+        }
+        Ok(())
+    }
+
+    /// CSV 글로서리 임포트(특정 용어집)
+    /// - replace_entries=true면 해당 용어집 엔트리를 전부 지우고 다시 넣음
     ///
     /// # Safety
     /// `path`는 호출자(commands/glossary.rs)에서 `validate_path()`로 검증된 경로여야 함.
     pub fn import_glossary_csv(
         &mut self,
-        project_id: &str,
+        glossary_id: &str,
         path: &str,
-        replace_project_scope: bool,
+        replace_entries: bool,
     ) -> Result<(u32, u32, u32, Vec<String>), IteError> {
+        self.require_glossary(glossary_id)?;
         // ────────────────────────────────────────────────────────────────────
         // Phase 1: Read and parse OUTSIDE transaction
         // ────────────────────────────────────────────────────────────────────
@@ -1179,7 +1874,7 @@ impl Database {
 
             let id = format!(
                 "{:x}",
-                md5::compute(format!("{}|{}|{}", project_id, source, target))
+                md5::compute(format!("{}|{}|{}", glossary_id, source, target))
             );
 
             if source.len() > 200 || target.len() > 200 {
@@ -1198,29 +1893,26 @@ impl Database {
 
         let warnings =
             validate_glossary_rows(&headers, parsed_records.len(), skipped, long_entry_count);
-
         // ────────────────────────────────────────────────────────────────────
-        // Phase 2: Batch insert WITH transaction per batch
+        // Phase 2: bounded chunks inside one atomic transaction
         // ────────────────────────────────────────────────────────────────────
         const BATCH_SIZE: usize = 500;
         let mut inserted: u32 = 0;
         let mut updated: u32 = 0;
 
-        // Handle replace_project_scope in its own transaction first
-        if replace_project_scope {
-            let tx = self.conn.unchecked_transaction()?;
+        // replace와 모든 upsert를 한 트랜잭션으로 묶어 중간 실패 시 기존 용어집이
+        // 삭제된 채 일부 행만 남는 상태를 방지한다.
+        let tx = self.conn.unchecked_transaction()?;
+        if replace_entries {
             tx.execute(
-                "DELETE FROM glossary_entries WHERE project_id = ?1",
-                [project_id],
+                "DELETE FROM glossary_entries WHERE glossary_id = ?1",
+                [glossary_id],
             )?;
-            tx.commit()?;
         }
 
         let now = chrono::Utc::now().timestamp_millis();
 
         for chunk in parsed_records.chunks(BATCH_SIZE) {
-            let tx = self.conn.unchecked_transaction()?;
-
             for rec in chunk {
                 // 존재 여부 확인(INSERT vs UPDATE 카운트용)
                 let exists: bool = tx
@@ -1234,10 +1926,10 @@ impl Database {
                 // upsert (created_at은 기존 유지)
                 tx.execute(
                     "INSERT INTO glossary_entries (
-                        id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
+                        id, glossary_id, source, target, notes, domain, case_sensitive, created_at, updated_at
                      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                      ON CONFLICT(id) DO UPDATE SET
-                        project_id = excluded.project_id,
+                        glossary_id = excluded.glossary_id,
                         source = excluded.source,
                         target = excluded.target,
                         notes = excluded.notes,
@@ -1246,7 +1938,7 @@ impl Database {
                         updated_at = excluded.updated_at",
                     (
                         &rec.id,
-                        project_id,
+                        glossary_id,
                         &rec.source,
                         &rec.target,
                         rec.notes.as_deref(),
@@ -1263,9 +1955,12 @@ impl Database {
                     inserted += 1;
                 }
             }
-
-            tx.commit()?;
         }
+        tx.execute(
+            "UPDATE glossaries SET updated_at = ?1 WHERE id = ?2",
+            (now, glossary_id),
+        )?;
+        tx.commit()?;
 
         Ok((inserted, updated, skipped, warnings))
     }
@@ -1281,60 +1976,70 @@ impl Database {
         limit: u32,
     ) -> Result<Vec<GlossaryEntryRow>, IteError> {
         let q = query.trim();
-        if q.is_empty() {
+        if q.is_empty() || limit == 0 {
             return Ok(vec![]);
         }
 
         let mut stmt = self.conn.prepare(
-            "SELECT id, source, target, notes, domain, case_sensitive, created_at, updated_at
-             FROM glossary_entries
-             WHERE (project_id IS NULL OR project_id = ?1)
-               AND (?2 IS NULL OR domain IS NULL OR domain = ?2)
+            "SELECT e.id, e.glossary_id, e.source, e.target, e.notes, e.domain,
+                    e.case_sensitive, e.created_at, e.updated_at
+             FROM project_glossaries pg
+             JOIN glossary_entries e ON e.glossary_id = pg.glossary_id
+             WHERE pg.project_id = ?1
+               AND (?2 IS NULL OR e.domain IS NULL OR e.domain = ?2)
                AND (
-                    (case_sensitive = 1 AND instr(?3, source) > 0)
-                 OR (case_sensitive = 0 AND instr(lower(?3), lower(source)) > 0)
+                    (e.case_sensitive = 1 AND instr(?3, e.source) > 0)
+                 OR (e.case_sensitive = 0 AND instr(lower(?3), lower(e.source)) > 0)
                )
-             ORDER BY length(source) DESC
-             LIMIT ?4",
+             ORDER BY pg.priority ASC, length(e.source) DESC, e.created_at ASC, e.id ASC",
         )?;
 
-        let iter = stmt.query_map((project_id, domain, q, limit as i64), |row| {
+        let iter = stmt.query_map((project_id, domain, q), |row| {
             Ok(GlossaryEntryRow {
                 id: row.get(0)?,
-                source: row.get(1)?,
-                target: row.get(2)?,
-                notes: row.get(3)?,
-                domain: row.get(4)?,
+                glossary_id: row.get(1)?,
+                source: row.get(2)?,
+                target: row.get(3)?,
+                notes: row.get(4)?,
+                domain: row.get(5)?,
                 case_sensitive: {
-                    let v: i64 = row.get(5)?;
+                    let v: i64 = row.get(6)?;
                     v == 1
                 },
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         })?;
 
         let mut out = Vec::new();
+        let mut seen_sources = std::collections::HashSet::new();
         for r in iter {
-            out.push(r?);
+            let entry = r?;
+            if seen_sources.insert(normalize_glossary_source(&entry.source)) {
+                out.push(entry);
+                if out.len() >= limit as usize {
+                    break;
+                }
+            }
         }
         Ok(out)
     }
 
-    /// Excel(.xlsx/.xls) 글로서리 임포트(project scope)
+    /// Excel(.xlsx/.xls) 글로서리 임포트(특정 용어집)
     /// - 첫 번째 시트(또는 첫 sheet_names())를 읽습니다.
-    /// - 첫 행이 source/target 헤더로 보이면 헤더로 취급합니다.
+    /// - 첫 행은 헤더로 취급합니다.
     ///
     /// # Safety
     /// `path`는 호출자(commands/glossary.rs)에서 `validate_path()`로 검증된 경로여야 함.
     pub fn import_glossary_excel(
         &mut self,
-        project_id: &str,
+        glossary_id: &str,
         path: &str,
-        replace_project_scope: bool,
+        replace_entries: bool,
     ) -> Result<(u32, u32, u32, Vec<String>), IteError> {
         use calamine::{open_workbook_auto, Data, Reader};
 
+        self.require_glossary(glossary_id)?;
         // ────────────────────────────────────────────────────────────────────
         // Phase 1: Read and parse OUTSIDE transaction
         // ────────────────────────────────────────────────────────────────────
@@ -1436,7 +2141,7 @@ impl Database {
 
             let id = format!(
                 "{:x}",
-                md5::compute(format!("{}|{}|{}", project_id, source, target))
+                md5::compute(format!("{}|{}|{}", glossary_id, source, target))
             );
 
             if source.len() > 200 || target.len() > 200 {
@@ -1455,29 +2160,25 @@ impl Database {
 
         let warnings =
             validate_glossary_rows(&headers, parsed_records.len(), skipped, long_entry_count);
-
         // ────────────────────────────────────────────────────────────────────
-        // Phase 2: Batch insert WITH transaction per batch
+        // Phase 2: bounded chunks inside one atomic transaction
         // ────────────────────────────────────────────────────────────────────
         const BATCH_SIZE: usize = 500;
         let mut inserted: u32 = 0;
         let mut updated: u32 = 0;
 
-        // Handle replace_project_scope in its own transaction first
-        if replace_project_scope {
-            let tx = self.conn.unchecked_transaction()?;
+        // replace와 모든 upsert를 한 트랜잭션으로 묶어 부분 import를 방지한다.
+        let tx = self.conn.unchecked_transaction()?;
+        if replace_entries {
             tx.execute(
-                "DELETE FROM glossary_entries WHERE project_id = ?1",
-                [project_id],
+                "DELETE FROM glossary_entries WHERE glossary_id = ?1",
+                [glossary_id],
             )?;
-            tx.commit()?;
         }
 
         let now = chrono::Utc::now().timestamp_millis();
 
         for chunk in parsed_records.chunks(BATCH_SIZE) {
-            let tx = self.conn.unchecked_transaction()?;
-
             for rec in chunk {
                 // 존재 여부 확인(INSERT vs UPDATE 카운트용)
                 let exists: bool = tx
@@ -1491,10 +2192,10 @@ impl Database {
                 // upsert (created_at은 기존 유지)
                 tx.execute(
                     "INSERT INTO glossary_entries (
-                        id, project_id, source, target, notes, domain, case_sensitive, created_at, updated_at
+                        id, glossary_id, source, target, notes, domain, case_sensitive, created_at, updated_at
                      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                      ON CONFLICT(id) DO UPDATE SET
-                        project_id = excluded.project_id,
+                        glossary_id = excluded.glossary_id,
                         source = excluded.source,
                         target = excluded.target,
                         notes = excluded.notes,
@@ -1503,7 +2204,7 @@ impl Database {
                         updated_at = excluded.updated_at",
                     (
                         &rec.id,
-                        project_id,
+                        glossary_id,
                         &rec.source,
                         &rec.target,
                         rec.notes.as_deref(),
@@ -1520,9 +2221,12 @@ impl Database {
                     inserted += 1;
                 }
             }
-
-            tx.commit()?;
         }
+        tx.execute(
+            "UPDATE glossaries SET updated_at = ?1 WHERE id = ?2",
+            (now, glossary_id),
+        )?;
+        tx.commit()?;
 
         Ok((inserted, updated, skipped, warnings))
     }
@@ -2317,7 +3021,9 @@ mod tests {
         db.save_comments(&project.id, &comments)
             .expect("failed to save comments");
 
-        let loaded = db.load_comments(&project.id).expect("failed to load comments");
+        let loaded = db
+            .load_comments(&project.id)
+            .expect("failed to load comments");
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].id, "cmt_a");
         assert_eq!(loaded[0].segment_group_id.as_deref(), Some("segment-1"));
@@ -2414,8 +3120,11 @@ mod tests {
         assert_eq!(accepted[0].id, "qr_1");
 
         // INSERT OR REPLACE 멱등성: 같은 id 재삽입은 중복을 만들지 않는다
-        db.insert_quality_records(&project.id, &[build_quality_record("qr_1", "s1_translate", "proposed")])
-            .expect("re-insert");
+        db.insert_quality_records(
+            &project.id,
+            &[build_quality_record("qr_1", "s1_translate", "proposed")],
+        )
+        .expect("re-insert");
         let after_reinsert = db
             .query_quality_records(&project.id, &super::QualityRecordFilter::default())
             .expect("query after reinsert");
@@ -2436,7 +3145,9 @@ mod tests {
         };
         db.insert_quality_run(&project.id, &run)
             .expect("failed to insert run");
-        let runs = db.load_quality_runs(&project.id).expect("failed to load runs");
+        let runs = db
+            .load_quality_runs(&project.id)
+            .expect("failed to load runs");
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].doc_words, Some(1420));
 
@@ -2451,5 +3162,294 @@ mod tests {
             .load_quality_runs(&project.id)
             .expect("load runs after delete");
         assert!(runs_after_delete.is_empty());
+    }
+
+    #[test]
+    fn glossary_migration_preserves_legacy_and_global_rows_idempotently() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        {
+            let conn = rusqlite::Connection::open(file.path()).expect("open legacy database");
+            conn.execute_batch(super::schema::CREATE_SCHEMA)
+                .expect("create legacy schema");
+            for project_id in ["migration-project-1", "migration-project-2"] {
+                conn.execute(
+                    "INSERT INTO projects (
+                        id, version, metadata_json, created_at, updated_at
+                     ) VALUES (?1, '1.0.0', '{}', 1, 1)",
+                    [project_id],
+                )
+                .expect("insert legacy project");
+            }
+            conn.execute(
+                "INSERT INTO glossary_entries (
+                    id, project_id, source, target, notes, domain,
+                    case_sensitive, created_at, updated_at
+                 ) VALUES ('legacy-project-entry', 'migration-project-1',
+                           'Project term', '프로젝트', NULL, NULL, 0, 1, 1)",
+                [],
+            )
+            .expect("insert project entry");
+            conn.execute(
+                "INSERT INTO glossary_entries (
+                    id, project_id, source, target, notes, domain,
+                    case_sensitive, created_at, updated_at
+                 ) VALUES ('legacy-global-entry', NULL,
+                           'Global term', '전역', NULL, NULL, 0, 1, 1)",
+                [],
+            )
+            .expect("insert global entry");
+        }
+
+        let mut db = Database::new(file.path()).expect("open database");
+        db.initialize().expect("run glossary migration");
+        db.initialize().expect("rerun migration idempotently");
+
+        let glossaries = db.list_glossaries().expect("list migrated glossaries");
+        assert_eq!(glossaries.len(), 2);
+        assert_eq!(glossaries.iter().map(|g| g.entry_count).sum::<i64>(), 2);
+
+        let project_one_links = db
+            .list_project_glossaries("migration-project-1")
+            .expect("list first project links");
+        assert_eq!(project_one_links.len(), 2);
+        assert_eq!(project_one_links[0].priority, 0);
+        assert_eq!(project_one_links[1].priority, 1);
+
+        let project_two_links = db
+            .list_project_glossaries("migration-project-2")
+            .expect("list second project links");
+        assert_eq!(project_two_links.len(), 1);
+        assert_eq!(project_two_links[0].glossary.name, "Global glossary");
+
+        let migrated_ids = glossaries
+            .iter()
+            .flat_map(|glossary| {
+                db.list_glossary_entries(&glossary.id, None)
+                    .expect("list migrated entries")
+            })
+            .map(|entry| entry.id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(
+            migrated_ids,
+            ["legacy-project-entry", "legacy-global-entry"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+
+        let imported = glossaries
+            .iter()
+            .find(|glossary| glossary.name == "Imported glossary")
+            .expect("project entries migrate into the import-compatible glossary");
+        assert_eq!(
+            imported.id,
+            format!("imported-{:x}", md5::compute("migration-project-1"))
+        );
+        let replacement = NamedTempFile::new().expect("create replacement csv");
+        std::fs::write(
+            replacement.path(),
+            "Source,Target\nReplacement term,교체 용어\n",
+        )
+        .expect("write replacement csv");
+        db.import_glossary_csv(
+            &imported.id,
+            replacement.path().to_str().expect("replacement path"),
+            true,
+        )
+        .expect("replace migrated project glossary");
+        let replaced_entries = db
+            .list_glossary_entries(&imported.id, None)
+            .expect("list replaced entries");
+        assert_eq!(replaced_entries.len(), 1);
+        assert_eq!(replaced_entries[0].source, "Replacement term");
+    }
+
+    #[test]
+    fn glossary_crud_links_precedence_copy_and_cascades() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+        let project_one = build_test_project("glossary-project-1");
+        db.save_project(&project_one).expect("save first project");
+        let project_two_id = "glossary-project-2";
+        db.conn
+            .execute(
+                "INSERT INTO projects (
+                    id, version, metadata_json, created_at, updated_at
+                 ) VALUES (?1, '1.0.0', '{}', 1, 1)",
+                [project_two_id],
+            )
+            .expect("save second project");
+
+        let high = db
+            .create_glossary(" High priority ", Some(" Preferred terms "))
+            .expect("create high glossary");
+        let low = db
+            .create_glossary("Low priority", None)
+            .expect("create low glossary");
+        uuid::Uuid::parse_str(&high.id).expect("manual glossary id should be a UUID");
+
+        let high_entry = db
+            .create_glossary_entry(
+                &high.id,
+                " Term ",
+                "HIGH",
+                Some("Airdrop context"),
+                None,
+                false,
+            )
+            .expect("create high entry");
+        uuid::Uuid::parse_str(&high_entry.id).expect("manual entry id should be a UUID");
+        assert_eq!(high_entry.source, "Term");
+        assert_eq!(
+            db.list_glossary_entries(&high.id, Some("airdrop"))
+                .expect("search glossary entry notes")
+                .len(),
+            1
+        );
+        assert!(
+            db.create_glossary_entry(&high.id, "term", "duplicate", None, None, false)
+                .is_err(),
+            "normalized duplicate source should be rejected within one glossary"
+        );
+
+        db.create_glossary_entry(&low.id, "term", "LOW", None, None, false)
+            .expect("same source is allowed in another glossary");
+        db.create_glossary_entry(&low.id, "Long Term", "LONG", None, None, false)
+            .expect("create longer low-priority entry");
+        db.set_project_glossaries(&project_one.id, &[high.id.clone(), low.id.clone()])
+            .expect("link glossaries");
+
+        let high_first = db
+            .search_glossary_in_text(&project_one.id, "A long TERM appears", None, 10)
+            .expect("search high-first links");
+        assert_eq!(
+            high_first
+                .iter()
+                .map(|entry| entry.target.as_str())
+                .collect::<Vec<_>>(),
+            vec!["HIGH", "LONG"]
+        );
+
+        db.reorder_project_glossaries(&project_one.id, &[low.id.clone(), high.id.clone()])
+            .expect("reorder links");
+        let low_first = db
+            .search_glossary_in_text(&project_one.id, "A long TERM appears", None, 10)
+            .expect("search low-first links");
+        assert_eq!(
+            low_first
+                .iter()
+                .map(|entry| entry.target.as_str())
+                .collect::<Vec<_>>(),
+            vec!["LONG", "LOW"]
+        );
+
+        let updated = db
+            .update_glossary_entry(
+                &high_entry.id,
+                "Updated term",
+                "UPDATED",
+                Some(" note "),
+                None,
+                true,
+            )
+            .expect("update entry in place");
+        assert_eq!(updated.id, high_entry.id);
+        assert_eq!(updated.notes.as_deref(), Some("note"));
+
+        db.copy_project_glossary_links(&project_one.id, project_two_id)
+            .expect("copy project links");
+        assert_eq!(
+            db.list_project_glossaries(project_two_id)
+                .expect("list copied links")
+                .iter()
+                .map(|link| link.glossary.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![low.id.as_str(), high.id.as_str()]
+        );
+
+        db.delete_project(&project_one.id)
+            .expect("delete source project");
+        assert_eq!(
+            db.list_project_glossaries(project_two_id)
+                .expect("target links remain")
+                .len(),
+            2
+        );
+        assert_eq!(
+            db.list_glossary_entries(&high.id, None)
+                .expect("entries survive project deletion")
+                .len(),
+            1
+        );
+
+        db.delete_glossary(&high.id)
+            .expect("delete linked glossary");
+        assert!(db
+            .list_glossary_entries(&high.id, None)
+            .expect("entries cascade")
+            .is_empty());
+        assert_eq!(
+            db.list_project_glossaries(project_two_id)
+                .expect("links cascade")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn glossary_csv_import_targets_selected_glossary_and_can_replace_entries() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let mut db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+        let project = build_test_project("glossary-import-project");
+        db.save_project(&project).expect("save import project");
+        let manual = db
+            .create_glossary("Manual", None)
+            .expect("create manual glossary");
+        db.create_glossary_entry(&manual.id, "manual", "수동", None, None, false)
+            .expect("create manual entry");
+        db.set_project_glossaries(&project.id, &[manual.id.clone()])
+            .expect("link manual glossary");
+
+        let other = db
+            .create_glossary("Other", None)
+            .expect("create other glossary");
+        db.create_glossary_entry(&other.id, "keep", "유지", None, None, false)
+            .expect("create other entry");
+
+        let csv = NamedTempFile::new().expect("create csv");
+        std::fs::write(csv.path(), "Source,Target\nfirst,첫째\nsecond,둘째\n").expect("write csv");
+        let first_result = db
+            .import_glossary_csv(&manual.id, csv.path().to_str().expect("csv path"), false)
+            .expect("first import");
+        assert_eq!(first_result.0, 2);
+        assert_eq!(
+            db.list_glossary_entries(&manual.id, None)
+                .expect("list manual entries after import")
+                .len(),
+            3
+        );
+
+        std::fs::write(csv.path(), "Source,Target\nreplacement,교체\n").expect("rewrite csv");
+        db.import_glossary_csv(&manual.id, csv.path().to_str().expect("csv path"), true)
+            .expect("replace import");
+        let replaced = db
+            .list_glossary_entries(&manual.id, None)
+            .expect("list replacement entries");
+        assert_eq!(replaced.len(), 1);
+        assert_eq!(replaced[0].source, "replacement");
+        assert_eq!(
+            db.list_glossary_entries(&other.id, None)
+                .expect("other glossary unaffected")
+                .len(),
+            1
+        );
+
+        assert!(
+            db.import_glossary_csv("missing-glossary", csv.path().to_str().expect("csv path"), false)
+                .is_err(),
+            "unknown glossary should fail"
+        );
     }
 }

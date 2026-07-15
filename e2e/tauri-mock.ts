@@ -25,6 +25,9 @@ function buildMockScript(seedProjects: MockProject[]): string {
   const chatSettings = new Map();   // projectId → settings
   const snapshots = new Map();      // snapshotId → snapshot
   const secrets = new Map();        // key → value
+  const glossaries = new Map();     // glossaryId → glossary
+  const glossaryEntries = new Map();// glossaryId → entries[]
+  const projectGlossaryIds = new Map(); // projectId → ordered glossaryIds[]
 
   let projectIdCounter = 0;
   function uid() {
@@ -121,6 +124,10 @@ function buildMockScript(seedProjects: MockProject[]): string {
       dup.id = uid();
       dup.metadata.title = orig.metadata.title + ' (Copy)';
       projects.set(dup.id, dup);
+      projectGlossaryIds.set(
+        dup.id,
+        [...(projectGlossaryIds.get(a?.projectId) ?? [])],
+      );
       return dup;
     },
 
@@ -252,9 +259,191 @@ function buildMockScript(seedProjects: MockProject[]): string {
     confluence_get_page_html: () => '',
 
     // ── Glossary ──
-    search_glossary: () => [],
-    import_glossary_csv: () => 0,
-    import_glossary_excel: () => 0,
+    search_glossary: (args) => {
+      const a = args?.args ?? args;
+      const query = (a?.query ?? '').trim();
+      if (!query) return [];
+      const domain = a?.domain ?? null;
+      const seen = new Set();
+      const matches = [];
+      for (const [priority, glossaryId] of (projectGlossaryIds.get(a?.projectId) ?? []).entries()) {
+        for (const entry of glossaryEntries.get(glossaryId) ?? []) {
+          if (domain && entry.domain && entry.domain !== domain) continue;
+          const matched = entry.caseSensitive
+            ? query.includes(entry.source)
+            : query.toLowerCase().includes(entry.source.toLowerCase());
+          if (matched) matches.push({ ...entry, priority });
+        }
+      }
+      matches.sort((left, right) => (
+        left.priority - right.priority
+        || right.source.length - left.source.length
+        || left.createdAt - right.createdAt
+      ));
+      return matches.filter(entry => {
+        const normalized = entry.source.trim().toLowerCase();
+        if (seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      }).slice(0, Math.min(a?.limit ?? 12, 50)).map(({ priority: _priority, ...entry }) => entry);
+    },
+    import_glossary_csv: (args) => {
+      const a = args?.args ?? args;
+      const glossaryId = a?.glossaryId;
+      if (!glossaryId || !glossaries.has(glossaryId)) {
+        throw new Error('Glossary not found: ' + glossaryId);
+      }
+      // E2E stub: treat import as success without parsing file contents.
+      return { inserted: 0, updated: 0, skipped: 0, warnings: [] };
+    },
+    import_glossary_excel: (args) => {
+      const a = args?.args ?? args;
+      const glossaryId = a?.glossaryId;
+      if (!glossaryId || !glossaries.has(glossaryId)) {
+        throw new Error('Glossary not found: ' + glossaryId);
+      }
+      return { inserted: 0, updated: 0, skipped: 0, warnings: [] };
+    },
+    list_glossaries: () => Array.from(glossaries.values()).map(g => ({
+      ...g,
+      entryCount: (glossaryEntries.get(g.id) ?? []).length,
+    })),
+    create_glossary: (args) => {
+      const a = args?.args ?? args;
+      const now = Date.now();
+      const glossary = {
+        id: uid(),
+        name: a?.name ?? 'Glossary',
+        description: a?.description ?? null,
+        entryCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      glossaries.set(glossary.id, glossary);
+      glossaryEntries.set(glossary.id, []);
+      return glossary;
+    },
+    update_glossary: (args) => {
+      const a = args?.args ?? args;
+      const current = glossaries.get(a?.glossaryId);
+      if (!current) throw new Error('Glossary not found');
+      const updated = {
+        ...current,
+        name: a?.name ?? current.name,
+        description: a?.description ?? null,
+        updatedAt: Date.now(),
+        entryCount: (glossaryEntries.get(current.id) ?? []).length,
+      };
+      glossaries.set(current.id, updated);
+      return updated;
+    },
+    delete_glossary: (args) => {
+      const a = args?.args ?? args;
+      glossaries.delete(a?.glossaryId);
+      glossaryEntries.delete(a?.glossaryId);
+      for (const [projectId, ids] of projectGlossaryIds) {
+        projectGlossaryIds.set(projectId, ids.filter(id => id !== a?.glossaryId));
+      }
+      return null;
+    },
+    list_glossary_entries: (args) => {
+      const a = args?.args ?? args;
+      const query = (a?.query ?? '').trim().toLowerCase();
+      return (glossaryEntries.get(a?.glossaryId) ?? []).filter(entry => (
+        !query
+        || entry.source.toLowerCase().includes(query)
+        || entry.target.toLowerCase().includes(query)
+        || (entry.notes ?? '').toLowerCase().includes(query)
+      ));
+    },
+    create_glossary_entry: (args) => {
+      const a = args?.args ?? args;
+      const source = (a?.source ?? '').trim();
+      const target = (a?.target ?? '').trim();
+      if (!source || !target) throw new Error('Source and target are required');
+      const entries = glossaryEntries.get(a?.glossaryId) ?? [];
+      if (entries.some(entry => entry.source.trim().toLowerCase() === source.toLowerCase())) {
+        throw new Error('An entry with the same source already exists in this glossary.');
+      }
+      const now = Date.now();
+      const entry = {
+        id: uid(),
+        glossaryId: a?.glossaryId,
+        source,
+        target,
+        notes: a?.notes ?? null,
+        domain: a?.domain ?? null,
+        caseSensitive: a?.caseSensitive ?? false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      glossaryEntries.set(a?.glossaryId, [
+        ...(glossaryEntries.get(a?.glossaryId) ?? []),
+        entry,
+      ]);
+      return entry;
+    },
+    update_glossary_entry: (args) => {
+      const a = args?.args ?? args;
+      const source = (a?.source ?? '').trim();
+      const target = (a?.target ?? '').trim();
+      if (!source || !target) throw new Error('Source and target are required');
+      for (const [glossaryId, entries] of glossaryEntries) {
+        const index = entries.findIndex(entry => entry.id === a?.entryId);
+        if (index < 0) continue;
+        if (entries.some(entry => (
+          entry.id !== a?.entryId
+          && entry.source.trim().toLowerCase() === source.toLowerCase()
+        ))) {
+          throw new Error('An entry with the same source already exists in this glossary.');
+        }
+        const updated = {
+          ...entries[index],
+          source,
+          target,
+          notes: a?.notes ?? null,
+          domain: a?.domain ?? null,
+          caseSensitive: a?.caseSensitive ?? false,
+          updatedAt: Date.now(),
+        };
+        entries[index] = updated;
+        glossaryEntries.set(glossaryId, entries);
+        return updated;
+      }
+      throw new Error('Glossary entry not found');
+    },
+    delete_glossary_entry: (args) => {
+      const a = args?.args ?? args;
+      for (const [glossaryId, entries] of glossaryEntries) {
+        glossaryEntries.set(glossaryId, entries.filter(entry => entry.id !== a?.entryId));
+      }
+      return null;
+    },
+    list_project_glossaries: (args) => {
+      const a = args?.args ?? args;
+      return (projectGlossaryIds.get(a?.projectId) ?? [])
+        .map((id, priority) => {
+          const glossary = glossaries.get(id);
+          return glossary ? {
+            ...glossary,
+            entryCount: (glossaryEntries.get(id) ?? []).length,
+            priority,
+          } : null;
+        })
+        .filter(Boolean);
+    },
+    set_project_glossaries: (args) => {
+      const a = args?.args ?? args;
+      projectGlossaryIds.set(a?.projectId, [...(a?.glossaryIds ?? [])]);
+      return (a?.glossaryIds ?? []).map((id, priority) => {
+        const glossary = glossaries.get(id);
+        return glossary ? {
+          ...glossary,
+          entryCount: (glossaryEntries.get(id) ?? []).length,
+          priority,
+        } : null;
+      }).filter(Boolean);
+    },
 
     // ── Block operations ──
     get_block: () => null,

@@ -4,7 +4,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { stripImages } from '@/utils/imagePlaceholder';
-import { searchGlossary } from '@/tauri/glossary';
+import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import type { ITEProject } from '@/types';
 
 // ============================================
@@ -331,31 +331,19 @@ export const reviewTranslationTool = tool(
     // Translation Rules, Project Context, Attachments 가져오기
     const { translationRules, projectContext, attachments } = useChatStore.getState();
 
-    // Trade-off: glossary lookup uses only the first chunk to keep prompt size manageable.
-    // Multi-chunk glossary would require per-chunk search or merging, adding latency with diminishing returns.
+    // 전체 청크 텍스트를 윈도우 검색해 후반 용어 누락을 줄인다.
+    // (도구는 첫 호출에서 glossary를 한 번 제공; get_review_chunk는 세그먼트만 반환)
     let glossaryText = '';
-    try {
-      if (project.id) {
-        const chunkText = firstChunk.segments
-          .map((s) => `${s.sourceText}\n${s.targetText}`)
-          .join('\n')
-          .slice(0, 4000);
-        if (chunkText.trim().length > 0) {
-          const hits = await searchGlossary({
-            projectId: project.id,
-            query: chunkText,
-            domain: project.metadata.domain,
-            limit: 40,
-          });
-          if (hits.length > 0) {
-            glossaryText = hits
-              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-              .join('\n');
-          }
-        }
-      }
-    } catch {
-      // Glossary 검색 실패 시 무시
+    if (project.id) {
+      const allChunkText = chunks
+        .map((chunk) => chunk.segments.map((s) => `${s.sourceText}\n${s.targetText}`).join('\n'))
+        .join('\n');
+      glossaryText = await resolveGlossaryForPrompt({
+        projectId: project.id,
+        text: allChunkText,
+        domain: project.metadata.domain,
+        limit: 40,
+      });
     }
 
     // Attachments 텍스트 추출

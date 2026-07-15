@@ -95,7 +95,29 @@ CREATE TABLE IF NOT EXISTS chat_project_settings (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
--- 용어집 테이블
+-- 이름 있는 앱 전역 용어집
+CREATE TABLE IF NOT EXISTS glossaries (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- 프로젝트에서 사용할 용어집과 검색 우선순위
+CREATE TABLE IF NOT EXISTS project_glossaries (
+    project_id TEXT NOT NULL,
+    glossary_id TEXT NOT NULL,
+    priority INTEGER NOT NULL,
+    PRIMARY KEY (project_id, glossary_id),
+    UNIQUE (project_id, priority),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (glossary_id) REFERENCES glossaries(id) ON DELETE CASCADE
+);
+
+-- 용어집 엔트리의 레거시 부트스트랩 스키마.
+-- Database::run_migrations가 glossary_id 소유권 스키마로 원자적으로 재구성합니다.
+-- 기존 DB에서도 CREATE_SCHEMA 전체가 먼저 실행되므로 여기서는 project_id를 유지해야 합니다.
 CREATE TABLE IF NOT EXISTS glossary_entries (
     id TEXT PRIMARY KEY,
     project_id TEXT,  -- NULL이면 전역 용어집
@@ -108,10 +130,6 @@ CREATE TABLE IF NOT EXISTS glossary_entries (
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
-
--- 용어집 인덱스
-CREATE INDEX IF NOT EXISTS idx_glossary_project ON glossary_entries(project_id);
-CREATE INDEX IF NOT EXISTS idx_glossary_source ON glossary_entries(source);
 
 -- 첨부 파일 테이블
 CREATE TABLE IF NOT EXISTS attachments (

@@ -23,7 +23,7 @@ import { MODEL_PRESETS } from '@/ai/config';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
-import { searchGlossary } from '@/tauri/glossary';
+import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
@@ -505,24 +505,19 @@ export function EditorCanvasTipTap(): JSX.Element {
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
 
-      // 용어집 검색 (채팅 모드와 동일한 패턴)
+      // 용어집 검색 (앞부분만이 아니라 문서 전역 윈도우)
       let glossary = '';
       try {
-        // 원문을 Markdown으로 변환하여 검색 쿼리로 사용
         const sourceMarkdown = tipTapJsonToMarkdown(sourceDocJson);
-        const query = sourceMarkdown.slice(0, 2000); // 앞부분 2000자로 검색
-        if (query.trim().length > 0) {
-          const hits = await searchGlossary({
+        if (sourceMarkdown.trim().length > 0) {
+          glossary = await resolveGlossaryForPrompt({
             projectId: project.id,
-            query,
+            text: sourceMarkdown,
             domain: project.metadata.domain,
-            limit: 30, // 번역은 전체 문서이므로 더 많이
+            limit: 30,
           });
-          if (hits.length > 0) {
-            glossary = hits
-              .map((e) => `- ${e.source} = ${e.target}${e.notes ? ` (${e.notes})` : ''}`)
-              .join('\n');
-            console.warn(`[Translation] Glossary injected: ${hits.length} terms`);
+          if (glossary) {
+            console.warn(`[Translation] Glossary injected`);
           }
         }
       } catch (glossaryError) {
@@ -645,12 +640,34 @@ export function EditorCanvasTipTap(): JSX.Element {
         },
       );
       const trimmedMessage = extraMessage?.trim();
+
+      // Source(+Target)에서 용어 검색 — Target만 검색하면 원문 용어가 안 잡힘
+      let glossary = '';
+      try {
+        const sourceMarkdown = sourceEditorRef.current
+          ? tipTapJsonToMarkdown(sourceEditorRef.current.getJSON() as Record<string, unknown>)
+          : '';
+        const targetMarkdown = tipTapJsonToMarkdown(targetDocJson as Record<string, unknown>);
+        const searchText = [sourceMarkdown, targetMarkdown].filter((part) => part.trim()).join('\n');
+        if (searchText.trim().length > 0) {
+          glossary = await resolveGlossaryForPrompt({
+            projectId: project.id,
+            text: searchText,
+            domain: project.metadata.domain,
+            limit: 30,
+          });
+        }
+      } catch (glossaryError) {
+        console.warn('[Polish] Glossary search failed:', glossaryError);
+      }
+
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson,
         targetLanguage: project.metadata.targetLanguage,
         styleRules: translationRules,
         projectContext,
         translatorPersona,
+        ...(glossary ? { glossary } : {}),
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
         onToken: (text) => setStreamingChannelText('polish', text),
