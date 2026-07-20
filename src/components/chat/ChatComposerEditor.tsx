@@ -121,7 +121,9 @@ export function ChatComposerEditor({
         return false;
       },
     },
-    onUpdate: ({ editor: ed }) => {
+    onUpdate: ({ editor: ed, transaction }) => {
+      // 포커스/선택 이동은 문서 변경이 아니므로 composerText를 다시 쓰지 않는다.
+      if (!transaction.docChanged) return;
       // 에디터 -> composerText 동기화
       const markdown = ed.storage.markdown?.getMarkdown() ?? '';
       lastSetContentRef.current = markdown;
