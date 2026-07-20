@@ -10,7 +10,7 @@ import {
   readImageAsDataUrl,
 } from '@/tauri/attachments';
 import { resizeImageForApi, IMAGE_SIZE_LIMITS } from '@/utils/imageResize';
-import type { ChatSet, ChatGet } from './chatStore.types';
+import type { ChatSet, ChatGet, PendingComposerAppend } from './chatStore.types';
 
 // ── Composer Actions ───────────────────────────────────────────────────
 
@@ -44,6 +44,21 @@ export function createComposerActions(
     }));
   };
 
+  const consumePendingComposerAppend = (targetSessionId: string): PendingComposerAppend | null => {
+    const pending = get().pendingComposerAppend;
+    if (!pending) return null;
+    if (pending.targetSessionId && pending.targetSessionId !== targetSessionId) return null;
+
+    let consumed = false;
+    set((state) => {
+      if (state.pendingComposerAppend?.nonce !== pending.nonce) return {};
+      consumed = true;
+      return { pendingComposerAppend: null };
+    });
+
+    return consumed ? pending : null;
+  };
+
   const requestComposerFocus = (targetSessionId?: string): void => {
     const resolvedSessionId = targetSessionId ?? get().currentSessionId;
     set((state) => ({
@@ -58,6 +73,7 @@ export function createComposerActions(
   return {
     setComposerText,
     appendComposerText,
+    consumePendingComposerAppend,
     requestComposerFocus,
   };
 }

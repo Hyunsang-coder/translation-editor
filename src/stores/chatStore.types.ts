@@ -8,6 +8,13 @@ export const MAX_CHAT_SESSIONS = 5;
 export const MAX_MESSAGES_PER_SESSION = 1000;
 export const CHAT_LENGTH_THRESHOLD = 30;
 
+export interface PendingComposerAppend {
+  text: string;
+  separator: string;
+  targetSessionId: string | null;
+  nonce: number;
+}
+
 /** 도구 이름 → 한국어 표시명 매핑 (sendMessage/replayMessage 공용) */
 export const TOOL_NAME_MAP: Record<string, string> = {
   'web_search': '웹 검색',
@@ -55,12 +62,7 @@ export interface ChatState {
     nonce: number;
   } | null;
   /** 외부 append 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
-  pendingComposerAppend: {
-    text: string;
-    separator: string;
-    targetSessionId: string | null;
-    nonce: number;
-  } | null;
+  pendingComposerAppend: PendingComposerAppend | null;
   translationRules: string;
   projectContext: string;
   /** 웹검색 사용 여부 (tool availability gate) */
@@ -108,6 +110,7 @@ export interface ChatActions {
   // Composer
   setComposerText: (text: string) => void;
   appendComposerText: (text: string, opts?: { separator?: string }) => void;
+  consumePendingComposerAppend: (targetSessionId: string) => PendingComposerAppend | null;
   requestComposerFocus: (targetSessionId?: string) => void;
 
   // 컨텍스트 블록 관리

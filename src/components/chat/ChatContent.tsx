@@ -73,19 +73,25 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   // 외부 append 이벤트 subscribe (Cmd+L, DOM 선택 등)
   useEffect(() => {
-    let lastNonce = useChatStore.getState().pendingComposerAppend?.nonce ?? 0;
-    return useChatStore.subscribe((state) => {
-      const pending = state.pendingComposerAppend;
-      if (!pending || pending.nonce === lastNonce) return;
-      lastNonce = pending.nonce;
-      if (pending.targetSessionId && pending.targetSessionId !== effectiveSessionId) return;
+    const consumePendingAppend = (): void => {
+      const pending = useChatStore.getState().consumePendingComposerAppend(effectiveSessionId);
+      if (!pending) return;
       setLocalComposerText((prev) => {
         if (!pending.text) return prev;
         return prev.trim().length > 0
           ? `${prev}${pending.separator}${pending.text}`
           : pending.text;
       });
+    };
+
+    const unsubscribe = useChatStore.subscribe((state, previousState) => {
+      if (state.pendingComposerAppend?.nonce === previousState.pendingComposerAppend?.nonce) return;
+      consumePendingAppend();
     });
+
+    // 채팅 패널이 닫혀 있을 때 발행된 append도 마운트 직후 소비한다.
+    consumePendingAppend();
+    return unsubscribe;
   }, [effectiveSessionId]);
 
   // 디바운스 persistence sync (500ms)
