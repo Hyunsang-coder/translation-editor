@@ -114,7 +114,10 @@ interface ProjectState {
 interface ProjectActions {
   // 프로젝트 관리
   initializeProject: () => Promise<void>;
-  loadProject: (project: ITEProject, options?: { hydrateComments?: boolean }) => void;
+  loadProject: (
+    project: ITEProject,
+    options?: { hydrateComments?: boolean; hydrateChat?: boolean },
+  ) => void;
   createNewProject: (metadata: Partial<ProjectMetadata>) => Promise<void>;
   saveProject: () => Promise<void>;
   switchProjectById: (projectId: string) => Promise<void>;
@@ -625,7 +628,10 @@ export const useProjectStore = create<ProjectStore>()(
       // 주의: 이전 프로젝트가 dirty면 저장하지 않고 바로 덮어씁니다.
       // 이전 프로젝트를 저장하려면 호출 전에 saveProject()를 먼저 호출하거나,
       // switchProjectById()를 사용하세요.
-      loadProject: (project: ITEProject, options?: { hydrateComments?: boolean }): void => {
+      loadProject: (
+        project: ITEProject,
+        options?: { hydrateComments?: boolean; hydrateChat?: boolean },
+      ): void => {
         // P1: 프로젝트 교체 세대 증가 — 이전 프로젝트에서 스케줄된 에디터 디바운스 flush가
         // 늦게 발화해 새 프로젝트 문서를 덮어쓰는 것을 방지
         bumpDocSyncEpoch();
@@ -654,6 +660,9 @@ export const useProjectStore = create<ProjectStore>()(
           pendingDiffs: {},
           editSessions: [],
         });
+        if (options?.hydrateChat !== false) {
+          void useChatStore.getState().hydrateForProject(project.id);
+        }
         if (options?.hydrateComments === false) {
           hydrateCommentsRequestSeq++;
         } else {
@@ -860,7 +869,9 @@ export const useProjectStore = create<ProjectStore>()(
 
           const loaded = await tauriLoadProject(projectId);
           if (isStaleSwitch()) return;
-          loadProject(loaded);
+          // switchProjectById는 아래에서 두 하이드레이션을 await하므로
+          // loadProject의 기본 fire-and-forget 호출은 생략한다.
+          loadProject(loaded, { hydrateChat: false, hydrateComments: false });
 
           // Issue #3 수정: chatStore 하이드레이션을 프로젝트 전환 시 명시적으로 호출
           // React useEffect 의존 대신 직접 호출하여 race condition 방지

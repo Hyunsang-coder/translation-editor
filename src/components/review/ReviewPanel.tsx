@@ -258,8 +258,11 @@ export function ReviewPanel(): JSX.Element {
         const chunk = freshChunks[i]!;
 
         try {
-          // Issue #13 Fix: 각 청크 처리 시 최신 번역 규칙 가져오기
-          const currentRules = useChatStore.getState().translationRules;
+          // Issue #13 Fix: 각 청크 처리 시 최신 번역 규칙/프로젝트 컨텍스트 가져오기
+          const {
+            translationRules: currentRules,
+            projectContext: currentProjectContext,
+          } = useChatStore.getState();
 
           // 인라인 코멘트 → 이 청크의 세그먼트 범위로 한정해 직렬화 후 주입
           // (대조 검수는 source/target 양쪽 코멘트 모두 맥락으로 사용)
@@ -290,6 +293,7 @@ export function ReviewPanel(): JSX.Element {
           const response = await runReview({
             segments: chunk.segments,
             translationRules: currentRules,
+            projectContext: currentProjectContext,
             glossary: glossaryText,
             sourceLanguage: detectSourceLanguage(chunk.segments),
             targetLanguage: project.metadata.targetLanguage,

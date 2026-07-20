@@ -31,13 +31,14 @@ export function createSessionActions(
   const { schedulePersist, persistNow } = helpers;
 
   const hydrateForProject = async (projectId: string | null): Promise<void> => {
-    const requestId = incrementHydrateRequestId();
     // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
-    // 1. 현재와 같은 프로젝트고 이미 로드된 상태면 스킵 (불필요한 리로드 및 상태 초기화 방지)
+    // 1. 현재와 같은 프로젝트면 진행 중 여부와 무관하게 중복 요청을 무시한다.
+    // requestId도 증가시키지 않아 이미 진행 중인 정상 응답을 stale로 폐기하지 않는다.
     const currentLoadedId = get().loadedProjectId;
-    if (projectId === currentLoadedId && !get().isHydrating && projectId !== null) {
+    if (projectId === currentLoadedId && projectId !== null) {
       return;
     }
+    const requestId = incrementHydrateRequestId();
 
     console.warn(`[chatStore] hydrateForProject starting for: ${projectId} (current: ${currentLoadedId})`);
 
@@ -50,15 +51,22 @@ export function createSessionActions(
 
     // 2. 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
     clearPersistTimer();
-    if (currentLoadedId && !get().isHydrating) {
+    // persistNow는 await 전에 현재 설정 스냅샷을 만든다. 저장 Promise를 먼저
+    // 시작한 뒤 UI 상태를 즉시 전환해, 느린 DB 저장 중에 이전 컨텍스트가
+    // 새 프로젝트에 노출되는 공백을 없앤다.
+    const pendingPersist = currentLoadedId && !get().isHydrating
+      ? persistNow()
+      : null;
+    const awaitPendingPersist = async (): Promise<void> => {
+      if (!pendingPersist) return;
       try {
-        await persistNow();
+        await pendingPersist;
       } catch (e) {
         // 에러 객체 전체 로깅 시 민감 정보 노출 위험 방지
         const message = e instanceof Error ? e.message : String(e);
         console.warn('[chatStore] persistNow failed during project switch:', message);
       }
-    }
+    };
 
     // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
     if (!projectId) {
@@ -88,6 +96,7 @@ export function createSessionActions(
         isLoading: false,
         isAttachmentLoading: false,
       });
+      await awaitPendingPersist();
       return;
     }
 
@@ -95,18 +104,19 @@ export function createSessionActions(
       sessions: [],
       currentSessionId: null,
       currentSession: null,
-      lastInjectedGlossary: [],
-      summarySuggestionDismissedBySessionId: {},
       composerText: '',
-      composerFocusNonce: 0,
-      pendingComposerFocus: null,
-      pendingComposerAppend: null,
       translationRules: '',
       projectContext: '',
       webSearchEnabled: true,
       translationContextSessionId: null,
       attachments: [],
       composerAttachments: [],
+      loadedProjectId: null,
+      lastInjectedGlossary: [],
+      summarySuggestionDismissedBySessionId: {},
+      composerFocusNonce: 0,
+      pendingComposerFocus: null,
+      pendingComposerAppend: null,
       streamingMessageId: null,
       streamingSessionId: null,
       streamingContent: null,
@@ -116,8 +126,8 @@ export function createSessionActions(
       isHydrating: true,
       isFinalizingStreaming: false,
       error: null,
-      loadedProjectId: null,
     });
+    await awaitPendingPersist();
 
     try {
       if (!isTauriRuntime()) {

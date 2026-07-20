@@ -98,6 +98,7 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       const result = await runReview({
         segments: mockSegments,
         translationRules: 'Keep technical terms consistent',
+        projectContext: 'This project is a release note for enterprise administrators.',
         sourceLanguage: 'English',
         targetLanguage: 'Spanish',
       });
@@ -114,6 +115,8 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(String(messages[1]?.content)).toContain('Source (English): This guide provides detailed instructions');
       expect(String(messages[1]?.content)).toContain('Target (Spanish): Esta guía proporciona instrucciones detalladas');
       expect(String(messages[1]?.content)).toContain('## 번역 규칙');
+      expect(String(messages[1]?.content)).toContain('## 프로젝트 컨텍스트');
+      expect(String(messages[1]?.content)).toContain('release note for enterprise administrators');
     });
 
     it('Tauri 런타임에서는 백엔드 스트리밍을 1차 경로로 사용', async () => {

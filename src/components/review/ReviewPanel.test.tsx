@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useChatStore } from '@/stores/chatStore';
 import { runReview } from '@/ai/review/runReview';
 import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { recordIssuesProposed } from '@/quality';
 import { ReviewPanel } from './ReviewPanel';
+import { SettingsContent } from '@/components/panels/SettingsContent';
 import type { ITEProject } from '@/types';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -60,6 +62,10 @@ vi.mock('@/components/editor/TranslatePreviewModal', () => ({
 
 vi.mock('@/components/review/ReviewResultsTable', () => ({
   ReviewResultsTable: () => null,
+}));
+
+vi.mock('@/components/glossary/ProjectGlossarySection', () => ({
+  ProjectGlossarySection: () => null,
 }));
 
 describe('ReviewPanel - Zustand Selectors', () => {
@@ -210,6 +216,10 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useReviewStore.getState().resetReview();
+    useChatStore.setState({
+      translationRules: 'Keep product names unchanged.',
+      projectContext: 'Enterprise release notes for administrators.',
+    });
     useProjectStore.setState({
       project: fakeProject('proj-a'),
       sourceDocument: '<p>source text</p>',
@@ -221,6 +231,7 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
     cleanup();
     useReviewStore.getState().resetReview();
     useProjectStore.setState({ project: null, sourceDocument: '', targetDocument: '' });
+    useChatStore.setState({ translationRules: '', projectContext: '' });
   });
 
   it('검수 시작 즉시(청크 빌드 완료 전) isReviewing이 true가 되어 이중 실행 창이 없다', async () => {
@@ -266,6 +277,51 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
     expect(mockRecordIssuesProposed).toHaveBeenCalledTimes(1);
     expect(mockRecordIssuesProposed.mock.calls[0]![0]).toBe('proj-a');
     expect(useReviewStore.getState().getAllIssues()).toHaveLength(1);
+  });
+
+  it('검수 결과를 받은 후에도 프로젝트 컨텍스트를 유지하고 검수 프롬프트에 전달한다', async () => {
+    mockBuildChunks.mockResolvedValue([buildChunk(0, 'seg-1')]);
+    mockRunReview.mockResolvedValue(AI_RESPONSE_WITH_ISSUE);
+
+    render(<ReviewPanel />);
+    fireEvent.click(screen.getByTestId('review-run-button'));
+
+    await waitFor(() => {
+      expect(useReviewStore.getState().isReviewing).toBe(false);
+    });
+
+    expect(mockRunReview).toHaveBeenCalledWith(expect.objectContaining({
+      translationRules: 'Keep product names unchanged.',
+      projectContext: 'Enterprise release notes for administrators.',
+    }));
+    expect(useChatStore.getState().projectContext)
+      .toBe('Enterprise release notes for administrators.');
+  });
+
+  it('컨텍스트 입력 직후 검수 탭으로 전환해 결과를 받아도 입력값을 유지한다', async () => {
+    const typedContext = 'Context typed immediately before review.';
+    const settings = render(<SettingsContent />);
+
+    fireEvent.change(screen.getByTestId('settings-project-context'), {
+      target: { value: typedContext },
+    });
+    // 실제 탭 전환처럼 500ms debounce 전에 SettingsContent를 언마운트한다.
+    settings.unmount();
+
+    expect(useChatStore.getState().projectContext).toBe(typedContext);
+
+    mockBuildChunks.mockResolvedValue([buildChunk(0, 'seg-1')]);
+    mockRunReview.mockResolvedValue(AI_RESPONSE_WITH_ISSUE);
+    const review = render(<ReviewPanel />);
+    fireEvent.click(screen.getByTestId('review-run-button'));
+
+    await waitFor(() => {
+      expect(useReviewStore.getState().isReviewing).toBe(false);
+    });
+    review.unmount();
+
+    render(<SettingsContent />);
+    expect(screen.getByTestId('settings-project-context')).toHaveValue(typedContext);
   });
 
   it('검수 중 프로젝트 전환 시 결과 주입과 장부 기록을 모두 중단한다 (장부 오염 방지)', async () => {

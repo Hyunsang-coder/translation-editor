@@ -21,6 +21,8 @@ import { isTauriRuntime } from '@/tauri/invoke';
 export interface RunReviewParams {
   segments: AlignedSegment[];
   translationRules?: string;
+  /** 프로젝트 배경/도메인/독자 등 검수 판단에 필요한 맥락. */
+  projectContext?: string;
   glossary?: string;
   /** Source 언어 (예: "Korean", "한국어") */
   sourceLanguage?: string | undefined;
@@ -54,6 +56,9 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
 
   if (params.translationRules?.trim()) {
     userContentParts.push(`## 번역 규칙\n${params.translationRules.trim()}`);
+  }
+  if (params.projectContext?.trim()) {
+    userContentParts.push(`## 프로젝트 컨텍스트\n${params.projectContext.trim()}`);
   }
   if (params.glossary?.trim()) {
     userContentParts.push(`## 용어집\n${params.glossary.trim()}`);

@@ -247,6 +247,15 @@ describe('projectStore switchProjectById concurrency (L5)', () => {
     useProjectStore.getState().stopAutoSave();
   });
 
+  it('loadProject를 직접 호출해도 해당 프로젝트의 채팅 설정을 하이드레이션한다', () => {
+    const projectB = makeProject('<p>b</p>', 'project-B');
+
+    useProjectStore.getState().loadProject(projectB);
+
+    expect(chatStoreMock.hydrateForProject).toHaveBeenCalledTimes(1);
+    expect(chatStoreMock.hydrateForProject).toHaveBeenCalledWith('project-B');
+  });
+
   it('clears the desktop translation preview when switching projects (L3)', async () => {
     useTranslationPreviewStore.getState().setPreview({
       docJson: { type: 'doc', content: [] },
