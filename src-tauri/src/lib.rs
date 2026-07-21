@@ -465,6 +465,7 @@ pub fn run() {
             commands::quality::load_quality_runs,
             commands::glossary::import_glossary_csv,
             commands::glossary::import_glossary_excel,
+            commands::glossary::export_glossary,
             commands::glossary::list_glossaries,
             commands::glossary::create_glossary,
             commands::glossary::rename_glossary,

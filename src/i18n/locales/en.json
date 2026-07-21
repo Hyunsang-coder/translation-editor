@@ -112,7 +112,10 @@
     "emptyTerms": "No terms in this glossary yet.",
     "editTerm": "Edit term",
     "deleteTerm": "Delete term",
-    "deleteTermConfirm": "Delete the term \"{{source}}\"?"
+    "deleteTermConfirm": "Delete the term \"{{source}}\"?",
+    "exportCsv": "Export CSV",
+    "exportExcel": "Export Excel",
+    "exportSuccess": "Exported the \"{{name}}\" glossary."
   },
   "appSettings": {
     "title": "App Settings",

@@ -4,13 +4,14 @@ import userEvent from '@testing-library/user-event';
 import {
   createGlossary,
   createGlossaryEntry,
+  exportGlossary,
   importGlossaryCsv,
   listGlossaries,
   listGlossaryEntries,
   listProjectGlossaries,
   setProjectGlossaries,
 } from '@/tauri/glossary';
-import { pickGlossaryCsvFile } from '@/tauri/dialog';
+import { pickGlossaryCsvFile, pickGlossaryExportPath } from '@/tauri/dialog';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { GlossaryManagerModal } from './GlossaryManagerModal';
 
@@ -25,6 +26,7 @@ vi.mock('react-i18next', async () => {
 vi.mock('@/tauri/dialog', () => ({
   pickGlossaryCsvFile: vi.fn(),
   pickGlossaryExcelFile: vi.fn(),
+  pickGlossaryExportPath: vi.fn(),
 }));
 
 vi.mock('@/tauri/glossary', async () => {
@@ -43,6 +45,7 @@ vi.mock('@/tauri/glossary', async () => {
     setProjectGlossaries: vi.fn(),
     importGlossaryCsv: vi.fn(),
     importGlossaryExcel: vi.fn(),
+    exportGlossary: vi.fn(),
   };
 });
 
@@ -183,5 +186,34 @@ describe('GlossaryManagerModal', () => {
       });
     });
     expect(await screen.findByText('Care Package')).toBeInTheDocument();
+  });
+
+  it.each([
+    { format: 'csv' as const, path: '/tmp/PUBG-common.csv', label: 'glossaryManager.exportCsv' },
+    { format: 'excel' as const, path: '/tmp/PUBG-common.xlsx', label: 'glossaryManager.exportExcel' },
+  ])('exports the selected glossary to $format', async ({ format, path, label }) => {
+    const user = userEvent.setup();
+    vi.mocked(pickGlossaryExportPath).mockResolvedValue(path);
+    vi.mocked(exportGlossary).mockResolvedValue(undefined);
+
+    render(
+      <GlossaryManagerModal
+        open
+        projectId="project-1"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findAllByText('PUBG 공통');
+    await user.click(screen.getByRole('button', { name: label }));
+
+    await waitFor(() => {
+      expect(pickGlossaryExportPath).toHaveBeenCalledWith(format, 'PUBG 공통');
+      expect(exportGlossary).toHaveBeenCalledWith({
+        glossaryId: 'g-1',
+        path,
+        format,
+      });
+    });
   });
 });

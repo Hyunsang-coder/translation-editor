@@ -13,6 +13,20 @@ export interface ImportGlossaryCsvResult {
   warnings: string[];
 }
 
+export async function exportGlossary(params: {
+  glossaryId: string;
+  path: string;
+  format: 'csv' | 'excel';
+}): Promise<void> {
+  await invoke<void>('export_glossary', {
+    args: {
+      glossaryId: params.glossaryId,
+      path: params.path,
+      format: params.format,
+    },
+  });
+}
+
 export async function importGlossaryCsv(params: {
   glossaryId: string;
   path: string;
@@ -167,5 +181,3 @@ export async function setProjectGlossaries(params: {
     },
   });
 }
-
-

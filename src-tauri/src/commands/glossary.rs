@@ -4,6 +4,7 @@
 //! 임포트는 파일 파싱 + 배치 insert로 무거울 수 있어 async + `run_db_task`로 실행한다.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tauri::State;
 
 use super::run_db_task;
@@ -43,6 +44,21 @@ pub struct ImportGlossaryExcelArgs {
     pub path: String,
     /// true면 해당 용어집의 기존 엔트리를 모두 삭제 후 임포트
     pub replace_entries: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GlossaryExportFormat {
+    Csv,
+    Excel,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportGlossaryArgs {
+    pub glossary_id: String,
+    pub path: String,
+    pub format: GlossaryExportFormat,
 }
 
 #[derive(Debug, Serialize)]
@@ -264,6 +280,194 @@ pub async fn import_glossary_excel(
     .await
 }
 
+fn csv_field(value: &str) -> String {
+    if value.contains([',', '"', '\r', '\n']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
+fn build_glossary_csv(entries: &[crate::db::GlossaryEntryRow]) -> String {
+    let mut output = String::from("\u{feff}Source,Target,Notes,Domain,CaseSensitive\r\n");
+    for entry in entries {
+        let fields = [
+            csv_field(&entry.source),
+            csv_field(&entry.target),
+            csv_field(entry.notes.as_deref().unwrap_or("")),
+            csv_field(entry.domain.as_deref().unwrap_or("")),
+            entry.case_sensitive.to_string(),
+        ];
+        output.push_str(&fields.join(","));
+        output.push_str("\r\n");
+    }
+    output
+}
+
+fn excel_sheet_name(glossary_name: &str) -> String {
+    let sanitized = glossary_name
+        .chars()
+        .map(|ch| {
+            if matches!(ch, '[' | ']' | ':' | '*' | '?' | '/' | '\\') {
+                ' '
+            } else {
+                ch
+            }
+        })
+        .collect::<String>();
+    let trimmed = sanitized.trim().trim_matches('\'');
+    let name = if trimmed.is_empty() {
+        "Glossary"
+    } else {
+        trimmed
+    };
+    name.chars().take(31).collect()
+}
+
+fn write_glossary_excel(
+    path: &Path,
+    glossary_name: &str,
+    entries: &[crate::db::GlossaryEntryRow],
+) -> CommandResult<()> {
+    use rust_xlsxwriter::{Color, Format, FormatAlign, Workbook};
+
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+    worksheet
+        .set_name(excel_sheet_name(glossary_name))
+        .map_err(|error| CommandError {
+            code: "XLSX_ERROR".to_string(),
+            message: format!("Failed to name Excel worksheet: {error}"),
+            details: None,
+        })?;
+
+    let header_format = Format::new()
+        .set_bold()
+        .set_font_color(Color::White)
+        .set_background_color(Color::RGB(0x4f46e5))
+        .set_align(FormatAlign::Center);
+    let text_format = Format::new().set_num_format("@").set_text_wrap();
+    let headers = ["Source", "Target", "Notes", "Domain", "CaseSensitive"];
+    for (column, header) in headers.iter().enumerate() {
+        worksheet
+            .write_string_with_format(0, column as u16, *header, &header_format)
+            .map_err(|error| CommandError {
+                code: "XLSX_ERROR".to_string(),
+                message: format!("Failed to write Excel header: {error}"),
+                details: None,
+            })?;
+    }
+
+    for (index, entry) in entries.iter().enumerate() {
+        let row = index as u32 + 1;
+        let values = [
+            entry.source.as_str(),
+            entry.target.as_str(),
+            entry.notes.as_deref().unwrap_or(""),
+            entry.domain.as_deref().unwrap_or(""),
+            if entry.case_sensitive {
+                "true"
+            } else {
+                "false"
+            },
+        ];
+        for (column, value) in values.iter().enumerate() {
+            worksheet
+                .write_string_with_format(row, column as u16, *value, &text_format)
+                .map_err(|error| CommandError {
+                    code: "XLSX_ERROR".to_string(),
+                    message: format!("Failed to write Excel cell: {error}"),
+                    details: None,
+                })?;
+        }
+    }
+
+    for (column, width) in [28.0, 28.0, 36.0, 18.0, 16.0].into_iter().enumerate() {
+        worksheet
+            .set_column_width(column as u16, width)
+            .map_err(|error| CommandError {
+                code: "XLSX_ERROR".to_string(),
+                message: format!("Failed to size Excel column: {error}"),
+                details: None,
+            })?;
+    }
+    worksheet
+        .set_freeze_panes(1, 0)
+        .map_err(|error| CommandError {
+            code: "XLSX_ERROR".to_string(),
+            message: format!("Failed to freeze Excel header: {error}"),
+            details: None,
+        })?;
+    worksheet
+        .autofilter(0, 0, entries.len() as u32, 4)
+        .map_err(|error| CommandError {
+            code: "XLSX_ERROR".to_string(),
+            message: format!("Failed to add Excel filter: {error}"),
+            details: None,
+        })?;
+
+    workbook.save(path).map_err(|error| CommandError {
+        code: "IO_ERROR".to_string(),
+        message: format!("Failed to write Excel file: {error}"),
+        details: Some(path.display().to_string()),
+    })
+}
+
+fn write_glossary_export(
+    path: &Path,
+    format: GlossaryExportFormat,
+    glossary_name: &str,
+    entries: &[crate::db::GlossaryEntryRow],
+) -> CommandResult<()> {
+    match format {
+        GlossaryExportFormat::Csv => {
+            std::fs::write(path, build_glossary_csv(entries)).map_err(|error| CommandError {
+                code: "IO_ERROR".to_string(),
+                message: format!("Failed to write CSV file: {error}"),
+                details: Some(path.display().to_string()),
+            })
+        }
+        GlossaryExportFormat::Excel => write_glossary_excel(path, glossary_name, entries),
+    }
+}
+
+/// 저장된 용어집 전체를 CSV 또는 Excel(.xlsx) 파일로 내보냅니다.
+#[tauri::command]
+pub async fn export_glossary(
+    args: ExportGlossaryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<()> {
+    let validated_path = validate_path(&args.path)?;
+    let glossary_id = args.glossary_id;
+    let (glossary_name, entries) = run_db_task(&db_state, move |db| {
+        let glossary = db
+            .list_glossaries()
+            .map_err(CommandError::from)?
+            .into_iter()
+            .find(|glossary| glossary.id == glossary_id)
+            .ok_or_else(|| CommandError {
+                code: "INVALID_OPERATION".to_string(),
+                message: format!("Glossary not found: {glossary_id}"),
+                details: None,
+            })?;
+        let entries = db
+            .list_glossary_entries(&glossary_id, None)
+            .map_err(CommandError::from)?;
+        Ok((glossary.name, entries))
+    })
+    .await?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        write_glossary_export(&validated_path, args.format, &glossary_name, &entries)
+    })
+    .await
+    .map_err(|error| CommandError {
+        code: "TASK_JOIN_ERROR".to_string(),
+        message: format!("Glossary export task failed to complete: {error}"),
+        details: None,
+    })?
+}
+
 #[tauri::command]
 pub async fn list_glossaries(db_state: State<'_, DbState>) -> CommandResult<Vec<GlossaryDto>> {
     run_db_task(&db_state, move |db| {
@@ -481,4 +685,79 @@ pub async fn search_glossary(
             .collect())
     })
     .await
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+    use calamine::{open_workbook_auto, Reader};
+
+    fn entry(source: &str, target: &str, notes: Option<&str>) -> crate::db::GlossaryEntryRow {
+        crate::db::GlossaryEntryRow {
+            id: format!("id-{source}"),
+            glossary_id: "glossary-1".to_string(),
+            source: source.to_string(),
+            target: target.to_string(),
+            notes: notes.map(str::to_string),
+            domain: Some("game".to_string()),
+            case_sensitive: true,
+            created_at: 1,
+            updated_at: 1,
+        }
+    }
+
+    #[test]
+    fn csv_export_preserves_unicode_commas_quotes_and_newlines() {
+        let csv = build_glossary_csv(&[entry(
+            "Care, Package",
+            "보급 \"상자\"",
+            Some("첫 줄\n둘째 줄"),
+        )]);
+
+        assert!(csv.starts_with('\u{feff}'));
+        assert_eq!(
+            csv,
+            "\u{feff}Source,Target,Notes,Domain,CaseSensitive\r\n\
+             \"Care, Package\",\"보급 \"\"상자\"\"\",\"첫 줄\n둘째 줄\",game,true\r\n"
+        );
+    }
+
+    #[test]
+    fn excel_export_writes_import_compatible_columns_as_text() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("glossary.xlsx");
+        let entries = vec![entry("=SUM(1,2)", "보급 상자", None)];
+
+        write_glossary_excel(&path, "PUBG 공통", &entries).expect("write workbook");
+
+        let mut workbook = open_workbook_auto(&path).expect("open workbook");
+        assert_eq!(workbook.sheet_names(), &["PUBG 공통"]);
+        let range = workbook
+            .worksheet_range("PUBG 공통")
+            .expect("read glossary sheet");
+        let rows = range.rows().collect::<Vec<_>>();
+        assert_eq!(
+            rows[0].iter().map(ToString::to_string).collect::<Vec<_>>(),
+            ["Source", "Target", "Notes", "Domain", "CaseSensitive"]
+        );
+        assert_eq!(rows[1][0].to_string(), "=SUM(1,2)");
+        assert_eq!(rows[1][1].to_string(), "보급 상자");
+        assert_eq!(rows[1][4].to_string(), "true");
+    }
+
+    #[test]
+    fn excel_export_sanitizes_sheet_name_and_supports_empty_glossary() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("empty-glossary.xlsx");
+
+        write_glossary_excel(&path, "'invalid:/[]*? glossary name that is too long'", &[])
+            .expect("write workbook");
+
+        let workbook = open_workbook_auto(&path).expect("open workbook");
+        let sheet_name = &workbook.sheet_names()[0];
+        assert!(sheet_name.chars().count() <= 31);
+        assert!(!sheet_name
+            .chars()
+            .any(|ch| matches!(ch, '[' | ']' | ':' | '*' | '?' | '/' | '\\')));
+    }
 }

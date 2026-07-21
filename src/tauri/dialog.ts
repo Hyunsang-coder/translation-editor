@@ -40,6 +40,24 @@ export async function pickGlossaryExcelFile(): Promise<string | null> {
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
 
+export async function pickGlossaryExportPath(
+  format: 'csv' | 'excel',
+  defaultName = 'glossary',
+): Promise<string | null> {
+  const extension = format === 'excel' ? 'xlsx' : 'csv';
+  const filterName = format === 'excel' ? 'Excel' : 'CSV';
+  const safeName = defaultName
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .trim() || 'glossary';
+  const path = await save({
+    title: '용어집 내보내기',
+    defaultPath: `${safeName}.${extension}`,
+    filters: [{ name: filterName, extensions: [extension] }],
+  });
+  return path ?? null;
+}
+
 export async function pickGlossaryFile(): Promise<string | null> {
   const file = await open({
     title: '용어집 파일 선택',
@@ -104,5 +122,3 @@ export async function pickChatAttachmentFile(): Promise<string | null> {
   if (!file) return null;
   return Array.isArray(file) ? (file[0] ?? null) : file;
 }
-
-

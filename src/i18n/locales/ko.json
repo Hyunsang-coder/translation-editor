@@ -110,7 +110,10 @@
     "emptyTerms": "아직 등록된 용어가 없습니다.",
     "editTerm": "용어 편집",
     "deleteTerm": "용어 삭제",
-    "deleteTermConfirm": "\"{{source}}\" 용어를 삭제할까요?"
+    "deleteTermConfirm": "\"{{source}}\" 용어를 삭제할까요?",
+    "exportCsv": "CSV 내보내기",
+    "exportExcel": "Excel 내보내기",
+    "exportSuccess": "\"{{name}}\" 용어집을 내보냈습니다."
   },
   "appSettings": {
     "title": "앱 설정",

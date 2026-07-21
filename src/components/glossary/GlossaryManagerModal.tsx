@@ -7,6 +7,7 @@ import {
   ArrowUp,
   BookOpen,
   Check,
+  Download,
   FileSpreadsheet,
   FileText,
   Pencil,
@@ -18,7 +19,12 @@ import {
 import { Modal } from '@/components/ui/Modal';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { useUIStore } from '@/stores/uiStore';
-import { pickGlossaryCsvFile, pickGlossaryExcelFile } from '@/tauri/dialog';
+import {
+  pickGlossaryCsvFile,
+  pickGlossaryExcelFile,
+  pickGlossaryExportPath,
+} from '@/tauri/dialog';
+import { exportGlossary } from '@/tauri/glossary';
 import type { GlossaryEntry } from '@/types';
 
 interface GlossaryManagerModalProps {
@@ -78,6 +84,7 @@ export function GlossaryManagerModal({
   const [entryDraft, setEntryDraft] = useState<EntryDraft>(EMPTY_ENTRY);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const selectedGlossary = glossaries.find((item) => item.id === selectedGlossaryId) ?? null;
   const activeIndex = projectGlossaries.findIndex((item) => item.id === selectedGlossaryId);
@@ -292,6 +299,28 @@ export function GlossaryManagerModal({
       notifyError(caught);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExport = async (format: 'csv' | 'excel') => {
+    if (importing || exporting || saving || loading || !selectedGlossary) return;
+    setExporting(true);
+    try {
+      const path = await pickGlossaryExportPath(format, selectedGlossary.name);
+      if (!path) return;
+      await exportGlossary({
+        glossaryId: selectedGlossary.id,
+        path,
+        format,
+      });
+      addToast({
+        type: 'success',
+        message: t('glossaryManager.exportSuccess', { name: selectedGlossary.name }),
+      });
+    } catch (caught) {
+      notifyError(caught);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -546,7 +575,7 @@ export function GlossaryManagerModal({
                     <button
                       type="button"
                       onClick={() => void handleImport('csv')}
-                      disabled={importing || loading || saving}
+                      disabled={importing || exporting || loading || saving}
                       className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
                     >
                       <FileText size={11} />
@@ -555,11 +584,30 @@ export function GlossaryManagerModal({
                     <button
                       type="button"
                       onClick={() => void handleImport('excel')}
-                      disabled={importing || loading || saving}
+                      disabled={importing || exporting || loading || saving}
                       className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
                     >
                       <FileSpreadsheet size={11} />
                       {t('settings.glossaryImportExcel')}
+                    </button>
+                    <span className="mx-0.5 h-4 w-px bg-editor-border" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => void handleExport('csv')}
+                      disabled={importing || exporting || loading || saving}
+                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
+                    >
+                      <Download size={11} />
+                      {t('glossaryManager.exportCsv')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleExport('excel')}
+                      disabled={importing || exporting || loading || saving}
+                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
+                    >
+                      <FileSpreadsheet size={11} />
+                      {t('glossaryManager.exportExcel')}
                     </button>
                     <span className="text-[10px] text-editor-muted">
                       {t('settings.glossaryColumns')}
