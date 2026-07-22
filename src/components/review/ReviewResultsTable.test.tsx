@@ -52,3 +52,15 @@ describe('ReviewResultsTable 적용 버튼 노출', () => {
     expect(screen.queryByTitle('적용')).toBeNull();
   });
 });
+
+describe('ReviewResultsTable 수정 제안 표시', () => {
+  it('인코딩된 HTML과 Markdown 서식을 제거하고 텍스트만 표시한다', () => {
+    renderTable(makeIssue({
+      suggestedFix:
+        '문서의 &lt;a href=&quot;https://example.com&quot;&gt;부록&lt;/a&gt;과 **[예시](https://example.com/example)**',
+    }));
+
+    expect(screen.getByText('문서의 부록과 예시')).toBeTruthy();
+    expect(screen.queryByText(/&lt;|<a|href=|\*\*|https:\/\//)).toBeNull();
+  });
+});

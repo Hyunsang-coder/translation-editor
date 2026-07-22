@@ -35,28 +35,60 @@ export function hashContent(content: string): string {
 export function stripHtml(html: string): string {
   if (!html) return '';
 
-  const text = html
+  // AI 응답은 HTML 태그를 &lt;...&gt; 또는 &amp;lt;...&amp;gt;처럼
+  // 한두 번 인코딩해 반환할 수 있다. 태그 제거 후 디코딩하면 태그가 다시 노출되므로,
+  // 제한된 횟수만큼 먼저 디코딩한 뒤 태그를 제거한다.
+  const decodedHtml = decodeHtmlEntities(html);
+  const text = decodedHtml
     .replace(/<\/p>|<\/div>|<\/h[1-6]>|<\/li>|<\/blockquote>|<\/pre>|<\/tr>/gi, '\n')
     .replace(/<\/td>|<\/th>/gi, ' ')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, '');
 
-  // HTML 엔티티 디코딩
-  const entities: Record<string, string> = {
-    '&nbsp;': ' ',
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#39;': "'",
-    '&copy;': '©',
-    '&reg;': '®'
-  };
-
   return text
-    .replace(/&[a-z0-9#]+;/gi, (entity) => entities[entity] || entity)
     .replace(/\n\s*\n/g, '\n\n') // 중복 줄바꿈 정리
     .trim();
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+  copy: '©',
+  reg: '®',
+};
+
+function decodeHtmlEntitiesOnce(text: string): string {
+  return text.replace(/&(#x[\da-f]+|#\d+|[a-z][a-z\d]*);/gi, (entity, token: string) => {
+    const normalized = token.toLowerCase();
+    if (normalized.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalized.slice(2), 16);
+      return isValidCodePoint(codePoint) ? String.fromCodePoint(codePoint) : entity;
+    }
+    if (normalized.startsWith('#')) {
+      const codePoint = Number.parseInt(normalized.slice(1), 10);
+      return isValidCodePoint(codePoint) ? String.fromCodePoint(codePoint) : entity;
+    }
+    return HTML_ENTITIES[normalized] ?? entity;
+  });
+}
+
+function isValidCodePoint(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 0x10FFFF;
+}
+
+function decodeHtmlEntities(text: string): string {
+  let decoded = text;
+  // 일반 HTML + 이중 인코딩까지 처리하되, 사용자 텍스트를 과도하게 변환하지 않는다.
+  for (let i = 0; i < 2; i++) {
+    const next = decodeHtmlEntitiesOnce(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
 
 /**
@@ -173,4 +205,3 @@ function walkNode(node: Node, lines: string[], ctx: WalkContext): void {
 export function isContentEqual(content1: string, content2: string): boolean {
   return hashContent(content1) === hashContent(content2);
 }
-

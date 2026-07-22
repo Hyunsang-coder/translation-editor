@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ITEProject } from '@/types';
 import { buildAlignedChunksAsync, clearReviewChunkCache, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 
 // ============================================
 // Review Settings Types
@@ -313,16 +314,18 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     const { highlightNonce } = get();
     const normalized: ReviewIssue[] = issues.map((it, i) => {
       const segmentOrder = it.segmentOrder ?? i;
+      const sourceExcerpt = stripRichTextMarkup(it.sourceExcerpt);
+      const targetExcerpt = stripRichTextMarkup(it.targetExcerpt);
       return {
-        id: generateIssueId(segmentOrder, it.type, it.sourceExcerpt, it.targetExcerpt),
+        id: generateIssueId(segmentOrder, it.type, sourceExcerpt, targetExcerpt),
         segmentOrder,
         segmentGroupId: it.segmentGroupId,
-        sourceExcerpt: it.sourceExcerpt,
-        targetExcerpt: it.targetExcerpt,
-        suggestedFix: it.suggestedFix ?? '',
+        sourceExcerpt,
+        targetExcerpt,
+        suggestedFix: stripRichTextMarkup(it.suggestedFix ?? ''),
         type: it.type,
         severity: it.severity,
-        description: it.description,
+        description: stripRichTextMarkup(it.description),
         checked: true,
       };
     });

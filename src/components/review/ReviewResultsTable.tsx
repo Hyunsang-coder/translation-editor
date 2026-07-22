@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
-import { stripMarkdownInline } from '@/utils/normalizeForSearch';
-import { stripHtml } from '@/utils/hash';
+import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 
 /** 컬럼 기본 너비 비율(%) — 통합 / 수정 제안 / 설명 */
 const DEFAULT_COL_PCT: [number, number, number] = [16.67, 50, 33.33];
@@ -371,7 +370,7 @@ export function ReviewResultsTable({
                 <td className="px-3 py-2 text-editor-text text-xs align-top">
                   <div className="flex flex-col gap-1.5">
                     <span className="break-words">
-                      {issue.suggestedFix ? stripHtml(issue.suggestedFix).trim() : '-'}
+                      {issue.suggestedFix ? stripRichTextMarkup(issue.suggestedFix) : '-'}
                     </span>
                     <div className="flex items-center gap-1.5">
                       {/* 적용 가능 조건: 교체 앵커(targetExcerpt)와 제안이 모두 있을 때.
@@ -413,7 +412,7 @@ export function ReviewResultsTable({
                 <td className="px-3 py-2 text-editor-text text-xs align-top">
                   {issue.description ? (
                     <div className="space-y-0.5">
-                      {stripMarkdownInline(issue.description).split(' | ').map((item, i) => (
+                      {stripRichTextMarkup(issue.description).split(' | ').map((item, i) => (
                         <div key={`${issue.id}-desc-${i}`} className="break-words">{item}</div>
                       ))}
                     </div>

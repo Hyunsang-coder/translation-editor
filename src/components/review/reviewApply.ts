@@ -10,11 +10,10 @@ import type { Editor } from '@tiptap/react';
 import {
   normalizeForSearch,
   buildNormalizedTextWithMapping,
-  stripMarkdownInline,
+  stripRichTextMarkup,
   stripWrappingQuotes,
   getWrappingQuotePair,
 } from '@/utils/normalizeForSearch';
-import { stripHtml } from '@/utils/hash';
 import type { ReviewIssue } from '@/stores/reviewStore';
 
 export function normalizeSegmentGroupId(segmentGroupId: string | undefined): string | undefined {
@@ -193,7 +192,7 @@ function findNormalizedTextRanges(
  * 문서 대상 텍스트 기준으로 조건부 제거(resolveReplacementText)한다.
  */
 export function deriveReplacementText(suggestedFix: string): string {
-  return stripMarkdownInline(stripHtml(suggestedFix)).trim();
+  return stripRichTextMarkup(suggestedFix);
 }
 
 /**

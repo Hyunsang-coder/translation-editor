@@ -275,6 +275,8 @@ Review complete. No issues found.
 ## 작성 규칙 (필수!)
 - 각 이슈에는 SegmentGroupId와 Suggestion을 반드시 포함하세요.
 - Source/Target excerpt는 원문/번역문에서 문자 그대로 복사하세요.
+- Source/Target/Suggestion에는 HTML 태그나 Markdown 문법을 포함하지 마세요.
+- 링크·강조·기타 서식이 있으면 태그나 URL을 복사하지 말고 표시 텍스트만 작성하세요.
 - Target과 Suggestion은 **정확히 한 문장**만 담으세요 (불릿 항목이면 그 항목의 문장 하나).
   여러 문장·여러 불릿·단락 전체를 하나의 이슈에 합치지 말고, 문제가 여러 문장에 걸치면 문장별로 이슈를 분리하세요.
 - Suggestion은 Target 문장을 통째로 교체해 넣을 수 있는 완성된 문장이어야 합니다.

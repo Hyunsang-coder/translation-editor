@@ -261,6 +261,20 @@ Some text after
       const issues = parseReviewResult(response);
       expect(issues[0]?.suggestedFix).toBe('우선');
     });
+
+    it('인코딩된 HTML과 Markdown 서식을 제거한다', () => {
+      const response = `{
+        "issues": [{
+          "type": "오역",
+          "sourceExcerpt": "source",
+          "targetExcerpt": "target",
+          "suggestedFix": "문서의 &lt;a href=\\\"https://example.com\\\"&gt;부록&lt;/a&gt;과 **[예시](https://example.com/example)**"
+        }]
+      }`;
+
+      const issues = parseReviewResult(response);
+      expect(issues[0]?.suggestedFix).toBe('문서의 부록과 예시');
+    });
   });
 
   describe('segmentOrder 처리', () => {

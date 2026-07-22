@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useReviewStore } from './reviewStore';
+import { generateIssueId, useReviewStore } from './reviewStore';
 import { buildAlignedChunksAsync } from '@/ai/tools/reviewTool';
 import type { AlignedChunk } from '@/ai/tools/reviewTool';
 import type { ITEProject } from '@/types';
@@ -203,5 +203,28 @@ describe('reviewStore ingestExternalReview', () => {
     const issues = useReviewStore.getState().getAllIssues();
     expect(issues).toHaveLength(1);
     expect(issues[0]!.targetExcerpt).toBe('second');
+  });
+
+  it('외부 주입 텍스트도 정규화하고 정규화된 excerpt로 ID를 생성한다', () => {
+    useReviewStore.getState().ingestExternalReview({
+      projectId: 'p1',
+      issues: [{
+        sourceExcerpt: '**source**',
+        targetExcerpt: '&lt;strong&gt;target&lt;/strong&gt;',
+        suggestedFix: '&lt;a href=&quot;https://example.com&quot;&gt;fixed&lt;/a&gt;',
+        type: 'mistranslation',
+        severity: 'major',
+        description: '**description**',
+      }],
+    });
+
+    const issue = useReviewStore.getState().getAllIssues()[0]!;
+    expect(issue).toMatchObject({
+      sourceExcerpt: 'source',
+      targetExcerpt: 'target',
+      suggestedFix: 'fixed',
+      description: 'description',
+    });
+    expect(issue.id).toBe(generateIssueId(0, 'mistranslation', 'source', 'target'));
   });
 });

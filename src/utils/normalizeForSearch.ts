@@ -1,3 +1,5 @@
+import { stripHtml } from '@/utils/hash';
+
 /**
  * 유니코드 문자 정규화 패턴
  * ReviewHighlight, SearchHighlight에서도 사용하므로 export
@@ -168,6 +170,14 @@ export function stripMarkdownInline(text: string): string {
     .replace(/~~(.+?)~~/g, '$1') // ~~strikethrough~~ → strikethrough
     .replace(/`(.+?)`/g, '$1') // `code` → code
     .replace(/\[(.+?)\]\(.+?\)/g, '$1'); // [text](url) → text
+}
+
+/**
+ * 검수 결과처럼 HTML과 Markdown이 섞일 수 있는 텍스트를 표시·복사·적용용
+ * plain text로 변환합니다. HTML 엔티티로 인코딩된 태그도 stripHtml에서 처리합니다.
+ */
+export function stripRichTextMarkup(text: string): string {
+  return stripMarkdownInline(stripHtml(text)).trim();
 }
 
 /**

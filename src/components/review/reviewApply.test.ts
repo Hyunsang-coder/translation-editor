@@ -173,6 +173,14 @@ describe('deriveReplacementText', () => {
     expect(deriveReplacementText('**fixed** `text`')).toBe('fixed text');
   });
 
+  it('인코딩된 HTML 링크와 Markdown 링크를 텍스트로 변환한다', () => {
+    expect(
+      deriveReplacementText(
+        '문서의 &lt;a href=&quot;https://example.com&quot;&gt;부록&lt;/a&gt;과 [예시](https://example.com/example)',
+      ),
+    ).toBe('문서의 부록과 예시');
+  });
+
   it('앞뒤 공백을 제거한다', () => {
     expect(deriveReplacementText('  fixed text ')).toBe('fixed text');
   });

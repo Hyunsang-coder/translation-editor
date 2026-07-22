@@ -198,3 +198,14 @@ describe('buildAlignedChunksAsync', () => {
     ).toBe(true);
   });
 });
+
+describe('buildReviewPrompt', () => {
+  it('excerpt와 suggestion에 서식 태그를 포함하지 않도록 지시한다', async () => {
+    const { buildReviewPrompt } = await import('./reviewTool');
+    const prompt = buildReviewPrompt();
+
+    expect(prompt).toContain('HTML');
+    expect(prompt).toContain('Markdown');
+    expect(prompt).toContain('표시 텍스트만');
+  });
+});

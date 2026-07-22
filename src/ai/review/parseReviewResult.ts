@@ -1,5 +1,6 @@
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { generateIssueId } from '@/stores/reviewStore';
+import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 
 /**
  * 문제 유형을 분류 (Two-Pass Review 타입)
@@ -186,22 +187,27 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
     }
 
     // 유효한 이슈인지 확인 (최소한 타입과 source/target 중 하나는 있어야 함)
-    if (typeStr && (sourceExcerpt || targetExcerpt)) {
+    const cleanSourceExcerpt = stripRichTextMarkup(sourceExcerpt);
+    const cleanTargetExcerpt = stripRichTextMarkup(targetExcerpt);
+    const cleanSuggestion = stripRichTextMarkup(suggestion);
+    const cleanExplanation = stripRichTextMarkup(explanation);
+
+    if (typeStr && (cleanSourceExcerpt || cleanTargetExcerpt)) {
       const type = categorizeIssueType(typeStr);
       const severity = categorizeSeverity(severityStr);
 
       issues.push({
         // Known limitation: segmentOrder always 0 — AI output doesn't include order;
         // deduplication relies on segmentGroupId + type + excerpt instead.
-        id: generateIssueId(0, typeStr, sourceExcerpt, targetExcerpt),
+        id: generateIssueId(0, typeStr, cleanSourceExcerpt, cleanTargetExcerpt),
         segmentOrder: 0,
         segmentGroupId,
-        sourceExcerpt,
-        targetExcerpt,
-        suggestedFix: suggestion,
+        sourceExcerpt: cleanSourceExcerpt,
+        targetExcerpt: cleanTargetExcerpt,
+        suggestedFix: cleanSuggestion,
         type,
         severity,
-        description: explanation,
+        description: cleanExplanation,
         checked: true,
       });
     }
@@ -231,13 +237,14 @@ function parseJsonIssues(content: string): ReviewIssue[] | null {
           ? parseInt(i.segmentOrder, 10) || 0
           : 0;
       const segmentGroupId = typeof i.segmentGroupId === 'string' ? i.segmentGroupId : undefined;
-      const sourceExcerpt = typeof i.sourceExcerpt === 'string' ? i.sourceExcerpt : '';
-      const targetExcerpt = typeof i.targetExcerpt === 'string' ? i.targetExcerpt : '';
+      const sourceExcerpt = stripRichTextMarkup(typeof i.sourceExcerpt === 'string' ? i.sourceExcerpt : '');
+      const targetExcerpt = stripRichTextMarkup(typeof i.targetExcerpt === 'string' ? i.targetExcerpt : '');
       // suggestedFix 또는 suggestion 키 모두 처리 (프롬프트 호환성)
-      const suggestedFix = typeof i.suggestedFix === 'string' ? i.suggestedFix
+      const rawSuggestedFix = typeof i.suggestedFix === 'string' ? i.suggestedFix
         : typeof i.suggestion === 'string' ? i.suggestion
           : typeof i.Suggestion === 'string' ? i.Suggestion
             : '';
+      const suggestedFix = stripRichTextMarkup(rawSuggestedFix);
       const typeStr = typeof i.type === 'string' ? i.type : '';
       const severityStr = typeof i.severity === 'string' ? i.severity : '';
 
@@ -247,9 +254,9 @@ function parseJsonIssues(content: string): ReviewIssue[] | null {
       const explanation = typeof i.explanation === 'string' ? i.explanation : '';
       const legacyDescription = typeof i.description === 'string' ? i.description : '';
 
-      const description = explanation || (problem
+      const description = stripRichTextMarkup(explanation || (problem
         ? [problem, reason].filter(Boolean).join(' | ')
-        : legacyDescription);
+        : legacyDescription));
 
       return {
         id: generateIssueId(segmentOrder, typeStr, sourceExcerpt, targetExcerpt),

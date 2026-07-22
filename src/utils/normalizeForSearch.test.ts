@@ -2,11 +2,26 @@ import { describe, it, expect } from 'vitest';
 import {
   applyUnicodeNormalization,
   normalizeForSearch,
+  stripRichTextMarkup,
   stripMarkdownInline,
   stripWrappingQuotes,
   getWrappingQuotePair,
   buildNormalizedTextWithMapping,
 } from './normalizeForSearch';
+
+describe('stripRichTextMarkup', () => {
+  it('인코딩된 HTML 링크에서 표시 텍스트만 남긴다', () => {
+    const suggestion =
+      '분석 문서의 &lt;a target=&quot;_blank&quot; href=&quot;https://example.com&quot;&gt;부록&lt;/a&gt;을 확인했습니다.';
+
+    expect(stripRichTextMarkup(suggestion)).toBe('분석 문서의 부록을 확인했습니다.');
+  });
+
+  it('Markdown 링크와 인라인 서식을 일반 텍스트로 변환한다', () => {
+    expect(stripRichTextMarkup('**[부록](https://example.com)**과 `예시`'))
+      .toBe('부록과 예시');
+  });
+});
 
 describe('applyUnicodeNormalization', () => {
   it('곡선 큰따옴표를 직선 따옴표로 변환한다', () => {

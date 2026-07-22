@@ -27,6 +27,7 @@ import {
   type ReviewLedgerContext,
 } from '@/quality';
 import { stripHtml } from '@/utils/hash';
+import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { tipTapJsonToHtml } from '@/utils/markdownConverter';
 
@@ -398,8 +399,8 @@ export function ReviewPanel(): JSX.Element {
     }
 
     try {
-      // HTML 태그 제거 후 복사
-      const cleanText = stripHtml(issue.suggestedFix).trim();
+      // HTML/Markdown 서식을 제거한 plain text만 복사
+      const cleanText = stripRichTextMarkup(issue.suggestedFix);
       await navigator.clipboard.writeText(cleanText);
       addToast({
         type: 'success',
