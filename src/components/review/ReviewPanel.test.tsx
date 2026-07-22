@@ -242,7 +242,7 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
         resolveBuild = res;
       }),
     );
-    mockRunReview.mockResolvedValue('---REVIEW_START---\n## Summary\n---REVIEW_END---');
+    mockRunReview.mockResolvedValue('---REVIEW_START---\nNO_ISSUES\n---REVIEW_END---');
 
     render(<ReviewPanel />);
 

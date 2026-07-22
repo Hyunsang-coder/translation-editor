@@ -208,4 +208,27 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('Markdown');
     expect(prompt).toContain('표시 텍스트만');
   });
+
+  it('실제 UI와 동일한 3단계 심각도와 실행 가능한 이슈 기준을 사용한다', async () => {
+    const { buildReviewPrompt } = await import('./reviewTool');
+    const prompt = buildReviewPrompt();
+
+    expect(prompt).toContain('Critical / Major / Minor');
+    expect(prompt).not.toContain('1~5점');
+    expect(prompt).toContain('유능한 원어민 편집자가 실제 출판 전에 수정할 표현');
+    expect(prompt).toContain('동등하게 자연스러운 다른 표현은 이슈가 아닙니다');
+    expect(prompt).toContain('뉘앙스나 톤이 달라지면 Mistranslation');
+    expect(prompt).toContain('문법적으로 맞지만 번역투가 남아 있으면 Awkward');
+  });
+
+  it('하나의 교체 가능한 단위를 출력하고 사용하지 않는 summary를 요구하지 않는다', async () => {
+    const { buildReviewPrompt } = await import('./reviewTool');
+    const prompt = buildReviewPrompt();
+
+    expect(prompt).toContain('하나의 교체 가능한 단위');
+    expect(prompt).toContain('제목·UI 문자열·목록 항목·표 셀');
+    expect(prompt).not.toContain('## Summary');
+    expect(prompt).not.toContain('Verdict:');
+    expect(prompt).toContain('NO_ISSUES');
+  });
 });

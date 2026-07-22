@@ -125,9 +125,9 @@ Some text after
       expect(parseReviewResult(response)[0]?.type).toBe('addition');
     });
 
-    it('뉘앙스 → awkward (하위 호환)', () => {
+    it('뉘앙스·톤 변화 → mistranslation', () => {
       const response = `{"issues": [{"type": "뉘앙스 변형", "sourceExcerpt": "a", "targetExcerpt": "b"}]}`;
-      expect(parseReviewResult(response)[0]?.type).toBe('awkward');
+      expect(parseReviewResult(response)[0]?.type).toBe('mistranslation');
     });
 
     it('문법 → grammar', () => {
@@ -305,13 +305,13 @@ Some text after
       expect(parseReviewResult(response)).toHaveLength(0);
     });
 
-    it('null/undefined 입력', () => {
-      expect(parseReviewResult(null as unknown as string)).toHaveLength(0);
-      expect(parseReviewResult(undefined as unknown as string)).toHaveLength(0);
+    it('null/undefined 입력은 불완전한 검수로 처리', () => {
+      expect(() => parseReviewResult(null as unknown as string)).toThrow('검수 응답이 비어 있습니다');
+      expect(() => parseReviewResult(undefined as unknown as string)).toThrow('검수 응답이 비어 있습니다');
     });
 
-    it('빈 문자열', () => {
-      expect(parseReviewResult('')).toHaveLength(0);
+    it('빈 문자열은 불완전한 검수로 처리', () => {
+      expect(() => parseReviewResult('')).toThrow('검수 응답이 비어 있습니다');
     });
   });
 
@@ -365,6 +365,29 @@ Review complete. No issues found.
 
       const issues = parseReviewResult(response);
       expect(issues).toHaveLength(0);
+    });
+
+    it('새 NO_ISSUES 형식을 처리', () => {
+      const response = `---REVIEW_START---\nNO_ISSUES\n---REVIEW_END---`;
+      expect(parseReviewResult(response)).toHaveLength(0);
+    });
+
+    it('종료 마커가 없으면 부분 결과를 정상 검수로 수용하지 않는다', () => {
+      const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: "Hello"
+- **Target**: "안녕"
+- **Type**: Mistranslation
+- **Severity**: Major
+`;
+
+      expect(() => parseReviewResult(response)).toThrow('검수 응답이 완전하지 않습니다');
+    });
+
+    it('파싱할 수 없는 응답을 이슈 없음으로 처리하지 않는다', () => {
+      expect(() => parseReviewResult('검수는 완료했지만 정해진 형식으로 출력하지 않았습니다.'))
+        .toThrow('검수 응답 형식을 확인할 수 없습니다');
     });
   });
 
