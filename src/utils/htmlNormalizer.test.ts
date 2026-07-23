@@ -121,3 +121,18 @@ describe('removeDuplicateTableHeaders', () => {
     expect(tableCount).toBe(2);
   });
 });
+
+describe('ordered list start 속성 보존', () => {
+  it('Confluence처럼 코드블록으로 쪼개진 <ol start="N"> 연속 번호를 유지', () => {
+    // Confluence ADF 렌더러는 리스트 사이에 다른 블록이 끼면
+    // <ol start="N">으로 쪼개서 번호를 이어간다.
+    // 픽스처: PUBGUE5-15066 재현 단계 페이지의 실제 본문에서 2번 항목까지 발췌.
+    // 래퍼 div는 실제 클립보드 복사 시 붙는 렌더러 컨테이너(inline style 포함)로,
+    // shouldNormalizePastedHtml 게이트를 통과시켜 sanitize 경로를 태운다.
+    const html = `<div class="ak-renderer-document" style="margin: 0px;"><h3 data-local-id="029c995ae8d2">단계</h3><ol data-local-id="b105d1c32ff1"><li data-local-id="d7799881853e"><p data-local-id="3cd5fc5af626">로컬 데디케이티드 서버로 <code>IBR_Erangel</code>에 입장한다.</p></li></ol><ol data-local-id="61ed92d3baad" start="2"><li data-local-id="db290015a15e"><p data-local-id="69bd5a3dd8a9">남성 캐릭터에서 다음 순서로 맨몸 상태를 만든다.</p></li></ol><pre data-local-id="9e012900-a2e8-4931-8f1e-aa1a45b5a2d5"><code class="language-plaintext">   Admin ClearInventory
+   Admin MS2Set 0
+   Admin ClearInventory</code></pre></div>`;
+    const result = normalizePastedHtml(html);
+    expect(result).toContain('start="2"');
+  });
+});
