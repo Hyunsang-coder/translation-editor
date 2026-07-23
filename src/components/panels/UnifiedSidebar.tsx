@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PanelLeftClose, PanelRightClose } from 'lucide-react';
+import { ExternalLink, PanelLeftClose, PanelRightClose } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { MAX_CHAT_SESSIONS } from '@/stores/chatStore.types';
@@ -13,7 +13,7 @@ import { useResizeHandle } from '@/hooks/useResizeHandle';
 import { usePanelDrag } from '@/hooks/usePanelDrag';
 import { LAYOUT } from '@/constants/layout';
 import type { SidebarSide, PanelType } from '@/types';
-import { isChatPanel, getChatSessionId } from '@/types';
+import { chatPanelId, isChatPanel, getChatSessionId } from '@/types';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
 interface UnifiedSidebarProps {
@@ -55,11 +55,18 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
   const setSidebarHiddenSide = useUIStore((s) => s.setSidebarHiddenSide);
   const setActivePanel_side = useUIStore((s) => s.setActivePanel_side);
   const setSidebarWidthSide = useUIStore((s) => s.setSidebarWidthSide);
+  const floatingChatSessionId = useUIStore((s) => s.floatingChatSessionId);
+  const floatChatPanel = useUIStore((s) => s.floatChatPanel);
 
   // chatStore에서 세션 목록 구독 (이름 표시용) — sessions 배열 자체를 구독하고 useMemo로 파생
   const sessions = useChatStore((s) => s.sessions);
   const chatSessions = useMemo(() => sessions.map((ses) => ({ id: ses.id, name: ses.name })), [sessions]);
   const isSessionLimitReached = useChatStore((s) => s.sessions.length >= MAX_CHAT_SESSIONS);
+  const floatingPanel = floatingChatSessionId ? chatPanelId(floatingChatSessionId) : null;
+  const visiblePanels = useMemo(
+    () => panels.filter((panel) => panel !== floatingPanel),
+    [floatingPanel, panels],
+  );
 
   const minSidebarWidth = useMemo(
     () => (panels.some(isChatPanel) ? LAYOUT.CHAT_SIDEBAR_MIN : LAYOUT.SIDEBAR_MIN),
@@ -112,7 +119,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
   }, [isClickSuppressed, setActivePanel_side, side]);
 
   // --- Hidden 또는 빈 바: 폭 0 완전 숨김 (프로젝트 사이드바와 동일 모델) ---
-  if (hidden || panels.length === 0) {
+  if (hidden || visiblePanels.length === 0) {
     return null;
   }
 
@@ -155,7 +162,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
         </button>
 
         <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
-          {panels.map((panel, idx) => {
+          {visiblePanels.map((panel, idx) => {
             const label = getPanelLabel(panel, t, chatSessions);
             const isChat = isChatPanel(panel);
             return (
@@ -166,7 +173,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
                   onMouseDown={(e) => handleTabMouseDown(panel, label, e)}
                   onClick={() => handleTabClick(panel)}
                   className={`
-                    group relative h-10 px-3 flex items-center gap-1.5 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[60px] max-w-[140px]
+                    group relative h-10 px-3 flex items-center gap-1.5 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[60px] max-w-[180px]
                     ${activePanel === panel
                       ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
                       : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
@@ -177,16 +184,32 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
                 >
                   <span className="truncate flex-1">{label}</span>
                   {isChat && (
-                    <button
-                      className={`
-                        opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-editor-border/50 text-[10px] leading-none
-                        ${activePanel === panel ? 'opacity-100' : ''}
-                      `}
-                      onClick={(e) => void handleCloseChatTab(panel, e)}
-                      title={t('common.close')}
-                    >
-                      ✕
-                    </button>
+                    <div className={`flex items-center ${activePanel === panel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <button
+                        type="button"
+                        data-testid={`float-chat-${getChatSessionId(panel) ?? ''}`}
+                        className="p-0.5 rounded hover:bg-editor-border/50 leading-none"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const sessionId = getChatSessionId(panel);
+                          if (sessionId) floatChatPanel(sessionId);
+                        }}
+                        title={t('chat.floatPanel', 'Float chat')}
+                        aria-label={t('chat.floatPanel', 'Float chat')}
+                      >
+                        <ExternalLink size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-0.5 rounded hover:bg-editor-border/50 text-[10px] leading-none"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => void handleCloseChatTab(panel, e)}
+                        title={t('common.close')}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -194,7 +217,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
           })}
 
           {/* Insertion indicator at end */}
-          {renderInsertionIndicator(panels.length)}
+          {renderInsertionIndicator(visiblePanels.length)}
 
           {/* + 버튼: 새 채팅 추가 (우측 채팅 바 전용) */}
           {side === 'right' && !isSessionLimitReached && (

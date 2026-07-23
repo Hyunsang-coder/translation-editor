@@ -14,12 +14,13 @@ import { ExportModal } from '@/components/export/ExportModal';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, toggleChatVisibility, leftSidebar, rightSidebar, projectSidebarCollapsed, toggleProjectSidebar } =
+  const { openPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId, projectSidebarCollapsed, toggleProjectSidebar } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
       toggleChatVisibility: s.toggleChatVisibility,
       leftSidebar: s.leftSidebar,
       rightSidebar: s.rightSidebar,
+      floatingChatSessionId: s.floatingChatSessionId,
       projectSidebarCollapsed: s.projectSidebarCollapsed,
       toggleProjectSidebar: s.toggleProjectSidebar,
     })));
@@ -82,7 +83,8 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
     setDropdownOpen(false);
   };
   const isAnyChatVisible = (
-    (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    floatingChatSessionId !== null
+    || (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
     || (!rightSidebar.hidden && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
   );
 

@@ -28,9 +28,10 @@ function App(): JSX.Element {
   const { t } = useTranslation();
   const theme = useUIStore((s) => s.theme);
   const addToast = useUIStore((s) => s.addToast);
-  const { leftSidebar, rightSidebar } = useUIStore(useShallow((s) => ({
+  const { leftSidebar, rightSidebar, floatingChatSessionId } = useUIStore(useShallow((s) => ({
     leftSidebar: s.leftSidebar,
     rightSidebar: s.rightSidebar,
+    floatingChatSessionId: s.floatingChatSessionId,
   })));
   const { initializeProject, startAutoSave, stopAutoSave } = useProjectStore(
     useShallow((s) => ({ initializeProject: s.initializeProject, startAutoSave: s.startAutoSave, stopAutoSave: s.stopAutoSave }))
@@ -58,7 +59,8 @@ function App(): JSX.Element {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showAppSettingsModal, setShowAppSettingsModal] = useState(false);
   const isViewChatOn = (
-    (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
+    floatingChatSessionId !== null
+    || (!leftSidebar.hidden && leftSidebar.activePanel !== null && isChatPanel(leftSidebar.activePanel))
     || (!rightSidebar.hidden && rightSidebar.activePanel !== null && isChatPanel(rightSidebar.activePanel))
   );
 

@@ -125,6 +125,92 @@ describe('uiStore movePanel 역할 가드', () => {
   });
 });
 
+describe('uiStore floating chat', () => {
+  const floatingChat = chatPanelId('floating-chat');
+  const otherChat = chatPanelId('other-chat');
+
+  beforeEach(() => {
+    useUIStore.setState({
+      floatingChatSessionId: null,
+      floatingChatRect: { x: 24, y: 24, width: 400, height: 560 },
+      leftSidebar: {
+        hidden: false,
+        panels: ['settings', 'review', 'comments'],
+        activePanel: 'settings',
+        width: 250,
+      },
+      rightSidebar: {
+        hidden: false,
+        panels: [floatingChat],
+        activePanel: floatingChat,
+        width: 320,
+      },
+    });
+  });
+
+  it('유일한 채팅을 플로팅하면 우측 사이드바를 숨긴다', () => {
+    useUIStore.getState().floatChatPanel('floating-chat');
+
+    const state = useUIStore.getState();
+    expect(state.floatingChatSessionId).toBe('floating-chat');
+    expect(state.rightSidebar.hidden).toBe(true);
+    expect(state.rightSidebar.activePanel).toBe(floatingChat);
+  });
+
+  it('다른 채팅 탭이 있으면 사이드바에 다음 탭을 표시한다', () => {
+    useUIStore.setState({
+      rightSidebar: {
+        hidden: false,
+        panels: [floatingChat, otherChat],
+        activePanel: floatingChat,
+        width: 320,
+      },
+    });
+
+    useUIStore.getState().floatChatPanel('floating-chat');
+
+    const state = useUIStore.getState();
+    expect(state.floatingChatSessionId).toBe('floating-chat');
+    expect(state.rightSidebar.hidden).toBe(false);
+    expect(state.rightSidebar.activePanel).toBe(otherChat);
+  });
+
+  it('다시 도킹하면 해당 채팅을 우측 사이드바에 연다', () => {
+    useUIStore.getState().floatChatPanel('floating-chat');
+    useUIStore.getState().dockFloatingChat();
+
+    const state = useUIStore.getState();
+    expect(state.floatingChatSessionId).toBeNull();
+    expect(state.rightSidebar.hidden).toBe(false);
+    expect(state.rightSidebar.activePanel).toBe(floatingChat);
+  });
+
+  it('플로팅 중인 세션이 삭제되면 플로팅 상태를 정리한다', () => {
+    useUIStore.getState().floatChatPanel('floating-chat');
+    useUIStore.getState().removeChatPanel('floating-chat');
+
+    expect(useUIStore.getState().floatingChatSessionId).toBeNull();
+  });
+
+  it('채팅 토글을 끄면 플로팅 패널과 남은 채팅 사이드바를 함께 숨긴다', () => {
+    useUIStore.setState({
+      rightSidebar: {
+        hidden: false,
+        panels: [floatingChat, otherChat],
+        activePanel: floatingChat,
+        width: 320,
+      },
+    });
+    useUIStore.getState().floatChatPanel('floating-chat');
+
+    useUIStore.getState().toggleChatVisibility();
+
+    const state = useUIStore.getState();
+    expect(state.floatingChatSessionId).toBeNull();
+    expect(state.rightSidebar.hidden).toBe(true);
+  });
+});
+
 describe('uiStore 좌측 바 되살림 (empty-left 복구)', () => {
   it('좌측이 비어 있어도 openPanelOnSide로 settings를 복구·표시한다', () => {
     // dead-end 시나리오: 좌측 바가 비고 hidden:false 로 렌더 null 이 된 상태

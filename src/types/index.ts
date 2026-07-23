@@ -379,6 +379,17 @@ export interface DockingSidebarState {
 }
 
 /**
+ * 앱 내부 플로팅 채팅 패널의 위치와 크기.
+ * MainLayout의 콘텐츠 영역을 기준으로 한 CSS px 좌표입니다.
+ */
+export interface FloatingChatRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
  * DnD dataTransfer용
  */
 export interface PanelDragData {
