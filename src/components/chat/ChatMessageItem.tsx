@@ -185,7 +185,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
 
   return (
     <div
-      className={`chat-message group ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai'
+      className={`chat-message group ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai w-full max-w-none'
         } ${isStreaming ? 'ring-1 ring-primary-300/70' : ''}`}
       data-testid={message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}
       data-message-id={message.id}

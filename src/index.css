@@ -184,7 +184,7 @@
 
   .chat-message-ai {
     @apply bg-editor-bg;
-    @apply mr-auto max-w-[80%];
+    @apply mr-auto w-full max-w-none;
   }
 
   /* Chat Markdown */

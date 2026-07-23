@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast as sonnerToast } from 'sonner';
-import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType } from '@/types';
+import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType, FloatingChatRect } from '@/types';
 import { isChatPanel, chatPanelId } from '@/types';
 import { LAYOUT } from '@/constants/layout';
 import { useReviewStore } from '@/stores/reviewStore';
@@ -20,6 +20,8 @@ interface UIState extends EditorUIState {
   // === Dual Sidebar State (Docking Model) ===
   leftSidebar: DockingSidebarState;
   rightSidebar: DockingSidebarState;
+  floatingChatSessionId: string | null;
+  floatingChatRect: FloatingChatRect;
 
   // Editor typography settings (Source/Target 패널별 독립 설정)
   sourceFontSize: number; // px
@@ -108,6 +110,10 @@ interface UIActions {
   removeChatPanel: (sessionId: string) => void;
   syncChatPanels: (sessionIds: string[]) => void;
   openActiveChat: () => void;
+  floatChatPanel: (sessionId: string) => void;
+  dockFloatingChat: () => void;
+  closeFloatingChat: () => void;
+  setFloatingChatRect: (rect: FloatingChatRect) => void;
 
   // Editor typography (Source/Target 패널별 독립 설정)
   setSourceFontSize: (size: number) => void;
@@ -168,6 +174,8 @@ export const useUIStore = create<UIStore>()(
       // === Docking Sidebar - 기본값 ===
       leftSidebar: { hidden: false, panels: ['settings', 'review', 'comments'], activePanel: 'settings', width: 250 },
       rightSidebar: { hidden: false, panels: [], activePanel: null, width: 250 },
+      floatingChatSessionId: null,
+      floatingChatRect: { x: 24, y: 24, width: 400, height: 560 },
 
       // Editor typography defaults (Source/Target 패널별 독립 설정)
       sourceFontSize: 14,
@@ -383,6 +391,19 @@ export const useUIStore = create<UIStore>()(
 
       toggleChatVisibility: (): void => {
         const state = get();
+        if (state.floatingChatSessionId) {
+          const sidebarUpdates: Partial<Record<'leftSidebar' | 'rightSidebar', DockingSidebarState>> = {};
+          for (const side of ['leftSidebar', 'rightSidebar'] as const) {
+            const sidebar = state[side];
+            if (sidebar.hidden || !sidebar.activePanel || !isChatPanel(sidebar.activePanel)) continue;
+            const fallbackPanel = sidebar.panels.find((panel) => !isChatPanel(panel)) ?? null;
+            sidebarUpdates[side] = fallbackPanel
+              ? { ...sidebar, activePanel: fallbackPanel, hidden: false }
+              : { ...sidebar, hidden: true };
+          }
+          set({ floatingChatSessionId: null, ...sidebarUpdates });
+          return;
+        }
         const chatSides = (['left', 'right'] as const).filter((side) => {
           const sb = side === 'left' ? state.leftSidebar : state.rightSidebar;
           return sb.panels.some(isChatPanel);
@@ -564,7 +585,12 @@ export const useUIStore = create<UIStore>()(
             updates[side] = { ...sb, panels: newPanels, activePanel: newActive, hidden: newPanels.length === 0 ? true : sb.hidden };
           }
         }
-        if (Object.keys(updates).length > 0) set(updates);
+        const floatingChatSessionId = state.floatingChatSessionId === sessionId
+          ? null
+          : state.floatingChatSessionId;
+        if (Object.keys(updates).length > 0 || floatingChatSessionId !== state.floatingChatSessionId) {
+          set({ ...updates, floatingChatSessionId });
+        }
       },
 
       syncChatPanels: (sessionIds: string[]): void => {
@@ -613,11 +639,30 @@ export const useUIStore = create<UIStore>()(
           };
         }
 
-        if (Object.keys(updates).length > 0) set(updates);
+        const floatingChatSessionId = state.floatingChatSessionId
+          && sessionIds.includes(state.floatingChatSessionId)
+          ? state.floatingChatSessionId
+          : null;
+
+        if (floatingChatSessionId) {
+          const floatingPanel = chatPanelId(floatingChatSessionId);
+          const nextRight = updates.rightSidebar ?? state.rightSidebar;
+          if (nextRight.activePanel === floatingPanel) {
+            const fallback = nextRight.panels.find((panel) => panel !== floatingPanel && isChatPanel(panel)) ?? null;
+            updates.rightSidebar = fallback
+              ? { ...nextRight, activePanel: fallback, hidden: false }
+              : { ...nextRight, hidden: true };
+          }
+        }
+
+        if (Object.keys(updates).length > 0 || floatingChatSessionId !== state.floatingChatSessionId) {
+          set({ ...updates, floatingChatSessionId });
+        }
       },
 
       openActiveChat: (): void => {
         const state = get();
+        if (state.floatingChatSessionId) return;
         // 이미 열려있는 chat 패널 찾기 (어느 사이드든)
         for (const side of ['rightSidebar', 'leftSidebar'] as const) {
           const sb = state[side];
@@ -653,6 +698,49 @@ export const useUIStore = create<UIStore>()(
           // 세션 자체가 없으면 새로 생성 (createSession → addChatPanel 자동 호출)
           chatState.createSession();
         }
+      },
+
+      floatChatPanel: (sessionId: string): void => {
+        const state = get();
+        const panel = chatPanelId(sessionId);
+        const rightSidebar = state.rightSidebar;
+        if (!rightSidebar.panels.includes(panel)) return;
+
+        const fallback = rightSidebar.panels.find((candidate) => candidate !== panel && isChatPanel(candidate)) ?? null;
+        set({
+          floatingChatSessionId: sessionId,
+          rightSidebar: fallback
+            ? { ...rightSidebar, activePanel: fallback, hidden: false }
+            : { ...rightSidebar, hidden: true },
+        });
+      },
+
+      dockFloatingChat: (): void => {
+        const state = get();
+        const sessionId = state.floatingChatSessionId;
+        if (!sessionId) return;
+
+        const panel = chatPanelId(sessionId);
+        const rightSidebar = state.rightSidebar;
+        set({
+          floatingChatSessionId: null,
+          rightSidebar: {
+            ...rightSidebar,
+            panels: rightSidebar.panels.includes(panel)
+              ? rightSidebar.panels
+              : [...rightSidebar.panels, panel],
+            activePanel: panel,
+            hidden: false,
+          },
+        });
+      },
+
+      closeFloatingChat: (): void => {
+        set({ floatingChatSessionId: null });
+      },
+
+      setFloatingChatRect: (rect: FloatingChatRect): void => {
+        set({ floatingChatRect: rect });
       },
 
       // Editor typography (Source/Target 패널별 독립 설정)
@@ -740,7 +828,7 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const data = persisted as Record<string, unknown>;
 
@@ -867,6 +955,11 @@ export const useUIStore = create<UIStore>()(
           data.rightSidebar = normalizeSide(right, nextRight);
         }
 
+        if (version < 7) {
+          data.floatingChatSessionId = null;
+          data.floatingChatRect = { x: 24, y: 24, width: 400, height: 560 };
+        }
+
         return data;
       },
       partialize: (state) => ({
@@ -880,6 +973,8 @@ export const useUIStore = create<UIStore>()(
         // Dual sidebar persist
         leftSidebar: state.leftSidebar,
         rightSidebar: state.rightSidebar,
+        floatingChatSessionId: state.floatingChatSessionId,
+        floatingChatRect: state.floatingChatRect,
         // Editor typography
         sourceFontSize: state.sourceFontSize,
         sourceLineHeight: state.sourceLineHeight,

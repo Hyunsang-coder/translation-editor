@@ -10,6 +10,7 @@ import { ToastHost } from '@/components/ui/ToastHost';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 import { createProject } from '@/tauri/project';
+import { FloatingChatPanel } from '@/components/chat/FloatingChatPanel';
 
 // 개발자 테스트 패널 (lazy load)
 const ReviewTestPanel = lazy(() =>
@@ -154,6 +155,12 @@ export function MainLayout(): JSX.Element {
         {project && (
           <ErrorBoundary name="RightSidebar">
             <UnifiedSidebar side="right" />
+          </ErrorBoundary>
+        )}
+
+        {project && (
+          <ErrorBoundary name="FloatingChatPanel">
+            <FloatingChatPanel />
           </ErrorBoundary>
         )}
 
