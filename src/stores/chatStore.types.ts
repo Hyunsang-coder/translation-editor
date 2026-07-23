@@ -1,4 +1,4 @@
-import type { ChatSession, ChatMessage, GlossaryEntry } from '@/types';
+import type { ChatSession, ChatMessage, ChatSessionMemory, GlossaryEntry } from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -92,6 +92,8 @@ export interface ChatActions {
   renameSession: (sessionId: string, name: string) => void;
   /** 세션별 모델 프리셋 변경 (전역 chatModel과 분리, 다음 응답부터 적용) */
   setSessionModelPreset: (sessionId: string, preset: string) => void;
+  /** 세션 장기 대화 요약(memory) 갱신 (Phase 3, transcript는 보존) */
+  updateSessionMemory: (sessionId: string, memory: ChatSessionMemory) => void;
 
   // 메시지 관리
   sendMessage: (content: string, targetSessionId?: string) => Promise<void>;

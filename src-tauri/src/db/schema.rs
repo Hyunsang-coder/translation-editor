@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     context_block_ids TEXT NOT NULL,  -- JSON Array
     confluence_search_enabled INTEGER NOT NULL DEFAULT 1,
     model_preset TEXT,  -- 세션별 채팅 모델 프리셋 ID (NULL이면 프런트가 전역 기본값 상속)
+    memory_json TEXT,  -- 장기 대화 요약 상태(ChatSessionMemory) JSON (NULL이면 요약 없음)
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 

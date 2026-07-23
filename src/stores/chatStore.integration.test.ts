@@ -23,6 +23,11 @@ vi.mock('@/ai/chat', () => ({
 vi.mock('@/ai/config', () => ({
   getAiConfig: mocks.getAiConfig,
   resolveModelRunConfig: mocks.resolveModelRunConfig,
+  // resolveSummaryModelRunConfig(요약 저비용 모델 파생)이 사용하는 실 구현 스텁
+  resolveModelFromPreset: (raw: string) => ({
+    provider: raw.startsWith('claude') ? 'anthropic' : 'openai',
+    model: raw,
+  }),
 }));
 
 vi.mock('@/ai/client', () => ({
@@ -545,6 +550,80 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
 
       expect(useChatStore.getState().attachments).toHaveLength(1);
       expect(useChatStore.getState().isAttachmentLoading).toBe(false);
+    });
+  });
+
+  describe('Phase 3: 장기 대화 요약/토큰 예산', () => {
+    function seedMessages(sessionId: string, n: number): void {
+      const seeded = Array.from({ length: n }, (_, i) => ({
+        id: `s${i}`,
+        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: `과거 메시지 ${i}`,
+        timestamp: 1000 + i,
+      }));
+      useChatStore.setState((state) => ({
+        sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, messages: seeded } : s)),
+        currentSession:
+          state.currentSession?.id === sessionId
+            ? { ...state.currentSession, messages: seeded }
+            : state.currentSession,
+      }));
+    }
+
+    it('긴 대화는 오래된 구간을 요약해 memory에 저장하고 전체 transcript는 보존한다', async () => {
+      useChatStore.getState().createSession('Long');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      seedMessages(sessionId, 30);
+      // 요약 모델(createChatModel().invoke) 응답 고정
+      mocks.webInvoke.mockResolvedValue({ content: '누적 요약 텍스트' });
+
+      await useChatStore.getState().sendMessage('새 질문', sessionId);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      // transcript 무손실: 30 + user + assistant
+      expect(session?.messages).toHaveLength(32);
+      // memory에 요약 저장
+      expect(session?.memory?.summary).toBe('누적 요약 텍스트');
+      expect(session?.memory?.summarizedThroughMessageId).toBeTruthy();
+      // 요약이 AI 요청 컨텍스트로 전달됨
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationSummary: '누적 요약 텍스트' }),
+        expect.any(Object),
+        expect.any(Object),
+      );
+    });
+
+    it('요약 실패 시 transcript를 보존하고 응답을 계속한다(무손실 fallback)', async () => {
+      useChatStore.getState().createSession('LongFail');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      seedMessages(sessionId, 30);
+      // 요약 모델 호출이 실패(비재시도 에러) → 기존 요약 유지
+      mocks.webInvoke.mockRejectedValue(new Error('summary boom'));
+
+      await useChatStore.getState().sendMessage('새 질문', sessionId);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      // transcript 보존 + 응답 진행
+      expect(session?.messages).toHaveLength(32);
+      expect(session?.messages.at(-1)?.content).toBe('AI 응답입니다.');
+      // 요약 실패했으므로 memory.summary는 비어 있음
+      expect(session?.memory?.summary ?? '').toBe('');
+    });
+
+    it('짧은 대화는 요약하지 않고 memory를 만들지 않는다', async () => {
+      useChatStore.getState().createSession('Short');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      seedMessages(sessionId, 4);
+
+      await useChatStore.getState().sendMessage('짧은 질문', sessionId);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      expect(session?.memory).toBeUndefined();
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.not.objectContaining({ conversationSummary: expect.anything() }),
+        expect.any(Object),
+        expect.any(Object),
+      );
     });
   });
 });

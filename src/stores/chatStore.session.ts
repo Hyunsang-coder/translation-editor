@@ -2,7 +2,7 @@
  * chatStore 세션/메시지 CRUD + hydration 슬라이스
  */
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatSession, ChatMessage } from '@/types';
+import type { ChatSession, ChatMessage, ChatSessionMemory } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
@@ -344,6 +344,25 @@ export function createSessionActions(
     schedulePersist();
   };
 
+  /**
+   * 세션의 장기 대화 요약(memory)을 갱신한다 (Phase 3).
+   * - transcript(messages)는 건드리지 않는다. working context 요약만 저장/영속한다.
+   */
+  const updateSessionMemory = (sessionId: string, memory: ChatSessionMemory): void => {
+    const target = get().sessions.find((s) => s.id === sessionId);
+    if (!target) return;
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === sessionId ? { ...s, memory } : s
+      ),
+      currentSession:
+        state.currentSession?.id === sessionId
+          ? { ...state.currentSession, memory }
+          : state.currentSession,
+    }));
+    schedulePersist();
+  };
+
   const shouldShowSummarySuggestion = (): boolean => {
     const session = get().currentSession;
     if (!session) return false;
@@ -386,6 +405,7 @@ export function createSessionActions(
     deleteSession,
     renameSession,
     setSessionModelPreset,
+    updateSessionMemory,
     shouldShowSummarySuggestion,
     dismissSummarySuggestion,
     startNewSessionFromSuggestion,

@@ -7,11 +7,14 @@ import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/sugges
 import { confluenceWordCountTool, confluenceLoadPageTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
 import i18n from '@/i18n/config';
-import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessageChunk, HumanMessage, SystemMessage, ToolMessage, trimMessages } from '@langchain/core/messages';
 import type { ToolCall, ToolCallChunk } from '@langchain/core/messages/tool';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { BindToolsInput } from '@langchain/core/language_models/chat_models';
 import type { StructuredToolInterface } from '@langchain/core/tools';
+import { resolveModelCapabilities, type ModelCapabilities } from '@/ai/chatContext/modelCapabilities';
+import { computeInputBudget, estimateMessagesTokens } from '@/ai/chatContext/tokenBudget';
+import { DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 
 /** runToolCallingLoop가 실행 가능한 도구의 최소 인터페이스 */
 type ToolCallableSpec = { name: string; invoke: (arg: Record<string, unknown>) => Promise<unknown> };
@@ -184,6 +187,11 @@ export interface GenerateReplyInput {
   imageAttachments?: { filename: string; fileType: string; filePath: string }[];
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
+  /**
+   * 장기 대화 누적 요약 (Phase 3).
+   * - store의 context planner가 오래된 대화를 접어 만든 요약. recentMessages(원문)와 함께 전달.
+   */
+  conversationSummary?: string;
 }
 
 /** 이번 요청에서 실제 소비된 토큰 사용량 (provider usage_metadata 집계) */
@@ -331,6 +339,41 @@ const MAX_SAME_ERROR = 2;
 // 루프 내 누적 메시지 수 상한 (context window 초과 방지)
 // 초기 메시지 + (AI 응답 + 도구 결과) * N 스텝이 이 값을 초과하면 루프 중단
 const MAX_LOOP_MESSAGES = 80;
+
+/**
+ * Phase 3: 모델 호출 직전 입력 토큰 하드 가드 (§7.2).
+ * 요약 + 최근 원문이 조립된 이후에도 예산을 넘으면 trimMessages로 최종 절단한다.
+ * - 시스템 메시지는 보존(includeSystem), 최신(현재 사용자 메시지)부터 유지(strategy 'last').
+ * - 예산 이내면 무손실로 그대로 반환한다.
+ */
+async function applyInputTokenGuard(
+  messages: BaseMessage[],
+  capabilities: ModelCapabilities,
+): Promise<BaseMessage[]> {
+  const budget = computeInputBudget({
+    maxInputTokens: capabilities.maxInputTokens,
+    outputTokenBudget: DEFAULT_CHAT_MAX_TOKENS,
+  });
+  if (estimateMessagesTokens(messages) <= budget.usableInputTokens) return messages;
+
+  try {
+    const trimmed = await trimMessages(messages, {
+      maxTokens: budget.usableInputTokens,
+      tokenCounter: estimateMessagesTokens,
+      strategy: 'last',
+      startOn: 'human',
+      includeSystem: true,
+    });
+    if (Array.isArray(trimmed) && trimmed.length > 0) return trimmed;
+    return messages;
+  } catch (e) {
+    console.warn(
+      '[chat] input token guard(trimMessages) 실패, 원본 유지:',
+      e instanceof Error ? e.message : e,
+    );
+    return messages;
+  }
+}
 
 /**
  * 실시간 토큰 스트리밍을 지원하는 도구 호출 루프
@@ -930,6 +973,9 @@ export async function streamAssistantReply(
   // 캡처된 runConfig로 모델 생성 (요청 도중 전역 store 재조회 없음 → 모델 결정 경쟁 조건 제거)
   const model = createChatModel(undefined, { useFor: 'chat', runConfig });
 
+  // Phase 3: 대상 모델 capability (입력 예산/vision 지원)
+  const capabilities = resolveModelCapabilities(runConfig);
+
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)
   const sourceDocument = undefined;
@@ -944,12 +990,14 @@ export async function streamAssistantReply(
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+      ...(input.conversationSummary ? { conversationSummary: input.conversationSummary } : {}),
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
       ...(targetDocument ? { targetDocument } : {}),
     },
     {
       requestType,
+      imageInputs: capabilities.imageInputs,
     },
   );
 
@@ -982,6 +1030,9 @@ export async function streamAssistantReply(
     provider: runConfig.provider,
   });
 
+  // Phase 3: 모델 호출 직전 입력 토큰 하드 가드 (예산 이내면 무손실 통과)
+  const guardedMessages = await applyInputTokenGuard(finalMessages, capabilities);
+
   let finalText: string;
   let toolsUsed: string[];
   let usage: UsageInfo;
@@ -990,7 +1041,7 @@ export async function streamAssistantReply(
       model,
       tools: toolSpecs as ToolCallableSpec[],
       bindTools,
-      messages: finalMessages,
+      messages: guardedMessages,
       ...(cb ? { cb } : {}),
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
     }));
@@ -1006,11 +1057,12 @@ export async function streamAssistantReply(
           '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
         ].join('\n'),
       );
+      const guardedFallback = await applyInputTokenGuard(fallback, capabilities);
       ({ finalText, toolsUsed, usage } = await runToolCallingLoop({
         model,
         tools: toolSpecs as ToolCallableSpec[],
         bindTools,
-        messages: fallback,
+        messages: guardedFallback,
         ...(cb ? { cb } : {}),
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       }));

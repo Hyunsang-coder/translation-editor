@@ -121,7 +121,7 @@ function getEnvApiKeyFallback(kind: 'openai' | 'anthropic'): string | undefined 
  * 프리셋 ID(rawModel) → provider/실제 모델 ID/추론 강도 해석
  * getAiConfig와 resolveModelRunConfig가 공유하는 단일 소스입니다.
  */
-function resolveModelFromPreset(rawModel: string): {
+export function resolveModelFromPreset(rawModel: string): {
   provider: 'openai' | 'anthropic';
   model: string;
   reasoningEffort?: ReasoningEffort;
@@ -186,7 +186,11 @@ export interface ModelRunConfig {
   temperature?: number;
   openaiApiKey?: string;
   anthropicApiKey?: string;
-  /** 모델 컨텍스트에 포함할 최근 메시지 수 (Phase 3에서 토큰 예산으로 대체 예정) */
+  /**
+   * @deprecated Phase 3에서 고정 N개 slice 경로는 토큰 예산 기반 context planner
+   * (src/ai/chatContext/conversationContext.ts)로 대체됨. 하위호환을 위해 필드는 유지하되
+   * 채팅 히스토리 절단에는 더 이상 사용되지 않는다.
+   */
   maxRecentMessages: number;
 }
 

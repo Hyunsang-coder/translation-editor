@@ -464,6 +464,17 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         </div>
       )}
 
+      {/* 장기 대화 요약 활성 알림 (Phase 3): 오래된 맥락이 요약으로 유지됨 */}
+      {displaySession?.memory?.summary ? (
+        <div
+          className="border-b border-editor-border bg-editor-surface/40 px-4 py-1.5 flex items-center gap-1.5 shrink-0 text-[11px] text-editor-muted"
+          title={t('chat.memorySummaryTitle')}
+        >
+          <span aria-hidden>🗜</span>
+          <span className="leading-relaxed">{t('chat.memorySummaryActive')}</span>
+        </div>
+      ) : null}
+
       {/* 메시지 목록 */}
       <div className="relative flex-1 min-h-0">
         <div

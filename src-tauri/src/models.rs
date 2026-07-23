@@ -145,6 +145,9 @@ pub struct ChatSession {
     /// 세션별 채팅 모델 프리셋 ID (없으면 프런트가 전역 기본값을 상속)
     #[serde(rename = "modelPreset", default, skip_serializing_if = "Option::is_none")]
     pub model_preset: Option<String>,
+    /// 장기 대화 요약 상태(ChatSessionMemory). 프론트 구조를 그대로 roundtrip 하기 위해 JSON으로 보관합니다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<Value>,
 }
 
 fn default_true() -> bool {

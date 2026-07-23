@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { detectRequestType, buildBlockContextText } from './prompt';
-import type { BlockType, EditorBlock } from '@/types';
+import { SystemMessage, HumanMessage } from '@langchain/core/messages';
+import { detectRequestType, buildBlockContextText, buildLangChainMessages } from './prompt';
+import type { BlockType, ChatMessage, EditorBlock } from '@/types';
 
 describe('detectRequestType', () => {
   describe('질문 감지 (question)', () => {
@@ -147,5 +148,58 @@ describe('buildBlockContextText', () => {
     // 500자 + "..." = 503자 이하
     expect(result).toContain('...');
     expect(result.length).toBeLessThan(600);
+  });
+});
+
+describe('buildLangChainMessages — Phase 3 (요약/이미지 capability)', () => {
+  const baseCtx = {
+    project: null,
+    contextBlocks: [],
+    recentMessages: [] as ChatMessage[],
+    userMessage: '이 표현 자연스러워?',
+  };
+
+  it('conversationSummary가 있으면 시스템 프롬프트에 요약 블록을 포함한다', async () => {
+    const messages = await buildLangChainMessages(
+      { ...baseCtx, conversationSummary: '사용자는 존댓말 톤을 확정했다.' },
+      { requestType: 'question' },
+    );
+    const system = messages[0] as SystemMessage;
+    expect(String(system.content)).toContain('[이전 대화 요약]');
+    expect(String(system.content)).toContain('존댓말 톤을 확정했다');
+  });
+
+  it('시스템 메시지는 항상 맨 앞에 보존된다', async () => {
+    const recent: ChatMessage[] = [
+      { id: 'a', role: 'user', content: '첫 질문', timestamp: 1 },
+      { id: 'b', role: 'assistant', content: '첫 답변', timestamp: 2 },
+    ];
+    const messages = await buildLangChainMessages({ ...baseCtx, recentMessages: recent }, {});
+    expect(messages[0]).toBeInstanceOf(SystemMessage);
+    expect(messages.length).toBe(4); // system + 2 history + current human
+  });
+
+  it('imageInputs=false면 history의 이미지 블록을 제외하고 텍스트만 전달', async () => {
+    const recent: ChatMessage[] = [
+      {
+        id: 'u1',
+        role: 'user',
+        content: '이 이미지 봐줘',
+        timestamp: 1,
+        metadata: {
+          imageAttachments: [{ filename: 'a.png', thumbnailDataUrl: 'data:image/png;base64,AAAA' }],
+        },
+      },
+    ];
+    const withVision = await buildLangChainMessages({ ...baseCtx, recentMessages: recent }, { imageInputs: true });
+    const noVision = await buildLangChainMessages({ ...baseCtx, recentMessages: recent }, { imageInputs: false });
+
+    const visionHist = withVision[1] as HumanMessage;
+    const noVisionHist = noVision[1] as HumanMessage;
+    // vision 지원: 멀티모달 블록 배열
+    expect(Array.isArray(visionHist.content)).toBe(true);
+    // vision 미지원: 순수 텍스트 문자열
+    expect(typeof noVisionHist.content).toBe('string');
+    expect(noVisionHist.content).toContain('이 이미지 봐줘');
   });
 });

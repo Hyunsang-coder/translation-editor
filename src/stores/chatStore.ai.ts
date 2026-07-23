@@ -4,8 +4,16 @@
 import type { ChatMessage } from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
 import { streamAssistantReply, type StreamCallbacks } from '@/ai/chat';
-import { getAiConfig, resolveModelRunConfig } from '@/ai/config';
+import { resolveModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { resolveModelCapabilities } from '@/ai/chatContext/modelCapabilities';
+import { approxTokens, computeInputBudget } from '@/ai/chatContext/tokenBudget';
+import { planConversationContext } from '@/ai/chatContext/conversationContext';
+import {
+  summarizeConversation,
+  resolveSummaryModelRunConfig,
+} from '@/ai/chatContext/summarizeConversation';
+import { DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { formatGlossaryForPrompt, resolveGlossaryEntries } from '@/utils/glossaryInject';
@@ -211,7 +219,61 @@ export function createAiActions(
         set({ lastInjectedGlossary: [] });
       }
 
-      const recent: ChatMessage[] = priorMessages;
+      // ── Phase 3: 장기 대화 context planning + 증분 요약 ──────────────
+      // 전체 prior transcript(priorMessages)를 토큰 예산 기준으로 "누적 요약 + 최근 원문"으로 나눈다.
+      // 예산을 넘는 오래된 구간만 저비용 모델로 요약해 세션 memory에 저장한다(transcript 무손실).
+      const capabilities = resolveModelCapabilities(runConfig);
+      const budget = computeInputBudget({
+        maxInputTokens: capabilities.maxInputTokens,
+        outputTokenBudget: DEFAULT_CHAT_MAX_TOKENS,
+      });
+      // 시스템 프롬프트/도구 가이드 + 규칙/글로서리/컨텍스트/현재 입력의 고정 컨텍스트 추정치
+      const SYSTEM_BASE_TOKENS = 1_500;
+      const reservedContextTokens =
+        SYSTEM_BASE_TOKENS +
+        approxTokens(translationRules) +
+        approxTokens(projectContext) +
+        approxTokens(glossaryInjected) +
+        approxTokens(content);
+
+      const plan = planConversationContext({
+        messages: priorMessages,
+        memory: session?.memory,
+        budget,
+        reservedContextTokens,
+      });
+
+      let conversationSummary = session?.memory?.summary ?? '';
+      if (plan.needsSummary) {
+        set({ statusMessage: '이전 대화 요약 중...' });
+        try {
+          const newSummary = await summarizeConversation({
+            priorSummary: conversationSummary,
+            messagesToSummarize: plan.messagesToSummarize,
+            runConfig,
+            abortSignal: abortController.signal,
+          });
+          // 요약 도중 취소/전환됐으면 이 요청의 상태를 더 진행하지 않는다.
+          if (!ownsStream()) return;
+          conversationSummary = newSummary;
+          get().updateSessionMemory(effectiveSessionId, {
+            summary: newSummary,
+            summarizedThroughMessageId: plan.summarizedThroughMessageId,
+            summaryUpdatedAt: Date.now(),
+            summaryModel: resolveSummaryModelRunConfig(runConfig).resolvedModel,
+            summaryVersion: 1,
+          });
+        } catch (e) {
+          // abort는 상위 catch가 정리하도록 전파. 그 외 실패는 기존 요약으로 안전 진행(무손실).
+          if (isAbortError(e)) throw e;
+          console.warn(
+            '[chatStore] 대화 요약 실패, 기존 요약으로 진행:',
+            e instanceof Error ? e.message : e,
+          );
+        }
+      }
+
+      const recent: ChatMessage[] = plan.recentRawMessages;
 
       // Assistant 빈 메시지 추가 (스트리밍 버블)
       // 실행 출처 메타데이터를 캡처된 runConfig에서 만든다(기록 모델 = 실제 호출 모델 보장).
@@ -321,6 +383,7 @@ export function createAiActions(
           translationRules,
           ...(glossaryInjected ? { glossaryInjected } : {}),
           projectContext,
+          ...(conversationSummary ? { conversationSummary } : {}),
           requestType: 'question',
           abortSignal: abortController.signal,
           attachments: capturedAttachments
@@ -459,10 +522,10 @@ export function createAiActions(
       return;
     }
 
-    // 최근 채팅 히스토리를 모델 컨텍스트에 포함
-    const maxRecent = getAiConfig().maxRecentMessages;
+    // Phase 3: 전체 prior transcript를 전달하고, 토큰 예산/요약은 executeAiReply의
+    // context planner가 처리한다(고정 20개 slice 제거).
     const targetSession = get().sessions.find((s) => s.id === effectiveSessionId);
-    const priorMessages = (targetSession?.messages ?? []).slice(-maxRecent);
+    const priorMessages = targetSession?.messages ?? [];
 
     // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
     const capturedAttachments = get().composerAttachments;
@@ -607,10 +670,9 @@ export function createAiActions(
     const content = targetMessage.content?.trim();
     if (!content) return;
 
-    // 해당 메시지 "이전"까지의 히스토리 포함
-    const maxRecent = getAiConfig().maxRecentMessages;
+    // 해당 메시지 "이전"까지의 전체 히스토리 포함 (Phase 3: context planner가 예산 처리)
     const idx = session.messages.findIndex((m) => m.id === messageId);
-    const priorMessages = idx > 0 ? session.messages.slice(Math.max(0, idx - maxRecent), idx) : [];
+    const priorMessages = idx > 0 ? session.messages.slice(0, idx) : [];
 
     // 재전송 시 해당 메시지 이후의 응답 삭제 (편집 후 저장과 동일한 동작)
     if (resolvedSessionId && idx >= 0) {

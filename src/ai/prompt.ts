@@ -105,11 +105,22 @@ export interface PromptContext {
   targetDocument?: string;
   /** 첨부 파일 (추출된 텍스트 목록) */
   attachments?: { filename: string; text: string }[];
+  /**
+   * 장기 대화 누적 요약 (Phase 3).
+   * - 오래된 원문 대화를 대체하는 working context. recentMessages(원문)와 함께 전달된다.
+   */
+  conversationSummary?: string;
 }
 
 export interface PromptOptions {
   /** 요청 유형 (자동 감지 또는 명시적 지정) */
   requestType?: RequestType;
+  /**
+   * 대상 모델이 이미지 입력을 지원하는지 여부 (Phase 3).
+   * - false면 history의 이미지 블록을 제외하고 텍스트만 전달한다.
+   * - 기본값 true(하위호환).
+   */
+  imageInputs?: boolean;
 }
 
 // ============================================
@@ -210,6 +221,16 @@ function formatProjectContext(context?: string): string {
   return ['[Project Context]', sliced].join('\n');
 }
 
+function formatConversationSummary(summary?: string): string {
+  const trimmed = summary?.trim();
+  if (!trimmed) return '';
+  return [
+    '[이전 대화 요약]',
+    '(아래는 오래된 대화를 압축한 누적 요약입니다. 최근 원문 대화와 함께 맥락으로 활용하세요.)',
+    trimmed,
+  ].join('\n');
+}
+
 function formatGlossaryInjected(glossary?: string): string {
   const trimmed = glossary?.trim();
   if (!trimmed) return '';
@@ -285,15 +306,20 @@ export function buildSystemPrompt(project: ITEProject | null, opts?: PromptOptio
 /** 최근 N개 메시지까지 이미지 포함 (토큰 비용 제한) */
 const MAX_HISTORY_IMAGES_MESSAGES = 3;
 
-function mapRecentMessagesToHistory(recentMessages: ChatMessage[]): BaseMessage[] {
+function mapRecentMessagesToHistory(
+  recentMessages: ChatMessage[],
+  opts?: { imageInputs?: boolean },
+): BaseMessage[] {
   const history: BaseMessage[] = [];
   const totalMessages = recentMessages.length;
+  // vision 미지원 모델이면 history 이미지는 제외하고 텍스트만 전달 (Phase 3, §6.2)
+  const allowImages = opts?.imageInputs !== false;
 
   recentMessages.forEach((m, i) => {
     const isRecent = i >= totalMessages - MAX_HISTORY_IMAGES_MESSAGES;
 
     if (m.role === 'user') {
-      const images = isRecent ? (m.metadata?.imageAttachments ?? []) : [];
+      const images = allowImages && isRecent ? (m.metadata?.imageAttachments ?? []) : [];
 
       if (images.length > 0 && images.some((img) => img.thumbnailDataUrl)) {
         // 멀티모달 HumanMessage: 텍스트 + 이미지
@@ -351,6 +377,7 @@ export async function buildLangChainMessages(
   const translationRules = formatTranslationRules(ctx.translationRules);
   const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
   const projectContext = formatProjectContext(ctx.projectContext);
+  const conversationSummary = formatConversationSummary(ctx.conversationSummary);
   const sourceDoc = formatDocument('원문', ctx.sourceDocument);
   const targetDoc = formatDocument('번역문', ctx.targetDocument);
 
@@ -358,6 +385,7 @@ export async function buildLangChainMessages(
     translationRules,
     glossaryInjected,
     projectContext,
+    conversationSummary,
     sourceDoc,
     targetDoc,
     formatAttachments(ctx.attachments),
@@ -366,7 +394,9 @@ export async function buildLangChainMessages(
     .filter(Boolean)
     .join('\n\n');
 
-  const history = mapRecentMessagesToHistory(ctx.recentMessages);
+  const history = mapRecentMessagesToHistory(ctx.recentMessages, {
+    imageInputs: opts?.imageInputs !== false,
+  });
 
   // 프롬프트 템플릿 구성
   // Google Gemini 등 일부 모델은 System Message가 맨 앞에 하나만 있어야 하거나, 

@@ -1,10 +1,10 @@
 # AI Chat 장기 대화·세션 모델 개선 구현 계획
 
 > 작성: 2026-07-23  
-> 상태: **Phase 0/1/2 구현 완료 · Phase 3/4 미착수** (2026-07-23 업데이트)  
+> 상태: **Phase 0/1/2/3 구현 완료 · Phase 4 미착수** (2026-07-23 업데이트)  
 > 목적: 이 문서만 읽고 새 세션에서 TDD 구현을 이어갈 수 있도록 현재 문제, 확정 결정, 단계별 작업, 마이그레이션과 완료 조건을 정리한다.
 >
-> **진행 상황 요약은 아래 [§15 구현 진행](#15-구현-진행-2026-07-23) 참조.** Phase 3(장기 대화 요약/토큰 예산)부터 이어서 진행하면 된다.
+> **진행 상황 요약은 아래 [§15 구현 진행](#15-구현-진행-2026-07-23) 참조.** Phase 3까지 완료됐고, 남은 것은 Phase 4(도구 context editing / 저장 정책 정리)다.
 
 ## 1. 목표
 
@@ -414,24 +414,24 @@ TDD:
 
 TDD:
 
-- [ ] 100개 이상 짧은 메시지에서 초기 결정이 summary로 유지
-- [ ] 한 개의 매우 긴 메시지가 있는 경우 token budget 적용
-- [ ] 기존 summary에 새 구간만 증분 반영
-- [ ] 요약 실패 시 transcript 무손실 fallback
-- [ ] smaller-context 모델 전환 시 자동 재예산
-- [ ] 시스템 메시지 보존
-- [ ] history가 user부터 시작하도록 유효성 유지
-- [ ] AI tool call/ToolMessage 쌍 보존
-- [ ] 이미지 capability 및 history 제한
+- [x] 100개 이상 짧은 메시지에서 초기 결정이 summary로 유지 (`conversationContext.test.ts` + `chatStore.integration.test.ts`)
+- [x] 한 개의 매우 긴 메시지가 있는 경우 token budget 적용 (`conversationContext.test.ts`)
+- [x] 기존 summary에 새 구간만 증분 반영 (`conversationContext.test.ts` 증분 + `summarizeConversation.test.ts`)
+- [x] 요약 실패 시 transcript 무손실 fallback (`summarizeConversation.test.ts` + store 통합 fallback 케이스)
+- [x] smaller-context 모델 전환 시 자동 재예산 (`conversationContext.test.ts` "작은 예산일수록 윈도우 축소")
+- [x] 시스템 메시지 보존 (`prompt.test.ts` system 맨 앞 + chat.ts `trimMessages` includeSystem)
+- [x] history가 user부터 시작하도록 유효성 유지 (`conversationContext.test.ts` user-start)
+- [~] AI tool call/ToolMessage 쌍 보존 — 영속 transcript엔 ToolMessage가 없어 planner/trimMessages가 쌍을 깨지 않음. 도구 루프 내부는 `MAX_LOOP_MESSAGES`로 Phase 4까지 유지
+- [x] 이미지 capability 및 history 제한 (`prompt.test.ts` imageInputs=false strip + `MAX_HISTORY_IMAGES_MESSAGES`)
 
 구현:
 
-- [ ] `maxRecentMessages: 20` 경로 제거
-- [ ] summary + recent turns 조립
-- [ ] target model token budget
-- [ ] `trimMessages` hard guard
-- [ ] summary persistence
-- [ ] 실제 summary notice UI
+- [x] `maxRecentMessages: 20` 경로 제거 (store의 `slice(-20)` 제거·전체 prior 전달. config 필드는 `@deprecated`로 유지)
+- [x] summary + recent turns 조립 (`conversationContext.ts` → `prompt.ts` `[이전 대화 요약]` 블록 + recent 원문)
+- [x] target model token budget (`modelCapabilities.ts` + `tokenBudget.ts`)
+- [x] `trimMessages` hard guard (`chat.ts::applyInputTokenGuard`)
+- [x] summary persistence (Rust `memory_json` 컬럼 + `updateSessionMemory` 액션)
+- [x] 실제 summary notice UI (`ChatContent` 요약 활성 알림 + i18n)
 
 ### Phase 4 — 도구 context editing과 저장 정책 정리
 
@@ -588,4 +588,48 @@ Phase 0/1/2 구현 완료. 커밋은 아직 안 함(사용자 커밋 권한 대�
 - `MAX_LOOP_MESSAGES = 80`(chat.ts)은 Phase 4까지 비상 상한으로 유지.
 - 요약 모델은 **세션 채팅 모델과 분리된 저비용 런타임 모델**(플랜 §2.6) — 이 코드를 구현하는 모델과 무관.
 - usage는 provider 실제값(사전 추정 아님). Phase 3에서 contextUtilization 계산 시 사전 추정치와 분리 기록(§12.5).
+
+## 16. Phase 3 구현 진행 (2026-07-23)
+
+Phase 3(장기 대화 요약/토큰 예산) 구현 완료. TDD로 각 모듈부터 통합까지 진행.
+
+### 16.1 신규 모듈 (`src/ai/chatContext/`)
+
+- `tokenBudget.ts` — CJK-aware heuristic 토큰 추정(`approxTokens`), 메시지 토큰 추정, `computeInputBudget`(usable = max - output - reserve, 요약 트리거 75%), 중앙 상수(MIN/MAX_RECENT_TURNS=8/12, IMAGE_TOKEN_COST, TOOL_SAFETY_RESERVE). 실제 토크나이저는 번들에 싣지 않음(§12.5 사전추정 ≠ 실사용).
+- `modelCapabilities.ts` — `resolveModelCapabilities({resolvedModel, provider})` → maxInputTokens(컨텍스트 윈도우×0.9)/imageInputs/toolCalling/reasoningOutput/builtInWebSearch. provider 기본값 + prefix override registry(현재 비어있음, 모든 프리셋이 provider 기본과 동일).
+- `conversationContext.ts` — 순수 플래너 `planConversationContext`. 전체 transcript를 (이미 요약된 prefix 제외) 최근 원문 윈도우(턴 수 상한 + 토큰 예산) + 요약 대상으로 분할. 원문 윈도우는 항상 user부터 시작. `{needsSummary, messagesToSummarize, recentRawMessages, summarizedThroughMessageId}` 반환.
+- `summarizeConversation.ts` — `resolveSummaryModelRunConfig(base)`(=실행 provider의 저비용 프리셋: anthropic→Haiku 4.5, openai→Luna Medium; base의 API 키 상속), `summarizeConversation`(증분 요약, `<untrusted_conversation>` 경계, abort 전파, 빈 응답/실패 시 기존 요약 유지=무손실).
+
+### 16.2 배선(수정 파일)
+
+- `prompt.ts` — `PromptContext.conversationSummary`(시스템 `[이전 대화 요약]` 블록), `PromptOptions.imageInputs`(false면 history 이미지 제거).
+- `chat.ts` — `GenerateReplyInput.conversationSummary` 스레드, `resolveModelCapabilities`로 imageInputs 전달, **`applyInputTokenGuard`**(모델 호출 직전 `trimMessages` 하드 가드: 예산 이내면 무손실 통과, 초과 시 strategy 'last'/startOn 'human'/includeSystem). 이미지 fallback 경로에도 적용.
+- `chatStore.ai.ts` — `sendMessage`/`replayMessage`의 `slice(-20)` 제거 → **전체 prior 전달**. `executeAiReply`에서 planner 실행 + `needsSummary`면 `summarizeConversation`(abort/ownership 가드) → `updateSessionMemory` 영속 → `conversationSummary`를 `streamAssistantReply`에 전달. `getAiConfig` import 제거.
+- `chatStore.session.ts` — `updateSessionMemory(sessionId, memory)` 액션(transcript 불변, schedulePersist). hydrate는 `...session`으로 memory 자동 캐리.
+- `types/index.ts` — `ChatSession.memory?: ChatSessionMemory`, `ChatSessionMemory{summary, summarizedThroughMessageId, summaryUpdatedAt, summaryModel, summaryVersion}`.
+- `config.ts` — `resolveModelFromPreset` export(요약 runConfig 파생용). `maxRecentMessages`는 `@deprecated`.
+- **Rust**: `models.rs` `ChatSession.memory: Option<Value>`(serde "memory"), `db/schema.rs` `memory_json TEXT`, `db/mod.rs` 마이그레이션 ALTER TABLE + save/load에 컬럼 포함.
+- `ChatContent.tsx` + i18n — 세션에 `memory.summary`가 있으면 "이전 대화 요약됨" 알림.
+
+### 16.3 검증 상태
+
+- `npx tsc --noEmit` ✅
+- `npm run test:run` ✅ 959 passed / 8 skipped (71 files, Phase 3에서 +31 신규)
+- `cargo test` ✅ 31 passed(신규 `chat_session_memory_roundtrip_and_legacy_null` 포함). 일반 TMPDIR(`TMPDIR=<repo>/src-tauri/target/tmptest`)에서 실행 시 `utils::validate_path...`도 통과(31/31).
+- `npm run test:e2e:web` — 19 passed / 1 failed. **실패는 Phase 3 무관**: `user-story.spec.ts`가 OpenAI 토글 초기 `disabled`를 기대하나 로컬 `.env.local`의 `OPENAI_API_KEY`가 dev serve에 주입되어 토글이 `enabled`로 시작(환경 아티팩트). Phase 3는 설정/키 UI를 건드리지 않음.
+- 커밋: 사용자 권한 대기(아직 커밋 안 함).
+
+### 16.4 설계 결정 · 편차
+
+1. **요약 모델 = 실행 provider의 저비용 프리셋**(고정 전역 프리셋 아님). 이유: 사용자가 한쪽 provider 키만 가질 수 있어 실행 provider의 키를 재사용해야 함. 같은 provider 안에서 채팅 모델을 바꿔도 요약 모델은 고정(§2 준수). provider 전환 시에만 요약 모델 provider도 따라감(키 제약상 불가피). 필요 시 별도 설정으로 확장 가능하게 `SUMMARY_PRESET_BY_PROVIDER` 중앙화.
+2. **토큰은 heuristic 사전추정**(실 토크나이저 미번들). 하드 가드(`trimMessages`)도 동일 추정치 사용. 실 usage는 provider usage_metadata로 별도 기록(Phase 1에서 이미).
+3. **요약은 인라인(전송 preflight)**: `needsSummary`일 때만, 그리고 증분(새 구간만)이라 지연/비용 제한적. "이전 대화 요약 중..." 상태 표시.
+4. **`maxRecentMessages` 필드 유지(제거 대신 deprecate)**: 인터페이스/테스트 ~15곳 churn 회피(Surgical). 실제 절단 경로만 제거.
+5. **capability override registry는 현재 비어있음**: 모든 현행 프리셋이 provider 기본 capability와 동일. 특성이 다른 모델 추가 시 등록.
+
+### 16.5 Phase 4 착수 시 주의
+
+- 오래된 tool result 축약(`[cleared: ...]`), tool/model call limit 중앙화, SQLite 100개 destructive clamp 제거/1,000 정렬, delete-all/reinsert → 증분 upsert 검토, 장기 대화 telemetry(contextUtilization 채우기), Chat E2E.
+- `MAX_LOOP_MESSAGES = 80`은 Phase 4에서 token-aware guard 안정화 후 제거 판단.
+- Rust `save_chat_sessions`는 여전히 세션당 100 메시지로 clamp(§3.4) — Phase 4에서 프런트 1,000과 정렬 필요. 현재 memory(요약)는 clamp와 무관하게 세션 레코드에 저장되므로, 100 초과 삭제돼도 요약은 보존됨.
 

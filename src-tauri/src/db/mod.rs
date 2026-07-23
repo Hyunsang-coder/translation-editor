@@ -256,6 +256,18 @@ impl Database {
             )?;
         }
 
+        // chat_sessions.memory_json 컬럼 추가 (기존 DB 호환)
+        // NULL 허용: 요약이 아직 없는 세션을 의미한다.
+        let has_memory_json: bool = self
+            .conn
+            .prepare("SELECT memory_json FROM chat_sessions LIMIT 0")
+            .is_ok();
+        if !has_memory_json {
+            self.conn.execute_batch(
+                "ALTER TABLE chat_sessions ADD COLUMN memory_json TEXT;",
+            )?;
+        }
+
         // history.snapshot_json 컬럼 추가 (풀 스냅샷 저장용)
         let has_snapshot_json: bool = self
             .conn
@@ -899,9 +911,13 @@ impl Database {
         const MAX_MESSAGES_PER_SESSION: usize = 100;
 
         for session in sorted.into_iter().take(MAX_SESSIONS) {
+            let memory_json: Option<String> = match &session.memory {
+                Some(mem) => Some(serde_json::to_string(mem)?),
+                None => None,
+            };
             tx.execute(
-                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids, confluence_search_enabled, model_preset)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids, confluence_search_enabled, model_preset, memory_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 (
                     &session.id,
                     project_id,
@@ -910,6 +926,7 @@ impl Database {
                     serde_json::to_string(&session.context_block_ids)?,
                     session.confluence_search_enabled,
                     &session.model_preset,
+                    memory_json,
                 ),
             )?;
 
@@ -959,7 +976,7 @@ impl Database {
     /// 채팅 세션 목록 로드 (최근 활동 기준, 최대 MAX_SESSIONS개)
     pub fn load_chat_sessions(&self, project_id: &str) -> Result<Vec<ChatSession>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT s.id, s.name, s.created_at, s.context_block_ids, s.confluence_search_enabled, s.model_preset,
+            "SELECT s.id, s.name, s.created_at, s.context_block_ids, s.confluence_search_enabled, s.model_preset, s.memory_json,
                     COALESCE((SELECT MAX(m.timestamp) FROM chat_messages m WHERE m.session_id = s.id), s.created_at) AS last_ts
              FROM chat_sessions s
              WHERE s.project_id = ?1
@@ -975,15 +992,19 @@ impl Database {
                 row.get::<_, String>(3)?,
                 row.get::<_, bool>(4)?,
                 row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
             ))
         })?;
 
         let mut sessions = Vec::new();
         for r in iter {
-            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled, model_preset) =
+            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled, model_preset, memory_json) =
                 r?;
             let context_block_ids: Vec<String> =
                 serde_json::from_str(&context_block_ids_json).unwrap_or_default();
+            let memory: Option<serde_json::Value> = memory_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
 
             let mut msg_stmt = self.conn.prepare(
                 "SELECT id, role, content, timestamp, metadata_json
@@ -1018,6 +1039,7 @@ impl Database {
                 context_block_ids,
                 confluence_search_enabled,
                 model_preset,
+                memory,
             });
         }
 
@@ -2748,6 +2770,7 @@ mod tests {
             context_block_ids: vec![],
             confluence_search_enabled: true,
             model_preset: Some("gpt-5.6-sol-high".to_string()),
+            memory: None,
         };
         let without_preset = ChatSession {
             id: "sess-without".to_string(),
@@ -2757,6 +2780,7 @@ mod tests {
             context_block_ids: vec![],
             confluence_search_enabled: true,
             model_preset: None,
+            memory: None,
         };
 
         db.save_chat_sessions(&project.id, &[with_preset, without_preset])
@@ -2778,6 +2802,69 @@ mod tests {
             .find(|s| s.id == "sess-without")
             .expect("without-preset session missing");
         assert_eq!(loaded_without.model_preset, None);
+    }
+
+    #[test]
+    fn chat_session_memory_roundtrip_and_legacy_null() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-chat-memory");
+        db.save_project(&project).expect("failed to save project");
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let memory = serde_json::json!({
+            "summary": "사용자는 게임 UI 문자열을 번역 중이며 존댓말 톤을 확정했다.",
+            "summarizedThroughMessageId": "msg-42",
+            "summaryUpdatedAt": now,
+            "summaryModel": "claude-haiku-4-5",
+            "summaryVersion": 1,
+        });
+        let with_memory = ChatSession {
+            id: "sess-mem".to_string(),
+            name: "With Memory".to_string(),
+            created_at: now,
+            messages: vec![],
+            context_block_ids: vec![],
+            confluence_search_enabled: true,
+            model_preset: None,
+            memory: Some(memory.clone()),
+        };
+        let without_memory = ChatSession {
+            id: "sess-nomem".to_string(),
+            name: "Without Memory".to_string(),
+            created_at: now + 1,
+            messages: vec![],
+            context_block_ids: vec![],
+            confluence_search_enabled: true,
+            model_preset: None,
+            memory: None,
+        };
+
+        db.save_chat_sessions(&project.id, &[with_memory, without_memory])
+            .expect("failed to save chat sessions");
+
+        let loaded = db
+            .load_chat_sessions(&project.id)
+            .expect("failed to load chat sessions");
+        assert_eq!(loaded.len(), 2);
+
+        let loaded_with = loaded
+            .iter()
+            .find(|s| s.id == "sess-mem")
+            .expect("with-memory session missing");
+        assert_eq!(loaded_with.memory.as_ref(), Some(&memory));
+        assert_eq!(
+            loaded_with.memory.as_ref().unwrap()["summarizedThroughMessageId"],
+            serde_json::json!("msg-42")
+        );
+
+        let loaded_without = loaded
+            .iter()
+            .find(|s| s.id == "sess-nomem")
+            .expect("without-memory session missing");
+        assert_eq!(loaded_without.memory, None);
     }
 
     #[test]

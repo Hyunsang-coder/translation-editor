@@ -166,6 +166,30 @@ export interface ChatSession {
    * - 전역 aiConfigStore.chatModel은 "새 세션 기본값"으로만 사용된다.
    */
   modelPreset?: string;
+  /**
+   * 장기 대화 working context (Phase 3).
+   * - 전체 transcript(messages)는 그대로 보존하고, 오래된 구간은 이 요약으로 압축해
+   *   모델 입력 토큰 예산을 지킨다.
+   * - 값이 없으면 아직 요약이 생성되지 않은 세션이다.
+   */
+  memory?: ChatSessionMemory;
+}
+
+/**
+ * 장기 대화 누적 요약 상태 (Phase 3).
+ * transcript(messages)를 대체하지 않으며, 모델 입력용 working context 조립에만 쓰인다.
+ */
+export interface ChatSessionMemory {
+  /** 오래된 대화 구간의 누적 요약 텍스트 */
+  summary: string;
+  /** 요약에 반영된 마지막 메시지 ID (이 이후 메시지만 다음 증분 요약 대상) */
+  summarizedThroughMessageId: string | null;
+  /** 마지막 요약 생성 시각(ms) */
+  summaryUpdatedAt: number | null;
+  /** 요약 생성에 사용한 모델 ID (관측/디버깅) */
+  summaryModel: string | null;
+  /** 요약 스키마 버전 (호환 마이그레이션용) */
+  summaryVersion: number;
 }
 
 /**
