@@ -244,6 +244,18 @@ impl Database {
             )?;
         }
 
+        // chat_sessions.model_preset 컬럼 추가 (기존 DB 호환)
+        // NULL 허용: 프런트가 NULL을 전역 기본 모델로 해석해 상속한다.
+        let has_model_preset: bool = self
+            .conn
+            .prepare("SELECT model_preset FROM chat_sessions LIMIT 0")
+            .is_ok();
+        if !has_model_preset {
+            self.conn.execute_batch(
+                "ALTER TABLE chat_sessions ADD COLUMN model_preset TEXT;",
+            )?;
+        }
+
         // history.snapshot_json 컬럼 추가 (풀 스냅샷 저장용)
         let has_snapshot_json: bool = self
             .conn
@@ -888,8 +900,8 @@ impl Database {
 
         for session in sorted.into_iter().take(MAX_SESSIONS) {
             tx.execute(
-                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids, confluence_search_enabled)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO chat_sessions (id, project_id, name, created_at, context_block_ids, confluence_search_enabled, model_preset)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 (
                     &session.id,
                     project_id,
@@ -897,6 +909,7 @@ impl Database {
                     session.created_at,
                     serde_json::to_string(&session.context_block_ids)?,
                     session.confluence_search_enabled,
+                    &session.model_preset,
                 ),
             )?;
 
@@ -946,7 +959,7 @@ impl Database {
     /// 채팅 세션 목록 로드 (최근 활동 기준, 최대 MAX_SESSIONS개)
     pub fn load_chat_sessions(&self, project_id: &str) -> Result<Vec<ChatSession>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT s.id, s.name, s.created_at, s.context_block_ids, s.confluence_search_enabled,
+            "SELECT s.id, s.name, s.created_at, s.context_block_ids, s.confluence_search_enabled, s.model_preset,
                     COALESCE((SELECT MAX(m.timestamp) FROM chat_messages m WHERE m.session_id = s.id), s.created_at) AS last_ts
              FROM chat_sessions s
              WHERE s.project_id = ?1
@@ -961,12 +974,13 @@ impl Database {
                 row.get::<_, i64>(2)?,
                 row.get::<_, String>(3)?,
                 row.get::<_, bool>(4)?,
+                row.get::<_, Option<String>>(5)?,
             ))
         })?;
 
         let mut sessions = Vec::new();
         for r in iter {
-            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled) =
+            let (session_id, name, created_at, context_block_ids_json, confluence_search_enabled, model_preset) =
                 r?;
             let context_block_ids: Vec<String> =
                 serde_json::from_str(&context_block_ids_json).unwrap_or_default();
@@ -1003,6 +1017,7 @@ impl Database {
                 messages,
                 context_block_ids,
                 confluence_search_enabled,
+                model_preset,
             });
         }
 
@@ -2641,7 +2656,8 @@ mod tests {
     use super::Database;
     use crate::error::IteError;
     use crate::models::{
-        BlockMetadata, EditorBlock, IteProject, ProjectMetadata, ProjectSettings, SegmentGroup,
+        BlockMetadata, ChatSession, EditorBlock, IteProject, ProjectMetadata, ProjectSettings,
+        SegmentGroup,
     };
 
     fn build_test_project(project_id: &str) -> IteProject {
@@ -2711,6 +2727,57 @@ mod tests {
             }],
             blocks,
         }
+    }
+
+    #[test]
+    fn chat_session_model_preset_roundtrip_and_legacy_null() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-chat-model-preset");
+        db.save_project(&project).expect("failed to save project");
+
+        // 세션 2개: 하나는 명시적 modelPreset, 하나는 미설정(None → 레거시/전역 상속)
+        let now = chrono::Utc::now().timestamp_millis();
+        let with_preset = ChatSession {
+            id: "sess-with".to_string(),
+            name: "With Preset".to_string(),
+            created_at: now,
+            messages: vec![],
+            context_block_ids: vec![],
+            confluence_search_enabled: true,
+            model_preset: Some("gpt-5.6-sol-high".to_string()),
+        };
+        let without_preset = ChatSession {
+            id: "sess-without".to_string(),
+            name: "Without Preset".to_string(),
+            created_at: now + 1, // 더 최근(정렬상 먼저)
+            messages: vec![],
+            context_block_ids: vec![],
+            confluence_search_enabled: true,
+            model_preset: None,
+        };
+
+        db.save_chat_sessions(&project.id, &[with_preset, without_preset])
+            .expect("failed to save chat sessions");
+
+        let loaded = db
+            .load_chat_sessions(&project.id)
+            .expect("failed to load chat sessions");
+        assert_eq!(loaded.len(), 2);
+
+        let loaded_with = loaded
+            .iter()
+            .find(|s| s.id == "sess-with")
+            .expect("with-preset session missing");
+        assert_eq!(loaded_with.model_preset.as_deref(), Some("gpt-5.6-sol-high"));
+
+        let loaded_without = loaded
+            .iter()
+            .find(|s| s.id == "sess-without")
+            .expect("without-preset session missing");
+        assert_eq!(loaded_without.model_preset, None);
     }
 
     #[test]

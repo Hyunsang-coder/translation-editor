@@ -4,7 +4,7 @@
 import type { ChatMessage } from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
 import { streamAssistantReply, type StreamCallbacks } from '@/ai/chat';
-import { getAiConfig } from '@/ai/config';
+import { getAiConfig, resolveModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConnectorStore } from '@/stores/connectorStore';
@@ -159,9 +159,11 @@ export function createAiActions(
     let assistantId: string | null = null;
 
     try {
-      const cfg = getAiConfig();
       // fresh session 읽기 (caller가 truncation 등으로 변경했을 수 있음)
       const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
+      // 요청 실행 설정을 한 번만 캡처: 이후 전역/세션 모델이 바뀌어도 이 요청의 모델은 고정된다.
+      // (세션별 modelPreset이 있으면 그것을, 없으면 전역 chat 기본값을 사용)
+      const runConfig = resolveModelRunConfig({ ...(session?.modelPreset ? { preset: session.modelPreset } : {}) });
       const project = useProjectStore.getState().project;
       const webSearchEnabled = get().webSearchEnabled;
 
@@ -212,10 +214,17 @@ export function createAiActions(
       const recent: ChatMessage[] = priorMessages;
 
       // Assistant 빈 메시지 추가 (스트리밍 버블)
+      // 실행 출처 메타데이터를 캡처된 runConfig에서 만든다(기록 모델 = 실제 호출 모델 보장).
       assistantId = get().addMessage({
         role: 'assistant',
         content: '',
-        metadata: { model: cfg.model, toolCallsInProgress: [] },
+        metadata: {
+          requestedModelPreset: runConfig.requestedPreset,
+          resolvedModel: runConfig.resolvedModel,
+          provider: runConfig.provider === 'mock' ? 'openai' : runConfig.provider,
+          ...(runConfig.reasoningEffort ? { reasoningEffort: runConfig.reasoningEffort } : {}),
+          toolCallsInProgress: [],
+        },
       }, effectiveSessionId);
       if (assistantId) {
         set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
@@ -288,6 +297,18 @@ export function createAiActions(
             streamingMetadata: { ...currentMetadata, toolsUsed },
           });
         },
+        onUsage: (usage) => {
+          if (!ownsStream()) return;
+          const currentMetadata = get().streamingMetadata ?? {};
+          set({
+            streamingMetadata: {
+              ...currentMetadata,
+              ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+              ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+              ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
+            },
+          });
+        },
         ...extraCallbacks,
       };
 
@@ -315,6 +336,7 @@ export function createAiActions(
             return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
           })(),
         },
+        runConfig,
         callbacks,
       );
 
@@ -485,21 +507,29 @@ export function createAiActions(
       const ownsWebSearch = (): boolean => get().abortController === webAbortController;
       set({ abortController: webAbortController, isLoading: true, error: null, statusMessage: '웹 검색 준비 중...' });
 
-      const cfg = getAiConfig();
-      const webSearchSpec = getBuiltInWebSearchSpec(cfg.provider);
+      // /web 경로도 run config를 한 번만 캡처 (세션 모델 우선, 이후 전역 변경과 무관)
+      const webSession = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
+      const webRunConfig = resolveModelRunConfig({ ...(webSession?.modelPreset ? { preset: webSession.modelPreset } : {}) });
+      const webSearchSpec = getBuiltInWebSearchSpec(webRunConfig.provider);
       const initialToolsInProgress = [webSearchSpec?.toolName ?? 'web_search'];
 
       const assistantId = addMessage({
         role: 'assistant',
         content: '',
-        metadata: { model: 'web_search', toolCallsInProgress: initialToolsInProgress, toolsUsed: [] },
+        metadata: {
+          requestedModelPreset: webRunConfig.requestedPreset,
+          resolvedModel: webRunConfig.resolvedModel,
+          provider: webRunConfig.provider === 'mock' ? 'openai' : webRunConfig.provider,
+          toolCallsInProgress: initialToolsInProgress,
+          toolsUsed: [],
+        },
       }, effectiveSessionId);
 
       try {
         let text = '';
         const toolsUsed: string[] = [];
 
-        const modelAny = createChatModel(undefined, { useFor: 'chat' }) as unknown as ToolEnabledModel;
+        const modelAny = createChatModel(undefined, { useFor: 'chat', runConfig: webRunConfig }) as unknown as ToolEnabledModel;
 
         if (webSearchSpec) {
           set({ statusMessage: webSearchSpec.statusMessage });

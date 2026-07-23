@@ -288,6 +288,18 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           )}
         </span>
 
+        {/* 모델 배지: 이 응답이 실제로 어떤 모델로 생성됐는지 표시 (실행 출처) */}
+        {message.role === 'assistant' && !isStreaming &&
+          (message.metadata?.resolvedModel ?? message.metadata?.model) && (
+          <span
+            className="text-[10px] text-editor-muted whitespace-nowrap"
+            data-testid="chat-message-model-badge"
+            title={t('chat.modelBadgeTitle')}
+          >
+            {message.metadata?.resolvedModel ?? message.metadata?.model}
+          </span>
+        )}
+
         {/* Action icons - 호버 시에만 표시 */}
         {!isEditing && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -1,5 +1,5 @@
 import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
-import { getAiConfig } from '@/ai/config';
+import type { ModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
@@ -186,12 +186,21 @@ export interface GenerateReplyInput {
   requestType?: RequestType;
 }
 
+/** 이번 요청에서 실제 소비된 토큰 사용량 (provider usage_metadata 집계) */
+export interface UsageInfo {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
 export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
   onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: Record<string, unknown>; status?: 'success' | 'error' }) => void;
   /** 모델 실행(생각) 시작 시 호출 */
   onModelRun?: (step: number) => void;
+  /** 도구 루프 종료 후 집계된 토큰 사용량 전달 */
+  onUsage?: (usage: UsageInfo) => void;
 }
 
 function getToolCallId(call: ToolCall): string {
@@ -346,10 +355,21 @@ async function runToolCallingLoop(params: {
   maxSteps?: number;
   cb?: StreamCallbacks;
   abortSignal?: AbortSignal;
-}): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[] }> {
+}): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[]; usage: UsageInfo }> {
   const maxSteps = Math.max(1, Math.min(12, params.maxSteps ?? 6));
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
   const toolsUsed: string[] = [];
+
+  // 토큰 사용량 집계 (각 step의 finalAiMessage.usage_metadata 누적)
+  const usage: UsageInfo = {};
+  const addUsage = (msg: AIMessageChunk | null): void => {
+    const u = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } } | null)
+      ?.usage_metadata;
+    if (!u) return;
+    if (typeof u.input_tokens === 'number') usage.inputTokens = (usage.inputTokens ?? 0) + u.input_tokens;
+    if (typeof u.output_tokens === 'number') usage.outputTokens = (usage.outputTokens ?? 0) + u.output_tokens;
+    if (typeof u.total_tokens === 'number') usage.totalTokens = (usage.totalTokens ?? 0) + u.total_tokens;
+  };
 
   // Phase 4.3: 에러 카운트 추적 (같은 에러 반복 시 조기 중단)
   const errorCounts = new Map<string, number>();
@@ -415,10 +435,14 @@ async function runToolCallingLoop(params: {
       }
       // 네트워크 에러 등 - 부분 응답이 있으면 반환
       if (accumulatedText) {
-        return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed };
+        addUsage(finalAiMessage);
+        return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed, usage };
       }
       throw e;
     }
+
+    // 토큰 사용량 집계 (도구 루프의 각 모델 실행마다 누적)
+    addUsage(finalAiMessage);
 
     // 최종 메시지를 대화 기록에 추가
     if (finalAiMessage) {
@@ -445,7 +469,7 @@ async function runToolCallingLoop(params: {
 
     // 도구 호출이 없으면 최종 응답 반환
     if (toolCalls.length === 0) {
-      return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed };
+      return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed, usage };
     }
 
     // 도구 호출 병렬 실행 (Promise.allSettled로 독립적 호출 병렬화)
@@ -561,6 +585,7 @@ async function runToolCallingLoop(params: {
         finalText: earlyExitMessage,
         usedTools: true,
         toolsUsed,
+        usage,
       };
     }
 
@@ -575,6 +600,7 @@ async function runToolCallingLoop(params: {
         finalText: text,
         usedTools: true,
         toolsUsed,
+        usage,
       };
     }
   }
@@ -583,6 +609,7 @@ async function runToolCallingLoop(params: {
     finalText: i18n.t('errors.insufficientContext'),
     usedTools: true,
     toolsUsed,
+    usage,
   };
 }
 
@@ -888,11 +915,10 @@ function replaceLastHumanMessageText(messages: BaseMessage[], nextText: string):
  */
 export async function streamAssistantReply(
   input: GenerateReplyInput,
+  runConfig: ModelRunConfig,
   cb?: StreamCallbacks,
 ): Promise<string> {
-  const cfg = getAiConfig();
-
-  if (cfg.provider === 'mock') {
+  if (runConfig.provider === 'mock') {
     const mock = getMockResponse(input);
     cb?.onToken?.(mock, mock);
     return mock;
@@ -901,7 +927,8 @@ export async function streamAssistantReply(
   // 요청 유형 자동 감지
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
-  const model = createChatModel(undefined, { useFor: 'chat' });
+  // 캡처된 runConfig로 모델 생성 (요청 도중 전역 store 재조회 없음 → 모델 결정 경쟁 조건 제거)
+  const model = createChatModel(undefined, { useFor: 'chat', runConfig });
 
   // 토큰 최적화(=on-demand): 초기 호출에서 Source/Target을 기본으로 인라인 포함하지 않습니다.
   // 필요 시 모델이 tool_call로 문서를 가져오게 합니다. (TRD 3.2 업데이트 반영)
@@ -935,7 +962,7 @@ export async function streamAssistantReply(
     notionSearchEnabled: !!input.notionSearchEnabled,
     connectorConfigs: input.connectorConfigs,
     getConnectorToken: input.getConnectorToken,
-    provider: cfg.provider,
+    provider: runConfig.provider,
   });
 
   // Phase 3.2: 동적 가이드 생성
@@ -944,7 +971,7 @@ export async function streamAssistantReply(
     new SystemMessage([
       (messages[0] as SystemMessage).content,
       '',
-      buildToolGuideMessage({ boundToolNames, provider: cfg.provider }).content,
+      buildToolGuideMessage({ boundToolNames, provider: runConfig.provider }).content,
     ].join('\n')),
     ...messages.slice(1),
   ];
@@ -952,13 +979,14 @@ export async function streamAssistantReply(
     messages: messagesWithGuide,
     userText: input.userMessage,
     ...(input.imageAttachments ? { imageAttachments: input.imageAttachments } : {}),
-    provider: cfg.provider,
+    provider: runConfig.provider,
   });
 
   let finalText: string;
   let toolsUsed: string[];
+  let usage: UsageInfo;
   try {
-    ({ finalText, toolsUsed } = await runToolCallingLoop({
+    ({ finalText, toolsUsed, usage } = await runToolCallingLoop({
       model,
       tools: toolSpecs as ToolCallableSpec[],
       bindTools,
@@ -978,7 +1006,7 @@ export async function streamAssistantReply(
           '이미지 분석이 필요하면 Vision 지원 모델로 변경해 주세요.',
         ].join('\n'),
       );
-      ({ finalText, toolsUsed } = await runToolCallingLoop({
+      ({ finalText, toolsUsed, usage } = await runToolCallingLoop({
         model,
         tools: toolSpecs as ToolCallableSpec[],
         bindTools,
@@ -992,6 +1020,9 @@ export async function streamAssistantReply(
   }
 
   cb?.onToolsUsed?.(toolsUsed);
+  if (usage.inputTokens !== undefined || usage.outputTokens !== undefined || usage.totalTokens !== undefined) {
+    cb?.onUsage?.(usage);
+  }
 
   // 실시간 스트리밍: onToken 콜백은 runToolCallingLoop 내에서 이미 호출됨
   // 최종 텍스트만 반환

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ChatSession, ChatMessage } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { loadChatSessions, loadChatProjectSettings } from '@/tauri/chat';
 import { listAttachments } from '@/tauri/attachments';
@@ -22,6 +23,14 @@ import {
 } from './chatStore.persist';
 
 // ── Session Actions ────────────────────────────────────────────────────
+
+/**
+ * 새 세션/마이그레이션 세션의 기본 모델 프리셋.
+ * 전역 aiConfigStore.chatModel은 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
+ */
+function getDefaultModelPreset(): string {
+  return useAiConfigStore.getState().chatModel;
+}
 
 export function createSessionActions(
   set: ChatSet,
@@ -156,10 +165,12 @@ export function createSessionActions(
         return;
       }
 
-      // Migration: confluenceSearchEnabled 기본값 true로 설정 (기존 세션 호환)
+      // Migration: confluenceSearchEnabled 기본값 true, modelPreset 없으면 전역 기본값 상속
+      const defaultPreset = getDefaultModelPreset();
       const migratedSessions = (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS).map((session) => ({
         ...session,
         confluenceSearchEnabled: session.confluenceSearchEnabled ?? true,
+        modelPreset: session.modelPreset ?? defaultPreset,
       }));
 
       const nextState: Partial<ChatStore> = {
@@ -244,6 +255,8 @@ export function createSessionActions(
       messages: [],
       contextBlockIds: [],
       confluenceSearchEnabled: true,
+      // 새 세션은 전역 기본 모델을 상속(이후 세션별로 독립 변경 가능)
+      modelPreset: getDefaultModelPreset(),
     };
 
     set((state) => ({
@@ -311,6 +324,26 @@ export function createSessionActions(
     schedulePersist();
   };
 
+  /**
+   * 세션별 모델 프리셋을 변경한다(세션 범위, 전역 chatModel과 분리).
+   * - idle 세션에서 호출 시 다음 응답부터 적용된다(진행 중 요청은 캡처된 runConfig를 유지).
+   * - 전역 aiConfigStore.chatModel은 건드리지 않는다(새 세션 기본값 보존).
+   */
+  const setSessionModelPreset = (sessionId: string, preset: string): void => {
+    const target = get().sessions.find((s) => s.id === sessionId);
+    if (!target || target.modelPreset === preset) return;
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === sessionId ? { ...s, modelPreset: preset } : s
+      ),
+      currentSession:
+        state.currentSession?.id === sessionId
+          ? { ...state.currentSession, modelPreset: preset }
+          : state.currentSession,
+    }));
+    schedulePersist();
+  };
+
   const shouldShowSummarySuggestion = (): boolean => {
     const session = get().currentSession;
     if (!session) return false;
@@ -352,6 +385,7 @@ export function createSessionActions(
     switchSession,
     deleteSession,
     renameSession,
+    setSessionModelPreset,
     shouldShowSummarySuggestion,
     dismissSummarySuggestion,
     startNewSessionFromSuggestion,

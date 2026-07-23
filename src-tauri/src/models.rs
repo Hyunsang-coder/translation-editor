@@ -142,6 +142,9 @@ pub struct ChatSession {
     pub context_block_ids: Vec<String>,
     #[serde(rename = "confluenceSearchEnabled", default = "default_true")]
     pub confluence_search_enabled: bool,
+    /// 세션별 채팅 모델 프리셋 ID (없으면 프런트가 전역 기본값을 상속)
+    #[serde(rename = "modelPreset", default, skip_serializing_if = "Option::is_none")]
+    pub model_preset: Option<String>,
 }
 
 fn default_true() -> bool {

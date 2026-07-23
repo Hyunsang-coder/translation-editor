@@ -39,6 +39,15 @@ interface ChatContentProps {
  * 채팅 콘텐츠 컴포넌트
  * UnifiedSidebar 또는 DockedChatPanel 내부에 렌더링되는 채팅 기능
  */
+/** 프리셋 value → 표시 라벨 (양쪽 provider 검색, 없으면 value 그대로) */
+function findPresetLabel(value: string): string {
+  for (const group of [MODEL_PRESETS.anthropic, MODEL_PRESETS.openai]) {
+    const found = group.find((m) => m.value === value);
+    if (found) return found.label;
+  }
+  return value;
+}
+
 export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Element {
   const { t } = useTranslation();
 
@@ -136,8 +145,10 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
+  // 전역 chatModel은 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
   const chatModel = useAiConfigStore((s) => s.chatModel);
   const setChatModel = useAiConfigStore((s) => s.setChatModel);
+  const setSessionModelPreset = useChatStore((s) => s.setSessionModelPreset);
 
   // 활성화된 프로바이더의 모델만 표시
   const enabledChatPresets = useMemo((): SelectOptionGroup[] => {
@@ -162,7 +173,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     return enabledChatPresets.flatMap((g) => g.options);
   }, [enabledChatPresets]);
 
-  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
+  // 전역 기본 모델이 비활성 프로바이더면 첫 활성 모델로 변경 (세션 모델은 건드리지 않음)
   useEffect(() => {
     if (allChatModels.length === 0) return;
     const firstModel = allChatModels[0];
@@ -171,6 +182,29 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       setChatModel(firstModel.value);
     }
   }, [chatModel, allChatModels, setChatModel]);
+
+  // 이 세션의 모델 프리셋(없으면 전역 기본값 상속)
+  const sessionModelPreset = displaySession?.modelPreset ?? chatModel;
+
+  // 세션 모델의 provider가 비활성화됐어도 현재 선택을 조용히 바꾸지 않고 그대로 노출한다.
+  const chatModelSelectOptions = useMemo((): SelectOptionGroup[] => {
+    if (allChatModels.some((m) => m.value === sessionModelPreset)) return enabledChatPresets;
+    return [
+      {
+        label: t('chat.currentModelGroup'),
+        options: [{ value: sessionModelPreset, label: findPresetLabel(sessionModelPreset) }],
+      },
+      ...enabledChatPresets,
+    ];
+  }, [enabledChatPresets, allChatModels, sessionModelPreset, t]);
+
+  // 모델을 바꿨지만 아직 그 모델로 응답하지 않은 idle 상태 → "다음 응답부터 적용" 안내
+  const pendingModelChange = useMemo(() => {
+    const msgs = displaySession?.messages ?? [];
+    const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+    const lastPreset = lastAssistant?.metadata?.requestedModelPreset;
+    return !!lastPreset && lastPreset !== sessionModelPreset;
+  }, [displaySession, sessionModelPreset]);
 
   const project = useProjectStore((s) => s.project);
 
@@ -675,11 +709,20 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             </div>
 
             <div className="pointer-events-auto ml-auto flex items-center gap-1 min-w-0">
+              {pendingModelChange && (
+                <span
+                  className="text-[10px] text-editor-text-secondary whitespace-nowrap"
+                  title={t('chat.modelAppliesNextTitle')}
+                  data-testid="chat-model-pending-hint"
+                >
+                  {t('chat.modelAppliesNext')}
+                </span>
+              )}
               <Select
-                value={chatModel}
-                onChange={setChatModel}
-                options={enabledChatPresets}
-                disabled={isLoading}
+                value={sessionModelPreset}
+                onChange={(v) => setSessionModelPreset(effectiveSessionId, v)}
+                options={chatModelSelectOptions}
+                disabled={globalIsLoading}
                 aria-label={t('chat.chatModelAriaLabel')}
                 title={t('chat.chatModelTitle')}
                 size="sm"

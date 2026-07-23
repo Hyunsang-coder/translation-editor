@@ -90,6 +90,8 @@ export interface ChatActions {
   switchSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => void;
   renameSession: (sessionId: string, name: string) => void;
+  /** 세션별 모델 프리셋 변경 (전역 chatModel과 분리, 다음 응답부터 적용) */
+  setSessionModelPreset: (sessionId: string, preset: string) => void;
 
   // 메시지 관리
   sendMessage: (content: string, targetSessionId?: string) => Promise<void>;

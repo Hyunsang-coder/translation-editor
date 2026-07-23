@@ -117,6 +117,25 @@ function getEnvApiKeyFallback(kind: 'openai' | 'anthropic'): string | undefined 
   );
 }
 
+/**
+ * 프리셋 ID(rawModel) → provider/실제 모델 ID/추론 강도 해석
+ * getAiConfig와 resolveModelRunConfig가 공유하는 단일 소스입니다.
+ */
+function resolveModelFromPreset(rawModel: string): {
+  provider: 'openai' | 'anthropic';
+  model: string;
+  reasoningEffort?: ReasoningEffort;
+} {
+  const provider: 'openai' | 'anthropic' = rawModel.startsWith('claude') ? 'anthropic' : 'openai';
+  const presets = MODEL_PRESETS[provider];
+  const preset = presets.find((p) => p.value === rawModel) ?? presets[0]!;
+  return {
+    provider,
+    model: preset.apiModel ?? preset.value,
+    ...(preset.reasoningEffort ? { reasoningEffort: preset.reasoningEffort } : {}),
+  };
+}
+
 export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'review' }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
@@ -125,14 +144,8 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
   const rawModel = (useFor === 'translation' || useFor === 'review') ? store.translationModel : store.chatModel;
 
-  // 3. 모델명에서 provider 자동 결정
-  const provider: AiProvider = rawModel.startsWith('claude') ? 'anthropic' : 'openai';
-
-  // 4. 해당 provider의 프리셋에서 모델 검증
-  const presetKey = provider === 'anthropic' ? 'anthropic' : 'openai';
-  const presets = MODEL_PRESETS[presetKey];
-  const preset = presets.find((p) => p.value === rawModel) ?? presets[0]!;
-  const model = preset.apiModel ?? preset.value;
+  // 3~4. 모델명에서 provider/실제 모델/추론 강도 해석
+  const { provider, model, reasoningEffort: presetReasoningEffort } = resolveModelFromPreset(rawModel);
 
   // 5. API Key 우선순위
   // - Store(설정/secure store) 우선
@@ -148,9 +161,64 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
     provider,
     model,
     ...(temperature !== undefined ? { temperature } : {}),
-    ...(preset.reasoningEffort ? { reasoningEffort: preset.reasoningEffort } : {}),
+    ...(presetReasoningEffort ? { reasoningEffort: presetReasoningEffort } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: 20,
   };
+}
+
+/**
+ * 단일 요청의 불변 실행 설정 (ModelRunConfig)
+ *
+ * 요청 시작 시 한 번 캡처하여, 준비/스트리밍/도구 루프가 동일한 모델·설정을 사용하도록 보장합니다.
+ * 이후 전역 aiConfigStore가 바뀌어도 진행 중 요청의 모델은 변하지 않습니다. (경쟁 조건 제거)
+ *
+ * NOTE: capability profile / 토큰 예산 필드는 Phase 3(장기 대화 context manager)에서 확장됩니다.
+ */
+export interface ModelRunConfig {
+  /** 사용자가 선택한 프리셋 ID (세션 modelPreset 또는 전역 기본값) */
+  requestedPreset: string;
+  /** 실제 API 호출에 사용할 모델 ID */
+  resolvedModel: string;
+  provider: AiProvider;
+  reasoningEffort?: ReasoningEffort;
+  temperature?: number;
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  /** 모델 컨텍스트에 포함할 최근 메시지 수 (Phase 3에서 토큰 예산으로 대체 예정) */
+  maxRecentMessages: number;
+}
+
+/**
+ * 요청 실행 설정을 한 번 캡처합니다.
+ * @param options.preset 세션별 modelPreset. 없으면 전역 chat/translation 모델 사용.
+ * @param options.useFor 기본 'chat'. translation/review는 전역 translationModel 사용.
+ */
+export function resolveModelRunConfig(options?: {
+  preset?: string;
+  useFor?: 'translation' | 'chat' | 'review';
+}): ModelRunConfig {
+  const store = useAiConfigStore.getState();
+  const useFor = options?.useFor ?? 'chat';
+  const globalRaw =
+    useFor === 'translation' || useFor === 'review' ? store.translationModel : store.chatModel;
+  const rawModel = options?.preset ?? globalRaw;
+
+  const { provider, model, reasoningEffort } = resolveModelFromPreset(rawModel);
+
+  const openaiApiKey = store.openaiApiKey || getEnvApiKeyFallback('openai');
+  const anthropicApiKey = store.anthropicApiKey || getEnvApiKeyFallback('anthropic');
+  const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
+
+  return Object.freeze({
+    requestedPreset: rawModel,
+    resolvedModel: model,
+    provider,
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(openaiApiKey ? { openaiApiKey } : {}),
+    ...(anthropicApiKey ? { anthropicApiKey } : {}),
+    maxRecentMessages: 20,
+  });
 }

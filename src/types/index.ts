@@ -160,6 +160,12 @@ export interface ChatSession {
   messages: ChatMessage[];
   contextBlockIds: string[]; // 관련 블록 ID들
   confluenceSearchEnabled?: boolean; // Rovo MCP 검색 사용 여부 (탭 단위)
+  /**
+   * 이 세션의 채팅 모델 프리셋 ID (세션 단위 모델 선택).
+   * - 값이 없으면(레거시/마이그레이션) 전역 chatModel 기본값을 상속한다.
+   * - 전역 aiConfigStore.chatModel은 "새 세션 기본값"으로만 사용된다.
+   */
+  modelPreset?: string;
 }
 
 /**
@@ -177,8 +183,30 @@ export interface ChatMessage {
  * 채팅 메시지 메타데이터
  */
 export interface ChatMessageMetadata {
+  /**
+   * @deprecated 레거시 필드. 마이그레이션 호환을 위해 읽기는 지원하되,
+   * 새 쓰기에서는 resolvedModel/requestedModelPreset/provider로 대체한다.
+   */
   model?: string;
   tokens?: number;
+
+  /** 사용자가 선택한 모델 프리셋 ID (세션 modelPreset 또는 전역 기본값 스냅샷) */
+  requestedModelPreset?: string;
+  /** 실제 호출에 사용된 API 모델 ID (배지 표시 소스) */
+  resolvedModel?: string;
+  /** 실제 호출 provider */
+  provider?: 'openai' | 'anthropic';
+  /** 추론 강도 (해당되는 경우) */
+  reasoningEffort?: string;
+  /** 실제 소비된 입력 토큰 수 */
+  inputTokens?: number;
+  /** 실제 소비된 출력 토큰 수 */
+  outputTokens?: number;
+  /** 실제 소비된 총 토큰 수 */
+  totalTokens?: number;
+  /** context window 사용률 (0~1, Phase 3에서 채워짐) */
+  contextUtilization?: number;
+
   /** 이번 응답 생성 과정에서 호출된 Tool 목록(디버깅/가시화) */
   toolsUsed?: string[];
   /**

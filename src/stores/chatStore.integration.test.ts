@@ -5,6 +5,7 @@ import { useConnectorStore } from '@/stores/connectorStore';
 const mocks = vi.hoisted(() => ({
   streamAssistantReply: vi.fn(),
   getAiConfig: vi.fn(),
+  resolveModelRunConfig: vi.fn(),
   createChatModel: vi.fn(),
   searchGlossary: vi.fn(),
   webInvoke: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/ai/chat', () => ({
 
 vi.mock('@/ai/config', () => ({
   getAiConfig: mocks.getAiConfig,
+  resolveModelRunConfig: mocks.resolveModelRunConfig,
 }));
 
 vi.mock('@/ai/client', () => ({
@@ -55,7 +57,15 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       maxRecentMessages: 20,
       openaiApiKey: 'sk-test',
     });
-    mocks.streamAssistantReply.mockImplementation(async (_input, callbacks) => {
+    mocks.resolveModelRunConfig.mockReturnValue({
+      requestedPreset: 'gpt-5.6-luna-medium',
+      resolvedModel: 'gpt-5.6-luna',
+      provider: 'openai',
+      reasoningEffort: 'medium',
+      maxRecentMessages: 20,
+      openaiApiKey: 'sk-test',
+    });
+    mocks.streamAssistantReply.mockImplementation(async (_input, _runConfig, callbacks) => {
       callbacks?.onToken?.('AI 응답입니다.', 'AI 응답입니다.');
       return 'AI 응답입니다.';
     });
@@ -295,7 +305,35 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
           notionSearchEnabled: false,
         }),
         expect.any(Object),
+        expect.any(Object),
       );
+    });
+
+    it('assistant 메시지 메타데이터가 캡처된 runConfig(요청 프리셋/실제 모델/provider)와 일치', async () => {
+      // Arrange
+      useChatStore.getState().createSession('Meta Chat');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      // 준비 이후 전역 모델이 바뀌어도 기록 메타는 캡처 시점 값을 유지해야 함
+      mocks.streamAssistantReply.mockImplementationOnce(async (_input, _runConfig, callbacks) => {
+        callbacks?.onUsage?.({ inputTokens: 120, outputTokens: 45, totalTokens: 165 });
+        callbacks?.onToken?.('응답', '응답');
+        return '응답';
+      });
+
+      // Act
+      await useChatStore.getState().sendMessage('모델 출처 확인', sessionId);
+
+      // Assert: 실제 호출에 쓰인 runConfig(mock)가 메시지 메타데이터로 기록됨
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      const assistant = session?.messages.find((m) => m.role === 'assistant');
+      expect(assistant?.metadata?.requestedModelPreset).toBe('gpt-5.6-luna-medium');
+      expect(assistant?.metadata?.resolvedModel).toBe('gpt-5.6-luna');
+      expect(assistant?.metadata?.provider).toBe('openai');
+      // usage_metadata가 finalize 후에도 보존됨
+      expect(assistant?.metadata?.inputTokens).toBe(120);
+      expect(assistant?.metadata?.outputTokens).toBe(45);
+      expect(assistant?.metadata?.totalTokens).toBe(165);
     });
 
     it('Confluence 검색 활성 여부가 AI 요청 옵션에 반영됨', async () => {
@@ -312,6 +350,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         expect.objectContaining({
           confluenceSearchEnabled: false,
         }),
+        expect.any(Object),
         expect.any(Object),
       );
     });
@@ -339,6 +378,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         expect.objectContaining({
           notionSearchEnabled: true,
         }),
+        expect.any(Object),
         expect.any(Object),
       );
     });

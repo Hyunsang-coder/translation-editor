@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { getAiConfig } from '@/ai/config';
+import { getAiConfig, type ModelRunConfig } from '@/ai/config';
 import { DEFAULT_TRANSLATION_MAX_TOKENS, DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import { resolveModelCallOptions } from '@/ai/modelCallOptions';
 import i18n from '@/i18n/config';
@@ -15,10 +15,30 @@ import { getTauriResilientFetch } from '@/ai/tauriFetch';
  */
 export function createChatModel(
   modelOverride?: string,
-  options?: { useFor?: 'translation' | 'chat' | 'review'; maxTokens?: number }
+  options?: {
+    useFor?: 'translation' | 'chat' | 'review';
+    maxTokens?: number;
+    /**
+     * 요청 시작 시 캡처한 불변 실행 설정.
+     * 전달되면 전역 store를 다시 읽지 않고 이 설정으로 모델을 만든다(경쟁 조건 제거).
+     */
+    runConfig?: ModelRunConfig;
+  }
 ): BaseChatModel {
-  const cfg = getAiConfig(options);
-  const model = modelOverride ?? cfg.model;
+  const rc = options?.runConfig;
+  // runConfig가 있으면 그 스냅샷을 사용하고, 없으면 기존처럼 전역 store를 읽는다(번역/검수/폴리싱 호환).
+  const cfg = rc
+    ? {
+        provider: rc.provider,
+        model: rc.resolvedModel,
+        ...(rc.reasoningEffort ? { reasoningEffort: rc.reasoningEffort } : {}),
+        ...(rc.temperature !== undefined ? { temperature: rc.temperature } : {}),
+        ...(rc.openaiApiKey ? { openaiApiKey: rc.openaiApiKey } : {}),
+        ...(rc.anthropicApiKey ? { anthropicApiKey: rc.anthropicApiKey } : {}),
+        maxRecentMessages: rc.maxRecentMessages,
+      }
+    : getAiConfig(options);
+  const model = rc ? rc.resolvedModel : (modelOverride ?? cfg.model);
   const useFor = options?.useFor ?? 'chat';
   const isReview = useFor === 'review';
 
