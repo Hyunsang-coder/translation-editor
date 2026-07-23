@@ -333,12 +333,65 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
   ].join('\n');
 }
 
-// 같은 에러 반복 시 조기 중단을 위한 상수
+// ── 도구 루프 한도 (Phase 4: 중앙화) ────────────────────────────────────
+// run-level 호출 한도(모델 스텝 수) — context 크기 한도와 별개로 둔다(§7.4).
+const DEFAULT_MAX_MODEL_STEPS = 6;
+const MAX_MODEL_STEPS_CAP = 12;
+
+// 같은 에러 반복 시 조기 중단 임계
 const MAX_SAME_ERROR = 2;
 
-// 루프 내 누적 메시지 수 상한 (context window 초과 방지)
-// 초기 메시지 + (AI 응답 + 도구 결과) * N 스텝이 이 값을 초과하면 루프 중단
+// 루프 내 누적 메시지 수 상한 (context window 초과 방지).
+// 초기 메시지 + (AI 응답 + 도구 결과) * N 스텝이 이 값을 초과하면 루프 중단.
+// token-aware 입력 가드 + 도구 결과 축약이 안정화되면 제거 여부 재검토(§16.5).
 const MAX_LOOP_MESSAGES = 80;
+
+// Phase 4: 도구 결과 context editing 상수 (§7.4)
+// 최근 N개 도구 결과는 원문 유지, 그보다 오래되고 큰 결과는 digest로 축약한다.
+const TOOL_RESULT_KEEP_RECENT = 3;
+const TOOL_RESULT_MAX_CHARS = 4_000;
+
+function digestToolContent(name: string | undefined, content: string): string {
+  const head = content.slice(0, 200).replace(/\s+/g, ' ').trim();
+  return `[cleared: ${name ?? 'tool'} | ${content.length} chars | "${head}…"]`;
+}
+
+/**
+ * Phase 4: 도구 루프 누적 메시지에서 오래된 대형 tool result를 digest로 축약한다.
+ * - 최근 keepRecent개 ToolMessage와 현재 turn의 결과는 원문 유지(§7.4).
+ * - 메시지를 제거하지 않고 content만 교체하므로 AI tool_call ↔ ToolMessage 쌍은 보존된다.
+ * - 이미 축약됐거나 임계값 이하인 결과는 건드리지 않는다.
+ * @param messages 도구 루프 누적 메시지 (in place 수정)
+ * @param toolNames tool_call_id → 도구 이름 매핑 (digest 라벨용)
+ */
+export function compressOldToolMessages(
+  messages: BaseMessage[],
+  toolNames: Map<string, string>,
+  opts?: { keepRecent?: number; maxChars?: number },
+): void {
+  const keepRecent = Math.max(0, opts?.keepRecent ?? TOOL_RESULT_KEEP_RECENT);
+  const maxChars = opts?.maxChars ?? TOOL_RESULT_MAX_CHARS;
+
+  const toolIdx: number[] = [];
+  messages.forEach((m, i) => {
+    if (m instanceof ToolMessage) toolIdx.push(i);
+  });
+
+  const compressUntil = toolIdx.length - keepRecent;
+  for (let k = 0; k < compressUntil; k++) {
+    const idx = toolIdx[k]!;
+    const msg = messages[idx] as ToolMessage;
+    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    if (content.length <= maxChars) continue;
+    if (content.startsWith('[cleared:')) continue;
+    const name = toolNames.get(msg.tool_call_id);
+    messages[idx] = new ToolMessage({
+      tool_call_id: msg.tool_call_id,
+      ...(msg.status ? { status: msg.status } : {}),
+      content: digestToolContent(name, content),
+    });
+  }
+}
 
 /**
  * Phase 3: 모델 호출 직전 입력 토큰 하드 가드 (§7.2).
@@ -399,9 +452,11 @@ async function runToolCallingLoop(params: {
   cb?: StreamCallbacks;
   abortSignal?: AbortSignal;
 }): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[]; usage: UsageInfo }> {
-  const maxSteps = Math.max(1, Math.min(12, params.maxSteps ?? 6));
+  const maxSteps = Math.max(1, Math.min(MAX_MODEL_STEPS_CAP, params.maxSteps ?? DEFAULT_MAX_MODEL_STEPS));
   const toolMap = new Map(params.tools.map((t) => [t.name, t]));
   const toolsUsed: string[] = [];
+  // Phase 4: tool_call_id → 도구 이름 (오래된 결과 축약 시 digest 라벨용)
+  const toolCallNames = new Map<string, string>();
 
   // 토큰 사용량 집계 (각 step의 finalAiMessage.usage_metadata 누적)
   const usage: UsageInfo = {};
@@ -520,6 +575,7 @@ async function runToolCallingLoop(params: {
     const toolCallPromises = toolCalls.map(async (call): Promise<{ msg: ToolMessage; isError: boolean; errorType?: string }> => {
       const tool = toolMap.get(call.name);
       const toolCallId = getToolCallId(call);
+      toolCallNames.set(toolCallId, call.name);
       if (!toolsUsed.includes(call.name)) toolsUsed.push(call.name);
       console.warn('[AI tool_call]', { name: call.name, args: call.args ?? {} });
 
@@ -631,6 +687,12 @@ async function runToolCallingLoop(params: {
         usage,
       };
     }
+
+    // Phase 4: 다음 스트림 호출 전에 오래된 대형 tool result를 축약(§7.4).
+    // 이번 turn의 결과(toolCalls.length개)와 최근 몇 개는 원문으로 유지한다.
+    compressOldToolMessages(loopMessages, toolCallNames, {
+      keepRecent: Math.max(TOOL_RESULT_KEEP_RECENT, toolCalls.length),
+    });
 
     // 누적 메시지 수 상한 초과 시 context window 보호를 위해 루프 중단
     if (loopMessages.length >= MAX_LOOP_MESSAGES) {

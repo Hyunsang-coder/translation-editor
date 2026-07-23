@@ -339,6 +339,9 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       expect(assistant?.metadata?.inputTokens).toBe(120);
       expect(assistant?.metadata?.outputTokens).toBe(45);
       expect(assistant?.metadata?.totalTokens).toBe(165);
+      // Phase 4: 실제 입력 토큰 기준 context 사용률 기록 (0~1)
+      expect(assistant?.metadata?.contextUtilization).toBeGreaterThan(0);
+      expect(assistant?.metadata?.contextUtilization).toBeLessThanOrEqual(1);
     });
 
     it('Confluence 검색 활성 여부가 AI 요청 옵션에 반영됨', async () => {

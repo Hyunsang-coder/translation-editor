@@ -871,7 +871,9 @@ impl Database {
 
     /// 채팅 세션을 프로젝트에 저장 (최대 5개 유지)
     /// - 정책: 최근 활동(마지막 메시지 timestamp) 기준으로 정렬 후 상위 5개만 저장
-    /// - 세션당 메시지는 최근 MAX_MESSAGES_PER_SESSION(100)개만 저장 (스토리지 부담 방지)
+    /// - 세션당 메시지는 최근 MAX_MESSAGES_PER_SESSION개만 저장.
+    ///   Phase 4: 프런트 정책(chatStore MAX_MESSAGES_PER_SESSION=1000)과 정렬해 재시작 시
+    ///   transcript 손실을 막는다. (기존 100 → 1000)
     pub fn save_chat_sessions(
         &self,
         project_id: &str,
@@ -908,7 +910,8 @@ impl Database {
         });
 
         const MAX_SESSIONS: usize = 5;
-        const MAX_MESSAGES_PER_SESSION: usize = 100;
+        // 프런트(chatStore.types.ts MAX_MESSAGES_PER_SESSION)와 정렬.
+        const MAX_MESSAGES_PER_SESSION: usize = 1000;
 
         for session in sorted.into_iter().take(MAX_SESSIONS) {
             let memory_json: Option<String> = match &session.memory {
@@ -2865,6 +2868,54 @@ mod tests {
             .find(|s| s.id == "sess-nomem")
             .expect("without-memory session missing");
         assert_eq!(loaded_without.memory, None);
+    }
+
+    #[test]
+    fn chat_session_message_persistence_aligns_with_frontend_1000_cap() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-chat-msg-cap");
+        db.save_project(&project).expect("failed to save project");
+
+        let make_session = |id: &str, count: usize| ChatSession {
+            id: id.to_string(),
+            name: id.to_string(),
+            created_at: 0,
+            messages: (0..count)
+                .map(|i| crate::models::ChatMessage {
+                    id: format!("{id}-m{i}"),
+                    role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
+                    content: format!("메시지 {i}"),
+                    timestamp: (i as i64) + 1,
+                    metadata: None,
+                })
+                .collect(),
+            context_block_ids: vec![],
+            confluence_search_enabled: true,
+            model_preset: None,
+            memory: None,
+        };
+
+        // 과거엔 100개로 clamp됐으나, 이제 150개는 손실 없이 보존돼야 한다.
+        // 1005개는 프런트 정책(1000)과 정렬되어 최근 1000개만 보존한다.
+        db.save_chat_sessions(&project.id, &[make_session("s150", 150), make_session("s1005", 1005)])
+            .expect("failed to save chat sessions");
+
+        let loaded = db
+            .load_chat_sessions(&project.id)
+            .expect("failed to load chat sessions");
+
+        let s150 = loaded.iter().find(|s| s.id == "s150").expect("s150 missing");
+        assert_eq!(s150.messages.len(), 150, "150개는 100 clamp 없이 전부 보존돼야 함");
+        assert!(s150.messages.iter().any(|m| m.id == "s150-m0"), "가장 오래된 메시지 보존");
+
+        let s1005 = loaded.iter().find(|s| s.id == "s1005").expect("s1005 missing");
+        assert_eq!(s1005.messages.len(), 1000, "1000개로 정렬(clamp)");
+        // 최근 1000개 보존 → 가장 최근(m1004)은 남고, 가장 오래된(m0..m4)은 제거
+        assert!(s1005.messages.iter().any(|m| m.id == "s1005-m1004"), "최근 메시지 보존");
+        assert!(!s1005.messages.iter().any(|m| m.id == "s1005-m0"), "초과 오래된 메시지는 clamp");
     }
 
     #[test]

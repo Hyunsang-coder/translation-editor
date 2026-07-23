@@ -362,12 +362,18 @@ export function createAiActions(
         onUsage: (usage) => {
           if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
+          // Phase 4: 실제 provider 입력 토큰 기준 context 사용률 (사전 추정과 분리, §12.5)
+          const contextUtilization =
+            usage.inputTokens !== undefined && capabilities.maxInputTokens > 0
+              ? Math.min(1, usage.inputTokens / capabilities.maxInputTokens)
+              : undefined;
           set({
             streamingMetadata: {
               ...currentMetadata,
               ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
               ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
               ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
+              ...(contextUtilization !== undefined ? { contextUtilization } : {}),
             },
           });
         },

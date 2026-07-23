@@ -1,10 +1,10 @@
 # AI Chat 장기 대화·세션 모델 개선 구현 계획
 
 > 작성: 2026-07-23  
-> 상태: **Phase 0/1/2/3 구현 완료 · Phase 4 미착수** (2026-07-23 업데이트)  
+> 상태: **Phase 0/1/2/3/4 구현 완료** (2026-07-23 업데이트). 연기 항목: delete-all→증분 upsert 성능 최적화(YAGNI), 실 AI 장기대화 Chat E2E(`test:tauri` 게이트).  
 > 목적: 이 문서만 읽고 새 세션에서 TDD 구현을 이어갈 수 있도록 현재 문제, 확정 결정, 단계별 작업, 마이그레이션과 완료 조건을 정리한다.
 >
-> **진행 상황 요약은 아래 [§15 구현 진행](#15-구현-진행-2026-07-23) 참조.** Phase 3까지 완료됐고, 남은 것은 Phase 4(도구 context editing / 저장 정책 정리)다.
+> **진행 상황 요약은 [§16 Phase 3](#16-phase-3-구현-진행-2026-07-23) / [§17 Phase 4](#17-phase-4-구현-진행-2026-07-23) 참조.** 핵심 4단계 구현 완료.
 
 ## 1. 목표
 
@@ -435,13 +435,13 @@ TDD:
 
 ### Phase 4 — 도구 context editing과 저장 정책 정리
 
-- [ ] 오래된 tool result 축약
-- [ ] tool/model call limit 중앙화
-- [ ] SQLite 최근 100개 destructive clamp 제거 또는 1,000개로 정렬
-- [ ] delete-all/reinsert 성능 측정
-- [ ] 필요 시 증분 upsert 후속 구현
-- [ ] 장기 대화 telemetry
-- [ ] Chat E2E 추가
+- [x] 오래된 tool result 축약 (`chat.ts::compressOldToolMessages`, `[cleared: name | N chars | "…"]`; 쌍 보존)
+- [x] tool/model call limit 중앙화 (`DEFAULT_MAX_MODEL_STEPS`/`MAX_MODEL_STEPS_CAP`/`MAX_LOOP_MESSAGES`/`MAX_SAME_ERROR` 그룹화·주석)
+- [x] SQLite 최근 100개 destructive clamp → 1,000개로 정렬 (`db/mod.rs` `MAX_MESSAGES_PER_SESSION` 100→1000, 프런트와 정렬)
+- [~] delete-all/reinsert 성능 측정 — 현 규모(디바운스 800ms·로컬 SQLite·≤5세션×≤1000)에서 병목 아님. 증분 upsert는 연기(YAGNI)
+- [~] 필요 시 증분 upsert 후속 구현 — 위 판단으로 연기
+- [x] 장기 대화 telemetry (`ChatMessageMetadata.contextUtilization` = 실 입력토큰/컨텍스트윈도우, §12.5 실 usage 기반)
+- [~] Chat E2E 추가 — 요약 트리거/영속/fallback/clamp는 unit+store 통합으로 커버. 실 AI가 필요한 장기대화 시나리오는 `test:tauri`(릴리스 게이트)로 남김
 
 ## 9. 테스트 매트릭스
 
@@ -632,4 +632,27 @@ Phase 3(장기 대화 요약/토큰 예산) 구현 완료. TDD로 각 모듈부�
 - 오래된 tool result 축약(`[cleared: ...]`), tool/model call limit 중앙화, SQLite 100개 destructive clamp 제거/1,000 정렬, delete-all/reinsert → 증분 upsert 검토, 장기 대화 telemetry(contextUtilization 채우기), Chat E2E.
 - `MAX_LOOP_MESSAGES = 80`은 Phase 4에서 token-aware guard 안정화 후 제거 판단.
 - Rust `save_chat_sessions`는 여전히 세션당 100 메시지로 clamp(§3.4) — Phase 4에서 프런트 1,000과 정렬 필요. 현재 memory(요약)는 clamp와 무관하게 세션 레코드에 저장되므로, 100 초과 삭제돼도 요약은 보존됨.
+
+## 17. Phase 4 구현 진행 (2026-07-23)
+
+Phase 4(도구 context editing / 저장 정책 정리 / 관측) 핵심 4항목 구현 완료. 성능-upsert와 실 AI E2E는 의도적으로 연기.
+
+### 17.1 변경 사항
+
+1. **저장 정책 정렬 (최우선, 실데이터 손실 수정)**: `db/mod.rs` `save_chat_sessions`의 `MAX_MESSAGES_PER_SESSION` **100 → 1000**(프런트 `chatStore.types.ts`와 정렬). 재시작 시 100개 초과 transcript가 잘리던 문제 해소. 테스트 `chat_session_message_persistence_aligns_with_frontend_1000_cap`(150개 무손실, 1005→1000 clamp).
+2. **오래된 tool result 축약**: `chat.ts::compressOldToolMessages(messages, toolNames, {keepRecent, maxChars})` — 최근 N개(+이번 turn 배치)와 임계값 이하는 원문, 그 외 대형 결과는 `[cleared: name | N chars | "head…"]`로 교체. 메시지 미제거 → AI tool_call↔ToolMessage 쌍 보존, 멱등. 루프에서 매 스텝 결과 push 직후 호출(`keepRecent = max(3, 이번 스텝 tool 수)`). `tool_call_id→name` 매핑(`toolCallNames`)으로 라벨. 단위 테스트 `chat.toolContext.test.ts`(3).
+3. **한도 중앙화**: `DEFAULT_MAX_MODEL_STEPS=6`/`MAX_MODEL_STEPS_CAP=12`(run-level 호출) + `MAX_LOOP_MESSAGES=80`(context 크기 비상 상한) + `MAX_SAME_ERROR=2`를 한 곳에 그룹화·주석. `maxSteps` 인라인 매직넘버 제거. 동작 불변.
+4. **telemetry**: `chatStore.ai.ts` onUsage에서 `contextUtilization = min(1, 실 inputTokens / capabilities.maxInputTokens)` 계산·저장(§12.5 실 usage 기반, 사전추정과 분리). 통합 테스트에 0<util≤1 검증 추가.
+
+### 17.2 연기(rationale)
+
+- **delete-all/reinsert → 증분 upsert**: 현 규모(persist 800ms 디바운스·로컬 SQLite·≤5세션×≤1000 메시지 = 최대 ~5000행)에서 병목 아님. YAGNI로 연기.
+- **실 AI 장기대화 Chat E2E**: web 하니스는 AI를 stub → 요약 트리거를 실제로 태울 수 없음. 로직은 unit(`conversationContext`/`summarizeConversation`/`chat.toolContext`) + store 통합(요약 트리거·영속·무손실 fallback·telemetry)으로 커버. 실 모델 필요한 시나리오는 `npm run test:tauri`(릴리스 게이트)에서.
+
+### 17.3 검증 상태
+
+- `npx tsc --noEmit` ✅
+- `npm run test:run` ✅ 962 passed / 8 skipped (72 files, Phase 4에서 +3)
+- `cargo test` ✅ 32 passed (신규 clamp 정렬 테스트 포함; `TMPDIR=<repo>/src-tauri/target/tmptest`)
+- 릴리스 게이트 `npm run test:tauri`는 배포 전 사용자가 실행.
 
