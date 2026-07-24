@@ -120,6 +120,7 @@ pub mod http_proxy;
 pub mod mcp;
 pub mod notion;
 pub mod project;
+pub mod project_memory;
 pub mod quality;
 pub mod secrets;
 pub mod secure_store;

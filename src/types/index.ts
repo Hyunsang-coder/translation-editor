@@ -192,6 +192,232 @@ export interface ChatSessionMemory {
   summaryVersion: number;
 }
 
+export type SelectionPanel = 'source' | 'target';
+
+export type SelectionAnchorStatus =
+  | 'active'
+  | 'stale'
+  | 'detached'
+  | 'applied'
+  | 'dismissed';
+
+export interface SelectionContext {
+  selectionId: string;
+  selectionScopeId: string;
+  projectId: string;
+  panel: SelectionPanel;
+  text: string;
+  from: number;
+  to: number;
+  anchorId: string;
+  translationUnitIds: string[];
+  segmentGroupId?: string;
+  documentRevision: string;
+  status: SelectionAnchorStatus;
+  createdAt: number;
+}
+
+export interface ChatSelectionSnapshot {
+  selectionId: string;
+  selectionScopeId: string;
+  projectId: string;
+  panel: SelectionPanel;
+  text: string;
+  translationUnitIds: string[];
+  documentRevision: string;
+  anchorStatusAtSend: SelectionAnchorStatus;
+}
+
+export interface ContextReferenceOptions {
+  translationRules: boolean;
+  forbiddenTerms: boolean;
+  glossary: boolean;
+  projectContext: boolean;
+}
+
+export const DEFAULT_SELECTION_REFERENCE_OPTIONS: ContextReferenceOptions = {
+  translationRules: false,
+  forbiddenTerms: false,
+  glossary: false,
+  projectContext: false,
+};
+
+export type ProjectMemoryCategory =
+  | 'domain'
+  | 'audience'
+  | 'product'
+  | 'worldbuilding'
+  | 'character'
+  | 'intent'
+  | 'decision'
+  | 'reference_fact'
+  | 'general';
+
+export type ProjectMemoryStatus = 'proposed' | 'active' | 'archived';
+
+export interface ProjectMemoryItem {
+  id: string;
+  projectId: string;
+  category: ProjectMemoryCategory;
+  content: string;
+  normalizedHash: string;
+  status: ProjectMemoryStatus;
+  source: 'user' | 'chat' | 'review' | 'import' | 'legacy';
+  sourceSessionId?: string;
+  sourceMessageId?: string;
+  sourceSelectionId?: string;
+  supersedesId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ForbiddenTerm {
+  id: string;
+  projectId: string;
+  term: string;
+  replacement?: string;
+  note?: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type WorkflowContextMode =
+  | 'general-chat'
+  | 'selection-chat'
+  | 'full-translate'
+  | 'selection-retranslate'
+  | 'review'
+  | 'polish';
+
+export interface ContextSnapshot {
+  revision: number;
+  projectMemoryItems: Array<Pick<ProjectMemoryItem, 'id' | 'category' | 'content'>>;
+  translationRules: string;
+  forbiddenTerms: Array<Pick<ForbiddenTerm, 'id' | 'term' | 'replacement' | 'note'>>;
+  glossaryEntries: Array<{
+    id: string;
+    source: string;
+    target: string;
+  }>;
+  createdAt: number;
+}
+
+export type ContextManifestInclude =
+  | 'selection'
+  | 'aligned-source'
+  | 'translation-rules'
+  | 'forbidden-terms'
+  | 'glossary'
+  | 'project-memory'
+  | 'chat-summary'
+  | 'document-tool'
+  | 'external-tool';
+
+export interface ContextManifest {
+  mode: WorkflowContextMode;
+  revision: number;
+  projectMemoryItemIds: string[];
+  translationRulesHash?: string;
+  forbiddenTermIds: string[];
+  glossaryEntryIds: string[];
+  included: ContextManifestInclude[];
+  estimatedInputTokens?: number;
+}
+
+export interface ResolvedWorkflowContext {
+  snapshot: ContextSnapshot;
+  manifest: ContextManifest;
+  rendered: {
+    projectMemory?: string;
+    translationRules?: string;
+    forbiddenTerms?: string;
+    glossary?: string;
+  };
+}
+
+export interface SelectionEditProposal {
+  proposalId: string;
+  selectionId: string;
+  selectionScopeId: string;
+  projectId: string;
+  panel: 'target';
+  anchorId: string;
+  originalText: string;
+  replacementText: string;
+  explanation?: string;
+  operation: 'translate' | 'polish' | 'rewrite';
+  documentRevisionAtRequest: string;
+  contextManifest?: ContextManifest;
+  status: 'proposed' | 'previewing' | 'applied' | 'stale' | 'dismissed';
+  createdAt: number;
+  appliedAt?: number;
+}
+
+export interface ProjectMemoryChangeProposal {
+  proposalId: string;
+  operation: 'add' | 'replace' | 'archive';
+  category: ProjectMemoryCategory;
+  content?: string;
+  targetItemId?: string;
+  reason?: string;
+  sourceSessionId: string;
+  sourceMessageId?: string;
+  status: 'proposed' | 'applied' | 'dismissed';
+}
+
+export interface ForbiddenTermProposal {
+  proposalId: string;
+  term: string;
+  replacement?: string;
+  note?: string;
+  status: 'proposed' | 'applied' | 'dismissed';
+}
+
+export interface GlossaryEntryProposal {
+  proposalId: string;
+  source: string;
+  target: string;
+  notes?: string;
+  status: 'proposed' | 'applied' | 'dismissed';
+}
+
+export type ChatContextMode = 'general' | 'selection' | 'document';
+
+export type ChatToolProfile =
+  | 'general'
+  | 'selection-source'
+  | 'selection-target'
+  | 'selection-retranslate';
+
+export type ChatToolRequirement =
+  | 'project'
+  | 'source-selection'
+  | 'target-selection'
+  | 'review-results'
+  | 'web-enabled'
+  | 'confluence-enabled'
+  | 'notion-enabled'
+  | 'explicit-document-reference'
+  | 'explicit-external-reference';
+
+export interface ChatToolDescriptor {
+  name: string;
+  profiles: ChatToolProfile[];
+  effect: 'read' | 'external-read' | 'proposal' | 'document-write';
+  trust: 'internal' | 'document' | 'external';
+  maxOutputChars: number;
+  displayNameKey: string;
+  requires?: ChatToolRequirement[];
+}
+
+export interface SendMessageOptions {
+  targetSessionId?: string;
+  contextMode?: ChatContextMode;
+  selection?: SelectionContext;
+  selectionScopeId?: string;
+}
+
 /**
  * 채팅 메시지
  */
@@ -238,6 +464,14 @@ export interface ChatMessageMetadata {
    * - 실시간 표시를 위한 상태이며, 최종 toolsUsed와는 별개입니다.
    */
   toolCallsInProgress?: string[];
+
+  selection?: ChatSelectionSnapshot;
+  selectionScopeId?: string;
+  documentEditProposal?: SelectionEditProposal;
+  contextManifest?: ContextManifest;
+  projectMemoryProposal?: ProjectMemoryChangeProposal;
+  forbiddenTermProposal?: ForbiddenTermProposal;
+  glossaryEntryProposal?: GlossaryEntryProposal;
 
   /**
    * Add to Rules 버튼을 이미 눌렀는지 여부

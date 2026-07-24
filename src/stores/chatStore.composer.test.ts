@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createComposerActions } from './chatStore.settings';
 import type { ChatGet, ChatSet, ChatStore } from './chatStore.types';
+import type { SelectionContext } from '@/types';
 
 function createComposerHarness(currentSessionId = 'session-a') {
   let state = {
     composerText: '',
+    composerSelection: null,
+    activeSelectionScopeIdBySession: {},
     composerFocusNonce: 0,
     currentSessionId,
     pendingComposerAppend: null,
@@ -44,5 +47,33 @@ describe('chat composer pending append', () => {
 
     expect(actions.consumePendingComposerAppend('session-b')).toBeNull();
     expect(get().pendingComposerAppend?.text).toBe('session-a 전용 텍스트');
+  });
+});
+
+describe('chat composer selection targeting', () => {
+  const selection: SelectionContext = {
+    selectionId: 'selection-1',
+    selectionScopeId: 'scope-1',
+    projectId: 'project-1',
+    panel: 'source',
+    text: '선택한 텍스트',
+    from: 1,
+    to: 8,
+    anchorId: 'anchor-1',
+    translationUnitIds: ['unit-1'],
+    documentRevision: 'revision-1',
+    status: 'active',
+    createdAt: 1,
+  };
+
+  it('현재 세션이 아니어도 열린 채팅 세션에 선택 scope를 연결한다', () => {
+    const { actions, get } = createComposerHarness('session-a');
+
+    actions.setComposerSelection(selection, 'session-b');
+
+    expect(get().composerSelection).toEqual(selection);
+    expect(get().activeSelectionScopeIdBySession).toEqual({
+      'session-b': 'scope-1',
+    });
   });
 });

@@ -9,8 +9,10 @@
 
 import { PluginKey } from '@tiptap/pm/state';
 import { DecorationSet } from '@tiptap/pm/view';
+import type { SelectionAnchorPluginState } from '@/editor/extensions/SelectionAnchor';
 
 export const pluginKeys = {
   reviewHighlight: new PluginKey<DecorationSet>('reviewHighlight'),
   searchHighlight: new PluginKey<DecorationSet>('searchHighlight'),
+  selectionAnchor: new PluginKey<SelectionAnchorPluginState>('selectionAnchor'),
 } as const;

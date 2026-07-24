@@ -5,6 +5,16 @@ import type { ChatMessage, ChatMessageMetadata } from '@/types';
 import { MemoizedMarkdown } from './MemoizedMarkdown';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { useUIStore } from '@/stores/uiStore';
+import { SelectionContextChip } from './SelectionContextChip';
+import { getChatToolDisplayNameKey } from '@/ai/tools/toolRegistry';
+import { SelectionEditProposalCard } from './SelectionEditProposalCard';
+import type { SelectionEditProposal } from '@/types';
+import type {
+  ForbiddenTermProposal,
+  GlossaryEntryProposal,
+  ProjectMemoryChangeProposal,
+} from '@/types';
+import { ProjectKnowledgeProposalCards } from './ProjectKnowledgeProposalCards';
 
 /**
  * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
@@ -29,6 +39,31 @@ interface ChatMessageItemProps {
   onAppendToRules: (content: string) => void;
   onAppendToContext: (content: string) => void;
   onUpdateMessageMetadata: (messageId: string, metadata: Partial<ChatMessageMetadata>) => void;
+  onPreviewSelectionProposal?: (
+    messageId: string,
+    proposal: SelectionEditProposal,
+  ) => void;
+  onDismissSelectionProposal?: (
+    messageId: string,
+    proposal: SelectionEditProposal,
+  ) => void;
+  onApplyMemoryProposal?: (
+    messageId: string,
+    proposal: ProjectMemoryChangeProposal,
+    mode: 'requested' | 'add',
+  ) => void;
+  onApplyForbiddenTermProposal?: (
+    messageId: string,
+    proposal: ForbiddenTermProposal,
+  ) => void;
+  onApplyGlossaryEntryProposal?: (
+    messageId: string,
+    proposal: GlossaryEntryProposal,
+  ) => void;
+  onDismissKnowledgeProposal?: (
+    messageId: string,
+    kind: 'memory' | 'forbiddenTerm' | 'glossaryEntry',
+  ) => void;
 }
 
 /**
@@ -47,6 +82,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   onAppendToRules,
   onAppendToContext,
   onUpdateMessageMetadata,
+  onPreviewSelectionProposal,
+  onDismissSelectionProposal,
+  onApplyMemoryProposal,
+  onApplyForbiddenTermProposal,
+  onApplyGlossaryEntryProposal,
+  onDismissKnowledgeProposal,
 }: ChatMessageItemProps) {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
@@ -105,15 +146,10 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   }, [message.id, onReplay]);
 
   const humanizeToolName = useCallback((name: string): string => {
-    const map: Record<string, string> = {
-      'web_search': t('chat.toolName.webSearch'),
-      'web_search_preview': t('chat.toolName.webSearch'),
-      'get_source_document': t('chat.toolName.getSourceDocument'),
-      'get_target_document': t('chat.toolName.getTargetDocument'),
-      'suggest_translation_rule': t('chat.toolName.suggestTranslationRule'),
-      'suggest_project_context': t('chat.toolName.suggestProjectContext'),
-    };
-    return map[name] ?? name;
+    const key = getChatToolDisplayNameKey(
+      name === 'web_search_preview' ? 'web_search' : name,
+    );
+    return key ? t(key) : name;
   }, [t]);
 
   const renderToolCallingBadge = useCallback((toolNames: string[]): JSX.Element | null => {
@@ -228,6 +264,18 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             </div>
           ) : (
             <>
+              {message.role === 'user' && message.metadata?.selection && (
+                <div className="mb-2">
+                  <SelectionContextChip
+                    compact
+                    selection={{
+                      panel: message.metadata.selection.panel,
+                      text: message.metadata.selection.text,
+                      status: message.metadata.selection.anchorStatusAtSend,
+                    }}
+                  />
+                </div>
+              )}
               {/* 사용자 메시지에 첨부된 이미지 표시 */}
               {message.role === 'user' && message.metadata?.imageAttachments && message.metadata.imageAttachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -266,6 +314,24 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                   {message.role === 'assistant' &&
                     !!displayMetadata?.toolsUsed?.length &&
                     renderToolsUsedBadge(displayMetadata.toolsUsed)}
+                  {message.role === 'assistant' && displayMetadata?.contextManifest && (
+                    <div
+                      className="mt-2 text-[10px] text-editor-muted"
+                      data-testid="context-manifest"
+                      title={displayMetadata.contextManifest.included.join(', ')}
+                    >
+                      {t('chat.contextReferences', '참조')}: {
+                        displayMetadata.contextManifest.included.length > 0
+                          ? displayMetadata.contextManifest.included.join(' · ')
+                          : t('chat.noExtraContext', '추가 컨텍스트 없음')
+                      }
+                      {displayMetadata.contextManifest.estimatedInputTokens !== undefined && (
+                        <> · {t('chat.inputTokens', '입력')} {
+                          displayMetadata.contextManifest.estimatedInputTokens.toLocaleString()
+                        } tokens</>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -358,6 +424,49 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       {/* Add to Rules / Context buttons - 분리된 필드로 각각 표시 */}
       {message.role === 'assistant' && !isStreaming && (
         <>
+          {message.metadata?.documentEditProposal && (
+            <SelectionEditProposalCard
+              proposal={message.metadata.documentEditProposal}
+              onPreview={() =>
+                onPreviewSelectionProposal?.(
+                  message.id,
+                  message.metadata!.documentEditProposal!,
+                )
+              }
+              onDismiss={() =>
+                onDismissSelectionProposal?.(
+                  message.id,
+                  message.metadata!.documentEditProposal!,
+                )
+              }
+            />
+          )}
+          <ProjectKnowledgeProposalCards
+            memory={message.metadata?.projectMemoryProposal}
+            forbiddenTerm={message.metadata?.forbiddenTermProposal}
+            glossaryEntry={message.metadata?.glossaryEntryProposal}
+            onApplyMemory={(mode) => {
+              const proposal = message.metadata?.projectMemoryProposal;
+              if (proposal) onApplyMemoryProposal?.(message.id, proposal, mode);
+            }}
+            onApplyForbiddenTerm={() => {
+              const proposal = message.metadata?.forbiddenTermProposal;
+              if (proposal) onApplyForbiddenTermProposal?.(message.id, proposal);
+            }}
+            onApplyGlossaryEntry={() => {
+              const proposal = message.metadata?.glossaryEntryProposal;
+              if (proposal) onApplyGlossaryEntryProposal?.(message.id, proposal);
+            }}
+            onDismissMemory={() =>
+              onDismissKnowledgeProposal?.(message.id, 'memory')
+            }
+            onDismissForbiddenTerm={() =>
+              onDismissKnowledgeProposal?.(message.id, 'forbiddenTerm')
+            }
+            onDismissGlossaryEntry={() =>
+              onDismissKnowledgeProposal?.(message.id, 'glossaryEntry')
+            }
+          />
           {/* Suggested Rule 카드 */}
           {message.metadata?.suggestedRule && !message.metadata.rulesAdded && (
             <div className="mt-2">
@@ -440,5 +549,10 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prev.message.metadata?.suggestedContext !== next.message.metadata?.suggestedContext) return false;
   if (prev.message.metadata?.rulesAdded !== next.message.metadata?.rulesAdded) return false;
   if (prev.message.metadata?.contextAdded !== next.message.metadata?.contextAdded) return false;
+  if (prev.message.metadata?.selection !== next.message.metadata?.selection) return false;
+  if (prev.message.metadata?.documentEditProposal !== next.message.metadata?.documentEditProposal) return false;
+  if (prev.message.metadata?.projectMemoryProposal !== next.message.metadata?.projectMemoryProposal) return false;
+  if (prev.message.metadata?.forbiddenTermProposal !== next.message.metadata?.forbiddenTermProposal) return false;
+  if (prev.message.metadata?.glossaryEntryProposal !== next.message.metadata?.glossaryEntryProposal) return false;
   return true;
 });

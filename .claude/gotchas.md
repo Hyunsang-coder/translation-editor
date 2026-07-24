@@ -337,3 +337,23 @@ Critical implementation warnings learned from past issues.
 140. **Toolbar Project Null Guard**: `Toolbar.tsx`의 Settings/Review/Chat 메뉴 버튼에 `disabled={!project}` 가드 + 핸들러 `if (!project) return` 얼리 리턴. 프로젝트 없는 상태에서 패널 열기 시도 방지.
 
 141. **createSnapshotIfChanged Dedup**: `historyStore.ts`의 `createSnapshotIfChanged()`는 `latestBlocksHash` 캐시로 중복 스냅샷 방지. Fast path (캐시 비교) → Slow path (스냅샷 로드 비교) → 변경 감지 시만 새 스냅샷 생성. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 `createSnapshot` 대신 사용.
+
+142. **Selection Text Raw Append 금지**: 선택 영역을 채팅에 보낼 때 `appendComposerText()`를 호출하면 scope/anchor/audit 정보가 사라진다. 우클릭 메뉴와 Cmd/Ctrl+K/L 모두 `SelectionContext`를 생성해 `setComposerSelection()`을 사용해야 한다.
+
+143. **Selection Anchor는 영속 객체가 아님**: `SelectionAnchor`의 DecorationSet은 에디터 런타임에만 존재한다. 저장된 채팅 proposal을 재수화할 때 `active`로 복원하지 말고 `detached`로 표시해 재선택을 요구한다.
+
+144. **Same-text Replace 금지**: 선택 수정 적용 시 문서 전체에서 문자열 검색/치환하면 중복 문구의 잘못된 위치를 바꿀 수 있다. 반드시 anchor range와 현재 텍스트를 함께 검증하고 해당 range에만 단일 transaction을 적용한다.
+
+145. **Review Context Drift**: 리뷰 청크 루프 안에서 `chatStore`/`projectMemoryStore`를 다시 읽으면 청크마다 규칙 revision이 달라질 수 있다. glossary 검색과 `ContextSnapshot` 생성을 루프 전에 한 번만 수행하고 동일 `ResolvedWorkflowContext` 객체를 재사용한다.
+
+146. **Legacy Project Context Fallback**: 구조화 Project Memory가 아직 비었거나 migration 조회가 실패한 순간에도 기존 `projectContext`를 버리면 안 된다. `buildContextSnapshot({ legacyProjectContext })`가 `legacy-project-context` 항목으로 보존한다. (v2.13.0에서 Settings UI 편집 필드와 chat 직접 주입은 제거됐지만, 스토어 필드·DB persist·hydrate migration·이 fallback·Desktop MCP 주입은 유지된다.)
+
+147. **Selection Retranslate Tool Binding**: 직접 부분 재번역은 단일 AI 호출이며 `selection-retranslate` profile의 bound tools는 항상 0개다. 외부 MCP/웹/커넥터 도구를 우회로 추가하지 않는다.
+
+148. **External Tool Gate**: MCP/Notion/Confluence/빌트인 커넥터는 registry allowlist와 explicit external intent를 모두 통과해야 한다. 특히 selection profile에서 동적 커넥터 배열을 무조건 `bindTools`에 합치면 최소 컨텍스트 계약이 깨진다.
+
+149. **Selection Anchor 수명 = 모든 종료 경로에서 제거**: `createSelectionAnchor`로 만든 앵커(하이라이트)는 apply 성공(`applySelectionEdit`) 시에만 자동 제거된다. 그 외 종료 경로 — chat chip dismiss, proposal 폐기/stale, 새 선택으로 교체, 프로젝트 전환 — 에서 `removeSelectionAnchor`를 짝지어 호출하지 않으면 하이라이트가 `MAX_SELECTION_ANCHORS` eviction 전까지 영구 잔존한다. 앵커를 만드는 코드는 제거 경로를 함께 설계할 것.
+
+150. **Marker 워크플로우 maxTokens는 thinking 포함 예산**: `---X_START/END---` 마커 기반 응답(번역/부분 재번역 등)에서 maxTokens을 교체문 길이만 보고 작게 잡으면(예: 4096), Anthropic adaptive thinking / OpenAI reasoning 토큰이 예산을 먼저 소비해 END 마커 전에 truncation → 파싱 실패한다. `retranslateSelection`은 `SELECTION_EDIT_MAX_TOKENS=16384`, review는 16384, chat은 8192. 신규 마커 워크플로우는 8192+ 기준으로 산정한다. (F13과 동일 문제 클래스.)
+
+151. **선택 앵커 범위는 트림된 range로 생성**: `SelectionContext.text`는 `.trim()`되지만 앵커 검증은 `doc.textBetween(from, to)`(비트림)와 비교한다. `normalizeSelectionAnchorRange`가 가장자리 공백을 range에서 제외하지 않으면 두 값이 어긋나 proposal 적용이 항상 stale로 판정된다.

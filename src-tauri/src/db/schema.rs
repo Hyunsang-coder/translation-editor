@@ -97,6 +97,59 @@ CREATE TABLE IF NOT EXISTS chat_project_settings (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
+-- 사용자 승인을 거쳐 프로젝트 전체에서 재사용되는 구조화 메모리
+CREATE TABLE IF NOT EXISTS project_memory_items (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (
+        category IN (
+            'domain', 'audience', 'product', 'worldbuilding', 'character',
+            'intent', 'decision', 'reference_fact', 'general'
+        )
+    ),
+    content TEXT NOT NULL,
+    normalized_hash TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('proposed', 'active', 'archived')),
+    source TEXT NOT NULL CHECK (source IN ('user', 'chat', 'review', 'import', 'legacy')),
+    source_session_id TEXT,
+    source_message_id TEXT,
+    source_selection_id TEXT,
+    supersedes_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (supersedes_id) REFERENCES project_memory_items(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_memory_project_status
+    ON project_memory_items(project_id, status);
+CREATE INDEX IF NOT EXISTS idx_project_memory_project_hash
+    ON project_memory_items(project_id, category, normalized_hash);
+
+-- ContextSnapshot이 참조하는 프로젝트 컨텍스트 revision
+CREATE TABLE IF NOT EXISTS project_memory_state (
+    project_id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- Translation Rules/Glossary와 분리된 프로젝트 금칙어
+CREATE TABLE IF NOT EXISTS forbidden_terms (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    term TEXT NOT NULL,
+    replacement TEXT,
+    note TEXT,
+    enabled INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_forbidden_terms_project
+    ON forbidden_terms(project_id);
+
 -- 이름 있는 앱 전역 용어집
 CREATE TABLE IF NOT EXISTS glossaries (
     id TEXT PRIMARY KEY,

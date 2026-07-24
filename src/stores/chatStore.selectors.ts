@@ -19,6 +19,8 @@ export function useChatComposerState() {
   return useBaseStore(
     useShallow((s) => ({
       composerAttachments: s.composerAttachments,
+      composerSelection: s.composerSelection,
+      clearComposerSelection: s.clearComposerSelection,
       addComposerAttachment: s.addComposerAttachment,
       removeComposerAttachment: s.removeComposerAttachment,
       pendingComposerFocus: s.pendingComposerFocus,

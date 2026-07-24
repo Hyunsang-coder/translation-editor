@@ -13,13 +13,14 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { registerEditorSyncFlush, getDocSyncEpoch } from '@/stores/projectStore';
 import { ReviewHighlight, refreshEditorHighlight } from '@/editor/extensions/ReviewHighlight';
 import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { CommentMark } from '@/editor/extensions/CommentMark';
+import { SelectionAnchor } from '@/editor/extensions/SelectionAnchor';
+import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
@@ -44,6 +45,7 @@ export interface TipTapEditorProps {
   onEditorReady?: (editor: Editor) => void;
   onSearchOpen?: () => void;
   onSearchOpenWithReplace?: () => void;
+  onSelectionShortcut?: (editor: Editor, panel: 'source' | 'target') => void;
   onCommentClick?: (payload: { commentId: string; top: number; left: number }) => void;
 }
 
@@ -56,6 +58,7 @@ function TipTapEditor({
   onEditorReady,
   onSearchOpen,
   onSearchOpenWithReplace,
+  onSelectionShortcut,
   onCommentClick,
 }: TipTapEditorProps): JSX.Element {
   const { t } = useTranslation();
@@ -94,6 +97,8 @@ function TipTapEditor({
       Subscript,
       Superscript,
       CommentMark,
+      TranslationUnitId,
+      SelectionAnchor,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: panelType === 'source' ? 'sourceExcerpt' : 'targetExcerpt',
@@ -117,9 +122,11 @@ function TipTapEditor({
   const lastContentRef = useRef<string>(content);
   const onSearchOpenRef = useRef(onSearchOpen);
   const onSearchOpenWithReplaceRef = useRef(onSearchOpenWithReplace);
+  const onSelectionShortcutRef = useRef(onSelectionShortcut);
   const onCommentClickRef = useRef(onCommentClick);
   onSearchOpenRef.current = onSearchOpen;
   onSearchOpenWithReplaceRef.current = onSearchOpenWithReplace;
+  onSelectionShortcutRef.current = onSelectionShortcut;
   onCommentClickRef.current = onCommentClick;
 
   // ─── 디바운스된 store 동기화 (P1) ─────────────────────────────────────────
@@ -230,22 +237,13 @@ function TipTapEditor({
         const isSelectionShortcut = (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === 'l' || event.key.toLowerCase() === 'k');
 
-        if (isSelectionShortcut && editor) {
-          const { from, to } = editor.state.selection;
+        const currentEditor = editorInstanceRef.current;
+        if (isSelectionShortcut && currentEditor) {
+          const { from, to } = currentEditor.state.selection;
           if (from === to) return false;
 
           event.preventDefault();
-          const selected = editor.state.doc.textBetween(from, to, ' ').trim();
-
-          const { openActiveChat } = useUIStore.getState();
-          const { appendComposerText, requestComposerFocus } = useChatStore.getState();
-
-          // Chat 패널 열기
-          openActiveChat();
-          if (selected.length > 0) {
-            appendComposerText(selected);
-          }
-          requestComposerFocus();
+          onSelectionShortcutRef.current?.(currentEditor, panelType);
           return true;
         }
 

@@ -28,11 +28,22 @@ function buildMockScript(seedProjects: MockProject[]): string {
   const glossaries = new Map();     // glossaryId → glossary
   const glossaryEntries = new Map();// glossaryId → entries[]
   const projectGlossaryIds = new Map(); // projectId → ordered glossaryIds[]
+  const projectMemory = new Map(); // projectId → { items, forbiddenTerms, revision }
 
   let projectIdCounter = 0;
   function uid() {
     projectIdCounter++;
     return 'mock-' + projectIdCounter + '-' + Date.now();
+  }
+
+  // 시스템 프롬프트의 ---X_START/END--- 마커를 감지해 같은 마커로 감싼
+  // 고정 응답을 돌려준다 (번역/부분 재번역 등 마커 기반 워크플로우 공용).
+  const MOCK_AI_BODY = 'Mock AI 응답입니다.';
+  function buildMockAiText(a) {
+    const system = (a && a.messages || []).find((m) => m.role === 'system');
+    const marker = ((system && system.content) || '').match(/---([A-Z_]+)_START---/);
+    if (!marker) return MOCK_AI_BODY;
+    return '---' + marker[1] + '_START---\\n' + MOCK_AI_BODY + '\\n---' + marker[1] + '_END---';
   }
 
   // ── Command handlers ──
@@ -128,12 +139,22 @@ function buildMockScript(seedProjects: MockProject[]): string {
         dup.id,
         [...(projectGlossaryIds.get(a?.projectId) ?? [])],
       );
+      const memory = projectMemory.get(a?.projectId);
+      if (memory) {
+        projectMemory.set(dup.id, JSON.parse(JSON.stringify({
+          ...memory,
+          projectId: dup.id,
+          items: memory.items.map(item => ({ ...item, projectId: dup.id })),
+          forbiddenTerms: memory.forbiddenTerms.map(term => ({ ...term, projectId: dup.id })),
+        })));
+      }
       return dup;
     },
 
     delete_project: (args) => {
       const a = args?.args ?? args;
       projects.delete(a?.projectId);
+      projectMemory.delete(a?.projectId);
       return null;
     },
 
@@ -141,6 +162,137 @@ function buildMockScript(seedProjects: MockProject[]): string {
     import_project_file: () => [],
     import_project_file_safe: () => ({ projectIds: [], backupPath: '' }),
     delete_all_projects: () => { projects.clear(); return null; },
+
+    // ── Project memory / forbidden terms ──
+    load_project_memory: (args) => {
+      const a = args?.args ?? args;
+      const projectId = a?.projectId;
+      return projectMemory.get(projectId) ?? {
+        projectId,
+        items: [],
+        forbiddenTerms: [],
+        revision: 0,
+      };
+    },
+    migrate_legacy_project_memory: () => false,
+    add_project_memory_item: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId) ?? {
+        projectId: a?.projectId,
+        items: [],
+        forbiddenTerms: [],
+        revision: 0,
+      };
+      const normalized = String(a?.content ?? '').trim().toLowerCase();
+      const duplicate = state.items.find(item => (
+        item.status === 'active' && item.normalizedHash === normalized
+      ));
+      if (duplicate) {
+        return { item: duplicate, revision: state.revision, duplicate: true };
+      }
+      const now = Date.now();
+      const item = {
+        id: uid(),
+        projectId: a?.projectId,
+        category: a?.category ?? 'general',
+        content: String(a?.content ?? '').trim(),
+        normalizedHash: normalized,
+        status: a?.status ?? 'active',
+        source: a?.source ?? 'user',
+        sourceSessionId: a?.sourceSessionId ?? null,
+        sourceMessageId: a?.sourceMessageId ?? null,
+        sourceSelectionId: a?.sourceSelectionId ?? null,
+        supersedesId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const next = { ...state, items: [...state.items, item], revision: state.revision + 1 };
+      projectMemory.set(a?.projectId, next);
+      return { item, revision: next.revision, duplicate: false };
+    },
+    replace_project_memory_item: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId);
+      const current = state?.items.find(item => item.id === a?.targetItemId);
+      if (!state || !current) throw new Error('Project memory item not found');
+      const now = Date.now();
+      const archived = { ...current, status: 'archived', updatedAt: now };
+      const item = {
+        ...current,
+        id: uid(),
+        category: a?.category ?? current.category,
+        content: String(a?.content ?? '').trim(),
+        normalizedHash: String(a?.content ?? '').trim().toLowerCase(),
+        status: 'active',
+        source: a?.source ?? 'user',
+        sourceSessionId: a?.sourceSessionId ?? null,
+        sourceMessageId: a?.sourceMessageId ?? null,
+        sourceSelectionId: a?.sourceSelectionId ?? null,
+        supersedesId: current.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const next = {
+        ...state,
+        items: state.items.map(existing => existing.id === current.id ? archived : existing).concat(item),
+        revision: state.revision + 1,
+      };
+      projectMemory.set(a?.projectId, next);
+      return { archived, item, revision: next.revision };
+    },
+    archive_project_memory_item: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId);
+      const current = state?.items.find(item => item.id === a?.itemId);
+      if (!state || !current) throw new Error('Project memory item not found');
+      const item = { ...current, status: 'archived', updatedAt: Date.now() };
+      const next = {
+        ...state,
+        items: state.items.map(existing => existing.id === item.id ? item : existing),
+        revision: state.revision + 1,
+      };
+      projectMemory.set(a?.projectId, next);
+      return { item, revision: next.revision };
+    },
+    upsert_forbidden_term: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId) ?? {
+        projectId: a?.projectId,
+        items: [],
+        forbiddenTerms: [],
+        revision: 0,
+      };
+      const existing = state.forbiddenTerms.find(term => term.id === a?.id);
+      const now = Date.now();
+      const term = {
+        id: existing?.id ?? uid(),
+        projectId: a?.projectId,
+        term: String(a?.term ?? '').trim(),
+        replacement: a?.replacement ?? null,
+        note: a?.note ?? null,
+        enabled: a?.enabled !== false,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      const terms = existing
+        ? state.forbiddenTerms.map(value => value.id === term.id ? term : value)
+        : [...state.forbiddenTerms, term];
+      const next = { ...state, forbiddenTerms: terms, revision: state.revision + 1 };
+      projectMemory.set(a?.projectId, next);
+      return { term, revision: next.revision };
+    },
+    delete_forbidden_term: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId);
+      if (!state) return { revision: 0 };
+      const next = {
+        ...state,
+        forbiddenTerms: state.forbiddenTerms.filter(term => term.id !== a?.id),
+        revision: state.revision + 1,
+      };
+      projectMemory.set(a?.projectId, next);
+      return { revision: next.revision };
+    },
 
     // ── Chat sessions ──
     save_current_chat_session: () => null,
@@ -257,6 +409,23 @@ function buildMockScript(seedProjects: MockProject[]): string {
 
     // ── Confluence ──
     confluence_get_page_html: () => '',
+
+    // ── AI backend (marker-echo mock) ──
+    ai_complete: (args) => {
+      const a = args?.args ?? args;
+      return { text: buildMockAiText(a) };
+    },
+    ai_stream: (args) => {
+      const a = args?.args ?? args;
+      const text = buildMockAiText(a);
+      // args.onEvent는 in-process Channel 인스턴스라 onmessage로 직접 델타 전달
+      const channel = args?.onEvent;
+      if (channel && typeof channel.onmessage === 'function') {
+        channel.onmessage({ type: 'delta', text });
+      }
+      return { text };
+    },
+    ai_stream_cancel: () => null,
 
     // ── Glossary ──
     search_glossary: (args) => {
@@ -452,7 +621,14 @@ function buildMockScript(seedProjects: MockProject[]): string {
     merge_blocks: () => null,
 
     // ── Legacy secure secrets ──
-    get_secure_secret: () => null,
+    // AI 생성 경로가 키 부재로 막히지 않도록 mock 키 번들을 돌려준다
+    get_secure_secret: (args) => {
+      const key = args?.key ?? args?.args?.key;
+      if (key === 'ai:api_keys_bundle') {
+        return JSON.stringify({ openai: 'sk-mock-openai', anthropic: 'sk-mock-anthropic' });
+      }
+      return null;
+    },
     set_secure_secret: () => null,
     delete_secure_secret: () => null,
 

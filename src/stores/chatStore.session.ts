@@ -6,6 +6,7 @@ import type { ChatSession, ChatMessage, ChatSessionMemory } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { loadChatSessions, loadChatProjectSettings } from '@/tauri/chat';
 import { listAttachments } from '@/tauri/attachments';
@@ -79,6 +80,7 @@ export function createSessionActions(
 
     // 프로젝트 전환 시, 기존 채팅 상태를 프로젝트 스코프로 재구성
     if (!projectId) {
+      useProjectMemoryStore.getState().reset();
       set({
         sessions: [],
         currentSessionId: null,
@@ -89,6 +91,8 @@ export function createSessionActions(
         isFinalizingStreaming: false,
         loadedProjectId: null,
         composerText: '',
+        composerSelection: null,
+        activeSelectionScopeIdBySession: {},
         composerFocusNonce: 0,
         pendingComposerFocus: null,
         pendingComposerAppend: null,
@@ -114,6 +118,8 @@ export function createSessionActions(
       currentSessionId: null,
       currentSession: null,
       composerText: '',
+      composerSelection: null,
+      activeSelectionScopeIdBySession: {},
       translationRules: '',
       projectContext: '',
       webSearchEnabled: true,
@@ -169,6 +175,20 @@ export function createSessionActions(
       const defaultPreset = getDefaultModelPreset();
       const migratedSessions = (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS).map((session) => ({
         ...session,
+        messages: session.messages.map((message) => {
+          const selection = message.metadata?.selection;
+          if (!selection) return message;
+          return {
+            ...message,
+            metadata: {
+              ...message.metadata,
+              selection: {
+                ...selection,
+                anchorStatusAtSend: 'detached' as const,
+              },
+            },
+          };
+        }),
         confluenceSearchEnabled: session.confluenceSearchEnabled ?? true,
         modelPreset: session.modelPreset ?? defaultPreset,
       }));
@@ -207,6 +227,21 @@ export function createSessionActions(
       }
 
       set(nextState);
+
+      // 구조화 Project Memory/금칙어는 chat settings와 별도 테이블에 있지만
+      // 같은 프로젝트 전환 경계에서 hydrate한다. store 자체의 request sequence가
+      // 늦게 끝난 이전 프로젝트 응답을 폐기한다.
+      try {
+        await useProjectMemoryStore.getState().hydrate(
+          projectId,
+          nextState.projectContext ?? '',
+        );
+      } catch (memoryError) {
+        console.warn(
+          '[chatStore] project memory hydration failed:',
+          memoryError instanceof Error ? memoryError.message : String(memoryError),
+        );
+      }
 
       // 레거시 persona가 rules로 흡수됐으면 다음 persist에서 DB 필드도 비워지도록 예약
       if (settingsRes?.translatorPersona?.trim() || (settingsRes as { systemPromptOverlay?: string } | null)?.systemPromptOverlay?.trim()) {

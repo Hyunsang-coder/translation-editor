@@ -1,5 +1,6 @@
-import { Clipboard, Eye, MessagesSquare, NotebookPen, X } from 'lucide-react';
+import { Clipboard, Eye, Languages, MessagesSquare, NotebookPen, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { SelectionPanel } from '@/types';
 
 export interface SelectionExistingComment {
   id: string;
@@ -7,9 +8,11 @@ export interface SelectionExistingComment {
 }
 
 interface SelectionActionMenuProps {
+  panel?: SelectionPanel;
   existingComments?: SelectionExistingComment[];
   onCopy: () => void;
   onAddToChat: () => void;
+  onRetranslateSelection?: () => void;
   onAddComment: () => void;
   onViewComment: (commentId: string) => void;
   /** 메뉴만 닫기 (텍스트 선택은 유지) */
@@ -26,9 +29,11 @@ const CLOSE_HEADER_HEIGHT = 29;
  * 텍스트 선택 후 표시되는 세로 액션 메뉴 (채팅 추가 / 코멘트).
  */
 export function SelectionActionMenu({
+  panel = 'source',
   existingComments = [],
   onCopy,
   onAddToChat,
+  onRetranslateSelection,
   onAddComment,
   onViewComment,
   onClose,
@@ -54,6 +59,7 @@ export function SelectionActionMenu({
   return (
     <div
       data-selection-action-menu
+      data-testid={`selection-action-menu-${panel}`}
       style={style}
       className={`
         min-w-[10rem] max-w-[14rem] overflow-hidden rounded-xl
@@ -78,6 +84,7 @@ export function SelectionActionMenu({
 
       <button
         type="button"
+        data-testid="selection-action-copy"
         className={itemClassName}
         title={t('editor.copySelection')}
         onClick={onCopy}
@@ -88,6 +95,7 @@ export function SelectionActionMenu({
 
       <button
         type="button"
+        data-testid="selection-action-add-chat"
         className={`${itemClassName} border-t border-editor-border`}
         title={t('editor.addToChat')}
         onClick={onAddToChat}
@@ -95,6 +103,19 @@ export function SelectionActionMenu({
         <MessagesSquare className="w-4 h-4 shrink-0 text-primary-500" />
         <span>{t('editor.addToChatLabel')}</span>
       </button>
+
+      {panel === 'target' && onRetranslateSelection && (
+        <button
+          type="button"
+          data-testid="selection-action-retranslate"
+          className={`${itemClassName} border-t border-editor-border`}
+          title={t('editor.retranslateSelection')}
+          onClick={onRetranslateSelection}
+        >
+          <Languages className="w-4 h-4 shrink-0 text-violet-500" />
+          <span>{t('editor.retranslateSelection')}</span>
+        </button>
+      )}
 
       {hasExisting ? (
         existingComments.slice(0, 3).map((item, index) => (
@@ -134,9 +155,13 @@ export function SelectionActionMenu({
 }
 
 /** 메뉴 높이 추정값 — 코멘트 popover 위치 보정용 */
-export function getSelectionActionMenuHeight(existingCommentCount = 0): number {
+export function getSelectionActionMenuHeight(
+  existingCommentCount = 0,
+  panel: SelectionPanel = 'source',
+): number {
   const commentItems = existingCommentCount > 0
     ? Math.min(existingCommentCount, 3)
     : 1;
-  return CLOSE_HEADER_HEIGHT + (2 + commentItems) * ITEM_HEIGHT + 8;
+  const retranslateItems = panel === 'target' ? 1 : 0;
+  return CLOSE_HEADER_HEIGHT + (2 + retranslateItems + commentItems) * ITEM_HEIGHT + 8;
 }

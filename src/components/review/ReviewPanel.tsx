@@ -12,7 +12,12 @@ import { useCommentStore } from '@/stores/commentStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
-import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
+import { resolveGlossaryEntries } from '@/utils/glossaryInject';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import {
+  buildContextSnapshot,
+  resolveWorkflowContextFromSnapshot,
+} from '@/ai/context/resolveWorkflowContext';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { applySuggestionToEditor } from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
@@ -76,9 +81,6 @@ export function ReviewPanel(): JSX.Element {
   const project = useProjectStore((s) => s.project);
   const sourceDocument = useProjectStore((s) => s.sourceDocument);
   const targetDocument = useProjectStore((s) => s.targetDocument);
-  // Note: translationRules/projectContext는 useCallback 내에서 getState()로 직접 가져옴
-  // 검수 중 규칙이 변경되어도 각 청크 처리 시 최신 값 사용 (Issue #13 Fix)
-
   // 자주 변경되는 필드 → 별도 selector (리렌더 최소화)
   const streamingText = useReviewStore((s) => s.streamingText);
   const reviewTrigger = useReviewStore((s) => s.reviewTrigger);
@@ -218,6 +220,11 @@ export function ReviewPanel(): JSX.Element {
 
     // 프로젝트 전환 감지용 스냅샷 (L4): 루프/장부 기록은 이 ID 기준으로만 수행
     const startProjectId = project.id;
+    const {
+      translationRules: translationRulesAtStart,
+      projectContext: legacyProjectContextAtStart,
+    } = useChatStore.getState();
+    const memoryAtStart = useProjectMemoryStore.getState();
     setElapsedSeconds(0);
 
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
@@ -249,8 +256,29 @@ export function ReviewPanel(): JSX.Element {
     reviewAbortRef.current = controller;
     startReview(freshChunks);
 
-    // Trade-off: 예전에는 첫 청크만 검색했지만, 청크마다 검색해 후반 용어 누락을 줄인다.
     try {
+      const reviewText = freshChunks
+        .flatMap((chunk) => chunk.segments)
+        .map((segment) => `${segment.sourceText}\n${segment.targetText}`)
+        .join('\n');
+      const glossaryEntries = await resolveGlossaryEntries({
+        projectId: startProjectId,
+        text: reviewText,
+        domain: project.metadata.domain,
+        limit: 40,
+      });
+      const resolvedContext = resolveWorkflowContextFromSnapshot({
+        mode: 'review',
+        snapshot: buildContextSnapshot({
+          revision: memoryAtStart.revision,
+          projectMemoryItems: memoryAtStart.items,
+          legacyProjectContext: legacyProjectContextAtStart,
+          translationRules: translationRulesAtStart,
+          forbiddenTerms: memoryAtStart.forbiddenTerms,
+          glossaryEntries,
+        }),
+      });
+
       for (let i = 0; i < freshChunks.length; i++) {
         if (controller.signal.aborted) break;
         // 프로젝트 전환 감지 (L4): 구 프로젝트 이슈가 새 프로젝트 상태/장부에 주입되는 것 방지
@@ -259,12 +287,6 @@ export function ReviewPanel(): JSX.Element {
         const chunk = freshChunks[i]!;
 
         try {
-          // Issue #13 Fix: 각 청크 처리 시 최신 번역 규칙/프로젝트 컨텍스트 가져오기
-          const {
-            translationRules: currentRules,
-            projectContext: currentProjectContext,
-          } = useChatStore.getState();
-
           // 인라인 코멘트 → 이 청크의 세그먼트 범위로 한정해 직렬화 후 주입
           // (대조 검수는 source/target 양쪽 코멘트 모두 맥락으로 사용)
           const chunkGroupIds = new Set(chunk.segments.map((s) => s.groupId));
@@ -276,26 +298,11 @@ export function ReviewPanel(): JSX.Element {
             },
           );
 
-          let glossaryText = '';
-          if (project.id) {
-            const chunkText = chunk.segments
-              .map((s) => `${s.sourceText}\n${s.targetText}`)
-              .join('\n');
-            glossaryText = await resolveGlossaryForPrompt({
-              projectId: project.id,
-              text: chunkText,
-              domain: project.metadata.domain,
-              limit: 40,
-            });
-          }
-
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
           // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
           const response = await runReview({
             segments: chunk.segments,
-            translationRules: currentRules,
-            projectContext: currentProjectContext,
-            glossary: glossaryText,
+            resolvedContext,
             sourceLanguage: detectSourceLanguage(chunk.segments),
             targetLanguage: project.metadata.targetLanguage,
             ...(serializedComments ? { userComments: serializedComments } : {}),
@@ -538,14 +545,18 @@ export function ReviewPanel(): JSX.Element {
     retranslateAbortController.current = controller;
 
     try {
-      const { translationRules, projectContext } = useChatStore.getState();
+      const {
+        translationRules,
+        projectContext: legacyProjectContextAtStart,
+      } = useChatStore.getState();
+      const memoryAtStart = useProjectMemoryStore.getState();
 
       // 용어집 검색 (문서 전역 윈도우)
-      let glossary = '';
+      let glossaryEntries: Awaited<ReturnType<typeof resolveGlossaryEntries>> = [];
       try {
         const sourceDocument = useProjectStore.getState().sourceDocument;
         if ((sourceDocument || '').trim() && currentProject.id) {
-          glossary = await resolveGlossaryForPrompt({
+          glossaryEntries = await resolveGlossaryEntries({
             projectId: currentProject.id,
             text: sourceDocument || '',
             domain: currentProject.metadata.domain,
@@ -555,6 +566,17 @@ export function ReviewPanel(): JSX.Element {
       } catch {
         // 용어집 검색 실패 무시
       }
+      const resolvedContext = resolveWorkflowContextFromSnapshot({
+        mode: 'full-translate',
+        snapshot: buildContextSnapshot({
+          revision: memoryAtStart.revision,
+          projectMemoryItems: memoryAtStart.items,
+          legacyProjectContext: legacyProjectContextAtStart,
+          translationRules,
+          forbiddenTerms: memoryAtStart.forbiddenTerms,
+          glossaryEntries,
+        }),
+      });
 
       // 기존 번역 함수 사용 (검수 이슈 + 사용자 메시지 컨텍스트 포함)
       const trimmedMessage = retranslateMessage.trim();
@@ -567,9 +589,7 @@ export function ReviewPanel(): JSX.Element {
       const { doc } = await translateWithStreaming({
         project: currentProject,
         sourceDocJson,
-        translationRules,
-        projectContext,
-        glossary,
+        resolvedContext,
         reviewIssues: checkedIssues,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),

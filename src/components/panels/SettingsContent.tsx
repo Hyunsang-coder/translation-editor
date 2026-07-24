@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/shallow';
 import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { PromptPresetMenu } from '@/components/panels/PromptPresetMenu';
 import { ProjectGlossarySection } from '@/components/glossary/ProjectGlossarySection';
+import { ProjectMemorySettingsSection } from './ProjectMemorySettingsSection';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -14,10 +15,9 @@ import { ProjectGlossarySection } from '@/components/glossary/ProjectGlossarySec
 export function SettingsContent(): JSX.Element {
   const { t } = useTranslation();
 
-  const { translationRules, setTranslationRules, projectContext, setProjectContext } =
+  const { translationRules, setTranslationRules } =
     useChatStore(useShallow((s) => ({
       translationRules: s.translationRules, setTranslationRules: s.setTranslationRules,
-      projectContext: s.projectContext, setProjectContext: s.setProjectContext,
     })));
 
   const project = useProjectStore((s) => s.project);
@@ -27,12 +27,11 @@ export function SettingsContent(): JSX.Element {
   // textarea의 live 값을 추적한다. (store 값은 500ms 디바운스 후에야 갱신됨)
   const [liveValues, setLiveValues] = useState({
     rules: translationRules,
-    context: projectContext,
   });
   // store 값(프로젝트 전환/프리셋 적용 등 외부 변경)과 동기화
   useEffect(() => {
-    setLiveValues({ rules: translationRules, context: projectContext });
-  }, [translationRules, projectContext]);
+    setLiveValues({ rules: translationRules });
+  }, [translationRules]);
 
   return (
     <div className="h-full min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
@@ -40,7 +39,7 @@ export function SettingsContent(): JSX.Element {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">1. {t('settings.translationRules')}</h3>
+            <h3 className="text-xs font-semibold text-editor-text">{t('settings.translationRules')}</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
             <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
               {t('settings.translationRulesDescription')}
@@ -65,34 +64,10 @@ export function SettingsContent(): JSX.Element {
         />
       </section>
 
-      {/* Section 2: Project Context */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">2. {t('settings.projectContext')}</h3>
-            <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-            <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
-              {t('settings.projectContextDescription')}
-            </div>
-          </div>
-          <PromptPresetMenu
-            key={`preset-context-${settingsKey}`}
-            kind="context"
-            currentValue={liveValues.context}
-            onApply={setProjectContext}
-            onClear={() => setProjectContext('')}
-          />
-        </div>
-        <DebouncedTextarea
-          key={`project-context-${settingsKey}`}
-          data-testid="settings-project-context"
-          className="w-full h-32 text-xs px-3 py-2 rounded-md border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
-          value={projectContext}
-          onDebouncedChange={setProjectContext}
-          onLiveChange={(v) => setLiveValues((prev) => ({ ...prev, context: v }))}
-          placeholder={t('settings.projectContextPlaceholder')}
-        />
-      </section>
+      {/* 프로젝트 컨텍스트(legacy)는 승인 기반 Project Memory로 대체됨.
+          기존 값은 hydrate 시 1회 Project Memory로 migration되며, 저장 필드와
+          Desktop MCP 주입 경로는 호환을 위해 유지된다. */}
+      {project && <ProjectMemorySettingsSection />}
 
       {/* Glossary */}
       {project && <ProjectGlossarySection projectId={project.id} />}

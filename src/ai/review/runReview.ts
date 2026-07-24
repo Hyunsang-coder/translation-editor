@@ -17,9 +17,12 @@ import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
 import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
 import { isTauriRuntime } from '@/tauri/invoke';
+import type { ResolvedWorkflowContext } from '@/types';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
+  /** 검수 시작 시 고정된 프로젝트 컨텍스트. 모든 청크가 같은 객체를 재사용합니다. */
+  resolvedContext?: ResolvedWorkflowContext;
   translationRules?: string;
   /** 프로젝트 배경/도메인/독자 등 검수 판단에 필요한 맥락. */
   projectContext?: string;
@@ -58,14 +61,36 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   if (params.userComments?.trim()) {
     userContentParts.push(`## 사용자 코멘트\n${params.userComments.trim()}`);
   }
-  if (params.glossary?.trim()) {
-    userContentParts.push(`## 용어집\n${params.glossary.trim()}`);
+  const glossary = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.glossary
+      : params.glossary
+  )?.trim();
+  const translationRules = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.translationRules
+      : params.translationRules
+  )?.trim();
+  const projectContext = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.projectMemory
+      : params.projectContext
+  )?.trim();
+  const forbiddenTerms = params.resolvedContext?.rendered.forbiddenTerms?.trim();
+
+  if (glossary) {
+    userContentParts.push(`## 용어집\n${glossary}`);
   }
-  if (params.translationRules?.trim()) {
-    userContentParts.push(`## 번역 규칙\n${params.translationRules.trim()}`);
+  if (translationRules) {
+    userContentParts.push(`## 번역 규칙\n${translationRules}`);
   }
-  if (params.projectContext?.trim()) {
-    userContentParts.push(`## 프로젝트 컨텍스트\n${params.projectContext.trim()}`);
+  if (projectContext) {
+    userContentParts.push(`## 프로젝트 컨텍스트\n${projectContext}`);
+  }
+  if (forbiddenTerms) {
+    userContentParts.push(
+      `## 금지 용어\n아래 용어는 번역문에서 허용되지 않습니다. 대체어가 있으면 사용하세요.\n${forbiddenTerms}`,
+    );
   }
 
   const segmentsText = params.segments

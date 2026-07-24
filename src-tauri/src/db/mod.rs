@@ -65,6 +65,37 @@ pub struct CommentRow {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMemoryItemRow {
+    pub id: String,
+    pub project_id: String,
+    pub category: String,
+    pub content: String,
+    pub normalized_hash: String,
+    pub status: String,
+    pub source: String,
+    pub source_session_id: Option<String>,
+    pub source_message_id: Option<String>,
+    pub source_selection_id: Option<String>,
+    pub supersedes_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForbiddenTermRow {
+    pub id: String,
+    pub project_id: String,
+    pub term: String,
+    pub replacement: Option<String>,
+    pub note: Option<String>,
+    pub enabled: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct McpServerRow {
     pub id: String,
     pub name: String,
@@ -186,6 +217,55 @@ fn optional_glossary_text(value: Option<&str>) -> Option<String> {
 
 fn normalize_glossary_source(value: &str) -> String {
     value.trim().to_lowercase()
+}
+
+fn normalize_memory_content(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn memory_content_hash(value: &str) -> String {
+    format!("{:x}", md5::compute(value.to_lowercase()))
+}
+
+fn validate_memory_category(value: &str) -> Result<(), IteError> {
+    const CATEGORIES: &[&str] = &[
+        "domain",
+        "audience",
+        "product",
+        "worldbuilding",
+        "character",
+        "intent",
+        "decision",
+        "reference_fact",
+        "general",
+    ];
+    if CATEGORIES.contains(&value) {
+        Ok(())
+    } else {
+        Err(IteError::InvalidOperation(format!(
+            "Invalid project memory category: {value}"
+        )))
+    }
+}
+
+fn validate_memory_status(value: &str) -> Result<(), IteError> {
+    if ["proposed", "active", "archived"].contains(&value) {
+        Ok(())
+    } else {
+        Err(IteError::InvalidOperation(format!(
+            "Invalid project memory status: {value}"
+        )))
+    }
+}
+
+fn validate_memory_source(value: &str) -> Result<(), IteError> {
+    if ["user", "chat", "review", "import", "legacy"].contains(&value) {
+        Ok(())
+    } else {
+        Err(IteError::InvalidOperation(format!(
+            "Invalid project memory source: {value}"
+        )))
+    }
 }
 
 /// 데이터베이스 상태 (Tauri 앱 상태로 관리)
@@ -473,6 +553,18 @@ impl Database {
             "DELETE FROM chat_project_settings WHERE project_id = ?1",
             [project_id],
         )?;
+        tx.execute(
+            "DELETE FROM project_memory_items WHERE project_id = ?1",
+            [project_id],
+        )?;
+        tx.execute(
+            "DELETE FROM forbidden_terms WHERE project_id = ?1",
+            [project_id],
+        )?;
+        tx.execute(
+            "DELETE FROM project_memory_state WHERE project_id = ?1",
+            [project_id],
+        )?;
 
         tx.execute("DELETE FROM history WHERE project_id = ?1", [project_id])?;
         tx.execute(
@@ -503,6 +595,9 @@ impl Database {
         tx.execute("DELETE FROM chat_messages", [])?;
         tx.execute("DELETE FROM chat_sessions", [])?;
         tx.execute("DELETE FROM chat_project_settings", [])?;
+        tx.execute("DELETE FROM project_memory_items", [])?;
+        tx.execute("DELETE FROM forbidden_terms", [])?;
+        tx.execute("DELETE FROM project_memory_state", [])?;
         tx.execute("DELETE FROM history", [])?;
         tx.execute("DELETE FROM project_glossaries", [])?;
         tx.execute("DELETE FROM quality_records", [])?;
@@ -2337,6 +2432,557 @@ impl Database {
         Ok(())
     }
 
+    fn current_project_memory_revision(&self, project_id: &str) -> Result<i64, IteError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT revision FROM project_memory_state WHERE project_id = ?1",
+                [project_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(0))
+    }
+
+    fn bump_project_memory_revision(
+        tx: &rusqlite::Transaction<'_>,
+        project_id: &str,
+        now: i64,
+    ) -> Result<i64, IteError> {
+        tx.execute(
+            "INSERT INTO project_memory_state (project_id, revision, updated_at)
+             VALUES (?1, 0, ?2)
+             ON CONFLICT(project_id) DO NOTHING",
+            rusqlite::params![project_id, now],
+        )?;
+        tx.execute(
+            "UPDATE project_memory_state
+             SET revision = revision + 1, updated_at = ?2
+             WHERE project_id = ?1",
+            rusqlite::params![project_id, now],
+        )?;
+        Ok(tx.query_row(
+            "SELECT revision FROM project_memory_state WHERE project_id = ?1",
+            [project_id],
+            |row| row.get(0),
+        )?)
+    }
+
+    pub fn load_project_memory(
+        &self,
+        project_id: &str,
+    ) -> Result<(Vec<ProjectMemoryItemRow>, Vec<ForbiddenTermRow>, i64), IteError> {
+        let items = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, project_id, category, content, normalized_hash, status, source,
+                        source_session_id, source_message_id, source_selection_id,
+                        supersedes_id, created_at, updated_at
+                 FROM project_memory_items
+                 WHERE project_id = ?1
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([project_id], |row| {
+                Ok(ProjectMemoryItemRow {
+                    id: row.get(0)?,
+                    project_id: row.get(1)?,
+                    category: row.get(2)?,
+                    content: row.get(3)?,
+                    normalized_hash: row.get(4)?,
+                    status: row.get(5)?,
+                    source: row.get(6)?,
+                    source_session_id: row.get(7)?,
+                    source_message_id: row.get(8)?,
+                    source_selection_id: row.get(9)?,
+                    supersedes_id: row.get(10)?,
+                    created_at: row.get(11)?,
+                    updated_at: row.get(12)?,
+                })
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+
+        let forbidden_terms = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, project_id, term, replacement, note, enabled, created_at, updated_at
+                 FROM forbidden_terms
+                 WHERE project_id = ?1
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([project_id], |row| {
+                Ok(ForbiddenTermRow {
+                    id: row.get(0)?,
+                    project_id: row.get(1)?,
+                    term: row.get(2)?,
+                    replacement: row.get(3)?,
+                    note: row.get(4)?,
+                    enabled: row.get::<_, i64>(5)? != 0,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+
+        let revision = self.current_project_memory_revision(project_id)?;
+        Ok((items, forbidden_terms, revision))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_project_memory_item(
+        &mut self,
+        project_id: &str,
+        category: &str,
+        content: &str,
+        status: &str,
+        source: &str,
+        source_session_id: Option<&str>,
+        source_message_id: Option<&str>,
+        source_selection_id: Option<&str>,
+    ) -> Result<(ProjectMemoryItemRow, i64, bool), IteError> {
+        validate_memory_category(category)?;
+        validate_memory_status(status)?;
+        validate_memory_source(source)?;
+        let content = normalize_memory_content(content);
+        if content.is_empty() {
+            return Err(IteError::InvalidOperation(
+                "Project memory content is required.".to_string(),
+            ));
+        }
+        let normalized_hash = memory_content_hash(&content);
+
+        let duplicate = {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, project_id, category, content, normalized_hash, status, source,
+                        source_session_id, source_message_id, source_selection_id,
+                        supersedes_id, created_at, updated_at
+                 FROM project_memory_items
+                 WHERE project_id = ?1
+                   AND category = ?2
+                   AND normalized_hash = ?3
+                   AND status != 'archived'
+                 ORDER BY created_at ASC
+                 LIMIT 1",
+            )?;
+            stmt.query_row(
+                rusqlite::params![project_id, category, normalized_hash],
+                |row| {
+                    Ok(ProjectMemoryItemRow {
+                        id: row.get(0)?,
+                        project_id: row.get(1)?,
+                        category: row.get(2)?,
+                        content: row.get(3)?,
+                        normalized_hash: row.get(4)?,
+                        status: row.get(5)?,
+                        source: row.get(6)?,
+                        source_session_id: row.get(7)?,
+                        source_message_id: row.get(8)?,
+                        source_selection_id: row.get(9)?,
+                        supersedes_id: row.get(10)?,
+                        created_at: row.get(11)?,
+                        updated_at: row.get(12)?,
+                    })
+                },
+            )
+            .optional()?
+        };
+        if let Some(existing) = duplicate {
+            return Ok((
+                existing,
+                self.current_project_memory_revision(project_id)?,
+                true,
+            ));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let item = ProjectMemoryItemRow {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project_id.to_string(),
+            category: category.to_string(),
+            content,
+            normalized_hash,
+            status: status.to_string(),
+            source: source.to_string(),
+            source_session_id: source_session_id.map(str::to_string),
+            source_message_id: source_message_id.map(str::to_string),
+            source_selection_id: source_selection_id.map(str::to_string),
+            supersedes_id: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO project_memory_items (
+                id, project_id, category, content, normalized_hash, status, source,
+                source_session_id, source_message_id, source_selection_id,
+                supersedes_id, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                item.id,
+                item.project_id,
+                item.category,
+                item.content,
+                item.normalized_hash,
+                item.status,
+                item.source,
+                item.source_session_id,
+                item.source_message_id,
+                item.source_selection_id,
+                item.supersedes_id,
+                item.created_at,
+                item.updated_at,
+            ],
+        )?;
+        let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
+        tx.commit()?;
+        Ok((item, revision, false))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_project_memory_item(
+        &mut self,
+        project_id: &str,
+        target_item_id: &str,
+        category: &str,
+        content: &str,
+        source: &str,
+        source_session_id: Option<&str>,
+        source_message_id: Option<&str>,
+        source_selection_id: Option<&str>,
+    ) -> Result<(ProjectMemoryItemRow, ProjectMemoryItemRow, i64), IteError> {
+        validate_memory_category(category)?;
+        validate_memory_source(source)?;
+        let content = normalize_memory_content(content);
+        if content.is_empty() {
+            return Err(IteError::InvalidOperation(
+                "Project memory content is required.".to_string(),
+            ));
+        }
+        let (items, _, _) = self.load_project_memory(project_id)?;
+        let original = items
+            .into_iter()
+            .find(|item| item.id == target_item_id)
+            .ok_or_else(|| {
+                IteError::InvalidOperation("Project memory item was not found.".to_string())
+            })?;
+        if original.status == "archived" {
+            return Err(IteError::InvalidOperation(
+                "Archived project memory cannot be replaced.".to_string(),
+            ));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let mut archived = original.clone();
+        archived.status = "archived".to_string();
+        archived.updated_at = now;
+        let replacement = ProjectMemoryItemRow {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project_id.to_string(),
+            category: category.to_string(),
+            normalized_hash: memory_content_hash(&content),
+            content,
+            status: "active".to_string(),
+            source: source.to_string(),
+            source_session_id: source_session_id.map(str::to_string),
+            source_message_id: source_message_id.map(str::to_string),
+            source_selection_id: source_selection_id.map(str::to_string),
+            supersedes_id: Some(target_item_id.to_string()),
+            created_at: now,
+            updated_at: now,
+        };
+
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "UPDATE project_memory_items
+             SET status = 'archived', updated_at = ?3
+             WHERE id = ?1 AND project_id = ?2",
+            rusqlite::params![target_item_id, project_id, now],
+        )?;
+        tx.execute(
+            "INSERT INTO project_memory_items (
+                id, project_id, category, content, normalized_hash, status, source,
+                source_session_id, source_message_id, source_selection_id,
+                supersedes_id, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                replacement.id,
+                replacement.project_id,
+                replacement.category,
+                replacement.content,
+                replacement.normalized_hash,
+                replacement.status,
+                replacement.source,
+                replacement.source_session_id,
+                replacement.source_message_id,
+                replacement.source_selection_id,
+                replacement.supersedes_id,
+                replacement.created_at,
+                replacement.updated_at,
+            ],
+        )?;
+        let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
+        tx.commit()?;
+        Ok((archived, replacement, revision))
+    }
+
+    pub fn archive_project_memory_item(
+        &mut self,
+        project_id: &str,
+        item_id: &str,
+    ) -> Result<(ProjectMemoryItemRow, i64), IteError> {
+        let (items, _, revision) = self.load_project_memory(project_id)?;
+        let mut item = items
+            .into_iter()
+            .find(|item| item.id == item_id)
+            .ok_or_else(|| {
+                IteError::InvalidOperation("Project memory item was not found.".to_string())
+            })?;
+        if item.status == "archived" {
+            return Ok((item, revision));
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        item.status = "archived".to_string();
+        item.updated_at = now;
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "UPDATE project_memory_items
+             SET status = 'archived', updated_at = ?3
+             WHERE id = ?1 AND project_id = ?2",
+            rusqlite::params![item_id, project_id, now],
+        )?;
+        let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
+        tx.commit()?;
+        Ok((item, revision))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn upsert_forbidden_term(
+        &mut self,
+        project_id: &str,
+        id: Option<&str>,
+        term: &str,
+        replacement: Option<&str>,
+        note: Option<&str>,
+        enabled: bool,
+    ) -> Result<(ForbiddenTermRow, i64), IteError> {
+        let term = normalize_memory_content(term);
+        if term.is_empty() {
+            return Err(IteError::InvalidOperation(
+                "Forbidden term is required.".to_string(),
+            ));
+        }
+        let replacement = replacement
+            .map(normalize_memory_content)
+            .filter(|value| !value.is_empty());
+        let note = note
+            .map(normalize_memory_content)
+            .filter(|value| !value.is_empty());
+        let (_, existing_terms, _) = self.load_project_memory(project_id)?;
+        let existing = if let Some(id) = id {
+            existing_terms
+                .into_iter()
+                .find(|candidate| candidate.id == id)
+        } else {
+            existing_terms
+                .into_iter()
+                .find(|candidate| candidate.term.trim().eq_ignore_ascii_case(&term))
+        };
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let row = ForbiddenTermRow {
+            id: existing
+                .as_ref()
+                .map(|candidate| candidate.id.clone())
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            project_id: project_id.to_string(),
+            term,
+            replacement,
+            note,
+            enabled,
+            created_at: existing
+                .as_ref()
+                .map(|candidate| candidate.created_at)
+                .unwrap_or(now),
+            updated_at: now,
+        };
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO forbidden_terms (
+                id, project_id, term, replacement, note, enabled, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+                term = excluded.term,
+                replacement = excluded.replacement,
+                note = excluded.note,
+                enabled = excluded.enabled,
+                updated_at = excluded.updated_at
+             WHERE forbidden_terms.project_id = excluded.project_id",
+            rusqlite::params![
+                row.id,
+                row.project_id,
+                row.term,
+                row.replacement,
+                row.note,
+                row.enabled as i64,
+                row.created_at,
+                row.updated_at,
+            ],
+        )?;
+        let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
+        tx.commit()?;
+        Ok((row, revision))
+    }
+
+    pub fn delete_forbidden_term(&mut self, project_id: &str, id: &str) -> Result<i64, IteError> {
+        let now = chrono::Utc::now().timestamp_millis();
+        let tx = self.conn.transaction()?;
+        let deleted = tx.execute(
+            "DELETE FROM forbidden_terms WHERE id = ?1 AND project_id = ?2",
+            rusqlite::params![id, project_id],
+        )?;
+        let revision = if deleted > 0 {
+            Self::bump_project_memory_revision(&tx, project_id, now)?
+        } else {
+            tx.query_row(
+                "SELECT revision FROM project_memory_state WHERE project_id = ?1",
+                [project_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(0)
+        };
+        tx.commit()?;
+        Ok(revision)
+    }
+
+    pub fn migrate_legacy_project_memory(
+        &mut self,
+        project_id: &str,
+        content: &str,
+    ) -> Result<bool, IteError> {
+        let content = normalize_memory_content(content);
+        if content.is_empty() {
+            return Ok(false);
+        }
+        let existing_count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM project_memory_items WHERE project_id = ?1",
+            [project_id],
+            |row| row.get(0),
+        )?;
+        if existing_count > 0 {
+            return Ok(false);
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO project_memory_items (
+                id, project_id, category, content, normalized_hash, status, source,
+                source_session_id, source_message_id, source_selection_id,
+                supersedes_id, created_at, updated_at
+             ) VALUES (?1, ?2, 'general', ?3, ?4, 'active', 'legacy',
+                       NULL, NULL, NULL, NULL, ?5, ?5)",
+            rusqlite::params![
+                uuid::Uuid::new_v4().to_string(),
+                project_id,
+                content,
+                memory_content_hash(&content),
+                now,
+            ],
+        )?;
+        Self::bump_project_memory_revision(&tx, project_id, now)?;
+        tx.commit()?;
+        Ok(true)
+    }
+
+    pub fn copy_project_memory_data(
+        &mut self,
+        source_project_id: &str,
+        target_project_id: &str,
+    ) -> Result<(), IteError> {
+        let (source_items, source_terms, source_revision) =
+            self.load_project_memory(source_project_id)?;
+        let now = chrono::Utc::now().timestamp_millis();
+        let id_map: std::collections::HashMap<String, String> = source_items
+            .iter()
+            .map(|item| (item.id.clone(), uuid::Uuid::new_v4().to_string()))
+            .collect();
+
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "DELETE FROM project_memory_items WHERE project_id = ?1",
+            [target_project_id],
+        )?;
+        tx.execute(
+            "DELETE FROM forbidden_terms WHERE project_id = ?1",
+            [target_project_id],
+        )?;
+        tx.execute(
+            "DELETE FROM project_memory_state WHERE project_id = ?1",
+            [target_project_id],
+        )?;
+
+        for item in &source_items {
+            tx.execute(
+                "INSERT INTO project_memory_items (
+                    id, project_id, category, content, normalized_hash, status, source,
+                    source_session_id, source_message_id, source_selection_id,
+                    supersedes_id, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12)",
+                rusqlite::params![
+                    id_map[&item.id],
+                    target_project_id,
+                    item.category,
+                    item.content,
+                    item.normalized_hash,
+                    item.status,
+                    item.source,
+                    item.source_session_id,
+                    item.source_message_id,
+                    item.source_selection_id,
+                    item.created_at,
+                    now,
+                ],
+            )?;
+        }
+        for item in &source_items {
+            if let Some(supersedes_id) = item.supersedes_id.as_ref() {
+                if let Some(mapped_supersedes_id) = id_map.get(supersedes_id) {
+                    tx.execute(
+                        "UPDATE project_memory_items SET supersedes_id = ?2 WHERE id = ?1",
+                        rusqlite::params![id_map[&item.id], mapped_supersedes_id],
+                    )?;
+                }
+            }
+        }
+        for term in &source_terms {
+            tx.execute(
+                "INSERT INTO forbidden_terms (
+                    id, project_id, term, replacement, note, enabled, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    uuid::Uuid::new_v4().to_string(),
+                    target_project_id,
+                    term.term,
+                    term.replacement,
+                    term.note,
+                    term.enabled as i64,
+                    term.created_at,
+                    now,
+                ],
+            )?;
+        }
+        if source_revision > 0 || !source_items.is_empty() || !source_terms.is_empty() {
+            tx.execute(
+                "INSERT INTO project_memory_state (project_id, revision, updated_at)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![target_project_id, source_revision, now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// 프로젝트 코멘트 전체 교체 저장 (delete-all + insert)
     pub fn save_comments(
         &mut self,
@@ -2687,8 +3333,8 @@ mod tests {
 
     fn build_test_project(project_id: &str) -> IteProject {
         let now = chrono::Utc::now().timestamp_millis();
-        let source_id = "source-1".to_string();
-        let target_id = "target-1".to_string();
+        let source_id = format!("{project_id}-source-1");
+        let target_id = format!("{project_id}-target-1");
 
         let mut blocks = HashMap::new();
         blocks.insert(
@@ -2744,7 +3390,7 @@ mod tests {
                 },
             },
             segments: vec![SegmentGroup {
-                group_id: "segment-1".to_string(),
+                group_id: format!("{project_id}-segment-1"),
                 source_ids: vec![source_id],
                 target_ids: vec![target_id],
                 is_aligned: true,
@@ -3656,5 +4302,126 @@ mod tests {
                 .is_err(),
             "unknown glossary should fail"
         );
+    }
+
+    #[test]
+    fn project_memory_dedup_replace_forbidden_clone_and_cascade() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let mut db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-memory-test");
+        let clone = build_test_project("project-memory-clone");
+        db.save_project(&project).expect("save memory project");
+        db.save_project(&clone).expect("save clone project");
+
+        let (first, first_revision, first_duplicate) = db
+            .add_project_memory_item(
+                &project.id,
+                "audience",
+                "  Enterprise   administrators  ",
+                "active",
+                "chat",
+                Some("session-1"),
+                Some("message-1"),
+                None,
+            )
+            .expect("add memory");
+        assert_eq!(first.content, "Enterprise administrators");
+        assert_eq!(first_revision, 1);
+        assert!(!first_duplicate);
+
+        let (duplicate, duplicate_revision, is_duplicate) = db
+            .add_project_memory_item(
+                &project.id,
+                "audience",
+                "enterprise administrators",
+                "active",
+                "user",
+                None,
+                None,
+                None,
+            )
+            .expect("dedupe memory");
+        assert_eq!(duplicate.id, first.id);
+        assert_eq!(duplicate_revision, 1);
+        assert!(is_duplicate);
+
+        let (archived, replacement, replace_revision) = db
+            .replace_project_memory_item(
+                &project.id,
+                &first.id,
+                "audience",
+                "Enterprise IT administrators",
+                "chat",
+                Some("session-1"),
+                Some("message-2"),
+                None,
+            )
+            .expect("replace memory");
+        assert_eq!(archived.status, "archived");
+        assert_eq!(
+            replacement.supersedes_id.as_deref(),
+            Some(first.id.as_str())
+        );
+        assert_eq!(replace_revision, 2);
+
+        let (term, term_revision) = db
+            .upsert_forbidden_term(
+                &project.id,
+                None,
+                "blacklist",
+                Some("denylist"),
+                Some("Use inclusive terminology"),
+                true,
+            )
+            .expect("upsert forbidden term");
+        assert_eq!(term.term, "blacklist");
+        assert_eq!(term_revision, 3);
+
+        db.copy_project_memory_data(&project.id, &clone.id)
+            .expect("copy project memory");
+        let (clone_items, clone_terms, clone_revision) = db
+            .load_project_memory(&clone.id)
+            .expect("load cloned memory");
+        assert_eq!(clone_items.len(), 2);
+        assert_eq!(clone_terms.len(), 1);
+        assert_eq!(clone_revision, 3);
+        assert!(clone_items.iter().all(|item| item.project_id == clone.id));
+        assert!(clone_items.iter().all(|item| item.id != first.id));
+
+        db.delete_project(&project.id)
+            .expect("delete memory project");
+        let (after_delete_items, after_delete_terms, after_delete_revision) = db
+            .load_project_memory(&project.id)
+            .expect("load deleted project memory");
+        assert!(after_delete_items.is_empty());
+        assert!(after_delete_terms.is_empty());
+        assert_eq!(after_delete_revision, 0);
+    }
+
+    #[test]
+    fn legacy_project_context_migration_is_idempotent() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let mut db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-memory-legacy");
+        db.save_project(&project).expect("save legacy project");
+
+        assert!(db
+            .migrate_legacy_project_memory(&project.id, "Legacy context")
+            .expect("first migration"));
+        assert!(!db
+            .migrate_legacy_project_memory(&project.id, "Legacy context")
+            .expect("second migration"));
+
+        let (items, _, revision) = db
+            .load_project_memory(&project.id)
+            .expect("load migrated memory");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].category, "general");
+        assert_eq!(items[0].source, "legacy");
+        assert_eq!(revision, 1);
     }
 }

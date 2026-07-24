@@ -84,7 +84,16 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-07-15)
+## Recent Updates (2026-07-24)
+
+- **Anchored selection editing**: Source/Target 선택을 raw composer 문자열 대신 `SelectionContext` 카드로 유지. Target은 직접 부분 재번역 또는 채팅의 `propose_selection_edit`만 허용하며, 공통 preview + anchor/project/text guard를 통과한 뒤 정확한 range를 한 transaction으로 적용.
+- **Dynamic project knowledge**: 승인 기반 Project Memory·Forbidden Terms SQLite 저장/관리 UI 및 chat proposal 도구 추가. 프로젝트 복제/삭제와 revision이 함께 관리되며 legacy `projectContext`는 idempotent migration/fallback으로 보존.
+- **Workflow ContextSnapshot**: 전체 번역·검수·폴리싱·부분 재번역이 작업 시작 시 고정 snapshot을 사용. 리뷰의 모든 chunk가 동일 snapshot revision을 공유하고 `ContextManifest`로 참조 ID/도구/토큰 정보를 표시.
+- **Tool registry profiles**: general/selection-source/selection-target/selection-retranslate profile별 allowlist, trust/effect/output cap을 단일 registry에서 파생. 직접 부분 재번역은 tools=0.
+- **선택 재번역 안정화 (v2.13.0)**: ① `retranslateSelection` 출력 토큰 4096→16384(`SELECTION_EDIT_MAX_TOKENS`) — thinking/reasoning이 예산을 잠식해 END 마커가 truncation되던 재번역 실패 수정. ② 앵커(하이라이트) 수명 정리 — apply 성공 외에도 chip dismiss·proposal 폐기/stale·새 선택 교체·프로젝트 전환 시 `removeSelectionAnchor` 호출(하이라이트 영구 잔존 버그). ③ `normalizeSelectionAnchorRange`가 가장자리 공백을 범위에서 제외 — `SelectionContext.text`(트림)와 `anchor.originalText`(textBetween) 불일치로 proposal 적용이 항상 stale 처리되던 오탐 수정. ④ e2e `tauri-mock`에 `ai_stream`/`ai_complete` 마커-에코 목 추가로 생성→적용 경로 웹 E2E 검증.
+- **legacy projectContext 내부 제거 (v2.13.0)**: Settings의 "프로젝트 컨텍스트" 편집 필드와 chat 시스템 프롬프트 직접 주입 제거. 승인 기반 Project Memory로 완전 대체. 스토어 필드·DB persist·hydrate migration·워크플로우 `legacyProjectContext` fallback·Desktop MCP `oddeyes_set_translation_context` 주입은 호환을 위해 유지(=데이터/계약 안전). MCP 파라미터 제거는 차기 MCP 버전업 때.
+
+### Previous (2026-07-15)
 
 - **Translator Persona 제거**: Settings UI / suggest tool / 프리셋 / Desktop MCP `translatorPersona` 필드 삭제. 기존 프로젝트 값은 hydrate 시 `translationRules` 앞에 흡수하고 DB에는 빈 문자열로 저장. 톤·문체 지시는 Rules로 통합.
 - **Desktop MCP A+B (`oddeyes-desktop-mcp` v0.7.0, 19 tools)**: persona 제거; glossary entry CRUD + project link/unlink. 관리 UI 생성 시 자동 연결 제거, Settings에서 연결 해제(✕). 배포 시 `.mcpb` 재번들 + `npm publish` 필요.
@@ -165,6 +174,8 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 ```bash
 npm run test:e2e:tauri:mcp:workflow     # Full workflow (번역+리뷰+채팅)
 npm run test:e2e:tauri:mcp:new-project  # 프로젝트 생성 smoke test
+npm run test:e2e:tauri:mcp:chat-selection # SelectionContext 카드 shortcut
+npx playwright test -c playwright.web.config.ts e2e/selection-editing.spec.ts
 node scripts/tauri-testing-mcp-<name>.mjs  # Custom scenario
 ```
 
@@ -175,7 +186,7 @@ node scripts/tauri-testing-mcp-<name>.mjs  # Custom scenario
 /e2e-scenario --attach-to-running 채팅 테스트       # 실행 중인 앱에 연결
 ```
 
-### Available MCP Tools (33개)
+### Available MCP Tools (36개)
 - **DOM**: `query_selector`, `click`, `click_by_text`, `fill`, `fill_by_placeholder`, `type_contenteditable`, `type_contenteditable_by_selector`, `get_text`, `get_value`, `get_all`, `get_page_content`, `select`, `keyboard`, `scroll_to`, `wait_for_selector`, `wait_for_text`, `wait_for_hidden`
 - **Dialog**: `get_state`, `set_auto_response`, `push_response`, `clear`
 - **Tauri**: `invoke`, `emit`

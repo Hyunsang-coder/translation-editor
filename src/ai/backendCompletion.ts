@@ -215,7 +215,8 @@ export async function streamWithTauriAiBackend(params: {
   const abortSignal = params.abortSignal;
   if (!abortSignal) {
     const res = await invokePromise;
-    return res.text || accumulated;
+    // 브리지/목 환경이 응답 객체를 주지 않아도 누적 텍스트로 폴백 (TypeError 방지)
+    return res?.text || accumulated;
   }
 
   const abort = createAbortPromise(
@@ -229,5 +230,5 @@ export async function streamWithTauriAiBackend(params: {
 
   const res = await Promise.race([invokePromise, abort.promise])
     .finally(abort.cleanup);
-  return res.text || accumulated;
+  return res?.text || accumulated;
 }

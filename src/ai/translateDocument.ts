@@ -1,4 +1,4 @@
-import type { ITEProject } from '@/types';
+import type { ITEProject, ResolvedWorkflowContext } from '@/types';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
@@ -32,6 +32,10 @@ import {
   streamWithTauriAiBackend,
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
+import {
+  reattachTranslationUnitIds,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
 
 // TipTapDocJson 타입을 re-export
 export type { TipTapDocJson };
@@ -140,6 +144,7 @@ export function formatTranslationError(error: unknown): string {
 function buildTranslationSetup(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
+  resolvedContext?: ResolvedWorkflowContext | undefined;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   glossary?: string | undefined;
@@ -200,17 +205,39 @@ function buildTranslationSetup(params: {
     '',
   ];
 
-  const rules = params.translationRules?.trim();
+  const rules = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.translationRules
+      : params.translationRules
+  )?.trim();
   if (rules) {
     systemLines.push('[번역 규칙]', rules, '');
   }
 
-  const projectContext = params.projectContext?.trim();
+  const projectContext = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.projectMemory
+      : params.projectContext
+  )?.trim();
   if (projectContext) {
     systemLines.push('[Project Context]', projectContext, '');
   }
 
-  const glossary = params.glossary?.trim();
+  const forbiddenTerms = params.resolvedContext?.rendered.forbiddenTerms?.trim();
+  if (forbiddenTerms) {
+    systemLines.push(
+      '[금지 용어]',
+      '아래 용어는 번역문에 사용하지 마세요. 대체어가 있으면 반드시 대체어를 사용하세요:',
+      forbiddenTerms,
+      '',
+    );
+  }
+
+  const glossary = (
+    params.resolvedContext
+      ? params.resolvedContext.rendered.glossary
+      : params.glossary
+  )?.trim();
   if (glossary) {
     systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
   }
@@ -329,6 +356,16 @@ function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
   return { doc: translatedDoc };
 }
 
+function restoreTranslationUnitIds(
+  sourceDocJson: TipTapDocJson,
+  translatedDocJson: TipTapDocJson,
+): TipTapDocJson {
+  return reattachTranslationUnitIds(
+    sourceDocJson as TranslationUnitDocument,
+    translatedDocJson as TranslationUnitDocument,
+  ).doc as TipTapDocJson;
+}
+
 // ============================================================
 // 비스트리밍 번역
 // ============================================================
@@ -346,6 +383,7 @@ function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
 export async function translateSourceDocToTargetDocJson(params: {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
+  resolvedContext?: ResolvedWorkflowContext | undefined;
   translationRules?: string | undefined;
   projectContext?: string | undefined;
   /** 용어집 (source = target 형식) */
@@ -372,7 +410,7 @@ export async function translateSourceDocToTargetDocJson(params: {
       throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
     }
     const { doc } = processTranslationResponse(raw);
-    return { doc, raw };
+    return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   }
 
   // 번역 실행 (비 Tauri 환경: LangChain 직접 호출)
@@ -401,7 +439,7 @@ export async function translateSourceDocToTargetDocJson(params: {
   }
 
   const { doc } = processTranslationResponse(raw);
-  return { doc, raw };
+  return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
 }
 
 // ============================================================
@@ -420,6 +458,8 @@ export type { TranslationProgressCallback, ChunkedTranslationResult };
 export interface StreamingTranslationParams {
   project: ITEProject;
   sourceDocJson: TipTapDocJson;
+  /** 작업 시작 시 고정된 프로젝트 컨텍스트. 제공되면 legacy 문자열 필드보다 우선합니다. */
+  resolvedContext?: ResolvedWorkflowContext;
   translationRules?: string;
   projectContext?: string;
   /** 용어집 (source = target 형식) */
@@ -480,7 +520,7 @@ export async function translateWithStreaming(
     }
 
     const { doc } = processTranslationResponse(raw);
-    return { doc, raw };
+    return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   }
 
   // 스트리밍 실행 (웹/테스트 등 비 Tauri 환경: LangChain 직접 호출)
@@ -538,7 +578,7 @@ export async function translateWithStreaming(
       params.onToken?.(translatedMarkdown.trim());
     }
     const { doc } = processTranslationResponse(raw);
-    return { doc, raw };
+    return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   }
 
   // 응답이 비어있는 경우
@@ -547,7 +587,10 @@ export async function translateWithStreaming(
   }
 
   const { doc } = processTranslationResponse(accumulated);
-  return { doc, raw: accumulated };
+  return {
+    doc: restoreTranslationUnitIds(params.sourceDocJson, doc),
+    raw: accumulated,
+  };
 }
 
 // ============================================================
@@ -596,7 +639,9 @@ export interface TranslationResult {
  * @returns 번역 결과 (doc, raw, 메타 정보)
  */
 export async function translateSourceDocWithChunking(
-  params: ChunkedTranslationParams
+  params: ChunkedTranslationParams & {
+    resolvedContext?: ResolvedWorkflowContext;
+  },
 ): Promise<TranslationResult> {
   const {
     project,
@@ -604,6 +649,7 @@ export async function translateSourceDocWithChunking(
     translationRules,
     projectContext,
     glossary,
+    resolvedContext,
     onProgress,
     abortSignal,
   } = params;
@@ -625,6 +671,7 @@ export async function translateSourceDocWithChunking(
         translationRules: chunkParams.translationRules,
         projectContext: chunkParams.projectContext,
         glossary: chunkParams.glossary,
+        resolvedContext,
         abortSignal,
       });
       return { doc: translated.doc as ChunkingTipTapDocJson, raw: translated.raw };
@@ -641,7 +688,7 @@ export async function translateSourceDocWithChunking(
   }
 
   return {
-    doc: result.doc as TipTapDocJson,
+    doc: restoreTranslationUnitIds(sourceDocJson, result.doc as TipTapDocJson),
     raw: result.raw || JSON.stringify(result.doc),
     wasChunked: result.wasChunked,
     totalChunks: result.totalChunks,

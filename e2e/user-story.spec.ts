@@ -55,18 +55,26 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
 
     const openaiToggle = page.locator('#openai-enabled');
     const openaiInput = page.getByPlaceholder(/OpenAI API 키를 입력하세요|Enter your OpenAI API key/i);
+    const openaiSection = openaiToggle.locator('xpath=ancestor::div[contains(@class,"space-y-2")][1]');
+    if (await openaiToggle.isEnabled()) {
+      await openaiSection.getByRole('button', { name: TEXT.clear }).click();
+    }
     await expect(openaiToggle).toBeDisabled();
     await openaiInput.fill('sk-proj-abcdef1234567890');
     await expect(openaiInput).toHaveAttribute('type', 'password');
     await expect(openaiToggle).toBeEnabled();
     await openaiToggle.check();
     await expect(openaiToggle).toBeChecked();
-    await openaiToggle.locator('xpath=ancestor::div[contains(@class,"space-y-2")][1]').getByRole('button', { name: TEXT.clear }).click();
+    await openaiSection.getByRole('button', { name: TEXT.clear }).click();
     await expect(openaiInput).toHaveValue('');
     await expect(openaiToggle).toBeDisabled();
 
     const anthropicToggle = page.locator('#anthropic-enabled');
     const anthropicInput = page.getByPlaceholder(/Anthropic API 키를 입력하세요|Enter your Anthropic API key/i);
+    const anthropicSection = anthropicToggle.locator('xpath=ancestor::div[contains(@class,"space-y-2")][1]');
+    if (await anthropicToggle.isEnabled()) {
+      await anthropicSection.getByRole('button', { name: TEXT.clear }).click();
+    }
     await anthropicInput.fill('sk-ant-abcdef1234567890');
     await expect(anthropicToggle).toBeEnabled();
     await anthropicToggle.check();

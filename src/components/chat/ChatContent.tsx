@@ -16,6 +16,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
+import { SelectionContextChip } from '@/components/chat/SelectionContextChip';
 import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
@@ -24,9 +25,31 @@ import { useConnectorStore } from '@/stores/connectorStore';
 import { useChatDragDrop } from '@/components/chat/useChatDragDrop';
 import { useChatScroll } from '@/components/chat/useChatScroll';
 import { useChatComposerHandlers } from '@/components/chat/useChatComposerHandlers';
-import type { ChatMessageMetadata, SidebarSide } from '@/types';
+import type {
+  ChatMessageMetadata,
+  ForbiddenTermProposal,
+  GlossaryEntryProposal,
+  ProjectMemoryChangeProposal,
+  SelectionContext,
+  SelectionEditProposal,
+  SidebarSide,
+} from '@/types';
 import { chatPanelId } from '@/types';
 import type { Editor } from '@tiptap/react';
+import { useEditorStore } from '@/stores/editorStore';
+import {
+  removeSelectionAnchor,
+  resolveSelectionAnchor,
+} from '@/editor/extensions/SelectionAnchor';
+import { applySelectionEdit } from '@/editor/utils/applySelectionEdit';
+import {
+  collectTranslationUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
+import { SelectionEditPreviewModal } from '@/components/editor/SelectionEditPreviewModal';
+import { DEFAULT_SELECTION_REFERENCE_OPTIONS } from '@/types';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import { useGlossaryStore } from '@/stores/glossaryStore';
 
 interface ChatContentProps {
   /** 어느 사이드바에 렌더링되는지 (없으면 legacy DockedChatPanel 모드) */
@@ -69,9 +92,17 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const addToast = useUIStore((s) => s.addToast);
   const {
     composerAttachments,
+    composerSelection,
+    clearComposerSelection,
     addComposerAttachment,
     removeComposerAttachment,
   } = useChatComposerState();
+  const activeComposerSelection =
+    composerSelection &&
+    useChatStore.getState().activeSelectionScopeIdBySession[effectiveSessionId] ===
+      composerSelection.selectionScopeId
+      ? composerSelection
+      : null;
 
   // 로컬 composerText — 듀얼 사이드바에서 각 인스턴스 독립
   const [localComposerText, setLocalComposerText] = useState(
@@ -209,6 +240,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const project = useProjectStore((s) => s.project);
 
   const [composerMenuOpen, setComposerMenuOpen] = useState(false);
+  const [proposalPreview, setProposalPreview] = useState<null | {
+    messageId: string;
+    proposal: SelectionEditProposal;
+    selection: SelectionContext;
+    sourceText: string;
+  }>(null);
 
   // side+sessionId가 있으면 해당 sidebar의 hidden+activePanel로 판단
   const chatPanelOpen = useUIStore((s) => {
@@ -322,6 +359,313 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage(messageId, { metadata }, sessionId);
   }, [updateMessage, sessionId]);
 
+  // 앵커(하이라이트)는 적용 성공 시 applySelectionEdit이 제거한다. 그 외 종료 경로
+  // (칩 dismiss, proposal 폐기, stale 판정)에서도 제거해 하이라이트가 남지 않게 한다.
+  const removePanelSelectionAnchor = useCallback((
+    panel: 'source' | 'target',
+    anchorId: string,
+  ): void => {
+    const editors = useEditorStore.getState();
+    const editor = panel === 'source' ? editors.sourceEditor : editors.targetEditor;
+    if (editor && !editor.isDestroyed) removeSelectionAnchor(editor, anchorId);
+  }, []);
+
+  const handlePreviewSelectionProposal = useCallback((
+    messageId: string,
+    proposal: SelectionEditProposal,
+  ): void => {
+    const activeProject = useProjectStore.getState().project;
+    const editor = useEditorStore.getState().targetEditor;
+    const message = displaySession?.messages.find((candidate) => candidate.id === messageId);
+    const snapshot = message?.metadata?.selection;
+    if (!activeProject || activeProject.id !== proposal.projectId || !editor || !snapshot) {
+      removePanelSelectionAnchor('target', proposal.anchorId);
+      updateMessage(messageId, {
+        metadata: {
+          documentEditProposal: { ...proposal, status: 'stale' },
+        },
+      }, sessionId);
+      addToast({
+        type: 'error',
+        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      });
+      return;
+    }
+    const anchor = resolveSelectionAnchor(editor, proposal.anchorId);
+    if (
+      !anchor ||
+      anchor.status !== 'active' ||
+      editor.state.doc.textBetween(anchor.from, anchor.to) !== proposal.originalText
+    ) {
+      removePanelSelectionAnchor('target', proposal.anchorId);
+      updateMessage(messageId, {
+        metadata: {
+          documentEditProposal: { ...proposal, status: 'stale' },
+        },
+      }, sessionId);
+      addToast({
+        type: 'error',
+        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      });
+      return;
+    }
+    const sourceDoc = (
+      useEditorStore.getState().sourceEditor?.getJSON() ??
+      useProjectStore.getState().sourceDocJson
+    ) as TranslationUnitDocument | null;
+    const selectedIds = new Set(snapshot.translationUnitIds);
+    const sourceText = sourceDoc
+      ? collectTranslationUnits(sourceDoc)
+          .filter((unit) => unit.id && selectedIds.has(unit.id))
+          .map((unit) => unit.text)
+          .join('\n')
+      : '';
+    const selection: SelectionContext = {
+      selectionId: snapshot.selectionId,
+      selectionScopeId: snapshot.selectionScopeId,
+      projectId: snapshot.projectId,
+      panel: 'target',
+      text: proposal.originalText,
+      from: anchor.from,
+      to: anchor.to,
+      anchorId: proposal.anchorId,
+      translationUnitIds: [...snapshot.translationUnitIds],
+      documentRevision: snapshot.documentRevision,
+      status: anchor.status,
+      createdAt: proposal.createdAt,
+    };
+    updateMessage(messageId, {
+      metadata: {
+        documentEditProposal: { ...proposal, status: 'previewing' },
+      },
+    }, sessionId);
+    setProposalPreview({
+      messageId,
+      proposal: { ...proposal, status: 'previewing' },
+      selection,
+      sourceText,
+    });
+  }, [displaySession?.messages, updateMessage, sessionId, addToast, t, removePanelSelectionAnchor]);
+
+  const handleDismissSelectionProposal = useCallback((
+    messageId: string,
+    proposal: SelectionEditProposal,
+  ): void => {
+    removePanelSelectionAnchor('target', proposal.anchorId);
+    updateMessage(messageId, {
+      metadata: {
+        documentEditProposal: { ...proposal, status: 'dismissed' },
+      },
+    }, sessionId);
+    setProposalPreview((current) =>
+      current?.proposal.proposalId === proposal.proposalId ? null : current,
+    );
+  }, [updateMessage, sessionId, removePanelSelectionAnchor]);
+
+  const applyProposalPreview = useCallback((): void => {
+    if (!proposalPreview) return;
+    const { messageId, proposal } = proposalPreview;
+    const activeProject = useProjectStore.getState().project;
+    const editor = useEditorStore.getState().targetEditor;
+    const anchor = editor ? resolveSelectionAnchor(editor, proposal.anchorId) : null;
+    if (
+      !editor ||
+      activeProject?.id !== proposal.projectId ||
+      !anchor ||
+      anchor.status !== 'active' ||
+      editor.state.doc.textBetween(anchor.from, anchor.to) !== proposal.originalText
+    ) {
+      removePanelSelectionAnchor('target', proposal.anchorId);
+      updateMessage(messageId, {
+        metadata: {
+          documentEditProposal: { ...proposal, status: 'stale' },
+        },
+      }, sessionId);
+      setProposalPreview(null);
+      addToast({
+        type: 'error',
+        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      });
+      return;
+    }
+    const result = applySelectionEdit(editor, anchor, proposal.replacementText);
+    if (result !== 'applied') {
+      removePanelSelectionAnchor('target', proposal.anchorId);
+      updateMessage(messageId, {
+        metadata: {
+          documentEditProposal: { ...proposal, status: 'stale' },
+        },
+      }, sessionId);
+      setProposalPreview(null);
+      addToast({
+        type: 'error',
+        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      });
+      return;
+    }
+    updateMessage(messageId, {
+      metadata: {
+        documentEditProposal: {
+          ...proposal,
+          status: 'applied',
+          appliedAt: Date.now(),
+        },
+      },
+    }, sessionId);
+    setProposalPreview(null);
+  }, [proposalPreview, updateMessage, sessionId, addToast, t, removePanelSelectionAnchor]);
+
+  const applyMemoryProposal = useCallback(async (
+    messageId: string,
+    proposal: ProjectMemoryChangeProposal,
+    mode: 'requested' | 'add',
+  ): Promise<void> => {
+    try {
+      const memoryStore = useProjectMemoryStore.getState();
+      if (mode === 'requested' && proposal.operation === 'archive') {
+        if (!proposal.targetItemId) throw new Error('보관할 메모리 항목이 없습니다.');
+        await memoryStore.archiveItem(proposal.targetItemId);
+      } else {
+        if (!proposal.content?.trim()) throw new Error('추가할 메모리 내용이 없습니다.');
+        const input = {
+          category: proposal.category,
+          content: proposal.content.trim(),
+          source: 'chat' as const,
+          status: 'active' as const,
+          sourceSessionId: proposal.sourceSessionId,
+          ...(proposal.sourceMessageId
+            ? { sourceMessageId: proposal.sourceMessageId }
+            : {}),
+        };
+        if (
+          mode === 'requested' &&
+          proposal.operation === 'replace' &&
+          proposal.targetItemId
+        ) {
+          await memoryStore.replaceItem(proposal.targetItemId, input);
+        } else {
+          await memoryStore.addItem(input);
+        }
+      }
+      updateMessage(messageId, {
+        metadata: {
+          projectMemoryProposal: { ...proposal, status: 'applied' },
+        },
+      }, sessionId);
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [updateMessage, sessionId, addToast]);
+
+  const applyForbiddenTermProposal = useCallback(async (
+    messageId: string,
+    proposal: ForbiddenTermProposal,
+  ): Promise<void> => {
+    try {
+      await useProjectMemoryStore.getState().saveForbiddenTerm({
+        term: proposal.term,
+        ...(proposal.replacement ? { replacement: proposal.replacement } : {}),
+        ...(proposal.note ? { note: proposal.note } : {}),
+        enabled: true,
+      });
+      updateMessage(messageId, {
+        metadata: {
+          forbiddenTermProposal: { ...proposal, status: 'applied' },
+        },
+      }, sessionId);
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [updateMessage, sessionId, addToast]);
+
+  const applyGlossaryEntryProposal = useCallback(async (
+    messageId: string,
+    proposal: GlossaryEntryProposal,
+  ): Promise<void> => {
+    const activeProject = useProjectStore.getState().project;
+    if (!activeProject) return;
+    try {
+      const glossaryStore = useGlossaryStore.getState();
+      if (glossaryStore.activeProjectId !== activeProject.id) {
+        await glossaryStore.loadLibrary(activeProject.id);
+      }
+      let targetGlossaryId =
+        useGlossaryStore.getState().selectedGlossaryId ??
+        useGlossaryStore.getState().projectGlossaries[0]?.id ??
+        null;
+      if (!targetGlossaryId) {
+        const created = await useGlossaryStore.getState().createGlossary(
+          t('memory.defaultGlossaryName', '프로젝트 용어집'),
+        );
+        targetGlossaryId = created.id;
+        await useGlossaryStore.getState().saveProjectSelection(
+          activeProject.id,
+          [created.id],
+        );
+      }
+      await useGlossaryStore.getState().createEntry({
+        glossaryId: targetGlossaryId,
+        source: proposal.source,
+        target: proposal.target,
+        notes: proposal.notes ?? null,
+        domain: activeProject.metadata.domain ?? null,
+        caseSensitive: false,
+      });
+      updateMessage(messageId, {
+        metadata: {
+          glossaryEntryProposal: { ...proposal, status: 'applied' },
+        },
+      }, sessionId);
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [updateMessage, sessionId, addToast, t]);
+
+  const dismissKnowledgeProposal = useCallback((
+    messageId: string,
+    kind: 'memory' | 'forbiddenTerm' | 'glossaryEntry',
+  ): void => {
+    const message = displaySession?.messages.find((candidate) => candidate.id === messageId);
+    if (!message?.metadata) return;
+    if (kind === 'memory' && message.metadata.projectMemoryProposal) {
+      updateMessage(messageId, {
+        metadata: {
+          projectMemoryProposal: {
+            ...message.metadata.projectMemoryProposal,
+            status: 'dismissed',
+          },
+        },
+      }, sessionId);
+    } else if (kind === 'forbiddenTerm' && message.metadata.forbiddenTermProposal) {
+      updateMessage(messageId, {
+        metadata: {
+          forbiddenTermProposal: {
+            ...message.metadata.forbiddenTermProposal,
+            status: 'dismissed',
+          },
+        },
+      }, sessionId);
+    } else if (kind === 'glossaryEntry' && message.metadata.glossaryEntryProposal) {
+      updateMessage(messageId, {
+        metadata: {
+          glossaryEntryProposal: {
+            ...message.metadata.glossaryEntryProposal,
+            status: 'dismissed',
+          },
+        },
+      }, sessionId);
+    }
+  }, [displaySession?.messages, updateMessage, sessionId]);
+
   // 붙여넣기/첨부 핸들러
   const { handleComposerPaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
 
@@ -403,8 +747,17 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     // scrollToBottom()이 shouldStickToBottomRef=true로 되돌려 이후 응답 스트리밍 follow도 복구된다.
     scrollToBottom();
 
-    await sendMessage(message, sessionId);
-  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, addToast, t, scrollToBottom]);
+    await sendMessage(message, {
+      ...(sessionId ? { targetSessionId: sessionId } : {}),
+      ...(activeComposerSelection
+        ? {
+            contextMode: 'selection' as const,
+            selection: activeComposerSelection,
+            selectionScopeId: activeComposerSelection.selectionScopeId,
+          }
+        : {}),
+    });
+  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, activeComposerSelection, addToast, t, scrollToBottom]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
@@ -501,6 +854,18 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               onAppendToRules={handleAppendToRules}
               onAppendToContext={handleAppendToContext}
               onUpdateMessageMetadata={handleUpdateMessageMetadata}
+              onPreviewSelectionProposal={handlePreviewSelectionProposal}
+              onDismissSelectionProposal={handleDismissSelectionProposal}
+              onApplyMemoryProposal={(messageId, proposal, mode) =>
+                void applyMemoryProposal(messageId, proposal, mode)
+              }
+              onApplyForbiddenTermProposal={(messageId, proposal) =>
+                void applyForbiddenTermProposal(messageId, proposal)
+              }
+              onApplyGlossaryEntryProposal={(messageId, proposal) =>
+                void applyGlossaryEntryProposal(messageId, proposal)
+              }
+              onDismissKnowledgeProposal={dismissKnowledgeProposal}
             />
           );
         })}
@@ -544,6 +909,20 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         <div className={`relative rounded-2xl border bg-editor-bg shadow-sm transition-colors ${
           isDragging ? 'border-primary-500 bg-primary-50' : 'border-editor-border'
         }`}>
+          {activeComposerSelection && (
+            <div className="px-3 pt-3">
+              <SelectionContextChip
+                selection={activeComposerSelection}
+                onDismiss={() => {
+                  removePanelSelectionAnchor(
+                    activeComposerSelection.panel,
+                    activeComposerSelection.anchorId,
+                  );
+                  clearComposerSelection(effectiveSessionId);
+                }}
+              />
+            </div>
+          )}
           {/* 첨부 파일 미리보기 - textarea 위에 표시 */}
           {composerAttachments.length > 0 && (
             <div className="px-4 pt-4 pb-2 flex flex-wrap gap-3">
@@ -757,6 +1136,23 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           </div>
         </div>
       </form>
+      <SelectionEditPreviewModal
+        open={proposalPreview !== null}
+        proposalOnly
+        selection={proposalPreview?.selection ?? null}
+        sourceText={proposalPreview?.sourceText ?? ''}
+        replacementText={proposalPreview?.proposal.replacementText ?? ''}
+        instruction=""
+        referenceOptions={DEFAULT_SELECTION_REFERENCE_OPTIONS}
+        contextManifest={proposalPreview?.proposal.contextManifest}
+        isLoading={false}
+        error={null}
+        onInstructionChange={() => undefined}
+        onReferenceOptionsChange={() => undefined}
+        onGenerate={() => undefined}
+        onApply={applyProposalPreview}
+        onClose={() => setProposalPreview(null)}
+      />
     </div>
   );
 }

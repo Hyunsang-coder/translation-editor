@@ -25,6 +25,11 @@ import {
   streamWithTauriAiBackend,
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
+import {
+  reattachTranslationUnitIds,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
+import type { ResolvedWorkflowContext } from '@/types';
 
 const POLISH_START = '---POLISH_START---';
 const POLISH_END = '---POLISH_END---';
@@ -45,6 +50,7 @@ function buildPolishSystemPrompt(params: {
   targetLanguage?: string | undefined;
   styleRules?: string | undefined;
   projectContext?: string | undefined;
+  forbiddenTerms?: string | undefined;
   glossary?: string | undefined;
   userComments?: string | undefined;
   polishMessage?: string | undefined;
@@ -52,6 +58,7 @@ function buildPolishSystemPrompt(params: {
   const targetLanguage = params.targetLanguage?.trim() || 'Target';
   const rules = params.styleRules?.trim();
   const projectContext = params.projectContext?.trim();
+  const forbiddenTerms = params.forbiddenTerms?.trim();
   const glossary = params.glossary?.trim();
   const userComments = params.userComments?.trim();
   const polishMessage = params.polishMessage?.trim();
@@ -108,6 +115,14 @@ function buildPolishSystemPrompt(params: {
           '',
         ]
       : []),
+    ...(forbiddenTerms
+      ? [
+          '[Forbidden terms]',
+          'Do not use these terms in the polished document. Use the specified replacement when one is provided:',
+          forbiddenTerms,
+          '',
+        ]
+      : []),
     ...(rules ? ['Style/translation rules to respect:', rules, ''] : []),
     ...(projectContext
       ? [
@@ -129,6 +144,7 @@ function buildPolishSystemPrompt(params: {
 function buildPolishMessages(params: {
   targetDocJson: TipTapDocJson;
   targetLanguage?: string | undefined;
+  resolvedContext?: ResolvedWorkflowContext | undefined;
   styleRules?: string | undefined;
   projectContext?: string | undefined;
   glossary?: string | undefined;
@@ -156,9 +172,16 @@ function buildPolishMessages(params: {
 
   const systemPrompt = buildPolishSystemPrompt({
     targetLanguage: params.targetLanguage,
-    styleRules: params.styleRules,
-    projectContext: params.projectContext,
-    glossary: params.glossary,
+    styleRules: params.resolvedContext
+      ? params.resolvedContext.rendered.translationRules
+      : params.styleRules,
+    projectContext: params.resolvedContext
+      ? params.resolvedContext.rendered.projectMemory
+      : params.projectContext,
+    forbiddenTerms: params.resolvedContext?.rendered.forbiddenTerms,
+    glossary: params.resolvedContext
+      ? params.resolvedContext.rendered.glossary
+      : params.glossary,
     userComments: params.userComments,
     polishMessage: params.polishMessage,
   });
@@ -226,9 +249,21 @@ function processPolishResponse(raw: string): { doc: TipTapDocJson } {
   return { doc: polishedDoc };
 }
 
+function restoreTranslationUnitIds(
+  targetDocJson: TipTapDocJson,
+  polishedDocJson: TipTapDocJson,
+): TipTapDocJson {
+  return reattachTranslationUnitIds(
+    targetDocJson as TranslationUnitDocument,
+    polishedDocJson as TranslationUnitDocument,
+  ).doc as TipTapDocJson;
+}
+
 export interface PolishTargetDocumentParams {
   targetDocJson: TipTapDocJson;
   targetLanguage?: string | undefined;
+  /** 작업 시작 시 고정된 프로젝트 컨텍스트. 제공되면 legacy 문자열 필드보다 우선합니다. */
+  resolvedContext?: ResolvedWorkflowContext | undefined;
   styleRules?: string | undefined;
   /** 프로젝트 컨텍스트(제품/도메인/톤 제약). 의미 추론용으로 쓰지 않음. */
   projectContext?: string | undefined;
@@ -276,7 +311,7 @@ export async function polishTargetDocumentWithStreaming(
     }
 
     const { doc } = processPolishResponse(raw);
-    return { doc, raw };
+    return { doc: restoreTranslationUnitIds(params.targetDocJson, doc), raw };
   }
 
   let accumulated = '';
@@ -323,7 +358,7 @@ export async function polishTargetDocumentWithStreaming(
       params.onToken?.(polishedMarkdown.trim());
     }
     const { doc } = processPolishResponse(raw);
-    return { doc, raw };
+    return { doc: restoreTranslationUnitIds(params.targetDocJson, doc), raw };
   }
 
   if (!accumulated.trim()) {
@@ -331,5 +366,8 @@ export async function polishTargetDocumentWithStreaming(
   }
 
   const { doc } = processPolishResponse(accumulated);
-  return { doc, raw: accumulated };
+  return {
+    doc: restoreTranslationUnitIds(params.targetDocJson, doc),
+    raw: accumulated,
+  };
 }

@@ -32,6 +32,7 @@ export function replaceDocContent(
 
   const { tr } = state;
   tr.replaceWith(0, state.doc.content.size, newDoc.content);
+  tr.setMeta('selectionAnchorDocumentReplace', true);
   if (!addToHistory) tr.setMeta('addToHistory', false);
   editor.view.dispatch(tr);
 }

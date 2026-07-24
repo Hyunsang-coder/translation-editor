@@ -325,9 +325,13 @@ async function runWorkflow() {
       selector: "textarea[data-testid='settings-translation-rules']",
       value: '1) 용어 일관성 유지\n2) 문장은 짧게\n3) 불필요한 의역 금지',
     });
+    // 프로젝트 컨텍스트(legacy 필드)는 제거됨 → Project Memory 항목으로 대체
     await callTool(client, 'tauri_dom_fill', {
-      selector: "textarea[data-testid='settings-project-context']",
+      selector: "[data-testid='project-memory-new-item']",
       value: '이 문서는 API 통합 가이드이며 독자는 개발자입니다.',
+    });
+    await callTool(client, 'tauri_dom_click', {
+      selector: "[data-testid='project-memory-add']",
     });
     await sleep(700); // DebouncedTextarea 반영 대기
 

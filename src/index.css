@@ -1039,6 +1039,17 @@
   @apply bg-primary-800;
 }
 
+/* AI selection cards/proposals remain anchored while the document changes. */
+.selection-anchor {
+  border-radius: 2px;
+  background: color-mix(in srgb, rgb(99 102 241) 22%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, rgb(99 102 241) 70%, transparent);
+}
+
+.dark .selection-anchor {
+  background: color-mix(in srgb, rgb(129 140 248) 28%, transparent);
+}
+
 /* ============================================
    Image - 에디터 내 이미지 스타일 (original 모드)
    ============================================ */

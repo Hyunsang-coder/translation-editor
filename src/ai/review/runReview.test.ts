@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';
 import { runReview } from './runReview';
 import { parseReviewResult } from './parseReviewResult';
+import type { ResolvedWorkflowContext } from '@/types';
 
 const mocks = vi.hoisted(() => ({
   createChatModel: vi.fn(),
@@ -61,6 +62,31 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       order: 1,
     },
   ];
+  const resolvedContext: ResolvedWorkflowContext = {
+    snapshot: {
+      revision: 3,
+      projectMemoryItems: [{ id: 'memory-1', category: 'domain', content: 'Cloud administration' }],
+      translationRules: 'Use formal terminology.',
+      forbiddenTerms: [{ id: 'term-1', term: 'easy', replacement: 'straightforward' }],
+      glossaryEntries: [{ id: 'glossary-1', source: 'workspace', target: 'espacio de trabajo' }],
+      createdAt: 1,
+    },
+    manifest: {
+      mode: 'review',
+      revision: 3,
+      projectMemoryItemIds: ['memory-1'],
+      translationRulesHash: 'rules-hash',
+      forbiddenTermIds: ['term-1'],
+      glossaryEntryIds: ['glossary-1'],
+      included: ['project-memory', 'translation-rules', 'forbidden-terms', 'glossary'],
+    },
+    rendered: {
+      projectMemory: '- [domain] Cloud administration',
+      translationRules: 'Use formal terminology.',
+      forbiddenTerms: '- easy → straightforward',
+      glossary: 'workspace = espacio de trabajo',
+    },
+  };
 
   describe('리뷰 실행 기본 동작', () => {
     it('세그먼트 배열이 유효해야 함', () => {
@@ -117,6 +143,26 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(String(messages[1]?.content)).toContain('## 번역 규칙');
       expect(String(messages[1]?.content)).toContain('## 프로젝트 컨텍스트');
       expect(String(messages[1]?.content)).toContain('release note for enterprise administrators');
+    });
+
+    it('리뷰 청크가 전달받은 고정 컨텍스트만 사용한다', async () => {
+      await runReview({
+        segments: mockSegments,
+        resolvedContext,
+        translationRules: 'legacy rule',
+        projectContext: 'legacy context',
+        glossary: 'legacy glossary',
+      });
+
+      const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const userPrompt = String(messages[1]?.content);
+      expect(userPrompt).toContain('Cloud administration');
+      expect(userPrompt).toContain('Use formal terminology.');
+      expect(userPrompt).toContain('- easy → straightforward');
+      expect(userPrompt).toContain('workspace = espacio de trabajo');
+      expect(userPrompt).not.toContain('legacy rule');
+      expect(userPrompt).not.toContain('legacy context');
+      expect(userPrompt).not.toContain('legacy glossary');
     });
 
     it('Tauri 런타임에서는 백엔드 스트리밍을 1차 경로로 사용', async () => {

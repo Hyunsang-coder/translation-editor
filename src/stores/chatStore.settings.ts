@@ -26,6 +26,48 @@ export function createComposerActions(
     schedulePersist();
   };
 
+  const setActiveSelectionScope = (sessionId: string, scopeId: string | null): void => {
+    set((state) => ({
+      activeSelectionScopeIdBySession: {
+        ...state.activeSelectionScopeIdBySession,
+        [sessionId]: scopeId,
+      },
+    }));
+  };
+
+  const setComposerSelection = (
+    selection: import('@/types').SelectionContext | null,
+    targetSessionId?: string,
+  ): void => {
+    const sessionId = targetSessionId ?? get().currentSessionId;
+    set((state) => ({
+      composerSelection: selection,
+      ...(sessionId
+        ? {
+            activeSelectionScopeIdBySession: {
+              ...state.activeSelectionScopeIdBySession,
+              [sessionId]: selection?.selectionScopeId ?? null,
+            },
+          }
+        : {}),
+    }));
+  };
+
+  const clearComposerSelection = (targetSessionId?: string): void => {
+    const sessionId = targetSessionId ?? get().currentSessionId;
+    set((state) => ({
+      composerSelection: null,
+      ...(sessionId
+        ? {
+            activeSelectionScopeIdBySession: {
+              ...state.activeSelectionScopeIdBySession,
+              [sessionId]: null,
+            },
+          }
+        : {}),
+    }));
+  };
+
   const appendComposerText = (text: string, opts?: { separator?: string }): void => {
     const incoming = text.trim();
     if (!incoming) return;
@@ -72,6 +114,9 @@ export function createComposerActions(
 
   return {
     setComposerText,
+    setComposerSelection,
+    clearComposerSelection,
+    setActiveSelectionScope,
     appendComposerText,
     consumePendingComposerAppend,
     requestComposerFocus,

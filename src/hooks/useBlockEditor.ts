@@ -75,21 +75,16 @@ export function useBlockEditor({
           event.preventDefault();
           void (async () => {
             // view 파라미터를 사용하여 stale closure 방지 (editor 캡처 제거)
-            const { from, to } = view.state.selection;
-            const selected = view.state.doc.textBetween(from, to, ' ').trim();
-
             // getState()를 사용하여 stale closure 문제 방지
             const { addContextBlock } = useChatStore.getState();
             const { openActiveChat, setActivePanel } = useUIStore.getState();
-            const { appendComposerText, requestComposerFocus } = useChatStore.getState();
+            const { requestComposerFocus } = useChatStore.getState();
 
-            // 현재 블록을 컨텍스트로 등록 (Context Injection)
+            // 레거시 블록 에디터는 runtime selection anchor를 제공하지 않으므로
+            // 선택 문자열을 raw composer text로 복사하지 않고 블록만 컨텍스트로 등록한다.
             addContextBlock(blockId);
             openActiveChat();
             setActivePanel('chat');
-            if (selected.length > 0) {
-              appendComposerText(selected);
-            }
             requestComposerFocus();
           })();
           return true;
@@ -171,4 +166,3 @@ export function useBlockEditor({
     isFocused,
   };
 }
-

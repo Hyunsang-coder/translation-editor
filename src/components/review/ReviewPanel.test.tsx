@@ -291,24 +291,28 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
     });
 
     expect(mockRunReview).toHaveBeenCalledWith(expect.objectContaining({
-      translationRules: 'Keep product names unchanged.',
-      projectContext: 'Enterprise release notes for administrators.',
+      resolvedContext: expect.objectContaining({
+        rendered: expect.objectContaining({
+          translationRules: 'Keep product names unchanged.',
+          projectMemory: expect.stringContaining('Enterprise release notes for administrators.'),
+        }),
+      }),
     }));
     expect(useChatStore.getState().projectContext)
       .toBe('Enterprise release notes for administrators.');
   });
 
-  it('컨텍스트 입력 직후 검수 탭으로 전환해 결과를 받아도 입력값을 유지한다', async () => {
-    const typedContext = 'Context typed immediately before review.';
+  it('규칙 입력 직후 검수 탭으로 전환해 결과를 받아도 입력값을 유지한다', async () => {
+    const typedRules = 'Rule typed immediately before review.';
     const settings = render(<SettingsContent />);
 
-    fireEvent.change(screen.getByTestId('settings-project-context'), {
-      target: { value: typedContext },
+    fireEvent.change(screen.getByTestId('settings-translation-rules'), {
+      target: { value: typedRules },
     });
     // 실제 탭 전환처럼 500ms debounce 전에 SettingsContent를 언마운트한다.
     settings.unmount();
 
-    expect(useChatStore.getState().projectContext).toBe(typedContext);
+    expect(useChatStore.getState().translationRules).toBe(typedRules);
 
     mockBuildChunks.mockResolvedValue([buildChunk(0, 'seg-1')]);
     mockRunReview.mockResolvedValue(AI_RESPONSE_WITH_ISSUE);
@@ -321,7 +325,7 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
     review.unmount();
 
     render(<SettingsContent />);
-    expect(screen.getByTestId('settings-project-context')).toHaveValue(typedContext);
+    expect(screen.getByTestId('settings-translation-rules')).toHaveValue(typedRules);
   });
 
   it('검수 중 프로젝트 전환 시 결과 주입과 장부 기록을 모두 중단한다 (장부 오염 방지)', async () => {

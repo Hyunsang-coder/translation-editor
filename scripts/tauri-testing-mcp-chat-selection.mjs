@@ -17,9 +17,36 @@ function parseToolText(result) {
 async function callTool(client, name, args = {}) {
   const result = parseToolText(await client.callTool({ name, arguments: args }));
   if (typeof result?.text === 'string' && result.text.startsWith('RPC ')) {
-    throw new Error(`${name}: ${result.text}`);
+    throw new Error(`${name} ${JSON.stringify(args)}: ${result.text}`);
   }
   return result;
+}
+
+async function clickWhenReady(client, selector, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      await callTool(client, 'tauri_dom_wait_for_selector', {
+        selector,
+        timeout: Math.min(1000, Math.max(1, deadline - Date.now())),
+        visible: true,
+      });
+      await callTool(client, 'tauri_dom_click', { selector });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+  const page = await callTool(client, 'tauri_dom_get_page_content', {
+    maxDepth: 5,
+    maxNodes: 300,
+  });
+  throw new Error(
+    `${lastError instanceof Error ? lastError.message : `Timed out clicking ${selector}`}\n`
+    + `Current page: ${JSON.stringify(page).slice(0, 6000)}`,
+  );
 }
 
 function ensureMcpBuilt() {
@@ -38,12 +65,19 @@ async function runScenario(client) {
 
   try {
     await callTool(client, 'tauri_dom_wait_for_selector', {
-      selector: "button[data-testid='project-new-button']",
+      selector: "button[data-testid='toolbar-sidebar-toggle']",
       timeout: 15000,
+      visible: true,
     });
-    await callTool(client, 'tauri_dom_click', {
-      selector: "button[data-testid='project-new-button']",
-    });
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    try {
+      await callTool(client, 'tauri_dom_query_selector', {
+        selector: "button[data-testid='project-new-button']",
+      });
+    } catch {
+      await clickWhenReady(client, "button[data-testid='toolbar-sidebar-toggle']");
+    }
+    await clickWhenReady(client, "button[data-testid='project-new-button']", 15000);
     await callTool(client, 'tauri_dom_wait_for_selector', {
       selector: "input[data-testid='project-title-input']",
       timeout: 5000,
@@ -52,29 +86,40 @@ async function runScenario(client) {
       selector: "input[data-testid='project-title-input']",
       value: title,
     });
-    await callTool(client, 'tauri_dom_click', {
-      selector: "button[data-testid='project-create-button']",
-    });
+    await clickWhenReady(client, "button[data-testid='project-create-button']");
     await callTool(client, 'tauri_dom_wait_for_selector', {
       selector: "[data-testid='source-editor'] [contenteditable='true']",
       timeout: 10000,
     });
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Project switching hydrates chat/session state independently from the editor.
+    // Wait for that reset boundary before asserting that the shortcut opens a chat.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     const sourceSelector = "[data-testid='source-editor'] [contenteditable='true']";
     await callTool(client, 'tauri_dom_fill', { selector: sourceSelector, value: selectedText });
-    await callTool(client, 'tauri_dom_keyboard', {
+    const selectResult = await callTool(client, 'tauri_dom_keyboard', {
       selector: sourceSelector,
       key: 'a',
       code: 'KeyA',
       modifiers: ['meta'],
     });
-    await callTool(client, 'tauri_dom_keyboard', {
+    if (!String(selectResult.selectionText ?? '').includes(selectedText)) {
+      throw new Error(
+        `Cmd+A did not select the source text: ${JSON.stringify(selectResult)}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const shortcutResult = await callTool(client, 'tauri_dom_keyboard', {
       selector: sourceSelector,
       key: 'l',
       code: 'KeyL',
       modifiers: ['meta'],
     });
+    if (!shortcutResult.defaultPrevented) {
+      throw new Error(
+        `Cmd+L was not handled by the source editor: ${JSON.stringify(shortcutResult)}`,
+      );
+    }
 
     const composerSelector = "[data-testid='chat-composer-container'] [contenteditable='true']";
     await callTool(client, 'tauri_dom_wait_for_selector', {
@@ -82,22 +127,55 @@ async function runScenario(client) {
       timeout: 10000,
       visible: true,
     });
-    let composerText = '';
+    let chipText = '';
     let sendButton = null;
     for (let attempt = 0; attempt < 25; attempt += 1) {
-      const composer = await callTool(client, 'tauri_dom_get_text', { selector: composerSelector });
-      composerText = String(composer.text ?? '');
-      sendButton = await callTool(client, 'tauri_dom_query_selector', {
-        selector: "button[data-testid='chat-send-button']",
-      });
-      if (composerText.includes(selectedText)) break;
+      try {
+        const chip = await callTool(client, 'tauri_dom_query_selector', {
+          selector: "[data-testid='selection-context-chip']",
+        });
+        chipText = String(chip.textContent ?? '');
+      } catch {
+        chipText = '';
+      }
+      try {
+        sendButton = await callTool(client, 'tauri_dom_query_selector', {
+          selector: "button[data-testid='chat-send-button']",
+        });
+      } catch {
+        sendButton = null;
+      }
+      if (chipText.includes(selectedText)) break;
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    if (!composerText.includes(selectedText)) {
-      throw new Error(`Selected text missing from composer: text=${JSON.stringify(composerText)}, sendDisabled=${String(sendButton?.disabled)}`);
+    if (!chipText.includes(selectedText)) {
+      const page = await callTool(client, 'tauri_dom_get_page_content', {
+        maxDepth: 10,
+        maxNodes: 1000,
+      });
+      throw new Error(
+        `Selection card missing from composer: text=${JSON.stringify(chipText)}, `
+        + `sendDisabled=${String(sendButton?.disabled)}\n`
+        + `Current page: ${JSON.stringify(page).slice(0, 12000)}`,
+      );
+    }
+    await callTool(client, 'tauri_dom_fill', {
+      selector: composerSelector,
+      value: '이 문장의 의미를 설명해줘.',
+    });
+    sendButton = await callTool(client, 'tauri_dom_query_selector', {
+      selector: "button[data-testid='chat-send-button']",
+    });
+    const composer = await callTool(client, 'tauri_dom_get_text', { selector: composerSelector });
+    const composerText = String(composer.text ?? '').trim();
+    if (composerText.includes(selectedText)) {
+      throw new Error('Selection was appended as raw composer text instead of metadata');
+    }
+    if (sendButton?.disabled) {
+      throw new Error('Question plus selection card should enable the chat send button');
     }
 
-    process.stdout.write(`[success] Closed-chat selection append: ${composerText}\n`);
+    process.stdout.write(`[success] Closed-chat selection card: ${chipText}\n`);
   } finally {
     const recent = await callTool(client, 'tauri_invoke', { command: 'list_recent_projects' });
     const projects = Array.isArray(recent) ? recent : recent?.result;

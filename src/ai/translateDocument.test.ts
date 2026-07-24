@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ITEProject } from '@/types';
+import type { ITEProject, ResolvedWorkflowContext } from '@/types';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { isValidTipTapDocJson, type TipTapDocJson } from '@/utils/markdownConverter';
 import {
@@ -74,6 +74,32 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
         ],
       },
     ],
+  };
+
+  const resolvedContext: ResolvedWorkflowContext = {
+    snapshot: {
+      revision: 7,
+      projectMemoryItems: [{ id: 'memory-1', category: 'audience', content: 'Enterprise admins' }],
+      translationRules: 'Use a formal tone.',
+      forbiddenTerms: [{ id: 'forbidden-1', term: 'simply', replacement: 'directly' }],
+      glossaryEntries: [{ id: 'glossary-1', source: 'workspace', target: 'workspace' }],
+      createdAt: 1,
+    },
+    manifest: {
+      mode: 'full-translate',
+      revision: 7,
+      projectMemoryItemIds: ['memory-1'],
+      translationRulesHash: 'rules-hash',
+      forbiddenTermIds: ['forbidden-1'],
+      glossaryEntryIds: ['glossary-1'],
+      included: ['project-memory', 'translation-rules', 'forbidden-terms', 'glossary'],
+    },
+    rendered: {
+      projectMemory: '- [audience] Enterprise admins',
+      translationRules: 'Use a formal tone.',
+      forbiddenTerms: '- simply → directly',
+      glossary: 'workspace = workspace',
+    },
   };
 
   // ===== 유틸리티 함수 테스트 (기본) =====
@@ -189,6 +215,30 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
         undefined,
         expect.objectContaining({ useFor: 'translation' }),
       );
+    });
+
+    it('고정된 컨텍스트 스냅샷을 legacy 문자열보다 우선한다', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson,
+        resolvedContext,
+        translationRules: 'legacy rule',
+        projectContext: 'legacy context',
+        glossary: 'legacy glossary',
+      });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content);
+      expect(systemPrompt).toContain('Enterprise admins');
+      expect(systemPrompt).toContain('Use a formal tone.');
+      expect(systemPrompt).toContain('- simply → directly');
+      expect(systemPrompt).toContain('workspace = workspace');
+      expect(systemPrompt).not.toContain('legacy rule');
+      expect(systemPrompt).not.toContain('legacy context');
+      expect(systemPrompt).not.toContain('legacy glossary');
     });
 
     it('번역 중 취소 (AbortSignal)', async () => {

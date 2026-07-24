@@ -20,6 +20,7 @@ import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { CommentMark } from '@/editor/extensions/CommentMark';
+import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { Markdown } from 'tiptap-markdown';
 
 /**
@@ -87,6 +88,7 @@ function createExtensions() {
     Subscript,
     Superscript,
     CommentMarkForConversion,
+    TranslationUnitId.configure({ assignMissingIds: false }),
     Markdown.configure({
       html: false,                  // HTML 태그 비활성화
       tightLists: true,             // 리스트 항목 사이 빈 줄 제거
@@ -171,6 +173,7 @@ function createExtensionsForTranslation() {
     Subscript,
     Superscript,
     CommentMarkForConversion,
+    TranslationUnitId.configure({ assignMissingIds: false }),
     Markdown.configure({
       html: true,                   // HTML 태그 활성화 (테이블 지원)
       tightLists: true,

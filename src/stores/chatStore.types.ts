@@ -1,4 +1,11 @@
-import type { ChatSession, ChatMessage, ChatSessionMemory, GlossaryEntry } from '@/types';
+import type {
+  ChatSession,
+  ChatMessage,
+  ChatSessionMemory,
+  GlossaryEntry,
+  SelectionContext,
+  SendMessageOptions,
+} from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -14,19 +21,6 @@ export interface PendingComposerAppend {
   targetSessionId: string | null;
   nonce: number;
 }
-
-/** 도구 이름 → 한국어 표시명 매핑 (sendMessage/replayMessage 공용) */
-export const TOOL_NAME_MAP: Record<string, string> = {
-  'web_search': '웹 검색',
-  'web_search_preview': '웹 검색',
-  'get_source_document': '원문 문서 조회',
-  'get_target_document': '번역문 문서 조회',
-  'suggest_translation_rule': '번역 규칙 생성',
-  'suggest_project_context': '프로젝트 맥락 분석',
-  'notion_search': 'Notion 검색',
-  'notion_get_page': 'Notion 페이지 조회',
-  'notion_query_database': 'Notion 데이터베이스 조회',
-};
 
 // ── State Interface ────────────────────────────────────────────────────
 
@@ -55,6 +49,9 @@ export interface ChatState {
   summarySuggestionDismissedBySessionId: Record<string, boolean>;
   /** Chat composer */
   composerText: string;
+  /** 현재 채팅 입력에 첨부된 runtime 선택 영역. 문서 위치 자체는 TipTap plugin이 관리한다. */
+  composerSelection: SelectionContext | null;
+  activeSelectionScopeIdBySession: Record<string, string | null>;
   composerFocusNonce: number;
   /** 외부 focus 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
   pendingComposerFocus: {
@@ -96,7 +93,10 @@ export interface ChatActions {
   updateSessionMemory: (sessionId: string, memory: ChatSessionMemory) => void;
 
   // 메시지 관리
-  sendMessage: (content: string, targetSessionId?: string) => Promise<void>;
+  sendMessage: (
+    content: string,
+    targetSessionIdOrOptions?: string | SendMessageOptions,
+  ) => Promise<void>;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, targetSessionId?: string) => string | null;
   updateMessage: (
     messageId: string,
@@ -113,6 +113,12 @@ export interface ChatActions {
 
   // Composer
   setComposerText: (text: string) => void;
+  setComposerSelection: (
+    selection: SelectionContext | null,
+    targetSessionId?: string,
+  ) => void;
+  clearComposerSelection: (targetSessionId?: string) => void;
+  setActiveSelectionScope: (sessionId: string, scopeId: string | null) => void;
   appendComposerText: (text: string, opts?: { separator?: string }) => void;
   consumePendingComposerAppend: (targetSessionId: string) => PendingComposerAppend | null;
   requestComposerFocus: (targetSessionId?: string) => void;

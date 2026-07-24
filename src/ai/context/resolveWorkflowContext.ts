@@ -1,0 +1,98 @@
+import type {
+  ContextManifest,
+  ContextReferenceOptions,
+  ContextSnapshot,
+  ResolvedWorkflowContext,
+  WorkflowContextMode,
+} from '@/types';
+import { hashContent } from '@/utils/hash';
+import { approxTokens } from '@/ai/chatContext/tokenBudget';
+export {
+  buildContextSnapshot,
+  type BuildContextSnapshotInput,
+} from './buildContextSnapshot';
+
+interface ResolveWorkflowContextFromSnapshotInput {
+  mode: WorkflowContextMode;
+  snapshot: ContextSnapshot;
+  referenceOptions?: ContextReferenceOptions;
+}
+
+function includeAll(mode: WorkflowContextMode): boolean {
+  return (
+    mode === 'general-chat' ||
+    mode === 'full-translate' ||
+    mode === 'review' ||
+    mode === 'polish'
+  );
+}
+
+export function resolveWorkflowContextFromSnapshot(
+  input: ResolveWorkflowContextFromSnapshotInput,
+): ResolvedWorkflowContext {
+  const { mode, snapshot } = input;
+  const all = includeAll(mode);
+  const options = input.referenceOptions;
+  const useTranslationRules =
+    all || (mode === 'selection-retranslate' && options?.translationRules === true);
+  const useForbiddenTerms =
+    all || (mode === 'selection-retranslate' && options?.forbiddenTerms === true);
+  const useGlossary =
+    all || (mode === 'selection-retranslate' && options?.glossary === true);
+  const useProjectMemory =
+    all || (mode === 'selection-retranslate' && options?.projectContext === true);
+
+  const rendered: ResolvedWorkflowContext['rendered'] = {};
+  const included: ContextManifest['included'] = [];
+
+  if (useProjectMemory && snapshot.projectMemoryItems.length > 0) {
+    rendered.projectMemory = snapshot.projectMemoryItems
+      .map((item) => `- [${item.category}] ${item.content}`)
+      .join('\n');
+    included.push('project-memory');
+  }
+  if (useTranslationRules && snapshot.translationRules.trim()) {
+    rendered.translationRules = snapshot.translationRules.trim();
+    included.push('translation-rules');
+  }
+  if (useForbiddenTerms && snapshot.forbiddenTerms.length > 0) {
+    rendered.forbiddenTerms = snapshot.forbiddenTerms
+      .map((term) =>
+        `- ${term.term}${term.replacement ? ` → ${term.replacement}` : ''}${
+          term.note ? ` (${term.note})` : ''
+        }`,
+      )
+      .join('\n');
+    included.push('forbidden-terms');
+  }
+  if (useGlossary && snapshot.glossaryEntries.length > 0) {
+    rendered.glossary = snapshot.glossaryEntries
+      .map((entry) => `${entry.source} = ${entry.target}`)
+      .join('\n');
+    included.push('glossary');
+  }
+
+  const renderedText = Object.values(rendered).filter(Boolean).join('\n\n');
+  return {
+    snapshot,
+    manifest: {
+      mode,
+      revision: snapshot.revision,
+      projectMemoryItemIds: useProjectMemory
+        ? snapshot.projectMemoryItems.map((item) => item.id)
+        : [],
+      ...(useTranslationRules && snapshot.translationRules.trim()
+        ? { translationRulesHash: hashContent(snapshot.translationRules.trim()) }
+        : {}),
+      forbiddenTermIds: useForbiddenTerms
+        ? snapshot.forbiddenTerms.map((term) => term.id)
+        : [],
+      glossaryEntryIds: useGlossary
+        ? snapshot.glossaryEntries.map((entry) => entry.id)
+        : [],
+      included,
+      estimatedInputTokens: approxTokens(renderedText),
+    },
+    rendered,
+  };
+}

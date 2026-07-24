@@ -1,7 +1,14 @@
 /**
  * chatStore AI 상호작용 슬라이스 (executeAiReply, sendMessage, replayMessage, streaming)
  */
-import type { ChatMessage } from '@/types';
+import type {
+  ChatContextMode,
+  ChatMessage,
+  ChatSelectionSnapshot,
+  ContextManifest,
+  SelectionContext,
+  SendMessageOptions,
+} from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
 import { streamAssistantReply, type StreamCallbacks } from '@/ai/chat';
 import { resolveModelRunConfig } from '@/ai/config';
@@ -23,15 +30,25 @@ import {
   restoreGhostChips,
 } from '@/utils/ghostMask';
 import { cleanSuggestionContent } from '@/utils/cleanSuggestionContent';
-import { stripHtml } from '@/utils/hash';
-import { TOOL_NAME_MAP } from './chatStore.types';
+import { hashContent, stripHtml } from '@/utils/hash';
 import type { ChatSet, ChatGet } from './chatStore.types';
+import i18n from '@/i18n/config';
+import {
+  getChatToolDescriptor,
+  getChatToolDisplayNameKey,
+} from '@/ai/tools/toolRegistry';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import {
   tryExtractWebSearchQuery,
   extractTextFromAiMessage,
   inferSuggestionFromAssistantText,
   createIncrementalGhostRestorer,
 } from './chatStore.helpers';
+import {
+  filterMessagesForSelectionScope,
+  toChatSelectionSnapshot,
+} from '@/ai/chatContext/selectionContext';
+import { v4 as uuidv4 } from 'uuid';
 
 // ── ExecuteAiReply Params ──────────────────────────────────────────────
 
@@ -48,6 +65,10 @@ interface ExecuteAiReplyParams {
   extraCallbacks?: Partial<StreamCallbacks>;
   /** 성공 시 schedulePersist() 호출 여부 (replayMessage: true) */
   persistOnSuccess?: boolean;
+  contextMode?: ChatContextMode;
+  selection?: ChatSelectionSnapshot;
+  selectionContext?: SelectionContext;
+  selectionScopeId?: string;
 }
 
 type ToolEnabledModelInvokeOptions = { signal?: AbortSignal };
@@ -149,6 +170,10 @@ export function createAiActions(
       capturedAttachments,
       extraCallbacks,
       persistOnSuccess = false,
+      contextMode = 'general',
+      selection,
+      selectionContext,
+      selectionScopeId,
     } = params;
 
     // Ghost mask (request 단위 무결성 보호)
@@ -169,6 +194,7 @@ export function createAiActions(
     try {
       // fresh session 읽기 (caller가 truncation 등으로 변경했을 수 있음)
       const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
+      const isSelectionRequest = contextMode === 'selection' && !!selectionScopeId;
       // 요청 실행 설정을 한 번만 캡처: 이후 전역/세션 모델이 바뀌어도 이 요청의 모델은 고정된다.
       // (세션별 modelPreset이 있으면 그것을, 없으면 전역 chat 기본값을 사용)
       const runConfig = resolveModelRunConfig({ ...(session?.modelPreset ? { preset: session.modelPreset } : {}) });
@@ -177,23 +203,21 @@ export function createAiActions(
 
       const contextBlockIds = session?.contextBlockIds ?? [];
       const contextBlocks =
-        project
+        project && !isSelectionRequest
           ? contextBlockIds
             .map((id) => project.blocks[id])
             .filter((b): b is NonNullable<typeof b> => b !== undefined)
           : [];
-      const translationRulesRaw = get().translationRules;
-      const projectContextRaw = get().projectContext;
+      const translationRulesRaw = isSelectionRequest ? '' : get().translationRules;
 
       const translationRules = translationRulesRaw
         ? maskGhostChips(translationRulesRaw, maskSession)
         : '';
-      const projectContext = projectContextRaw ? maskGhostChips(projectContextRaw, maskSession) : '';
 
       // 로컬 글로서리 주입 (on-demand, 문서 전역 윈도우)
       let glossaryInjected = '';
       try {
-        if (project?.id) {
+        if (project?.id && !isSelectionRequest) {
           const plainContext = contextBlocks
             .map((b) => stripHtml(b.content))
             .join('\n');
@@ -232,18 +256,24 @@ export function createAiActions(
       const reservedContextTokens =
         SYSTEM_BASE_TOKENS +
         approxTokens(translationRules) +
-        approxTokens(projectContext) +
         approxTokens(glossaryInjected) +
         approxTokens(content);
 
-      const plan = planConversationContext({
-        messages: priorMessages,
-        memory: session?.memory,
-        budget,
-        reservedContextTokens,
-      });
+      const plan = isSelectionRequest
+        ? {
+            recentRawMessages: priorMessages.slice(-12),
+            needsSummary: false,
+            messagesToSummarize: [],
+            summarizedThroughMessageId: null,
+          }
+        : planConversationContext({
+            messages: priorMessages,
+            memory: session?.memory,
+            budget,
+            reservedContextTokens,
+          });
 
-      let conversationSummary = session?.memory?.summary ?? '';
+      let conversationSummary = isSelectionRequest ? '' : (session?.memory?.summary ?? '');
       if (plan.needsSummary) {
         set({ statusMessage: '이전 대화 요약 중...' });
         try {
@@ -274,22 +304,49 @@ export function createAiActions(
       }
 
       const recent: ChatMessage[] = plan.recentRawMessages;
+      const memoryRevision = useProjectMemoryStore.getState().revision;
+      const initialIncluded: ContextManifest['included'] = [];
+      if (selection) initialIncluded.push('selection');
+      if (translationRules) initialIncluded.push('translation-rules');
+      if (glossaryInjected) initialIncluded.push('glossary');
+      if (conversationSummary) initialIncluded.push('chat-summary');
+      if (contextBlocks.length > 0) initialIncluded.push('document-tool');
+      const contextManifest: ContextManifest = {
+        mode: isSelectionRequest ? 'selection-chat' : 'general-chat',
+        revision: memoryRevision,
+        projectMemoryItemIds: [],
+        ...(translationRules
+          ? { translationRulesHash: hashContent(translationRules) }
+          : {}),
+        forbiddenTermIds: [],
+        glossaryEntryIds: get().lastInjectedGlossary.map((entry) => entry.id),
+        included: initialIncluded,
+        estimatedInputTokens: reservedContextTokens,
+      };
 
       // Assistant 빈 메시지 추가 (스트리밍 버블)
       // 실행 출처 메타데이터를 캡처된 runConfig에서 만든다(기록 모델 = 실제 호출 모델 보장).
+      const initialAssistantMetadata: NonNullable<ChatMessage['metadata']> = {
+        requestedModelPreset: runConfig.requestedPreset,
+        resolvedModel: runConfig.resolvedModel,
+        provider: runConfig.provider === 'mock' ? 'openai' : runConfig.provider,
+        ...(runConfig.reasoningEffort ? { reasoningEffort: runConfig.reasoningEffort } : {}),
+        ...(selectionScopeId ? { selectionScopeId } : {}),
+        ...(selection ? { selection } : {}),
+        contextManifest,
+        toolCallsInProgress: [],
+      };
       assistantId = get().addMessage({
         role: 'assistant',
         content: '',
-        metadata: {
-          requestedModelPreset: runConfig.requestedPreset,
-          resolvedModel: runConfig.resolvedModel,
-          provider: runConfig.provider === 'mock' ? 'openai' : runConfig.provider,
-          ...(runConfig.reasoningEffort ? { reasoningEffort: runConfig.reasoningEffort } : {}),
-          toolCallsInProgress: [],
-        },
+        metadata: initialAssistantMetadata,
       }, effectiveSessionId);
       if (assistantId) {
-        set({ streamingMessageId: assistantId, streamingSessionId: effectiveSessionId });
+        set({
+          streamingMessageId: assistantId,
+          streamingSessionId: effectiveSessionId,
+          streamingMetadata: initialAssistantMetadata,
+        });
       }
 
       // P3: 토큰마다 전체 텍스트를 다시 복원(O(L^2))하지 않도록 증분 복원기 사용
@@ -310,12 +367,57 @@ export function createAiActions(
           if (!assistantId) return;
           if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
+          let nextMetadata = { ...currentMetadata };
 
           if (evt.phase === 'start') {
-            const friendlyName = TOOL_NAME_MAP[evt.toolName] || evt.toolName;
+            const displayNameKey = getChatToolDisplayNameKey(evt.toolName);
+            const friendlyName = displayNameKey
+              ? i18n.t(displayNameKey)
+              : evt.toolName;
             set({ statusMessage: `${friendlyName} 진행 중...` });
           } else {
             set({ statusMessage: '결과 처리 및 답변 생성 중...' });
+            if (evt.status === 'success' && evt.result) {
+              try {
+                const parsed = JSON.parse(evt.result) as {
+                  projectMemory?: Array<{ id?: unknown }>;
+                  forbiddenTerms?: Array<{ id?: unknown }>;
+                  entries?: Array<{ id?: unknown }>;
+                };
+                const manifest = nextMetadata.contextManifest ?? contextManifest;
+                const included = new Set(manifest.included);
+                const memoryIds = (parsed.projectMemory ?? [])
+                  .map((item) => item.id)
+                  .filter((id): id is string => typeof id === 'string');
+                const forbiddenIds = (parsed.forbiddenTerms ?? [])
+                  .map((item) => item.id)
+                  .filter((id): id is string => typeof id === 'string');
+                const glossaryIds = (parsed.entries ?? [])
+                  .map((item) => item.id)
+                  .filter((id): id is string => typeof id === 'string');
+                if (memoryIds.length > 0) included.add('project-memory');
+                if (forbiddenIds.length > 0) included.add('forbidden-terms');
+                if (glossaryIds.length > 0) included.add('glossary');
+                nextMetadata = {
+                  ...nextMetadata,
+                  contextManifest: {
+                    ...manifest,
+                    projectMemoryItemIds: [
+                      ...new Set([...manifest.projectMemoryItemIds, ...memoryIds]),
+                    ],
+                    forbiddenTermIds: [
+                      ...new Set([...manifest.forbiddenTermIds, ...forbiddenIds]),
+                    ],
+                    glossaryEntryIds: [
+                      ...new Set([...manifest.glossaryEntryIds, ...glossaryIds]),
+                    ],
+                    included: [...included],
+                  },
+                };
+              } catch {
+                // JSON 구조를 반환하지 않는 도구는 type-level 사용 기록만 남긴다.
+              }
+            }
           }
 
           // 1. Tool Call Badge (Running state)
@@ -326,9 +428,91 @@ export function createAiActions(
               : prev.filter((n) => n !== evt.toolName);
 
           // 2. Suggestion Handling (Smart Buttons)
-          let nextMetadata = { ...currentMetadata };
           if (evt.phase === 'start' && evt.args) {
-            if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
+            if (
+              evt.toolName === 'propose_selection_edit' &&
+              selectionContext?.panel === 'target' &&
+              evt.args.replacementText
+            ) {
+              nextMetadata = {
+                ...nextMetadata,
+                documentEditProposal: {
+                  proposalId: uuidv4(),
+                  selectionId: selectionContext.selectionId,
+                  selectionScopeId: selectionContext.selectionScopeId,
+                  projectId: selectionContext.projectId,
+                  panel: 'target',
+                  anchorId: selectionContext.anchorId,
+                  originalText: selectionContext.text,
+                  replacementText: String(evt.args.replacementText),
+                  ...(evt.args.explanation
+                    ? { explanation: String(evt.args.explanation) }
+                    : {}),
+                  operation:
+                    evt.args.operation === 'translate' ||
+                    evt.args.operation === 'polish'
+                      ? evt.args.operation
+                      : 'rewrite',
+                  documentRevisionAtRequest: selectionContext.documentRevision,
+                  contextManifest: currentMetadata.contextManifest ?? contextManifest,
+                  status: 'proposed',
+                  createdAt: Date.now(),
+                },
+              };
+            } else if (
+              evt.toolName === 'propose_project_memory_change' &&
+              typeof evt.args.operation === 'string' &&
+              typeof evt.args.category === 'string'
+            ) {
+              const operation =
+                evt.args.operation === 'replace' || evt.args.operation === 'archive'
+                  ? evt.args.operation
+                  : 'add';
+              nextMetadata = {
+                ...nextMetadata,
+                projectMemoryProposal: {
+                  proposalId: uuidv4(),
+                  operation,
+                  category: evt.args.category as import('@/types').ProjectMemoryCategory,
+                  ...(evt.args.content ? { content: String(evt.args.content) } : {}),
+                  ...(evt.args.targetItemId
+                    ? { targetItemId: String(evt.args.targetItemId) }
+                    : {}),
+                  ...(evt.args.reason ? { reason: String(evt.args.reason) } : {}),
+                  sourceSessionId: effectiveSessionId,
+                  ...(assistantId ? { sourceMessageId: assistantId } : {}),
+                  status: 'proposed',
+                },
+              };
+            } else if (evt.toolName === 'suggest_forbidden_term' && evt.args.term) {
+              nextMetadata = {
+                ...nextMetadata,
+                forbiddenTermProposal: {
+                  proposalId: uuidv4(),
+                  term: String(evt.args.term),
+                  ...(evt.args.replacement
+                    ? { replacement: String(evt.args.replacement) }
+                    : {}),
+                  ...(evt.args.note ? { note: String(evt.args.note) } : {}),
+                  status: 'proposed',
+                },
+              };
+            } else if (
+              evt.toolName === 'suggest_glossary_entry' &&
+              evt.args.source &&
+              evt.args.target
+            ) {
+              nextMetadata = {
+                ...nextMetadata,
+                glossaryEntryProposal: {
+                  proposalId: uuidv4(),
+                  source: String(evt.args.source),
+                  target: String(evt.args.target),
+                  ...(evt.args.notes ? { notes: String(evt.args.notes) } : {}),
+                  status: 'proposed',
+                },
+              };
+            } else if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
               const prev = nextMetadata.suggestedRule ?? '';
               const cleaned = cleanSuggestionContent(String(evt.args.rule));
               nextMetadata = {
@@ -355,8 +539,36 @@ export function createAiActions(
         onToolsUsed: (toolsUsed) => {
           if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
+          const manifest = currentMetadata.contextManifest ?? contextManifest;
+          const included = new Set(manifest.included);
+          if (toolsUsed.includes('get_aligned_selection_context')) included.add('aligned-source');
+          if (toolsUsed.some((name) =>
+            ['get_source_document', 'get_target_document', 'get_selection_surroundings', 'get_review_results']
+              .includes(name),
+          )) included.add('document-tool');
+          if (toolsUsed.some((name) => getChatToolDescriptor(name)?.trust === 'external')) {
+            included.add('external-tool');
+          }
+          if (toolsUsed.includes('get_project_guidance')) included.add('project-memory');
+          const documentEditProposal = currentMetadata.documentEditProposal
+            ? {
+                ...currentMetadata.documentEditProposal,
+                contextManifest: {
+                  ...manifest,
+                  included: [...included],
+                },
+              }
+            : undefined;
           set({
-            streamingMetadata: { ...currentMetadata, toolsUsed },
+            streamingMetadata: {
+              ...currentMetadata,
+              toolsUsed,
+              contextManifest: {
+                ...manifest,
+                included: [...included],
+              },
+              ...(documentEditProposal ? { documentEditProposal } : {}),
+            },
           });
         },
         onUsage: (usage) => {
@@ -374,6 +586,12 @@ export function createAiActions(
               ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
               ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
               ...(contextUtilization !== undefined ? { contextUtilization } : {}),
+              contextManifest: {
+                ...(currentMetadata.contextManifest ?? contextManifest),
+                ...(usage.inputTokens !== undefined
+                  ? { estimatedInputTokens: usage.inputTokens }
+                  : {}),
+              },
             },
           });
         },
@@ -386,9 +604,12 @@ export function createAiActions(
           contextBlocks,
           recentMessages: recent,
           userMessage: maskedUserContent,
+          ...(selection ? { selection } : {}),
+          ...(selectionContext?.status === 'active'
+            ? { selectionProposalEnabled: true }
+            : {}),
           translationRules,
           ...(glossaryInjected ? { glossaryInjected } : {}),
-          projectContext,
           ...(conversationSummary ? { conversationSummary } : {}),
           requestType: 'question',
           abortSignal: abortController.signal,
@@ -491,7 +712,14 @@ export function createAiActions(
 
   // ── sendMessage ──────────────────────────────────────────────────────
 
-  const sendMessage = async (content: string, targetSessionId?: string): Promise<void> => {
+  const sendMessage = async (
+    content: string,
+    targetSessionIdOrOptions?: string | SendMessageOptions,
+  ): Promise<void> => {
+    const options: SendMessageOptions =
+      typeof targetSessionIdOrOptions === 'string'
+        ? { targetSessionId: targetSessionIdOrOptions }
+        : (targetSessionIdOrOptions ?? {});
     // Race Condition 방지: finalization 진행 중이면 완료 대기
     if (get().isFinalizingStreaming) {
       // 최대 1초 대기 (100ms 간격으로 체크)
@@ -510,7 +738,7 @@ export function createAiActions(
       return;
     }
 
-    const resolvedSessionId = targetSessionId ?? get().currentSessionId;
+    const resolvedSessionId = options.targetSessionId ?? get().currentSessionId;
     const { createSession, addMessage, updateMessage } = get();
 
     // 세션이 없으면 생성
@@ -531,7 +759,10 @@ export function createAiActions(
     // Phase 3: 전체 prior transcript를 전달하고, 토큰 예산/요약은 executeAiReply의
     // context planner가 처리한다(고정 20개 slice 제거).
     const targetSession = get().sessions.find((s) => s.id === effectiveSessionId);
-    const priorMessages = targetSession?.messages ?? [];
+    const selectionScopeId = options.selectionScopeId ?? options.selection?.selectionScopeId;
+    const priorMessages = selectionScopeId
+      ? filterMessagesForSelectionScope(targetSession?.messages ?? [], selectionScopeId)
+      : (targetSession?.messages ?? []);
 
     // 전송 시작 시점에 첨부 파일 캡처 후 즉시 초기화 (입력창 썸네일 즉시 제거)
     const capturedAttachments = get().composerAttachments;
@@ -542,12 +773,25 @@ export function createAiActions(
       .filter((a) => ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(a.fileType.toLowerCase()) && a.thumbnailDataUrl)
       .map((a) => ({ filename: a.filename, thumbnailDataUrl: a.thumbnailDataUrl! }));
 
+    const selectionSnapshot = options.selection
+      ? toChatSelectionSnapshot(options.selection)
+      : undefined;
     addMessage({
       role: 'user',
       content,
-      ...(imageAttachmentsForMessage.length > 0
-        ? { metadata: { imageAttachments: imageAttachmentsForMessage } }
-        : {}),
+      ...(
+        imageAttachmentsForMessage.length > 0 || selectionSnapshot || selectionScopeId
+          ? {
+              metadata: {
+                ...(imageAttachmentsForMessage.length > 0
+                  ? { imageAttachments: imageAttachmentsForMessage }
+                  : {}),
+                ...(selectionSnapshot ? { selection: selectionSnapshot } : {}),
+                ...(selectionScopeId ? { selectionScopeId } : {}),
+              },
+            }
+          : {}
+      ),
     }, effectiveSessionId);
 
     // [Auto-Title] 첫 메시지인 경우 세션 이름 자동 변경
@@ -655,6 +899,10 @@ export function createAiActions(
       content,
       priorMessages,
       capturedAttachments,
+      contextMode: options.contextMode ?? (selectionSnapshot ? 'selection' : 'general'),
+      ...(selectionSnapshot ? { selection: selectionSnapshot } : {}),
+      ...(options.selection ? { selectionContext: options.selection } : {}),
+      ...(selectionScopeId ? { selectionScopeId } : {}),
     });
   };
 
@@ -679,6 +927,10 @@ export function createAiActions(
     // 해당 메시지 "이전"까지의 전체 히스토리 포함 (Phase 3: context planner가 예산 처리)
     const idx = session.messages.findIndex((m) => m.id === messageId);
     const priorMessages = idx > 0 ? session.messages.slice(0, idx) : [];
+    const selectionScopeId = targetMessage.metadata?.selectionScopeId;
+    const scopedPriorMessages = selectionScopeId
+      ? filterMessagesForSelectionScope(priorMessages, selectionScopeId)
+      : priorMessages;
 
     // 재전송 시 해당 메시지 이후의 응답 삭제 (편집 후 저장과 동일한 동작)
     if (resolvedSessionId && idx >= 0) {
@@ -702,8 +954,13 @@ export function createAiActions(
     await executeAiReply({
       effectiveSessionId: resolvedSessionId!,
       content,
-      priorMessages,
+      priorMessages: scopedPriorMessages,
       capturedAttachments,
+      contextMode: selectionScopeId ? 'selection' : 'general',
+      ...(targetMessage.metadata?.selection
+        ? { selection: targetMessage.metadata.selection }
+        : {}),
+      ...(selectionScopeId ? { selectionScopeId } : {}),
       extraCallbacks: {
         onModelRun: (step) => {
           if (step > 0) {

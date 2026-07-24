@@ -1,0 +1,211 @@
+import * as Diff from 'diff';
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Modal } from '@/components/ui/Modal';
+import type {
+  ContextManifest,
+  ContextReferenceOptions,
+  SelectionContext,
+} from '@/types';
+
+interface SelectionEditPreviewModalProps {
+  open: boolean;
+  selection: SelectionContext | null;
+  sourceText: string;
+  replacementText: string;
+  instruction: string;
+  referenceOptions: ContextReferenceOptions;
+  contextManifest: ContextManifest | undefined;
+  isLoading: boolean;
+  error: string | null | undefined;
+  proposalOnly?: boolean;
+  onInstructionChange: (value: string) => void;
+  onReferenceOptionsChange: (value: ContextReferenceOptions) => void;
+  onGenerate: () => void;
+  onApply: () => void;
+  onClose: () => void;
+}
+
+const OPTION_KEYS: Array<{
+  key: keyof ContextReferenceOptions;
+  label: string;
+}> = [
+  { key: 'translationRules', label: 'selection.reference.translationRules' },
+  { key: 'forbiddenTerms', label: 'selection.reference.forbiddenTerms' },
+  { key: 'glossary', label: 'selection.reference.glossary' },
+  { key: 'projectContext', label: 'selection.reference.projectContext' },
+];
+
+export function SelectionEditPreviewModal({
+  open,
+  selection,
+  sourceText,
+  replacementText,
+  instruction,
+  referenceOptions,
+  contextManifest,
+  isLoading,
+  error,
+  proposalOnly = false,
+  onInstructionChange,
+  onReferenceOptionsChange,
+  onGenerate,
+  onApply,
+  onClose,
+}: SelectionEditPreviewModalProps): JSX.Element | null {
+  const { t } = useTranslation();
+  const changes = useMemo(
+    () => selection && replacementText
+      ? Diff.diffWords(selection.text, replacementText)
+      : [],
+    [selection, replacementText],
+  );
+  if (!open || !selection) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} labelId="selection-edit-title">
+      <div className="absolute inset-0 bg-black/35" aria-hidden />
+      <div
+        data-testid="selection-edit-modal"
+        className="relative z-10 w-[min(720px,calc(100vw-32px))] max-h-[85vh] overflow-y-auto rounded-2xl border border-editor-border bg-editor-surface p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="selection-edit-title" className="text-base font-semibold text-editor-text">
+              {t('selection.retranslateTitle', '선택 영역 재번역')}
+            </h2>
+            <p className="mt-1 text-xs text-editor-muted">
+              {t('selection.retranslateDescription', '연결된 원문을 기준으로 선택한 번역문만 바꿉니다.')}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-sm text-editor-muted hover:bg-editor-border/60"
+            onClick={onClose}
+            aria-label={t('common.close')}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Source</div>
+            <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
+          </section>
+          <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Target</div>
+            <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
+          </section>
+        </div>
+
+        {!proposalOnly && <label className="mt-4 block">
+          <span className="text-xs font-medium text-editor-text">
+            {t('selection.instruction', '추가 지시사항')}
+          </span>
+          <textarea
+            data-testid="selection-edit-instruction"
+            className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus:ring-2 focus:ring-primary-500"
+            value={instruction}
+            onChange={(event) => onInstructionChange(event.target.value)}
+            placeholder={t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')}
+            disabled={isLoading}
+          />
+        </label>}
+
+        {!proposalOnly && <fieldset className="mt-3">
+          <legend className="text-xs font-medium text-editor-text">
+            {t('selection.optionalReferences', '선택적 컨텍스트')}
+          </legend>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {OPTION_KEYS.map(({ key, label }) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-xs text-editor-text"
+              >
+                <input
+                  data-testid={`selection-reference-${key}`}
+                  type="checkbox"
+                  checked={referenceOptions[key]}
+                  onChange={(event) =>
+                    onReferenceOptionsChange({
+                      ...referenceOptions,
+                      [key]: event.target.checked,
+                    })
+                  }
+                  disabled={isLoading}
+                />
+                {t(label)}
+              </label>
+            ))}
+          </div>
+        </fieldset>}
+
+        {(replacementText || isLoading) && (
+          <section className="mt-4 rounded-xl border border-primary-300/70 bg-primary-50/40 p-3 dark:bg-primary-950/20">
+            <div className="mb-2 text-xs font-semibold text-editor-text">
+              {t('selection.proposal', '수정안')}
+            </div>
+            {replacementText ? (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {changes.map((change, index) => (
+                  <span
+                    key={`${index}-${change.value}`}
+                    className={
+                      change.added
+                        ? 'bg-emerald-200/70 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100'
+                        : change.removed
+                          ? 'bg-red-200/70 text-red-900 line-through dark:bg-red-900/50 dark:text-red-100'
+                          : 'text-editor-text'
+                    }
+                  >
+                    {change.value}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-editor-muted">
+                {t('selection.generating', '수정안을 생성하는 중…')}
+              </div>
+            )}
+          </section>
+        )}
+
+        {contextManifest && (
+          <div className="mt-2 text-[10px] text-editor-muted">
+            {t('chat.contextReferences', '참조')}: {contextManifest.included.join(' · ')}
+          </div>
+        )}
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            data-testid="selection-edit-cancel-button"
+            className="rounded-lg border border-editor-border px-3 py-2 text-sm text-editor-muted hover:bg-editor-border/60"
+            onClick={onClose}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            data-testid="selection-edit-primary-button"
+            className="rounded-lg bg-primary-500 px-3 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+            onClick={replacementText && !isLoading ? onApply : onGenerate}
+            disabled={isLoading || (!replacementText && !sourceText.trim())}
+          >
+            {replacementText
+              ? t('common.apply', '적용')
+              : isLoading
+                ? t('editor.translating')
+                : t('selection.generate', '재번역')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

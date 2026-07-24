@@ -23,7 +23,6 @@ import { MODEL_PRESETS } from '@/ai/config';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
-import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
@@ -34,7 +33,39 @@ import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
 import { serializeUserComments } from '@/ai/commentContext';
 import { collectCommentIdsInRange, removeCommentMark } from '@/editor/utils/commentNavigation';
-import type { ITEProject } from '@/types';
+import {
+  getChatSessionId,
+  isChatPanel,
+  type ITEProject,
+  type SelectionContext,
+} from '@/types';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  createSelectionAnchor,
+  normalizeSelectionAnchorRange,
+  removeSelectionAnchor,
+  resolveSelectionAnchor,
+} from '@/editor/extensions/SelectionAnchor';
+import { getTranslationUnitIdsAtRange } from '@/editor/extensions/TranslationUnitId';
+import {
+  collectAlignedSourceUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
+import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
+import {
+  DEFAULT_SELECTION_REFERENCE_OPTIONS,
+  type ContextManifest,
+  type ContextReferenceOptions,
+  type ForbiddenTerm,
+} from '@/types';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import { resolveGlossaryEntries } from '@/utils/glossaryInject';
+import { retranslateSelection } from '@/ai/retranslateSelection';
+import { applySelectionEdit } from '@/editor/utils/applySelectionEdit';
+import {
+  buildContextSnapshot,
+  resolveWorkflowContextFromSnapshot,
+} from '@/ai/context/resolveWorkflowContext';
 
 /**
  * TipTap 기반 에디터 캔버스
@@ -73,10 +104,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const setTargetDocJson = useProjectStore((s) => s.setTargetDocJson);
   const setTargetLanguage = useProjectStore((s) => s.setTargetLanguage);
 
-  const appendComposerText = useChatStore((s) => s.appendComposerText);
+  const setComposerSelection = useChatStore((s) => s.setComposerSelection);
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
-  const projectContext = useChatStore((s) => s.projectContext);
 
   const openReviewPanel = useUIStore((s) => s.openReviewPanel);
   const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
@@ -234,6 +264,18 @@ export function EditorCanvasTipTap(): JSX.Element {
     segmentGroupId: string | undefined;
     existingComments: Array<{ id: string; excerpt: string }>;
   }>(null);
+  const [selectionEdit, setSelectionEdit] = useState<null | {
+    selection: SelectionContext;
+    sourceText: string;
+    instruction: string;
+    referenceOptions: ContextReferenceOptions;
+    replacementText: string;
+    contextManifest: ContextManifest | undefined;
+    forbiddenTermsUsed: ForbiddenTerm[];
+    loading: boolean;
+    error: string | null;
+  }>(null);
+  const selectionEditAbortRef = useRef<AbortController | null>(null);
 
   // 코멘트 입력 popover 상태
   const [commentPopover, setCommentPopover] = useState<null | {
@@ -318,7 +360,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
       // 마우스 우클릭 위치에 메뉴를 띄우되 화면 경계 안으로 클램프한다.
       // 아래로 넘치면 커서 위쪽으로 올려 잘리지 않게 한다.
-      const menuHeight = getSelectionActionMenuHeight(existingComments.length);
+      const menuHeight = getSelectionActionMenuHeight(existingComments.length, field);
       const left = Math.min(window.innerWidth - 200, Math.max(8, clientX));
       const top = clientY + menuHeight > window.innerHeight - 8
         ? Math.max(8, clientY - menuHeight)
@@ -362,17 +404,329 @@ export function EditorCanvasTipTap(): JSX.Element {
     const onBlur = (): void => {
       setAddToChatBubble(null);
     };
+    const onTransaction = (): void => {
+      const chatState = useChatStore.getState();
+      const selection = chatState.composerSelection;
+      if (
+        !selection ||
+        selection.panel !== field ||
+        selection.projectId !== project?.id
+      ) {
+        return;
+      }
+      const anchor = resolveSelectionAnchor(editor, selection.anchorId);
+      const nextStatus = anchor?.status ?? 'detached';
+      if (selection.status !== nextStatus) {
+        const targetSessionId = Object.entries(
+          chatState.activeSelectionScopeIdBySession,
+        ).find(([, scopeId]) => scopeId === selection.selectionScopeId)?.[0];
+        chatState.setComposerSelection(
+          { ...selection, status: nextStatus },
+          targetSessionId,
+        );
+      }
+    };
 
     dom.addEventListener('contextmenu', onContextMenu);
     editor.on('selectionUpdate', onSelection);
     editor.on('blur', onBlur);
+    editor.on('transaction', onTransaction);
 
     return () => {
       dom.removeEventListener('contextmenu', onContextMenu);
       editor.off('selectionUpdate', onSelection);
       editor.off('blur', onBlur);
+      editor.off('transaction', onTransaction);
     };
-  }, [openSelectionActionMenuAt]);
+  }, [openSelectionActionMenuAt, project?.id]);
+
+  const createChatSelection = useCallback((
+    bubble: NonNullable<typeof addToChatBubble>,
+  ): SelectionContext | null => {
+    if (!project) return null;
+    try {
+      const range = normalizeSelectionAnchorRange(bubble.editor, {
+        from: bubble.from,
+        to: bubble.to,
+      });
+      if (!range) {
+        throw new Error(
+          t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+        );
+      }
+      const text = bubble.editor.state.doc
+        .textBetween(range.from, range.to, ' ')
+        .trim();
+      if (!text) return null;
+      const anchorId = createSelectionAnchor(bubble.editor, {
+        from: range.from,
+        to: range.to,
+      });
+      const selectionId = uuidv4();
+      return {
+        selectionId,
+        selectionScopeId: uuidv4(),
+        projectId: project.id,
+        panel: bubble.field,
+        text,
+        from: range.from,
+        to: range.to,
+        anchorId,
+        translationUnitIds: getTranslationUnitIdsAtRange(
+          bubble.editor.state.doc,
+          range.from,
+          range.to,
+        ),
+        ...(bubble.segmentGroupId ? { segmentGroupId: bubble.segmentGroupId } : {}),
+        documentRevision: hashContent(JSON.stringify(bubble.editor.getJSON())),
+        status: 'active',
+        createdAt: Date.now(),
+      };
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+      });
+      return null;
+    }
+  }, [project, addToast, t]);
+
+  const openChatWithSelection = useCallback((selection: SelectionContext): void => {
+    // 기존 칩을 새 선택으로 교체할 때 이전 앵커(하이라이트)가 남지 않도록 정리
+    const previous = useChatStore.getState().composerSelection;
+    if (previous && previous.anchorId !== selection.anchorId) {
+      const previousEditor =
+        previous.panel === 'source' ? sourceEditorRef.current : targetEditorRef.current;
+      if (previousEditor) removeSelectionAnchor(previousEditor, previous.anchorId);
+    }
+
+    const uiState = useUIStore.getState();
+    uiState.openActiveChat();
+
+    const openedState = useUIStore.getState();
+    let targetSessionId = openedState.floatingChatSessionId;
+    if (!targetSessionId) {
+      for (const sidebar of [openedState.rightSidebar, openedState.leftSidebar]) {
+        if (
+          !sidebar.hidden &&
+          sidebar.activePanel &&
+          isChatPanel(sidebar.activePanel)
+        ) {
+          targetSessionId = getChatSessionId(sidebar.activePanel);
+          if (targetSessionId) break;
+        }
+      }
+    }
+
+    setComposerSelection(selection, targetSessionId ?? undefined);
+    requestComposerFocus(targetSessionId ?? undefined);
+  }, [requestComposerFocus, setComposerSelection]);
+
+  const handleSelectionShortcut = useCallback((
+    editor: Editor,
+    field: CommentField,
+  ): void => {
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+    const text = editor.state.doc.textBetween(from, to, ' ').trim();
+    if (!text) return;
+    const selection = createChatSelection({
+      top: 0,
+      left: 0,
+      text,
+      editor,
+      field,
+      from,
+      to,
+      segmentGroupId: inferSegmentGroupIdForSelection(project, field, text),
+      existingComments: [],
+    });
+    if (!selection) return;
+    openChatWithSelection(selection);
+  }, [createChatSelection, openChatWithSelection, project]);
+
+  const openSelectionRetranslate = useCallback((
+    bubble: NonNullable<typeof addToChatBubble>,
+  ): void => {
+    if (bubble.field !== 'target') return;
+    const selection = createChatSelection(bubble);
+    if (!selection) return;
+    const sourceDoc = sourceEditorRef.current?.getJSON() as TranslationUnitDocument | undefined;
+    if (!sourceDoc) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.alignedSourceMissing', '연결된 원문을 찾을 수 없습니다.'),
+      });
+      return;
+    }
+    const sourceText = collectAlignedSourceUnits(
+      sourceDoc,
+      bubble.editor.getJSON() as TranslationUnitDocument,
+      selection.translationUnitIds,
+    )
+      .map((unit) => unit.text)
+      .join('\n');
+    if (!sourceText.trim()) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.alignedSourceMissing', '연결된 원문을 찾을 수 없습니다.'),
+      });
+      return;
+    }
+    setSelectionEdit({
+      selection,
+      sourceText,
+      instruction: '',
+      referenceOptions: { ...DEFAULT_SELECTION_REFERENCE_OPTIONS },
+      replacementText: '',
+      contextManifest: undefined,
+      forbiddenTermsUsed: [],
+      loading: false,
+      error: null,
+    });
+    setAddToChatBubble(null);
+  }, [createChatSelection, addToast, t]);
+
+  const closeSelectionEdit = useCallback((): void => {
+    selectionEditAbortRef.current?.abort();
+    selectionEditAbortRef.current = null;
+    // 실패·취소 포함 어떤 경로로 닫혀도 앵커(하이라이트)를 함께 정리한다.
+    if (selectionEdit) {
+      const editor = targetEditorRef.current;
+      if (editor) removeSelectionAnchor(editor, selectionEdit.selection.anchorId);
+    }
+    setSelectionEdit(null);
+  }, [selectionEdit]);
+
+  const generateSelectionEdit = useCallback(async (): Promise<void> => {
+    const request = selectionEdit;
+    if (!request || !project) return;
+    const requestProjectId = project.id;
+    const controller = new AbortController();
+    selectionEditAbortRef.current?.abort();
+    selectionEditAbortRef.current = controller;
+    setSelectionEdit((current) => current ? {
+      ...current,
+      replacementText: '',
+      loading: true,
+      error: null,
+    } : null);
+
+    try {
+      const memory = useProjectMemoryStore.getState();
+      const legacyProjectContextAtStart = useChatStore.getState().projectContext;
+      const enabledForbiddenTerms = memory.forbiddenTerms.filter((term) => term.enabled);
+      const glossaryEntries = request.referenceOptions.glossary
+        ? await resolveGlossaryEntries({
+            projectId: requestProjectId,
+            text: request.sourceText,
+            domain: project.metadata.domain,
+            limit: 12,
+          })
+        : [];
+      const contextSnapshot = buildContextSnapshot({
+        revision: memory.revision,
+        projectMemoryItems: memory.items,
+        legacyProjectContext: legacyProjectContextAtStart,
+        translationRules,
+        forbiddenTerms: memory.forbiddenTerms,
+        glossaryEntries,
+      });
+      const result = await retranslateSelection({
+        projectId: requestProjectId,
+        sourceText: request.sourceText,
+        currentTargetText: request.selection.text,
+        targetLanguage: project.metadata.targetLanguage ?? 'Target',
+        ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
+        referenceOptions: request.referenceOptions,
+        contextSnapshot,
+        abortSignal: controller.signal,
+        onToken: (text) => {
+          setSelectionEdit((current) =>
+            current?.selection.selectionId === request.selection.selectionId
+              ? { ...current, replacementText: text }
+              : current,
+          );
+        },
+      });
+      if (
+        controller.signal.aborted ||
+        useProjectStore.getState().project?.id !== requestProjectId
+      ) return;
+      setSelectionEdit((current) =>
+        current?.selection.selectionId === request.selection.selectionId
+          ? {
+              ...current,
+              replacementText: result.replacementText,
+              contextManifest: result.contextManifest,
+              forbiddenTermsUsed: request.referenceOptions.forbiddenTerms
+                ? enabledForbiddenTerms
+                : [],
+              loading: false,
+              error: null,
+            }
+          : current,
+      );
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setSelectionEdit((current) => current ? {
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      } : null);
+    } finally {
+      if (selectionEditAbortRef.current === controller) {
+        selectionEditAbortRef.current = null;
+      }
+    }
+  }, [selectionEdit, project, translationRules]);
+
+  const applyCurrentSelectionEdit = useCallback((): void => {
+    const request = selectionEdit;
+    const editor = targetEditorRef.current;
+    if (!request || !editor || project?.id !== request.selection.projectId) {
+      setSelectionEdit((current) => current ? {
+        ...current,
+        error: t('selection.projectChanged', '프로젝트가 바뀌어 적용할 수 없습니다.'),
+      } : null);
+      return;
+    }
+    const violatedTerm = request.forbiddenTermsUsed.find((term) =>
+      request.replacementText.toLocaleLowerCase().includes(term.term.toLocaleLowerCase()),
+    );
+    if (violatedTerm) {
+      setSelectionEdit((current) => current ? {
+        ...current,
+        error: t('selection.forbiddenTermViolation', {
+          term: violatedTerm.term,
+          defaultValue: `수정안에 금칙어 “${violatedTerm.term}”이 포함되어 있습니다.`,
+        }),
+      } : null);
+      return;
+    }
+    const anchor = resolveSelectionAnchor(editor, request.selection.anchorId);
+    if (!anchor) {
+      setSelectionEdit((current) => current ? {
+        ...current,
+        error: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      } : null);
+      return;
+    }
+    const result = applySelectionEdit(editor, anchor, request.replacementText);
+    if (result !== 'applied') {
+      setSelectionEdit((current) => current ? {
+        ...current,
+        error: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      } : null);
+      return;
+    }
+    closeSelectionEdit();
+  }, [selectionEdit, project?.id, t, closeSelectionEdit]);
 
   // 메뉴만 닫기 (닫기 버튼 / 메뉴 바깥 클릭). 선택 영역은 그대로 유지한다.
   const dismissAddToChatBubble = useCallback((): void => {
@@ -503,19 +857,21 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
+      const memoryAtStart = useProjectMemoryStore.getState();
+      const legacyProjectContextAtStart = useChatStore.getState().projectContext;
 
       // 용어집 검색 (앞부분만이 아니라 문서 전역 윈도우)
-      let glossary = '';
+      let glossaryEntries: Awaited<ReturnType<typeof resolveGlossaryEntries>> = [];
       try {
         const sourceMarkdown = tipTapJsonToMarkdown(sourceDocJson);
         if (sourceMarkdown.trim().length > 0) {
-          glossary = await resolveGlossaryForPrompt({
+          glossaryEntries = await resolveGlossaryEntries({
             projectId: project.id,
             text: sourceMarkdown,
             domain: project.metadata.domain,
             limit: 30,
           });
-          if (glossary) {
+          if (glossaryEntries.length > 0) {
             console.warn(`[Translation] Glossary injected`);
           }
         }
@@ -523,6 +879,17 @@ export function EditorCanvasTipTap(): JSX.Element {
         // 용어집 검색 실패는 조용히 무시 (번역은 계속 진행)
         console.warn('[Translation] Glossary search failed:', glossaryError);
       }
+      const resolvedContext = resolveWorkflowContextFromSnapshot({
+        mode: 'full-translate',
+        snapshot: buildContextSnapshot({
+          revision: memoryAtStart.revision,
+          projectMemoryItems: memoryAtStart.items,
+          legacyProjectContext: legacyProjectContextAtStart,
+          translationRules,
+          forbiddenTerms: memoryAtStart.forbiddenTerms,
+          glossaryEntries,
+        }),
+      });
 
       const trimmedMessage = extraMessage?.trim();
       // 인라인 코멘트 → excerpt 직렬화 후 주입 (source/target 양쪽 모두 번역 맥락으로 전달)
@@ -532,9 +899,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       const { doc } = await translateWithStreaming({
         project,
         sourceDocJson,
-        translationRules,
-        projectContext,
-        glossary,
+        resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => {
@@ -569,7 +934,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   }, [
     project,
     translationRules,
-    projectContext,
     addToast,
     t,
     computeTargetRevision,
@@ -627,6 +991,8 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     try {
       const targetDocJson = targetEditorRef.current.getJSON() as TipTapDocJson;
+      const memoryAtStart = useProjectMemoryStore.getState();
+      const legacyProjectContextAtStart = useChatStore.getState().projectContext;
       setPolishOriginalDocJson(targetDocJson);
       // 폴리싱은 target 문서만 다루므로 target field 코멘트만 주입
       const serializedComments = serializeUserComments(
@@ -639,7 +1005,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       const trimmedMessage = extraMessage?.trim();
 
       // Source(+Target)에서 용어 검색 — Target만 검색하면 원문 용어가 안 잡힘
-      let glossary = '';
+      let glossaryEntries: Awaited<ReturnType<typeof resolveGlossaryEntries>> = [];
       try {
         const sourceMarkdown = sourceEditorRef.current
           ? tipTapJsonToMarkdown(sourceEditorRef.current.getJSON() as Record<string, unknown>)
@@ -647,7 +1013,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         const targetMarkdown = tipTapJsonToMarkdown(targetDocJson as Record<string, unknown>);
         const searchText = [sourceMarkdown, targetMarkdown].filter((part) => part.trim()).join('\n');
         if (searchText.trim().length > 0) {
-          glossary = await resolveGlossaryForPrompt({
+          glossaryEntries = await resolveGlossaryEntries({
             projectId: project.id,
             text: searchText,
             domain: project.metadata.domain,
@@ -657,13 +1023,22 @@ export function EditorCanvasTipTap(): JSX.Element {
       } catch (glossaryError) {
         console.warn('[Polish] Glossary search failed:', glossaryError);
       }
+      const resolvedContext = resolveWorkflowContextFromSnapshot({
+        mode: 'polish',
+        snapshot: buildContextSnapshot({
+          revision: memoryAtStart.revision,
+          projectMemoryItems: memoryAtStart.items,
+          legacyProjectContext: legacyProjectContextAtStart,
+          translationRules,
+          forbiddenTerms: memoryAtStart.forbiddenTerms,
+          glossaryEntries,
+        }),
+      });
 
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson,
         targetLanguage: project.metadata.targetLanguage,
-        styleRules: translationRules,
-        projectContext,
-        ...(glossary ? { glossary } : {}),
+        resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
         onToken: (text) => setStreamingChannelText('polish', text),
@@ -689,7 +1064,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         polishAbortController.current = null;
       }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules, projectContext, computeTargetRevision, setStreamingChannelText]);
+  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;
@@ -936,6 +1311,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     polishAbortController.current?.abort();
     translateRequestMetaRef.current = null;
     polishRequestMetaRef.current = null;
+    // 선택 영역 재번역 모달도 함께 정리 (전환 후 영구 로딩/오적용 방지).
+    // 앵커는 프로젝트 문서 교체(replaceDocContent의 documentReplace meta)가 clear한다.
+    selectionEditAbortRef.current?.abort();
+    selectionEditAbortRef.current = null;
+    setSelectionEdit(null);
     setTranslatePreviewOpen(false);
     setTranslatePreviewDoc(null);
     setTranslatePreviewError(null);
@@ -1212,6 +1592,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                     className="h-full"
                     onEditorReady={handleSourceEditorReady}
                     onSearchOpen={handleSourceSearchOpen}
+                    onSelectionShortcut={handleSelectionShortcut}
                     onCommentClick={handleSourceCommentClick}
                   />
                   {/* 호버 복사 버튼 */}
@@ -1308,6 +1689,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 onEditorReady={handleTargetEditorReady}
                 onSearchOpen={handleTargetSearchOpen}
                 onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
+                onSelectionShortcut={handleSelectionShortcut}
                 onCommentClick={handleTargetCommentClick}
               />
               {/* 호버 복사 버튼 */}
@@ -1489,6 +1871,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       {/* TipTap 선택 액션 메뉴 (선택 영역 우클릭) */}
       {addToChatBubble && !commentPopover && !commentDetailPopover && (
         <SelectionActionMenu
+          panel={addToChatBubble.field}
           existingComments={addToChatBubble.existingComments}
           style={{
             position: 'fixed',
@@ -1500,38 +1883,21 @@ export function EditorCanvasTipTap(): JSX.Element {
           }}
           onCopy={() => void handleCopySelectedText(addToChatBubble.text)}
           onAddToChat={() => {
-            const text = addToChatBubble.text.trim();
-            if (!text) return;
-            // 선택 범위에 걸린 인라인 코멘트가 있으면 함께 첨부
-            const commentLines: string[] = [];
-            try {
-              const ids = collectCommentIdsInRange(
-                addToChatBubble.editor.state.doc,
-                addToChatBubble.from,
-                addToChatBubble.to,
-              );
-              const store = useCommentStore.getState();
-              for (const id of ids) {
-                const c = store.getComment(id);
-                if (c && c.comment.trim()) {
-                  commentLines.push(`> ${t('comment.title', '코멘트')}: ${c.comment.trim()}`);
-                }
-              }
-            } catch {
-              // 코멘트 수집 실패는 무시(텍스트만 첨부)
-            }
-            const composed = commentLines.length > 0
-              ? `${text}\n${commentLines.join('\n')}`
-              : text;
-            useUIStore.getState().openActiveChat();
-            appendComposerText(composed);
-            requestComposerFocus();
+            const selection = createChatSelection(addToChatBubble);
+            if (!selection) return;
+            openChatWithSelection(selection);
             setAddToChatBubble(null);
           }}
+          {...(addToChatBubble.field === 'target'
+            ? {
+                onRetranslateSelection: () =>
+                  openSelectionRetranslate(addToChatBubble),
+              }
+            : {})}
           onAddComment={() => {
             const b = addToChatBubble;
             setCommentPopover({
-              top: b.top + getSelectionActionMenuHeight(b.existingComments.length),
+              top: b.top + getSelectionActionMenuHeight(b.existingComments.length, b.field),
               left: b.left,
               excerpt: b.text.trim(),
               editor: b.editor,
@@ -1548,7 +1914,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               commentId,
               editor: b.editor,
               field: b.field,
-              top: b.top + getSelectionActionMenuHeight(b.existingComments.length),
+              top: b.top + getSelectionActionMenuHeight(b.existingComments.length, b.field),
               left: b.left,
             });
             setAddToChatBubble(null);
@@ -1556,6 +1922,41 @@ export function EditorCanvasTipTap(): JSX.Element {
           onClose={dismissAddToChatBubble}
         />
       )}
+
+      <SelectionEditPreviewModal
+        open={selectionEdit !== null}
+        selection={selectionEdit?.selection ?? null}
+        sourceText={selectionEdit?.sourceText ?? ''}
+        replacementText={selectionEdit?.replacementText ?? ''}
+        instruction={selectionEdit?.instruction ?? ''}
+        referenceOptions={
+          selectionEdit?.referenceOptions ?? DEFAULT_SELECTION_REFERENCE_OPTIONS
+        }
+        contextManifest={selectionEdit?.contextManifest}
+        isLoading={selectionEdit?.loading ?? false}
+        error={selectionEdit?.error}
+        onInstructionChange={(instruction) =>
+          setSelectionEdit((current) => current ? {
+            ...current,
+            instruction,
+            replacementText: '',
+            contextManifest: undefined,
+            error: null,
+          } : null)
+        }
+        onReferenceOptionsChange={(referenceOptions) =>
+          setSelectionEdit((current) => current ? {
+            ...current,
+            referenceOptions,
+            replacementText: '',
+            contextManifest: undefined,
+            error: null,
+          } : null)
+        }
+        onGenerate={() => void generateSelectionEdit()}
+        onApply={applyCurrentSelectionEdit}
+        onClose={closeSelectionEdit}
+      />
 
       {/* 코멘트 입력 popover */}
       {commentPopover && (

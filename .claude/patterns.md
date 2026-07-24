@@ -818,3 +818,42 @@ npx tauri build --bundles nsis   # Windows
 - macOS: `src-tauri/target/release/bundle/dmg/`
 - macOS Universal: `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`
 - Windows: `src-tauri/target/release/bundle/nsis/`
+
+## Anchored Selection Editing
+
+Selection-based AI work uses runtime anchors instead of copying selected text into the composer.
+
+```text
+TipTap selection
+→ SelectionAnchor DecorationSet (mapped through transactions)
+→ SelectionContext metadata + selectionScopeId
+→ proposal-only AI result
+→ shared preview
+→ anchor/project/text validation
+→ one replace transaction (one-step Undo)
+```
+
+- `TranslationUnitId` is attached to paragraph/heading/tableCell nodes and reattached after full translation/polishing when topology matches.
+- Source selections are question-only. Only Target selections can create/apply edit proposals.
+- Anchors are runtime-only. Hydrated proposals must be marked `detached`.
+- Anchor lifecycle: `applySelectionEdit` removes the anchor on success; every other exit path (chip dismiss, proposal discard/stale, replacing the selection, project switch) must call `removeSelectionAnchor`, or the highlight lingers.
+- `normalizeSelectionAnchorRange` trims edge whitespace out of the range so the anchor's `textBetween` matches the trimmed `SelectionContext.text` (otherwise apply always reads as stale).
+- Full document replacement dispatches the selection-anchor clear meta before replacing content.
+- Cmd/Ctrl+K or Cmd/Ctrl+L must create `composerSelection` metadata; never append the selected text to raw composer content.
+
+## Workflow Context Snapshots
+
+AI workflows capture project context once at operation start:
+
+```text
+projectMemoryStore + translationRules + enabled forbidden terms + matched glossary
+→ buildContextSnapshot()
+→ resolveWorkflowContextFromSnapshot(mode, checkbox options)
+→ ResolvedWorkflowContext { snapshot, rendered, manifest }
+```
+
+- Full translation, review, and polish include the active structured context.
+- Direct selection retranslation includes only checkbox-enabled references and binds zero tools.
+- Review resolves one snapshot before the chunk loop and passes the same `ResolvedWorkflowContext` to every chunk.
+- `ContextManifest` stores only audit IDs/hashes/token estimates, not duplicated full context strings.
+- If structured memory is empty, `legacyProjectContext` is preserved as the explicit `legacy-project-context` fallback until migration succeeds.

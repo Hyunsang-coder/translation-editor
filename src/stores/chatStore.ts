@@ -59,6 +59,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
     abortController: null,
     summarySuggestionDismissedBySessionId: {},
     composerText: '',
+    composerSelection: null,
+    activeSelectionScopeIdBySession: {},
     composerFocusNonce: 0,
     pendingComposerFocus: null,
     pendingComposerAppend: null,
@@ -111,5 +113,4 @@ export {
   MAX_CHAT_SESSIONS,
   MAX_MESSAGES_PER_SESSION,
   CHAT_LENGTH_THRESHOLD,
-  TOOL_NAME_MAP,
 } from './chatStore.types';

@@ -8,7 +8,31 @@ export { DiffMarkExtension } from './DiffMark';
 export { SearchHighlight, getSearchState } from './SearchHighlight';
 export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
 export { ImagePlaceholder, ImageOriginal } from './ImagePlaceholder';
+export {
+  SelectionAnchor,
+  clearSelectionAnchors,
+  createSelectionAnchor,
+  markSelectionAnchorStale,
+  removeSelectionAnchor,
+  resolveSelectionAnchor,
+} from './SelectionAnchor';
+export type {
+  CreateSelectionAnchorInput,
+  SelectionAnchorPluginState,
+  SelectionAnchorRecord,
+} from './SelectionAnchor';
+export {
+  TranslationUnitId,
+  collectTranslationUnits,
+  ensureTranslationUnitIds,
+  getTranslationUnitIdsAtRange,
+  reattachTranslationUnitIds,
+} from './TranslationUnitId';
+export type {
+  TranslationUnit,
+  TranslationUnitDocument,
+  TranslationUnitReattachmentResult,
+} from './TranslationUnitId';
 export { pluginKeys } from '@/editor/plugins/pluginKeys';
 // Backward compatibility: searchHighlightPluginKey는 pluginKeys.searchHighlight로 접근
 export { searchHighlightPluginKey } from './SearchHighlight';
-

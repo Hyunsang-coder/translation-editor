@@ -6,6 +6,10 @@ import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { tipTapJsonToMarkdownForTranslation, type TipTapDocJson } from '@/utils/markdownConverter';
+import {
+  collectTranslationUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
 
 /**
  * Source 문서를 Markdown 형식으로 반환
@@ -14,7 +18,7 @@ import { tipTapJsonToMarkdownForTranslation, type TipTapDocJson } from '@/utils/
  *
  * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
-function resolveSourceDocumentMarkdown(): string {
+function resolveSourceDocumentMarkdown(unitIds?: string[]): string {
   // P1: TipTap 편집은 250ms 디바운스로 store에 반영된다. AI 도구가 최신 문서를
   // 읽도록 pending 동기화를 먼저 flush한다(디바운스 창 안의 편집 누락 방지).
   flushPendingEditorSyncs();
@@ -30,6 +34,13 @@ function resolveSourceDocumentMarkdown(): string {
   // TipTap JSON이 있으면 Markdown으로 변환
   if (sourceDocJson != null && typeof sourceDocJson === 'object' && sourceDocJson.type === 'doc') {
     try {
+      if (unitIds && unitIds.length > 0) {
+        const selectedIds = new Set(unitIds);
+        return collectTranslationUnits(sourceDocJson as TranslationUnitDocument)
+          .filter((unit) => unit.id && selectedIds.has(unit.id))
+          .map((unit) => unit.text)
+          .join('\n');
+      }
       return tipTapJsonToMarkdownForTranslation(sourceDocJson as TipTapDocJson);
     } catch (e) {
       console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
@@ -48,7 +59,7 @@ function resolveSourceDocumentMarkdown(): string {
  *
  * Issue #10 Fix: null 안전성 검사 및 의미 있는 에러 메시지
  */
-function resolveTargetDocumentMarkdown(): string {
+function resolveTargetDocumentMarkdown(unitIds?: string[]): string {
   // P1: TipTap 편집은 250ms 디바운스로 store에 반영된다. AI 도구가 최신 문서를
   // 읽도록 pending 동기화를 먼저 flush한다(디바운스 창 안의 편집 누락 방지).
   flushPendingEditorSyncs();
@@ -64,6 +75,13 @@ function resolveTargetDocumentMarkdown(): string {
   // TipTap JSON이 있으면 Markdown으로 변환
   if (targetDocJson != null && typeof targetDocJson === 'object' && targetDocJson.type === 'doc') {
     try {
+      if (unitIds && unitIds.length > 0) {
+        const selectedIds = new Set(unitIds);
+        return collectTranslationUnits(targetDocJson as TranslationUnitDocument)
+          .filter((unit) => unit.id && selectedIds.has(unit.id))
+          .map((unit) => unit.text)
+          .join('\n');
+      }
       return tipTapJsonToMarkdownForTranslation(targetDocJson as TipTapDocJson);
     } catch (e) {
       console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
@@ -108,6 +126,8 @@ function wrapUntrusted(content: string): string {
 // - 기본 호출({})은 "짧으면 전체, 길면 truncate" (auto)
 // - query는 문서가 아주 길 때만 주변 발췌에 사용합니다.
 const DocumentToolArgsSchema = z.object({
+  unitIds: z.array(z.string().min(1)).max(50).optional()
+    .describe('특정 translationUnitId만 조회할 때 사용'),
   query: z.string().optional().describe('문서가 매우 길 때, 이 구절 주변만 발췌하고 싶으면 사용'),
   maxChars: z.number().int().min(1000).max(20000).optional().describe('문서가 길 때 반환할 최대 문자 수 (기본 8000)'),
   aroundChars: z.number().int().min(200).max(4000).optional().describe('query 주변 발췌 범위(문자) (기본 900)'),
@@ -148,7 +168,7 @@ export const getSourceDocumentTool = tool(
   async (rawArgs) => {
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
-    const markdown = resolveSourceDocumentMarkdown();
+    const markdown = resolveSourceDocumentMarkdown(parsed.unitIds);
     // Issue #10 Fix: 더 의미 있는 에러 메시지
     if (!markdown || markdown.trim().length === 0) {
       const { project } = useProjectStore.getState();
@@ -172,7 +192,7 @@ export const getTargetDocumentTool = tool(
   async (rawArgs) => {
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
     const parsed = args.success ? args.data : {};
-    const markdown = resolveTargetDocumentMarkdown();
+    const markdown = resolveTargetDocumentMarkdown(parsed.unitIds);
     // Issue #10 Fix: 더 의미 있는 에러 메시지
     if (!markdown || markdown.trim().length === 0) {
       const { project } = useProjectStore.getState();
@@ -326,5 +346,4 @@ export const getReviewResultsTool = tool(
     schema: ReviewResultsArgsSchema,
   },
 );
-
 

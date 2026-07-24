@@ -1,9 +1,15 @@
-import type { ChatMessage, EditorBlock, ITEProject } from '@/types';
+import type {
+  ChatMessage,
+  ChatSelectionSnapshot,
+  ChatToolProfile,
+  EditorBlock,
+  ITEProject,
+} from '@/types';
 import type { ModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
-import { suggestTranslationRule, suggestProjectContext } from '@/ai/tools/suggestionTools';
+import { suggestTranslationRule } from '@/ai/tools/suggestionTools';
 import { confluenceWordCountTool, confluenceLoadPageTool } from '@/ai/tools/confluenceTools';
 import { withRetry } from './retry';
 import i18n from '@/i18n/config';
@@ -15,6 +21,18 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import { resolveModelCapabilities, type ModelCapabilities } from '@/ai/chatContext/modelCapabilities';
 import { computeInputBudget, estimateMessagesTokens } from '@/ai/chatContext/tokenBudget';
 import { DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
+import { resolveChatToolNames } from '@/ai/tools/resolveChatTools';
+import { getChatToolDescriptor } from '@/ai/tools/toolRegistry';
+import { createSelectionTools } from '@/ai/tools/selectionTools';
+import { createProjectGuidanceTools } from '@/ai/tools/projectGuidanceTools';
+import {
+  proposeProjectMemoryChange,
+  proposeSelectionEdit,
+  suggestForbiddenTerm,
+  suggestGlossaryEntry,
+} from '@/ai/tools/proposalTools';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import { useReviewStore } from '@/stores/reviewStore';
 
 /** runToolCallingLoop가 실행 가능한 도구의 최소 인터페이스 */
 type ToolCallableSpec = { name: string; invoke: (arg: Record<string, unknown>) => Promise<unknown> };
@@ -137,6 +155,10 @@ export interface GenerateReplyInput {
   contextBlocks: EditorBlock[];
   recentMessages: ChatMessage[];
   userMessage: string;
+  /** 현재 selection scope의 선택 영역 snapshot */
+  selection?: ChatSelectionSnapshot;
+  selectionProposalEnabled?: boolean;
+  toolProfile?: ChatToolProfile;
   /** 번역 규칙 (사용자 입력) */
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
@@ -204,7 +226,13 @@ export interface UsageInfo {
 export interface StreamCallbacks {
   onToken?: (fullText: string, delta: string) => void;
   onToolsUsed?: (toolNames: string[]) => void;
-  onToolCall?: (event: { phase: 'start' | 'end'; toolName: string; args?: Record<string, unknown>; status?: 'success' | 'error' }) => void;
+  onToolCall?: (event: {
+    phase: 'start' | 'end';
+    toolName: string;
+    args?: Record<string, unknown>;
+    status?: 'success' | 'error';
+    result?: string;
+  }) => void;
   /** 모델 실행(생각) 시작 시 호출 */
   onModelRun?: (step: number) => void;
   /** 도구 루프 종료 후 집계된 토큰 사용량 전달 */
@@ -310,20 +338,13 @@ function mergeToolCallChunks(chunks: ToolCallChunk[]): ToolCall[] {
   return result;
 }
 
-// 내부 도구 목록 (출력이 신뢰 가능한 자체 도구)
-// 이 목록에 없는 도구(MCP, Notion, Confluence 등)는 외부 콘텐츠로 래핑됨
-const INTERNAL_TOOLS = new Set([
-  'get_source_document', 'get_target_document', 'get_review_results',
-  'suggest_translation_rule', 'suggest_project_context',
-  'confluence_word_count', 'review_translation', 'get_review_chunk',
-]);
-
 /**
  * 외부 도구 출력에 인젝션 방어 태그 추가
- * 내부 도구를 제외한 모든 도구 출력을 래핑 (MCP 동적 도구 포함)
+ * registry에서 external로 분류된 도구와 미등록 동적 도구 출력을 래핑한다.
  */
 function wrapExternalToolOutput(toolName: string, output: string): string {
-  if (INTERNAL_TOOLS.has(toolName)) return output;
+  const descriptor = getChatToolDescriptor(toolName);
+  if (descriptor && descriptor.trust !== 'external') return output;
 
   return [
     '<external_content>',
@@ -620,9 +641,18 @@ async function runToolCallingLoop(params: {
         }
 
         const rawContent = typeof out === 'string' ? out : JSON.stringify(out);
+        const maxOutputChars = getChatToolDescriptor(call.name)?.maxOutputChars ?? 8_000;
+        const limitedContent = rawContent.length > maxOutputChars
+          ? `${rawContent.slice(0, maxOutputChars)}\n[도구 결과가 제한 길이에서 잘렸습니다.]`
+          : rawContent;
         // Phase 4.2: 외부 도구 출력에 인젝션 방어 태그 적용
-        const content = wrapExternalToolOutput(call.name, rawContent);
-        params.cb?.onToolCall?.({ phase: 'end', toolName: call.name, status: 'success' });
+        const content = wrapExternalToolOutput(call.name, limitedContent);
+        params.cb?.onToolCall?.({
+          phase: 'end',
+          toolName: call.name,
+          status: 'success',
+          result: limitedContent,
+        });
         return {
           msg: new ToolMessage({
             tool_call_id: toolCallId,
@@ -734,8 +764,12 @@ function getBuiltInWebSearchTool(provider: string): Record<string, unknown>[] {
  * 스트리밍/비스트리밍 모두에서 동일한 도구를 사용하도록 통합
  */
 interface BuildToolSpecsInput {
-  includeSource: boolean;
-  includeTarget: boolean;
+  profile: ChatToolProfile;
+  project: ITEProject | null;
+  selection?: ChatSelectionSnapshot | undefined;
+  selectionProposalEnabled?: boolean | undefined;
+  userMessage: string;
+  translationRules?: string | undefined;
   webSearchEnabled: boolean;
   confluenceSearchEnabled: boolean;
   notionSearchEnabled: boolean;
@@ -751,39 +785,81 @@ interface BuildToolSpecsResult {
 }
 
 async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpecsResult> {
-  const toolSpecs: StructuredToolInterface[] = [suggestTranslationRule, suggestProjectContext];
+  const explicitDocumentReference =
+    /(?:source|target|원문|번역문|문서|전체\s*내용|앞뒤\s*문맥)/i.test(input.userMessage);
+  const explicitExternalReference =
+    /(?:웹|web|검색|search|confluence|컨플루언스|notion|노션|외부\s*(?:문서|자료))/i.test(input.userMessage);
+  const memoryState = useProjectMemoryStore.getState();
+  const allowedNames = new Set(resolveChatToolNames({
+    profile: input.profile,
+    hasProject: !!input.project,
+    hasSourceSelection: input.selection?.panel === 'source',
+    hasTargetSelection: input.selection?.panel === 'target',
+    hasReviewResults: useReviewStore.getState().results.length > 0,
+    webEnabled: input.webSearchEnabled,
+    confluenceEnabled: input.confluenceSearchEnabled,
+    notionEnabled: input.notionSearchEnabled,
+    explicitDocumentReference,
+    explicitExternalReference,
+  }));
+  if (!input.selectionProposalEnabled) {
+    allowedNames.delete('propose_selection_edit');
+  }
 
-  // 문서 도구
-  if (input.includeSource) toolSpecs.push(getSourceDocumentTool);
-  if (input.includeTarget) toolSpecs.push(getTargetDocumentTool);
-
-  // 검수 결과 도구 (항상 사용 가능)
-  toolSpecs.push(getReviewResultsTool);
+  const candidates: StructuredToolInterface[] = [
+    getSourceDocumentTool,
+    getTargetDocumentTool,
+    getReviewResultsTool,
+    suggestTranslationRule,
+    proposeProjectMemoryChange,
+    suggestForbiddenTerm,
+    suggestGlossaryEntry,
+  ];
+  if (input.selection) {
+    candidates.push(...createSelectionTools(input.selection));
+    if (input.selection.panel === 'target') candidates.push(proposeSelectionEdit);
+  }
+  if (input.project) {
+    candidates.push(...createProjectGuidanceTools({
+      projectId: input.project.id,
+      domain: input.project.metadata.domain,
+      translationRules: input.translationRules ?? '',
+      projectMemoryItems: memoryState.items,
+      forbiddenTerms: memoryState.forbiddenTerms,
+    }));
+  }
+  const toolSpecs = candidates.filter((candidate) => allowedNames.has(candidate.name));
 
   // MCP 도구 (Atlassian Confluence)
   // getConfluencePage는 제외 - confluence_word_count가 REST API로 직접 처리
   if (input.confluenceSearchEnabled) {
     const allMcpTools = await mcpClientManager.getTools();
-    const mcpTools = allMcpTools.filter((tool) => tool.name !== 'getConfluencePage');
+    const mcpTools = allMcpTools.filter((candidate) => allowedNames.has(candidate.name));
     toolSpecs.push(...mcpTools);
     // confluence_word_count, confluence_load_page 도구 추가
-    toolSpecs.push(confluenceWordCountTool);
-    toolSpecs.push(confluenceLoadPageTool);
+    if (allowedNames.has(confluenceWordCountTool.name)) toolSpecs.push(confluenceWordCountTool);
+    if (allowedNames.has(confluenceLoadPageTool.name)) toolSpecs.push(confluenceLoadPageTool);
   }
 
   // Notion 도구 (REST API 기반)
   if (input.notionSearchEnabled) {
     const notionTools = await mcpClientManager.getNotionTools();
-    toolSpecs.push(...notionTools);
+    toolSpecs.push(...notionTools.filter((candidate) => allowedNames.has(candidate.name)));
   }
 
   // 내장 웹 검색 도구
-  const builtInWebSearchTools = input.webSearchEnabled
+  const builtInWebSearchTools = allowedNames.has('web_search')
     ? getBuiltInWebSearchTool(input.provider)
     : [];
 
   // OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등) - OpenAI 전용
-  const connectorTools = (input.provider === 'openai' && input.connectorConfigs && input.getConnectorToken)
+  const connectorTools = (
+    input.profile === 'general'
+    && explicitExternalReference
+    && input.provider === 'openai'
+    && input.connectorConfigs
+    && input.getConnectorToken
+  )
     ? await buildConnectorTools(input.connectorConfigs, input.getConnectorToken)
     : [];
 
@@ -793,7 +869,7 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
   const boundToolNames = toolSpecs.map((t) => t.name);
 
   // 웹 검색이 활성화되면 가상 이름 추가
-  if (input.webSearchEnabled && (input.provider === 'openai' || input.provider === 'anthropic')) {
+  if (allowedNames.has('web_search') && (input.provider === 'openai' || input.provider === 'anthropic')) {
     boundToolNames.push('web_search');
   }
 
@@ -823,13 +899,28 @@ function buildToolGuideMessage(params: {
   if (has('get_target_document')) {
     toolGuide.push('- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.');
   }
+  if (has('get_selection_surroundings')) {
+    toolGuide.push('- get_selection_surroundings: 선택 영역만으로 부족할 때 앞뒤 문맥을 제한적으로 조회.');
+  }
+  if (has('get_aligned_selection_context')) {
+    toolGuide.push('- get_aligned_selection_context: Target 선택의 원문 대조가 필요할 때만 조회.');
+  }
+  if (has('get_project_guidance')) {
+    toolGuide.push('- get_project_guidance: 필요한 규칙·금칙어·프로젝트 메모리 섹션만 조회.');
+  }
+  if (has('search_project_glossary')) {
+    toolGuide.push('- search_project_glossary: 현재 질문에 관련된 용어만 검색.');
+  }
+  if (has('propose_selection_edit')) {
+    toolGuide.push('- propose_selection_edit: Target 선택 수정안을 구조화해 제안. 문서를 직접 변경하지 않음.');
+  }
+  if (has('propose_project_memory_change')) {
+    toolGuide.push('- propose_project_memory_change: 장기 프로젝트 메모리 변경을 제안. 직접 저장하지 않음.');
+  }
 
   // 제안 도구
   if (has('suggest_translation_rule')) {
     toolGuide.push('- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)');
-  }
-  if (has('suggest_project_context')) {
-    toolGuide.push('- suggest_project_context: Project Context 저장 제안 생성(정의/구분은 tool description을 따른다)');
   }
   // 웹 검색
   if (has('web_search')) {
@@ -902,14 +993,6 @@ function buildToolGuideMessage(params: {
     toolGuide.push(`${priority}. 번역 스타일/포맷 규칙 발견`);
     toolGuide.push('   → suggest_translation_rule');
     toolGuide.push('   → 응답: "[Add to Rules] 버튼을 눌러 추가하세요"');
-    toolGuide.push('');
-    priority++;
-  }
-
-  if (has('suggest_project_context')) {
-    toolGuide.push(`${priority}. 프로젝트 배경지식/맥락 정보 발견`);
-    toolGuide.push('   → suggest_project_context');
-    toolGuide.push('   → 응답: "[Add to Context] 버튼을 눌러 추가하세요"');
     toolGuide.push('');
     priority++;
   }
@@ -1049,6 +1132,7 @@ export async function streamAssistantReply(
       contextBlocks: input.contextBlocks,
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
+      ...(input.selection ? { selection: input.selection } : {}),
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.projectContext ? { projectContext: input.projectContext } : {}),
@@ -1065,8 +1149,18 @@ export async function streamAssistantReply(
 
   // Phase 3.1: 공통 도구 빌더 사용 (스트리밍/비스트리밍 통합)
   const { toolSpecs, bindTools, boundToolNames } = await buildToolSpecs({
-    includeSource: true,
-    includeTarget: true,
+    profile: input.toolProfile ?? (
+      input.selection?.panel === 'source'
+        ? 'selection-source'
+        : input.selection?.panel === 'target'
+          ? 'selection-target'
+          : 'general'
+    ),
+    project: input.project,
+    selection: input.selection,
+    selectionProposalEnabled: input.selectionProposalEnabled,
+    userMessage: input.userMessage,
+    translationRules: input.translationRules,
     webSearchEnabled: !!input.webSearchEnabled,
     confluenceSearchEnabled: !!input.confluenceSearchEnabled,
     notionSearchEnabled: !!input.notionSearchEnabled,
@@ -1106,6 +1200,7 @@ export async function streamAssistantReply(
       messages: guardedMessages,
       ...(cb ? { cb } : {}),
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
+      maxSteps: input.selection ? 4 : 6,
     }));
   } catch (e) {
     if (usedImages) {
@@ -1127,6 +1222,7 @@ export async function streamAssistantReply(
         messages: guardedFallback,
         ...(cb ? { cb } : {}),
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
+        maxSteps: input.selection ? 4 : 6,
       }));
     } else {
       throw e;

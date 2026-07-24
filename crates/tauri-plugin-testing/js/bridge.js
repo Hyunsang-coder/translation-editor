@@ -843,10 +843,27 @@
         altKey: modifiers.some((m) => m === "alt" || m === "Alt"),
       };
 
-      target.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+      const keydown = new KeyboardEvent("keydown", eventInit);
+      const shouldRunDefault = target.dispatchEvent(keydown);
+      if (
+        shouldRunDefault
+        && (eventInit.metaKey || eventInit.ctrlKey)
+        && key.toLowerCase() === "a"
+        && target.isContentEditable
+      ) {
+        target.focus();
+        document.execCommand("selectAll", false, null);
+      }
       target.dispatchEvent(new KeyboardEvent("keyup", eventInit));
 
-      return { dispatched: true, key, modifiers, target: selector ?? "activeElement" };
+      return {
+        dispatched: true,
+        key,
+        modifiers,
+        target: selector ?? "activeElement",
+        selectionText: textValue(window.getSelection()?.toString()),
+        defaultPrevented: !shouldRunDefault,
+      };
     },
 
     "dom.scrollTo": async (params) => {

@@ -4,6 +4,7 @@ import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { createMockAiConfig } from '@/test/mocks/ai';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import type { ResolvedWorkflowContext } from '@/types';
 
 const mocks = vi.hoisted(() => ({
   stream: vi.fn(),
@@ -28,6 +29,31 @@ describe('polishTargetDocumentWithStreaming', () => {
         content: [{ type: 'text', text: 'This sentence has awkward collocation.' }],
       },
     ],
+  };
+  const resolvedContext: ResolvedWorkflowContext = {
+    snapshot: {
+      revision: 4,
+      projectMemoryItems: [{ id: 'memory-1', category: 'audience', content: 'Developers' }],
+      translationRules: 'Prefer concise prose.',
+      forbiddenTerms: [{ id: 'term-1', term: 'easy', replacement: 'straightforward' }],
+      glossaryEntries: [{ id: 'glossary-1', source: 'workspace', target: 'workspace' }],
+      createdAt: 1,
+    },
+    manifest: {
+      mode: 'polish',
+      revision: 4,
+      projectMemoryItemIds: ['memory-1'],
+      translationRulesHash: 'rules-hash',
+      forbiddenTermIds: ['term-1'],
+      glossaryEntryIds: ['glossary-1'],
+      included: ['project-memory', 'translation-rules', 'forbidden-terms', 'glossary'],
+    },
+    rendered: {
+      projectMemory: '- [audience] Developers',
+      translationRules: 'Prefer concise prose.',
+      forbiddenTerms: '- easy → straightforward',
+      glossary: 'workspace = workspace',
+    },
   };
 
   beforeEach(() => {
@@ -65,6 +91,26 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(userPrompt).toContain('---TARGET_DOCUMENT_START---');
     expect(userPrompt).toContain('This sentence has awkward collocation.');
     expect(userPrompt).not.toContain('Source (');
+  });
+
+  it('폴리싱에 고정된 메모리·규칙·금지 용어·용어집을 함께 적용한다', async () => {
+    await polishTargetDocumentWithStreaming({
+      targetDocJson,
+      resolvedContext,
+      styleRules: 'legacy rule',
+      projectContext: 'legacy context',
+      glossary: 'legacy glossary',
+    });
+
+    const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+    const systemPrompt = String(messages[0]?.content);
+    expect(systemPrompt).toContain('Developers');
+    expect(systemPrompt).toContain('Prefer concise prose.');
+    expect(systemPrompt).toContain('- easy → straightforward');
+    expect(systemPrompt).toContain('workspace = workspace');
+    expect(systemPrompt).not.toContain('legacy rule');
+    expect(systemPrompt).not.toContain('legacy context');
+    expect(systemPrompt).not.toContain('legacy glossary');
   });
 
   it('문서 구조는 보존하면서 번역투를 적극적으로 재구성하도록 프롬프트 계약을 명시한다', async () => {
