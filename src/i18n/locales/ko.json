@@ -324,6 +324,7 @@
     },
     "addToChat": "선택한 텍스트를 채팅 입력창에 추가",
     "addToChatLabel": "채팅에 추가",
+    "copySelection": "복사하기",
     "loadingProject": "프로젝트를 불러오는 중...",
     "source": "원문",
     "target": "번역문",

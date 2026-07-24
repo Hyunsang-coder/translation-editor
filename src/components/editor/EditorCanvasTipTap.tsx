@@ -997,6 +997,24 @@ export function EditorCanvasTipTap(): JSX.Element {
   const handleCopySource = useCallback(() => copyEditorContent(sourceEditorRef.current), [copyEditorContent]);
   const handleCopyTarget = useCallback(() => copyEditorContent(targetEditorRef.current), [copyEditorContent]);
 
+  const handleCopySelectedText = useCallback(async (text: string): Promise<void> => {
+    const selectedText = text.trim();
+    if (!selectedText) {
+      addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
+      setAddToChatBubble(null);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedText);
+      addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
+    } catch {
+      addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
+    } finally {
+      setAddToChatBubble(null);
+    }
+  }, [addToast, t]);
+
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
     const cleaners: Array<() => void> = [];
@@ -1480,6 +1498,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             zoom: 1 / useUIStore.getState().editorZoom,
             backgroundColor: 'color-mix(in srgb, var(--editor-surface) 90%, transparent)',
           }}
+          onCopy={() => void handleCopySelectedText(addToChatBubble.text)}
           onAddToChat={() => {
             const text = addToChatBubble.text.trim();
             if (!text) return;

@@ -1,4 +1,4 @@
-import { Eye, MessagesSquare, NotebookPen, X } from 'lucide-react';
+import { Clipboard, Eye, MessagesSquare, NotebookPen, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export interface SelectionExistingComment {
@@ -8,6 +8,7 @@ export interface SelectionExistingComment {
 
 interface SelectionActionMenuProps {
   existingComments?: SelectionExistingComment[];
+  onCopy: () => void;
   onAddToChat: () => void;
   onAddComment: () => void;
   onViewComment: (commentId: string) => void;
@@ -26,6 +27,7 @@ const CLOSE_HEADER_HEIGHT = 29;
  */
 export function SelectionActionMenu({
   existingComments = [],
+  onCopy,
   onAddToChat,
   onAddComment,
   onViewComment,
@@ -77,6 +79,16 @@ export function SelectionActionMenu({
       <button
         type="button"
         className={itemClassName}
+        title={t('editor.copySelection')}
+        onClick={onCopy}
+      >
+        <Clipboard className="w-4 h-4 shrink-0 text-editor-muted" />
+        <span>{t('editor.copySelection')}</span>
+      </button>
+
+      <button
+        type="button"
+        className={`${itemClassName} border-t border-editor-border`}
         title={t('editor.addToChat')}
         onClick={onAddToChat}
       >
@@ -126,5 +138,5 @@ export function getSelectionActionMenuHeight(existingCommentCount = 0): number {
   const commentItems = existingCommentCount > 0
     ? Math.min(existingCommentCount, 3)
     : 1;
-  return CLOSE_HEADER_HEIGHT + (1 + commentItems) * ITEM_HEIGHT + 8;
+  return CLOSE_HEADER_HEIGHT + (2 + commentItems) * ITEM_HEIGHT + 8;
 }

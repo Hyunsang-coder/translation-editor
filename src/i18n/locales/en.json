@@ -326,6 +326,7 @@
     },
     "addToChat": "Add selected text to chat input",
     "addToChatLabel": "Add to chat",
+    "copySelection": "Copy",
     "loadingProject": "Loading project...",
     "source": "Source",
     "target": "Target",
