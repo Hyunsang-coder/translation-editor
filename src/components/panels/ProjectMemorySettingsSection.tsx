@@ -57,12 +57,18 @@ export function ProjectMemorySettingsSection(): JSX.Element {
   const handleAdd = async (): Promise<void> => {
     if (!content.trim()) return;
     try {
-      await addItem({
+      const result = await addItem({
         category,
         content: content.trim(),
         source: 'user',
         status: 'active',
       });
+      if (result.duplicate) {
+        addToast({
+          type: 'info',
+          message: t('memory.alreadyExists', '이미 동일한 메모리가 있습니다.'),
+        });
+      }
       setContent('');
     } catch (error) {
       reportError(error);

@@ -5,6 +5,8 @@ import type { ChatMessage, ChatMessageMetadata } from '@/types';
 import { MemoizedMarkdown } from './MemoizedMarkdown';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { useUIStore } from '@/stores/uiStore';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import { useGlossaryStore } from '@/stores/glossaryStore';
 import { SelectionContextChip } from './SelectionContextChip';
 import { getChatToolDisplayNameKey } from '@/ai/tools/toolRegistry';
 import { SelectionEditProposalCard } from './SelectionEditProposalCard';
@@ -96,6 +98,10 @@ export const ChatMessageItem = memo(function ChatMessageItem({
 }: ChatMessageItemProps) {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
+  // 승인 저장이 진행 중인 동안 카드 버튼을 잠가 중복 쓰기를 막는다.
+  const memorySaving = useProjectMemoryStore((s) => s.saving);
+  const glossarySaving = useGlossaryStore((s) => s.saving);
+  const knowledgeSaving = memorySaving || glossarySaving;
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
 
@@ -461,6 +467,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             onDismiss={(kind, proposalId) =>
               onDismissKnowledgeProposal?.(message.id, kind, proposalId)
             }
+            busy={knowledgeSaving}
           />
           {/* Suggested Rule 카드 */}
           {message.metadata?.suggestedRule && !message.metadata.rulesAdded && (

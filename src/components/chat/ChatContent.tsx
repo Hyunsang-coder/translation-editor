@@ -525,11 +525,26 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage(messageId, { metadata: patch }, sessionId);
   }, [displaySession?.messages, updateMessage, sessionId]);
 
+  /**
+   * 제안이 만들어진 프로젝트와 현재 프로젝트가 다르면 적용을 막는다.
+   * projectId가 없는 legacy 제안은 통과시킨다.
+   */
+  const isProposalProjectActive = useCallback((projectId?: string): boolean => {
+    if (!projectId) return true;
+    if (useProjectStore.getState().project?.id === projectId) return true;
+    addToast({
+      type: 'error',
+      message: t('memory.projectChanged', '프로젝트가 변경되어 적용할 수 없습니다.'),
+    });
+    return false;
+  }, [addToast, t]);
+
   const applyMemoryProposal = useCallback(async (
     messageId: string,
     proposal: ProjectMemoryChangeProposal,
     mode: 'requested' | 'add',
   ): Promise<void> => {
+    if (!isProposalProjectActive(proposal.projectId)) return;
     try {
       const memoryStore = useProjectMemoryStore.getState();
       if (mode === 'requested' && proposal.operation === 'archive') {
@@ -554,7 +569,13 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         ) {
           await memoryStore.replaceItem(proposal.targetItemId, input);
         } else {
-          await memoryStore.addItem(input);
+          const result = await memoryStore.addItem(input);
+          if (result.duplicate) {
+            addToast({
+              type: 'info',
+              message: t('memory.alreadyExists', '이미 동일한 메모리가 있습니다.'),
+            });
+          }
         }
       }
       markProposal(messageId, 'memory', proposal.proposalId, 'applied');
@@ -564,12 +585,13 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [markProposal, addToast]);
+  }, [markProposal, addToast, t, isProposalProjectActive]);
 
   const applyForbiddenTermProposal = useCallback(async (
     messageId: string,
     proposal: ForbiddenTermProposal,
   ): Promise<void> => {
+    if (!isProposalProjectActive(proposal.projectId)) return;
     try {
       await useProjectMemoryStore.getState().saveForbiddenTerm({
         term: proposal.term,
@@ -584,12 +606,13 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [markProposal, addToast]);
+  }, [markProposal, addToast, isProposalProjectActive]);
 
   const applyGlossaryEntryProposal = useCallback(async (
     messageId: string,
     proposal: GlossaryEntryProposal,
   ): Promise<void> => {
+    if (!isProposalProjectActive(proposal.projectId)) return;
     const activeProject = useProjectStore.getState().project;
     if (!activeProject) return;
     try {
@@ -626,7 +649,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [markProposal, addToast, t]);
+  }, [markProposal, addToast, t, isProposalProjectActive]);
 
   const dismissKnowledgeProposal = useCallback((
     messageId: string,

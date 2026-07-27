@@ -495,6 +495,7 @@ export function createAiActions(
                   : 'add';
               const proposal: ProjectMemoryChangeProposal = {
                 proposalId: uuidv4(),
+                ...(project ? { projectId: project.id } : {}),
                 operation,
                 category: evt.args.category as ProjectMemoryCategory,
                 ...(evt.args.content ? { content: String(evt.args.content) } : {}),
@@ -521,6 +522,7 @@ export function createAiActions(
             } else if (evt.toolName === 'suggest_forbidden_term' && evt.args.term) {
               const proposal: ForbiddenTermProposal = {
                 proposalId: uuidv4(),
+                ...(project ? { projectId: project.id } : {}),
                 term: String(evt.args.term),
                 ...(evt.args.replacement
                   ? { replacement: String(evt.args.replacement) }
@@ -545,6 +547,7 @@ export function createAiActions(
             ) {
               const proposal: GlossaryEntryProposal = {
                 proposalId: uuidv4(),
+                ...(project ? { projectId: project.id } : {}),
                 source: String(evt.args.source),
                 target: String(evt.args.target),
                 ...(evt.args.notes ? { notes: String(evt.args.notes) } : {}),

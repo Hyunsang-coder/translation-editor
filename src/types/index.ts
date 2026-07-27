@@ -356,6 +356,8 @@ export interface SelectionEditProposal {
 
 export interface ProjectMemoryChangeProposal {
   proposalId: string;
+  /** 제안이 생성된 프로젝트. 적용 시점에 프로젝트가 바뀌었는지 검증한다. */
+  projectId?: string;
   operation: 'add' | 'replace' | 'archive';
   category: ProjectMemoryCategory;
   content?: string;
@@ -368,6 +370,8 @@ export interface ProjectMemoryChangeProposal {
 
 export interface ForbiddenTermProposal {
   proposalId: string;
+  /** 제안이 생성된 프로젝트. 적용 시점에 프로젝트가 바뀌었는지 검증한다. */
+  projectId?: string;
   term: string;
   replacement?: string;
   note?: string;
@@ -376,6 +380,8 @@ export interface ForbiddenTermProposal {
 
 export interface GlossaryEntryProposal {
   proposalId: string;
+  /** 제안이 생성된 프로젝트. 적용 시점에 프로젝트가 바뀌었는지 검증한다. */
+  projectId?: string;
   source: string;
   target: string;
   notes?: string;

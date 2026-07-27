@@ -538,7 +538,9 @@
     "glossaryProposal": "용어집 제안",
     "addAsNew": "새 항목으로 추가",
     "update": "업데이트",
-    "defaultGlossaryName": "프로젝트 용어집"
+    "defaultGlossaryName": "프로젝트 용어집",
+    "alreadyExists": "이미 동일한 메모리가 있습니다.",
+    "projectChanged": "프로젝트가 변경되어 적용할 수 없습니다."
   },
   "selection": {
     "characters": "자",

@@ -14,21 +14,26 @@ interface ProjectKnowledgeProposalCardsProps {
   onApplyForbiddenTerm: (proposal: ForbiddenTermProposal) => void;
   onApplyGlossaryEntry: (proposal: GlossaryEntryProposal) => void;
   onDismiss: (kind: KnowledgeProposalKind, proposalId: string) => void;
+  /** 저장이 진행 중이면 승인 버튼을 잠가 중복 쓰기를 막는다. */
+  busy?: boolean;
 }
 
 function ActionButton({
   children,
   onClick,
   primary = false,
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   primary?: boolean;
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <button
       type="button"
-      className={`rounded-lg px-2.5 py-1.5 text-xs ${
+      disabled={disabled}
+      className={`rounded-lg px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
         primary
           ? 'bg-primary-500 font-medium text-white hover:bg-primary-600'
           : 'border border-editor-border text-editor-muted hover:bg-editor-border/60'
@@ -52,6 +57,7 @@ export function ProjectKnowledgeProposalCards({
   onApplyForbiddenTerm,
   onApplyGlossaryEntry,
   onDismiss,
+  busy = false,
 }: ProjectKnowledgeProposalCardsProps): JSX.Element | null {
   const { t } = useTranslation();
   const memory = memoryProposals.filter(isPending);
@@ -81,7 +87,11 @@ export function ProjectKnowledgeProposalCards({
             <div className="mt-1 text-xs text-editor-muted">{proposal.reason}</div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            <ActionButton primary onClick={() => onApplyMemory(proposal, 'requested')}>
+            <ActionButton
+              primary
+              disabled={busy}
+              onClick={() => onApplyMemory(proposal, 'requested')}
+            >
               {proposal.operation === 'archive'
                 ? t('memory.archive', '보관')
                 : proposal.operation === 'replace'
@@ -89,7 +99,7 @@ export function ProjectKnowledgeProposalCards({
                   : t('memory.add', '추가')}
             </ActionButton>
             {proposal.operation === 'replace' && (
-              <ActionButton onClick={() => onApplyMemory(proposal, 'add')}>
+              <ActionButton disabled={busy} onClick={() => onApplyMemory(proposal, 'add')}>
                 {t('memory.addAsNew', '새 항목으로 추가')}
               </ActionButton>
             )}
@@ -113,7 +123,7 @@ export function ProjectKnowledgeProposalCards({
             {proposal.replacement ? ` → ${proposal.replacement}` : ''}
           </div>
           <div className="mt-3 flex gap-2">
-            <ActionButton primary onClick={() => onApplyForbiddenTerm(proposal)}>
+            <ActionButton primary disabled={busy} onClick={() => onApplyForbiddenTerm(proposal)}>
               {t('memory.add', '추가')}
             </ActionButton>
             <ActionButton onClick={() => onDismiss('forbiddenTerm', proposal.proposalId)}>
@@ -135,7 +145,7 @@ export function ProjectKnowledgeProposalCards({
             {proposal.source} = {proposal.target}
           </div>
           <div className="mt-3 flex gap-2">
-            <ActionButton primary onClick={() => onApplyGlossaryEntry(proposal)}>
+            <ActionButton primary disabled={busy} onClick={() => onApplyGlossaryEntry(proposal)}>
               {t('memory.add', '추가')}
             </ActionButton>
             <ActionButton onClick={() => onDismiss('glossaryEntry', proposal.proposalId)}>

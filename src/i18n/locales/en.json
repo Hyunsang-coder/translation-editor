@@ -540,7 +540,9 @@
     "glossaryProposal": "Glossary proposal",
     "addAsNew": "Add as new",
     "update": "Update",
-    "defaultGlossaryName": "Project glossary"
+    "defaultGlossaryName": "Project glossary",
+    "alreadyExists": "This memory item already exists.",
+    "projectChanged": "The project changed, so this can no longer be applied."
   },
   "selection": {
     "characters": " chars",
