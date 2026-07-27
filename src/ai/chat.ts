@@ -224,6 +224,12 @@ export interface UsageInfo {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /**
+   * usage를 보고한 모델 실행 횟수.
+   * 도구 루프는 매 스텝마다 전체 프롬프트를 다시 보내므로, inputTokens를 이 값으로
+   * 나눠야 "프롬프트 1회 크기"가 나온다.
+   */
+  modelCalls?: number;
   /** 캐시에서 읽은 입력 토큰 (~0.1× 과금). prompt caching 실효 검증용. */
   cacheReadInputTokens?: number;
   /** 캐시에 새로 기록한 입력 토큰 (1.25× 과금). */
@@ -514,15 +520,18 @@ export async function runToolCallingLoop(params: {
       };
     } | null)?.usage_metadata;
     if (!u) return;
+    usage.modelCalls = (usage.modelCalls ?? 0) + 1;
     if (typeof u.input_tokens === 'number') usage.inputTokens = (usage.inputTokens ?? 0) + u.input_tokens;
     if (typeof u.output_tokens === 'number') usage.outputTokens = (usage.outputTokens ?? 0) + u.output_tokens;
     if (typeof u.total_tokens === 'number') usage.totalTokens = (usage.totalTokens ?? 0) + u.total_tokens;
     // prompt caching 실효 관측 (Anthropic: cache_control, OpenAI: 자동 프리픽스 캐싱)
+    // 0도 그대로 누적한다. undefined(=provider 미보고)와 0(=캐시 미스)은 원인이 달라
+    // 구분되지 않으면 진단이 불가능하다.
     const details = u.input_token_details;
-    if (typeof details?.cache_read === 'number' && details.cache_read > 0) {
+    if (typeof details?.cache_read === 'number') {
       usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + details.cache_read;
     }
-    if (typeof details?.cache_creation === 'number' && details.cache_creation > 0) {
+    if (typeof details?.cache_creation === 'number') {
       usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + details.cache_creation;
     }
   };
@@ -1293,12 +1302,19 @@ export async function streamAssistantReply(
   if (usage.inputTokens !== undefined || usage.outputTokens !== undefined || usage.totalTokens !== undefined) {
     cb?.onUsage?.(usage);
   }
-  // prompt caching 실효 관측: cache_read가 0이면 silent invalidator를 의심할 것
-  if (usage.cacheReadInputTokens !== undefined || usage.cacheCreationInputTokens !== undefined) {
+  // prompt caching 실효 관측.
+  // usage가 있으면 항상 찍는다. 종전에는 cache_read > 0일 때만 기록해서, 정작 진단하려던
+  // "캐시가 한 번도 안 맞는 상태"에서 아무 로그도 남지 않았다.
+  // - read가 0이면 프리픽스를 매번 깨뜨리는 요소를 의심할 것
+  // - read가 'n/a'면 provider/SDK가 캐시 정보를 보고하지 않는 것 (별개 원인)
+  if (usage.inputTokens !== undefined) {
+    const calls = usage.modelCalls ?? 1;
     console.warn('[AI cache]', {
-      read: usage.cacheReadInputTokens ?? 0,
-      write: usage.cacheCreationInputTokens ?? 0,
-      input: usage.inputTokens ?? 0,
+      read: usage.cacheReadInputTokens ?? 'n/a',
+      write: usage.cacheCreationInputTokens ?? 'n/a',
+      input: usage.inputTokens,
+      modelCalls: calls,
+      inputPerCall: Math.round(usage.inputTokens / Math.max(1, calls)),
     });
   }
 
