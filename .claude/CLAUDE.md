@@ -84,7 +84,16 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-07-24)
+## Recent Updates (2026-07-27)
+
+- **동적 프로젝트 지식 루프 수정 (D1–D7, `docs/dynamic-project-knowledge-fix-plan.md`)**: 채팅 ↔ Project Memory 갱신 경로의 결함 7건 수정.
+- **채팅 컨텍스트 주입 구조 (D1)**: 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
+- **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.
+- **제안 다건 지원 (D3)**: `ChatMessageMetadata`에 `projectMemoryProposals`/`forbiddenTermProposals`/`glossaryEntryProposals` 배열 추가. 단수 필드는 과거 메시지 호환용 deprecated. 읽기/갱신은 `components/chat/knowledgeProposals.ts`의 `read*`/`patchProposalStatus`로 일원화(legacy 단수 필드 자동 정규화).
+- **승인 안전성 (D4/D5/D7)**: `duplicate` 플래그 토스트 노출, 저장 중 승인 버튼 잠금(`saving`), 제안의 `projectId`와 활성 프로젝트 일치 검증.
+- **workflow 메모리 상한 (D6)**: `resolveWorkflowContextFromSnapshot`이 mode별 상한(full-translate/review/polish 40, selection-retranslate 20)을 적용하고 `manifest.projectMemoryItemIds`를 실제 주입분과 일치시킨다. `buildContextSnapshot`은 전체를 유지(스냅샷 의미 보존). **카테고리 하드 제외는 하지 않는다** — legacy 마이그레이션과 수동 추가가 모두 `general`이라 배제 시 데이터 누락.
+
+### Previous (2026-07-24)
 
 - **Anchored selection editing**: Source/Target 선택을 raw composer 문자열 대신 `SelectionContext` 카드로 유지. Target은 직접 부분 재번역 또는 채팅의 `propose_selection_edit`만 허용하며, 공통 preview + anchor/project/text guard를 통과한 뒤 정확한 range를 한 transaction으로 적용.
 - **Dynamic project knowledge**: 승인 기반 Project Memory·Forbidden Terms SQLite 저장/관리 UI 및 chat proposal 도구 추가. 프로젝트 복제/삭제와 revision이 함께 관리되며 legacy `projectContext`는 idempotent migration/fallback으로 보존.

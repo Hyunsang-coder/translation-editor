@@ -1,6 +1,8 @@
 # 동적 프로젝트 지식(Project Memory) 수정 계획 (2026-07-27)
 
-> **구현 상태: 🚧 미착수** — 아래 D1–D8 순서대로 진행.
+> **구현 상태: ✅ D1–D7 완료 (2026-07-27)** — 커밋 `e229e9b`(D1/D2), `f866564`(D3), `2638304`(D4/D5/D7), `68e9711`(D6).
+> 검증: `npx tsc --noEmit`, `npm run test:run` (1077 passed, 8 skipped / 94 files).
+> 미적용: D8-4(웹 E2E 시나리오) — 사용자 합의로 범위 제외. 아래 "구현 결과" 참조.
 
 > 대상: v2.13.0 "Dynamic project knowledge" 도입 이후의 채팅 ↔ Project Memory/금칙어/용어집 갱신 루프.
 > 저장·승인·스냅샷 계층(SQLite `project_memory_state` revision, no-op proposal tool, workflow ContextSnapshot 고정)은 의도대로 동작함이 확인되었고, 이 문서는 **그 위에 얹힌 채팅 루프가 닫히지 않은 부분**만 다룬다.
@@ -9,21 +11,43 @@
 
 ## 우선순위 요약
 
-| # | 심각도 | 파일 | 요약 |
-|---|--------|------|------|
-| D1 | P0 기능 후퇴 | `src/ai/prompt.ts:398` / `src/stores/chatStore.ai.ts:307` | 승인된 Project Memory가 일반 채팅 시스템 프롬프트에 주입되지 않음 (tool pull 전용) |
-| D2 | P1 죽은 경로 | `src/components/chat/ChatMessageItem.tsx:500` / `ChatContent.tsx:354` | `[Add to Context]` 버튼이 어디에도 쓰이지 않는 `chatStore.projectContext`에 기록 |
-| D3 | P1 데이터 유실 | `src/stores/chatStore.ai.ts:462` | 한 응답에 제안이 여러 건이면 종류별 마지막 1건만 남고 나머지 덮어쓰기 |
-| D4 | P2 UX | `src/components/chat/ChatContent.tsx:518` / `src/tauri/projectMemory.ts:58` | Rust가 돌려주는 `duplicate` 플래그를 UI가 무시, 유사 항목 충돌 감지 미구현 |
-| D5 | P2 정합성 | `src/components/chat/ProjectKnowledgeProposalCards.tsx:77` | 승인 버튼에 in-flight 가드 없음 (`saving` 미전달) → 더블클릭 시 중복 쓰기 |
-| D6 | P2 토큰 | `src/ai/context/buildContextSnapshot.ts:22` | active 메모리 전량 주입 (개수 cap·카테고리 필터 없음), pull 경로와 정책 불일치 |
-| D7 | P3 방어 | `src/components/chat/ChatContent.tsx:518` | 메모리/금칙어/용어집 proposal에 `projectId` 가드 없음 (selection proposal에는 있음) |
-| D8 | P3 테스트 | — | tool call → proposal 카드 → 승인 → DB → 다음 요청 반영 경로의 테스트 부재 |
+| # | 상태 | 심각도 | 파일 | 요약 |
+|---|------|--------|------|------|
+| D1 | ✅ | P0 기능 후퇴 | `src/ai/prompt.ts:398` / `src/stores/chatStore.ai.ts:307` | 승인된 Project Memory가 일반 채팅 시스템 프롬프트에 주입되지 않음 (tool pull 전용) |
+| D2 | ✅ | P1 죽은 경로 | `src/components/chat/ChatMessageItem.tsx:500` / `ChatContent.tsx:354` | `[Add to Context]` 버튼이 어디에도 쓰이지 않는 `chatStore.projectContext`에 기록 |
+| D3 | ✅ | P1 데이터 유실 | `src/stores/chatStore.ai.ts:462` | 한 응답에 제안이 여러 건이면 종류별 마지막 1건만 남고 나머지 덮어쓰기 |
+| D4 | ✅ | P2 UX | `src/components/chat/ChatContent.tsx:518` / `src/tauri/projectMemory.ts:58` | Rust가 돌려주는 `duplicate` 플래그를 UI가 무시, 유사 항목 충돌 감지 미구현 |
+| D5 | ✅ | P2 정합성 | `src/components/chat/ProjectKnowledgeProposalCards.tsx:77` | 승인 버튼에 in-flight 가드 없음 (`saving` 미전달) → 더블클릭 시 중복 쓰기 |
+| D6 | ✅ | P2 토큰 | `src/ai/context/buildContextSnapshot.ts:22` | active 메모리 전량 주입 (개수 cap·카테고리 필터 없음), pull 경로와 정책 불일치 |
+| D7 | ✅ | P3 방어 | `src/components/chat/ChatContent.tsx:518` | 메모리/금칙어/용어집 proposal에 `projectId` 가드 없음 (selection proposal에는 있음) |
+| D8 | 부분 | P3 테스트 | — | tool call → proposal 카드 → 승인 → DB → 다음 요청 반영 경로의 테스트 부재 |
 
 **검토했으나 수정 불필요로 판단한 항목**:
 - "워크플로우 도중 메모리를 승인하면 진행 중 번역이 오염된다" — **해당 없음.** `EditorCanvasTipTap.tsx:860`, `:994`, `ReviewPanel.tsx:227`, `:552`가 작업 시작 시 `useProjectMemoryStore.getState()`를 캡처해 `buildContextSnapshot`으로 고정하므로 모든 chunk가 동일 revision을 공유한다. 설계 의도대로임.
 - "채팅 한 턴 안에서 tool이 읽는 메모리와 manifest revision이 어긋난다" — **해당 없음.** `chat.ts:847`이 요청 조립 시점에 `memoryState`를 한 번 캡처해 tool closure에 넘기고, `chatStore.ai.ts:307`도 같은 시점 revision을 기록한다. 턴 내부는 일관적이다.
 - "`hydrate` 경합으로 이전 프로젝트 메모리가 남는다" — **해당 없음.** `projectMemoryStore.ts:53`의 `hydrationSequence` + `activeProjectId` 이중 검사로 stale 응답을 폐기한다.
+
+## 구현 결과 (2026-07-27)
+
+### 계획과 달라진 점
+
+1. **D6 — 카테고리 하드 제외 대신 우선순위 정렬.** 설계 문서 §14.3은 full-translate에 `domain/audience/product/worldbuilding/character/decision`만 넣기로 했으나 채택하지 않았다. 구현 중 확인해보니 legacy 마이그레이션(`db/mod.rs:2883`, `category='general'`)과 설정 UI 수동 추가(`ProjectMemorySettingsSection.tsx`, 기본값 `'general'`)가 모두 `general`로 들어온다. 하드 제외하면 마이그레이션된 기존 프로젝트 컨텍스트와 사용자가 직접 넣은 항목이 통째로 빠진다. `MEMORY_CATEGORY_PRIORITY`는 상한에 걸렸을 때의 정렬 기준으로만 쓰고, 카테고리로 배제하지는 않는다.
+
+2. **D6 — `droppedCount` manifest 필드 보류.** ContextManifest를 렌더링하는 곳이 `SelectionEditPreviewModal.tsx:174`의 `included.join(' · ')` 하나뿐이라, 읽는 쪽 없이 필드만 늘리면 D4에서 문제 삼은 `duplicate` 플래그와 같은 상황이 된다. `selectMemoryItems`/`renderSnapshotMemory`는 `droppedCount`를 이미 돌려주므로 표시 UI가 생길 때 배선하면 된다.
+
+3. **D2 — 계획에 없던 dead reference 추가 정리.** `suggest_project_context`의 tool progress 라벨이 `ChatContent.tsx`와 `ChatMessageItem.tsx`에 남아 있어 i18n 키와 함께 제거했다.
+
+4. **D4 — token similarity 충돌 감지는 미착수.** 계획대로 `duplicate` 노출까지만 했다. 후속 항목으로 남긴다(아래).
+
+### 남은 작업
+
+- **D8-4**: `e2e/tauri-mock.ts`에 `propose_project_memory_change` 마커 에코를 추가해 생성 → 승인 → Settings 반영을 웹 E2E로 검증. 사용자 합의로 이번 범위에서 제외.
+- **D4 후속**: 같은 category 내 token similarity(Dice ≥ 0.6, 상위 3건) 후보를 `add_project_memory_item`이 함께 반환하고, 카드에서 "교체 / 새로 추가"를 제공 (설계 문서 §13.5 3~4단계).
+- **정리**: `prompt.ts:451`의 `buildTranslateOnlyMessages`는 호출부가 0건인 dead export다.
+
+### 검증 메모
+
+`npm run test:e2e:web`은 이번 세션에서 실행하지 못했다. 개발자의 `npm run dev`(vite)가 HMR용으로 1421 포트를 점유하는데(`vite.config.ts:145`) 웹 harness도 같은 포트에 서버를 띄우려 해서(`playwright.web.config.ts:28`) 충돌한다. 개발 서버를 내린 뒤 실행하거나, harness 포트를 1421에서 옮기는 것을 검토할 것.
 
 ---
 
@@ -402,25 +426,23 @@ selection proposal은 적용 전 프로젝트 일치를 검사한다.
 
 ---
 
-## 작업 순서
+## 작업 순서 (실제 진행 결과)
 
-의존 관계상 아래 순서를 권장한다.
+| 커밋 | 항목 | 비고 |
+|------|------|------|
+| `e229e9b` | D1 + D2 | `projectMemoryPolicy.ts`/`projectKnowledgeRender.ts` 신설. legacy `projectContext` 슬롯 정리가 겹쳐 함께 처리 |
+| `f866564` | D3 | `knowledgeProposals.ts`로 읽기/갱신 일원화 |
+| `2638304` | D4 + D5 + D7 | 작고 독립적이라 묶음 |
+| `68e9711` | D6 | D1의 정책 모듈을 workflow resolver에 적용 |
 
-1. **D8-1, D8-2** (테스트 먼저) — D1/D3의 회귀 안전망. `/tdd`로 실패 확인 후 진행.
-2. **D1** — 사용자 체감이 가장 큰 항목. D6의 `projectMemoryPolicy.ts`를 여기서 함께 만든다.
-3. **D2** — D1과 짝. legacy `projectContext` 슬롯 제거가 D1 4번과 겹치므로 연속 처리.
-4. **D3** — 배열화. D8-1 테스트가 있어야 안전.
-5. **D5** → **D4** → **D7** — 작고 독립적. 한 커밋으로 묶어도 무방.
-6. **D6** — D1에서 만든 정책 모듈을 workflow resolver에 적용.
-7. **D8-3, D8-4** — 통합/E2E 마무리.
-8. 후속: D4의 token similarity 충돌 감지 (별도 계획).
+D8-1/D8-2/D8-3은 각 커밋에 테스트로 포함했다(`projectMemoryPolicy.test.ts`, `projectKnowledgeRender.test.ts`, `knowledgeProposals.test.ts`, `ProjectKnowledgeProposalCards.test.tsx`, `chatStore.integration.test.ts`의 D1/D3 케이스).
 
-각 단계 완료 시 `npx tsc --noEmit` + `npm run test:run`, Rust 변경이 포함되면 `cargo test`. 전체 완료 후 `npm run test:ci:local`.
+각 단계 완료 시 `npx tsc --noEmit` + `npm run test:run`으로 검증했다. Rust 변경은 없었다. 전체 완료 후 `npm run test:ci:local`은 위 "검증 메모"의 포트 충돌로 웹 E2E 구간을 실행하지 못했다.
 
 ## 완료 후 문서 갱신
 
-- `.claude/CLAUDE.md` "Recent Updates"에 항목 추가
-- `.claude/patterns.md` — 채팅 컨텍스트 주입 구조(push digest + pull tool) 반영
-- `.claude/gotchas.md` — "메모리 승인은 다음 턴부터 반영" 등 주의사항
-- `docs/INDEX.md` 진행 중인 태스크 표에 이 문서 등록
-- `docs/selection-editing-and-dynamic-context-plan.md` §14.1에 실제 구현 방식(compact digest) 반영
+- [x] `.claude/CLAUDE.md` "Recent Updates"에 항목 추가
+- [x] `docs/INDEX.md` 진행 중인 태스크 표에 이 문서 등록
+- [ ] `.claude/patterns.md` — 채팅 컨텍스트 주입 구조(push digest + pull tool) 반영
+- [ ] `.claude/gotchas.md` — "메모리 승인은 다음 턴부터 반영" 등 주의사항
+- [ ] `docs/selection-editing-and-dynamic-context-plan.md` §14.1에 실제 구현 방식(compact digest) 반영
