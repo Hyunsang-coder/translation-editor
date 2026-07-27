@@ -89,9 +89,12 @@ describe('retranslateSelection', () => {
     expect(result.contextManifest.included).toEqual([
       'selection',
       'aligned-source',
+      'project-memory',
       'translation-rules',
       'forbidden-terms',
-      'project-memory',
     ]);
+    expect(result.contextManifest.projectMemoryItemIds).toEqual(['memory-1']);
+    expect(result.contextManifest.forbiddenTermIds).toEqual(['term-1']);
+    expect(result.contextManifest.glossaryEntryIds).toEqual([]);
   });
 });

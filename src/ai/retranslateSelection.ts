@@ -10,7 +10,7 @@ import {
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { approxTokens } from '@/ai/chatContext/tokenBudget';
-import { hashContent } from '@/utils/hash';
+import { resolveWorkflowContextFromSnapshot } from '@/ai/context/resolveWorkflowContext';
 
 const START_MARKER = '---SELECTION_EDIT_START---';
 const END_MARKER = '---SELECTION_EDIT_END---';
@@ -55,67 +55,30 @@ function buildOptionalContext(input: RetranslateSelectionInput): {
   text: string;
   manifest: ContextManifest;
 } {
-  const { referenceOptions, contextSnapshot } = input;
-  const sections: string[] = [];
-  const included: ContextManifest['included'] = ['selection', 'aligned-source'];
+  const { manifest, rendered } = resolveWorkflowContextFromSnapshot({
+    mode: 'selection-retranslate',
+    snapshot: input.contextSnapshot,
+    referenceOptions: input.referenceOptions,
+  });
 
-  if (referenceOptions.translationRules && contextSnapshot.translationRules.trim()) {
-    sections.push('[Translation Rules]', contextSnapshot.translationRules.trim());
-    included.push('translation-rules');
-  }
-  if (referenceOptions.forbiddenTerms && contextSnapshot.forbiddenTerms.length > 0) {
-    sections.push(
-      '[Forbidden Terms]',
-      contextSnapshot.forbiddenTerms.map((term) =>
-        `- ${term.term}${term.replacement ? ` → ${term.replacement}` : ''}${
-          term.note ? ` (${term.note})` : ''
-        }`,
-      ).join('\n'),
-    );
-    included.push('forbidden-terms');
-  }
-  if (referenceOptions.glossary && contextSnapshot.glossaryEntries.length > 0) {
-    sections.push(
-      '[Glossary]',
-      contextSnapshot.glossaryEntries
-        .map((entry) => `- ${entry.source} = ${entry.target}`)
-        .join('\n'),
-    );
-    included.push('glossary');
-  }
-  if (referenceOptions.projectContext && contextSnapshot.projectMemoryItems.length > 0) {
-    sections.push(
-      '[Project Memory]',
-      contextSnapshot.projectMemoryItems
-        .map((item) => `- [${item.category}] ${item.content}`)
-        .join('\n'),
-    );
-    included.push('project-memory');
-  }
+  const sections: string[] = [];
+  if (rendered.projectMemory) sections.push('[Project Memory]', rendered.projectMemory);
+  if (rendered.translationRules) sections.push('[Translation Rules]', rendered.translationRules);
+  if (rendered.forbiddenTerms) sections.push('[Forbidden Terms]', rendered.forbiddenTerms);
+  if (rendered.glossary) sections.push('[Glossary]', rendered.glossary);
+  const text = sections.join('\n\n');
 
   return {
-    text: sections.join('\n\n'),
+    text,
     manifest: {
-      mode: 'selection-retranslate',
-      revision: contextSnapshot.revision,
-      projectMemoryItemIds: referenceOptions.projectContext
-        ? contextSnapshot.projectMemoryItems.map((item) => item.id)
-        : [],
-      ...(referenceOptions.translationRules && contextSnapshot.translationRules.trim()
-        ? { translationRulesHash: hashContent(contextSnapshot.translationRules.trim()) }
-        : {}),
-      forbiddenTermIds: referenceOptions.forbiddenTerms
-        ? contextSnapshot.forbiddenTerms.map((term) => term.id)
-        : [],
-      glossaryEntryIds: referenceOptions.glossary
-        ? contextSnapshot.glossaryEntries.map((entry) => entry.id)
-        : [],
-      included,
+      ...manifest,
+      // 선택 영역과 정렬된 원문은 이 워크플로우에서 항상 전달된다(스냅샷과 무관).
+      included: ['selection', 'aligned-source', ...manifest.included],
       estimatedInputTokens: approxTokens([
         input.sourceText,
         input.currentTargetText,
         input.instruction ?? '',
-        sections.join('\n\n'),
+        text,
       ].join('\n')),
     },
   };
