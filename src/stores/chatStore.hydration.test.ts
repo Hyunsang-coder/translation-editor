@@ -91,6 +91,36 @@ describe('chatStore project settings hydration', () => {
     mocks.listAttachments.mockResolvedValue([]);
   });
 
+  it('진행 중인 같은 프로젝트 요청에 합류해 중복 로드를 하지 않는다', async () => {
+    // 기동 시 initializeProject와 좌·우 ChatContent가 각각 호출한다.
+    const gate = deferred<ChatProjectSettings | null>();
+    mocks.loadChatProjectSettings.mockReturnValue(gate.promise);
+    const harness = createStateHarness({ loadedProjectId: null });
+
+    const first = harness.actions.hydrateForProject('project-a');
+    const second = harness.actions.hydrateForProject('project-a');
+    const third = harness.actions.hydrateForProject('project-a');
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+
+    gate.resolve(null);
+    await Promise.all([first, second, third]);
+
+    expect(mocks.loadChatProjectSettings).toHaveBeenCalledTimes(1);
+    expect(mocks.loadChatSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('요청이 끝난 뒤의 다른 프로젝트 요청은 새로 로드한다', async () => {
+    mocks.loadChatProjectSettings.mockResolvedValue(null);
+    const harness = createStateHarness({ loadedProjectId: null });
+
+    await harness.actions.hydrateForProject('project-a');
+    mocks.activeProjectId = 'project-b';
+    await harness.actions.hydrateForProject('project-b');
+
+    expect(mocks.loadChatProjectSettings).toHaveBeenCalledTimes(2);
+  });
+
   it('동일 프로젝트의 중복 하이드레이션은 기존 컨텍스트를 지우지 않고 즉시 무시한다', async () => {
     const harness = createStateHarness({
       loadedProjectId: 'project-a',

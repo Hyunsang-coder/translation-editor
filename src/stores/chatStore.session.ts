@@ -40,7 +40,7 @@ export function createSessionActions(
 ) {
   const { schedulePersist, persistNow } = helpers;
 
-  const hydrateForProject = async (projectId: string | null): Promise<void> => {
+  const runHydrateForProject = async (projectId: string | null): Promise<void> => {
     // 프로젝트 전환 시, 저장되지 않은 변경사항이 있으면 즉시 저장 (Flush)
     // 1. 현재와 같은 프로젝트면 진행 중 여부와 무관하게 중복 요청을 무시한다.
     // requestId도 증가시키지 않아 이미 진행 중인 정상 응답을 stale로 폐기하지 않는다.
@@ -260,6 +260,31 @@ export function createSessionActions(
         error: e instanceof Error ? e.message : '채팅 상태 로드 실패',
       });
     }
+  };
+
+  let inFlightHydration: { projectId: string | null; promise: Promise<void> } | null = null;
+
+  /**
+   * 같은 프로젝트에 대한 동시 요청을 하나로 합친다.
+   *
+   * 기동 시 `projectStore.initializeProject`와 좌·우 `ChatContent`가 각각 호출하는데,
+   * 하이드레이션 중에는 `loadedProjectId`가 null이라 위 함수 초입의 중복 가드를 모두
+   * 통과한다. 세대 가드가 나중 요청만 살리므로 결과는 정확했지만, chat settings와
+   * project memory를 세 번 읽고 두 번 버리고 있었다.
+   */
+  const hydrateForProject = (projectId: string | null): Promise<void> => {
+    const inFlight = inFlightHydration;
+    if (inFlight && inFlight.projectId === projectId) return inFlight.promise;
+
+    const entry: { projectId: string | null; promise: Promise<void> } = {
+      projectId,
+      promise: Promise.resolve(),
+    };
+    entry.promise = runHydrateForProject(projectId).finally(() => {
+      if (inFlightHydration === entry) inFlightHydration = null;
+    });
+    inFlightHydration = entry;
+    return entry.promise;
   };
 
   const createSession = (name?: string): string => {
