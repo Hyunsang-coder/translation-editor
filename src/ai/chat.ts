@@ -23,6 +23,7 @@ import { computeInputBudget, estimateMessagesTokens } from '@/ai/chatContext/tok
 import { DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import { resolveChatToolNames } from '@/ai/tools/resolveChatTools';
 import { getChatToolDescriptor } from '@/ai/tools/toolRegistry';
+import { withAnthropicPromptCache } from '@/ai/anthropicPromptCache';
 import { createSelectionTools } from '@/ai/tools/selectionTools';
 import { createProjectGuidanceTools } from '@/ai/tools/projectGuidanceTools';
 import {
@@ -221,6 +222,10 @@ export interface UsageInfo {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** 캐시에서 읽은 입력 토큰 (~0.1× 과금). prompt caching 실효 검증용. */
+  cacheReadInputTokens?: number;
+  /** 캐시에 새로 기록한 입력 토큰 (1.25× 과금). */
+  cacheCreationInputTokens?: number;
 }
 
 export interface StreamCallbacks {
@@ -481,6 +486,11 @@ export async function runToolCallingLoop(params: {
   bindTools?: BindToolsInput[];
   messages: BaseMessage[];
   maxSteps?: number;
+  /**
+   * 실행 provider. 'anthropic'이면 매 스텝 요청에 cache_control breakpoint를 적용해
+   * 반복 프리픽스를 prompt cache로 할인받는다 (OpenAI는 서버 자동 캐싱이라 불필요).
+   */
+  provider?: string;
   cb?: StreamCallbacks;
   abortSignal?: AbortSignal;
 }): Promise<{ finalText: string; usedTools: boolean; toolsUsed: string[]; usage: UsageInfo }> {
@@ -493,12 +503,26 @@ export async function runToolCallingLoop(params: {
   // 토큰 사용량 집계 (각 step의 finalAiMessage.usage_metadata 누적)
   const usage: UsageInfo = {};
   const addUsage = (msg: AIMessageChunk | null): void => {
-    const u = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } } | null)
-      ?.usage_metadata;
+    const u = (msg as {
+      usage_metadata?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        total_tokens?: number;
+        input_token_details?: { cache_read?: number; cache_creation?: number };
+      };
+    } | null)?.usage_metadata;
     if (!u) return;
     if (typeof u.input_tokens === 'number') usage.inputTokens = (usage.inputTokens ?? 0) + u.input_tokens;
     if (typeof u.output_tokens === 'number') usage.outputTokens = (usage.outputTokens ?? 0) + u.output_tokens;
     if (typeof u.total_tokens === 'number') usage.totalTokens = (usage.totalTokens ?? 0) + u.total_tokens;
+    // prompt caching 실효 관측 (Anthropic: cache_control, OpenAI: 자동 프리픽스 캐싱)
+    const details = u.input_token_details;
+    if (typeof details?.cache_read === 'number' && details.cache_read > 0) {
+      usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + details.cache_read;
+    }
+    if (typeof details?.cache_creation === 'number' && details.cache_creation > 0) {
+      usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + details.cache_creation;
+    }
   };
 
   // Phase 4.3: 에러 카운트 추적 (같은 에러 반복 시 조기 중단)
@@ -538,8 +562,13 @@ export async function runToolCallingLoop(params: {
 
     try {
       const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+      // Anthropic: 요청 직전에만 cache_control을 입힌 사본을 전송 (loopMessages는 plain 유지)
+      const wireMessages =
+        params.provider === 'anthropic'
+          ? withAnthropicPromptCache(loopMessages)
+          : loopMessages;
       const stream = await withRetry(
-        () => modelWithTools.stream(loopMessages, streamOptions) as Promise<AsyncIterable<AIMessageChunk>>,
+        () => modelWithTools.stream(wireMessages, streamOptions) as Promise<AsyncIterable<AIMessageChunk>>,
       );
 
       for await (const chunk of stream) {
@@ -1224,6 +1253,7 @@ export async function streamAssistantReply(
       tools: toolSpecs as ToolCallableSpec[],
       bindTools,
       messages: guardedMessages,
+      provider: runConfig.provider,
       ...(cb ? { cb } : {}),
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       maxSteps: input.selection ? 4 : 6,
@@ -1246,6 +1276,7 @@ export async function streamAssistantReply(
         tools: toolSpecs as ToolCallableSpec[],
         bindTools,
         messages: guardedFallback,
+        provider: runConfig.provider,
         ...(cb ? { cb } : {}),
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
         maxSteps: input.selection ? 4 : 6,
@@ -1258,6 +1289,14 @@ export async function streamAssistantReply(
   cb?.onToolsUsed?.(toolsUsed);
   if (usage.inputTokens !== undefined || usage.outputTokens !== undefined || usage.totalTokens !== undefined) {
     cb?.onUsage?.(usage);
+  }
+  // prompt caching 실효 관측: cache_read가 0이면 silent invalidator를 의심할 것
+  if (usage.cacheReadInputTokens !== undefined || usage.cacheCreationInputTokens !== undefined) {
+    console.warn('[AI cache]', {
+      read: usage.cacheReadInputTokens ?? 0,
+      write: usage.cacheCreationInputTokens ?? 0,
+      input: usage.inputTokens ?? 0,
+    });
   }
 
   // 실시간 스트리밍: onToken 콜백은 runToolCallingLoop 내에서 이미 호출됨

@@ -69,6 +69,36 @@ describe('backendCompletion', () => {
     expect(args.temperature).toBe(0.7);
   });
 
+  it('cacheSystem=true면 invoke 인자에 cacheSystem이 실린다 (complete/stream)', async () => {
+    const cfg: AiConfig = {
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      anthropicApiKey: 'sk-ant-test',
+      maxRecentMessages: 20,
+    };
+
+    await completeWithTauriAiBackend({ cfg, messages, maxTokens: 4096, cacheSystem: true });
+    const completeArgs = mocks.aiComplete.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(completeArgs.cacheSystem).toBe(true);
+
+    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096, cacheSystem: true });
+    const streamArgs = mocks.aiStream.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(streamArgs.cacheSystem).toBe(true);
+  });
+
+  it('cacheSystem 미지정이면 invoke 인자에 포함되지 않는다', async () => {
+    const cfg: AiConfig = {
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      anthropicApiKey: 'sk-ant-test',
+      maxRecentMessages: 20,
+    };
+
+    await completeWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
+    const args = mocks.aiComplete.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect('cacheSystem' in args).toBe(false);
+  });
+
   it('GPT-5 백엔드 스트리밍 호출에는 temperature를 전달하지 않음', async () => {
     const cfg: AiConfig = {
       provider: 'openai',

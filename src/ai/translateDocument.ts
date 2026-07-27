@@ -390,6 +390,11 @@ export async function translateSourceDocToTargetDocJson(params: {
   glossary?: string | undefined;
   /** 취소 신호 */
   abortSignal?: AbortSignal | undefined;
+  /**
+   * Anthropic prompt caching: 청크 분할 번역처럼 같은 system(규칙/용어집/컨텍스트)을
+   * 여러 호출이 재사용할 때 true. 단발 호출은 캐시 쓰기 할증만 내므로 켜지 않는다.
+   */
+  cacheSystem?: boolean | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
   const { cfg, model, messages, maxTokens } = buildTranslationSetup(params);
 
@@ -405,6 +410,7 @@ export async function translateSourceDocToTargetDocJson(params: {
       messages,
       maxTokens,
       abortSignal: params.abortSignal,
+      cacheSystem: params.cacheSystem,
     });
     if (!raw || raw.trim().length === 0) {
       throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
@@ -665,6 +671,7 @@ export async function translateSourceDocWithChunking(
     abortSignal,
     translateSingleChunk: async (chunkParams) => {
       // 기존 단일 번역 함수 호출 (abortSignal 전달)
+      // 모든 청크가 동일한 system(규칙/용어집/컨텍스트)을 재사용하므로 캐싱 대상
       const translated = await translateSourceDocToTargetDocJson({
         project: chunkParams.project,
         sourceDocJson: chunkParams.sourceDocJson as TipTapDocJson,
@@ -673,6 +680,7 @@ export async function translateSourceDocWithChunking(
         glossary: chunkParams.glossary,
         resolvedContext,
         abortSignal,
+        cacheSystem: true,
       });
       return { doc: translated.doc as ChunkingTipTapDocJson, raw: translated.raw };
     },

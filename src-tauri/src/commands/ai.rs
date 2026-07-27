@@ -67,6 +67,9 @@ pub struct AiCompleteArgs {
     pub adaptive_thinking: Option<bool>,
     /// Anthropic output_config.effort / OpenAI reasoning_effort
     pub effort: Option<String>,
+    /// Anthropic prompt caching: system 블록에 cache_control breakpoint 적용.
+    /// 같은 system을 여러 번 재사용하는 호출(검수 청크, 번역 청킹)에서만 켠다.
+    pub cache_system: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -216,6 +219,22 @@ fn split_anthropic_messages(messages: &[AiMessage]) -> (Option<String>, Vec<Valu
     (system, request_messages)
 }
 
+/// Anthropic body의 system 값 구성.
+/// cache_system이면 content 블록 배열 + cache_control breakpoint로 전달해
+/// 같은 system을 재사용하는 후속 호출(검수 청크, 번역 청킹)이 캐시 읽기(~0.1×)로 과금되게 한다.
+/// 최소 캐시 길이(모델별 1024~4096 토큰) 미달 시 API가 조용히 무시하므로 항상 안전하다.
+fn anthropic_system_value(system: String, cache_system: bool) -> Value {
+    if cache_system {
+        json!([{
+            "type": "text",
+            "text": system,
+            "cache_control": { "type": "ephemeral" },
+        }])
+    } else {
+        Value::String(system)
+    }
+}
+
 async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> CommandResult<String> {
     let (system, messages) = split_anthropic_messages(&args.messages);
     let mut body = json!({
@@ -225,7 +244,7 @@ async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> 
     });
 
     if let Some(system) = system {
-        body["system"] = Value::String(system);
+        body["system"] = anthropic_system_value(system, args.cache_system == Some(true));
     }
     if let Some(temperature) = args.temperature {
         body["temperature"] = json!(temperature);
@@ -406,6 +425,8 @@ pub struct AiStreamArgs {
     pub adaptive_thinking: Option<bool>,
     /// Anthropic output_config.effort / OpenAI reasoning_effort
     pub effort: Option<String>,
+    /// Anthropic prompt caching: system 블록에 cache_control breakpoint 적용.
+    pub cache_system: Option<bool>,
 }
 
 #[derive(Clone, Serialize)]
@@ -467,7 +488,7 @@ async fn stream_anthropic(
         "stream": true,
     });
     if let Some(system) = system {
-        body["system"] = Value::String(system);
+        body["system"] = anthropic_system_value(system, args.cache_system == Some(true));
     }
     if let Some(temperature) = args.temperature {
         body["temperature"] = json!(temperature);
@@ -691,4 +712,38 @@ pub async fn ai_stream(
 #[tauri::command]
 pub fn ai_stream_cancel(stream_id: String, registry: State<'_, AiStreamRegistry>) {
     registry.cancel(&stream_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anthropic_system_plain_string_without_cache() {
+        let value = anthropic_system_value("규칙".to_string(), false);
+        assert_eq!(value, Value::String("규칙".to_string()));
+    }
+
+    #[test]
+    fn anthropic_system_cache_control_block_with_cache() {
+        let value = anthropic_system_value("규칙".to_string(), true);
+        let blocks = value.as_array().expect("system은 블록 배열이어야 한다");
+        assert_eq!(blocks.len(), 1);
+        let block = &blocks[0];
+        assert_eq!(block["type"], "text");
+        assert_eq!(block["text"], "규칙");
+        assert_eq!(block["cache_control"]["type"], "ephemeral");
+    }
+
+    #[test]
+    fn split_anthropic_messages_extracts_system() {
+        let messages = vec![
+            AiMessage { role: "system".to_string(), content: "시스템".to_string() },
+            AiMessage { role: "user".to_string(), content: "질문".to_string() },
+        ];
+        let (system, rest) = split_anthropic_messages(&messages);
+        assert_eq!(system, Some("시스템".to_string()));
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0]["role"], "user");
+    }
 }

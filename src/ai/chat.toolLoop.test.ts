@@ -142,3 +142,54 @@ describe('runToolCallingLoop 스텝 소진 처리', () => {
     expect(hasNudge).toBe(false);
   });
 });
+
+describe('runToolCallingLoop Anthropic prompt caching', () => {
+  function cacheMarkerCount(msgs: BaseMessage[]): number {
+    let count = 0;
+    for (const m of msgs) {
+      if (!Array.isArray(m.content)) continue;
+      for (const block of m.content as Array<Record<string, unknown>>) {
+        if (block && typeof block === 'object' && 'cache_control' in block) count++;
+      }
+    }
+    return count;
+  }
+
+  it('provider=anthropic이면 매 스텝 요청에 cache_control breakpoint를 적용한다', async () => {
+    const { model, seenMessages } = makeModel([
+      [toolCallChunk('fake_tool', 'c1')],
+      [textChunk('최종 답변')],
+    ]);
+    const original = baseMessages();
+    await runToolCallingLoop({
+      model,
+      tools: [fakeTool()],
+      messages: original,
+      maxSteps: 3,
+      provider: 'anthropic',
+    });
+
+    // 두 스텝 모두: 시스템 + 마지막 HumanMessage에 정확히 2개
+    for (const wire of seenMessages) {
+      expect(cacheMarkerCount(wire)).toBe(2);
+      const system = wire[0]!.content as Array<{ cache_control?: unknown }>;
+      expect(system[system.length - 1]!.cache_control).toEqual({ type: 'ephemeral' });
+    }
+    // 원본 메시지는 plain 유지 (누적 방지)
+    expect(original[0]!.content).toBe('sys');
+    expect(original[1]!.content).toBe('질문');
+  });
+
+  it('provider 미지정/openai면 메시지를 변형하지 않는다', async () => {
+    const { model, seenMessages } = makeModel([[textChunk('답변')]]);
+    await runToolCallingLoop({
+      model,
+      tools: [fakeTool()],
+      messages: baseMessages(),
+      maxSteps: 2,
+      provider: 'openai',
+    });
+    expect(cacheMarkerCount(seenMessages[0]!)).toBe(0);
+    expect(seenMessages[0]![0]!.content).toBe('sys');
+  });
+});

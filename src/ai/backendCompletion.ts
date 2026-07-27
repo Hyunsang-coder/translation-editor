@@ -114,6 +114,8 @@ export async function completeWithTauriAiBackend(params: {
   useFor?: ModelUseFor | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
+  /** Anthropic: 같은 system을 재사용하는 반복 호출이면 true (prompt caching) */
+  cacheSystem?: boolean | undefined;
 }): Promise<string> {
   const cancelMessage = params.cancelMessage ?? '번역이 취소되었습니다.';
   const useFor = params.useFor ?? 'translation';
@@ -127,6 +129,7 @@ export async function completeWithTauriAiBackend(params: {
       useFor,
       cancelMessage,
       abortSignal: params.abortSignal,
+      cacheSystem: params.cacheSystem,
     });
   }
 
@@ -148,6 +151,7 @@ export async function completeWithTauriAiBackend(params: {
     maxTokens: params.maxTokens,
     messages: params.messages,
     ...getModelCallArgs(params.cfg, useFor),
+    ...(params.cacheSystem ? { cacheSystem: true } : {}),
   });
 
   return response.text;
@@ -172,6 +176,8 @@ export async function streamWithTauriAiBackend(params: {
   onAccumulated?: ((rawSoFar: string) => void) | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
+  /** Anthropic: 같은 system을 재사용하는 반복 호출이면 true (prompt caching) */
+  cacheSystem?: boolean | undefined;
 }): Promise<string> {
   const cancelMessage = params.cancelMessage ?? '번역이 취소되었습니다.';
   const useFor = params.useFor ?? 'translation';
@@ -202,6 +208,7 @@ export async function streamWithTauriAiBackend(params: {
       maxTokens: params.maxTokens,
       messages: params.messages,
       ...getModelCallArgs(params.cfg, useFor),
+      ...(params.cacheSystem ? { cacheSystem: true } : {}),
     },
     (event) => {
       if (stopped) return;

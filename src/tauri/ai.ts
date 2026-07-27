@@ -18,6 +18,11 @@ export interface AiCompleteArgs {
   adaptiveThinking?: boolean | undefined;
   /** Anthropic output_config.effort / OpenAI reasoning_effort */
   effort?: string | undefined;
+  /**
+   * Anthropic prompt caching: system 블록에 cache_control breakpoint 적용.
+   * 같은 system을 재사용하는 호출(검수 청크, 번역 청킹)에서만 켠다.
+   */
+  cacheSystem?: boolean | undefined;
 }
 
 export interface AiCompleteResponse {

@@ -124,6 +124,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   }
 
   // 검수는 도구 호출 없는 단순 스트리밍이므로 Tauri에서는 WebView fetch를 거치지 않는다.
+  // 시스템 프롬프트(검수 지침)는 모든 청크가 동일하므로 Anthropic prompt caching 대상.
   if (isTauriRuntime() && cfg.provider !== 'mock') {
     return await streamWithTauriAiBackend({
       cfg,
@@ -133,6 +134,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
+      cacheSystem: true,
     });
   }
 
@@ -173,6 +175,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
+      cacheSystem: true,
     });
   }
 
