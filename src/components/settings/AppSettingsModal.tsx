@@ -6,6 +6,7 @@ import { getErrorMessage, useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
+import { UsageSection } from './UsageSection';
 import { Modal } from '@/components/ui/Modal';
 import { invoke } from '@/tauri/invoke';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -446,6 +447,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
             {/* Connectors */}
             <ConnectorsSection />
+
+            {/* AI 사용량 · 추정 비용 */}
+            <UsageSection />
 
             {/* Security Recovery */}
             {isTauriRuntime() && (

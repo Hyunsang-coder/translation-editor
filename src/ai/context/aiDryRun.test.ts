@@ -12,8 +12,6 @@ describe('AI context dry-run report', () => {
       webEnabled: true,
       confluenceEnabled: true,
       notionEnabled: true,
-      explicitDocumentReference: true,
-      explicitExternalReference: true,
     });
     const report = buildAiDryRunReport({
       mode: 'selection-retranslate',

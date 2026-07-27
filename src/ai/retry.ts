@@ -37,7 +37,7 @@ function isRateLimitError(error: unknown): boolean {
   return false;
 }
 
-function isRetryableError(error: unknown): boolean {
+export function isRetryableError(error: unknown): boolean {
   if (isRateLimitError(error)) return true;
   if (error instanceof Error) {
     const message = error.message.toLowerCase();

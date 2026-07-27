@@ -232,13 +232,19 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     ];
   }, [enabledChatPresets, allChatModels, sessionModelPreset, t]);
 
-  // 모델을 바꿨지만 아직 그 모델로 응답하지 않은 idle 상태 → "다음 응답부터 적용" 안내
+  // 모델을 바꿨지만 아직 그 모델로 응답하지 않은 idle 상태 → "다음 응답부터 적용" 안내.
+  // 대화 시작 후에는 모델을 바꿀 수 없으므로, 이 안내는 마이그레이션으로 프리셋이 고정된
+  // 레거시 세션(과거 메시지가 다른 모델로 생성됨)에서만 나타난다.
   const pendingModelChange = useMemo(() => {
     const msgs = displaySession?.messages ?? [];
     const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
     const lastPreset = lastAssistant?.metadata?.requestedModelPreset;
     return !!lastPreset && lastPreset !== sessionModelPreset;
   }, [displaySession, sessionModelPreset]);
+
+  // 대화가 시작되면 모델을 고정한다. 모델을 바꾸면 그 세션이 쌓은 prompt cache가
+  // 통째로 무효화되므로(캐시 키에 모델이 포함됨), 첫 메시지 전까지만 변경을 허용한다.
+  const sessionModelLocked = (displaySession?.messages.length ?? 0) > 0;
 
   const project = useProjectStore((s) => s.project);
 
@@ -1104,9 +1110,9 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 value={sessionModelPreset}
                 onChange={(v) => setSessionModelPreset(effectiveSessionId, v)}
                 options={chatModelSelectOptions}
-                disabled={globalIsLoading}
+                disabled={globalIsLoading || sessionModelLocked}
                 aria-label={t('chat.chatModelAriaLabel')}
-                title={t('chat.chatModelTitle')}
+                title={sessionModelLocked ? t('chat.chatModelLockedTitle') : t('chat.chatModelTitle')}
                 size="sm"
                 className="min-w-0 max-w-[8.5rem] shrink"
                 anchor="top"

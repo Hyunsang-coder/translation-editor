@@ -173,6 +173,10 @@ export function createSessionActions(
 
       // Migration: confluenceSearchEnabled 기본값 true, modelPreset 없으면 전역 기본값 상속
       const defaultPreset = getDefaultModelPreset();
+      // modelPreset이 없던 레거시 세션은 이번 hydrate에서 현재 전역값으로 고정된다.
+      // 저장하지 않으면 다음 실행에서 그때의 전역값으로 다시 정해져 세션 모델이 흔들리고,
+      // 모델이 바뀌면 그 세션의 prompt cache 프리픽스도 함께 버려진다.
+      const hasUnpinnedSession = (sessionsRes ?? []).some((session) => !session.modelPreset);
       const migratedSessions = (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS).map((session) => ({
         ...session,
         messages: session.messages.map((message) => {
@@ -227,6 +231,11 @@ export function createSessionActions(
       }
 
       set(nextState);
+
+      // 마이그레이션으로 고정한 모델 프리셋을 영속화한다(위 주석 참고).
+      if (hasUnpinnedSession) {
+        schedulePersist();
+      }
 
       // 구조화 Project Memory/금칙어는 chat settings와 별도 테이블에 있지만
       // 같은 프로젝트 전환 경계에서 hydrate한다. store 자체의 request sequence가
@@ -386,12 +395,22 @@ export function createSessionActions(
 
   /**
    * 세션별 모델 프리셋을 변경한다(세션 범위, 전역 chatModel과 분리).
-   * - idle 세션에서 호출 시 다음 응답부터 적용된다(진행 중 요청은 캡처된 runConfig를 유지).
    * - 전역 aiConfigStore.chatModel은 건드리지 않는다(새 세션 기본값 보존).
+   *
+   * 대화가 시작된 세션(메시지 ≥ 1)은 모델을 바꿀 수 없다. Anthropic prompt cache는
+   * (모델, API 키, 프리픽스) 조합으로 키가 잡혀서 모델을 바꾸면 그 세션이 쌓아온
+   * 캐시가 통째로 버려지고, 이후 매 턴 cache write를 다시 낸다. 아직 아무것도 보내지
+   * 않은 세션은 캐시가 없으므로 자유롭게 바꿀 수 있다.
    */
   const setSessionModelPreset = (sessionId: string, preset: string): void => {
     const target = get().sessions.find((s) => s.id === sessionId);
     if (!target || target.modelPreset === preset) return;
+    if (target.messages.length > 0) {
+      console.warn(
+        `[chat] 대화가 시작된 세션의 모델은 변경할 수 없습니다 (sessionId=${sessionId}).`,
+      );
+      return;
+    }
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === sessionId ? { ...s, modelPreset: preset } : s

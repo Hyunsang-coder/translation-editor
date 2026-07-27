@@ -17,6 +17,7 @@ import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
 import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { mergeUsageFromChunk, recordAiUsage, type AiUsageTokens } from '@/ai/usageLedger';
 import type { ResolvedWorkflowContext } from '@/types';
 
 export interface RunReviewParams {
@@ -142,12 +143,15 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
+      usageFeature: 'review',
       cacheSystem: true,
     });
   }
 
   // 도구 없이 직접 스트리밍 (1회 호출)
   let result = '';
+  // 취소된 스트림도 생성분만큼 과금되므로 finally에서 기록한다.
+  const streamUsage: AiUsageTokens = {};
   try {
     // useFor: 'review'로 설정하여 Responses API 비활성화(성능 향상) + reasoning/thinking effort를 high로 상향
     const model = createChatModel(undefined, { useFor: 'review', maxTokens: REVIEW_MAX_TOKENS });
@@ -160,6 +164,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
     });
 
     for await (const chunk of stream) {
+      mergeUsageFromChunk(streamUsage, chunk as AIMessageChunk);
       // AbortSignal 체크
       if (params.abortSignal?.aborted) {
         throw new DOMException('Request aborted', 'AbortError');
@@ -183,7 +188,16 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
+      usageFeature: 'review',
       cacheSystem: true,
+    });
+  } finally {
+    // 취소된 검수도 생성분만큼 과금되므로 finally에서 기록한다.
+    recordAiUsage({
+      feature: 'review',
+      provider: cfg.provider,
+      model: cfg.model,
+      ...streamUsage,
     });
   }
 

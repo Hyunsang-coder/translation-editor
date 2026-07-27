@@ -83,6 +83,88 @@ pub struct AiMessage {
 #[serde(rename_all = "camelCase")]
 pub struct AiCompleteResponse {
     pub text: String,
+    /// provider가 보고한 토큰 사용량. 보고하지 않으면 None.
+    pub usage: Option<AiUsage>,
+}
+
+/// provider별 usage를 하나의 스키마로 정규화한 값.
+///
+/// `input_tokens`는 **캐시 read/write를 제외한 순수 입력**이다. provider마다 원본 의미가 달라
+/// 정규화가 필요하다.
+/// - Anthropic: `input_tokens`가 이미 캐시분을 제외한 값이고 캐시 필드가 따로 온다 → 그대로.
+/// - OpenAI: `prompt_tokens`가 캐시분을 **포함한 총합**이고 `cached_tokens`가 그 부분집합이다
+///   → `input_tokens = prompt_tokens - cached_tokens`로 빼야 이중 계상되지 않는다.
+///   OpenAI는 캐시 write 과금이 없으므로 `cache_creation_input_tokens`는 항상 0이다.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsage {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_input_tokens: i64,
+    pub cache_creation_input_tokens: i64,
+}
+
+impl AiUsage {
+    fn is_empty(&self) -> bool {
+        self.input_tokens == 0
+            && self.output_tokens == 0
+            && self.cache_read_input_tokens == 0
+            && self.cache_creation_input_tokens == 0
+    }
+
+    /// Anthropic 스트리밍은 message_start와 message_delta가 모두 "누적 스냅샷"을 보고한다.
+    /// 합산하면 캐시 필드가 2배로 계상되므로 필드별 최댓값을 취한다(TS 도구 루프와 동일 규칙).
+    fn merge_max(&mut self, other: &AiUsage) {
+        self.input_tokens = self.input_tokens.max(other.input_tokens);
+        self.output_tokens = self.output_tokens.max(other.output_tokens);
+        self.cache_read_input_tokens = self
+            .cache_read_input_tokens
+            .max(other.cache_read_input_tokens);
+        self.cache_creation_input_tokens = self
+            .cache_creation_input_tokens
+            .max(other.cache_creation_input_tokens);
+    }
+}
+
+fn json_i64(value: &Value, pointer: &str) -> i64 {
+    value.pointer(pointer).and_then(Value::as_i64).unwrap_or(0)
+}
+
+/// Anthropic 응답/스트림 이벤트의 usage 블록을 파싱한다.
+fn parse_anthropic_usage(value: &Value) -> Option<AiUsage> {
+    // 최상위(complete) 또는 message.usage(스트림 message_start) 둘 다 지원.
+    let usage = value.get("usage").or_else(|| value.pointer("/message/usage"))?;
+    let parsed = AiUsage {
+        input_tokens: json_i64(usage, "/input_tokens"),
+        output_tokens: json_i64(usage, "/output_tokens"),
+        cache_read_input_tokens: json_i64(usage, "/cache_read_input_tokens"),
+        cache_creation_input_tokens: json_i64(usage, "/cache_creation_input_tokens"),
+    };
+    if parsed.is_empty() {
+        None
+    } else {
+        Some(parsed)
+    }
+}
+
+/// OpenAI 응답/스트림의 usage 블록을 파싱한다(캐시분을 input에서 분리).
+fn parse_openai_usage(value: &Value) -> Option<AiUsage> {
+    let usage = value.get("usage").filter(|u| !u.is_null())?;
+    let prompt_tokens = json_i64(usage, "/prompt_tokens");
+    let cached = json_i64(usage, "/prompt_tokens_details/cached_tokens");
+    let parsed = AiUsage {
+        // 캐시분을 빼서 Anthropic과 같은 의미(순수 입력)로 맞춘다.
+        input_tokens: (prompt_tokens - cached).max(0),
+        output_tokens: json_i64(usage, "/completion_tokens"),
+        cache_read_input_tokens: cached,
+        // OpenAI는 자동 프리픽스 캐싱이라 write 과금이 없다.
+        cache_creation_input_tokens: 0,
+    };
+    if parsed.is_empty() {
+        None
+    } else {
+        Some(parsed)
+    }
 }
 
 fn command_error(code: &str, message: impl Into<String>, details: Option<String>) -> CommandError {
@@ -235,7 +317,10 @@ fn anthropic_system_value(system: String, cache_system: bool) -> Value {
     }
 }
 
-async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> CommandResult<String> {
+async fn complete_anthropic(
+    client: &reqwest::Client,
+    args: &AiCompleteArgs,
+) -> CommandResult<(String, Option<AiUsage>)> {
     let (system, messages) = split_anthropic_messages(&args.messages);
     let mut body = json!({
         "model": args.model,
@@ -298,10 +383,13 @@ async fn complete_anthropic(client: &reqwest::Client, args: &AiCompleteArgs) -> 
         ));
     }
 
-    Ok(content)
+    Ok((content, parse_anthropic_usage(&value)))
 }
 
-async fn complete_openai(client: &reqwest::Client, args: &AiCompleteArgs) -> CommandResult<String> {
+async fn complete_openai(
+    client: &reqwest::Client,
+    args: &AiCompleteArgs,
+) -> CommandResult<(String, Option<AiUsage>)> {
     let messages = args
         .messages
         .iter()
@@ -365,7 +453,7 @@ async fn complete_openai(client: &reqwest::Client, args: &AiCompleteArgs) -> Com
         ));
     }
 
-    Ok(content)
+    Ok((content, parse_openai_usage(&value)))
 }
 
 #[tauri::command]
@@ -388,7 +476,7 @@ pub async fn ai_complete(
         ));
     }
 
-    let text = match args.provider.as_str() {
+    let (text, usage) = match args.provider.as_str() {
         "anthropic" => complete_anthropic(&client.oneshot, &args).await?,
         "openai" => complete_openai(&client.oneshot, &args).await?,
         other => {
@@ -400,7 +488,7 @@ pub async fn ai_complete(
         }
     };
 
-    Ok(AiCompleteResponse { text })
+    Ok(AiCompleteResponse { text, usage })
 }
 
 // ============================================================
@@ -433,6 +521,8 @@ pub struct AiStreamArgs {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AiStreamEvent {
     Delta { text: String },
+    /// 스트림 종료 직전 1회 발행되는 최종 토큰 사용량.
+    Usage { usage: AiUsage },
 }
 
 /// stream_id별 취소 핸들 레지스트리. (락은 짧게만 잡고 await 구간을 넘기지 않는다)
@@ -520,14 +610,26 @@ async fn stream_anthropic(
 
     let mut acc = String::new();
     let mut buffer = String::new();
+    // 취소된 스트림도 생성분만큼 과금되므로, 중단 경로에서도 지금까지의 usage를 발행한다.
+    let mut usage_acc = AiUsage::default();
+    macro_rules! finish {
+        () => {{
+            if !usage_acc.is_empty() {
+                let _ = on_event.send(AiStreamEvent::Usage {
+                    usage: usage_acc.clone(),
+                });
+            }
+            return Ok(acc);
+        }};
+    }
     loop {
         if cancel.is_cancelled() {
-            return Ok(acc);
+            finish!();
         }
         // chunk 대기 중에도 취소가 즉시 반영되도록 select!로 감싼다.
         // read_timeout(idle 기준) 덕분에 서버 무응답 시에도 유한 시간 내에 반환된다.
         let chunk = tokio::select! {
-            _ = cancel.cancelled() => return Ok(acc),
+            _ = cancel.cancelled() => finish!(),
             chunk = response.chunk() => chunk
                 .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?,
         };
@@ -546,6 +648,10 @@ async fn stream_anthropic(
                 Ok(value) => value,
                 Err(_) => continue,
             };
+            // message_start/message_delta 모두 누적 스냅샷이라 필드별 max로 병합한다.
+            if let Some(usage) = parse_anthropic_usage(&value) {
+                usage_acc.merge_max(&usage);
+            }
             match value.get("type").and_then(Value::as_str) {
                 Some("content_block_delta") => {
                     if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str) {
@@ -570,7 +676,7 @@ async fn stream_anthropic(
         }
     }
 
-    Ok(acc)
+    finish!();
 }
 
 async fn stream_openai(
@@ -594,6 +700,8 @@ async fn stream_openai(
         "model": args.model,
         "messages": messages,
         "stream": true,
+        // 이 옵션이 없으면 OpenAI 스트리밍은 usage를 아예 보내지 않는다.
+        "stream_options": { "include_usage": true },
     });
 
     if args.model.starts_with("gpt-5") {
@@ -627,12 +735,24 @@ async fn stream_openai(
 
     let mut acc = String::new();
     let mut buffer = String::new();
+    // 취소된 스트림도 생성분만큼 과금되므로, 중단 경로에서도 지금까지의 usage를 발행한다.
+    let mut usage_acc = AiUsage::default();
+    macro_rules! finish {
+        () => {{
+            if !usage_acc.is_empty() {
+                let _ = on_event.send(AiStreamEvent::Usage {
+                    usage: usage_acc.clone(),
+                });
+            }
+            return Ok(acc);
+        }};
+    }
     loop {
         if cancel.is_cancelled() {
-            return Ok(acc);
+            finish!();
         }
         let chunk = tokio::select! {
-            _ = cancel.cancelled() => return Ok(acc),
+            _ = cancel.cancelled() => finish!(),
             chunk = response.chunk() => chunk
                 .map_err(|e| command_error("AI_NETWORK_ERROR", e.to_string(), None))?,
         };
@@ -648,12 +768,16 @@ async fn stream_openai(
                 continue;
             }
             if data == "[DONE]" {
-                return Ok(acc);
+                finish!();
             }
             let value: Value = match serde_json::from_str(data) {
                 Ok(value) => value,
                 Err(_) => continue,
             };
+            // usage 청크는 choices가 비어 있으므로 델타 처리보다 먼저 본다.
+            if let Some(usage) = parse_openai_usage(&value) {
+                usage_acc.merge_max(&usage);
+            }
             if let Some(text) = value
                 .pointer("/choices/0/delta/content")
                 .and_then(Value::as_str)
@@ -668,7 +792,7 @@ async fn stream_openai(
         }
     }
 
-    Ok(acc)
+    finish!();
 }
 
 #[tauri::command]
@@ -706,7 +830,9 @@ pub async fn ai_stream(
     registry.remove(&args.stream_id);
 
     let text = result?;
-    Ok(AiCompleteResponse { text })
+    // 스트리밍 usage는 종료 직전 AiStreamEvent::Usage로 이미 발행됐다.
+    // 반환값에 다시 실으면 프런트가 같은 호출을 두 번 계상할 수 있어 None으로 둔다.
+    Ok(AiCompleteResponse { text, usage: None })
 }
 
 #[tauri::command]
@@ -745,5 +871,82 @@ mod tests {
         assert_eq!(system, Some("시스템".to_string()));
         assert_eq!(rest.len(), 1);
         assert_eq!(rest[0]["role"], "user");
+    }
+
+    #[test]
+    fn anthropic_usage_keeps_cache_fields_separate() {
+        let value = json!({
+            "usage": {
+                "input_tokens": 120,
+                "output_tokens": 40,
+                "cache_read_input_tokens": 5000,
+                "cache_creation_input_tokens": 300
+            }
+        });
+        let usage = parse_anthropic_usage(&value).expect("usage should parse");
+        // Anthropic의 input_tokens는 이미 캐시분을 뺀 값이라 그대로 쓴다.
+        assert_eq!(usage.input_tokens, 120);
+        assert_eq!(usage.output_tokens, 40);
+        assert_eq!(usage.cache_read_input_tokens, 5000);
+        assert_eq!(usage.cache_creation_input_tokens, 300);
+    }
+
+    #[test]
+    fn anthropic_usage_reads_stream_message_start_shape() {
+        let value = json!({
+            "type": "message_start",
+            "message": { "usage": { "input_tokens": 10, "output_tokens": 1 } }
+        });
+        let usage = parse_anthropic_usage(&value).expect("message.usage should parse");
+        assert_eq!(usage.input_tokens, 10);
+    }
+
+    #[test]
+    fn openai_usage_subtracts_cached_tokens_from_input() {
+        let value = json!({
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 50,
+                "prompt_tokens_details": { "cached_tokens": 800 }
+            }
+        });
+        let usage = parse_openai_usage(&value).expect("usage should parse");
+        // prompt_tokens는 캐시분을 포함한 총합이므로 빼지 않으면 이중 계상된다.
+        assert_eq!(usage.input_tokens, 200);
+        assert_eq!(usage.cache_read_input_tokens, 800);
+        assert_eq!(usage.output_tokens, 50);
+        // OpenAI는 캐시 write 과금이 없다.
+        assert_eq!(usage.cache_creation_input_tokens, 0);
+    }
+
+    #[test]
+    fn usage_parsers_return_none_when_absent_or_empty() {
+        assert!(parse_openai_usage(&json!({ "choices": [] })).is_none());
+        assert!(parse_openai_usage(&json!({ "usage": null })).is_none());
+        assert!(parse_anthropic_usage(&json!({ "type": "ping" })).is_none());
+        // 전부 0이면 기록할 가치가 없으므로 None.
+        assert!(parse_anthropic_usage(&json!({ "usage": { "input_tokens": 0 } })).is_none());
+    }
+
+    #[test]
+    fn merge_max_does_not_double_count_cumulative_snapshots() {
+        // Anthropic 스트림: message_start와 message_delta가 같은 캐시 값을 각각 보고한다.
+        let mut acc = AiUsage::default();
+        acc.merge_max(&AiUsage {
+            input_tokens: 4325,
+            output_tokens: 1,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 4323,
+        });
+        acc.merge_max(&AiUsage {
+            input_tokens: 0,
+            output_tokens: 50,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 4323,
+        });
+        assert_eq!(acc.input_tokens, 4325);
+        assert_eq!(acc.output_tokens, 50);
+        // 합산했다면 8646이 됐을 값.
+        assert_eq!(acc.cache_creation_input_tokens, 4323);
     }
 }

@@ -15,8 +15,9 @@
  *    tool_result 블록을 자체 생성하며 메시지 레벨 cache_control을 통과시키지 않으므로,
  *    스텝별로 자라는 도구 결과 꼬리는 호출 옵션으로만 캐시할 수 있다.
  *
- * 최소 캐시 길이(Opus 4.8/Sonnet 5: 1024, Haiku 4.5: 4096 토큰) 미달 프리픽스는
- * API가 조용히 무시하므로 짧은 대화에서도 무해하다.
+ * 최소 캐시 길이(Opus 5: 512, Sonnet 5: 1024, Opus 4.7: 2048, Haiku 4.5: 4096 토큰)
+ * 미달 프리픽스는 API가 조용히 무시하므로 짧은 대화에서도 무해하다.
+ * 세대순으로 단조 감소하지 않으니 모델을 바꿀 때 값을 다시 확인할 것.
  */
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';

@@ -218,6 +218,29 @@
       "manualSetup": "Manual Setup",
       "manualHint": "Add this to ~/Library/Application Support/Claude/claude_desktop_config.json:",
       "copied": "Copied!"
+    },
+    "usage": "AI Usage & Estimated Cost",
+    "usageEstimateNotice": "Token counts are exactly what the provider reported. Costs are estimates from the built-in price table — your provider console is the source of truth for billing.",
+    "usageLastNDays": "Last {{count}} days",
+    "usageRefresh": "Refresh",
+    "usageLoading": "Loading…",
+    "usageEmpty": "No usage recorded in this period.",
+    "usageTotalTokens": "Total tokens",
+    "usageEstimatedCost": "Estimated cost",
+    "usageCacheSavings": "Cache savings",
+    "usageUnpricedNotice": "* Includes a model with no registered price, so the total is understated.",
+    "usageUnknownPrice": "No price",
+    "usageCallCount": "{{count}} calls",
+    "usageColumnHint": "Tokens are shown as input / output.",
+    "usageClear": "Delete all usage records",
+    "usageClearConfirm": "Delete all recorded AI usage? This cannot be undone.",
+    "usageFeature": {
+      "chat": "Chat",
+      "translate": "Translate",
+      "review": "Review",
+      "polish": "Polish",
+      "selection-retranslate": "Selection retranslate",
+      "summary": "Conversation summary"
     }
   },
   "toolbar": {
@@ -489,7 +512,6 @@
     "category.distortion.desc": "Intensity/scope/conditions changed",
     "category.consistency": "Term Consist.",
     "category.consistency.desc": "Same term translated differently",
-    "highlight": "Highlight",
     "apply": "Apply",
     "copy": "Copy",
     "ignore": "Done",
@@ -627,7 +649,6 @@
       "suggestTranslationRule": "Rule Suggestion",
       "suggestForbiddenTerm": "Forbidden Term Suggestion",
       "suggestGlossaryEntry": "Glossary Entry Suggestion",
-      "confluenceWordCount": "Confluence Word Count",
       "confluenceLoadPage": "Import Confluence Page",
       "notionSearch": "Notion Search"
     },
@@ -648,6 +669,7 @@
     "chatModel": "Chat Model",
     "chatModelAriaLabel": "Chat model",
     "chatModelTitle": "Chat Model (this session)",
+    "chatModelLockedTitle": "This session is locked to its model because the conversation has started. Start a new chat to use a different model.",
     "currentModelGroup": "Current",
     "modelAppliesNext": "Applies to next reply",
     "modelAppliesNextTitle": "Model changed. The new model will be used from the next reply.",
