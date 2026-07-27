@@ -134,7 +134,7 @@ const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
   anthropic: [
     { value: 'claude-sonnet-5' },
     { value: 'claude-haiku-4-5' },
-    { value: 'claude-opus-4-8' },
+    { value: 'claude-opus-5' },
   ],
 };
 
@@ -199,6 +199,12 @@ export function migrateAiConfig(
       if (v === 'gpt-5.4-mini') return 'gpt-5.6-luna-medium';
       return v;
     };
+    data.translationModel = rename(data.translationModel);
+    data.chatModel = rename(data.chatModel);
+  }
+  // v12 → v13: Opus 4.8 → Opus 5
+  if (version < 13) {
+    const rename = (v: unknown) => v === 'claude-opus-4-8' ? 'claude-opus-5' : v;
     data.translationModel = rename(data.translationModel);
     data.chatModel = rename(data.chatModel);
   }
@@ -395,7 +401,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 12,
+      version: 13,
       migrate: (persisted: unknown, version: number) =>
         migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({

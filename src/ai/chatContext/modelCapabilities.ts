@@ -61,7 +61,7 @@ function providerDefaults(provider: AiProvider): ModelCapabilities {
  * 특정 모델이 provider 일반값과 다른 capability를 가질 때만 항목을 추가한다.
  */
 const MODEL_OVERRIDES: { prefix: string; caps: Partial<ModelCapabilities> }[] = [
-  // 현재 프리셋(Opus 4.8 / Sonnet 5 / Haiku 4.5 / gpt-5.6-*)은 모두 provider 기본값과 동일하다.
+  // 현재 프리셋(Opus 5 / Sonnet 5 / Haiku 4.5 / gpt-5.6-*)은 모두 provider 기본값과 동일하다.
   // 향후 컨텍스트/비전 특성이 다른 모델이 추가되면 여기에 보수적 값을 등록한다.
 ];
 

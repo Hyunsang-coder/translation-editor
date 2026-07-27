@@ -17,6 +17,16 @@ describe('resolveModelCallOptions', () => {
     expect(opts.temperature).toBeUndefined();
   });
 
+  it('Opus 5 review → adaptiveThinking + effort high, temperature 없음', () => {
+    const opts = resolveModelCallOptions(
+      cfg({ provider: 'anthropic', model: 'claude-opus-5', temperature: 0.5 }),
+      'review',
+    );
+    expect(opts.adaptiveThinking).toBe(true);
+    expect(opts.effort).toBe('high');
+    expect(opts.temperature).toBeUndefined();
+  });
+
   it('Sonnet 5 chat → adaptiveThinking, effort 없음, temperature 없음', () => {
     const opts = resolveModelCallOptions(
       cfg({ provider: 'anthropic', model: 'claude-sonnet-5', temperature: 0.5 }),

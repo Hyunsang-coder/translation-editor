@@ -19,9 +19,9 @@ export interface ModelCallOptions {
   effort?: 'medium' | 'high';
 }
 
-/** Opus 4.7 이상(4.7/4.8/4.9 및 2자리 이상 버전) */
+/** Opus 4.7 이상(4.7/4.8/4.9 및 2자리 이상 버전) 및 Opus 5+ */
 function isOpus47Plus(model: string): boolean {
-  return /^claude-opus-4-(7|[89]|\d{2,})/.test(model);
+  return /^claude-opus-(4-(7|[89]|\d{2,})|[5-9]|\d{2,})/.test(model);
 }
 
 function isSonnet5(model: string): boolean {
