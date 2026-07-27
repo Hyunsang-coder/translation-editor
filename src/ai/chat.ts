@@ -359,6 +359,16 @@ function wrapExternalToolOutput(toolName: string, output: string): string {
 const DEFAULT_MAX_MODEL_STEPS = 6;
 const MAX_MODEL_STEPS_CAP = 12;
 
+/**
+ * 마지막 스텝 진입 시 주입하는 최종 답변 강제 안내 (테스트에서 직접 참조).
+ * 마지막 스텝의 도구 호출 결과는 소비할 다음 모델 호출이 없으므로,
+ * 추가 도구 호출 대신 지금까지 확보한 정보로 답변을 완성하게 한다.
+ */
+export const FINAL_STEP_NUDGE = [
+  '[시스템 안내] 이번이 마지막 응답입니다. 추가 도구 호출 없이, 지금까지 도구로 확보한 정보만으로 사용자 질문에 대한 최종 답변을 작성하세요.',
+  '정보가 부족하면 어떤 정보가 부족한지 명시하고, 아는 범위에서 답변하세요.',
+].join('\n');
+
 // 같은 에러 반복 시 조기 중단 임계
 const MAX_SAME_ERROR = 2;
 
@@ -456,8 +466,9 @@ async function applyInputTokenGuard(
  * - 외부 도구 출력에 인젝션 방어 태그 추가
  * - 같은 에러 반복 시 조기 중단
  * - 누적 메시지 수 상한(MAX_LOOP_MESSAGES) 초과 시 context window 보호를 위해 중단
+ * (테스트에서 직접 사용하기 위해 export)
  */
-async function runToolCallingLoop(params: {
+export async function runToolCallingLoop(params: {
   model: ReturnType<typeof createChatModel>;
   /**
    * 실행 가능한(로컬) 도구 목록: tool_calls로 요청이 오면 우리가 직접 invoke합니다.
@@ -501,11 +512,21 @@ async function runToolCallingLoop(params: {
       : params.model;
 
   const loopMessages: BaseMessage[] = [...params.messages];
+  // 스텝을 넘겨도 마지막으로 생성된 텍스트를 보존한다.
+  // (모델이 마지막 스텝에서 답변 텍스트와 도구 호출을 함께 반환하면, 종전에는 그 텍스트가 폐기됐다)
+  let lastEmittedText = '';
 
   for (let step = 0; step < maxSteps; step++) {
     // AbortSignal 체크
     if (params.abortSignal?.aborted) {
       throw new DOMException('Request aborted', 'AbortError');
+    }
+
+    // 마지막 스텝: 도구 결과를 소비할 다음 모델 호출이 없으므로, 추가 도구 호출 대신
+    // 지금까지의 정보로 최종 답변을 작성하도록 강제한다 (스텝 소진 → 폴백 경로 방지).
+    // Anthropic의 역할 교대 제약은 @langchain/anthropic의 연속 user 메시지 병합이 처리한다.
+    if (step > 0 && step === maxSteps - 1) {
+      loopMessages.push(new HumanMessage(FINAL_STEP_NUDGE));
     }
 
     params.cb?.onModelRun?.(step);
@@ -562,6 +583,9 @@ async function runToolCallingLoop(params: {
 
     // 토큰 사용량 집계 (도구 루프의 각 모델 실행마다 누적)
     addUsage(finalAiMessage);
+
+    // 마지막 스텝 답변 유실 방지: 이 스텝에서 생성된 텍스트를 보존
+    if (accumulatedText) lastEmittedText = accumulatedText;
 
     // 최종 메시지를 대화 기록에 추가
     if (finalAiMessage) {
@@ -730,7 +754,7 @@ async function runToolCallingLoop(params: {
         `[AI tool_call] Loop message count (${loopMessages.length}) reached limit (${MAX_LOOP_MESSAGES}). Breaking to prevent context window overflow.`
       );
       // 마지막으로 누적된 텍스트가 있으면 반환, 없으면 안내 메시지
-      const text = accumulatedText || i18n.t('errors.conversationLengthLimit');
+      const text = lastEmittedText || i18n.t('errors.conversationLengthLimit');
       return {
         finalText: text,
         usedTools: true,
@@ -740,8 +764,10 @@ async function runToolCallingLoop(params: {
     }
   }
 
+  // 스텝 소진: 마지막으로 생성된 텍스트가 있으면 그것이 최종 답변이다.
+  // 없을 때만 실제 상황(스텝 한도 도달)을 알리는 안내를 반환한다.
   return {
-    finalText: i18n.t('errors.insufficientContext'),
+    finalText: lastEmittedText || i18n.t('errors.toolLoopStepLimit'),
     usedTools: true,
     toolsUsed,
     usage,

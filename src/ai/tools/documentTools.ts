@@ -10,6 +10,7 @@ import {
   collectTranslationUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { getChatToolDescriptor } from './toolRegistry';
 
 /**
  * Source 문서를 Markdown 형식으로 반환
@@ -164,6 +165,31 @@ function autoSliceLargeDocument(text: string, args: DocumentToolArgs): string {
   return `${head}${marker}${tail}`;
 }
 
+// wrapUntrusted가 본문에 더하는 고정 오버헤드(안내문 + 태그 + 개행)
+const UNTRUSTED_WRAP_OVERHEAD = wrapUntrusted('').length;
+// neutralizeUntrustedMarkers의 zero-width 삽입 등 소폭 증가 대비 여유분
+const WRAP_SAFETY_MARGIN = 100;
+
+/**
+ * 문서 도구의 최종 출력 조립: 자동 슬라이스 + 신뢰경계 래핑.
+ * (테스트에서 직접 사용하기 위해 export)
+ *
+ * chat.ts는 registry maxOutputChars로 도구 출력을 최종 절단한다. 래퍼까지 포함해
+ * 그 캡을 넘지 않도록 본문 예산을 미리 차감한다 — 캡을 넘기면 닫는 </untrusted>
+ * 태그가 잘려 신뢰경계 마킹이 깨지고, "[도구 결과가 제한 길이에서 잘렸습니다.]"
+ * 표식이 모델의 불필요한 재조회(스텝 낭비)를 유발한다.
+ */
+export function renderDocumentToolOutput(
+  markdown: string,
+  args: DocumentToolArgs,
+  toolName: 'get_source_document' | 'get_target_document',
+): string {
+  const cap = getChatToolDescriptor(toolName)?.maxOutputChars ?? 8000;
+  const contentBudget = Math.max(1000, cap - UNTRUSTED_WRAP_OVERHEAD - WRAP_SAFETY_MARGIN);
+  const maxChars = Math.min(args.maxChars ?? contentBudget, contentBudget);
+  return wrapUntrusted(autoSliceLargeDocument(markdown, { ...args, maxChars }));
+}
+
 export const getSourceDocumentTool = tool(
   async (rawArgs) => {
     const args = DocumentToolArgsSchema.safeParse(rawArgs ?? {});
@@ -178,7 +204,7 @@ export const getSourceDocumentTool = tool(
       throw new Error('원문 문서가 비어있습니다. Source 패널에 내용을 입력해주세요.');
     }
     // S4: 문서 본문은 외부 유래일 수 있으므로 신뢰경계 마킹 후 반환
-    return wrapUntrusted(autoSliceLargeDocument(markdown, parsed));
+    return renderDocumentToolOutput(markdown, parsed, 'get_source_document');
   },
   {
     name: 'get_source_document',
@@ -202,7 +228,7 @@ export const getTargetDocumentTool = tool(
       throw new Error('번역문 문서가 비어있습니다. 먼저 번역을 실행하거나 Target 패널에 내용을 입력해주세요.');
     }
     // S4: 문서 본문은 외부 유래일 수 있으므로 신뢰경계 마킹 후 반환
-    return wrapUntrusted(autoSliceLargeDocument(markdown, parsed));
+    return renderDocumentToolOutput(markdown, parsed, 'get_target_document');
   },
   {
     name: 'get_target_document',

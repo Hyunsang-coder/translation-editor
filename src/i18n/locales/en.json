@@ -680,7 +680,7 @@
     "translationPreviewError": "Try increasing max_tokens in Settings, or translate a shorter document.",
     "aiResponseFailed": "Failed to generate AI response",
     "toolCallRepeatedFailure": "Tool \"{{toolName}}\" failed repeatedly. Please review your question and try again.",
-    "insufficientContext": "Could not gather enough context to process your request. Please be more specific or select the relevant documents/blocks.",
+    "toolLoopStepLimit": "Reached the tool-call step limit before completing an answer. Please narrow your question and try again.",
     "conversationLengthLimit": "Too many tool calls reached the conversation length limit. Please split your question and try again."
   },
   "update": {

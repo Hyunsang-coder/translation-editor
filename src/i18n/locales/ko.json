@@ -678,7 +678,7 @@
     "translationPreviewError": "해결 방법: 설정에서 모델의 max_tokens 값을 높이거나, 더 짧은 문서로 나누어 번역해 보세요.",
     "aiResponseFailed": "AI 응답 생성 실패",
     "toolCallRepeatedFailure": "도구 \"{{toolName}}\" 호출이 반복 실패했습니다. 질문을 다시 확인해주세요.",
-    "insufficientContext": "요청을 처리하는 데 필요한 컨텍스트를 충분히 확보하지 못했습니다. 질문을 더 구체화하거나, 필요한 문서/블록을 선택해 주세요.",
+    "toolLoopStepLimit": "도구 조회를 반복하다 응답 단계 한도에 도달해 답변을 완성하지 못했습니다. 질문 범위를 좁혀 다시 시도해 주세요.",
     "conversationLengthLimit": "도구 호출이 많아 대화 길이 제한에 도달했습니다. 질문을 나누어 다시 시도해 주세요."
   },
   "update": {
