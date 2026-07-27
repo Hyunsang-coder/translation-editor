@@ -12,7 +12,11 @@ export function registerDocumentTools(
   server.registerTool(
     "oddeyes_get_status",
     {
-      description: "Get the current OddEyes project/document status and revisions.",
+      description:
+        "Get the current OddEyes project/document status and revisions. " +
+        "`projectMemoryRevision` bumps whenever project memory or forbidden terms change — " +
+        "re-read oddeyes_get_translation_context when it moves. Memory counts are null until the " +
+        "app has loaded project knowledge (not the same as zero).",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -46,7 +50,13 @@ export function registerDocumentTools(
   server.registerTool(
     "oddeyes_get_translation_context",
     {
-      description: "Get translation rules, glossary, and project context from OddEyes.",
+      description:
+        "Get everything OddEyes would put in front of the model for this project: translation rules, " +
+        "active project memory items, enabled forbidden terms, and glossary matches for the current " +
+        "source document. Read this before translating or reviewing so your output matches what the " +
+        "app itself would produce. " +
+        "Returns { projectId, projectTitle, targetLanguage, translationRules, projectMemory, " +
+        "forbiddenTerms, revision, glossary }.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

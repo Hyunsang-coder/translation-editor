@@ -86,6 +86,7 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-27)
 
+- **Desktop MCP 0.8.0 (25 tools)**: 앱의 지식 모델이 legacy `projectContext` → 승인 기반 Project Memory·금칙어로 바뀐 것을 MCP에 반영. ① `oddeyes_set_translation_context`에서 `projectContext` 파라미터 **제거**(breaking) — v2.13.0 이후 채팅에 주입되지 않고 메모리 0건일 때만 스치는 죽은 쓰기였다. ② `oddeyes_get_translation_context`가 `projectContext` 대신 `projectMemory`(active)·`forbiddenTerms`(enabled)·`revision` 반환. ③ Project Memory/금칙어 도구 6종 추가: `oddeyes_list_project_memory`, `add`/`replace`/`archive_project_memory_item`, `upsert`/`delete_forbidden_term`. 외부 쓰기는 `source='import'`·`status='active'`로 즉시 반영되고 Settings에서 출처 확인·보관 가능(제안 승인 UI는 채팅 카드 전용이라 `proposed`로 넣으면 승인할 방법이 없음). ④ `oddeyes_get_status`에 `projectMemoryRevision`·카운트 추가(미로드 시 0이 아니라 `null`). 브리지 메서드는 `oddeyesAppBridge.ts`, hydrate 보증은 `ensureProjectMemory`.
 - **동적 프로젝트 지식 루프 수정 (D1–D7, `docs/dynamic-project-knowledge-fix-plan.md`)**: 채팅 ↔ Project Memory 갱신 경로의 결함 7건 수정.
 - **채팅 컨텍스트 주입 구조 (D1)**: 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
 - **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.
@@ -101,7 +102,7 @@ This `.claude/` directory contains:
 - **Workflow ContextSnapshot**: 전체 번역·검수·폴리싱·부분 재번역이 작업 시작 시 고정 snapshot을 사용. 리뷰의 모든 chunk가 동일 snapshot revision을 공유하고 `ContextManifest`로 참조 ID/도구/토큰 정보를 표시.
 - **Tool registry profiles**: general/selection-source/selection-target/selection-retranslate profile별 allowlist, trust/effect/output cap을 단일 registry에서 파생. 직접 부분 재번역은 tools=0.
 - **선택 재번역 안정화 (v2.13.0)**: ① `retranslateSelection` 출력 토큰 4096→16384(`SELECTION_EDIT_MAX_TOKENS`) — thinking/reasoning이 예산을 잠식해 END 마커가 truncation되던 재번역 실패 수정. ② 앵커(하이라이트) 수명 정리 — apply 성공 외에도 chip dismiss·proposal 폐기/stale·새 선택 교체·프로젝트 전환 시 `removeSelectionAnchor` 호출(하이라이트 영구 잔존 버그). ③ `normalizeSelectionAnchorRange`가 가장자리 공백을 범위에서 제외 — `SelectionContext.text`(트림)와 `anchor.originalText`(textBetween) 불일치로 proposal 적용이 항상 stale 처리되던 오탐 수정. ④ e2e `tauri-mock`에 `ai_stream`/`ai_complete` 마커-에코 목 추가로 생성→적용 경로 웹 E2E 검증.
-- **legacy projectContext 내부 제거 (v2.13.0)**: Settings의 "프로젝트 컨텍스트" 편집 필드와 chat 시스템 프롬프트 직접 주입 제거. 승인 기반 Project Memory로 완전 대체. 스토어 필드·DB persist·hydrate migration·워크플로우 `legacyProjectContext` fallback·Desktop MCP `oddeyes_set_translation_context` 주입은 호환을 위해 유지(=데이터/계약 안전). MCP 파라미터 제거는 차기 MCP 버전업 때.
+- **legacy projectContext 내부 제거 (v2.13.0)**: Settings의 "프로젝트 컨텍스트" 편집 필드와 chat 시스템 프롬프트 직접 주입 제거. 승인 기반 Project Memory로 완전 대체. 스토어 필드·DB persist·hydrate migration·워크플로우 `legacyProjectContext` fallback은 호환을 위해 유지(=데이터/계약 안전). MCP 파라미터는 0.8.0에서 제거됨(위 항목).
 
 ### Previous (2026-07-15)
 

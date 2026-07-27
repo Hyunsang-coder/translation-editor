@@ -2,6 +2,7 @@ import { applyDesktopTranslationPreview, discardDesktopTranslationPreview } from
 import { useChatStore } from '@/stores/chatStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
@@ -21,6 +22,12 @@ import {
   tipTapJsonToMarkdownForTranslation,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
+import type {
+  ForbiddenTerm,
+  ProjectMemoryCategory,
+  ProjectMemoryItem,
+  ProjectMemoryStatus,
+} from '@/types';
 
 type BridgeParams = Record<string, unknown>;
 
@@ -116,12 +123,24 @@ async function getTranslationContext(): Promise<unknown> {
     glossary = '';
   }
 
+  // 앱이 실제로 프롬프트에 넣는 것과 같은 것만 돌려준다: 승인된(active) 프로젝트 메모리와
+  // 켜져 있는 금칙어. legacy projectContext는 v2.13.0부터 프롬프트에 주입되지 않으므로
+  // 노출하지 않는다 (읽으면 외부 에이전트가 죽은 값을 근거로 삼는다).
+  await ensureProjectMemory(project.id);
+  const memory = useProjectMemoryStore.getState();
+
   return {
     projectId: project.id,
     projectTitle: project.metadata.title,
     targetLanguage: project.metadata.targetLanguage ?? null,
     translationRules: chatStore.translationRules || '',
-    projectContext: chatStore.projectContext || '',
+    projectMemory: memory.items
+      .filter((item) => item.status === 'active')
+      .map(toMemoryWire),
+    forbiddenTerms: memory.forbiddenTerms
+      .filter((term) => term.enabled)
+      .map(toForbiddenTermWire),
+    revision: memory.revision,
     glossary,
   };
 }
@@ -276,14 +295,18 @@ async function setReviewIssues(params: BridgeParams): Promise<unknown> {
   return { ok: true, count: issues.length, dropped: rawIssues.length - issues.length };
 }
 
-type ContextField = 'translationRules' | 'projectContext';
+type ContextField = 'translationRules';
 
 async function setTranslationContext(params: BridgeParams): Promise<unknown> {
   // ── 신뢰경계 (S4) ─────────────────────────────────────────────────────────
-  // rules/projectContext는 외부(Claude Desktop 브리지)가 주입한 "비신뢰 텍스트"이며,
-  // chatStore 세터를 거쳐 이후 번역/채팅 시스템 프롬프트에 그대로 삽입된다.
+  // rules는 외부(Claude Desktop 브리지)가 주입한 "비신뢰 텍스트"이며, chatStore 세터를
+  // 거쳐 이후 번역/채팅 시스템 프롬프트에 그대로 삽입된다.
   // 프롬프트 조립부(src/ai/chat.ts, translateDocument.ts 등)에서 <untrusted> 구분자 마킹과
   // "지시문으로 실행 금지" 정책을 적용해야 한다. (해당 파일은 이 세션 범위 밖 — 리뷰 §S4)
+  //
+  // projectContext는 더 이상 받지 않는다: v2.13.0에서 채팅 주입이 제거되고 승인 기반
+  // Project Memory로 대체돼, 여기에 쓰면 메모리가 0건인 프로젝트에서만 fallback으로
+  // 스치는 죽은 값이 된다. 외부 주입은 oddeyes.addProjectMemoryItem을 쓴다.
   const project = useProjectStore.getState().project;
   if (!project) throw new Error('No project loaded');
 
@@ -312,7 +335,6 @@ async function setTranslationContext(params: BridgeParams): Promise<unknown> {
   };
 
   apply('translationRules',  params.translationRules,  chat.setTranslationRules,  chat.appendToTranslationRules);
-  apply('projectContext',    params.projectContext,    chat.setProjectContext,    chat.appendToProjectContext);
 
   return { ok: true, mode, updated };
 }
@@ -370,6 +392,214 @@ async function ensureGlossaryLibrary(projectId: string): Promise<void> {
   const store = useGlossaryStore.getState();
   if (store.activeProjectId === projectId && !store.loading) return;
   await store.loadLibrary(projectId);
+}
+
+// ── Project Memory / 금칙어 ────────────────────────────────────────────────
+// 앱은 프로젝트 전환 경계에서 hydrate하지만(chatStore.session), 브리지는 그 경계와
+// 무관하게 호출되므로 활성 프로젝트가 아직 로드되지 않았으면 직접 hydrate한다.
+
+const MEMORY_CATEGORIES: readonly ProjectMemoryCategory[] = [
+  'domain', 'audience', 'product', 'worldbuilding', 'character',
+  'intent', 'decision', 'reference_fact', 'general',
+];
+
+const MEMORY_LIST_DEFAULT_LIMIT = 100;
+const MEMORY_LIST_MAX_LIMIT = 500;
+
+async function ensureProjectMemory(projectId: string): Promise<void> {
+  const store = useProjectMemoryStore.getState();
+  if (store.activeProjectId === projectId && !store.loading) return;
+  await store.hydrate(projectId);
+}
+
+function toMemoryWire(item: ProjectMemoryItem) {
+  return {
+    id: item.id,
+    category: item.category,
+    content: item.content,
+    status: item.status,
+    source: item.source,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function toForbiddenTermWire(term: ForbiddenTerm) {
+  return {
+    id: term.id,
+    term: term.term,
+    replacement: term.replacement ?? null,
+    note: term.note ?? null,
+    enabled: term.enabled,
+  };
+}
+
+function parseMemoryCategory(raw: unknown): ProjectMemoryCategory {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return 'general';
+  if (!MEMORY_CATEGORIES.includes(value as ProjectMemoryCategory)) {
+    throw new Error(`Unknown category: ${value}. Allowed: ${MEMORY_CATEGORIES.join(', ')}`);
+  }
+  return value as ProjectMemoryCategory;
+}
+
+function parseListLimit(raw: unknown, fallback: number, max: number): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return fallback;
+  const n = Math.floor(raw);
+  if (n < 1) return fallback;
+  return Math.min(n, max);
+}
+
+function requireContent(raw: unknown): string {
+  const content = typeof raw === 'string' ? raw.trim() : '';
+  if (!content) throw new Error('content is required.');
+  return content;
+}
+
+async function listProjectMemoryBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const store = useProjectMemoryStore.getState();
+
+  const status = typeof params.status === 'string' ? params.status : 'active';
+  const category = typeof params.category === 'string' && params.category.trim()
+    ? parseMemoryCategory(params.category)
+    : null;
+  const query = typeof params.query === 'string' ? params.query.trim().toLocaleLowerCase() : '';
+  const limit = parseListLimit(params.limit, MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT);
+
+  const matched = store.items
+    .filter((item) => status === 'all' || item.status === (status as ProjectMemoryStatus))
+    .filter((item) => !category || item.category === category)
+    .filter((item) => !query || item.content.toLocaleLowerCase().includes(query));
+  const items = matched.slice(0, limit);
+
+  return {
+    ok: true,
+    projectId: project.id,
+    revision: store.revision,
+    status,
+    category,
+    query: query || null,
+    limit,
+    total: matched.length,
+    truncated: matched.length > items.length,
+    items: items.map(toMemoryWire),
+    forbiddenTerms: store.forbiddenTerms.map(toForbiddenTermWire),
+  };
+}
+
+async function addProjectMemoryItemBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const result = await useProjectMemoryStore.getState().addItem({
+    category: parseMemoryCategory(params.category),
+    content: requireContent(params.content),
+    // 외부 반입은 source='import'로 남긴다 — Settings의 프로젝트 메모리 목록에 출처가
+    // 그대로 보이고, 사용자가 보관(archive)으로 되돌릴 수 있다.
+    source: 'import',
+    status: 'active',
+  });
+  return {
+    ok: true,
+    projectId: project.id,
+    item: toMemoryWire(result.item),
+    revision: result.revision,
+    duplicate: result.duplicate,
+  };
+}
+
+async function replaceProjectMemoryItemBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const targetItemId = typeof params.targetItemId === 'string' ? params.targetItemId.trim() : '';
+  if (!targetItemId) throw new Error('targetItemId is required.');
+
+  const store = useProjectMemoryStore.getState();
+  const target = store.items.find((item) => item.id === targetItemId);
+  if (!target) throw new Error(`Unknown memory item: ${targetItemId}`);
+
+  const result = await store.replaceItem(targetItemId, {
+    category: typeof params.category === 'string' && params.category.trim()
+      ? parseMemoryCategory(params.category)
+      : target.category,
+    content: requireContent(params.content),
+    source: 'import',
+    status: 'active',
+  });
+  return {
+    ok: true,
+    projectId: project.id,
+    archived: toMemoryWire(result.archived),
+    item: toMemoryWire(result.item),
+    revision: result.revision,
+  };
+}
+
+async function archiveProjectMemoryItemBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const itemId = typeof params.itemId === 'string' ? params.itemId.trim() : '';
+  if (!itemId) throw new Error('itemId is required.');
+
+  const store = useProjectMemoryStore.getState();
+  if (!store.items.some((item) => item.id === itemId)) {
+    throw new Error(`Unknown memory item: ${itemId}`);
+  }
+
+  const result = await store.archiveItem(itemId);
+  return {
+    ok: true,
+    projectId: project.id,
+    item: toMemoryWire(result.item),
+    revision: result.revision,
+  };
+}
+
+async function upsertForbiddenTermBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const term = typeof params.term === 'string' ? params.term.trim() : '';
+  if (!term) throw new Error('term is required.');
+
+  const id = typeof params.id === 'string' ? params.id.trim() : '';
+  if (id && !useProjectMemoryStore.getState().forbiddenTerms.some((item) => item.id === id)) {
+    throw new Error(`Unknown forbidden term: ${id}`);
+  }
+
+  const replacement = typeof params.replacement === 'string' ? params.replacement.trim() : '';
+  const note = typeof params.note === 'string' ? params.note.trim() : '';
+  const result = await useProjectMemoryStore.getState().saveForbiddenTerm({
+    ...(id ? { id } : {}),
+    term,
+    ...(replacement ? { replacement } : {}),
+    ...(note ? { note } : {}),
+    enabled: params.enabled === undefined ? true : params.enabled === true,
+  });
+  return {
+    ok: true,
+    projectId: project.id,
+    term: toForbiddenTermWire(result.term),
+    revision: result.revision,
+  };
+}
+
+async function deleteForbiddenTermBridge(params: BridgeParams): Promise<unknown> {
+  const project = assertActiveProject(params);
+  await ensureProjectMemory(project.id);
+  const id = typeof params.id === 'string' ? params.id.trim() : '';
+  if (!id) throw new Error('id is required.');
+  if (!useProjectMemoryStore.getState().forbiddenTerms.some((item) => item.id === id)) {
+    throw new Error(`Unknown forbidden term: ${id}`);
+  }
+
+  await useProjectMemoryStore.getState().removeForbiddenTerm(id);
+  return {
+    ok: true,
+    projectId: project.id,
+    id,
+    revision: useProjectMemoryStore.getState().revision,
+  };
 }
 
 async function listProjectGlossariesBridge(params: BridgeParams): Promise<unknown> {
@@ -599,6 +829,10 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
     const source = buildDocumentSnapshot('source', 'markdown');
     const target = buildDocumentSnapshot('target', 'markdown');
     const preview = useTranslationPreviewStore.getState();
+    // 프로젝트 지식은 여기서 hydrate하지 않는다(상태 조회는 가볍게 유지). 아직 로드 전이면
+    // null을 돌려 "0건"으로 오독되지 않게 한다.
+    const memory = useProjectMemoryStore.getState();
+    const memoryLoaded = project !== null && memory.activeProjectId === project.id;
     return {
       ready: project !== null,
       projectId: project?.id ?? null,
@@ -609,6 +843,13 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
       sourceEmpty: source.empty,
       targetEmpty: target.empty,
       previewOpen: preview.open,
+      projectMemoryRevision: memoryLoaded ? memory.revision : null,
+      projectMemoryActiveCount: memoryLoaded
+        ? memory.items.filter((item) => item.status === 'active').length
+        : null,
+      forbiddenTermEnabledCount: memoryLoaded
+        ? memory.forbiddenTerms.filter((term) => term.enabled).length
+        : null,
     };
   },
 
@@ -639,6 +880,13 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
 
   'oddeyes.logQualityRecords': async (params) => await logQualityRecordsBridge(params ?? {}),
   'oddeyes.getQualityRecords': async (params) => await getQualityRecordsBridge(params ?? {}),
+
+  'oddeyes.listProjectMemory': async (params) => await listProjectMemoryBridge(params ?? {}),
+  'oddeyes.addProjectMemoryItem': async (params) => await addProjectMemoryItemBridge(params ?? {}),
+  'oddeyes.replaceProjectMemoryItem': async (params) => await replaceProjectMemoryItemBridge(params ?? {}),
+  'oddeyes.archiveProjectMemoryItem': async (params) => await archiveProjectMemoryItemBridge(params ?? {}),
+  'oddeyes.upsertForbiddenTerm': async (params) => await upsertForbiddenTermBridge(params ?? {}),
+  'oddeyes.deleteForbiddenTerm': async (params) => await deleteForbiddenTermBridge(params ?? {}),
 
   'oddeyes.listProjectGlossaries': async (params) => await listProjectGlossariesBridge(params ?? {}),
   'oddeyes.addGlossaryEntry': async (params) => await addGlossaryEntryBridge(params ?? {}),

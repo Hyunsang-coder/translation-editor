@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "oddeyes-desktop",
   "display_name": "OddEyes Desktop",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Connect Claude Desktop to a running OddEyes app and send preview-first translation actions.",
-  "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and translation context from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
+  "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and project knowledge (translation rules, project memory, forbidden terms, glossary) from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
   "author": {
     "name": "OddEyes.ai"
   },
@@ -33,7 +33,7 @@
     },
     {
       "name": "oddeyes_get_translation_context",
-      "description": "Read translation rules, glossary, and project context from OddEyes."
+      "description": "Read translation rules, active project memory, enabled forbidden terms, and glossary matches from OddEyes."
     },
     {
       "name": "oddeyes_get_translation_preview",
@@ -57,7 +57,31 @@
     },
     {
       "name": "oddeyes_set_translation_context",
-      "description": "Update OddEyes translation rules and/or project context (replace or append)."
+      "description": "Update the OddEyes translation rules (replace or append)."
+    },
+    {
+      "name": "oddeyes_list_project_memory",
+      "description": "List the active project's memory items and forbidden terms (filter by status, category, or query)."
+    },
+    {
+      "name": "oddeyes_add_project_memory_item",
+      "description": "Add a durable project memory item used by translation, review, polishing, and chat."
+    },
+    {
+      "name": "oddeyes_replace_project_memory_item",
+      "description": "Replace a project memory item with corrected content, archiving the old one."
+    },
+    {
+      "name": "oddeyes_archive_project_memory_item",
+      "description": "Archive a project memory item so it stops being injected into prompts."
+    },
+    {
+      "name": "oddeyes_upsert_forbidden_term",
+      "description": "Create or update a forbidden term (with preferred replacement) for the active project."
+    },
+    {
+      "name": "oddeyes_delete_forbidden_term",
+      "description": "Permanently delete a forbidden term (no undo)."
     },
     {
       "name": "oddeyes_log_quality_records",

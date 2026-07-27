@@ -6,6 +6,7 @@
  * 2. getStatus, getSource, getTarget 등 기본 핸들러 동작
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ForbiddenTerm, ProjectMemoryItem } from '@/types';
 
 // ── store mock ──────────────────────────────────────────────────────────────
 vi.mock('@/stores/projectStore', () => ({
@@ -153,6 +154,69 @@ vi.mock('@/stores/reviewStore', () => ({
   },
 }));
 
+const memoryItem: ProjectMemoryItem = {
+  id: 'm-1',
+  projectId: 'test-project',
+  category: 'domain',
+  content: '배틀로얄 슈터 게임 UI 텍스트',
+  normalizedHash: 'h1',
+  status: 'active',
+  source: 'user',
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+const archivedMemoryItem: ProjectMemoryItem = {
+  ...memoryItem,
+  id: 'm-2',
+  content: '오래된 사실',
+  status: 'archived',
+};
+
+const forbiddenTerm: ForbiddenTerm = {
+  id: 'f-1',
+  projectId: 'test-project',
+  term: '유저',
+  replacement: '플레이어',
+  enabled: true,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+const memoryStore = {
+  activeProjectId: 'test-project' as string | null,
+  loading: false,
+  revision: 7,
+  items: [memoryItem, archivedMemoryItem] as ProjectMemoryItem[],
+  forbiddenTerms: [forbiddenTerm] as ForbiddenTerm[],
+  hydrate: vi.fn(async () => undefined),
+  addItem: vi.fn(async ({ category, content, source, status }) => ({
+    item: { ...memoryItem, id: 'm-new', category, content, source, status },
+    revision: 8,
+    duplicate: false,
+  })),
+  replaceItem: vi.fn(async (targetItemId: string, { category, content, source }) => ({
+    archived: { ...memoryItem, id: targetItemId, status: 'archived' as const },
+    item: { ...memoryItem, id: 'm-new', category, content, source },
+    revision: 9,
+  })),
+  archiveItem: vi.fn(async (itemId: string) => ({
+    item: { ...memoryItem, id: itemId, status: 'archived' as const },
+    revision: 10,
+  })),
+  saveForbiddenTerm: vi.fn(async (input) => ({
+    term: { ...forbiddenTerm, ...input },
+    revision: 11,
+  })),
+  removeForbiddenTerm: vi.fn(async () => undefined),
+};
+
+vi.mock('@/stores/projectMemoryStore', () => ({
+  useProjectMemoryStore: {
+    getState: () => memoryStore,
+  },
+}));
+
 import { initializeOddEyesAppBridge } from './oddeyesAppBridge';
 
 // ── helper ──────────────────────────────────────────────────────────────────
@@ -203,11 +267,19 @@ describe('oddeyesAppBridge — getTranslationContext', () => {
     initializeOddEyesAppBridge();
   });
 
-  it('rules/context를 반환하고 translator persona는 노출하지 않는다', async () => {
+  it('rules/승인된 메모리/켜진 금칙어를 반환하고 legacy projectContext는 노출하지 않는다', async () => {
     const result = await callBridge('oddeyes.getTranslationContext') as Record<string, unknown>;
     expect(result).toHaveProperty('translationRules');
-    expect(result).toHaveProperty('projectContext');
+    expect(result).not.toHaveProperty('projectContext');
     expect(result).not.toHaveProperty('translatorPersona');
+    // archived 항목은 프롬프트에 들어가지 않으므로 여기서도 제외된다
+    expect(result.projectMemory).toEqual([
+      expect.objectContaining({ id: 'm-1', status: 'active' }),
+    ]);
+    expect(result.forbiddenTerms).toEqual([
+      expect.objectContaining({ id: 'f-1', term: '유저', replacement: '플레이어' }),
+    ]);
+    expect(result.revision).toBe(7);
   });
 });
 
@@ -315,10 +387,18 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
 
   it('빈 문자열 replace는 허용(비우기)', async () => {
     const res = await callBridge('oddeyes.setTranslationContext', {
-      projectContext: '',
+      translationRules: '',
     }) as Record<string, unknown>;
-    expect(res.updated).toEqual(['projectContext']);
-    expect(setContextSpy).toHaveBeenCalledWith('');
+    expect(res.updated).toEqual(['translationRules']);
+    expect(setRulesSpy).toHaveBeenCalledWith('');
+  });
+
+  it('legacy projectContext는 더 이상 쓰이지 않는다', async () => {
+    const res = await callBridge('oddeyes.setTranslationContext', {
+      projectContext: '죽은 값',
+    }) as Record<string, unknown>;
+    expect(res.updated).toEqual([]);
+    expect(setContextSpy).not.toHaveBeenCalled();
   });
 
   it('mode=append에서 빈 문자열은 스킵', async () => {
@@ -567,5 +647,157 @@ describe('oddeyesAppBridge — glossary', () => {
     expect(res.ok).toBe(true);
     expect(res.alreadyUnlinked).toBe(false);
     expect(glossaryStore.saveProjectSelection).toHaveBeenCalledWith('test-project', []);
+  });
+});
+
+describe('oddeyesAppBridge — project memory', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    memoryStore.activeProjectId = 'test-project';
+    memoryStore.loading = false;
+    memoryStore.items = [memoryItem, archivedMemoryItem];
+    memoryStore.forbiddenTerms = [forbiddenTerm];
+    memoryStore.hydrate.mockClear();
+    memoryStore.addItem.mockClear();
+    memoryStore.replaceItem.mockClear();
+    memoryStore.archiveItem.mockClear();
+    memoryStore.saveForbiddenTerm.mockClear();
+    memoryStore.removeForbiddenTerm.mockClear();
+  });
+
+  it('기본 조회는 active만 반환하고 금칙어를 함께 준다', async () => {
+    const res = await callBridge('oddeyes.listProjectMemory') as Record<string, unknown>;
+    expect(res.total).toBe(1);
+    expect(res.items).toEqual([expect.objectContaining({ id: 'm-1' })]);
+    expect(res.forbiddenTerms).toEqual([expect.objectContaining({ id: 'f-1' })]);
+    expect(res.revision).toBe(7);
+  });
+
+  it("status='all'은 archived까지 포함", async () => {
+    const res = await callBridge('oddeyes.listProjectMemory', { status: 'all' }) as Record<string, unknown>;
+    expect(res.total).toBe(2);
+  });
+
+  it('query는 content 부분일치로 거른다', async () => {
+    const res = await callBridge('oddeyes.listProjectMemory', {
+      status: 'all', query: '오래된',
+    }) as Record<string, unknown>;
+    expect(res.items).toEqual([expect.objectContaining({ id: 'm-2' })]);
+  });
+
+  it('다른 프로젝트가 로드돼 있으면 hydrate 후 조회', async () => {
+    memoryStore.activeProjectId = 'other-project';
+    await callBridge('oddeyes.listProjectMemory');
+    expect(memoryStore.hydrate).toHaveBeenCalledWith('test-project');
+  });
+
+  it('추가는 source=import / status=active로 즉시 반영된다', async () => {
+    const res = await callBridge('oddeyes.addProjectMemoryItem', {
+      category: 'audience', content: '  대상 독자는 신규 유입 플레이어  ',
+    }) as Record<string, unknown>;
+    expect(memoryStore.addItem).toHaveBeenCalledWith({
+      category: 'audience',
+      content: '대상 독자는 신규 유입 플레이어',
+      source: 'import',
+      status: 'active',
+    });
+    expect(res.item).toEqual(expect.objectContaining({ source: 'import' }));
+    expect(res.duplicate).toBe(false);
+  });
+
+  it('알 수 없는 category는 거부', async () => {
+    await expect(callBridge('oddeyes.addProjectMemoryItem', {
+      category: 'nonsense', content: 'x',
+    })).rejects.toThrow('Unknown category');
+  });
+
+  it('빈 content는 거부', async () => {
+    await expect(callBridge('oddeyes.addProjectMemoryItem', { content: '   ' }))
+      .rejects.toThrow('content is required');
+  });
+
+  it('replace는 기존 category를 물려받는다', async () => {
+    await callBridge('oddeyes.replaceProjectMemoryItem', {
+      targetItemId: 'm-1', content: '수정된 사실',
+    });
+    expect(memoryStore.replaceItem).toHaveBeenCalledWith('m-1', expect.objectContaining({
+      category: 'domain', content: '수정된 사실', source: 'import',
+    }));
+  });
+
+  it('없는 항목의 replace/archive는 거부', async () => {
+    await expect(callBridge('oddeyes.replaceProjectMemoryItem', {
+      targetItemId: 'ghost', content: 'x',
+    })).rejects.toThrow('Unknown memory item: ghost');
+    await expect(callBridge('oddeyes.archiveProjectMemoryItem', { itemId: 'ghost' }))
+      .rejects.toThrow('Unknown memory item: ghost');
+    expect(memoryStore.replaceItem).not.toHaveBeenCalled();
+    expect(memoryStore.archiveItem).not.toHaveBeenCalled();
+  });
+
+  it('금칙어 신규 생성은 enabled 기본 true', async () => {
+    const res = await callBridge('oddeyes.upsertForbiddenTerm', {
+      term: '어그로', replacement: '도발',
+    }) as Record<string, unknown>;
+    expect(memoryStore.saveForbiddenTerm).toHaveBeenCalledWith({
+      term: '어그로', replacement: '도발', enabled: true,
+    });
+    expect(res.revision).toBe(11);
+  });
+
+  it('금칙어 갱신은 id 검증 후 통과', async () => {
+    await callBridge('oddeyes.upsertForbiddenTerm', {
+      id: 'f-1', term: '유저', enabled: false,
+    });
+    expect(memoryStore.saveForbiddenTerm).toHaveBeenCalledWith({
+      id: 'f-1', term: '유저', enabled: false,
+    });
+  });
+
+  it('없는 금칙어 id는 갱신/삭제 모두 거부', async () => {
+    await expect(callBridge('oddeyes.upsertForbiddenTerm', { id: 'ghost', term: 'x' }))
+      .rejects.toThrow('Unknown forbidden term: ghost');
+    await expect(callBridge('oddeyes.deleteForbiddenTerm', { id: 'ghost' }))
+      .rejects.toThrow('Unknown forbidden term: ghost');
+    expect(memoryStore.saveForbiddenTerm).not.toHaveBeenCalled();
+    expect(memoryStore.removeForbiddenTerm).not.toHaveBeenCalled();
+  });
+
+  it('projectId 불일치 시 모든 메모리 도구가 거부', async () => {
+    for (const method of [
+      'oddeyes.listProjectMemory',
+      'oddeyes.addProjectMemoryItem',
+      'oddeyes.replaceProjectMemoryItem',
+      'oddeyes.archiveProjectMemoryItem',
+      'oddeyes.upsertForbiddenTerm',
+      'oddeyes.deleteForbiddenTerm',
+    ]) {
+      await expect(callBridge(method, { projectId: 'other' }))
+        .rejects.toThrow('Project mismatch');
+    }
+  });
+});
+
+describe('oddeyesAppBridge — getStatus 프로젝트 지식', () => {
+  beforeEach(() => {
+    initializeOddEyesAppBridge();
+    memoryStore.activeProjectId = 'test-project';
+    memoryStore.items = [memoryItem, archivedMemoryItem];
+    memoryStore.forbiddenTerms = [forbiddenTerm];
+  });
+
+  it('로드된 프로젝트는 revision/카운트를 보고한다', async () => {
+    const res = await callBridge('oddeyes.getStatus') as Record<string, unknown>;
+    expect(res.projectMemoryRevision).toBe(7);
+    expect(res.projectMemoryActiveCount).toBe(1);
+    expect(res.forbiddenTermEnabledCount).toBe(1);
+  });
+
+  it('아직 로드 전이면 0이 아니라 null (오독 방지)', async () => {
+    memoryStore.activeProjectId = null;
+    const res = await callBridge('oddeyes.getStatus') as Record<string, unknown>;
+    expect(res.projectMemoryRevision).toBeNull();
+    expect(res.projectMemoryActiveCount).toBeNull();
+    expect(res.forbiddenTermEnabledCount).toBeNull();
   });
 });
