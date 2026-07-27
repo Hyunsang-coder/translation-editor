@@ -51,11 +51,12 @@ function renderModal(overrides: Partial<Parameters<typeof SelectionEditPreviewMo
 }
 
 describe('SelectionEditPreviewModal', () => {
-  it('선택 컨텍스트 체크박스는 모두 OFF로 시작한다', () => {
+  it('전역 제약(번역 규칙·금칙어)은 켜고, 질의 의존 컨텍스트는 끈 채로 시작한다', () => {
     renderModal();
-    for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).not.toBeChecked();
-    }
+    expect(screen.getByTestId('selection-reference-translationRules')).toBeChecked();
+    expect(screen.getByTestId('selection-reference-forbiddenTerms')).toBeChecked();
+    expect(screen.getByTestId('selection-reference-glossary')).not.toBeChecked();
+    expect(screen.getByTestId('selection-reference-projectContext')).not.toBeChecked();
   });
 
   it('수정안이 없으면 재번역을 실행하고, 수정안이 있으면 적용한다', () => {

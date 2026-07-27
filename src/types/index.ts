@@ -235,9 +235,17 @@ export interface ContextReferenceOptions {
   projectContext: boolean;
 }
 
+/**
+ * 부분 수정의 기본 참조 범위.
+ *
+ * 번역 규칙과 금칙어는 모든 문장에 적용되는 전역 제약이고 크기도 작아 기본으로 켠다.
+ * 이 둘이 빠진 채 생성된 수정안은 문장으로는 멀쩡해 보여서 문서 내 불일치를 조용히
+ * 만들어낸다. 반면 용어집과 프로젝트 메모리는 크고 질의에 따라 필요한 것이 달라지므로
+ * 사용자가 필요할 때 켜도록 둔다.
+ */
 export const DEFAULT_SELECTION_REFERENCE_OPTIONS: ContextReferenceOptions = {
-  translationRules: false,
-  forbiddenTerms: false,
+  translationRules: true,
+  forbiddenTerms: true,
   glossary: false,
   projectContext: false,
 };

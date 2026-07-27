@@ -276,6 +276,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     error: string | null;
   }>(null);
   const selectionEditAbortRef = useRef<AbortController | null>(null);
+  // 부분 수정의 참조 범위. 선택마다 초기화하지 않고 프로젝트 단위로 유지한다.
+  const selectionReferenceOptionsRef = useRef<ContextReferenceOptions>({
+    ...DEFAULT_SELECTION_REFERENCE_OPTIONS,
+  });
 
   // 코멘트 입력 popover 상태
   const [commentPopover, setCommentPopover] = useState<null | {
@@ -582,7 +586,9 @@ export function EditorCanvasTipTap(): JSX.Element {
       selection,
       sourceText,
       instruction: '',
-      referenceOptions: { ...DEFAULT_SELECTION_REFERENCE_OPTIONS },
+      // 번역사는 한 문서에서 같은 참조 범위로 여러 문장을 고친다. 선택마다 초기화하면
+      // 매번 같은 선택을 반복해야 하므로 프로젝트 안에서는 직전 설정을 유지한다.
+      referenceOptions: { ...selectionReferenceOptionsRef.current },
       replacementText: '',
       contextManifest: undefined,
       forbiddenTermsUsed: [],
@@ -1316,6 +1322,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     selectionEditAbortRef.current?.abort();
     selectionEditAbortRef.current = null;
     setSelectionEdit(null);
+    selectionReferenceOptionsRef.current = { ...DEFAULT_SELECTION_REFERENCE_OPTIONS };
     setTranslatePreviewOpen(false);
     setTranslatePreviewDoc(null);
     setTranslatePreviewError(null);
@@ -1944,15 +1951,16 @@ export function EditorCanvasTipTap(): JSX.Element {
             error: null,
           } : null)
         }
-        onReferenceOptionsChange={(referenceOptions) =>
+        onReferenceOptionsChange={(referenceOptions) => {
+          selectionReferenceOptionsRef.current = referenceOptions;
           setSelectionEdit((current) => current ? {
             ...current,
             referenceOptions,
             replacementText: '',
             contextManifest: undefined,
             error: null,
-          } : null)
-        }
+          } : null);
+        }}
         onGenerate={() => void generateSelectionEdit()}
         onApply={applyCurrentSelectionEdit}
         onClose={closeSelectionEdit}

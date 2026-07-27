@@ -91,6 +91,7 @@ This `.claude/` directory contains:
 - **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.
 - **제안 다건 지원 (D3)**: `ChatMessageMetadata`에 `projectMemoryProposals`/`forbiddenTermProposals`/`glossaryEntryProposals` 배열 추가. 단수 필드는 과거 메시지 호환용 deprecated. 읽기/갱신은 `components/chat/knowledgeProposals.ts`의 `read*`/`patchProposalStatus`로 일원화(legacy 단수 필드 자동 정규화).
 - **승인 안전성 (D4/D5/D7)**: `duplicate` 플래그 토스트 노출, 저장 중 승인 버튼 잠금(`saving`), 제안의 `projectId`와 활성 프로젝트 일치 검증.
+- **부분 수정의 전역 제약 (D9)**: 번역 규칙·금칙어는 모든 문장에 적용되는 전역 제약이므로 부분 수정 경로에도 기본 적용한다. `DEFAULT_SELECTION_REFERENCE_OPTIONS`의 `translationRules`/`forbiddenTerms`가 `true`(용어집·메모리는 `false` 유지), 참조 옵션은 선택마다 리셋하지 않고 프로젝트 단위 유지(`selectionReferenceOptionsRef`), 선택 채팅에도 규칙·금칙어를 주입. 프로젝트 메모리는 질의 의존적이라 선택 채팅에서 계속 제외하고 `get_project_guidance`에 맡긴다. 이전에는 문서를 고칠 수 있는 두 경로(직접 재번역·선택 채팅)에만 규칙이 빠져 있어, 다듬을수록 문서 내 일관성이 무너지는 구조였다.
 - **workflow 메모리 상한 (D6)**: `resolveWorkflowContextFromSnapshot`이 mode별 상한(full-translate/review/polish 40, selection-retranslate 20)을 적용하고 `manifest.projectMemoryItemIds`를 실제 주입분과 일치시킨다. `buildContextSnapshot`은 전체를 유지(스냅샷 의미 보존). **카테고리 하드 제외는 하지 않는다** — legacy 마이그레이션과 수동 추가가 모두 `general`이라 배제 시 데이터 누락.
 
 ### Previous (2026-07-24)

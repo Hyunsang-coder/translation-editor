@@ -1,7 +1,7 @@
 # 동적 프로젝트 지식(Project Memory) 수정 계획 (2026-07-27)
 
-> **구현 상태: ✅ D1–D7 완료 (2026-07-27)** — 커밋 `e229e9b`(D1/D2), `f866564`(D3), `2638304`(D4/D5/D7), `68e9711`(D6).
-> 검증: `npx tsc --noEmit`, `npm run test:run` (1077 passed, 8 skipped / 94 files).
+> **구현 상태: ✅ D1–D7, D9 완료 (2026-07-27)** — 커밋 `e229e9b`(D1/D2), `f866564`(D3), `2638304`(D4/D5/D7), `68e9711`(D6), D9.
+> 검증: `npx tsc --noEmit`, `npm run test:run` (1078 passed, 8 skipped / 94 files).
 > 미적용: D8-4(웹 E2E 시나리오) — 사용자 합의로 범위 제외. 아래 "구현 결과" 참조.
 
 > 대상: v2.13.0 "Dynamic project knowledge" 도입 이후의 채팅 ↔ Project Memory/금칙어/용어집 갱신 루프.
@@ -21,6 +21,7 @@
 | D6 | ✅ | P2 토큰 | `src/ai/context/buildContextSnapshot.ts:22` | active 메모리 전량 주입 (개수 cap·카테고리 필터 없음), pull 경로와 정책 불일치 |
 | D7 | ✅ | P3 방어 | `src/components/chat/ChatContent.tsx:518` | 메모리/금칙어/용어집 proposal에 `projectId` 가드 없음 (selection proposal에는 있음) |
 | D8 | 부분 | P3 테스트 | — | tool call → proposal 카드 → 승인 → DB → 다음 요청 반영 경로의 테스트 부재 |
+| D9 | ✅ | P1 일관성 | `src/types/index.ts:238` / `src/stores/chatStore.ai.ts:217` | 문서를 고칠 수 있는 두 경로(직접 재번역·선택 채팅)에만 번역 규칙·금칙어가 안 들어감 |
 
 **검토했으나 수정 불필요로 판단한 항목**:
 - "워크플로우 도중 메모리를 승인하면 진행 중 번역이 오염된다" — **해당 없음.** `EditorCanvasTipTap.tsx:860`, `:994`, `ReviewPanel.tsx:227`, `:552`가 작업 시작 시 `useProjectMemoryStore.getState()`를 캡처해 `buildContextSnapshot`으로 고정하므로 모든 chunk가 동일 revision을 공유한다. 설계 의도대로임.
@@ -426,6 +427,37 @@ selection proposal은 적용 전 프로젝트 일치를 검사한다.
 
 ---
 
+## D9. 부분 수정 경로에 전역 제약이 빠짐
+
+### 진단
+
+번역사가 문장 하나를 고치는 경로가 셋인데, 규칙이 적용되는 경로와 문서를 고칠 수 있는 경로가 어긋나 있었다.
+
+| 경로 | 번역 규칙 | 문서 수정 |
+|------|-----------|-----------|
+| 직접 부분 재번역 | 기본 꺼짐, 선택마다 재체크 | 가능 |
+| 선택 영역 채팅 | 미주입 (tool 호출 시에만) | 가능 |
+| 일반 채팅 | 자동 주입 | 불가 |
+
+`DEFAULT_SELECTION_REFERENCE_OPTIONS`가 네 항목 모두 `false`였고, 새 선택마다 `{ ...DEFAULT_SELECTION_REFERENCE_OPTIONS }`로 초기화돼(`EditorCanvasTipTap.tsx:585`) 체크를 켜도 다음 문장에서 다시 꺼졌다. 선택 채팅은 `translationRulesRaw = isSelectionRequest ? '' : ...`로 규칙을 아예 비웠다.
+
+설계 문서 §1.2의 "선택 채팅은 불필요한 프로젝트/문서 컨텍스트를 자동 주입하지 않는다"를 규칙에까지 적용한 결과인데, 배제 기준이 잘못됐다. 용어집·프로젝트 메모리는 크고 질의 의존적이라 on-demand가 맞지만, 문체·톤 규칙과 금칙어는 **모든 문장에 예외 없이 적용되는 전역 제약**이고 실제 크기도 수백 자다.
+
+이 조합의 위험은 실패가 조용하다는 데 있다. 규칙 없이 생성된 수정안도 문장으로는 멀쩡해 보이므로, 전체 번역은 규칙을 지켜 나왔는데 부분 수정만 규칙 없이 나오면 번역사가 다듬을수록 문서 내 일관성이 무너진다. 부분 수정의 최대 리스크가 바로 불일치인데 방향이 거꾸로였다.
+
+### 수정안
+
+1. `DEFAULT_SELECTION_REFERENCE_OPTIONS`의 `translationRules`/`forbiddenTerms`를 `true`로. `glossary`/`projectContext`는 `false` 유지.
+2. 참조 옵션을 `selectionReferenceOptionsRef`로 프로젝트 단위 유지. 프로젝트 전환 시에만 기본값으로 초기화.
+3. 선택 채팅에서도 `translationRules`와 금칙어 digest를 주입. 프로젝트 메모리는 `renderChatMemoryDigest({ items: isSelectionRequest ? [] : ... })`로 계속 제외해 `get_project_guidance`에 맡긴다.
+
+### 검증
+
+- `SelectionEditPreviewModal.test.tsx` — 규칙·금칙어 체크박스 ON, 용어집·메모리 OFF로 시작.
+- `chatStore.integration.test.ts` — 선택 요청에 `translationRules`/`forbiddenTermsDigest`는 들어가고 `projectMemoryDigest`는 빠지는지.
+
+---
+
 ## 작업 순서 (실제 진행 결과)
 
 | 커밋 | 항목 | 비고 |
@@ -434,6 +466,7 @@ selection proposal은 적용 전 프로젝트 일치를 검사한다.
 | `f866564` | D3 | `knowledgeProposals.ts`로 읽기/갱신 일원화 |
 | `2638304` | D4 + D5 + D7 | 작고 독립적이라 묶음 |
 | `68e9711` | D6 | D1의 정책 모듈을 workflow resolver에 적용 |
+| (D9) | D9 | 5번 구조 리뷰에서 추가 발견. 기본값 변경이라 사용자에게 보이는 동작이 바뀜 |
 
 D8-1/D8-2/D8-3은 각 커밋에 테스트로 포함했다(`projectMemoryPolicy.test.ts`, `projectKnowledgeRender.test.ts`, `knowledgeProposals.test.ts`, `ProjectKnowledgeProposalCards.test.tsx`, `chatStore.integration.test.ts`의 D1/D3 케이스).
 

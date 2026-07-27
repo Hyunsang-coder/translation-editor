@@ -474,6 +474,63 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       expect(new Set(ids).size).toBe(ids.length);
     });
 
+    it('선택 채팅은 전역 제약만 주입하고 프로젝트 메모리는 도구로 미룬다 (D9)', async () => {
+      useProjectMemoryStore.setState({
+        activeProjectId: 'project-1',
+        items: [{
+          id: 'm1',
+          projectId: 'project-1',
+          category: 'worldbuilding',
+          content: '배경은 22세기 화성 식민지다.',
+          normalizedHash: 'hash-m1',
+          status: 'active',
+          source: 'chat',
+          createdAt: 0,
+          updatedAt: 0,
+        }],
+        forbiddenTerms: [{
+          id: 't1',
+          projectId: 'project-1',
+          term: '유저',
+          replacement: '플레이어',
+          enabled: true,
+          createdAt: 0,
+          updatedAt: 0,
+        }],
+        revision: 4,
+      });
+      useChatStore.setState({ translationRules: '해요체로 통일' });
+      useChatStore.getState().createSession('Selection Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      await useChatStore.getState().sendMessage('이 문장 다듬어줘', {
+        targetSessionId: sessionId,
+        contextMode: 'selection',
+        selectionScopeId: 'scope-1',
+        selection: {
+          selectionId: 'selection-1',
+          selectionScopeId: 'scope-1',
+          projectId: 'project-1',
+          panel: 'target',
+          text: '유저가 접속했습니다',
+          from: 1,
+          to: 12,
+          anchorId: 'anchor-1',
+          translationUnitIds: ['unit-1'],
+          documentRevision: 'revision-1',
+          status: 'active',
+          createdAt: 1,
+        },
+      });
+
+      const input = mocks.streamAssistantReply.mock.calls[0]?.[0] as Record<string, unknown>;
+      // 모든 문장에 적용되는 제약은 모델의 도구 호출에 맡기지 않는다
+      expect(input.translationRules).toBe('해요체로 통일');
+      expect(input.forbiddenTermsDigest).toBe('- 유저 → 플레이어');
+      // 질의 의존적인 메모리는 get_project_guidance로 조회하게 둔다
+      expect(input).not.toHaveProperty('projectMemoryDigest');
+    });
+
     it('메모리가 없으면 digest를 주입하지 않는다 (D1)', async () => {
       useChatStore.getState().createSession('Empty Memory Session');
       const sessionId = useChatStore.getState().currentSessionId!;

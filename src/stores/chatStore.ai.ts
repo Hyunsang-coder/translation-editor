@@ -214,25 +214,25 @@ export function createAiActions(
             .map((id) => project.blocks[id])
             .filter((b): b is NonNullable<typeof b> => b !== undefined)
           : [];
-      const translationRulesRaw = isSelectionRequest ? '' : get().translationRules;
+      // 번역 규칙과 금칙어는 모든 문장에 적용되는 전역 제약이므로 선택 요청에도 넣는다.
+      // 모델의 자발적 도구 호출에 맡기면 규칙을 어긴 수정안이 조용히 나온다.
+      const translationRulesRaw = get().translationRules;
 
       const translationRules = translationRulesRaw
         ? maskGhostChips(translationRulesRaw, maskSession)
         : '';
 
-      // 승인된 Project Memory/금칙어는 압축 요약으로만 주입한다(매 턴 반복되므로).
-      // 요약에 없는 상세는 모델이 get_project_guidance로 조회한다.
+      // 반대로 프로젝트 메모리는 질의 의존적이고 양이 많아, 선택 요청에서는 선택 영역에
+      // 집중하도록 빼고 필요하면 get_project_guidance로 조회하게 둔다.
       const memoryState = useProjectMemoryStore.getState();
-      const memoryDigest = isSelectionRequest
-        ? null
-        : renderChatMemoryDigest({
-          items: memoryState.items,
-          forbiddenTerms: memoryState.forbiddenTerms,
-        });
-      const projectMemoryDigest = memoryDigest?.projectMemory
+      const memoryDigest = renderChatMemoryDigest({
+        items: isSelectionRequest ? [] : memoryState.items,
+        forbiddenTerms: memoryState.forbiddenTerms,
+      });
+      const projectMemoryDigest = memoryDigest.projectMemory
         ? maskGhostChips(memoryDigest.projectMemory, maskSession)
         : '';
-      const forbiddenTermsDigest = memoryDigest?.forbiddenTerms
+      const forbiddenTermsDigest = memoryDigest.forbiddenTerms
         ? maskGhostChips(memoryDigest.forbiddenTerms, maskSession)
         : '';
 
@@ -339,11 +339,11 @@ export function createAiActions(
       const contextManifest: ContextManifest = {
         mode: isSelectionRequest ? 'selection-chat' : 'general-chat',
         revision: memoryState.revision,
-        projectMemoryItemIds: memoryDigest?.itemIds ?? [],
+        projectMemoryItemIds: memoryDigest.itemIds,
         ...(translationRules
           ? { translationRulesHash: hashContent(translationRules) }
           : {}),
-        forbiddenTermIds: memoryDigest?.forbiddenTermIds ?? [],
+        forbiddenTermIds: memoryDigest.forbiddenTermIds,
         glossaryEntryIds: get().lastInjectedGlossary.map((entry) => entry.id),
         included: initialIncluded,
         estimatedInputTokens: reservedContextTokens,
