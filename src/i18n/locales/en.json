@@ -611,6 +611,8 @@
     "contextReferences": "References",
     "noExtraContext": "No extra context",
     "inputTokens": "Input",
+    "cacheReadTokens": "Cache read",
+    "cacheWriteTokens": "Cache write",
     "toolName": {
       "webSearch": "Web Search",
       "getSourceDocument": "Source Document",

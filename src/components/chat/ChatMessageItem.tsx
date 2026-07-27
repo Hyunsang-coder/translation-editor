@@ -340,6 +340,18 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                           displayMetadata.contextManifest.estimatedInputTokens.toLocaleString()
                         } tokens</>
                       )}
+                      {displayMetadata.cacheReadInputTokens !== undefined &&
+                        displayMetadata.cacheReadInputTokens > 0 && (
+                        <> · {t('chat.cacheReadTokens', '캐시 재사용')} {
+                          displayMetadata.cacheReadInputTokens.toLocaleString()
+                        }</>
+                      )}
+                      {displayMetadata.cacheCreationInputTokens !== undefined &&
+                        displayMetadata.cacheCreationInputTokens > 0 && (
+                        <> · {t('chat.cacheWriteTokens', '캐시 기록')} {
+                          displayMetadata.cacheCreationInputTokens.toLocaleString()
+                        }</>
+                      )}
                     </div>
                   )}
                 </>

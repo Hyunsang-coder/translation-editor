@@ -619,9 +619,12 @@ export function createAiActions(
           if (!ownsStream()) return;
           const currentMetadata = get().streamingMetadata ?? {};
           // Phase 4: 실제 provider 입력 토큰 기준 context 사용률 (사전 추정과 분리, §12.5)
+          // 분자는 마지막 모델 호출의 입력(=이번 턴의 실제 컨텍스트 크기).
+          // usage.inputTokens는 도구 루프 전 스텝 합산(청구 관점)이라 점유율이 부풀려진다.
+          const contextInput = usage.lastInputTokens ?? usage.inputTokens;
           const contextUtilization =
-            usage.inputTokens !== undefined && capabilities.maxInputTokens > 0
-              ? Math.min(1, usage.inputTokens / capabilities.maxInputTokens)
+            contextInput !== undefined && capabilities.maxInputTokens > 0
+              ? Math.min(1, contextInput / capabilities.maxInputTokens)
               : undefined;
           set({
             streamingMetadata: {
@@ -629,11 +632,17 @@ export function createAiActions(
               ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
               ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
               ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
+              ...(usage.cacheReadInputTokens !== undefined
+                ? { cacheReadInputTokens: usage.cacheReadInputTokens }
+                : {}),
+              ...(usage.cacheCreationInputTokens !== undefined
+                ? { cacheCreationInputTokens: usage.cacheCreationInputTokens }
+                : {}),
               ...(contextUtilization !== undefined ? { contextUtilization } : {}),
               contextManifest: {
                 ...(currentMetadata.contextManifest ?? contextManifest),
-                ...(usage.inputTokens !== undefined
-                  ? { estimatedInputTokens: usage.inputTokens }
+                ...(contextInput !== undefined
+                  ? { estimatedInputTokens: contextInput }
                   : {}),
               },
             },

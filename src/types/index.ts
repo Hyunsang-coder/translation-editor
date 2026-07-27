@@ -468,6 +468,10 @@ export interface ChatMessageMetadata {
   outputTokens?: number;
   /** 실제 소비된 총 토큰 수 */
   totalTokens?: number;
+  /** 이번 턴(도구 루프 합산)에서 캐시로부터 읽은 입력 토큰 (~0.1× 과금) */
+  cacheReadInputTokens?: number;
+  /** 이번 턴(도구 루프 합산)에서 캐시에 새로 기록한 입력 토큰 (1.25× 과금) */
+  cacheCreationInputTokens?: number;
   /** context window 사용률 (0~1, Phase 3에서 채워짐) */
   contextUtilization?: number;
 

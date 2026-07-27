@@ -27,9 +27,11 @@ async function* chunkStream(chunks: AIMessageChunk[]): AsyncGenerator<AIMessageC
  */
 function makeModel(steps: AIMessageChunk[][]) {
   const seenMessages: BaseMessage[][] = [];
+  const seenOptions: Array<Record<string, unknown> | undefined> = [];
   let call = 0;
-  const streamMock = vi.fn(async (messages: BaseMessage[]) => {
+  const streamMock = vi.fn(async (messages: BaseMessage[], options?: Record<string, unknown>) => {
     seenMessages.push([...messages]);
+    seenOptions.push(options);
     const idx = Math.min(call, steps.length - 1);
     call += 1;
     return chunkStream(steps[idx]!);
@@ -38,11 +40,33 @@ function makeModel(steps: AIMessageChunk[][]) {
     model: { stream: streamMock } as unknown as LoopParams['model'],
     streamMock,
     seenMessages,
+    seenOptions,
   };
 }
 
 function fakeTool() {
   return { name: 'fake_tool', invoke: vi.fn(async () => 'tool output') };
+}
+
+/** Anthropic message_start/message_delta가 보고하는 누적 스냅샷 usage를 실은 청크 */
+function usageChunk(u: {
+  input: number;
+  output: number;
+  cacheRead?: number;
+  cacheCreation?: number;
+}): AIMessageChunk {
+  const chunk = new AIMessageChunk({ content: '' });
+  // 이 버전의 AIMessageChunk 생성자 타입은 usage_metadata를 받지 않으므로 직접 주입
+  (chunk as { usage_metadata?: unknown }).usage_metadata = {
+    input_tokens: u.input,
+    output_tokens: u.output,
+    total_tokens: u.input + u.output,
+    input_token_details: {
+      ...(u.cacheRead !== undefined ? { cache_read: u.cacheRead } : {}),
+      ...(u.cacheCreation !== undefined ? { cache_creation: u.cacheCreation } : {}),
+    },
+  };
+  return chunk;
 }
 
 function baseMessages(): BaseMessage[] {
@@ -181,7 +205,7 @@ describe('runToolCallingLoop Anthropic prompt caching', () => {
   });
 
   it('provider 미지정/openai면 메시지를 변형하지 않는다', async () => {
-    const { model, seenMessages } = makeModel([[textChunk('답변')]]);
+    const { model, seenMessages, seenOptions } = makeModel([[textChunk('답변')]]);
     await runToolCallingLoop({
       model,
       tools: [fakeTool()],
@@ -191,5 +215,64 @@ describe('runToolCallingLoop Anthropic prompt caching', () => {
     });
     expect(cacheMarkerCount(seenMessages[0]!)).toBe(0);
     expect(seenMessages[0]![0]!.content).toBe('sys');
+    // 호출 옵션에도 cache_control을 넣지 않는다 (Anthropic 전용 옵션)
+    for (const opts of seenOptions) {
+      expect(opts ?? {}).not.toHaveProperty('cache_control');
+    }
+  });
+
+  it('message_start/message_delta 중복 보고를 이중 계상하지 않고 lastInputTokens를 추적한다', async () => {
+    // Anthropic 실스트림 재현: 두 이벤트 모두 누적 스냅샷 usage를 보고한다.
+    // 종전 concat 합산 방식은 캐시 필드를 정확히 2배로 계상했다 (write > input 로그).
+    const { model } = makeModel([
+      [
+        usageChunk({ input: 4325, output: 1, cacheRead: 0, cacheCreation: 4323 }), // message_start
+        toolCallChunk('fake_tool', 'c1'),
+        usageChunk({ input: 0, output: 50, cacheRead: 0, cacheCreation: 4323 }), // message_delta
+      ],
+      [
+        usageChunk({ input: 6000, output: 1, cacheRead: 5625, cacheCreation: 300 }),
+        textChunk('최종 답변'),
+        usageChunk({ input: 0, output: 80, cacheRead: 5625, cacheCreation: 300 }),
+      ],
+    ]);
+    const res = await runToolCallingLoop({
+      model,
+      tools: [fakeTool()],
+      messages: baseMessages(),
+      maxSteps: 3,
+      provider: 'anthropic',
+    });
+
+    expect(res.usage.modelCalls).toBe(2);
+    expect(res.usage.inputTokens).toBe(4325 + 6000);
+    expect(res.usage.outputTokens).toBe(50 + 80);
+    expect(res.usage.totalTokens).toBe(4325 + 50 + 6000 + 80);
+    // 캐시 필드: 스텝별 최댓값의 합 (2배 아님)
+    expect(res.usage.cacheReadInputTokens).toBe(0 + 5625);
+    expect(res.usage.cacheCreationInputTokens).toBe(4323 + 300);
+    // 마지막 모델 호출의 입력 (컨텍스트 점유율용, 누적 아님)
+    expect(res.usage.lastInputTokens).toBe(6000);
+  });
+
+  it('provider=anthropic이면 호출 옵션 cache_control로 도구 결과 꼬리 breakpoint를 요청한다', async () => {
+    const { model, seenOptions } = makeModel([
+      [toolCallChunk('fake_tool', 'c1')],
+      [textChunk('최종 답변')],
+    ]);
+    await runToolCallingLoop({
+      model,
+      tools: [fakeTool()],
+      messages: baseMessages(),
+      maxSteps: 3,
+      provider: 'anthropic',
+    });
+
+    // 매 스텝: 어댑터가 변환된 페이로드의 마지막 블록(스텝 2+는 마지막 tool_result)에
+    // marker를 추가하도록 옵션을 전달한다
+    expect(seenOptions.length).toBe(2);
+    for (const opts of seenOptions) {
+      expect(opts).toMatchObject({ cache_control: { type: 'ephemeral' } });
+    }
   });
 });

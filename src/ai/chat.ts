@@ -234,6 +234,12 @@ export interface UsageInfo {
   cacheReadInputTokens?: number;
   /** 캐시에 새로 기록한 입력 토큰 (1.25× 과금). */
   cacheCreationInputTokens?: number;
+  /**
+   * 마지막 모델 호출 1회의 입력 토큰 (uncached+read+write 포함, 누적 아님).
+   * inputTokens는 루프 전 스텝 합산(청구 관점)이라 context window 점유율의
+   * 분자로 쓰면 부풀려진다 — 점유율 계산은 이 값을 쓸 것.
+   */
+  lastInputTokens?: number;
 }
 
 export interface StreamCallbacks {
@@ -508,31 +514,52 @@ export async function runToolCallingLoop(params: {
   // Phase 4: tool_call_id → 도구 이름 (오래된 결과 축약 시 digest 라벨용)
   const toolCallNames = new Map<string, string>();
 
-  // 토큰 사용량 집계 (각 step의 finalAiMessage.usage_metadata 누적)
+  // 토큰 사용량 집계 (스텝별 StepUsage 누적)
   const usage: UsageInfo = {};
-  const addUsage = (msg: AIMessageChunk | null): void => {
-    const u = (msg as {
+  // 스텝 usage는 concat된 finalAiMessage.usage_metadata가 아니라 청크에서 직접 병합한다.
+  // Anthropic 스트리밍은 message_start와 message_delta가 모두 "누적 스냅샷" usage를
+  // 보고하는데, chunk concat은 usage_metadata를 필드별 합산하므로(@langchain/core
+  // mergeInputTokenDetails) 캐시 read/write가 정확히 2배로 계상된다(input_tokens는
+  // start에만 실려 무사). 누적 스냅샷끼리는 필드별 최댓값이 그 스텝의 실제값이다.
+  type StepUsage = {
+    input?: number | undefined;
+    output?: number | undefined;
+    cacheRead?: number | undefined;
+    cacheCreation?: number | undefined;
+  };
+  const maxField = (a: number | undefined, b: number | undefined): number | undefined =>
+    b === undefined ? a : a === undefined ? b : Math.max(a, b);
+  const collectStepUsage = (acc: StepUsage, chunk: AIMessageChunk): void => {
+    const u = (chunk as unknown as {
       usage_metadata?: {
         input_tokens?: number;
         output_tokens?: number;
-        total_tokens?: number;
         input_token_details?: { cache_read?: number; cache_creation?: number };
       };
-    } | null)?.usage_metadata;
+    }).usage_metadata;
     if (!u) return;
-    usage.modelCalls = (usage.modelCalls ?? 0) + 1;
-    if (typeof u.input_tokens === 'number') usage.inputTokens = (usage.inputTokens ?? 0) + u.input_tokens;
-    if (typeof u.output_tokens === 'number') usage.outputTokens = (usage.outputTokens ?? 0) + u.output_tokens;
-    if (typeof u.total_tokens === 'number') usage.totalTokens = (usage.totalTokens ?? 0) + u.total_tokens;
+    acc.input = maxField(acc.input, u.input_tokens);
+    acc.output = maxField(acc.output, u.output_tokens);
     // prompt caching 실효 관측 (Anthropic: cache_control, OpenAI: 자동 프리픽스 캐싱)
-    // 0도 그대로 누적한다. undefined(=provider 미보고)와 0(=캐시 미스)은 원인이 달라
+    // 0도 그대로 유지한다. undefined(=provider 미보고)와 0(=캐시 미스)은 원인이 달라
     // 구분되지 않으면 진단이 불가능하다.
-    const details = u.input_token_details;
-    if (typeof details?.cache_read === 'number') {
-      usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + details.cache_read;
+    acc.cacheRead = maxField(acc.cacheRead, u.input_token_details?.cache_read);
+    acc.cacheCreation = maxField(acc.cacheCreation, u.input_token_details?.cache_creation);
+  };
+  const addUsage = (step: StepUsage): void => {
+    if (step.input === undefined && step.output === undefined) return;
+    usage.modelCalls = (usage.modelCalls ?? 0) + 1;
+    if (step.input !== undefined) {
+      usage.inputTokens = (usage.inputTokens ?? 0) + step.input;
+      usage.lastInputTokens = step.input;
     }
-    if (typeof details?.cache_creation === 'number') {
-      usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + details.cache_creation;
+    if (step.output !== undefined) usage.outputTokens = (usage.outputTokens ?? 0) + step.output;
+    usage.totalTokens = (usage.totalTokens ?? 0) + (step.input ?? 0) + (step.output ?? 0);
+    if (step.cacheRead !== undefined) {
+      usage.cacheReadInputTokens = (usage.cacheReadInputTokens ?? 0) + step.cacheRead;
+    }
+    if (step.cacheCreation !== undefined) {
+      usage.cacheCreationInputTokens = (usage.cacheCreationInputTokens ?? 0) + step.cacheCreation;
     }
   };
 
@@ -570,14 +597,20 @@ export async function runToolCallingLoop(params: {
     let accumulatedText = '';
     const accumulatedToolCallChunks: ToolCallChunk[] = [];
     let finalAiMessage: AIMessageChunk | null = null;
+    const stepUsage: StepUsage = {};
 
     try {
-      const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
-      // Anthropic: 요청 직전에만 cache_control을 입힌 사본을 전송 (loopMessages는 plain 유지)
-      const wireMessages =
-        params.provider === 'anthropic'
-          ? withAnthropicPromptCache(loopMessages)
-          : loopMessages;
+      const isAnthropic = params.provider === 'anthropic';
+      // Anthropic: 요청 직전에만 cache_control을 입힌 사본을 전송 (loopMessages는 plain 유지).
+      // 호출 옵션 cache_control은 어댑터가 변환을 마친 페이로드의 마지막 블록에 세 번째
+      // breakpoint를 추가한다(applyCacheControlToPayload) — 스텝 2+에서는 마지막 tool_result.
+      // ToolMessage는 메시지 레벨로 marker를 전달할 수 없으므로(어댑터가 tool_result 블록을
+      // 자체 생성) 이 옵션이 도구 결과 꼬리를 캐시하는 유일한 경로다. 총 breakpoint 3 ≤ 4.
+      const streamOptions = {
+        ...(params.abortSignal ? { signal: params.abortSignal } : {}),
+        ...(isAnthropic ? { cache_control: { type: 'ephemeral' as const } } : {}),
+      };
+      const wireMessages = isAnthropic ? withAnthropicPromptCache(loopMessages) : loopMessages;
       const stream = await withRetry(
         () => modelWithTools.stream(wireMessages, streamOptions) as Promise<AsyncIterable<AIMessageChunk>>,
       );
@@ -607,6 +640,8 @@ export async function runToolCallingLoop(params: {
         } else {
           finalAiMessage = finalAiMessage.concat(chunk);
         }
+
+        collectStepUsage(stepUsage, chunk);
       }
     } catch (e) {
       // 스트림 에러 처리
@@ -615,14 +650,14 @@ export async function runToolCallingLoop(params: {
       }
       // 네트워크 에러 등 - 부분 응답이 있으면 반환
       if (accumulatedText) {
-        addUsage(finalAiMessage);
+        addUsage(stepUsage);
         return { finalText: accumulatedText, usedTools: toolsUsed.length > 0, toolsUsed, usage };
       }
       throw e;
     }
 
     // 토큰 사용량 집계 (도구 루프의 각 모델 실행마다 누적)
-    addUsage(finalAiMessage);
+    addUsage(stepUsage);
 
     // 마지막 스텝 답변 유실 방지: 이 스텝에서 생성된 텍스트를 보존
     if (accumulatedText) lastEmittedText = accumulatedText;
@@ -1313,6 +1348,7 @@ export async function streamAssistantReply(
       read: usage.cacheReadInputTokens ?? 'n/a',
       write: usage.cacheCreationInputTokens ?? 'n/a',
       input: usage.inputTokens,
+      lastInput: usage.lastInputTokens ?? 'n/a',
       modelCalls: calls,
       inputPerCall: Math.round(usage.inputTokens / Math.max(1, calls)),
     });

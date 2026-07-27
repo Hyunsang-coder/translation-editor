@@ -609,6 +609,8 @@
     "contextReferences": "참조",
     "noExtraContext": "추가 컨텍스트 없음",
     "inputTokens": "입력",
+    "cacheReadTokens": "캐시 재사용",
+    "cacheWriteTokens": "캐시 기록",
     "toolName": {
       "webSearch": "웹검색",
       "getSourceDocument": "원문 조회",
