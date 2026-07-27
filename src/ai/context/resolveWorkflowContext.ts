@@ -7,6 +7,11 @@ import type {
 } from '@/types';
 import { hashContent } from '@/utils/hash';
 import { approxTokens } from '@/ai/chatContext/tokenBudget';
+import {
+  formatForbiddenTermLine,
+  renderSnapshotMemory,
+} from './projectKnowledgeRender';
+import { memoryItemLimit } from './projectMemoryPolicy';
 export {
   buildContextSnapshot,
   type BuildContextSnapshotInput,
@@ -45,10 +50,13 @@ export function resolveWorkflowContextFromSnapshot(
   const rendered: ResolvedWorkflowContext['rendered'] = {};
   const included: ContextManifest['included'] = [];
 
-  if (useProjectMemory && snapshot.projectMemoryItems.length > 0) {
-    rendered.projectMemory = snapshot.projectMemoryItems
-      .map((item) => `- [${item.category}] ${item.content}`)
-      .join('\n');
+  // 무엇을 주입할지는 mode를 아는 resolver의 책임이다. snapshot은 "그 시점의 프로젝트
+  // 지식 전체"라는 의미를 유지해야 하므로 상한을 여기서 적용한다.
+  const memorySelection = useProjectMemory
+    ? renderSnapshotMemory(snapshot.projectMemoryItems, memoryItemLimit(mode))
+    : null;
+  if (memorySelection?.text) {
+    rendered.projectMemory = memorySelection.text;
     included.push('project-memory');
   }
   if (useTranslationRules && snapshot.translationRules.trim()) {
@@ -57,11 +65,7 @@ export function resolveWorkflowContextFromSnapshot(
   }
   if (useForbiddenTerms && snapshot.forbiddenTerms.length > 0) {
     rendered.forbiddenTerms = snapshot.forbiddenTerms
-      .map((term) =>
-        `- ${term.term}${term.replacement ? ` → ${term.replacement}` : ''}${
-          term.note ? ` (${term.note})` : ''
-        }`,
-      )
+      .map(formatForbiddenTermLine)
       .join('\n');
     included.push('forbidden-terms');
   }
@@ -78,9 +82,7 @@ export function resolveWorkflowContextFromSnapshot(
     manifest: {
       mode,
       revision: snapshot.revision,
-      projectMemoryItemIds: useProjectMemory
-        ? snapshot.projectMemoryItems.map((item) => item.id)
-        : [],
+      projectMemoryItemIds: memorySelection?.itemIds ?? [],
       ...(useTranslationRules && snapshot.translationRules.trim()
         ? { translationRulesHash: hashContent(snapshot.translationRules.trim()) }
         : {}),

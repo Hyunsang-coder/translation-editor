@@ -108,6 +108,64 @@ describe('workflow context snapshot', () => {
     expect(resolved.manifest.glossaryEntryIds).toEqual(['g1']);
   });
 
+  it('메모리가 상한을 넘으면 우선순위대로 잘라내고 manifest가 실제 주입분과 일치한다 (D6)', () => {
+    const many = Array.from({ length: 45 }, (_, index) => ({
+      id: `fact-${index}`,
+      projectId: 'project-1',
+      category: 'reference_fact' as const,
+      content: `참고 사실 ${index}`,
+      normalizedHash: `h${index}`,
+      status: 'active' as const,
+      source: 'user' as const,
+      createdAt: index,
+      updatedAt: index,
+    }));
+    const snapshot = buildContextSnapshot({
+      revision: 3,
+      projectMemoryItems: [
+        {
+          id: 'domain-1',
+          projectId: 'project-1',
+          category: 'domain',
+          content: '항공 정비 매뉴얼',
+          normalizedHash: 'd1',
+          status: 'active',
+          source: 'user',
+          createdAt: 999,
+          updatedAt: 999,
+        },
+        ...many,
+      ],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 100,
+    });
+    const resolved = resolveWorkflowContextFromSnapshot({ mode: 'full-translate', snapshot });
+
+    // snapshot은 전체를 유지하고, 주입만 상한을 적용한다
+    expect(snapshot.projectMemoryItems).toHaveLength(46);
+    expect(resolved.manifest.projectMemoryItemIds).toHaveLength(40);
+    // 우선순위가 높은 domain은 뒤늦게 추가됐어도 살아남는다
+    expect(resolved.manifest.projectMemoryItemIds).toContain('domain-1');
+    expect(resolved.rendered.projectMemory?.split('\n')).toHaveLength(40);
+  });
+
+  it('상한 이하면 모든 active 항목을 주입한다 (D6)', () => {
+    const snapshot = buildContextSnapshot({
+      revision: 1,
+      projectMemoryItems: memoryItems,
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 100,
+    });
+    const resolved = resolveWorkflowContextFromSnapshot({ mode: 'full-translate', snapshot });
+
+    expect(resolved.manifest.projectMemoryItemIds).toEqual(['active-1']);
+    expect(resolved.rendered.projectMemory).toContain('[audience]');
+  });
+
   it('review snapshot 객체를 모든 chunk에서 그대로 재사용할 수 있다', () => {
     const snapshot = buildContextSnapshot({
       revision: 9,
