@@ -411,9 +411,7 @@ export type ChatToolRequirement =
   | 'review-results'
   | 'web-enabled'
   | 'confluence-enabled'
-  | 'notion-enabled'
-  | 'explicit-document-reference'
-  | 'explicit-external-reference';
+  | 'notion-enabled';
 
 export interface ChatToolDescriptor {
   name: string;

@@ -9,6 +9,7 @@ import {
   streamWithTauriAiBackend,
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { mergeUsageFromChunk, recordAiUsage, type AiUsageTokens } from '@/ai/usageLedger';
 import { approxTokens } from '@/ai/chatContext/tokenBudget';
 import { resolveWorkflowContextFromSnapshot } from '@/ai/context/resolveWorkflowContext';
 
@@ -154,6 +155,7 @@ export async function retranslateSelection(
       abortSignal: input.abortSignal,
       cancelMessage: '재번역이 취소되었습니다.',
       onAccumulated: (accumulated) => input.onToken?.(filterMarkerText(accumulated)),
+      usageFeature: 'selection-retranslate',
     });
   } else {
     const model = createChatModel(undefined, {
@@ -164,12 +166,24 @@ export async function retranslateSelection(
       messages,
       input.abortSignal ? { signal: input.abortSignal } : {},
     );
-    for await (const chunk of stream) {
-      if (input.abortSignal?.aborted) {
-        throw new DOMException('재번역이 취소되었습니다.', 'AbortError');
+    // 취소된 스트림도 생성분만큼 과금되므로 finally에서 기록한다.
+    const streamUsage: AiUsageTokens = {};
+    try {
+      for await (const chunk of stream) {
+        mergeUsageFromChunk(streamUsage, chunk);
+        if (input.abortSignal?.aborted) {
+          throw new DOMException('재번역이 취소되었습니다.', 'AbortError');
+        }
+        raw += chunkText(chunk.content);
+        input.onToken?.(filterMarkerText(raw));
       }
-      raw += chunkText(chunk.content);
-      input.onToken?.(filterMarkerText(raw));
+    } finally {
+      recordAiUsage({
+        feature: 'selection-retranslate',
+        provider: cfg.provider,
+        model: cfg.model,
+        ...streamUsage,
+      });
     }
   }
 

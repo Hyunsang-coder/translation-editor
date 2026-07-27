@@ -14,7 +14,7 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     trust: 'document',
     maxOutputChars: 8_000,
     displayNameKey: 'chat.toolName.getSourceDocument',
-    requires: ['project', 'explicit-document-reference'],
+    requires: ['project'],
   },
   {
     name: 'get_target_document',
@@ -23,7 +23,7 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     trust: 'document',
     maxOutputChars: 8_000,
     displayNameKey: 'chat.toolName.getTargetDocument',
-    requires: ['project', 'explicit-document-reference'],
+    requires: ['project'],
   },
   {
     name: 'get_selection_surroundings',
@@ -122,16 +122,7 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     trust: 'external',
     maxOutputChars: 8_000,
     displayNameKey: 'chat.toolName.webSearch',
-    requires: ['web-enabled', 'explicit-external-reference'],
-  },
-  {
-    name: 'confluence_word_count',
-    profiles: PROJECT_PROFILES,
-    effect: 'external-read',
-    trust: 'external',
-    maxOutputChars: 4_000,
-    displayNameKey: 'chat.toolName.confluenceWordCount',
-    requires: ['confluence-enabled', 'explicit-external-reference'],
+    requires: ['web-enabled'],
   },
   {
     name: 'confluence_load_page',
@@ -140,7 +131,7 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     trust: 'external',
     maxOutputChars: 2_000,
     displayNameKey: 'chat.toolName.confluenceLoadPage',
-    requires: ['confluence-enabled', 'explicit-external-reference'],
+    requires: ['confluence-enabled'],
   },
   {
     name: 'notion_search',
@@ -149,7 +140,7 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     trust: 'external',
     maxOutputChars: 8_000,
     displayNameKey: 'chat.toolName.notionSearch',
-    requires: ['notion-enabled', 'explicit-external-reference'],
+    requires: ['notion-enabled'],
   },
 ] as const;
 

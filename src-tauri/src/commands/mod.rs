@@ -125,6 +125,7 @@ pub mod quality;
 pub mod secrets;
 pub mod secure_store;
 pub mod storage;
+pub mod usage;
 
 #[cfg(test)]
 mod cancel_handle_tests {

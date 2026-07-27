@@ -216,6 +216,29 @@
       "manualSetup": "수동 설정",
       "manualHint": "~/Library/Application Support/Claude/claude_desktop_config.json에 추가하세요:",
       "copied": "복사됨!"
+    },
+    "usage": "AI 사용량 · 추정 비용",
+    "usageEstimateNotice": "provider가 보고한 토큰을 그대로 집계한 값입니다. 비용은 등록된 단가로 환산한 추정치이며, 실제 청구는 provider 콘솔 기준입니다.",
+    "usageLastNDays": "최근 {{count}}일",
+    "usageRefresh": "새로고침",
+    "usageLoading": "불러오는 중…",
+    "usageEmpty": "이 기간에 기록된 사용량이 없습니다.",
+    "usageTotalTokens": "총 토큰",
+    "usageEstimatedCost": "추정 비용",
+    "usageCacheSavings": "캐시 절감",
+    "usageUnpricedNotice": "* 단가가 등록되지 않은 모델이 포함되어 실제보다 낮게 표시됩니다.",
+    "usageUnknownPrice": "가격 미상",
+    "usageCallCount": "{{count}}회 호출",
+    "usageColumnHint": "토큰은 입력 / 출력 순입니다.",
+    "usageClear": "사용량 기록 전체 삭제",
+    "usageClearConfirm": "기록된 AI 사용량을 모두 삭제할까요? 되돌릴 수 없습니다.",
+    "usageFeature": {
+      "chat": "채팅",
+      "translate": "번역",
+      "review": "검수",
+      "polish": "폴리싱",
+      "selection-retranslate": "부분 재번역",
+      "summary": "대화 요약"
     }
   },
   "toolbar": {
@@ -487,7 +510,6 @@
     "category.distortion.desc": "강도/범위/조건이 변경된 경우",
     "category.consistency": "용어 일관성",
     "category.consistency.desc": "같은 용어가 다르게 번역된 경우",
-    "highlight": "표시",
     "apply": "적용",
     "copy": "복사",
     "ignore": "확인",
@@ -625,7 +647,6 @@
       "suggestTranslationRule": "규칙 제안",
       "suggestForbiddenTerm": "금칙어 제안",
       "suggestGlossaryEntry": "용어집 항목 제안",
-      "confluenceWordCount": "Confluence 단어 수",
       "confluenceLoadPage": "Confluence 문서 가져오기",
       "notionSearch": "Notion 검색"
     },
@@ -646,6 +667,7 @@
     "chatModel": "채팅 모델",
     "chatModelAriaLabel": "채팅 모델",
     "chatModelTitle": "채팅 모델 (이 세션 전용)",
+    "chatModelLockedTitle": "이 세션은 대화가 시작되어 모델이 고정되었습니다. 다른 모델을 쓰려면 새 채팅을 시작하세요.",
     "currentModelGroup": "현재",
     "modelAppliesNext": "다음 응답부터 적용",
     "modelAppliesNextTitle": "모델을 변경했습니다. 다음 응답부터 새 모델이 사용됩니다.",

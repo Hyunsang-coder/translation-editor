@@ -33,6 +33,12 @@ import {
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
 import {
+  mergeUsageFromChunk,
+  recordAiUsage,
+  usageFromMessage,
+  type AiUsageTokens,
+} from '@/ai/usageLedger';
+import {
   reattachTranslationUnitIds,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
@@ -410,6 +416,7 @@ export async function translateSourceDocToTargetDocJson(params: {
       messages,
       maxTokens,
       abortSignal: params.abortSignal,
+      usageFeature: 'translate',
       cacheSystem: params.cacheSystem,
     });
     if (!raw || raw.trim().length === 0) {
@@ -422,6 +429,13 @@ export async function translateSourceDocToTargetDocJson(params: {
   // 번역 실행 (비 Tauri 환경: LangChain 직접 호출)
   const invokeOptions = params.abortSignal ? { signal: params.abortSignal } : {};
   const res = await model.invoke(messages, invokeOptions);
+
+  recordAiUsage({
+    feature: 'translate',
+    provider: cfg.provider,
+    model: cfg.model,
+    ...usageFromMessage(res),
+  });
 
   // finish_reason 확인 (응답 잘림 감지)
   const finishReason = (res.response_metadata as Record<string, unknown> | undefined)?.finish_reason;
@@ -519,6 +533,7 @@ export async function translateWithStreaming(
       maxTokens,
       onAccumulated: emitFiltered,
       abortSignal: params.abortSignal,
+      usageFeature: 'translate',
     });
 
     if (!raw || raw.trim().length === 0) {
@@ -532,6 +547,8 @@ export async function translateWithStreaming(
   // 스트리밍 실행 (웹/테스트 등 비 Tauri 환경: LangChain 직접 호출)
   let accumulated = '';
   const streamOptions = params.abortSignal ? { signal: params.abortSignal } : {};
+  // 취소된 스트림도 생성분만큼 과금되므로 finally에서 기록한다.
+  const streamUsage: AiUsageTokens = {};
   try {
     // WebView fetch는 CORS/네트워크 실패를 불투명한 "Type error"로 던질 수 있다.
     // 에러는 model.stream() 호출이 아니라 for-await 반복 도중에 발생하므로
@@ -539,6 +556,7 @@ export async function translateWithStreaming(
     const stream = await model.stream(messages, streamOptions);
 
     for await (const chunk of stream) {
+      mergeUsageFromChunk(streamUsage, chunk);
       // 취소 확인
       if (params.abortSignal?.aborted) {
         throw new Error('번역이 취소되었습니다.');
@@ -578,6 +596,7 @@ export async function translateWithStreaming(
       messages,
       maxTokens,
       abortSignal: params.abortSignal,
+      usageFeature: 'translate',
     });
     const translatedMarkdown = extractTranslationMarkdown(raw);
     if (translatedMarkdown.trim()) {
@@ -585,6 +604,13 @@ export async function translateWithStreaming(
     }
     const { doc } = processTranslationResponse(raw);
     return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
+  } finally {
+    recordAiUsage({
+      feature: 'translate',
+      provider: cfg.provider,
+      model: cfg.model,
+      ...streamUsage,
+    });
   }
 
   // 응답이 비어있는 경우

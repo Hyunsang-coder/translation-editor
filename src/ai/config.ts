@@ -22,7 +22,7 @@ interface ModelPreset {
 
 export const MODEL_PRESETS: Record<'anthropic' | 'openai', readonly ModelPreset[]> = {
   anthropic: [
-    { value: 'claude-opus-4-8', label: 'Opus 4.8', description: '높은 정확도, 복잡한 작업에 적합' },
+    { value: 'claude-opus-5', label: 'Opus 5', description: '높은 정확도, 복잡한 작업에 적합' },
     { value: 'claude-sonnet-5', label: 'Sonnet 5', description: '성능/속도/비용 균형 (권장)' },
     { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '빠른 응답, 낮은 비용' },
   ],

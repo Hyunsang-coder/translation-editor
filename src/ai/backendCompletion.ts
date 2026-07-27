@@ -1,6 +1,7 @@
 import type { AiConfig } from '@/ai/config';
 import { resolveModelCallOptions, type ModelUseFor } from '@/ai/modelCallOptions';
 import { aiComplete, aiStream, aiStreamCancel, type AiCompletionMessage } from '@/tauri/ai';
+import { recordAiUsage, type AiUsageFeature } from '@/ai/usageLedger';
 import { isTauriRuntime } from '@/tauri/invoke';
 
 export type AiPromptMessage = AiCompletionMessage;
@@ -114,6 +115,8 @@ export async function completeWithTauriAiBackend(params: {
   useFor?: ModelUseFor | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
+  /** 사용량 장부에 남길 기능 구분. 생략하면 기록하지 않는다. */
+  usageFeature?: AiUsageFeature | undefined;
   /** Anthropic: 같은 system을 재사용하는 반복 호출이면 true (prompt caching) */
   cacheSystem?: boolean | undefined;
 }): Promise<string> {
@@ -129,6 +132,7 @@ export async function completeWithTauriAiBackend(params: {
       useFor,
       cancelMessage,
       abortSignal: params.abortSignal,
+      usageFeature: params.usageFeature,
       cacheSystem: params.cacheSystem,
     });
   }
@@ -154,6 +158,15 @@ export async function completeWithTauriAiBackend(params: {
     ...(params.cacheSystem ? { cacheSystem: true } : {}),
   });
 
+  if (params.usageFeature && response.usage) {
+    recordAiUsage({
+      feature: params.usageFeature,
+      provider: params.cfg.provider,
+      model: params.cfg.model,
+      ...response.usage,
+    });
+  }
+
   return response.text;
 }
 
@@ -176,6 +189,8 @@ export async function streamWithTauriAiBackend(params: {
   onAccumulated?: ((rawSoFar: string) => void) | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
+  /** 사용량 장부에 남길 기능 구분. 생략하면 기록하지 않는다. */
+  usageFeature?: AiUsageFeature | undefined;
   /** Anthropic: 같은 system을 재사용하는 반복 호출이면 true (prompt caching) */
   cacheSystem?: boolean | undefined;
 }): Promise<string> {
@@ -211,6 +226,19 @@ export async function streamWithTauriAiBackend(params: {
       ...(params.cacheSystem ? { cacheSystem: true } : {}),
     },
     (event) => {
+      // usage는 stopped 가드보다 먼저 본다. 취소된 스트림도 생성분만큼 과금되고,
+      // 백엔드는 취소 경로에서도 usage를 발행하기 때문이다.
+      if (event.type === 'usage') {
+        if (params.usageFeature) {
+          recordAiUsage({
+            feature: params.usageFeature,
+            provider: params.cfg.provider,
+            model: params.cfg.model,
+            ...event.usage,
+          });
+        }
+        return;
+      }
       if (stopped) return;
       if (event.type === 'delta') {
         accumulated += event.text;

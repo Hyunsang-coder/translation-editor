@@ -54,6 +54,27 @@ describe('Phase 2: 세션별 모델 프리셋', () => {
     expect(useChatStore.getState().sessions.find((x) => x.id === b)!.modelPreset).toBe('gpt-5.6-luna-medium');
   });
 
+  it('대화가 시작된 세션은 모델을 바꿀 수 없다', () => {
+    const a = useChatStore.getState().createSession('A');
+    useChatStore.getState().switchSession(a);
+    useChatStore.getState().addMessage({ role: 'user', content: '첫 질문' }, a);
+
+    useChatStore.getState().setSessionModelPreset(a, 'gpt-5.6-sol-high');
+
+    // 모델을 바꾸면 그 세션이 쌓은 prompt cache가 통째로 무효화된다.
+    expect(useChatStore.getState().sessions.find((x) => x.id === a)!.modelPreset)
+      .toBe('claude-sonnet-5');
+    expect(useChatStore.getState().currentSession?.modelPreset).toBe('claude-sonnet-5');
+  });
+
+  it('첫 메시지 전에는 아직 캐시가 없으므로 모델을 바꿀 수 있다', () => {
+    const a = useChatStore.getState().createSession('A');
+    useChatStore.getState().setSessionModelPreset(a, 'gpt-5.6-sol-high');
+
+    expect(useChatStore.getState().sessions.find((x) => x.id === a)!.modelPreset)
+      .toBe('gpt-5.6-sol-high');
+  });
+
   it('currentSession도 동일 세션이면 modelPreset이 갱신된다', () => {
     const a = useChatStore.getState().createSession('A');
     useChatStore.getState().switchSession(a);

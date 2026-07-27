@@ -136,6 +136,46 @@ pub struct QualityRecordRow {
     pub origin_json: Option<String>,
 }
 
+/// AI 토큰 사용량 1건. 모델 호출 1회(도구 루프는 루프 전체)를 나타낸다.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsageRecordRow {
+    pub id: String,
+    pub project_id: Option<String>,
+    pub occurred_at: i64,
+    pub feature: String,
+    pub provider: String,
+    pub model: String,
+    #[serde(default)]
+    pub input_tokens: i64,
+    #[serde(default)]
+    pub output_tokens: i64,
+    #[serde(default)]
+    pub cache_read_input_tokens: i64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: i64,
+    #[serde(default)]
+    pub model_calls: i64,
+}
+
+/// 일자 + 모델 + 기능 단위로 접은 사용량 집계 행.
+/// 비용 환산은 모델 단가가 프런트(pricing.ts)에 있으므로 프런트에서 한다.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsageDailyRow {
+    /// 로컬 타임존 기준 YYYY-MM-DD
+    pub day: String,
+    pub feature: String,
+    pub provider: String,
+    pub model: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_input_tokens: i64,
+    pub cache_creation_input_tokens: i64,
+    pub model_calls: i64,
+    pub request_count: i64,
+}
+
 /// 품질 장부 작업 기록 (설계서 §4.4). 레코드의 분모.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -589,6 +629,9 @@ impl Database {
 
     /// 모든 프로젝트 삭제(연관 데이터 포함)
     /// - 앱 전역 용어집과 엔트리는 유지하고 프로젝트 링크만 제거합니다.
+    /// - `ai_usage_records`는 **의도적으로 지우지 않습니다**. 사용량 장부는 앱 전역 누적
+    ///   비용 기록이라 프로젝트 수명과 분리되어야 합니다(그래서 FK도 없음).
+    ///   전체 삭제는 설정의 `clear_ai_usage`로만 합니다.
     pub fn delete_all_projects(&self) -> Result<(), IteError> {
         let tx = self.conn.unchecked_transaction()?;
 
@@ -3246,6 +3289,79 @@ impl Database {
         Ok(out)
     }
 
+    /// AI 토큰 사용량 append 저장. 같은 id 재전송은 멱등(중복 계상 방지).
+    pub fn insert_ai_usage_record(&self, record: &AiUsageRecordRow) -> Result<(), IteError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO ai_usage_records (
+                id, project_id, occurred_at, feature, provider, model,
+                input_tokens, output_tokens,
+                cache_read_input_tokens, cache_creation_input_tokens, model_calls
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            rusqlite::params![
+                record.id,
+                record.project_id,
+                record.occurred_at,
+                record.feature,
+                record.provider,
+                record.model,
+                record.input_tokens,
+                record.output_tokens,
+                record.cache_read_input_tokens,
+                record.cache_creation_input_tokens,
+                record.model_calls,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// 일자(로컬 타임존) + 기능 + provider + 모델 단위 사용량 집계.
+    ///
+    /// `from_ms`/`to_ms`는 epoch ms 반개구간 [from, to)이며, None이면 그 방향 제한 없음.
+    /// 일자 버킷은 사용자가 보는 날짜와 맞아야 하므로 UTC가 아니라 'localtime' 기준이다.
+    pub fn query_ai_usage_daily(
+        &self,
+        from_ms: Option<i64>,
+        to_ms: Option<i64>,
+    ) -> Result<Vec<AiUsageDailyRow>, IteError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT date(occurred_at / 1000, 'unixepoch', 'localtime') AS day,
+                    feature, provider, model,
+                    SUM(input_tokens), SUM(output_tokens),
+                    SUM(cache_read_input_tokens), SUM(cache_creation_input_tokens),
+                    SUM(model_calls), COUNT(*)
+             FROM ai_usage_records
+             WHERE (?1 IS NULL OR occurred_at >= ?1)
+               AND (?2 IS NULL OR occurred_at < ?2)
+             GROUP BY day, feature, provider, model
+             ORDER BY day DESC, feature ASC, model ASC",
+        )?;
+        let iter = stmt.query_map(rusqlite::params![from_ms, to_ms], |row| {
+            Ok(AiUsageDailyRow {
+                day: row.get(0)?,
+                feature: row.get(1)?,
+                provider: row.get(2)?,
+                model: row.get(3)?,
+                input_tokens: row.get(4)?,
+                output_tokens: row.get(5)?,
+                cache_read_input_tokens: row.get(6)?,
+                cache_creation_input_tokens: row.get(7)?,
+                model_calls: row.get(8)?,
+                request_count: row.get(9)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in iter {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// 사용량 기록 전체 삭제 (설정에서 사용자가 명시적으로 실행).
+    pub fn clear_ai_usage_records(&self) -> Result<(), IteError> {
+        self.conn.execute("DELETE FROM ai_usage_records", [])?;
+        Ok(())
+    }
+
     /// MCP 서버 저장 (Insert or Update)
     pub fn save_mcp_server(&self, server: &McpServerRow) -> Result<(), IteError> {
         self.conn.execute(
@@ -3322,6 +3438,7 @@ impl Default for crate::models::BlockMetadata {
 mod tests {
     use std::collections::HashMap;
 
+    use super::AiUsageRecordRow;
     use tempfile::NamedTempFile;
 
     use super::Database;
@@ -4423,5 +4540,112 @@ mod tests {
         assert_eq!(items[0].category, "general");
         assert_eq!(items[0].source, "legacy");
         assert_eq!(revision, 1);
+    }
+
+    #[test]
+    fn ai_usage_records_survive_project_deletion() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-usage-1");
+        db.save_project(&project).expect("failed to save project");
+
+        db.insert_ai_usage_record(&AiUsageRecordRow {
+            id: "usage-1".into(),
+            project_id: Some("project-usage-1".into()),
+            occurred_at: 1_700_000_000_000,
+            feature: "chat".into(),
+            provider: "anthropic".into(),
+            model: "claude-opus-5".into(),
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_input_tokens: 900,
+            cache_creation_input_tokens: 50,
+            model_calls: 2,
+        })
+        .expect("insert usage");
+
+        // 프로젝트를 지워도 사용량 장부는 남아야 한다 (FK 없음 = 누적 비용 보존).
+        db.delete_project("project-usage-1").expect("delete project");
+
+        let rows = db.query_ai_usage_daily(None, None).expect("query usage");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].input_tokens, 100);
+        assert_eq!(rows[0].cache_read_input_tokens, 900);
+        assert_eq!(rows[0].model_calls, 2);
+        assert_eq!(rows[0].request_count, 1);
+    }
+
+    #[test]
+    fn ai_usage_daily_groups_and_filters_by_range() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let base = 1_700_000_000_000_i64;
+        let push = |id: &str, at: i64, feature: &str, model: &str, input: i64| {
+            db.insert_ai_usage_record(&AiUsageRecordRow {
+                id: id.into(),
+                project_id: None,
+                occurred_at: at,
+                feature: feature.into(),
+                provider: "anthropic".into(),
+                model: model.into(),
+                input_tokens: input,
+                output_tokens: 1,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
+                model_calls: 1,
+            })
+            .expect("insert usage");
+        };
+
+        // 같은 날/기능/모델은 하나로 접힌다.
+        push("u1", base, "chat", "claude-opus-5", 10);
+        push("u2", base + 1000, "chat", "claude-opus-5", 20);
+        // 기능이 다르면 별도 행.
+        push("u3", base + 2000, "translate", "claude-opus-5", 30);
+        // 범위 밖(2일 뒤).
+        push("u4", base + 2 * 86_400_000, "chat", "claude-opus-5", 999);
+
+        let rows = db
+            .query_ai_usage_daily(Some(base), Some(base + 86_400_000))
+            .expect("query usage");
+
+        assert_eq!(rows.len(), 2, "chat/translate 두 행으로 접혀야 한다");
+        let chat = rows.iter().find(|r| r.feature == "chat").expect("chat row");
+        assert_eq!(chat.input_tokens, 30, "같은 날 chat 두 건이 합산되어야 한다");
+        assert_eq!(chat.request_count, 2);
+        let translate = rows
+            .iter()
+            .find(|r| r.feature == "translate")
+            .expect("translate row");
+        assert_eq!(translate.input_tokens, 30);
+    }
+
+    #[test]
+    fn clear_ai_usage_removes_all_rows() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        db.insert_ai_usage_record(&AiUsageRecordRow {
+            id: "usage-1".into(),
+            project_id: None,
+            occurred_at: 1_700_000_000_000,
+            feature: "chat".into(),
+            provider: "openai".into(),
+            model: "gpt-5.5".into(),
+            input_tokens: 5,
+            output_tokens: 5,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            model_calls: 1,
+        })
+        .expect("insert usage");
+
+        db.clear_ai_usage_records().expect("clear usage");
+        assert!(db.query_ai_usage_daily(None, None).expect("query").is_empty());
     }
 }

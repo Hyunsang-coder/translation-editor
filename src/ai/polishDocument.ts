@@ -25,6 +25,7 @@ import {
   streamWithTauriAiBackend,
 } from '@/ai/backendCompletion';
 import { isTauriRuntime } from '@/tauri/invoke';
+import { mergeUsageFromChunk, recordAiUsage, type AiUsageTokens } from '@/ai/usageLedger';
 import {
   reattachTranslationUnitIds,
   type TranslationUnitDocument,
@@ -304,6 +305,7 @@ export async function polishTargetDocumentWithStreaming(
       onAccumulated: emitFiltered,
       cancelMessage: '폴리싱이 취소되었습니다.',
       abortSignal: params.abortSignal,
+      usageFeature: 'polish',
     });
 
     if (!raw.trim()) {
@@ -315,12 +317,15 @@ export async function polishTargetDocumentWithStreaming(
   }
 
   let accumulated = '';
+  // 취소된 스트림도 생성분만큼 과금되므로 finally에서 기록한다.
+  const streamUsage: AiUsageTokens = {};
   try {
     // WebView fetch의 CORS/네트워크 실패는 for-await 반복 도중 "Type error"로
     // 던져지므로 스트리밍 소비 전체를 try로 감싼다.
     const stream = await model.stream(messages, params.abortSignal ? { signal: params.abortSignal } : {});
 
     for await (const chunk of stream) {
+      mergeUsageFromChunk(streamUsage, chunk);
       if (params.abortSignal?.aborted) {
         throw new Error('폴리싱이 취소되었습니다.');
       }
@@ -352,6 +357,7 @@ export async function polishTargetDocumentWithStreaming(
       maxTokens,
       cancelMessage: '폴리싱이 취소되었습니다.',
       abortSignal: params.abortSignal,
+      usageFeature: 'polish',
     });
     const polishedMarkdown = extractPolishedMarkdown(raw);
     if (polishedMarkdown.trim()) {
@@ -359,6 +365,13 @@ export async function polishTargetDocumentWithStreaming(
     }
     const { doc } = processPolishResponse(raw);
     return { doc: restoreTranslationUnitIds(params.targetDocJson, doc), raw };
+  } finally {
+    recordAiUsage({
+      feature: 'polish',
+      provider: cfg.provider,
+      model: cfg.model,
+      ...streamUsage,
+    });
   }
 
   if (!accumulated.trim()) {

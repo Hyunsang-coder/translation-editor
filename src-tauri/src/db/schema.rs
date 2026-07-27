@@ -286,4 +286,27 @@ CREATE TABLE IF NOT EXISTS quality_runs (
 -- 작업 기록 인덱스
 CREATE INDEX IF NOT EXISTS idx_quality_runs_project ON quality_runs(project_id);
 CREATE INDEX IF NOT EXISTS idx_quality_runs_started ON quality_runs(project_id, started_at);
+
+-- AI 토큰 사용량 장부: 모델 호출 1회(도구 루프는 그 루프 전체) = 1행.
+--
+-- project_id에 의도적으로 FK를 걸지 않는다. 다른 테이블처럼 ON DELETE CASCADE를 걸면
+-- 프로젝트를 지울 때 과거 사용량이 함께 사라져 "일별 누적 비용"이라는 목적이 무너진다.
+-- 참조 무결성 대신 기록 보존을 택한다(프로젝트별 분해는 best-effort).
+CREATE TABLE IF NOT EXISTS ai_usage_records (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,                          -- 삭제된 프로젝트의 기록도 남는다 (FK 없음)
+    occurred_at INTEGER NOT NULL,             -- epoch ms
+    feature TEXT NOT NULL,                    -- chat | translate | review | polish | selection-retranslate | summary
+    provider TEXT NOT NULL,                   -- openai | anthropic
+    model TEXT NOT NULL,                      -- 실제 호출된 API 모델 ID
+    input_tokens INTEGER NOT NULL DEFAULT 0,  -- 캐시 read/write를 제외한 순수 입력
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_input_tokens INTEGER NOT NULL DEFAULT 0,      -- ~0.1x 과금
+    cache_creation_input_tokens INTEGER NOT NULL DEFAULT 0,  -- 5m TTL 기준 1.25x 과금
+    model_calls INTEGER NOT NULL DEFAULT 1    -- 도구 루프에서 실제 모델을 호출한 횟수
+);
+
+-- 사용량 인덱스 (일별 집계가 주 질의라 occurred_at 우선)
+CREATE INDEX IF NOT EXISTS idx_ai_usage_occurred ON ai_usage_records(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_project ON ai_usage_records(project_id, occurred_at);
 "#;

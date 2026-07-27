@@ -7,7 +7,6 @@ describe('resolveChatToolNames', () => {
     const names = resolveChatToolNames({
       profile: 'general',
       hasProject: true,
-      explicitDocumentReference: true,
     });
 
     expect(names).toContain('get_source_document');
@@ -50,8 +49,6 @@ describe('resolveChatToolNames', () => {
       webEnabled: true,
       confluenceEnabled: true,
       notionEnabled: true,
-      explicitDocumentReference: true,
-      explicitExternalReference: true,
     })).toEqual([]);
   });
 
@@ -59,13 +56,11 @@ describe('resolveChatToolNames', () => {
     const withoutResults = resolveChatToolNames({
       profile: 'general',
       hasProject: true,
-      explicitDocumentReference: true,
     });
     const withResults = resolveChatToolNames({
       profile: 'general',
       hasProject: true,
       hasReviewResults: true,
-      explicitDocumentReference: true,
     });
 
     expect(withoutResults).not.toContain('get_review_results');
@@ -78,10 +73,25 @@ describe('resolveChatToolNames', () => {
       hasProject: true,
       hasTargetSelection: true,
       confluenceEnabled: true,
-      explicitExternalReference: true,
     });
 
     expect(names).not.toContain('confluence_load_page');
+  });
+
+  it('같은 프로필·설정이면 사용자 메시지와 무관하게 도구 목록이 동일하다', () => {
+    // tools는 system보다 앞에 렌더되므로, 메시지 내용에 따라 목록이 흔들리면
+    // 그 뒤의 프리픽스 캐시가 매 턴 무효화된다.
+    const config = {
+      profile: 'general' as const,
+      hasProject: true,
+      webEnabled: true,
+      confluenceEnabled: true,
+      notionEnabled: true,
+    };
+
+    expect(resolveChatToolNames(config)).toEqual(resolveChatToolNames(config));
+    expect(resolveChatToolNames(config)).toContain('get_source_document');
+    expect(resolveChatToolNames(config)).toContain('web_search');
   });
 
   it('registry의 모든 도구는 UI 표시명과 trust/effect 분류를 가진다', () => {

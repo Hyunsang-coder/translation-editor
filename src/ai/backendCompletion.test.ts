@@ -40,7 +40,7 @@ describe('backendCompletion', () => {
   it('Opus 4.7+ 백엔드 completion 호출에는 temperature를 전달하지 않음', async () => {
     const cfg: AiConfig = {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       anthropicApiKey: 'sk-ant-test',
       temperature: 0.7,
       maxRecentMessages: 20,
@@ -49,7 +49,7 @@ describe('backendCompletion', () => {
     await completeWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
 
     const args = mocks.aiComplete.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(args.model).toBe('claude-opus-4-8');
+    expect(args.model).toBe('claude-opus-5');
     expect('temperature' in args).toBe(false);
   });
 
@@ -72,7 +72,7 @@ describe('backendCompletion', () => {
   it('cacheSystem=true면 invoke 인자에 cacheSystem이 실린다 (complete/stream)', async () => {
     const cfg: AiConfig = {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       anthropicApiKey: 'sk-ant-test',
       maxRecentMessages: 20,
     };
@@ -89,7 +89,7 @@ describe('backendCompletion', () => {
   it('cacheSystem 미지정이면 invoke 인자에 포함되지 않는다', async () => {
     const cfg: AiConfig = {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       anthropicApiKey: 'sk-ant-test',
       maxRecentMessages: 20,
     };
@@ -118,7 +118,7 @@ describe('backendCompletion', () => {
   it('Opus 4.7+ 백엔드 completion 호출에는 adaptiveThinking·effort를 전달 (F7)', async () => {
     const cfg: AiConfig = {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       anthropicApiKey: 'sk-ant-test',
       maxRecentMessages: 20,
     };

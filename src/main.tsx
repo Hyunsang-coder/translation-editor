@@ -1,3 +1,6 @@
+// LangChain/LangGraph가 평가되기 전에 안전한 AsyncLocalStorage를 전역에 심는다.
+// 반드시 첫 import로 유지할 것 (자세한 이유는 해당 모듈 주석 참고).
+import './ai/asyncLocalStorageSetup';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource/noto-sans-kr/300.css';
