@@ -596,10 +596,7 @@
     "deleteAfterEdit": "Delete (deletes later messages)",
     "addToRules": "Add this content to Translation Rules",
     "addToRulesButton": "Add to Rules",
-    "addToContext": "Add this content to Project Context",
-    "addToContextButton": "Add to Context",
     "suggestedRule": "Suggested Rule",
-    "suggestedContext": "Suggested Context",
     "deleteConfirmMessage": "All messages after this will be deleted. Continue?",
     "deleteConfirmTitle": "Delete Conversation",
     "edited": "edited",
@@ -624,7 +621,6 @@
       "proposeSelectionEdit": "Selection Edit Proposal",
       "proposeProjectMemoryChange": "Project Memory Proposal",
       "suggestTranslationRule": "Rule Suggestion",
-      "suggestProjectContext": "Context Suggestion",
       "suggestForbiddenTerm": "Forbidden Term Suggestion",
       "suggestGlossaryEntry": "Glossary Entry Suggestion",
       "confluenceWordCount": "Confluence Word Count",
@@ -635,8 +631,7 @@
       "webSearch": "Web Search",
       "getSourceDocument": "Analyzing Source",
       "getTargetDocument": "Analyzing Target",
-      "suggestTranslationRule": "Checking Rules",
-      "suggestProjectContext": "Checking Context"
+      "suggestTranslationRule": "Checking Rules"
     },
     "composerPlaceholder": "Ask anything :)",
     "composerAttach": "Attach/Options",

@@ -164,8 +164,10 @@ export interface GenerateReplyInput {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Project Context (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
-  projectContext?: string;
+  /** 승인된 Project Memory 압축 요약 */
+  projectMemoryDigest?: string;
+  /** 활성 금칙어 목록 */
+  forbiddenTermsDigest?: string;
   /** 원문 문서 */
   sourceDocument?: string;
   /** 번역문 문서 */
@@ -961,7 +963,7 @@ function buildToolGuideMessage(params: {
     toolGuide.push('- get_aligned_selection_context: Target 선택의 원문 대조가 필요할 때만 조회.');
   }
   if (has('get_project_guidance')) {
-    toolGuide.push('- get_project_guidance: 필요한 규칙·금칙어·프로젝트 메모리 섹션만 조회.');
+    toolGuide.push('- get_project_guidance: [프로젝트 메모리] 요약에 없는 규칙·금칙어·메모리 상세가 필요할 때 조회.');
   }
   if (has('search_project_glossary')) {
     toolGuide.push('- search_project_glossary: 현재 질문에 관련된 용어만 검색.');
@@ -1190,7 +1192,8 @@ export async function streamAssistantReply(
       ...(input.selection ? { selection: input.selection } : {}),
       ...(input.translationRules ? { translationRules: input.translationRules } : {}),
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
-      ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+      ...(input.projectMemoryDigest ? { projectMemoryDigest: input.projectMemoryDigest } : {}),
+      ...(input.forbiddenTermsDigest ? { forbiddenTermsDigest: input.forbiddenTermsDigest } : {}),
       ...(input.conversationSummary ? { conversationSummary: input.conversationSummary } : {}),
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),

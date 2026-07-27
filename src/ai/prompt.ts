@@ -19,6 +19,8 @@ export type RequestType = 'translate' | 'question' | 'general';
 const LIMITS = {
   translationRulesChars: 10000,
   projectContextChars: 30000,
+  projectMemoryChars: 4000,
+  forbiddenTermsChars: 2000,
   glossaryChars: 30000,
   documentChars: 100000,
   attachmentCharsPerFile: 30000,
@@ -103,8 +105,13 @@ export interface PromptContext {
   translationRules?: string;
   /** 글로서리 주입 결과(plain text) */
   glossaryInjected?: string;
-  /** Project Context (맥락 정보: 배경 지식, 프로젝트 컨텍스트 등) */
-  projectContext?: string;
+  /**
+   * 승인된 Project Memory 압축 요약 (`renderChatMemoryDigest`).
+   * - 상세는 모델이 `get_project_guidance`로 조회한다.
+   */
+  projectMemoryDigest?: string;
+  /** 활성 금칙어 목록 (`renderChatMemoryDigest`) */
+  forbiddenTermsDigest?: string;
   /** 원문 문서 */
   sourceDocument?: string;
   /** 번역문 문서 */
@@ -217,12 +224,24 @@ function formatTranslationRules(rules?: string): string {
   return ['[번역 규칙]', sliced].join('\n');
 }
 
-function formatProjectContext(context?: string): string {
-  const trimmed = context?.trim();
+function formatProjectMemoryDigest(digest?: string): string {
+  const trimmed = digest?.trim();
   if (!trimmed) return '';
-  const maxLen = LIMITS.projectContextChars;
+  const maxLen = LIMITS.projectMemoryChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[Project Context]', sliced].join('\n');
+  return [
+    '[프로젝트 메모리]',
+    '(사용자가 승인한 장기 프로젝트 지식입니다. 아래 요약에 없는 상세가 필요하면 get_project_guidance로 조회하세요.)',
+    sliced,
+  ].join('\n');
+}
+
+function formatForbiddenTerms(digest?: string): string {
+  const trimmed = digest?.trim();
+  if (!trimmed) return '';
+  const maxLen = LIMITS.forbiddenTermsChars;
+  const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
+  return ['[금칙어]', sliced].join('\n');
 }
 
 function formatConversationSummary(summary?: string): string {
@@ -380,7 +399,8 @@ export async function buildLangChainMessages(
   const blockContext = buildBlockContextText(ctx.contextBlocks);
   const translationRules = formatTranslationRules(ctx.translationRules);
   const glossaryInjected = formatGlossaryInjected(ctx.glossaryInjected);
-  const projectContext = formatProjectContext(ctx.projectContext);
+  const projectMemory = formatProjectMemoryDigest(ctx.projectMemoryDigest);
+  const forbiddenTerms = formatForbiddenTerms(ctx.forbiddenTermsDigest);
   const conversationSummary = formatConversationSummary(ctx.conversationSummary);
   const sourceDoc = formatDocument('원문', ctx.sourceDocument);
   const targetDoc = formatDocument('번역문', ctx.targetDocument);
@@ -397,8 +417,9 @@ export async function buildLangChainMessages(
 
   const systemContext = [
     translationRules,
+    projectMemory,
+    forbiddenTerms,
     glossaryInjected,
-    projectContext,
     conversationSummary,
     sourceDoc,
     targetDoc,

@@ -24,7 +24,6 @@ function renderMessage(message: ChatMessage) {
       onReplay={noop}
       onDelete={noop}
       onAppendToRules={noop}
-      onAppendToContext={noop}
       onUpdateMessageMetadata={noop}
     />,
   );

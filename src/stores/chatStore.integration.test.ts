@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 import { useConnectorStore } from '@/stores/connectorStore';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import type { ForbiddenTerm, ProjectMemoryItem } from '@/types';
 
 const mocks = vi.hoisted(() => ({
   streamAssistantReply: vi.fn(),
@@ -93,6 +95,8 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         notion: false,
       },
     });
+
+    useProjectMemoryStore.getState().reset();
 
     // 각 테스트 전 스토어 초기화
     useChatStore.setState({
@@ -361,6 +365,84 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         expect.any(Object),
         expect.any(Object),
       );
+    });
+
+    it('승인된 Project Memory/금칙어가 다음 요청 컨텍스트로 주입됨 (D1)', async () => {
+      // Arrange: 사용자가 승인해 저장된 프로젝트 지식
+      const memoryItem: ProjectMemoryItem = {
+        id: 'm1',
+        projectId: 'project-1',
+        category: 'worldbuilding',
+        content: '배경은 22세기 화성 식민지다.',
+        normalizedHash: 'hash-m1',
+        status: 'active',
+        source: 'chat',
+        createdAt: 0,
+        updatedAt: 0,
+      };
+      const archivedItem: ProjectMemoryItem = {
+        ...memoryItem,
+        id: 'm2',
+        content: '더 이상 유효하지 않은 설정',
+        normalizedHash: 'hash-m2',
+        status: 'archived',
+      };
+      const term: ForbiddenTerm = {
+        id: 't1',
+        projectId: 'project-1',
+        term: '유저',
+        replacement: '플레이어',
+        enabled: true,
+        createdAt: 0,
+        updatedAt: 0,
+      };
+      useProjectMemoryStore.setState({
+        activeProjectId: 'project-1',
+        items: [memoryItem, archivedItem],
+        forbiddenTerms: [term],
+        revision: 7,
+      });
+      useChatStore.getState().createSession('Memory Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      // Act: 도구를 호출하지 않아도 모델이 메모리를 알 수 있어야 한다
+      await useChatStore.getState().sendMessage('세계관 설명해줘', sessionId);
+
+      // Assert: active 항목만 요약으로 주입
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectMemoryDigest: '- [worldbuilding] 배경은 22세기 화성 식민지다.',
+          forbiddenTermsDigest: '- 유저 → 플레이어',
+        }),
+        expect.any(Object),
+        expect.any(Object),
+      );
+
+      // Assert: manifest가 실제 주입분을 기록
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      const manifest = session?.messages
+        .find((m) => m.role === 'assistant')?.metadata?.contextManifest;
+      expect(manifest?.revision).toBe(7);
+      expect(manifest?.projectMemoryItemIds).toEqual(['m1']);
+      expect(manifest?.forbiddenTermIds).toEqual(['t1']);
+      expect(manifest?.included).toContain('project-memory');
+      expect(manifest?.included).toContain('forbidden-terms');
+    });
+
+    it('메모리가 없으면 digest를 주입하지 않는다 (D1)', async () => {
+      useChatStore.getState().createSession('Empty Memory Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      await useChatStore.getState().sendMessage('안녕', sessionId);
+
+      const input = mocks.streamAssistantReply.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(input).not.toHaveProperty('projectMemoryDigest');
+      expect(input).not.toHaveProperty('forbiddenTermsDigest');
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      const manifest = session?.messages
+        .find((m) => m.role === 'assistant')?.metadata?.contextManifest;
+      expect(manifest?.included).not.toContain('project-memory');
     });
 
     it('Notion 토큰/활성 상태에 따라 도구 사용 가능 여부가 반영됨', async () => {

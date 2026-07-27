@@ -37,7 +37,6 @@ interface ChatMessageItemProps {
   onReplay: (messageId: string) => void;
   onDelete: (messageId: string) => void;
   onAppendToRules: (content: string) => void;
-  onAppendToContext: (content: string) => void;
   onUpdateMessageMetadata: (messageId: string, metadata: Partial<ChatMessageMetadata>) => void;
   onPreviewSelectionProposal?: (
     messageId: string,
@@ -80,7 +79,6 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   onReplay,
   onDelete,
   onAppendToRules,
-  onAppendToContext,
   onUpdateMessageMetadata,
   onPreviewSelectionProposal,
   onDismissSelectionProposal,
@@ -194,7 +192,6 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         'get_source_document': t('chat.toolProgressName.getSourceDocument'),
         'get_target_document': t('chat.toolProgressName.getTargetDocument'),
         'suggest_translation_rule': t('chat.toolProgressName.suggestTranslationRule'),
-        'suggest_project_context': t('chat.toolProgressName.suggestProjectContext'),
       };
       const name = (toolName ? progressMap[toolName] : undefined) ?? toolName;
       statusText = t('chat.toolInProgress', { name });
@@ -497,36 +494,6 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             </div>
           )}
 
-          {/* Suggested Context 카드 */}
-          {message.metadata?.suggestedContext && !message.metadata.contextAdded && (
-            <div className="mt-2">
-              <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-1 h-3 bg-primary-500 rounded-full" />
-                  <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
-                    {t('chat.suggestedContext')}
-                  </span>
-                </div>
-                <div className="text-xs text-editor-text font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto scrollbar-thin">
-                  {message.metadata.suggestedContext}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded-md text-xs font-medium bg-editor-surface border border-editor-border hover:bg-editor-border transition-colors text-editor-text"
-                onClick={() => {
-                  if (message.metadata?.suggestedContext) {
-                    onAppendToContext(message.metadata.suggestedContext);
-                    onUpdateMessageMetadata(message.id, { contextAdded: true });
-                  }
-                }}
-                title={t('chat.addToContext')}
-              >
-                {t('chat.addToContextButton')}
-              </button>
-            </div>
-          )}
-
         </>
       )}
     </div>
@@ -546,9 +513,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prev.message.metadata?.toolCallsInProgress !== next.message.metadata?.toolCallsInProgress) return false;
   if (prev.message.metadata?.toolsUsed !== next.message.metadata?.toolsUsed) return false;
   if (prev.message.metadata?.suggestedRule !== next.message.metadata?.suggestedRule) return false;
-  if (prev.message.metadata?.suggestedContext !== next.message.metadata?.suggestedContext) return false;
   if (prev.message.metadata?.rulesAdded !== next.message.metadata?.rulesAdded) return false;
-  if (prev.message.metadata?.contextAdded !== next.message.metadata?.contextAdded) return false;
   if (prev.message.metadata?.selection !== next.message.metadata?.selection) return false;
   if (prev.message.metadata?.documentEditProposal !== next.message.metadata?.documentEditProposal) return false;
   if (prev.message.metadata?.projectMemoryProposal !== next.message.metadata?.projectMemoryProposal) return false;

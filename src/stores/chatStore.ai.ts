@@ -38,6 +38,7 @@ import {
   getChatToolDisplayNameKey,
 } from '@/ai/tools/toolRegistry';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
+import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
 import {
   tryExtractWebSearchQuery,
   extractTextFromAiMessage,
@@ -214,6 +215,22 @@ export function createAiActions(
         ? maskGhostChips(translationRulesRaw, maskSession)
         : '';
 
+      // 승인된 Project Memory/금칙어는 압축 요약으로만 주입한다(매 턴 반복되므로).
+      // 요약에 없는 상세는 모델이 get_project_guidance로 조회한다.
+      const memoryState = useProjectMemoryStore.getState();
+      const memoryDigest = isSelectionRequest
+        ? null
+        : renderChatMemoryDigest({
+          items: memoryState.items,
+          forbiddenTerms: memoryState.forbiddenTerms,
+        });
+      const projectMemoryDigest = memoryDigest?.projectMemory
+        ? maskGhostChips(memoryDigest.projectMemory, maskSession)
+        : '';
+      const forbiddenTermsDigest = memoryDigest?.forbiddenTerms
+        ? maskGhostChips(memoryDigest.forbiddenTerms, maskSession)
+        : '';
+
       // 로컬 글로서리 주입 (on-demand, 문서 전역 윈도우)
       let glossaryInjected = '';
       try {
@@ -256,6 +273,8 @@ export function createAiActions(
       const reservedContextTokens =
         SYSTEM_BASE_TOKENS +
         approxTokens(translationRules) +
+        approxTokens(projectMemoryDigest) +
+        approxTokens(forbiddenTermsDigest) +
         approxTokens(glossaryInjected) +
         approxTokens(content);
 
@@ -304,21 +323,22 @@ export function createAiActions(
       }
 
       const recent: ChatMessage[] = plan.recentRawMessages;
-      const memoryRevision = useProjectMemoryStore.getState().revision;
       const initialIncluded: ContextManifest['included'] = [];
       if (selection) initialIncluded.push('selection');
       if (translationRules) initialIncluded.push('translation-rules');
+      if (projectMemoryDigest) initialIncluded.push('project-memory');
+      if (forbiddenTermsDigest) initialIncluded.push('forbidden-terms');
       if (glossaryInjected) initialIncluded.push('glossary');
       if (conversationSummary) initialIncluded.push('chat-summary');
       if (contextBlocks.length > 0) initialIncluded.push('document-tool');
       const contextManifest: ContextManifest = {
         mode: isSelectionRequest ? 'selection-chat' : 'general-chat',
-        revision: memoryRevision,
-        projectMemoryItemIds: [],
+        revision: memoryState.revision,
+        projectMemoryItemIds: memoryDigest?.itemIds ?? [],
         ...(translationRules
           ? { translationRulesHash: hashContent(translationRules) }
           : {}),
-        forbiddenTermIds: [],
+        forbiddenTermIds: memoryDigest?.forbiddenTermIds ?? [],
         glossaryEntryIds: get().lastInjectedGlossary.map((entry) => entry.id),
         included: initialIncluded,
         estimatedInputTokens: reservedContextTokens,
@@ -519,13 +539,6 @@ export function createAiActions(
                 ...nextMetadata,
                 suggestedRule: prev ? `${prev}; ${cleaned}` : cleaned,
               };
-            } else if (evt.toolName === 'suggest_project_context' && evt.args.context) {
-              const prev = nextMetadata.suggestedContext ?? '';
-              const cleaned = cleanSuggestionContent(String(evt.args.context));
-              nextMetadata = {
-                ...nextMetadata,
-                suggestedContext: prev ? `${prev}; ${cleaned}` : cleaned,
-              };
             }
           }
 
@@ -609,6 +622,8 @@ export function createAiActions(
             ? { selectionProposalEnabled: true }
             : {}),
           translationRules,
+          ...(projectMemoryDigest ? { projectMemoryDigest } : {}),
+          ...(forbiddenTermsDigest ? { forbiddenTermsDigest } : {}),
           ...(glossaryInjected ? { glossaryInjected } : {}),
           ...(conversationSummary ? { conversationSummary } : {}),
           requestType: 'question',
@@ -645,7 +660,7 @@ export function createAiActions(
 
         // Tool-call 누락 시 텍스트 기반 폴백 (Smart Buttons)
         const currentMetadata = get().streamingMetadata ?? {};
-        if (!currentMetadata.suggestedRule && !currentMetadata.suggestedContext) {
+        if (!currentMetadata.suggestedRule) {
           const inferred = inferSuggestionFromAssistantText(restored);
           if (inferred) {
             set({ streamingMetadata: { ...currentMetadata, ...inferred } });

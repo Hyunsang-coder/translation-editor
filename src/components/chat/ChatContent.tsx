@@ -161,7 +161,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     deleteMessageFrom,
     updateMessage,
     appendToTranslationRules,
-    appendToProjectContext,
   } = useChatMessageActions();
   const {
     shouldShow: shouldShowSummarySuggestion,
@@ -310,8 +309,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           : tool === 'get_source_document' ? '원문 분석'
             : tool === 'get_target_document' ? '번역문 분석'
               : tool === 'suggest_translation_rule' ? '번역 규칙 확인'
-                : tool === 'suggest_project_context' ? '프로젝트 맥락 확인'
-                  : tool;
+                : tool;
       statusText = `${name} 진행 중...`;
     }
 
@@ -350,10 +348,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   const handleAppendToRules = useCallback((content: string) => {
     appendToTranslationRules(content);
   }, [appendToTranslationRules]);
-
-  const handleAppendToContext = useCallback((content: string) => {
-    appendToProjectContext(content);
-  }, [appendToProjectContext]);
 
   const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
     updateMessage(messageId, { metadata }, sessionId);
@@ -852,7 +846,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               onReplay={handleReplayMessage}
               onDelete={handleDeleteMessage}
               onAppendToRules={handleAppendToRules}
-              onAppendToContext={handleAppendToContext}
               onUpdateMessageMetadata={handleUpdateMessageMetadata}
               onPreviewSelectionProposal={handlePreviewSelectionProposal}
               onDismissSelectionProposal={handleDismissSelectionProposal}

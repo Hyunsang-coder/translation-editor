@@ -12,29 +12,12 @@ import {
 import { restoreGhostChips, type GhostMaskSession } from '@/utils/ghostMask';
 
 describe('inferSuggestionFromAssistantText', () => {
-  describe('rule/context 트리거', () => {
+  describe('rule 트리거', () => {
     it('[Add to Rules] 마커로 suggestedRule 반환', () => {
       const text = '영문 대문자 통일 [Add to Rules]';
       const result = inferSuggestionFromAssistantText(text);
       expect(result).not.toBeNull();
       expect(result!.suggestedRule).toBeDefined();
-    });
-
-    it('[Add to Context] 마커로 suggestedContext 반환', () => {
-      const text = '이 프로젝트는 SaaS 플랫폼입니다 [Add to Context]';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedContext).toBeDefined();
-    });
-  });
-
-  describe('복합 트리거', () => {
-    it('Rule + Context 동시 감지', () => {
-      const text = '영문 소문자 통일 [Add to Rules] SaaS 프로젝트 [Add to Context]';
-      const result = inferSuggestionFromAssistantText(text);
-      expect(result).not.toBeNull();
-      expect(result!.suggestedRule).toBeDefined();
-      expect(result!.suggestedContext).toBeDefined();
     });
   });
 
@@ -49,6 +32,10 @@ describe('inferSuggestionFromAssistantText', () => {
       expect(inferSuggestionFromAssistantText('')).toBeNull();
     });
 
+    it('[Add to Context]는 더 이상 제안을 만들지 않는다 (D2)', () => {
+      const text = '이 프로젝트는 SaaS 플랫폼입니다 [Add to Context]';
+      expect(inferSuggestionFromAssistantText(text)).toBeNull();
+    });
   });
 });
 

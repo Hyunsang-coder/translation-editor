@@ -594,10 +594,7 @@
     "deleteAfterEdit": "삭제 (이후 대화 삭제)",
     "addToRules": "이 내용을 번역 규칙에 추가",
     "addToRulesButton": "규칙에 추가",
-    "addToContext": "이 내용을 프로젝트 컨텍스트에 추가",
-    "addToContextButton": "컨텍스트에 추가",
     "suggestedRule": "추천 규칙",
-    "suggestedContext": "추천 컨텍스트",
     "deleteConfirmMessage": "이 메시지 이후의 대화가 모두 삭제됩니다. 계속할까요?",
     "deleteConfirmTitle": "대화 삭제",
     "edited": "편집됨",
@@ -622,7 +619,6 @@
       "proposeSelectionEdit": "선택 수정안 제안",
       "proposeProjectMemoryChange": "프로젝트 메모리 제안",
       "suggestTranslationRule": "규칙 제안",
-      "suggestProjectContext": "컨텍스트 제안",
       "suggestForbiddenTerm": "금칙어 제안",
       "suggestGlossaryEntry": "용어집 항목 제안",
       "confluenceWordCount": "Confluence 단어 수",
@@ -633,8 +629,7 @@
       "webSearch": "웹 검색",
       "getSourceDocument": "원문 분석",
       "getTargetDocument": "번역문 분석",
-      "suggestTranslationRule": "번역 규칙 확인",
-      "suggestProjectContext": "프로젝트 맥락 확인"
+      "suggestTranslationRule": "번역 규칙 확인"
     },
     "composerPlaceholder": "무엇이든 물어보세요 :)",
     "composerAttach": "첨부/옵션",

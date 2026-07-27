@@ -480,8 +480,7 @@ export interface ChatMessageMetadata {
   rulesAdded?: boolean;
 
   /**
-   * Add to Context 버튼을 이미 눌렀는지 여부
-   * - 중복 append 방지 및 버튼 숨김 용도
+   * @deprecated 2026-07-27 — [Add to Context] 제거됨. 과거 메시지 hydrate 호환용으로만 남긴다.
    */
   contextAdded?: boolean;
 
@@ -499,8 +498,8 @@ export interface ChatMessageMetadata {
   suggestedRule?: string;
 
   /**
-   * AI가 제안한 프로젝트 컨텍스트 (suggest_project_context Tool Call 결과)
-   * - 이 필드가 존재하면 UI에 [Add to Context] 버튼이 표시됩니다.
+   * @deprecated 2026-07-27 — 승인 기반 Project Memory(`propose_project_memory_change`)로 대체됨.
+   * 더 이상 생성/표시하지 않으며 과거 메시지 hydrate 호환용으로만 남긴다.
    */
   suggestedContext?: string;
 
