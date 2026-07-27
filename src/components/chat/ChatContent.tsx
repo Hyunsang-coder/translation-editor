@@ -50,6 +50,10 @@ import { SelectionEditPreviewModal } from '@/components/editor/SelectionEditPrev
 import { DEFAULT_SELECTION_REFERENCE_OPTIONS } from '@/types';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useGlossaryStore } from '@/stores/glossaryStore';
+import {
+  patchProposalStatus,
+  type KnowledgeProposalKind,
+} from './knowledgeProposals';
 
 interface ChatContentProps {
   /** 어느 사이드바에 렌더링되는지 (없으면 legacy DockedChatPanel 모드) */
@@ -509,6 +513,18 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     setProposalPreview(null);
   }, [proposalPreview, updateMessage, sessionId, addToast, t, removePanelSelectionAnchor]);
 
+  const markProposal = useCallback((
+    messageId: string,
+    kind: KnowledgeProposalKind,
+    proposalId: string,
+    status: 'applied' | 'dismissed',
+  ): void => {
+    const message = displaySession?.messages.find((candidate) => candidate.id === messageId);
+    const patch = patchProposalStatus(message?.metadata, kind, proposalId, status);
+    if (!patch) return;
+    updateMessage(messageId, { metadata: patch }, sessionId);
+  }, [displaySession?.messages, updateMessage, sessionId]);
+
   const applyMemoryProposal = useCallback(async (
     messageId: string,
     proposal: ProjectMemoryChangeProposal,
@@ -541,18 +557,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           await memoryStore.addItem(input);
         }
       }
-      updateMessage(messageId, {
-        metadata: {
-          projectMemoryProposal: { ...proposal, status: 'applied' },
-        },
-      }, sessionId);
+      markProposal(messageId, 'memory', proposal.proposalId, 'applied');
     } catch (error) {
       addToast({
         type: 'error',
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [updateMessage, sessionId, addToast]);
+  }, [markProposal, addToast]);
 
   const applyForbiddenTermProposal = useCallback(async (
     messageId: string,
@@ -565,18 +577,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         ...(proposal.note ? { note: proposal.note } : {}),
         enabled: true,
       });
-      updateMessage(messageId, {
-        metadata: {
-          forbiddenTermProposal: { ...proposal, status: 'applied' },
-        },
-      }, sessionId);
+      markProposal(messageId, 'forbiddenTerm', proposal.proposalId, 'applied');
     } catch (error) {
       addToast({
         type: 'error',
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [updateMessage, sessionId, addToast]);
+  }, [markProposal, addToast]);
 
   const applyGlossaryEntryProposal = useCallback(async (
     messageId: string,
@@ -611,54 +619,22 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         domain: activeProject.metadata.domain ?? null,
         caseSensitive: false,
       });
-      updateMessage(messageId, {
-        metadata: {
-          glossaryEntryProposal: { ...proposal, status: 'applied' },
-        },
-      }, sessionId);
+      markProposal(messageId, 'glossaryEntry', proposal.proposalId, 'applied');
     } catch (error) {
       addToast({
         type: 'error',
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [updateMessage, sessionId, addToast, t]);
+  }, [markProposal, addToast, t]);
 
   const dismissKnowledgeProposal = useCallback((
     messageId: string,
-    kind: 'memory' | 'forbiddenTerm' | 'glossaryEntry',
+    kind: KnowledgeProposalKind,
+    proposalId: string,
   ): void => {
-    const message = displaySession?.messages.find((candidate) => candidate.id === messageId);
-    if (!message?.metadata) return;
-    if (kind === 'memory' && message.metadata.projectMemoryProposal) {
-      updateMessage(messageId, {
-        metadata: {
-          projectMemoryProposal: {
-            ...message.metadata.projectMemoryProposal,
-            status: 'dismissed',
-          },
-        },
-      }, sessionId);
-    } else if (kind === 'forbiddenTerm' && message.metadata.forbiddenTermProposal) {
-      updateMessage(messageId, {
-        metadata: {
-          forbiddenTermProposal: {
-            ...message.metadata.forbiddenTermProposal,
-            status: 'dismissed',
-          },
-        },
-      }, sessionId);
-    } else if (kind === 'glossaryEntry' && message.metadata.glossaryEntryProposal) {
-      updateMessage(messageId, {
-        metadata: {
-          glossaryEntryProposal: {
-            ...message.metadata.glossaryEntryProposal,
-            status: 'dismissed',
-          },
-        },
-      }, sessionId);
-    }
-  }, [displaySession?.messages, updateMessage, sessionId]);
+    markProposal(messageId, kind, proposalId, 'dismissed');
+  }, [markProposal]);
 
   // 붙여넣기/첨부 핸들러
   const { handleComposerPaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);

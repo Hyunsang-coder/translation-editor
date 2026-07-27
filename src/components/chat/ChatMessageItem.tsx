@@ -15,6 +15,12 @@ import type {
   ProjectMemoryChangeProposal,
 } from '@/types';
 import { ProjectKnowledgeProposalCards } from './ProjectKnowledgeProposalCards';
+import {
+  readForbiddenTermProposals,
+  readGlossaryEntryProposals,
+  readMemoryProposals,
+  type KnowledgeProposalKind,
+} from './knowledgeProposals';
 
 /**
  * LLM 응답에서 발생하는 불필요한 인용 마커(citation artifacts)를 제거합니다.
@@ -61,7 +67,8 @@ interface ChatMessageItemProps {
   ) => void;
   onDismissKnowledgeProposal?: (
     messageId: string,
-    kind: 'memory' | 'forbiddenTerm' | 'glossaryEntry',
+    kind: KnowledgeProposalKind,
+    proposalId: string,
   ) => void;
 }
 
@@ -439,29 +446,20 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             />
           )}
           <ProjectKnowledgeProposalCards
-            memory={message.metadata?.projectMemoryProposal}
-            forbiddenTerm={message.metadata?.forbiddenTermProposal}
-            glossaryEntry={message.metadata?.glossaryEntryProposal}
-            onApplyMemory={(mode) => {
-              const proposal = message.metadata?.projectMemoryProposal;
-              if (proposal) onApplyMemoryProposal?.(message.id, proposal, mode);
-            }}
-            onApplyForbiddenTerm={() => {
-              const proposal = message.metadata?.forbiddenTermProposal;
-              if (proposal) onApplyForbiddenTermProposal?.(message.id, proposal);
-            }}
-            onApplyGlossaryEntry={() => {
-              const proposal = message.metadata?.glossaryEntryProposal;
-              if (proposal) onApplyGlossaryEntryProposal?.(message.id, proposal);
-            }}
-            onDismissMemory={() =>
-              onDismissKnowledgeProposal?.(message.id, 'memory')
+            memoryProposals={readMemoryProposals(message.metadata)}
+            forbiddenTermProposals={readForbiddenTermProposals(message.metadata)}
+            glossaryEntryProposals={readGlossaryEntryProposals(message.metadata)}
+            onApplyMemory={(proposal, mode) =>
+              onApplyMemoryProposal?.(message.id, proposal, mode)
             }
-            onDismissForbiddenTerm={() =>
-              onDismissKnowledgeProposal?.(message.id, 'forbiddenTerm')
+            onApplyForbiddenTerm={(proposal) =>
+              onApplyForbiddenTermProposal?.(message.id, proposal)
             }
-            onDismissGlossaryEntry={() =>
-              onDismissKnowledgeProposal?.(message.id, 'glossaryEntry')
+            onApplyGlossaryEntry={(proposal) =>
+              onApplyGlossaryEntryProposal?.(message.id, proposal)
+            }
+            onDismiss={(kind, proposalId) =>
+              onDismissKnowledgeProposal?.(message.id, kind, proposalId)
             }
           />
           {/* Suggested Rule 카드 */}
@@ -516,6 +514,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prev.message.metadata?.rulesAdded !== next.message.metadata?.rulesAdded) return false;
   if (prev.message.metadata?.selection !== next.message.metadata?.selection) return false;
   if (prev.message.metadata?.documentEditProposal !== next.message.metadata?.documentEditProposal) return false;
+  if (prev.message.metadata?.projectMemoryProposals !== next.message.metadata?.projectMemoryProposals) return false;
+  if (prev.message.metadata?.forbiddenTermProposals !== next.message.metadata?.forbiddenTermProposals) return false;
+  if (prev.message.metadata?.glossaryEntryProposals !== next.message.metadata?.glossaryEntryProposals) return false;
   if (prev.message.metadata?.projectMemoryProposal !== next.message.metadata?.projectMemoryProposal) return false;
   if (prev.message.metadata?.forbiddenTermProposal !== next.message.metadata?.forbiddenTermProposal) return false;
   if (prev.message.metadata?.glossaryEntryProposal !== next.message.metadata?.glossaryEntryProposal) return false;

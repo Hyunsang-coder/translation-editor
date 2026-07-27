@@ -102,6 +102,22 @@ export function extractTextFromAiMessage(ai: unknown): string {
 }
 
 
+/**
+ * 같은 턴에서 제안된 항목을 누적한다.
+ *
+ * 모델이 한 응답에서 여러 건을 제안할 수 있으므로 덮어쓰지 않는다. 다만 동일 내용을
+ * 반복 호출하는 경우가 있어 `isDuplicate`로 걸러낸다.
+ */
+export function appendProposal<T extends { proposalId: string }>(
+  existing: T[] | undefined,
+  proposal: T,
+  isDuplicate: (candidate: T) => boolean,
+): T[] {
+  const list = existing ?? [];
+  if (list.some(isDuplicate)) return list;
+  return [...list, proposal];
+}
+
 /** Legacy translatorPersona → translationRules 흡수 (hydrate 마이그레이션용) */
 export function mergePersonaIntoRules(
   persona: string | undefined | null,

@@ -469,8 +469,26 @@ export interface ChatMessageMetadata {
   selectionScopeId?: string;
   documentEditProposal?: SelectionEditProposal;
   contextManifest?: ContextManifest;
+
+  /**
+   * 한 응답에서 제안된 프로젝트 지식 변경들.
+   * - 모델이 여러 건을 제안할 수 있으므로 배열로 누적한다.
+   */
+  projectMemoryProposals?: ProjectMemoryChangeProposal[];
+  forbiddenTermProposals?: ForbiddenTermProposal[];
+  glossaryEntryProposals?: GlossaryEntryProposal[];
+
+  /**
+   * @deprecated 2026-07-27 — `projectMemoryProposals` 사용. 과거 메시지 hydrate 호환용.
+   */
   projectMemoryProposal?: ProjectMemoryChangeProposal;
+  /**
+   * @deprecated 2026-07-27 — `forbiddenTermProposals` 사용. 과거 메시지 hydrate 호환용.
+   */
   forbiddenTermProposal?: ForbiddenTermProposal;
+  /**
+   * @deprecated 2026-07-27 — `glossaryEntryProposals` 사용. 과거 메시지 hydrate 호환용.
+   */
   glossaryEntryProposal?: GlossaryEntryProposal;
 
   /**

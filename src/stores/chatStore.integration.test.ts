@@ -429,6 +429,51 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       expect(manifest?.included).toContain('forbidden-terms');
     });
 
+    it('한 응답의 여러 프로젝트 지식 제안이 모두 누적된다 (D3)', async () => {
+      mocks.streamAssistantReply.mockImplementationOnce(async (_input, _runConfig, callbacks) => {
+        callbacks?.onToolCall?.({
+          phase: 'start',
+          toolName: 'propose_project_memory_change',
+          args: { operation: 'add', category: 'domain', content: '항공 정비 매뉴얼' },
+        });
+        callbacks?.onToolCall?.({
+          phase: 'start',
+          toolName: 'propose_project_memory_change',
+          args: { operation: 'add', category: 'audience', content: '현장 정비사' },
+        });
+        // 같은 내용의 반복 호출은 누적하지 않는다
+        callbacks?.onToolCall?.({
+          phase: 'start',
+          toolName: 'propose_project_memory_change',
+          args: { operation: 'add', category: 'domain', content: '항공 정비 매뉴얼' },
+        });
+        callbacks?.onToolCall?.({
+          phase: 'start',
+          toolName: 'suggest_forbidden_term',
+          args: { term: '유저', replacement: '사용자' },
+        });
+        callbacks?.onToken?.('정리했습니다.', '정리했습니다.');
+        return '정리했습니다.';
+      });
+
+      useChatStore.getState().createSession('Proposal Session');
+      const sessionId = useChatStore.getState().currentSessionId!;
+
+      await useChatStore.getState().sendMessage('대화 내용을 메모리에 정리해줘', sessionId);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      const metadata = session?.messages.find((m) => m.role === 'assistant')?.metadata;
+      expect(metadata?.projectMemoryProposals).toHaveLength(2);
+      expect(metadata?.projectMemoryProposals?.map((p) => p.category)).toEqual([
+        'domain',
+        'audience',
+      ]);
+      expect(metadata?.forbiddenTermProposals).toHaveLength(1);
+      // proposalId는 카드 key와 승인 대상 식별에 쓰이므로 고유해야 한다
+      const ids = metadata?.projectMemoryProposals?.map((p) => p.proposalId) ?? [];
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
     it('메모리가 없으면 digest를 주입하지 않는다 (D1)', async () => {
       useChatStore.getState().createSession('Empty Memory Session');
       const sessionId = useChatStore.getState().currentSessionId!;

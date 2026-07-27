@@ -6,6 +6,10 @@ import type {
   ChatMessage,
   ChatSelectionSnapshot,
   ContextManifest,
+  ForbiddenTermProposal,
+  GlossaryEntryProposal,
+  ProjectMemoryCategory,
+  ProjectMemoryChangeProposal,
   SelectionContext,
   SendMessageOptions,
 } from '@/types';
@@ -40,6 +44,7 @@ import {
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
 import {
+  appendProposal,
   tryExtractWebSearchQuery,
   extractTextFromAiMessage,
   inferSuggestionFromAssistantText,
@@ -488,49 +493,72 @@ export function createAiActions(
                 evt.args.operation === 'replace' || evt.args.operation === 'archive'
                   ? evt.args.operation
                   : 'add';
+              const proposal: ProjectMemoryChangeProposal = {
+                proposalId: uuidv4(),
+                operation,
+                category: evt.args.category as ProjectMemoryCategory,
+                ...(evt.args.content ? { content: String(evt.args.content) } : {}),
+                ...(evt.args.targetItemId
+                  ? { targetItemId: String(evt.args.targetItemId) }
+                  : {}),
+                ...(evt.args.reason ? { reason: String(evt.args.reason) } : {}),
+                sourceSessionId: effectiveSessionId,
+                ...(assistantId ? { sourceMessageId: assistantId } : {}),
+                status: 'proposed',
+              };
               nextMetadata = {
                 ...nextMetadata,
-                projectMemoryProposal: {
-                  proposalId: uuidv4(),
-                  operation,
-                  category: evt.args.category as import('@/types').ProjectMemoryCategory,
-                  ...(evt.args.content ? { content: String(evt.args.content) } : {}),
-                  ...(evt.args.targetItemId
-                    ? { targetItemId: String(evt.args.targetItemId) }
-                    : {}),
-                  ...(evt.args.reason ? { reason: String(evt.args.reason) } : {}),
-                  sourceSessionId: effectiveSessionId,
-                  ...(assistantId ? { sourceMessageId: assistantId } : {}),
-                  status: 'proposed',
-                },
+                projectMemoryProposals: appendProposal(
+                  nextMetadata.projectMemoryProposals,
+                  proposal,
+                  (candidate) =>
+                    candidate.operation === proposal.operation
+                    && candidate.category === proposal.category
+                    && candidate.content === proposal.content
+                    && candidate.targetItemId === proposal.targetItemId,
+                ),
               };
             } else if (evt.toolName === 'suggest_forbidden_term' && evt.args.term) {
+              const proposal: ForbiddenTermProposal = {
+                proposalId: uuidv4(),
+                term: String(evt.args.term),
+                ...(evt.args.replacement
+                  ? { replacement: String(evt.args.replacement) }
+                  : {}),
+                ...(evt.args.note ? { note: String(evt.args.note) } : {}),
+                status: 'proposed',
+              };
               nextMetadata = {
                 ...nextMetadata,
-                forbiddenTermProposal: {
-                  proposalId: uuidv4(),
-                  term: String(evt.args.term),
-                  ...(evt.args.replacement
-                    ? { replacement: String(evt.args.replacement) }
-                    : {}),
-                  ...(evt.args.note ? { note: String(evt.args.note) } : {}),
-                  status: 'proposed',
-                },
+                forbiddenTermProposals: appendProposal(
+                  nextMetadata.forbiddenTermProposals,
+                  proposal,
+                  (candidate) =>
+                    candidate.term === proposal.term
+                    && candidate.replacement === proposal.replacement,
+                ),
               };
             } else if (
               evt.toolName === 'suggest_glossary_entry' &&
               evt.args.source &&
               evt.args.target
             ) {
+              const proposal: GlossaryEntryProposal = {
+                proposalId: uuidv4(),
+                source: String(evt.args.source),
+                target: String(evt.args.target),
+                ...(evt.args.notes ? { notes: String(evt.args.notes) } : {}),
+                status: 'proposed',
+              };
               nextMetadata = {
                 ...nextMetadata,
-                glossaryEntryProposal: {
-                  proposalId: uuidv4(),
-                  source: String(evt.args.source),
-                  target: String(evt.args.target),
-                  ...(evt.args.notes ? { notes: String(evt.args.notes) } : {}),
-                  status: 'proposed',
-                },
+                glossaryEntryProposals: appendProposal(
+                  nextMetadata.glossaryEntryProposals,
+                  proposal,
+                  (candidate) =>
+                    candidate.source === proposal.source
+                    && candidate.target === proposal.target,
+                ),
               };
             } else if (evt.toolName === 'suggest_translation_rule' && evt.args.rule) {
               const prev = nextMetadata.suggestedRule ?? '';
