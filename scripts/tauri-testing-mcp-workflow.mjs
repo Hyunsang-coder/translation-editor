@@ -260,7 +260,6 @@ async function waitForAssistantReply(client, { selector, previousCount, userText
 async function runWorkflow() {
   const projectTitle = `Workflow E2E ${Date.now()}`;
   const chatMessage = '번역문 내용 간략히 요약해줘';
-  const toolsButtonSelector = "button[data-testid='toolbar-tools-button'], button[title='도구'], button[title='Tools']";
   const toolbarSettingsSelector = "button[data-testid='toolbar-menu-settings']";
   const toolbarChatSelector = "button[data-testid='toolbar-menu-chat']";
   const chatSendButtonSelector = "button[data-testid='chat-send-button'], [data-testid='chat-composer-container'] ~ div button[type='submit']";
@@ -317,8 +316,7 @@ async function runWorkflow() {
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='app-settings-close-button']" });
 
     // 3) Open settings panel and fill rules/context
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolsButtonSelector, timeout: 10000 });
-    await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolbarSettingsSelector, timeout: 10000 });
     await callTool(client, 'tauri_dom_click', { selector: toolbarSettingsSelector });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
     await callTool(client, 'tauri_dom_fill', {
@@ -415,7 +413,6 @@ async function runWorkflow() {
       visible: true,
     });
     if (!isChatVisible) {
-      await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
       await callTool(client, 'tauri_dom_click', { selector: toolbarChatSelector });
     }
     let chatVisible = await tryTool(client, 'tauri_dom_wait_for_selector', {
@@ -425,7 +422,6 @@ async function runWorkflow() {
     });
     if (!chatVisible) {
       // 첫 클릭이 "닫기"로 동작했을 수 있어 한 번 더 토글
-      await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
       await callTool(client, 'tauri_dom_click', { selector: toolbarChatSelector });
       chatVisible = await tryTool(client, 'tauri_dom_wait_for_selector', {
         selector: chatContainerSelector,

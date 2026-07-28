@@ -19,15 +19,14 @@ import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
-import { MODEL_PRESETS } from '@/ai/config';
-import { Select, type SelectOptionGroup } from '@/components/ui/Select';
+import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { NotebookPen, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -108,8 +107,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
 
-  const openReviewPanel = useUIStore((s) => s.openReviewPanel);
-  const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
   const addToast = useUIStore((s) => s.addToast);
   const focusMode = useUIStore((s) => s.focusMode);
   const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
@@ -146,48 +143,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const targetFontSize = useUIStore((s) => s.targetFontSize);
   const targetLineHeight = useUIStore((s) => s.targetLineHeight);
 
-  const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
-  const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
-  const translationModel = useAiConfigStore((s) => s.translationModel);
-  const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
-
   const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
 
-  const commentCount = useCommentStore((s) => s.comments.length);
   const comments = useCommentStore((s) => s.comments);
-
-  // 활성화된 프로바이더의 모델만 표시
-  const enabledPresets = useMemo((): SelectOptionGroup[] => {
-    const presets: SelectOptionGroup[] = [];
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    return presets;
-  }, [openaiEnabled, anthropicEnabled]);
-
-  // 모든 모델 플랫 리스트 (유효성 검사용)
-  const allTranslationModels = useMemo(() => {
-    return enabledPresets.flatMap((g) => g.options);
-  }, [enabledPresets]);
-
-  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
-  useEffect(() => {
-    if (allTranslationModels.length === 0) return;
-    const firstModel = allTranslationModels[0];
-    if (!firstModel) return;
-    if (!allTranslationModels.some((m) => m.value === translationModel)) {
-      setTranslationModel(firstModel.value);
-    }
-  }, [translationModel, allTranslationModels, setTranslationModel]);
 
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
@@ -205,7 +163,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [translatePreviewOpen, setTranslatePreviewOpen] = useState(false);
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
-  const [translateLoading, setTranslateLoading] = useState(false);
+  // 진행 상태는 uiStore에 둔다 — 상단 툴바(WorkflowActions)와 프리뷰 모달이 함께 읽는다.
+  const translateLoading = useUIStore((s) => s.translateLoading);
+  const setTranslateLoading = useUIStore((s) => s.setTranslateLoading);
   const translateAbortController = useRef<AbortController | null>(null);
 
   const [polishPreviewOpen, setPolishPreviewOpen] = useState(false);
@@ -213,7 +173,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   // 선택 적용 diff 기준: 폴리싱 시작 시점의 Target 문서 스냅샷
   const [polishOriginalDocJson, setPolishOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [polishPreviewError, setPolishPreviewError] = useState<string | null>(null);
-  const [polishLoading, setPolishLoading] = useState(false);
+  const polishLoading = useUIStore((s) => s.polishLoading);
+  const setPolishLoading = useUIStore((s) => s.setPolishLoading);
   const polishAbortController = useRef<AbortController | null>(null);
   const [polishModalOpen, setPolishModalOpen] = useState(false);
   const [polishMessage, setPolishMessage] = useState('');
@@ -944,6 +905,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     t,
     computeTargetRevision,
     setStreamingChannelText,
+    setTranslateLoading,
   ]);
 
   // 번역 버튼 클릭 핸들러: 타겟에 내용이 있으면 재번역 모달 먼저 표시
@@ -1070,7 +1032,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         polishAbortController.current = null;
       }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText]);
+  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText, setPolishLoading]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;
@@ -1089,6 +1051,28 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishModalOpen(true);
   }, [addToast, hasTargetContent, project, t]);
 
+  // 상단 툴바(WorkflowActions)의 실행 요청 수신.
+  // 번역/폴리싱 로직은 양쪽 TipTap 인스턴스와 프리뷰 모달에 묶여 있어 여기 남기고,
+  // 툴바는 nonce만 올린다 (reviewStore.reviewTrigger ← ReviewPanel 과 동일 패턴).
+  const translateTrigger = useUIStore((s) => s.translateTrigger);
+  const polishTrigger = useUIStore((s) => s.polishTrigger);
+  const prevTranslateTriggerRef = useRef(translateTrigger);
+  const prevPolishTriggerRef = useRef(polishTrigger);
+
+  useEffect(() => {
+    if (translateTrigger > prevTranslateTriggerRef.current) {
+      handleTranslateClick();
+    }
+    prevTranslateTriggerRef.current = translateTrigger;
+  }, [translateTrigger, handleTranslateClick]);
+
+  useEffect(() => {
+    if (polishTrigger > prevPolishTriggerRef.current) {
+      handlePolishClick();
+    }
+    prevPolishTriggerRef.current = polishTrigger;
+  }, [polishTrigger, handlePolishClick]);
+
   // 번역 취소 핸들러
   const handleTranslateCancel = useCallback((): void => {
     if (translateAbortController.current) {
@@ -1097,7 +1081,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setTranslateLoading(false);
     setTranslatePreviewOpen(false);
     setStreamingChannelText('translate', null);
-  }, [setStreamingChannelText]);
+  }, [setStreamingChannelText, setTranslateLoading]);
 
   const applyTranslatePreview = useCallback((): void => {
     if (!translatePreviewDoc) return;
@@ -1182,7 +1166,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishLoading(false);
     setPolishPreviewOpen(false);
     setStreamingChannelText('polish', null);
-  }, [setStreamingChannelText]);
+  }, [setStreamingChannelText, setPolishLoading]);
 
   // 폴리싱 미리보기 종료 시 스냅샷 상태를 함께 정리 (ReviewPanel handleRetranslateClose와 대칭).
   // 재열기 경로가 항상 재스냅샷하므로 correctness 이슈는 아니지만, 문서 JSON 상주를 방지한다.
@@ -1334,7 +1318,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishLoading(false);
     setStreamingChannelText('translate', null);
     setStreamingChannelText('polish', null);
-  }, [project?.id, setStreamingChannelText]);
+  }, [project?.id, setStreamingChannelText, setTranslateLoading, setPolishLoading]);
 
   // 검색바 핸들러
   const handleSourceSearchOpen = useCallback(() => {
@@ -1461,70 +1445,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            value={translationModel}
-            onChange={setTranslationModel}
-            options={enabledPresets}
-            aria-label={t('editor.translationModelAriaLabel')}
-            title={t('editor.translationModel')}
-            size="sm"
-            className="min-w-[130px]"
-          />
-          {/* AI 작업 워크플로 (번역 → 검수 → 폴리싱) — segmented control */}
-          <div className="inline-flex items-stretch rounded-md border border-editor-border overflow-hidden bg-editor-bg">
-            <button
-              type="button"
-              onClick={handleTranslateClick}
-              className="px-2.5 py-1 text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
-              disabled={translateLoading}
-              title={t('editor.translateTitle')}
-              data-testid="editor-translate-button"
-            >
-              {translateLoading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>{t('editor.translating')}</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{t('editor.translate')}</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => openReviewPanel()}
-              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface transition-colors"
-              title={t('editor.reviewTitle', '번역 검수')}
-              data-testid="editor-review-button"
-            >
-              {t('editor.review', '검수')}
-            </button>
-            <button
-              type="button"
-              onClick={handlePolishClick}
-              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              disabled={!hasTargetContent || polishLoading}
-              title={t('review.polish', '폴리싱')}
-              data-testid="editor-polish-button"
-            >
-              {t('review.polish', '폴리싱')}
-            </button>
-          </div>
-          {/* 코멘트 — 워크플로와 분리된 유틸리티 */}
-          <button
-            type="button"
-            onClick={() => openCommentsPanel()}
-            className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border flex items-center gap-1 transition-colors relative"
-            title={t('comment.title', '코멘트')}
-            data-testid="editor-comments-button"
-          >
-            <NotebookPen className="w-4 h-4" />
-            {commentCount > 0 && (
-              <span className="tabular-nums text-[11px] font-semibold text-editor-text">{commentCount}</span>
-            )}
-          </button>
+          {/* 워크플로 액션(번역/검수/폴리싱)·모델·코멘트는 상단 Toolbar로 승격됨 */}
           {/* 숨긴 채팅 바 되살림 */}
           {rightSidebarInvisible && (
             <button

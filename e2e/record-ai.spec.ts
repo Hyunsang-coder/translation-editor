@@ -97,7 +97,7 @@ test.describe.serial('AI Demo Recording', () => {
     await page.waitForTimeout(STEP_PAUSE);
 
     // 5. 번역 버튼 클릭 — 핵심 순간
-    await page.getByRole('button', { name: /^(번역|Translate)$/ }).click();
+    await page.getByTestId('editor-translate-button').click();
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 6. 번역 결과 대기 (mock이므로 즉시 완료, 결과 화면 유지)

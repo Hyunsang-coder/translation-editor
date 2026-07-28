@@ -253,7 +253,12 @@
     "settings": "Settings",
     "projectSettings": "Settings",
     "review": "Review",
-    "aiChat": "AI Chat"
+    "aiChat": "AI Chat",
+    "export": "Export"
+  },
+  "workflow": {
+    "translateDocument": "Translate",
+    "aiModel": "AI Model"
   },
   "history": {
     "title": "History",

@@ -270,7 +270,6 @@ const TAMPERED_TRANSLATION = [
 
 async function runScenario(client) {
   const projectTitle = `Review Highlight E2E ${Date.now()}`;
-  const toolsButtonSelector = "button[data-testid='toolbar-tools-button'], button[title='도구'], button[title='Tools']";
   const targetEditable = "[data-testid='target-editor'] [contenteditable='true']";
   const highlightSelector = '.review-highlight';
 

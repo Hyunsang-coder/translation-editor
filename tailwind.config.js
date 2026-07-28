@@ -27,6 +27,12 @@ export default {
           text: 'var(--editor-text)',
           muted: 'var(--editor-muted)',
         },
+        // 세그먼트/이슈 상태 액센트
+        accent: {
+          tint: 'var(--accent-tint)',
+          highlight: 'var(--accent-highlight)',
+          deep: 'var(--accent-deep)',
+        },
         // Diff 시각화 컬러
         diff: {
           insertion: 'var(--diff-insertion)',

@@ -14,10 +14,7 @@ const TEXT = {
   connect: /^(연결|Connect)$/,
   clear: /^(지우기|Clear)$/,
   close: /^(닫기|Close)$/,
-  translate: /^(번역|Translate)$/,
-  review: /^(검수|Review)$/,
   history: /^(히스토리|History)$/,
-  aiChat: /^(AI 채팅|AI Chat)$/,
   save: /^(저장|Save)$/,
   rename: /^(이름 변경|Rename)$/,
   delete: /^(삭제|Delete)$/,
@@ -32,9 +29,6 @@ async function openAppSettings(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: TEXT.appSettings })).toBeVisible();
 }
 
-async function openToolsMenu(page: Page): Promise<void> {
-  await page.locator('button[title="도구"], button[title="Tools"]').click();
-}
 
 test.describe('User Story: Maria의 번역 워크플로우', () => {
   test('Phase 1: 초기 진입과 빈 프로젝트 상태', async ({ page }) => {
@@ -117,14 +111,14 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.getByRole('button', { name: '새 프로젝트 시작하기' }).click();
     const sourceEditor = page.locator('[contenteditable="true"]').first();
     await expect(sourceEditor).toBeVisible();
-    await expect(page.getByRole('button', { name: TEXT.translate })).toBeVisible();
-    await expect(page.getByRole('button', { name: TEXT.review })).toBeVisible();
+    await expect(page.getByTestId('editor-translate-button')).toBeVisible();
+    await expect(page.getByTestId('editor-review-button')).toBeVisible();
 
     await sourceEditor.click();
     await page.keyboard.type('Guía de Integración de API\nEsta guía proporciona instrucciones.', { delay: 5 });
     await expect(sourceEditor).toContainText('Guía');
 
-    await page.getByRole('button', { name: TEXT.translate }).click();
+    await page.getByTestId('editor-translate-button').click();
     await expect(page.getByText(TEXT.targetLanguageWarning)).toBeVisible();
 
     const targetLanguageSelect = page.getByRole('button', { name: /^(언어 선택|Select Language)$/ }).first();
@@ -141,11 +135,10 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
-    await page.getByRole('button', { name: TEXT.review }).click();
+    await page.getByTestId('editor-review-button').click();
     await expect(page.getByTestId('review-run-button')).toBeVisible();
 
-    await openToolsMenu(page);
-    await page.getByRole('menuitem', { name: TEXT.aiChat }).click();
+    await page.getByTestId('toolbar-menu-chat').click();
     // Chat panel may take a moment to create a session and render
     await expect(page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i })).toBeVisible({ timeout: 5000 });
     await expect(page.getByLabel(/채팅 모델|Chat model/i)).toBeVisible();
@@ -164,8 +157,7 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
-    await openToolsMenu(page);
-    await page.getByRole('menuitem', { name: TEXT.history }).click();
+    await page.getByTestId('toolbar-menu-history').click();
 
     await expect(page.getByRole('heading', { name: TEXT.history })).toBeVisible();
     await page.getByRole('button', { name: /^(저장|Save)$/ }).first().click();

@@ -45,6 +45,14 @@ interface UIState extends EditorUIState {
   // Focus Mode (원문/번역 단일 패널 보기)
   focusMode: boolean;
   sourceOnlyMode: boolean;
+
+  // AI 워크플로 (번역/폴리싱) — 실행 로직은 EditorCanvasTipTap이 소유하고,
+  // 툴바는 nonce 트리거로 요청만 보낸다 (reviewStore.reviewTrigger와 동일 패턴).
+  // 비영속(persist 제외).
+  translateLoading: boolean;
+  polishLoading: boolean;
+  translateTrigger: number;
+  polishTrigger: number;
 }
 
 interface UIActions {
@@ -139,6 +147,12 @@ interface UIActions {
   setEditorZoom: (zoom: number) => void;
   adjustEditorZoom: (delta: number) => void;
   resetEditorZoom: () => void;
+
+  // AI 워크플로
+  setTranslateLoading: (loading: boolean) => void;
+  setPolishLoading: (loading: boolean) => void;
+  triggerTranslate: () => void;
+  triggerPolish: () => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -195,6 +209,12 @@ export const useUIStore = create<UIStore>()(
 
       // Editor zoom default
       editorZoom: 1.0,
+
+      // AI 워크플로 defaults
+      translateLoading: false,
+      polishLoading: false,
+      translateTrigger: 0,
+      polishTrigger: 0,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -824,6 +844,23 @@ export const useUIStore = create<UIStore>()(
 
       resetEditorZoom: (): void => {
         set({ editorZoom: 1.0 });
+      },
+
+      // AI 워크플로
+      setTranslateLoading: (loading: boolean): void => {
+        set({ translateLoading: loading });
+      },
+
+      setPolishLoading: (loading: boolean): void => {
+        set({ polishLoading: loading });
+      },
+
+      triggerTranslate: (): void => {
+        set((state) => ({ translateTrigger: state.translateTrigger + 1 }));
+      },
+
+      triggerPolish: (): void => {
+        set((state) => ({ polishTrigger: state.polishTrigger + 1 }));
       },
     }),
     {

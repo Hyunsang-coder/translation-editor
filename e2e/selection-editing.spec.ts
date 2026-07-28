@@ -143,7 +143,6 @@ test.describe('Selection editing and scoped context', () => {
   });
 
   test('approved project memory is managed separately from the legacy context field', async ({ page }) => {
-    await page.getByTestId('toolbar-tools-button').click();
     await page.getByTestId('toolbar-menu-settings').click();
     await expect(page.getByTestId('project-memory-settings')).toBeVisible();
 

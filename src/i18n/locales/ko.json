@@ -251,7 +251,12 @@
     "settings": "설정",
     "projectSettings": "설정",
     "review": "검수",
-    "aiChat": "AI 채팅"
+    "aiChat": "AI 채팅",
+    "export": "내보내기"
+  },
+  "workflow": {
+    "translateDocument": "문서 번역",
+    "aiModel": "AI 모델"
   },
   "history": {
     "title": "히스토리",

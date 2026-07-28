@@ -10,7 +10,6 @@ const port = Number(process.env.TAURI_TEST_PORT ?? '9876');
 const token = process.env.TAURI_TEST_TOKEN ?? 'tauri-testing-token';
 
 const TEXT = {
-  history: ['History', '히스토리'],
   saveSnapshot: ['Save Snapshot', '스냅샷 저장'],
   compare: ['Compare', '비교'],
   close: ['Close', '닫기'],
@@ -316,9 +315,8 @@ async function getButtonStateByAnyText(client, texts, selector = 'aside button')
   return null;
 }
 
-async function openHistoryDrawer(client, toolsButtonSelector) {
-  await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
-  await clickByAnyText(client, TEXT.history, { selector: 'button', exact: false, visibleOnly: true });
+async function openHistoryDrawer(client) {
+  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-menu-history']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: 'aside h2', timeout: 10000, visible: true });
 }
 
@@ -338,7 +336,6 @@ async function runScenario() {
   const projectTitle = `History Compare E2E ${Date.now()}`;
   const baselineSnapshot = `baseline-${Date.now()}`;
   const modifiedSnapshot = `modified-${Date.now()}`;
-  const toolsButtonSelector = "button[data-testid='toolbar-tools-button'], button[title='도구'], button[title='Tools']";
   const sourceEditable = "[data-testid='source-editor'] [contenteditable='true']";
   const targetEditable = "[data-testid='target-editor'] [contenteditable='true']";
   const checkboxSelector = 'aside input[type="checkbox"]';
@@ -381,7 +378,7 @@ async function runScenario() {
     log(`[list] Baseline hierarchy preserved (${baselineHierarchy.count} items): ${baselineHierarchy.targetSig}`);
 
     log('\n═══ Phase 3: Save Baseline Snapshot ═══');
-    await openHistoryDrawer(client, toolsButtonSelector);
+    await openHistoryDrawer(client);
     const compareBefore = await getButtonStateByAnyText(client, TEXT.compare);
     if (!compareBefore) {
       throw new Error('Compare button not found in History drawer');
@@ -409,7 +406,7 @@ async function runScenario() {
     log(`[list] Modified hierarchy preserved (${modifiedHierarchy.count} items): ${modifiedHierarchy.targetSig}`);
 
     log('\n═══ Phase 5: Save Modified Snapshot & Compare ═══');
-    await openHistoryDrawer(client, toolsButtonSelector);
+    await openHistoryDrawer(client);
     await saveSnapshotViaDialog(client, modifiedSnapshot);
 
     await waitForSelectorIndex(client, checkboxSelector, 2, 10000);

@@ -98,6 +98,24 @@ export function MainLayout(): JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleDevTestPanel]);
 
+  // AI 워크플로 단축키 (Cmd/Ctrl + T/R/P) — 툴바 단축키 칩과 짝을 이룬다.
+  // TipTap이 포커스를 가진 상태에서도 동작해야 하므로 document 레벨에 등록한다.
+  useEffect(() => {
+    if (!project) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== 't' && key !== 'r' && key !== 'p') return;
+      e.preventDefault();
+      const ui = useUIStore.getState();
+      if (key === 't') ui.triggerTranslate();
+      else if (key === 'r') ui.openReviewPanel();
+      else ui.triggerPolish();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [project]);
+
   return (
     <div className="flex flex-col h-screen">
       <ToastHost />
