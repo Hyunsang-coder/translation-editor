@@ -86,6 +86,13 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-28)
 
+- **정렬 검사 뷰 (Phase 4.5, `design_handoff_oddeyes_editor_ui/PHASE_4_5_alignment_view.md`)**: 원문↔번역문 문단을 나란히 놓는 **읽기 전용** 대조 뷰. 상단 상태 스트립의 `문서 보기 | 정렬 검사` 토글로 오간다(기본은 문서 보기, `uiStore.editorViewMode`만 persist). **정렬은 저장하지 않는다** — `project.segments`는 죽은 모델이고 `translationUnitId`는 두 에디터에서 독립 발급되므로, 뷰를 열 때마다 `alignUnits.ts`가 시그니처(`type:depth:level`) 시퀀스 LCS로 계산하고 짝이 안 맞는 구간은 **고치지 않고 불일치로 표시**한다(1:1 / 1:0 / 0:1만, 1:N 미지원).
+  - **에디터 언마운트 금지**: 정렬 뷰는 `PanelGroup` 위에 오버레이로 얹고 문서 보기 쪽은 `visibility:hidden`으로 가린다. 언마운트하면 TipTap 인스턴스가 파괴돼 `editorStore`가 비고 점프·검수 적용이 깨진다. `display:none`이 아닌 `visibility`인 이유는 ① 레이아웃이 남아 스크롤 위치가 보존되고(실측 1500 → 1500) ② 숨은 요소는 포커스를 못 받아 읽기 전용이 함께 강제되기 때문(React 18이라 `inert` 사용 불가).
+  - **재계산 트리거**: `onUpdate`가 아니라 300ms 디바운스된 문서 JSON 스냅샷. 스펙이 제안한 리비전 해시 비교는 markdown 변환+해시가 `alignUnits`보다 싸지 않아 넣지 않았다.
+  - **이슈·코멘트 배지**: `useAlignmentAnnotations.ts`가 `targetExcerpt`/`excerpt` **텍스트 포함 검사**로 유닛에 매핑한다(`segmentGroupId`는 신뢰 불가). 여러 유닛에 걸리면 매핑하지 않고 하단 `위치를 특정하지 못한 이슈 N건`으로 모은다 — 이 수치가 정렬 품질 지표다. 정규화는 `normalizeForSearch`의 기존 함수 재사용.
+  - **정렬 리포트**: 하단 `정렬 리포트` 버튼이 `AlignResult` 요약을 JSONL 한 줄로 내보낸다(`alignmentReport.ts`, `saveQualityJsonl`과 같은 방식). **자동 수집 없음.** 이 줄의 `ratio`가 Phase 5(영속 정렬, 4–6주) 착수 판단 근거다 — 0.95 이상이면 불필요, 0.7 근처면 착수 가치 있음.
+  - 부수 변경: `ReviewPanel`의 `detectSourceLanguage` → `src/utils/detectLanguage.ts`로 이관(반환 문자열은 검수 프롬프트에 들어가므로 그대로), `TranslationUnit`에 `level?: number` 추가, `e2e/tauri-mock.ts`에 `plugin:dialog|save`·`write_text_file` 목 추가(쓰인 내용은 `window.__MOCK_WRITTEN_FILES__`).
+  - **Phase 4-3(세그먼트 인스펙터)은 폐기** — 전제한 `segmentGroupId` 경로가 스키마에 없고, 4.5가 이를 대체한다.
 - **프로젝트 메모리에서 보관(archive) 개념 제거**: 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.
   - **DB**: `project_memory_items`에서 `supersedes_id` 컬럼과 `status='archived'`를 제거(CHECK는 `('proposed','active')`). 기존 DB는 `migrate_drop_project_memory_archive`가 테이블 재구성으로 archived 행을 삭제하며, `supersedes_id` 컬럼 유무로 판정해 재실행에 안전하다. `delete_project_memory_item` 커맨드 신설.
   - **편집은 제자리 갱신**: `replace_project_memory_item`이 원본 archive + 새 행 insert 대신 UPDATE만 한다. id·`created_at`이 유지되고 행이 늘지 않는다. 결과에서 `archived` 필드 제거.
