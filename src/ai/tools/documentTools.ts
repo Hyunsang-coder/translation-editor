@@ -6,6 +6,7 @@ import { stripHtml } from '@/utils/hash';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
 import { tipTapJsonToMarkdownForTranslation, type TipTapDocJson } from '@/utils/markdownConverter';
+import { stripImages } from '@/utils/imagePlaceholder';
 import {
   collectTranslationUnits,
   type TranslationUnitDocument,
@@ -42,7 +43,7 @@ function resolveSourceDocumentMarkdown(unitIds?: string[]): string {
           .map((unit) => unit.text)
           .join('\n');
       }
-      return tipTapJsonToMarkdownForTranslation(sourceDocJson as TipTapDocJson);
+      return stripImages(tipTapJsonToMarkdownForTranslation(sourceDocJson as TipTapDocJson)).stripped;
     } catch (e) {
       console.warn('[resolveSourceDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }
@@ -83,7 +84,7 @@ function resolveTargetDocumentMarkdown(unitIds?: string[]): string {
           .map((unit) => unit.text)
           .join('\n');
       }
-      return tipTapJsonToMarkdownForTranslation(targetDocJson as TipTapDocJson);
+      return stripImages(tipTapJsonToMarkdownForTranslation(targetDocJson as TipTapDocJson)).stripped;
     } catch (e) {
       console.warn('[resolveTargetDocumentMarkdown] Markdown conversion failed, falling back to plain text:', e);
     }
