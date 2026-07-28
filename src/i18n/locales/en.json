@@ -249,7 +249,6 @@
     "focusModeNormal": "Normal",
     "focusModeFocus": "Focus",
     "themeCurrent": "Current: {{theme}}",
-    "tools": "Tools",
     "settings": "Settings",
     "projectSettings": "Settings",
     "review": "Review",
@@ -326,7 +325,6 @@
     "projectTitlePlaceholder": "Project title"
   },
   "editor": {
-    "editorLabel": "EDITOR",
     "translationModel": "Translation Model",
     "translationModelAriaLabel": "Translation model",
     "translate": "Translate",
@@ -489,12 +487,9 @@
     "segment": "Segment",
     "sourceExcerpt": "Source",
     "targetExcerpt": "Current Translation",
-    "suggestedFix": "Suggested Fix",
     "issueType": "Type",
-    "description": "Description",
     "selectedCount": "{{count}} selected",
     "selectAll": "Select All",
-    "resizeColumn": "Resize column (double-click to reset)",
     "selectIssue": "Select Issue",
     "deleteIssue": "Delete Issue",
     "highlight": "Highlight",
