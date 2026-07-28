@@ -595,15 +595,18 @@ export function htmlToTipTapJson(html: string): TipTapDocJson {
     return { type: 'doc', content: [] };
   }
 
-  const editor = new Editor({
-    extensions: getExtensions(),
-    content: html, // HTML string을 직접 content로 전달
-  });
+  // ProseMirror DOMParser로 직접 파싱한다(`replaceDocContent`와 동일).
+  // HTML 문자열을 Editor의 `content`로 넘기면 Markdown 확장(html: false)이
+  // 마크다운으로 해석해 문서 전체가 raw 텍스트 문단 1개로 뭉개진다.
+  const editor = new Editor({ extensions: getExtensions() });
 
-  const json = editor.getJSON() as TipTapDocJson;
-  editor.destroy();
-
-  return json;
+  try {
+    const container = document.createElement('div');
+    container.innerHTML = DOMPurify.sanitize(html);
+    return PMDOMParser.fromSchema(editor.schema).parse(container).toJSON() as TipTapDocJson;
+  } finally {
+    editor.destroy();
+  }
 }
 
 /**

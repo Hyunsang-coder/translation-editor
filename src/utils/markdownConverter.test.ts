@@ -16,6 +16,10 @@ import {
   fixMisalignedBoldMarks,
   parseTranslationResponseToTipTap,
 } from './markdownConverter';
+import {
+  collectTranslationUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
 
 describe('markdownConverter - 기존 함수 (html: false)', () => {
   it('Markdown 테이블이 올바르게 파싱되어야 함', () => {
@@ -378,6 +382,44 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     // 기존 함수는 [table]로 변환 (기존 동작 유지)
     const markdown = tipTapJsonToMarkdown(complexTableJson);
     expect(markdown).toContain('[table]');
+  });
+});
+
+describe('htmlToTipTapJson - 블록 구조 보존', () => {
+  // 회귀: HTML 문자열을 Editor의 content로 넘기면 Markdown 확장(html: false)이
+  // 마크다운으로 해석해 문서 전체가 raw 텍스트 문단 1개로 뭉개졌다. 그 결과
+  // 프로젝트를 열 때마다 sourceDocJson/targetDocJson이 깨진 채로 저장돼
+  // AI 문서 도구와 정렬 뷰가 문단 1개짜리 문서를 봤다.
+  const blockHtml = '<h2>Design Goals</h2>'
+    + '<ul><li><p>Cut off movement routes.</p></li><li><p>Detect players from long range.</p></li></ul>'
+    + '<h2>Characteristics</h2>'
+    + '<p>Does not actively approach the player.</p>';
+
+  it('헤딩·리스트·문단이 각각의 노드로 파싱된다', () => {
+    const json = htmlToTipTapJson(blockHtml);
+    const units = collectTranslationUnits(json as unknown as TranslationUnitDocument)
+      .filter((unit) => unit.text.trim().length > 0);
+
+    expect(units.map((unit) => unit.type)).toEqual([
+      'heading', 'paragraph', 'paragraph', 'heading', 'paragraph',
+    ]);
+    expect(units[0]).toMatchObject({ type: 'heading', level: 2, text: 'Design Goals' });
+    expect(units[4]?.text).toBe('Does not actively approach the player.');
+  });
+
+  it('HTML 태그가 본문 텍스트로 남지 않는다', () => {
+    const json = htmlToTipTapJson(blockHtml);
+    const text = collectTranslationUnits(json as unknown as TranslationUnitDocument)
+      .map((unit) => unit.text)
+      .join('');
+
+    expect(text).not.toContain('<h2>');
+    expect(text).not.toContain('<li>');
+  });
+
+  it('빈 HTML은 빈 문서를 돌려준다', () => {
+    expect(htmlToTipTapJson('')).toEqual({ type: 'doc', content: [] });
+    expect(htmlToTipTapJson('   ')).toEqual({ type: 'doc', content: [] });
   });
 });
 

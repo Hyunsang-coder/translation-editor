@@ -644,8 +644,12 @@ export function ReviewPanel(): JSX.Element {
     const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
     if (!project) return;
 
-    // TipTapDocJson을 HTML로 변환하여 target document에 적용
+    // TipTapDocJson을 HTML로 변환하여 target document에 적용.
+    // JSON도 함께 갱신한다 — store의 targetDocument 교체는 에디터 content prop을 통해
+    // 반영되면서 pending 동기화를 취소하므로, 여기서 안 넣으면 targetDocJson이 재번역
+    // 이전 문서로 남아 AI 도구·정렬 뷰가 옛 내용을 본다.
     const html = tipTapJsonToHtml(doc);
+    useProjectStore.getState().setTargetDocJson(doc);
     useProjectStore.getState().setTargetDocument(html);
 
     // 품질 장부: 재번역에 반영된(checked) 이슈는 superseded, 나머지는 rejected (WP-A1 요구사항 2-③)

@@ -21,7 +21,11 @@ function createTestProject(segmentCount: number): ITEProject {
     blocks[sourceBlockId] = {
       id: sourceBlockId,
       type: 'source',
-      content: `<p>Source text for segment ${i}. This is a test paragraph with some content.</p>`,
+      // 세그먼트당 ~150자 — 100개면 12,000자 예산을 넘어 2개 청크로 갈라진다.
+      // (마크업은 길이에 포함되지 않는다. htmlToTipTapJson이 HTML을 제대로 파싱하므로
+      //  본문 텍스트만 남는다)
+      content: `<p>Source text for segment ${i}. This is a test paragraph with some content, `
+        + 'padded to roughly one hundred and fifty characters so the chunker actually splits.</p>',
       hash: `hash-source-${i}`,
       metadata: { createdAt: now, updatedAt: now, tags: [] },
     };
