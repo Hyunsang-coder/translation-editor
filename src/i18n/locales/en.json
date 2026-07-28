@@ -260,6 +260,16 @@
     "translateDocument": "Translate",
     "aiModel": "AI Model"
   },
+  "status": {
+    "reviewing": "Reviewing",
+    "saving": "Saving…",
+    "saved": "All changes saved",
+    "notSavedYet": "Not saved yet",
+    "snapshotJustNow": "Snapshot just now",
+    "snapshotAgo": "Snapshot {{minutes}}m ago",
+    "sourceWords": "Source {{words}} words",
+    "targetWords": "Target {{words}} words"
+  },
   "history": {
     "title": "History",
     "loading": "Loading history...",

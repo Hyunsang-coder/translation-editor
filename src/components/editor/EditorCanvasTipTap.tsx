@@ -6,6 +6,7 @@ import { useHistoryStore } from '@/stores/historyStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
+import { StatusStrip } from '@/components/layout/StatusStrip';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { SearchBar } from './SearchBar';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -21,7 +22,6 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
-import { countTotalWords } from '@/utils/wordCounter';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { countWords, logQualityRun } from '@/quality';
 import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
@@ -264,25 +264,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   }>(null);
 
   // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
-  const [sourceWordCount, setSourceWordCount] = useState(0);
-  const [targetWordCount, setTargetWordCount] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!sourceDocument) { setSourceWordCount(0); return; }
-      setSourceWordCount(countTotalWords(sourceDocument));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [sourceDocument]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!targetDocument) { setTargetWordCount(0); return; }
-      setTargetWordCount(countTotalWords(targetDocument));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [targetDocument]);
-
   // 선택 영역에서 우클릭하면 액션 메뉴를 마우스 위치에 띄운다.
   // (선택이 없으면 커스텀 메뉴를 띄우지 않고 OS/브라우저 기본 메뉴를 그대로 둔다.)
   const openSelectionActionMenuAt = useCallback((
@@ -1427,39 +1408,34 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   return (
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
-      {/* Header */}
-      <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
-        <div className="flex items-center gap-2">
-          {leftSidebarInvisible && (
-            <button
-              type="button"
-              onClick={revealLeftSidebar}
-              className="p-1.5 -ml-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
-              title={t('sidebar.showLeft', 'Show side panel')}
-              aria-label={t('sidebar.showLeft', 'Show side panel')}
-              data-testid="reveal-sidebar-left"
-            >
-              <PanelLeftOpen className="w-4 h-4" />
-            </button>
-          )}
-          <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* 워크플로 액션(번역/검수/폴리싱)·모델·코멘트는 상단 Toolbar로 승격됨 */}
-          {/* 숨긴 채팅 바 되살림 */}
-          {rightSidebarInvisible && (
-            <button
-              type="button"
-              onClick={revealRightSidebar}
-              className="p-1.5 -mr-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
-              title={t('sidebar.showRight', 'Show chat panel')}
-              aria-label={t('sidebar.showRight', 'Show chat panel')}
-              data-testid="reveal-sidebar-right"
-            >
-              <PanelRightOpen className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+      {/* 상태 스트립 — 워크플로 액션이 Toolbar로 올라간 자리를 진행/저장/스냅샷/단어수가 대신한다.
+          양 끝은 숨긴 사이드바 되살림 버튼(바 내부엔 UI가 없어 여기 노출). */}
+      <div className="h-[30px] px-2 flex items-center gap-2 border-b border-editor-border shrink-0">
+        {leftSidebarInvisible && (
+          <button
+            type="button"
+            onClick={revealLeftSidebar}
+            className="p-1 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors shrink-0"
+            title={t('sidebar.showLeft', 'Show side panel')}
+            aria-label={t('sidebar.showLeft', 'Show side panel')}
+            data-testid="reveal-sidebar-left"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        )}
+        <StatusStrip />
+        {rightSidebarInvisible && (
+          <button
+            type="button"
+            onClick={revealRightSidebar}
+            className="p-1 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors shrink-0"
+            title={t('sidebar.showRight', 'Show chat panel')}
+            aria-label={t('sidebar.showRight', 'Show chat panel')}
+            data-testid="reveal-sidebar-right"
+          >
+            <PanelRightOpen className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Editor Panels */}
@@ -1501,9 +1477,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                       </button>
                     ) : null}
                   </div>
-                  <span className="text-[10px] text-editor-muted">
-                    {sourceWordCount.toLocaleString()} {t('editor.words')}
-                  </span>
                 </div>
                 <TipTapMenuBar editor={sourceEditor} panelType="source" />
                 <SearchBar
@@ -1595,9 +1568,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                   data-testid="target-language-select"
                 />
               </div>
-              <span className="text-[10px] text-editor-muted">
-                {targetWordCount.toLocaleString()} {t('editor.words')}
-              </span>
             </div>
             <TipTapMenuBar editor={targetEditor} panelType="target" />
             <SearchBar

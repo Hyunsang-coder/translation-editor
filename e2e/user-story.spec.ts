@@ -159,25 +159,27 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
     await page.getByTestId('toolbar-menu-history').click();
 
+    // 상태 스트립도 최신 스냅샷 설명을 표시하므로 단언은 드로어로 한정한다.
+    const historyDrawer = page.locator('aside').filter({ has: page.getByRole('heading', { name: TEXT.history }) });
     await expect(page.getByRole('heading', { name: TEXT.history })).toBeVisible();
     await page.getByRole('button', { name: /^(저장|Save)$/ }).first().click();
     await page.locator('#history-description').fill('마리아 수동 저장');
     await page.getByLabel(/스냅샷 저장|Save Snapshot/i).getByRole('button', { name: TEXT.save }).click();
-    await expect(page.getByText('마리아 수동 저장')).toBeVisible();
+    await expect(historyDrawer.getByText('마리아 수동 저장')).toBeVisible();
 
     const savedItem = page.locator('li').filter({ hasText: '마리아 수동 저장' }).first();
     await savedItem.getByRole('button', { name: TEXT.rename }).click();
     const renameDialog = page.getByRole('dialog').filter({ has: page.locator('#history-rename-description') });
     await renameDialog.locator('#history-rename-description').fill('번역 적용 전 최종본');
     await renameDialog.getByRole('button', { name: TEXT.rename }).click();
-    await expect(page.getByText('번역 적용 전 최종본')).toBeVisible();
+    await expect(historyDrawer.getByText('번역 적용 전 최종본')).toBeVisible();
 
     const renamedItem = page.locator('li').filter({ hasText: '번역 적용 전 최종본' }).first();
     page.once('dialog', (dialog) => {
       void dialog.accept();
     });
     await renamedItem.getByRole('button', { name: TEXT.delete }).click();
-    await expect(page.getByText('번역 적용 전 최종본')).toBeHidden();
+    await expect(historyDrawer.getByText('번역 적용 전 최종본')).toBeHidden();
   });
 
   test('Phase 9: 프로젝트 컨텍스트 메뉴 - Duplicate', async ({ page }) => {

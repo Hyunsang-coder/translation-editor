@@ -258,6 +258,16 @@
     "translateDocument": "문서 번역",
     "aiModel": "AI 모델"
   },
+  "status": {
+    "reviewing": "검수 중",
+    "saving": "저장 중…",
+    "saved": "모든 변경사항 저장됨",
+    "notSavedYet": "아직 저장되지 않음",
+    "snapshotJustNow": "스냅샷 방금 전",
+    "snapshotAgo": "스냅샷 {{minutes}}분 전",
+    "sourceWords": "원문 {{words}} 단어",
+    "targetWords": "번역문 {{words}} 단어"
+  },
   "history": {
     "title": "히스토리",
     "loading": "히스토리를 불러오는 중...",
