@@ -1,6 +1,7 @@
 import { Clipboard, Eye, Languages, MessagesSquare, NotebookPen, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { SelectionPanel } from '@/types';
+import { shortcutLabel } from '@/utils/platform';
 
 export interface SelectionExistingComment {
   id: string;
@@ -150,6 +151,95 @@ export function SelectionActionMenu({
           <span>{t('comment.addButton')}</span>
         </button>
       )}
+    </div>
+  );
+}
+
+/** 인라인 선택 툴바 높이(px) — 선택 영역 위 배치 계산에 쓰인다 */
+export const SELECTION_INLINE_TOOLBAR_HEIGHT = 34;
+
+interface SelectionInlineToolbarProps {
+  panel?: SelectionPanel;
+  onCopy: () => void;
+  onAddToChat: () => void;
+  onRetranslateSelection?: () => void;
+  onAddComment: () => void;
+  style?: React.CSSProperties;
+}
+
+/**
+ * 텍스트를 선택하면 선택 영역 위에 자동으로 뜨는 가로 액션 바.
+ *
+ * 우클릭 메뉴(`SelectionActionMenu`)는 그대로 남는다. 이 바는 같은 액션을
+ * 발견 가능하게 만드는 것이 목적이라 항목을 4개로 줄였다(기존 코멘트 보기는
+ * 우클릭 메뉴에만 있다).
+ */
+export function SelectionInlineToolbar({
+  panel = 'source',
+  onCopy,
+  onAddToChat,
+  onRetranslateSelection,
+  onAddComment,
+  style,
+}: SelectionInlineToolbarProps): JSX.Element {
+  const { t } = useTranslation();
+
+  const itemClassName = 'h-[34px] px-3 flex items-center gap-1.5 text-xs font-semibold transition-colors';
+
+  return (
+    <div
+      data-selection-action-menu
+      data-testid={`selection-inline-toolbar-${panel}`}
+      style={style}
+      className="flex items-stretch overflow-hidden rounded-md border border-editor-text bg-editor-surface shadow-lg"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {panel === 'target' && onRetranslateSelection && (
+        <button
+          type="button"
+          data-testid="selection-inline-retranslate"
+          className={`${itemClassName} bg-primary-500 text-white hover:bg-primary-600`}
+          title={t('editor.retranslateSelection')}
+          onClick={onRetranslateSelection}
+        >
+          <Languages className="w-3.5 h-3.5 shrink-0" />
+          <span>{t('editor.retranslateSelection')}</span>
+        </button>
+      )}
+
+      <button
+        type="button"
+        data-testid="selection-inline-add-chat"
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border first:border-l-0`}
+        title={t('editor.addToChat')}
+        onClick={onAddToChat}
+      >
+        <MessagesSquare className="w-3.5 h-3.5 shrink-0" />
+        <span>{t('editor.addToChatLabel')}</span>
+        <span className="text-[11px] text-editor-muted">{shortcutLabel('L')}</span>
+      </button>
+
+      <button
+        type="button"
+        data-testid="selection-inline-comment"
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border`}
+        title={t('comment.addButton')}
+        onClick={onAddComment}
+      >
+        <NotebookPen className="w-3.5 h-3.5 shrink-0" />
+        <span>{t('comment.addButton')}</span>
+      </button>
+
+      <button
+        type="button"
+        data-testid="selection-inline-copy"
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border`}
+        title={t('editor.copySelection')}
+        onClick={onCopy}
+      >
+        <Clipboard className="w-3.5 h-3.5 shrink-0" />
+        <span>{t('editor.copySelection')}</span>
+      </button>
     </div>
   );
 }

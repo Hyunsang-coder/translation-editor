@@ -66,6 +66,32 @@ test.describe('Selection editing and scoped context', () => {
     await page.waitForLoadState('networkidle');
   });
 
+  test('Selecting target text shows the inline toolbar without right-clicking', async ({ page }) => {
+    const targetEditor = page.locator(
+      "[data-testid='target-editor'] [contenteditable='true']",
+    );
+    await targetEditor.click();
+    await targetEditor.selectText();
+
+    // 150ms 디바운스 후 선택 영역 위에 뜬다.
+    await expect(page.getByTestId('selection-inline-toolbar-target')).toBeVisible();
+    for (const action of ['retranslate', 'add-chat', 'comment', 'copy']) {
+      await expect(page.getByTestId(`selection-inline-${action}`)).toBeVisible();
+    }
+  });
+
+  test('Source inline toolbar never exposes retranslate', async ({ page }) => {
+    const sourceEditor = page.locator(
+      "[data-testid='source-editor'] [contenteditable='true']",
+    );
+    await sourceEditor.click();
+    await sourceEditor.selectText();
+
+    await expect(page.getByTestId('selection-inline-toolbar-source')).toBeVisible();
+    await expect(page.getByTestId('selection-inline-retranslate')).toHaveCount(0);
+    await expect(page.getByTestId('selection-inline-add-chat')).toBeVisible();
+  });
+
   test('Source selection becomes metadata and never exposes retranslate', async ({ page }) => {
     const sourceEditor = page.locator(
       "[data-testid='source-editor'] [contenteditable='true']",
@@ -143,7 +169,6 @@ test.describe('Selection editing and scoped context', () => {
   });
 
   test('approved project memory is managed separately from the legacy context field', async ({ page }) => {
-    await page.getByTestId('toolbar-tools-button').click();
     await page.getByTestId('toolbar-menu-settings').click();
     await expect(page.getByTestId('project-memory-settings')).toBeVisible();
 

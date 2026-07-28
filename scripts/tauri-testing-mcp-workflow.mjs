@@ -260,7 +260,6 @@ async function waitForAssistantReply(client, { selector, previousCount, userText
 async function runWorkflow() {
   const projectTitle = `Workflow E2E ${Date.now()}`;
   const chatMessage = '번역문 내용 간략히 요약해줘';
-  const toolsButtonSelector = "button[data-testid='toolbar-tools-button'], button[title='도구'], button[title='Tools']";
   const toolbarSettingsSelector = "button[data-testid='toolbar-menu-settings']";
   const toolbarChatSelector = "button[data-testid='toolbar-menu-chat']";
   const chatSendButtonSelector = "button[data-testid='chat-send-button'], [data-testid='chat-composer-container'] ~ div button[type='submit']";
@@ -297,6 +296,8 @@ async function runWorkflow() {
 
     // 1) New project
     await callTool(client, 'tauri_dom_wait_for_text', { text: 'New', timeout: 15000 });
+    // 프로젝트 목록은 툴바 드롭다운 안에 있다 — 먼저 연다
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-new-button']" });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "input[data-testid='project-title-input']", timeout: 5000 });
     await callTool(client, 'tauri_dom_fill', { selector: "input[data-testid='project-title-input']", value: projectTitle });
@@ -304,6 +305,8 @@ async function runWorkflow() {
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: `[title='${projectTitle}']`, timeout: 10000 });
 
     // 2) App settings: Anthropic provider enabled 확인
+    // 앱 설정 진입점도 프로젝트 드롭다운 하단에 있다
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='project-app-settings-button']", timeout: 10000 });
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-app-settings-button']" });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "#anthropic-enabled", timeout: 10000 });
@@ -317,8 +320,7 @@ async function runWorkflow() {
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='app-settings-close-button']" });
 
     // 3) Open settings panel and fill rules/context
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolsButtonSelector, timeout: 10000 });
-    await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolbarSettingsSelector, timeout: 10000 });
     await callTool(client, 'tauri_dom_click', { selector: toolbarSettingsSelector });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
     await callTool(client, 'tauri_dom_fill', {
@@ -415,7 +417,6 @@ async function runWorkflow() {
       visible: true,
     });
     if (!isChatVisible) {
-      await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
       await callTool(client, 'tauri_dom_click', { selector: toolbarChatSelector });
     }
     let chatVisible = await tryTool(client, 'tauri_dom_wait_for_selector', {
@@ -425,7 +426,6 @@ async function runWorkflow() {
     });
     if (!chatVisible) {
       // 첫 클릭이 "닫기"로 동작했을 수 있어 한 번 더 토글
-      await callTool(client, 'tauri_dom_click', { selector: toolsButtonSelector });
       await callTool(client, 'tauri_dom_click', { selector: toolbarChatSelector });
       chatVisible = await tryTool(client, 'tauri_dom_wait_for_selector', {
         selector: chatContainerSelector,

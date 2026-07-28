@@ -19,7 +19,11 @@ import {
   resolveWorkflowContextFromSnapshot,
 } from '@/ai/context/resolveWorkflowContext';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
-import { applySuggestionToEditor } from '@/components/review/reviewApply';
+import {
+  applySuggestionToEditor,
+  deriveReplacementText,
+  resolveSuggestionRange,
+} from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
 import {
   appReviewContext,
@@ -425,6 +429,38 @@ export function ReviewPanel(): JSX.Element {
    * 오역/문법 등 유형: targetExcerpt를 에디터에서 찾아 suggestedFix로 교체
    * 성공 시 이슈를 목록에서 제거 (Ctrl+Z로 되돌리기 가능)
    */
+  // 이슈가 가리키는 구절을 번역문 에디터에서 선택·포커스한다.
+  // 적용과 같은 탐색 로직(resolveSuggestionRange)을 쓰므로 적용 대상과 항상 일치한다.
+  const handleViewInDocument = useCallback((issue: ReviewIssue) => {
+    const { addToast } = useUIStore.getState();
+    const targetEditor = useEditorStore.getState().targetEditor;
+
+    if (!targetEditor || targetEditor.isDestroyed) {
+      addToast({
+        type: 'error',
+        message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.'),
+      });
+      return;
+    }
+
+    const range = resolveSuggestionRange(
+      targetEditor.state.doc,
+      issue.targetExcerpt,
+      issue.segmentGroupId,
+      deriveReplacementText(issue.suggestedFix),
+    );
+    if (!range) {
+      addToast({
+        type: 'warning',
+        message: t('review.viewNotFound', '본문에서 해당 구절을 찾지 못했습니다.'),
+      });
+      return;
+    }
+
+    targetEditor.commands.setTextSelection({ from: range.from, to: range.to });
+    targetEditor.commands.focus();
+  }, [t]);
+
   const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
     const { addToast } = useUIStore.getState();
     const targetEditor = useEditorStore.getState().targetEditor;
@@ -819,6 +855,7 @@ export function ReviewPanel(): JSX.Element {
                   onDelete={deleteIssue}
                   onCopy={handleCopySuggestion}
                   onApply={handleApplySuggestion}
+                  onViewInDocument={handleViewInDocument}
                   onToggleAll={() => setAllIssuesChecked(!allChecked)}
                   allChecked={allChecked}
                   totalIssuesFound={totalIssuesFound}

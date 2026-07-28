@@ -26,6 +26,7 @@ function renderTable(issue: ReviewIssue): void {
       onApply={() => undefined}
       onCopy={() => undefined}
       onDelete={() => undefined}
+      onViewInDocument={() => undefined}
     />,
   );
 }
@@ -50,6 +51,18 @@ describe('ReviewResultsTable 적용 버튼 노출', () => {
   it('수정 제안이 없으면 적용 버튼이 없다', () => {
     renderTable(makeIssue({ suggestedFix: '' }));
     expect(screen.queryByTitle('적용')).toBeNull();
+  });
+});
+
+describe('ReviewResultsTable 본문에서 보기', () => {
+  it('targetExcerpt가 있으면 본문에서 보기가 보인다', () => {
+    renderTable(makeIssue({}));
+    expect(screen.getByTitle('본문에서 보기')).toBeTruthy();
+  });
+
+  it('targetExcerpt가 없으면 탐색 앵커가 없어 숨긴다', () => {
+    renderTable(makeIssue({ targetExcerpt: '' }));
+    expect(screen.queryByTitle('본문에서 보기')).toBeNull();
   });
 });
 

@@ -6,20 +6,15 @@ import { useUIStore } from '@/stores/uiStore';
  * 윈도우 너비가 해당 값 미만으로 내려가면 패널이 접히거나 숨겨짐
  *
  * 패널 너비 기준:
- * - ProjectSidebar: 210px (축소: 48px → 숨김: 0px)
  * - LeftSidebar: 250px (숨김: 0px)
  * - RightSidebar: 250px (숨김: 0px)
  * - Editor 최소: 400px
  */
 export const BREAKPOINTS = {
-  /** ProjectSidebar 축소 (210px → 48px) - 모든 패널 열림 상태 기준 */
-  PROJECT_SIDEBAR_COLLAPSE: 1200,
   /** LeftSidebar 완전 숨김(폭 0) */
   LEFT_SIDEBAR_CLOSE: 1000,
   /** RightSidebar 완전 숨김(폭 0) */
   RIGHT_SIDEBAR_CLOSE: 800,
-  /** ProjectSidebar 완전 숨김 (48px → 0px) */
-  PROJECT_SIDEBAR_HIDE: 600,
 } as const;
 
 /**
@@ -28,10 +23,9 @@ export const BREAKPOINTS = {
  * 윈도우 크기 변경에 따라 패널들을 자동으로 접거나 닫음.
  *
  * 축소 우선순위 (너비 감소 시):
- * 1. ProjectSidebar → 축소 → 숨김
- * 2. LeftSidebar → 접힘
- * 3. RightSidebar → 접힘
- * 4. Editor → 마지막에 줄어듦 (항상 보호)
+ * 1. LeftSidebar → 접힘
+ * 2. RightSidebar → 접힘
+ * 3. Editor → 마지막에 줄어듦 (항상 보호)
  *
  * 주요 특성:
  * - 자동 레이아웃은 윈도우 크기가 줄어들 때만 적용
@@ -54,26 +48,14 @@ export function useResponsiveLayout(): void {
         return;
       }
 
-      const {
-        setProjectSidebarCollapsed,
-        setProjectSidebarHidden,
-        setSidebarHiddenSide,
-      } = useUIStore.getState();
+      const { setSidebarHiddenSide } = useUIStore.getState();
 
-      // 1순위: ProjectSidebar
-      if (width < BREAKPOINTS.PROJECT_SIDEBAR_HIDE) {
-        setProjectSidebarHidden(true);
-      } else if (width < BREAKPOINTS.PROJECT_SIDEBAR_COLLAPSE) {
-        setProjectSidebarHidden(false);
-        setProjectSidebarCollapsed(true);
-      }
-
-      // 2순위: LeftSidebar → 완전 숨김(폭 0)
+      // 1순위: LeftSidebar → 완전 숨김(폭 0)
       if (width < BREAKPOINTS.LEFT_SIDEBAR_CLOSE) {
         setSidebarHiddenSide('left', true);
       }
 
-      // 3순위: RightSidebar → 완전 숨김(폭 0)
+      // 2순위: RightSidebar → 완전 숨김(폭 0)
       if (width < BREAKPOINTS.RIGHT_SIDEBAR_CLOSE) {
         setSidebarHiddenSide('right', true);
       }

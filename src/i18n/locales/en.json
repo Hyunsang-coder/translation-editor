@@ -249,11 +249,25 @@
     "focusModeNormal": "Normal",
     "focusModeFocus": "Focus",
     "themeCurrent": "Current: {{theme}}",
-    "tools": "Tools",
     "settings": "Settings",
     "projectSettings": "Settings",
     "review": "Review",
-    "aiChat": "AI Chat"
+    "aiChat": "AI Chat",
+    "export": "Export"
+  },
+  "workflow": {
+    "translateDocument": "Translate",
+    "aiModel": "AI Model"
+  },
+  "status": {
+    "reviewing": "Reviewing",
+    "saving": "Saving…",
+    "saved": "All changes saved",
+    "notSavedYet": "Not saved yet",
+    "snapshotJustNow": "Snapshot just now",
+    "snapshotAgo": "Snapshot {{minutes}}m ago",
+    "sourceWords": "Source {{words}} words",
+    "targetWords": "Target {{words}} words"
   },
   "history": {
     "title": "History",
@@ -305,13 +319,10 @@
   "projectSidebar": {
     "projects": "Projects",
     "appSettings": "App Settings",
-    "showSidebar": "Show sidebar",
-    "collapseSidebar": "Collapse project sidebar",
     "newProject": "New Project",
     "projectTitlePlaceholder": "Project title"
   },
   "editor": {
-    "editorLabel": "EDITOR",
     "translationModel": "Translation Model",
     "translationModelAriaLabel": "Translation model",
     "translate": "Translate",
@@ -382,7 +393,8 @@
     "hideTarget": "Hide",
     "showTarget": "Show Translation",
     "zoom": {
-      "reset": "Reset Zoom"
+      "reset": "Reset Zoom",
+      "resetTo100": "Click to reset to 100%"
     },
     "chunks": "sections",
     "completedIn": "Completed in",
@@ -474,12 +486,9 @@
     "segment": "Segment",
     "sourceExcerpt": "Source",
     "targetExcerpt": "Current Translation",
-    "suggestedFix": "Suggested Fix",
     "issueType": "Type",
-    "description": "Description",
     "selectedCount": "{{count}} selected",
     "selectAll": "Select All",
-    "resizeColumn": "Resize column (double-click to reset)",
     "selectIssue": "Select Issue",
     "deleteIssue": "Delete Issue",
     "highlight": "Highlight",
@@ -514,6 +523,8 @@
     "category.consistency.desc": "Same term translated differently",
     "apply": "Apply",
     "copy": "Copy",
+    "viewInDocument": "Show in document",
+    "viewNotFound": "Could not locate this passage in the document.",
     "ignore": "Done",
     "applySuccess": "Suggested fix applied.",
     "copySuccess": "Copied to clipboard. Paste it in the appropriate location.",

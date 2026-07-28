@@ -1,34 +1,43 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, MessageSquare, Clock3, Download, PanelLeft, PanelLeftOpen } from 'lucide-react';
+import { Settings, MessageSquare, Clock3, Download, NotebookPen, RotateCcw } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
+import { useCommentStore } from '@/stores/commentStore';
 
+import { ProjectPicker } from '@/components/layout/ProjectPicker';
+import { WorkflowActions } from '@/components/layout/WorkflowActions';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
+
+const TOOL_BUTTON_CLASS =
+  'h-[34px] px-[11px] shrink-0 flex items-center gap-[7px] rounded-md text-[13px] font-semibold text-editor-text '
+  + 'whitespace-nowrap hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
+  + 'focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2';
+
+/** 좁은 창에서는 라벨을 접어 아이콘만 남긴다 (title/aria-label로 접근성 유지) */
+const TOOL_LABEL_CLASS = 'hidden xl:inline';
 
 /**
  * 상단 툴바 컴포넌트
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId, projectSidebarCollapsed, toggleProjectSidebar } =
+  const { openPanel, openCommentsPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
+      openCommentsPanel: s.openCommentsPanel,
       toggleChatVisibility: s.toggleChatVisibility,
       leftSidebar: s.leftSidebar,
       rightSidebar: s.rightSidebar,
       floatingChatSessionId: s.floatingChatSessionId,
-      projectSidebarCollapsed: s.projectSidebarCollapsed,
-      toggleProjectSidebar: s.toggleProjectSidebar,
     })));
   const project = useProjectStore((s) => s.project);
-const [dropdownOpen, setDropdownOpen] = useState(false);
+  const commentCount = useCommentStore((s) => s.comments.length);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // File 메뉴에서 Export 열기 이벤트 수신
   useEffect(() => {
@@ -37,50 +46,29 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
     return () => window.removeEventListener('app:open-export-modal', handler);
   }, []);
 
-  // 드롭다운 외부 클릭 시 닫기
-  useEffect(() => {
-    if (!dropdownOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDropdownOpen(false);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [dropdownOpen]);
-
   const handleProjectSettings = () => {
     if (!project) return;
     openPanel('settings');
-    setDropdownOpen(false);
+  };
+
+  const handleComments = () => {
+    if (!project) return;
+    openCommentsPanel();
   };
 
   const handleChat = () => {
     if (!project) return;
     toggleChatVisibility();
-    setDropdownOpen(false);
   };
 
   const handleExport = () => {
     if (!project) return;
     setExportModalOpen(true);
-    setDropdownOpen(false);
   };
 
   const handleHistory = () => {
     if (!project) return;
     setHistoryDrawerOpen(true);
-    setDropdownOpen(false);
   };
   const isAnyChatVisible = (
     floatingChatSessionId !== null
@@ -111,114 +99,107 @@ const [dropdownOpen, setDropdownOpen] = useState(false);
   }, []);
 
   return (
-    <header className="h-10 border-b border-editor-border bg-editor-surface flex items-center justify-between px-2 shrink-0">
-      {/* 좌측: 사이드바 토글 + 프로젝트 제목 (아래 영역이 이 프로젝트 소속임을 나타냄) */}
-      <div className="flex items-center gap-1.5 min-w-0">
-        <button
-          type="button"
-          onClick={toggleProjectSidebar}
-          className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
-          title={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
-          aria-label={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
-          data-testid="toolbar-sidebar-toggle"
-        >
-          {projectSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeft size={18} />}
-        </button>
-        <h1 className="text-sm font-semibold text-editor-text truncate">
-          {project?.metadata.title ?? t('common.untitledProject')}
-        </h1>
+    <header className="h-[52px] border-b border-editor-border bg-editor-surface flex items-center justify-between gap-3 px-2 shrink-0">
+      {/* 좌측: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
+      <div className="flex items-center min-w-0 shrink">
+        <ProjectPicker />
       </div>
 
-      {/* 우측: 줌 인디케이터 + Tools 메뉴 */}
-      <div className="flex items-center gap-2">
-        {/* Chrome-style zoom indicator */}
-        {zoomVisible && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-editor-bg border border-editor-border text-[11px] text-editor-muted animate-in fade-in duration-150">
-            <span className="font-medium">{zoomPercent}%</span>
-            {zoomPercent !== 100 && (
-              <button
-                type="button"
-                onClick={resetEditorZoom}
-                className="px-1 py-0.5 rounded text-[10px] hover:text-editor-text hover:bg-editor-border transition-colors"
-                title={t('editor.zoom.reset', '초기화')}
-              >
-                {t('editor.zoom.reset', 'Reset')}
-              </button>
-            )}
-          </div>
+      {/* 중앙: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
+      {project && (
+        <div className="shrink-0">
+          <WorkflowActions />
+        </div>
+      )}
+
+      {/* 우측: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
+      <div className="flex items-center gap-1 min-w-0 justify-end">
+        {/* 배율 인디케이터 — 100%가 아니면 계속 보인다(되돌릴 방법이 항상 있어야 한다).
+            100%일 때는 방금 조작했을 때만 잠깐 보여주고 사라진다. */}
+        {(zoomVisible || zoomPercent !== 100) && (
+          zoomPercent === 100 ? (
+            <span className="px-2 h-[26px] inline-flex items-center rounded-md bg-editor-bg border border-editor-border text-[11px] font-medium text-editor-muted animate-in fade-in duration-150 shrink-0 tabular-nums">
+              100%
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={resetEditorZoom}
+              className="px-2 h-[26px] inline-flex items-center gap-1 rounded-md bg-editor-bg border border-primary-500 text-[11px] font-medium text-primary-600 dark:text-primary-400 hover:bg-editor-border transition-colors shrink-0 tabular-nums focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+              title={t('editor.zoom.resetTo100', '클릭하면 100%로 되돌립니다')}
+              data-testid="toolbar-zoom-reset"
+            >
+              <span>{zoomPercent}%</span>
+              <RotateCcw size={11} />
+            </button>
+          )
         )}
 
-        {/* Tools 드롭다운 */}
-        <div ref={dropdownRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setDropdownOpen((v) => !v)}
-            className={`
-              p-1.5 rounded-md flex items-center gap-1
-              hover:bg-editor-border transition-colors
-              ${dropdownOpen ? 'bg-editor-border' : ''}
-            `}
-            title={t('toolbar.tools')}
-            data-testid="toolbar-tools-button"
-            aria-haspopup="true"
-            aria-expanded={dropdownOpen}
-          >
-            <img src="/app-icon-64.png" alt="" className="w-6 h-6" />
-            <span className="text-xs text-editor-muted">▼</span>
-          </button>
-
-          {dropdownOpen && (
-            <div role="menu" className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50">
-              <button
-                role="menuitem"
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleChat}
-                disabled={!project}
-                aria-pressed={isAnyChatVisible}
-                data-testid="toolbar-menu-chat"
-              >
-                <MessageSquare size={16} />
-                <span>{t('toolbar.aiChat')}</span>
-              </button>
-              <div role="separator" className="h-px bg-editor-border" />
-              <button
-                role="menuitem"
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleHistory}
-                disabled={!project}
-              >
-                <Clock3 size={16} />
-                <span>{t('history.title')}</span>
-              </button>
-              <div role="separator" className="h-px bg-editor-border" />
-              <button
-                role="menuitem"
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleExport}
-                disabled={!project}
-                data-testid="toolbar-menu-export"
-              >
-                <Download size={16} />
-                <span>{t('export.title')}</span>
-              </button>
-              <div role="separator" className="h-px bg-editor-border" />
-              <button
-                role="menuitem"
-                type="button"
-                className="w-full px-4 py-2.5 text-left text-sm text-editor-text hover:bg-editor-border/60 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleProjectSettings}
-                disabled={!project}
-                data-testid="toolbar-menu-settings"
-              >
-                <Settings size={16} />
-                <span>{t('toolbar.projectSettings')}</span>
-              </button>
-            </div>
+        <button
+          type="button"
+          onClick={handleComments}
+          disabled={!project}
+          className={TOOL_BUTTON_CLASS}
+          title={t('comment.title', '코멘트')}
+          data-testid="editor-comments-button"
+        >
+          <NotebookPen size={16} />
+          <span className={TOOL_LABEL_CLASS}>{t('comment.title', '코멘트')}</span>
+          {commentCount > 0 && (
+            <span className="tabular-nums text-editor-muted">{commentCount}</span>
           )}
-        </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleChat}
+          disabled={!project}
+          aria-pressed={isAnyChatVisible}
+          className={TOOL_BUTTON_CLASS}
+          title={t('toolbar.aiChat')}
+          data-testid="toolbar-menu-chat"
+        >
+          <MessageSquare size={16} />
+          <span className={TOOL_LABEL_CLASS}>{t('toolbar.aiChat')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleHistory}
+          disabled={!project}
+          className={TOOL_BUTTON_CLASS}
+          title={t('history.title')}
+          data-testid="toolbar-menu-history"
+        >
+          <Clock3 size={16} />
+          <span className={TOOL_LABEL_CLASS}>{t('history.title')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={!project}
+          className={TOOL_BUTTON_CLASS}
+          title={t('export.title')}
+          data-testid="toolbar-menu-export"
+        >
+          <Download size={16} />
+          <span className={TOOL_LABEL_CLASS}>{t('toolbar.export', '내보내기')}</span>
+        </button>
+
+        <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />
+
+        <button
+          type="button"
+          onClick={handleProjectSettings}
+          disabled={!project}
+          className="h-[34px] px-2 flex items-center rounded-md text-editor-text hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+          title={t('toolbar.projectSettings')}
+          aria-label={t('toolbar.projectSettings')}
+          data-testid="toolbar-menu-settings"
+        >
+          <Settings size={17} />
+        </button>
       </div>
 
       <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />

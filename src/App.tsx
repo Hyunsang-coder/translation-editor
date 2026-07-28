@@ -136,7 +136,8 @@ function App(): JSX.Element {
           break;
         }
         case 'view-toggle-project':
-          useUIStore.getState().toggleProjectSidebar();
+          // 프로젝트 목록은 사이드바가 아니라 툴바 드롭다운(ProjectPicker)이다
+          window.dispatchEvent(new Event('app:open-project-picker'));
           break;
         case 'view-toggle-settings':
           useUIStore.getState().toggleSettingsPanel();

@@ -32,8 +32,6 @@ interface UIState extends EditorUIState {
   // Responsive layout state
   windowWidth: number; // 현재 윈도우 너비 (세션마다 새로 측정, persist 안함)
   autoLayoutEnabled: boolean; // 자동 레이아웃 활성화 (기본: true)
-  projectSidebarHidden: boolean; // ProjectSidebar 완전 숨김 상태
-  projectSidebarWidth: number; // ProjectSidebar 너비 (리사이즈 가능)
 
   // Paste settings
   pasteImageMode: 'placeholder' | 'original' | 'ignore';
@@ -45,6 +43,14 @@ interface UIState extends EditorUIState {
   // Focus Mode (원문/번역 단일 패널 보기)
   focusMode: boolean;
   sourceOnlyMode: boolean;
+
+  // AI 워크플로 (번역/폴리싱) — 실행 로직은 EditorCanvasTipTap이 소유하고,
+  // 툴바는 nonce 트리거로 요청만 보낸다 (reviewStore.reviewTrigger와 동일 패턴).
+  // 비영속(persist 제외).
+  translateLoading: boolean;
+  polishLoading: boolean;
+  translateTrigger: number;
+  polishTrigger: number;
 }
 
 interface UIActions {
@@ -61,10 +67,6 @@ interface UIActions {
   // Sidebar (legacy)
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-
-  // Project Sidebar
-  toggleProjectSidebar: () => void;
-  setProjectSidebarCollapsed: (collapsed: boolean) => void;
 
   // Diff
   setShowDiff: (showDiff: boolean) => void;
@@ -128,8 +130,6 @@ interface UIActions {
   // Responsive layout
   setWindowWidth: (width: number) => void;
   setAutoLayoutEnabled: (enabled: boolean) => void;
-  setProjectSidebarHidden: (hidden: boolean) => void;
-  setProjectSidebarWidth: (width: number) => void;
 
   // Paste settings
   setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore') => void;
@@ -139,6 +139,12 @@ interface UIActions {
   setEditorZoom: (zoom: number) => void;
   adjustEditorZoom: (delta: number) => void;
   resetEditorZoom: () => void;
+
+  // AI 워크플로
+  setTranslateLoading: (loading: boolean) => void;
+  setPolishLoading: (loading: boolean) => void;
+  triggerTranslate: () => void;
+  triggerPolish: () => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -164,7 +170,6 @@ export const useUIStore = create<UIStore>()(
       selectedBlockId: null,
       showDiff: false,
       sidebarCollapsed: false,
-      projectSidebarCollapsed: false,
       theme: 'system',
       language: 'ko',
       isPanelsSwapped: false,
@@ -186,8 +191,6 @@ export const useUIStore = create<UIStore>()(
       // Responsive layout defaults
       windowWidth: typeof window !== 'undefined' ? window.innerWidth : 1400,
       autoLayoutEnabled: true,
-      projectSidebarHidden: false,
-      projectSidebarWidth: LAYOUT.PROJECT_EXPANDED,
 
       // Paste settings defaults
       pasteImageMode: 'original',
@@ -195,6 +198,12 @@ export const useUIStore = create<UIStore>()(
 
       // Editor zoom default
       editorZoom: 1.0,
+
+      // AI 워크플로 defaults
+      translateLoading: false,
+      polishLoading: false,
+      translateTrigger: 0,
+      polishTrigger: 0,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -235,15 +244,6 @@ export const useUIStore = create<UIStore>()(
 
       setSidebarCollapsed: (collapsed: boolean): void => {
         set({ sidebarCollapsed: collapsed });
-      },
-
-      // Project Sidebar
-      toggleProjectSidebar: (): void => {
-        set((state) => ({ projectSidebarCollapsed: !state.projectSidebarCollapsed }));
-      },
-
-      setProjectSidebarCollapsed: (collapsed: boolean): void => {
-        set({ projectSidebarCollapsed: collapsed });
       },
 
       // Diff
@@ -793,15 +793,6 @@ export const useUIStore = create<UIStore>()(
         set({ autoLayoutEnabled: enabled });
       },
 
-      setProjectSidebarHidden: (hidden: boolean): void => {
-        set({ projectSidebarHidden: hidden });
-      },
-
-      setProjectSidebarWidth: (width: number): void => {
-        const clamped = Math.max(LAYOUT.PROJECT_MIN, Math.min(LAYOUT.PROJECT_MAX, width));
-        set({ projectSidebarWidth: clamped });
-      },
-
       // Paste settings
       setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore'): void => {
         set({ pasteImageMode: mode });
@@ -824,6 +815,23 @@ export const useUIStore = create<UIStore>()(
 
       resetEditorZoom: (): void => {
         set({ editorZoom: 1.0 });
+      },
+
+      // AI 워크플로
+      setTranslateLoading: (loading: boolean): void => {
+        set({ translateLoading: loading });
+      },
+
+      setPolishLoading: (loading: boolean): void => {
+        set({ polishLoading: loading });
+      },
+
+      triggerTranslate: (): void => {
+        set((state) => ({ translateTrigger: state.translateTrigger + 1 }));
+      },
+
+      triggerPolish: (): void => {
+        set((state) => ({ polishTrigger: state.polishTrigger + 1 }));
       },
     }),
     {
@@ -967,8 +975,6 @@ export const useUIStore = create<UIStore>()(
         language: state.language,
         focusMode: state.focusMode,
         sourceOnlyMode: state.sourceOnlyMode,
-        projectSidebarCollapsed: state.projectSidebarCollapsed,
-        projectSidebarWidth: state.projectSidebarWidth,
         isPanelsSwapped: state.isPanelsSwapped,
         // Dual sidebar persist
         leftSidebar: state.leftSidebar,

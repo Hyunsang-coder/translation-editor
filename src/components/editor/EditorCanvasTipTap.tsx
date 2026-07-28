@@ -6,6 +6,7 @@ import { useHistoryStore } from '@/stores/historyStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { SourceTipTapEditor, TargetTipTapEditor } from './TipTapEditor';
 import { TipTapMenuBar } from './TipTapMenuBar';
+import { StatusStrip } from '@/components/layout/StatusStrip';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { SearchBar } from './SearchBar';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -19,15 +20,18 @@ import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
-import { MODEL_PRESETS } from '@/ai/config';
-import { Select, type SelectOptionGroup } from '@/components/ui/Select';
+import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
-import { countTotalWords } from '@/utils/wordCounter';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { countWords, logQualityRun } from '@/quality';
-import { getSelectionActionMenuHeight, SelectionActionMenu } from '@/components/ui/SelectionActionMenu';
+import {
+  getSelectionActionMenuHeight,
+  SelectionActionMenu,
+  SelectionInlineToolbar,
+  SELECTION_INLINE_TOOLBAR_HEIGHT,
+} from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { NotebookPen, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -93,6 +97,9 @@ function inferSegmentGroupIdForSelection(
   return matches.length === 1 ? matches[0] : undefined;
 }
 
+/** 인라인 선택 툴바 표시 지연 — 드래그 중에 따라다니지 않게 한다 */
+const SELECTION_TOOLBAR_DELAY_MS = 150;
+
 export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
@@ -108,8 +115,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   const requestComposerFocus = useChatStore((s) => s.requestComposerFocus);
   const translationRules = useChatStore((s) => s.translationRules);
 
-  const openReviewPanel = useUIStore((s) => s.openReviewPanel);
-  const openCommentsPanel = useUIStore((s) => s.openCommentsPanel);
   const addToast = useUIStore((s) => s.addToast);
   const focusMode = useUIStore((s) => s.focusMode);
   const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
@@ -146,48 +151,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const targetFontSize = useUIStore((s) => s.targetFontSize);
   const targetLineHeight = useUIStore((s) => s.targetLineHeight);
 
-  const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
-  const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
-  const translationModel = useAiConfigStore((s) => s.translationModel);
-  const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
-
   const createSnapshotIfChanged = useHistoryStore((s) => s.createSnapshotIfChanged);
 
-  const commentCount = useCommentStore((s) => s.comments.length);
   const comments = useCommentStore((s) => s.comments);
-
-  // 활성화된 프로바이더의 모델만 표시
-  const enabledPresets = useMemo((): SelectOptionGroup[] => {
-    const presets: SelectOptionGroup[] = [];
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    return presets;
-  }, [openaiEnabled, anthropicEnabled]);
-
-  // 모든 모델 플랫 리스트 (유효성 검사용)
-  const allTranslationModels = useMemo(() => {
-    return enabledPresets.flatMap((g) => g.options);
-  }, [enabledPresets]);
-
-  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
-  useEffect(() => {
-    if (allTranslationModels.length === 0) return;
-    const firstModel = allTranslationModels[0];
-    if (!firstModel) return;
-    if (!allTranslationModels.some((m) => m.value === translationModel)) {
-      setTranslationModel(firstModel.value);
-    }
-  }, [translationModel, allTranslationModels, setTranslationModel]);
 
   const sourceEditorRef = useRef<Editor | null>(null);
   const targetEditorRef = useRef<Editor | null>(null);
@@ -205,7 +171,9 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [translatePreviewOpen, setTranslatePreviewOpen] = useState(false);
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
-  const [translateLoading, setTranslateLoading] = useState(false);
+  // 진행 상태는 uiStore에 둔다 — 상단 툴바(WorkflowActions)와 프리뷰 모달이 함께 읽는다.
+  const translateLoading = useUIStore((s) => s.translateLoading);
+  const setTranslateLoading = useUIStore((s) => s.setTranslateLoading);
   const translateAbortController = useRef<AbortController | null>(null);
 
   const [polishPreviewOpen, setPolishPreviewOpen] = useState(false);
@@ -213,7 +181,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   // 선택 적용 diff 기준: 폴리싱 시작 시점의 Target 문서 스냅샷
   const [polishOriginalDocJson, setPolishOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [polishPreviewError, setPolishPreviewError] = useState<string | null>(null);
-  const [polishLoading, setPolishLoading] = useState(false);
+  const polishLoading = useUIStore((s) => s.polishLoading);
+  const setPolishLoading = useUIStore((s) => s.setPolishLoading);
   const polishAbortController = useRef<AbortController | null>(null);
   const [polishModalOpen, setPolishModalOpen] = useState(false);
   const [polishMessage, setPolishMessage] = useState('');
@@ -253,7 +222,8 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
-  const [addToChatBubble, setAddToChatBubble] = useState<null | {
+  // 우클릭 세로 메뉴와 인라인 가로 툴바가 같은 페이로드를 쓴다 (액션 핸들러 공유).
+  interface SelectionBubble {
     top: number;
     left: number;
     text: string;
@@ -263,7 +233,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     to: number;
     segmentGroupId: string | undefined;
     existingComments: Array<{ id: string; excerpt: string }>;
-  }>(null);
+  }
+
+  const [addToChatBubble, setAddToChatBubble] = useState<SelectionBubble | null>(null);
+  // 선택만 해도 뜨는 인라인 툴바 (우클릭 없이 액션을 발견할 수 있게 한다)
+  const [selectionToolbar, setSelectionToolbar] = useState<SelectionBubble | null>(null);
   const [selectionEdit, setSelectionEdit] = useState<null | {
     selection: SelectionContext;
     sourceText: string;
@@ -303,38 +277,17 @@ export function EditorCanvasTipTap(): JSX.Element {
   }>(null);
 
   // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
-  const [sourceWordCount, setSourceWordCount] = useState(0);
-  const [targetWordCount, setTargetWordCount] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!sourceDocument) { setSourceWordCount(0); return; }
-      setSourceWordCount(countTotalWords(sourceDocument));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [sourceDocument]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!targetDocument) { setTargetWordCount(0); return; }
-      setTargetWordCount(countTotalWords(targetDocument));
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [targetDocument]);
-
-  // 선택 영역에서 우클릭하면 액션 메뉴를 마우스 위치에 띄운다.
-  // (선택이 없으면 커스텀 메뉴를 띄우지 않고 OS/브라우저 기본 메뉴를 그대로 둔다.)
-  const openSelectionActionMenuAt = useCallback((
+  // 현재 선택으로부터 액션 메뉴/툴바가 공통으로 쓰는 페이로드를 만든다.
+  // 좌표는 호출부가 채운다(우클릭은 마우스 위치, 인라인 툴바는 선택 영역 위).
+  const buildSelectionBubble = useCallback((
     editor: Editor,
     field: CommentField,
-    clientX: number,
-    clientY: number,
-  ): boolean => {
+  ): Omit<SelectionBubble, 'top' | 'left'> | null => {
     const { from, to } = editor.state.selection;
-    if (from === to) return false;
+    if (from === to) return null;
 
     const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
-    if (!selectedText) return false;
+    if (!selectedText) return null;
 
     // 선택 범위가 속한 블록의 segmentGroupId 추출(중복 구절 모호성 완화)
     let segmentGroupId: string | undefined;
@@ -362,31 +315,56 @@ export function EditorCanvasTipTap(): JSX.Element {
         return comment ? [{ id: comment.id, excerpt: comment.excerpt }] : [];
       });
 
-      // 마우스 우클릭 위치에 메뉴를 띄우되 화면 경계 안으로 클램프한다.
-      // 아래로 넘치면 커서 위쪽으로 올려 잘리지 않게 한다.
-      const menuHeight = getSelectionActionMenuHeight(existingComments.length, field);
-      const left = Math.min(window.innerWidth - 200, Math.max(8, clientX));
-      const top = clientY + menuHeight > window.innerHeight - 8
-        ? Math.max(8, clientY - menuHeight)
-        : clientY;
-
-      setCommentDetailPopover(null);
-      setAddToChatBubble({
-        top,
-        left,
-        text: selectedText,
-        editor,
-        field,
-        from,
-        to,
-        segmentGroupId,
-        existingComments,
-      });
-      return true;
+      return { text: selectedText, editor, field, from, to, segmentGroupId, existingComments };
     } catch {
-      return false;
+      return null;
     }
   }, [project]);
+
+  // 선택 영역에서 우클릭하면 액션 메뉴를 마우스 위치에 띄운다.
+  // (선택이 없으면 커스텀 메뉴를 띄우지 않고 OS/브라우저 기본 메뉴를 그대로 둔다.)
+  const openSelectionActionMenuAt = useCallback((
+    editor: Editor,
+    field: CommentField,
+    clientX: number,
+    clientY: number,
+  ): boolean => {
+    const bubble = buildSelectionBubble(editor, field);
+    if (!bubble) return false;
+
+    // 마우스 우클릭 위치에 메뉴를 띄우되 화면 경계 안으로 클램프한다.
+    // 아래로 넘치면 커서 위쪽으로 올려 잘리지 않게 한다.
+    const menuHeight = getSelectionActionMenuHeight(bubble.existingComments.length, field);
+    const left = Math.min(window.innerWidth - 200, Math.max(8, clientX));
+    const top = clientY + menuHeight > window.innerHeight - 8
+      ? Math.max(8, clientY - menuHeight)
+      : clientY;
+
+    setCommentDetailPopover(null);
+    setSelectionToolbar(null);
+    setAddToChatBubble({ ...bubble, top, left });
+    return true;
+  }, [buildSelectionBubble]);
+
+  // 선택 영역 위(넘치면 아래)에 인라인 툴바를 띄운다.
+  const openSelectionToolbar = useCallback((editor: Editor, field: CommentField): void => {
+    const bubble = buildSelectionBubble(editor, field);
+    if (!bubble) {
+      setSelectionToolbar(null);
+      return;
+    }
+
+    try {
+      const start = editor.view.coordsAtPos(bubble.from);
+      const end = editor.view.coordsAtPos(bubble.to);
+      const above = start.top - SELECTION_INLINE_TOOLBAR_HEIGHT - 8;
+      const top = above < 8 ? end.bottom + 8 : above;
+      const left = Math.min(window.innerWidth - 320, Math.max(8, start.left));
+      setSelectionToolbar({ ...bubble, top, left });
+    } catch {
+      setSelectionToolbar(null);
+    }
+  }, [buildSelectionBubble]);
 
   const attachSelectionWatcher = useCallback((editor: Editor, field: CommentField) => {
     const dom = editor.view.dom as HTMLElement;
@@ -398,15 +376,37 @@ export function EditorCanvasTipTap(): JSX.Element {
     };
     // 선택이 열린 메뉴의 범위와 달라지면(다시 클릭/드래그) 메뉴를 닫는다.
     // 우클릭 순간의 selectionUpdate는 같은 범위이므로 방금 연 메뉴를 닫지 않는다.
+    //
+    // 인라인 툴바는 여기서 자동으로 띄운다. 드래그 중에 따라다니지 않도록 150ms
+    // 디바운스하고, 선택이 비면 즉시 숨긴다.
+    let toolbarTimer: number | null = null;
+    const clearToolbarTimer = (): void => {
+      if (toolbarTimer !== null) {
+        window.clearTimeout(toolbarTimer);
+        toolbarTimer = null;
+      }
+    };
     const onSelection = (): void => {
       const { from, to } = editor.state.selection;
       setAddToChatBubble((prev) => {
         if (!prev || prev.editor !== editor) return prev;
         return prev.from === from && prev.to === to ? prev : null;
       });
+
+      clearToolbarTimer();
+      setSelectionToolbar((prev) => (prev?.editor === editor ? null : prev));
+      if (from === to) return;
+      toolbarTimer = window.setTimeout(() => {
+        toolbarTimer = null;
+        // 우클릭 메뉴가 열려 있으면 둘을 겹쳐 띄우지 않는다.
+        if (editor.state.selection.empty || !editor.isFocused) return;
+        openSelectionToolbar(editor, field);
+      }, SELECTION_TOOLBAR_DELAY_MS);
     };
     const onBlur = (): void => {
+      clearToolbarTimer();
       setAddToChatBubble(null);
+      setSelectionToolbar((prev) => (prev?.editor === editor ? null : prev));
     };
     const onTransaction = (): void => {
       const chatState = useChatStore.getState();
@@ -437,12 +437,13 @@ export function EditorCanvasTipTap(): JSX.Element {
     editor.on('transaction', onTransaction);
 
     return () => {
+      clearToolbarTimer();
       dom.removeEventListener('contextmenu', onContextMenu);
       editor.off('selectionUpdate', onSelection);
       editor.off('blur', onBlur);
       editor.off('transaction', onTransaction);
     };
-  }, [openSelectionActionMenuAt, project?.id]);
+  }, [openSelectionActionMenuAt, openSelectionToolbar, project?.id]);
 
   const createChatSelection = useCallback((
     bubble: NonNullable<typeof addToChatBubble>,
@@ -944,6 +945,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     t,
     computeTargetRevision,
     setStreamingChannelText,
+    setTranslateLoading,
   ]);
 
   // 번역 버튼 클릭 핸들러: 타겟에 내용이 있으면 재번역 모달 먼저 표시
@@ -1070,7 +1072,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         polishAbortController.current = null;
       }
     }
-  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText]);
+  }, [addToast, hasTargetContent, project, t, translationRules, computeTargetRevision, setStreamingChannelText, setPolishLoading]);
 
   const handlePolishClick = useCallback(() => {
     if (!project) return;
@@ -1089,6 +1091,28 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishModalOpen(true);
   }, [addToast, hasTargetContent, project, t]);
 
+  // 상단 툴바(WorkflowActions)의 실행 요청 수신.
+  // 번역/폴리싱 로직은 양쪽 TipTap 인스턴스와 프리뷰 모달에 묶여 있어 여기 남기고,
+  // 툴바는 nonce만 올린다 (reviewStore.reviewTrigger ← ReviewPanel 과 동일 패턴).
+  const translateTrigger = useUIStore((s) => s.translateTrigger);
+  const polishTrigger = useUIStore((s) => s.polishTrigger);
+  const prevTranslateTriggerRef = useRef(translateTrigger);
+  const prevPolishTriggerRef = useRef(polishTrigger);
+
+  useEffect(() => {
+    if (translateTrigger > prevTranslateTriggerRef.current) {
+      handleTranslateClick();
+    }
+    prevTranslateTriggerRef.current = translateTrigger;
+  }, [translateTrigger, handleTranslateClick]);
+
+  useEffect(() => {
+    if (polishTrigger > prevPolishTriggerRef.current) {
+      handlePolishClick();
+    }
+    prevPolishTriggerRef.current = polishTrigger;
+  }, [polishTrigger, handlePolishClick]);
+
   // 번역 취소 핸들러
   const handleTranslateCancel = useCallback((): void => {
     if (translateAbortController.current) {
@@ -1097,7 +1121,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setTranslateLoading(false);
     setTranslatePreviewOpen(false);
     setStreamingChannelText('translate', null);
-  }, [setStreamingChannelText]);
+  }, [setStreamingChannelText, setTranslateLoading]);
 
   const applyTranslatePreview = useCallback((): void => {
     if (!translatePreviewDoc) return;
@@ -1182,7 +1206,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishLoading(false);
     setPolishPreviewOpen(false);
     setStreamingChannelText('polish', null);
-  }, [setStreamingChannelText]);
+  }, [setStreamingChannelText, setPolishLoading]);
 
   // 폴리싱 미리보기 종료 시 스냅샷 상태를 함께 정리 (ReviewPanel handleRetranslateClose와 대칭).
   // 재열기 경로가 항상 재스냅샷하므로 correctness 이슈는 아니지만, 문서 JSON 상주를 방지한다.
@@ -1322,6 +1346,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     selectionEditAbortRef.current?.abort();
     selectionEditAbortRef.current = null;
     setSelectionEdit(null);
+    setSelectionToolbar(null);
+    setAddToChatBubble(null);
     selectionReferenceOptionsRef.current = { ...DEFAULT_SELECTION_REFERENCE_OPTIONS };
     setTranslatePreviewOpen(false);
     setTranslatePreviewDoc(null);
@@ -1334,7 +1360,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishLoading(false);
     setStreamingChannelText('translate', null);
     setStreamingChannelText('polish', null);
-  }, [project?.id, setStreamingChannelText]);
+  }, [project?.id, setStreamingChannelText, setTranslateLoading, setPolishLoading]);
 
   // 검색바 핸들러
   const handleSourceSearchOpen = useCallback(() => {
@@ -1443,102 +1469,34 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   return (
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
-      {/* Header */}
-      <div className="h-10 px-4 flex items-center justify-between border-b border-editor-border shrink-0">
-        <div className="flex items-center gap-2">
-          {leftSidebarInvisible && (
-            <button
-              type="button"
-              onClick={revealLeftSidebar}
-              className="p-1.5 -ml-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
-              title={t('sidebar.showLeft', 'Show side panel')}
-              aria-label={t('sidebar.showLeft', 'Show side panel')}
-              data-testid="reveal-sidebar-left"
-            >
-              <PanelLeftOpen className="w-4 h-4" />
-            </button>
-          )}
-          <span className="text-xs font-bold text-editor-text tracking-wide">{t('editor.editorLabel')}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={translationModel}
-            onChange={setTranslationModel}
-            options={enabledPresets}
-            aria-label={t('editor.translationModelAriaLabel')}
-            title={t('editor.translationModel')}
-            size="sm"
-            className="min-w-[130px]"
-          />
-          {/* AI 작업 워크플로 (번역 → 검수 → 폴리싱) — segmented control */}
-          <div className="inline-flex items-stretch rounded-md border border-editor-border overflow-hidden bg-editor-bg">
-            <button
-              type="button"
-              onClick={handleTranslateClick}
-              className="px-2.5 py-1 text-xs font-semibold bg-primary-500 text-white hover:bg-primary-600 flex items-center gap-1 disabled:opacity-60 transition-colors"
-              disabled={translateLoading}
-              title={t('editor.translateTitle')}
-              data-testid="editor-translate-button"
-            >
-              {translateLoading ? (
-                <>
-                  <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>{t('editor.translating')}</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{t('editor.translate')}</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => openReviewPanel()}
-              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface transition-colors"
-              title={t('editor.reviewTitle', '번역 검수')}
-              data-testid="editor-review-button"
-            >
-              {t('editor.review', '검수')}
-            </button>
-            <button
-              type="button"
-              onClick={handlePolishClick}
-              className="px-2.5 py-1 text-xs font-semibold text-editor-text border-l border-editor-border hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              disabled={!hasTargetContent || polishLoading}
-              title={t('review.polish', '폴리싱')}
-              data-testid="editor-polish-button"
-            >
-              {t('review.polish', '폴리싱')}
-            </button>
-          </div>
-          {/* 코멘트 — 워크플로와 분리된 유틸리티 */}
+      {/* 상태 스트립 — 워크플로 액션이 Toolbar로 올라간 자리를 진행/저장/스냅샷/단어수가 대신한다.
+          양 끝은 숨긴 사이드바 되살림 버튼(바 내부엔 UI가 없어 여기 노출). */}
+      <div className="h-[30px] px-2 flex items-center gap-2 border-b border-editor-border shrink-0">
+        {leftSidebarInvisible && (
           <button
             type="button"
-            onClick={() => openCommentsPanel()}
-            className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border flex items-center gap-1 transition-colors relative"
-            title={t('comment.title', '코멘트')}
-            data-testid="editor-comments-button"
+            onClick={revealLeftSidebar}
+            className="p-1 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors shrink-0"
+            title={t('sidebar.showLeft', 'Show side panel')}
+            aria-label={t('sidebar.showLeft', 'Show side panel')}
+            data-testid="reveal-sidebar-left"
           >
-            <NotebookPen className="w-4 h-4" />
-            {commentCount > 0 && (
-              <span className="tabular-nums text-[11px] font-semibold text-editor-text">{commentCount}</span>
-            )}
+            <PanelLeftOpen className="w-4 h-4" />
           </button>
-          {/* 숨긴 채팅 바 되살림 */}
-          {rightSidebarInvisible && (
-            <button
-              type="button"
-              onClick={revealRightSidebar}
-              className="p-1.5 -mr-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
-              title={t('sidebar.showRight', 'Show chat panel')}
-              aria-label={t('sidebar.showRight', 'Show chat panel')}
-              data-testid="reveal-sidebar-right"
-            >
-              <PanelRightOpen className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        )}
+        <StatusStrip />
+        {rightSidebarInvisible && (
+          <button
+            type="button"
+            onClick={revealRightSidebar}
+            className="p-1 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors shrink-0"
+            title={t('sidebar.showRight', 'Show chat panel')}
+            aria-label={t('sidebar.showRight', 'Show chat panel')}
+            data-testid="reveal-sidebar-right"
+          >
+            <PanelRightOpen className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Editor Panels */}
@@ -1580,9 +1538,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                       </button>
                     ) : null}
                   </div>
-                  <span className="text-[10px] text-editor-muted">
-                    {sourceWordCount.toLocaleString()} {t('editor.words')}
-                  </span>
                 </div>
                 <TipTapMenuBar editor={sourceEditor} panelType="source" />
                 <SearchBar
@@ -1674,9 +1629,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                   data-testid="target-language-select"
                 />
               </div>
-              <span className="text-[10px] text-editor-muted">
-                {targetWordCount.toLocaleString()} {t('editor.words')}
-              </span>
             </div>
             <TipTapMenuBar editor={targetEditor} panelType="target" />
             <SearchBar
@@ -1874,6 +1826,52 @@ export function EditorCanvasTipTap(): JSX.Element {
         onCancel={handlePolishCancel}
         {...(polishPreviewError ? { onRetry: handlePolishRetry } : {})}
       />
+
+      {/* 인라인 선택 툴바 (선택만 해도 표시) — 우클릭 메뉴가 열리면 양보한다 */}
+      {selectionToolbar && !addToChatBubble && !commentPopover && !commentDetailPopover && (
+        <SelectionInlineToolbar
+          panel={selectionToolbar.field}
+          style={{
+            position: 'fixed',
+            top: selectionToolbar.top,
+            left: selectionToolbar.left,
+            zIndex: 80,
+            zoom: 1 / useUIStore.getState().editorZoom,
+          }}
+          onCopy={() => {
+            void handleCopySelectedText(selectionToolbar.text);
+            setSelectionToolbar(null);
+          }}
+          onAddToChat={() => {
+            const selection = createChatSelection(selectionToolbar);
+            if (!selection) return;
+            openChatWithSelection(selection);
+            setSelectionToolbar(null);
+          }}
+          {...(selectionToolbar.field === 'target'
+            ? {
+                onRetranslateSelection: () => {
+                  openSelectionRetranslate(selectionToolbar);
+                  setSelectionToolbar(null);
+                },
+              }
+            : {})}
+          onAddComment={() => {
+            const b = selectionToolbar;
+            setCommentPopover({
+              top: b.top + SELECTION_INLINE_TOOLBAR_HEIGHT + 4,
+              left: b.left,
+              excerpt: b.text.trim(),
+              editor: b.editor,
+              field: b.field,
+              from: b.from,
+              to: b.to,
+              segmentGroupId: b.segmentGroupId,
+            });
+            setSelectionToolbar(null);
+          }}
+        />
+      )}
 
       {/* TipTap 선택 액션 메뉴 (선택 영역 우클릭) */}
       {addToChatBubble && !commentPopover && !commentDetailPopover && (

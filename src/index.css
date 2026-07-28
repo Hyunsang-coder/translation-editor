@@ -18,6 +18,14 @@
   --primary-400: #0ea5e9;
   /* sky-500 (아이콘/강조용) */
 
+  /* 세그먼트/이슈 상태 — sky 계열 파생 */
+  --accent-tint: #f0f9ff;
+  /* sky-50 : 선택된 행/카드 바탕 */
+  --accent-highlight: #e0f2fe;
+  /* sky-100 : 본문 내 하이라이트 */
+  --accent-deep: #075985;
+  /* sky-800 : 틴트 위 본문 텍스트 (대비 확보) */
+
   /* Diff: 변경(삽입/삭제)만 강하게, 나머지는 최대한 조용하게 */
   --diff-insertion: #16a34a;
   /* green-600 */
@@ -48,6 +56,13 @@
   /* sky-500 */
   --primary-400: #7dd3fc;
   /* sky-300 (아이콘/강조용) */
+
+  /* 세그먼트/이슈 상태 — 다크에서는 명암 반전 */
+  --accent-tint: #0c2942;
+  --accent-highlight: #0c4a6e;
+  /* sky-900 */
+  --accent-deep: #bae6fd;
+  /* sky-200 : 어두운 틴트 위 본문 텍스트 */
 
   --diff-insertion: #4ade80;
   --diff-deletion: #f87171;
