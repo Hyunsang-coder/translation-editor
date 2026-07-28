@@ -1,13 +1,70 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useShallow } from 'zustand/shallow';
-import { Lock } from 'lucide-react';
+import { Lock, TriangleAlert } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useUIStore } from '@/stores/uiStore';
-import { alignUnits } from '@/utils/alignUnits';
+import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
-import type { TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
+import type { TranslationUnit, TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
+
+interface NumberedOp {
+  op: AlignOp;
+  /** ops 기준 1-based 번호 */
+  number: number;
+}
+
+type RenderBlock =
+  | { kind: 'pair'; op: Extract<AlignOp, { kind: 'pair' }>; number: number }
+  | { kind: 'mismatch'; items: NumberedOp[] };
+
+/** 연속된 불일치를 한 구간으로 묶는다. 정상 쌍은 행 하나가 곧 블록 하나. */
+function groupIntoBlocks(ops: AlignOp[]): RenderBlock[] {
+  const blocks: RenderBlock[] = [];
+
+  ops.forEach((op, index) => {
+    if (op.kind === 'pair') {
+      blocks.push({ kind: 'pair', op, number: index + 1 });
+      return;
+    }
+    const last = blocks[blocks.length - 1];
+    if (last?.kind === 'mismatch') {
+      last.items.push({ op, number: index + 1 });
+    } else {
+      blocks.push({ kind: 'mismatch', items: [{ op, number: index + 1 }] });
+    }
+  });
+
+  return blocks;
+}
+
+function rowKey(number: number, unit: TranslationUnit): string {
+  return `${number}-${unit.id ?? unit.path.join('.')}`;
+}
+
+/**
+ * 구간 배너 문구. 어느 쪽이 남는지에 따라 다르게 읽히도록 세 갈래로 나눈다.
+ * 괄호 안 수치는 문서 전체의 유닛 수 — 구간 수치만으로는 규모를 가늠할 수 없다.
+ */
+function mismatchHeadline(
+  t: TFunction,
+  block: Extract<RenderBlock, { kind: 'mismatch' }>,
+  totals: { source: number; target: number },
+): string {
+  const sourceOnly = block.items.filter(({ op }) => op.kind === 'source-only').length;
+  const targetOnly = block.items.length - sourceOnly;
+  const counts = { sourceTotal: totals.source, targetTotal: totals.target };
+
+  if (sourceOnly === 0) {
+    return t('editor.alignment.mismatch.extraTarget', { count: targetOnly, ...counts });
+  }
+  if (targetOnly === 0) {
+    return t('editor.alignment.mismatch.extraSource', { count: sourceOnly, ...counts });
+  }
+  return t('editor.alignment.mismatch.both', { sourceCount: sourceOnly, targetCount: targetOnly, ...counts });
+}
 
 const EMPTY_DOC: TranslationUnitDocument = { type: 'doc', content: [] };
 
@@ -64,12 +121,16 @@ export function AlignmentView(): JSX.Element {
     [docs]
   );
 
-  const pairs = useMemo(
-    () => alignResult.ops.flatMap((op, index) => (
-      op.kind === 'pair' ? [{ op, number: index + 1 }] : []
-    )),
-    [alignResult]
-  );
+  // 연속된 불일치는 하나의 "구간"으로 묶어 배너와 함께 보여준다 (§4.3).
+  const blocks = useMemo(() => groupIntoBlocks(alignResult.ops), [alignResult]);
+
+  const totals = useMemo(() => alignResult.ops.reduce(
+    (acc, op) => ({
+      source: acc.source + (op.kind === 'target-only' ? 0 : 1),
+      target: acc.target + (op.kind === 'source-only' ? 0 : 1),
+    }),
+    { source: 0, target: 0 }
+  ), [alignResult]);
 
   const sourceLanguage = useMemo(() => {
     const sample = alignResult.ops
@@ -108,23 +169,50 @@ export function AlignmentView(): JSX.Element {
 
       {/* 행 목록 */}
       <div className="flex-1 min-h-0 overflow-auto">
-        {pairs.length === 0 ? (
+        {blocks.length === 0 ? (
           <div className="px-[18px] py-6 text-sm text-editor-muted">
             {t('editor.alignment.empty', '정렬할 문단이 없습니다.')}
           </div>
         ) : (
-          pairs.map(({ op, number }) => {
-            if (op.kind !== 'pair') return null;
-            const unitId = op.target.id ?? null;
+          blocks.map((block) => {
+            if (block.kind === 'pair') {
+              const unitId = block.op.target.id ?? null;
+              return (
+                <AlignmentRow
+                  key={rowKey(block.number, block.op.target)}
+                  index={block.number}
+                  op={block.op}
+                  active={unitId !== null && unitId === activeAlignmentUnitId}
+                  onSelect={() => setActiveAlignmentUnitId(unitId)}
+                />
+              );
+            }
+
             return (
-              <AlignmentRow
-                key={`${number}-${unitId ?? op.target.path.join('.')}`}
-                index={number}
-                source={op.source}
-                target={op.target}
-                active={unitId !== null && unitId === activeAlignmentUnitId}
-                onSelect={() => setActiveAlignmentUnitId(unitId)}
-              />
+              <div
+                key={`mismatch-${block.items[0]?.number ?? 0}`}
+                className="bg-amber-50 border-b border-editor-border/40"
+                data-testid="alignment-mismatch-band"
+              >
+                <div className="flex items-center gap-2.5 px-[18px] py-2 border-b border-dashed border-amber-400">
+                  <TriangleAlert size={15} className="shrink-0 text-amber-700" />
+                  <span className="text-xs font-bold text-amber-700">
+                    {mismatchHeadline(t, block, totals)}
+                  </span>
+                  <span className="text-[11px] text-amber-800">
+                    {t('editor.alignment.mismatch.note', '이 구간은 짝을 추정하지 않고 그대로 표시합니다.')}
+                  </span>
+                </div>
+                {block.items.map(({ op, number }) => (
+                  <AlignmentRow
+                    key={rowKey(number, op.kind === 'target-only' ? op.target : op.source)}
+                    index={number}
+                    op={op}
+                    active={false}
+                    onSelect={null}
+                  />
+                ))}
+              </div>
             );
           })
         )}

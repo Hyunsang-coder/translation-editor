@@ -1,13 +1,15 @@
+import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
+import type { AlignOp } from '@/utils/alignUnits';
 import type { TranslationUnit } from '@/editor/extensions/TranslationUnitId';
 
 interface AlignmentRowProps {
   /** 표시 번호 (ops 기준 1-based — 불일치 행이 섞여도 번호가 밀리지 않는다) */
   index: number;
-  source: TranslationUnit;
-  target: TranslationUnit;
+  op: AlignOp;
   active: boolean;
-  onSelect: () => void;
+  /** 정상 쌍만 선택할 수 있다. 불일치 행은 null (구간 배너의 버튼으로 이동한다) */
+  onSelect: (() => void) | null;
 }
 
 /** heading은 본문보다 크게 — 표에서도 문서 구조가 읽히도록. */
@@ -17,47 +19,86 @@ function unitTextClass(unit: TranslationUnit): string {
 }
 
 /**
- * 정렬 검사 뷰의 정상 쌍(1:1) 행. 읽기 전용 — 여기서 편집하지 않는다.
- * 불일치 구간(1:0 / 0:1)은 4단계에서 별도로 그린다.
+ * 정렬 검사 뷰의 행 하나. 읽기 전용 — 여기서 편집하지 않는다.
+ *
+ * 정상 쌍(1:1)은 클릭해 선택할 수 있고, 짝이 없는 쪽(1:0 / 0:1)은 빈 셀
+ * 플레이스홀더로 표시한다. **짝을 추정하지 않는다** — 틀린 짝을 믿게 하느니
+ * 불일치를 그대로 드러낸다.
  */
-export function AlignmentRow({ index, source, target, active, onSelect }: AlignmentRowProps): JSX.Element {
+export function AlignmentRow({ index, op, active, onSelect }: AlignmentRowProps): JSX.Element {
+  const { t } = useTranslation();
+
+  const isPair = op.kind === 'pair';
+  const source = op.kind === 'target-only' ? null : op.source;
+  const target = op.kind === 'source-only' ? null : op.target;
+  const cellBorder = isPair ? 'border-editor-border/40' : 'border-amber-200';
+
+  const placeholderClass =
+    'block w-full px-3 py-2.5 border border-dashed border-amber-400 rounded '
+    + 'text-xs text-amber-700 bg-white/50';
+
   return (
     <div
       role="row"
-      tabIndex={0}
-      onClick={onSelect}
+      {...(onSelect ? { tabIndex: 0, onClick: onSelect } : {})}
       onKeyDown={(e) => {
+        if (!onSelect) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onSelect();
         }
       }}
-      className={`flex items-stretch border-b border-editor-border/40 cursor-pointer ${
-        active ? 'bg-accent-tint border-l-[3px] border-l-primary-500' : 'hover:bg-editor-bg'
+      className={`flex items-stretch ${
+        isPair
+          ? `border-b border-editor-border/40 cursor-pointer ${
+            active ? 'bg-accent-tint border-l-[3px] border-l-primary-500' : 'hover:bg-editor-bg'
+          }`
+          : ''
       }`}
       data-testid="alignment-row"
+      data-kind={op.kind}
       data-active={active}
     >
       {/* 활성 행은 좌측 3px 보더가 붙으므로 번호 셀을 그만큼 줄여 컬럼이 밀리지 않게 한다 */}
       <div
         className={`shrink-0 pt-3.5 text-xs font-bold tabular-nums ${
-          active ? 'w-[49px] pl-[15px] text-primary-500' : 'w-[52px] pl-[18px] text-slate-400'
-        }`}
+          active ? 'w-[49px] pl-[15px]' : 'w-[52px] pl-[18px]'
+        } ${active ? 'text-primary-500' : isPair ? 'text-slate-400' : 'text-amber-600'}`}
       >
         {String(index).padStart(2, '0')}
       </div>
 
-      <div className={`flex-1 min-w-0 px-5 py-3 border-l border-editor-border/40 ${unitTextClass(source)}`}>
-        {source.text}
-      </div>
+      {source ? (
+        <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} ${unitTextClass(source)}`}>
+          {source.text}
+        </div>
+      ) : (
+        <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} flex items-center`}>
+          <span className={placeholderClass}>{t('editor.alignment.mismatch.noSource', '대응하는 원문 없음')}</span>
+        </div>
+      )}
 
-      <div className={`flex-1 min-w-0 px-5 py-3 border-l border-editor-border/40 ${unitTextClass(target)}`}>
-        {target.text}
-      </div>
+      {target ? (
+        <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} ${unitTextClass(target)}`}>
+          {target.text}
+        </div>
+      ) : (
+        <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} flex items-center`}>
+          <span className={placeholderClass}>{t('editor.alignment.mismatch.noTarget', '대응하는 번역문 없음')}</span>
+        </div>
+      )}
 
-      <div className="w-[120px] shrink-0 pl-[14px] py-3 border-l border-editor-border/40 flex items-start gap-1 text-[11px] font-semibold text-editor-muted">
-        <Check size={12} className="mt-[3px] shrink-0" />
-        <span>1:1</span>
+      <div className={`w-[120px] shrink-0 pl-[14px] py-3 border-l ${cellBorder} flex items-start`}>
+        {isPair ? (
+          <span className="flex items-start gap-1 text-[11px] font-semibold text-editor-muted">
+            <Check size={12} className="mt-[3px] shrink-0" />
+            1:1
+          </span>
+        ) : (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-700">
+            {op.kind === 'source-only' ? '1:0' : '0:1'}
+          </span>
+        )}
       </div>
     </div>
   );

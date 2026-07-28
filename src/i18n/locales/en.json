@@ -333,7 +333,19 @@
       "sourceColumn": "Source",
       "targetColumn": "Target",
       "alignColumn": "Alignment",
-      "empty": "No paragraphs to align."
+      "empty": "No paragraphs to align.",
+      "mismatch": {
+        "extraTarget": "Alignment mismatch — the target has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",
+        "extraTarget_one": "Alignment mismatch — the target has {{count}} extra paragraph (source {{sourceTotal}} : target {{targetTotal}})",
+        "extraTarget_other": "Alignment mismatch — the target has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",
+        "extraSource": "Alignment mismatch — the source has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",
+        "extraSource_one": "Alignment mismatch — the source has {{count}} extra paragraph (source {{sourceTotal}} : target {{targetTotal}})",
+        "extraSource_other": "Alignment mismatch — the source has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",
+        "both": "Alignment mismatch — {{sourceCount}} source and {{targetCount}} target paragraphs found no match (source {{sourceTotal}} : target {{targetTotal}})",
+        "note": "This range is shown as is; no pairing is guessed.",
+        "noSource": "No matching source",
+        "noTarget": "No matching target"
+      }
     },
     "translationModel": "Translation Model",
     "translationModelAriaLabel": "Translation model",
