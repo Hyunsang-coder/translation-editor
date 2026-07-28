@@ -12,9 +12,12 @@ import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
 
 const TOOL_BUTTON_CLASS =
-  'h-[34px] px-[11px] flex items-center gap-[7px] rounded-md text-[13px] font-semibold text-editor-text '
-  + 'hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
+  'h-[34px] px-[11px] shrink-0 flex items-center gap-[7px] rounded-md text-[13px] font-semibold text-editor-text '
+  + 'whitespace-nowrap hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
   + 'focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2';
+
+/** 좁은 창에서는 라벨을 접어 아이콘만 남긴다 (title/aria-label로 접근성 유지) */
+const TOOL_LABEL_CLASS = 'hidden xl:inline';
 
 /**
  * 상단 툴바 컴포넌트
@@ -148,7 +151,7 @@ export function Toolbar(): JSX.Element {
           data-testid="editor-comments-button"
         >
           <NotebookPen size={16} />
-          <span>{t('comment.title', '코멘트')}</span>
+          <span className={TOOL_LABEL_CLASS}>{t('comment.title', '코멘트')}</span>
           {commentCount > 0 && (
             <span className="tabular-nums text-editor-muted">{commentCount}</span>
           )}
@@ -164,7 +167,7 @@ export function Toolbar(): JSX.Element {
           data-testid="toolbar-menu-chat"
         >
           <MessageSquare size={16} />
-          <span>{t('toolbar.aiChat')}</span>
+          <span className={TOOL_LABEL_CLASS}>{t('toolbar.aiChat')}</span>
         </button>
 
         <button
@@ -176,7 +179,7 @@ export function Toolbar(): JSX.Element {
           data-testid="toolbar-menu-history"
         >
           <Clock3 size={16} />
-          <span>{t('history.title')}</span>
+          <span className={TOOL_LABEL_CLASS}>{t('history.title')}</span>
         </button>
 
         <button
@@ -188,7 +191,7 @@ export function Toolbar(): JSX.Element {
           data-testid="toolbar-menu-export"
         >
           <Download size={16} />
-          <span>{t('toolbar.export', '내보내기')}</span>
+          <span className={TOOL_LABEL_CLASS}>{t('toolbar.export', '내보내기')}</span>
         </button>
 
         <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />

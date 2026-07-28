@@ -79,7 +79,7 @@ export function WorkflowActions(): JSX.Element {
   }, [translationModel, allTranslationModels, setTranslationModel]);
 
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div className="flex items-center gap-2 min-w-0 whitespace-nowrap">
       {/* 번역 실행 — 기본 액션 */}
       <button
         type="button"
