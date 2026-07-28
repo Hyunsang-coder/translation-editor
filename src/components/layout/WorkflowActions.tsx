@@ -79,13 +79,13 @@ export function WorkflowActions(): JSX.Element {
   }, [translationModel, allTranslationModels, setTranslationModel]);
 
   return (
-    <div className="flex items-center gap-2 min-w-0 whitespace-nowrap">
+    <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap">
       {/* 번역 실행 — 기본 액션 */}
       <button
         type="button"
         onClick={triggerTranslate}
         disabled={translateLoading}
-        className="h-[38px] px-4 rounded-md bg-primary-500 text-white text-sm font-bold flex items-center gap-2 hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className="h-[34px] px-3 rounded-md bg-primary-500 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
         title={t('editor.translateTitle')}
         data-testid="editor-translate-button"
       >
@@ -96,58 +96,58 @@ export function WorkflowActions(): JSX.Element {
           </>
         ) : (
           <>
-            <Sparkles size={17} />
+            <Sparkles size={15} />
             <span>{t('workflow.translateDocument')}</span>
-            <span className="text-[11px] px-1.5 py-0.5 bg-white/20 rounded">{shortcutLabel('T')}</span>
+            <span className="text-[11px] px-1 py-0.5 bg-white/20 rounded">{shortcutLabel('T')}</span>
           </>
         )}
       </button>
 
-      <span className="w-4 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
+      <span className="w-3 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
 
       {/* 검수 */}
       <button
         type="button"
         onClick={() => openReviewPanel()}
-        className="h-[38px] px-3.5 rounded-md border border-editor-border text-editor-text text-sm font-bold flex items-center gap-2 hover:bg-editor-surface transition-colors focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className="h-[34px] px-2.5 rounded-md border border-editor-border text-editor-text text-[13px] font-semibold flex items-center gap-1.5 hover:bg-editor-surface transition-colors focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
         title={t('editor.reviewTitle', '번역 검수')}
         data-testid="editor-review-button"
       >
-        <ClipboardCheck size={16} />
+        <ClipboardCheck size={15} />
         <span>{t('editor.review', '검수')}</span>
         {issueCount > 0 && (
-          <span className="min-w-[18px] h-[18px] px-1.5 bg-primary-500 text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
+          <span className="min-w-[17px] h-[17px] px-1 bg-primary-500 text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
             {issueCount}
           </span>
         )}
-        <span className="text-[11px] px-1.5 py-0.5 bg-editor-border/60 text-editor-muted rounded">
+        <span className="text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded">
           {shortcutLabel('R')}
         </span>
       </button>
 
-      <span className="w-4 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
+      <span className="w-3 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
 
       {/* 폴리싱 */}
       <button
         type="button"
         onClick={triggerPolish}
         disabled={!hasTargetContent || polishLoading}
-        className="h-[38px] px-3.5 rounded-md border border-editor-border text-editor-text text-sm font-bold flex items-center gap-2 hover:bg-editor-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className="h-[34px] px-2.5 rounded-md border border-editor-border text-editor-text text-[13px] font-semibold flex items-center gap-1.5 hover:bg-editor-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
         title={t('review.polish', '폴리싱')}
         data-testid="editor-polish-button"
       >
         {polishLoading ? (
-          <span className="w-3 h-3 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
+          <span className="w-3.5 h-3.5 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
         ) : (
-          <Highlighter size={16} />
+          <Highlighter size={15} />
         )}
         <span>{t('review.polish', '폴리싱')}</span>
-        <span className="text-[11px] px-1.5 py-0.5 bg-editor-border/60 text-editor-muted rounded">
+        <span className="text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded">
           {shortcutLabel('P')}
         </span>
       </button>
 
-      <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />
+      <div className="w-px h-[20px] bg-editor-border mx-1 shrink-0" />
 
       {/* 번역 모델 — 워크플로 버튼보다 낮은 위계라 기존 md 사이즈를 그대로 쓴다 */}
       <Select
