@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/modernist-f1c6f68b-2680-477c-a74f-898bfdc2f24f/styles.css">
+<script src="_ds/modernist-f1c6f68b-2680-477c-a74f-898bfdc2f24f/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  body { margin:0; background:#e6e4e2; font-family:"Archivo","Pretendard",system-ui,sans-serif; color:#201e1d; }
+  a { color:#0284c7; text-decoration:none; }
+  a:hover { color:#075985; text-decoration:underline; }
+  ::selection { background:#ffe0d9; }
+</style>
+</helmet>
+
+<div style="padding:64px 64px 0;display:flex;align-items:flex-end;gap:24px;border-bottom:2px solid rgba(32,30,29,.4);margin:0 64px 0 0;padding-bottom:16px;">
+  <div style="font:800 44px/1 Archivo,sans-serif;letter-spacing:-.02em;">OddEyes.ai — 에디터 UI 개선</div>
+  <div style="font:500 15px/1.5 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.55);padding-bottom:6px;">현재 재현 <a href="#1a">1a</a> · 보수적 <a href="#1b">1b</a> · 재구성 <a href="#1c">1c</a> · 정렬 검사 <a href="#2a">2a</a> · 1920 × 1080</div>
+</div>
+
+<section style="padding:48px 64px 0;display:flex;flex-direction:column;gap:40px;">
+  <div id="2a" data-screen-label="2a 정렬 검사 뷰" style="display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:26px;padding:0 9px;background:#0284c7;color:#f3f2f2;font:800 13px/1 Archivo,sans-serif;">2a</span>
+      <span style="font:800 26px/1 Archivo,Pretendard,sans-serif;">Phase 4.5 — 정렬 검사 뷰 (읽기 전용)</span>
+    </div>
+    <div style="display:flex;gap:32px;font:500 14px/1.5 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.62);max-width:1920px;">
+      <span>① 정렬을 <b>저장하지 않고</b> 열 때마다 순번 매칭으로 계산 — 스키마 변경 0</span>
+      <span>② 짝이 안 맞는 구간은 고치지 않고 <b>불일치로 표시</b>하고 넘어감</span>
+      <span>③ 편집은 기존 2분할에서 — 행 클릭 시 그 문단으로 점프</span>
+      <span>④ 하단 요약이 <b>Phase 5 판단 근거 데이터</b>가 됨</span>
+    </div>
+    <div style="width:1920px;height:1080px;overflow:hidden;background:#ffffff;box-shadow:0 12px 32px rgba(45,43,43,.22);display:flex;flex-direction:column;font-family:Archivo,Pretendard,system-ui,sans-serif;color:#1e293b;">
+
+      <!-- top bar (Phase 3 스테퍼 그대로) -->
+      <div style="height:56px;flex:none;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:stretch;">
+        <div style="width:260px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-right:1px solid #e2e8f0;">
+          <img src="assets/app-icon-64.png" alt="" style="width:26px;height:26px;display:block;flex:none;">
+          <div style="min-width:0;">
+            <div style="font-size:14px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PUBG 32.1 패치노트</div>
+            <div style="font-size:11px;color:#64748b;">EN → KO · 42 문단</div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 18px;">
+          <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;background:#0284c7;color:#fff;border-radius:6px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span style="font-size:14px;font-weight:700;">문서 번역</span>
+            <span style="font-size:11px;padding:2px 5px;background:rgba(255,255,255,.22);border-radius:3px;">⌘T</span>
+          </div>
+          <div style="width:16px;height:2px;background:#e2e8f0;"></div>
+          <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+            <span style="font-size:14px;font-weight:700;">검수</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:#0284c7;color:#fff;font-size:11px;font-weight:700;border-radius:3px;">5</span>
+            <span style="font-size:11px;padding:2px 5px;background:#e2e8f0;color:#64748b;border-radius:3px;">⌘R</span>
+          </div>
+          <div style="width:16px;height:2px;background:#e2e8f0;"></div>
+          <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+            <span style="font-size:14px;font-weight:700;">폴리싱</span>
+            <span style="font-size:11px;padding:2px 5px;background:#e2e8f0;color:#64748b;border-radius:3px;">⌘P</span>
+          </div>
+          <div style="width:1px;height:24px;background:#e2e8f0;margin:0 6px;"></div>
+          <div style="height:38px;min-width:190px;padding:0 12px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="display:flex;flex-direction:column;line-height:1.1;">
+              <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#64748b;">AI 모델</span>
+              <span style="font-size:13px;font-weight:600;">Claude Sonnet 4.5</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div style="flex:none;display:flex;align-items:center;gap:4px;padding:0 14px;border-left:1px solid #e2e8f0;">
+          <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:6px;font-size:13px;font-weight:600;color:#1e293b;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>코멘트 3
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:6px;font-size:13px;font-weight:600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>AI 채팅
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:6px;font-size:13px;font-weight:600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>히스토리
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:6px;font-size:13px;font-weight:600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>내보내기
+          </div>
+        </div>
+      </div>
+
+      <!-- status strip -->
+      <div style="height:30px;flex:none;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:12px;color:#64748b;">
+        <span style="display:flex;align-items:center;gap:6px;"><span style="width:7px;height:7px;background:#0284c7;display:inline-block;border-radius:2px;"></span><span style="font-weight:600;color:#1e293b;">검수 완료 · 이슈 5건</span></span>
+        <div style="width:1px;height:14px;background:#e2e8f0;"></div>
+        <span>모든 변경사항 저장됨 · 14:32</span>
+        <div style="width:1px;height:14px;background:#e2e8f0;"></div>
+        <span>자동 스냅샷 3분 전 (번역 적용)</span>
+        <div style="flex:1;"></div>
+        <span>원문 1,248 단어 · 번역문 1,102 단어</span>
+      </div>
+
+      <div style="flex:1;display:flex;min-height:0;">
+
+        <!-- rail -->
+        <div style="width:80px;flex:none;background:#f8fafc;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;">
+          <div style="height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:#0284c7;color:#fff;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+            <span style="font-size:10px;font-weight:800;">문서</span>
+          </div>
+          <div style="height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid #e2e8f0;position:relative;color:#64748b;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+            <span style="font-size:10px;font-weight:800;">검수</span>
+            <span style="position:absolute;top:10px;right:16px;min-width:16px;height:16px;padding:0 4px;background:#0284c7;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;border-radius:3px;">5</span>
+          </div>
+          <div style="height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid #e2e8f0;position:relative;color:#64748b;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>
+            <span style="font-size:10px;font-weight:800;">코멘트</span>
+            <span style="position:absolute;top:10px;right:18px;min-width:16px;height:16px;padding:0 4px;background:#1e293b;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;border-radius:3px;">3</span>
+          </div>
+          <div style="height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid #e2e8f0;color:#64748b;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+            <span style="font-size:10px;font-weight:800;">용어집</span>
+          </div>
+          <div style="flex:1;"></div>
+        </div>
+
+        <!-- center : alignment view -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+
+          <div style="height:38px;flex:none;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+            <div style="display:flex;align-items:stretch;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fff;">
+              <span style="padding:0 12px;height:26px;display:flex;align-items:center;font-size:11px;font-weight:600;color:#64748b;">문서 보기</span>
+              <span style="padding:0 12px;height:26px;display:flex;align-items:center;background:#0284c7;color:#fff;font-size:11px;font-weight:800;">정렬 검사</span>
+            </div>
+            <span style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;font-weight:600;color:#64748b;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              읽기 전용
+            </span>
+            <div style="width:1px;height:18px;background:#e2e8f0;"></div>
+            <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid #0284c7;background:#f0f9ff;border-radius:4px;font-size:11px;font-weight:700;color:#075985;">불일치 구간만 <span style="opacity:.75;">3</span></div>
+            <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px;font-weight:600;color:#64748b;">이슈 있는 문단 5</div>
+            <div style="flex:1;"></div>
+            <span style="font-size:11px;color:#64748b;">행을 클릭하면 문서 보기의 해당 문단으로 이동합니다</span>
+          </div>
+
+          <div style="height:32px;flex:none;display:flex;align-items:stretch;border-bottom:1px solid #e2e8f0;background:#fff;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b;">
+            <div style="width:52px;flex:none;display:flex;align-items:center;padding-left:18px;">#</div>
+            <div style="flex:1;display:flex;align-items:center;padding-left:18px;border-left:1px solid #e2e8f0;">원문 · EN</div>
+            <div style="flex:1;display:flex;align-items:center;padding-left:18px;border-left:1px solid #e2e8f0;">번역문 · KO</div>
+            <div style="width:120px;flex:none;display:flex;align-items:center;padding-left:14px;border-left:1px solid #e2e8f0;">정렬</div>
+          </div>
+
+          <div style="flex:1;min-height:0;overflow:hidden;background:#fff;">
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">01</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:19px;font-weight:700;line-height:1.3;">Update 32.1 — Patch Notes</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:19px;font-weight:700;line-height:1.3;">업데이트 32.1 — 패치 노트</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">02</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:14px;line-height:1.6;">This update focuses on weapon balance, the new Rondo map rotation, and a set of <span style="background:#e0f2fe;">quality-of-life</span> fixes reported by the community.</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:14px;line-height:1.6;">이번 업데이트는 무기 밸런스, <span style="background:#e0f2fe;">신규 론도 맵 로테이션</span>, 그리고 커뮤니티에서 제보된 개선 사항에 초점을 맞췄습니다.</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;display:flex;flex-direction:column;gap:5px;align-items:flex-start;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+                <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(249,115,22,.1);color:#ea580c;">이슈 2</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">03</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:16px;font-weight:700;line-height:1.35;">Weapon Balance</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:16px;font-weight:700;line-height:1.35;">무기 밸런스</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+              </div>
+            </div>
+
+            <!-- active row -->
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;background:#f0f9ff;border-left:3px solid #0284c7;">
+              <div style="width:49px;flex:none;padding:14px 0 0 15px;font-size:12px;font-weight:700;color:#0284c7;">04</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e0f2fe;font-size:14px;line-height:1.6;">Beryl M762: vertical recoil reduced by 6% during the <span style="background:#e0f2fe;">first four shots</span>.</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #bae6fd;font-size:14px;line-height:1.6;">
+                베릴 M762: <span style="background:#e0f2fe;border-bottom:2px solid #0284c7;padding-bottom:1px;">초탄 4발 구간</span>의 수직 반동이 6% 감소합니다.
+                <div style="display:inline-flex;align-items:center;gap:6px;margin-left:10px;height:24px;padding:0 10px;border:1px solid #0284c7;background:#fff;border-radius:4px;font-size:11px;font-weight:700;color:#075985;vertical-align:middle;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/></svg>
+                  이 문단 편집 ↗
+                </div>
+              </div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #e0f2fe;display:flex;flex-direction:column;gap:5px;align-items:flex-start;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+                <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(239,68,68,.1);color:#dc2626;">심각 1</span>
+                <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:#f1f5f9;color:#64748b;">코멘트 1</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">05</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:14px;line-height:1.6;">MK14 EBR: damage lowered from 61 to 58; magazine capacity unchanged.</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:14px;line-height:1.6;">MK14 EBR: 데미지가 61에서 58로 하향됩니다. <span style="background:#e0f2fe;">탄창 용량은 변경되지 않습니다.</span></div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;display:flex;flex-direction:column;gap:5px;align-items:flex-start;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+                <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(59,130,246,.1);color:#3b82f6;">이슈 1</span>
+              </div>
+            </div>
+
+            <!-- MISMATCH band -->
+            <div style="border-bottom:1px solid #f1f5f9;background:#fffbeb;">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px dashed #fbbf24;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <span style="font-size:12px;font-weight:700;color:#b45309;">정렬 불일치 — 번역문에 문단이 1개 더 있습니다 (원문 5 : 번역문 6)</span>
+                <span style="font-size:11px;color:#92400e;">이 구간은 짝을 추정하지 않고 그대로 표시합니다.</span>
+                <div style="flex:1;"></div>
+                <span style="height:24px;padding:0 10px;border:1px solid #b45309;background:#fff;border-radius:4px;display:flex;align-items:center;font-size:11px;font-weight:700;color:#b45309;">이 구간 문서 보기로 열기 ↗</span>
+              </div>
+              <div style="display:flex;align-items:stretch;">
+                <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#d97706;">06</div>
+                <div style="flex:1;padding:12px 20px;border-left:1px solid #fde68a;display:flex;align-items:center;">
+                  <span style="display:block;width:100%;padding:10px 12px;border:1px dashed #fbbf24;border-radius:4px;font-size:12px;color:#b45309;background:rgba(255,255,255,.5);">대응하는 원문 없음</span>
+                </div>
+                <div style="flex:1;padding:12px 20px;border-left:1px solid #fde68a;font-size:14px;line-height:1.6;">투척류는 이제 차량 주변의 신규 물리 볼륨을 따릅니다.</div>
+                <div style="width:120px;flex:none;padding:14px;border-left:1px solid #fde68a;">
+                  <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(251,191,36,.2);color:#b45309;">0:1</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">07</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:16px;font-weight:700;line-height:1.35;">Known Issues</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:16px;font-weight:700;line-height:1.35;">알려진 문제</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">08</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:14px;line-height:1.6;">Players may occasionally see a delayed inventory refresh after looting a care package. A fix is planned for 32.2.</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:14px;line-height:1.6;">보급 상자를 파밍한 뒤 인벤토리 갱신이 지연되는 현상이 발생할 수 있습니다. 32.2에서 수정될 예정입니다.</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;">
+              <div style="width:52px;flex:none;padding:14px 0 0 18px;font-size:12px;font-weight:700;color:#94a3b8;">09</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #f1f5f9;font-size:14px;line-height:1.6;">Ranked rewards for Season 27 will be distributed within 48 hours of the maintenance window closing.</div>
+              <div style="flex:1;padding:12px 20px;border-left:1px solid #e2e8f0;font-size:14px;line-height:1.6;">시즌 27 랭크 보상은 점검 종료 후 48시간 이내에 지급됩니다.</div>
+              <div style="width:120px;flex:none;padding:14px;border-left:1px solid #f1f5f9;">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#64748b;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>1:1</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- alignment summary : Phase 5 판단 근거 -->
+          <div style="height:56px;flex:none;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:18px;padding:0 18px;">
+            <div style="display:flex;flex-direction:column;line-height:1.2;">
+              <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;">정렬 상태</span>
+              <span style="font-size:14px;font-weight:700;">42개 문단 중 <span style="color:#0284c7;">39개 정렬</span> · <span style="color:#b45309;">3개 불일치</span></span>
+            </div>
+            <div style="flex:1;max-width:420px;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;display:flex;">
+              <div style="width:93%;background:#0284c7;"></div>
+              <div style="width:7%;background:#fbbf24;"></div>
+            </div>
+            <div style="flex:1;"></div>
+            <span style="font-size:12px;color:#64748b;">이 지표가 누적되면 Phase 5(영속 정렬)의 필요성을 데이터로 판단할 수 있습니다</span>
+            <span style="height:32px;padding:0 14px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              정렬 리포트
+            </span>
+          </div>
+        </div>
+
+        <!-- inspector -->
+        <div style="width:360px;flex:none;background:#f8fafc;border-left:1px solid #e2e8f0;display:flex;flex-direction:column;">
+          <div style="height:38px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #e2e8f0;background:#fff;">
+            <span style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">문단 04 — 인스펙터</span>
+            <div style="display:flex;align-items:center;gap:8px;color:#64748b;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;background:#fff;">
+            <div style="padding:16px;border-bottom:1px solid #e2e8f0;display:flex;flex-direction:column;gap:10px;background:#f0f9ff;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="padding:3px 8px;background:#0284c7;color:#fff;font-size:10px;font-weight:800;border-radius:4px;">심각 · 오역</span>
+                <span style="font-size:11px;color:#64748b;">Claude Sonnet 4.5 검출</span>
+              </div>
+              <div style="font-size:13px;line-height:1.55;">
+                <div style="color:#94a3b8;text-decoration:line-through;">초탄 4발 구간의 수직 반동이 6% 감소합니다.</div>
+                <div style="font-weight:700;color:#075985;margin-top:4px;">첫 4발 구간의 수직 반동이 6% 감소합니다.</div>
+              </div>
+              <div style="font-size:12px;line-height:1.55;color:#475569;">원문 "first four shots"은 발사 초기 4발 전체를 뜻합니다. '초탄'은 첫 발만 가리키는 관용어라 의미가 달라집니다.</div>
+              <div style="display:flex;gap:8px;">
+                <div style="flex:1;height:34px;background:#0284c7;color:#fff;border-radius:6px;display:flex;align-items:center;padding:0 14px;font-size:12px;font-weight:700;">수정 적용 <span style="margin-left:auto;font-size:11px;opacity:.8;">⏎</span></div>
+                <div style="height:34px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;display:flex;align-items:center;padding:0 14px;font-size:12px;font-weight:600;color:#64748b;">무시</div>
+              </div>
+            </div>
+            <div style="padding:16px;border-bottom:1px solid #e2e8f0;display:flex;flex-direction:column;gap:10px;">
+              <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b;">이 문단의 용어</div>
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;">
+                  <span style="font-weight:600;">Beryl M762</span><span style="color:#64748b;">베릴 M762</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;">
+                  <span style="font-weight:600;">vertical recoil</span><span style="color:#64748b;">수직 반동</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <span style="font-weight:600;">first four shots</span><span style="color:#075985;font-weight:700;">첫 4발 <span style="font-weight:500;font-size:11px;">(신규 제안)</span></span>
+                </div>
+              </div>
+            </div>
+            <div style="padding:16px;border-bottom:1px solid #e2e8f0;display:flex;flex-direction:column;gap:10px;">
+              <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b;">코멘트 1</div>
+              <div style="display:flex;gap:10px;">
+                <div style="width:26px;height:26px;flex:none;background:#1e293b;color:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">현</div>
+                <div style="min-width:0;">
+                  <div style="font-size:12px;font-weight:700;">김현상 <span style="font-weight:500;color:#94a3b8;">14:26</span></div>
+                  <div style="font-size:13px;line-height:1.5;margin-top:3px;">밸런스 수치는 QA 시트 기준으로 한 번 더 확인 필요.</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+              <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b;">정렬 근거</div>
+              <div style="font-size:12px;line-height:1.6;color:#475569;">원문 4번째 문단 ↔ 번역문 4번째 문단. <b>순번 매칭</b>으로 계산된 짝이며 저장되지 않습니다. 문단을 추가·삭제하면 다시 계산됩니다.</div>
+            </div>
+          </div>
+          <div style="height:44px;flex:none;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;color:#64748b;">
+            <span>이슈 1 / 5</span>
+            <div style="display:flex;gap:8px;">
+              <span style="height:26px;padding:0 11px;border:1px solid #e2e8f0;background:#fff;border-radius:4px;display:flex;align-items:center;font-weight:600;">이전</span>
+              <span style="height:26px;padding:0 11px;border:1px solid #e2e8f0;background:#fff;border-radius:4px;display:flex;align-items:center;font-weight:600;">다음 이슈 →</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:48px 64px 96px;display:flex;flex-direction:column;gap:40px;">
+
+  <div style="display:flex;flex-wrap:wrap;gap:72px;align-items:flex-start;">
+
+    <!-- ══════════════════════════ 1a — 현재 UI 재현 ══════════════════════════ -->
+    <div id="1a" data-screen-label="1a 현재 UI" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:26px;padding:0 9px;background:#201e1d;color:#f3f2f2;font:800 13px/1 Archivo,sans-serif;">1a</span>
+        <span style="font:800 26px/1 Archivo,Pretendard,sans-serif;">현재 UI — 코드 기반 재현</span>
+        <span style="font:500 14px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.5);">Toolbar · ProjectSidebar · UnifiedSidebar(검수) · EditorCanvasTipTap</span>
+      </div>
+      <div style="width:1920px;height:1080px;overflow:hidden;background:#ffffff;box-shadow:0 12px 32px rgba(45,43,43,.22);display:flex;flex-direction:column;font-family:Pretendard,-apple-system,system-ui,sans-serif;color:#1e293b;">
+
+        <!-- Toolbar h-10 -->
+        <div style="height:40px;flex:none;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;padding:0 8px;">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+            <div style="padding:6px;display:flex;color:#64748b;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#1e293b;">PUBG 32.1 패치노트 로컬라이제이션</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="padding:6px;border-radius:6px;display:flex;align-items:center;gap:4px;">
+              <img src="assets/app-icon-64.png" alt="" style="width:24px;height:24px;display:block;">
+              <span style="font-size:12px;color:#64748b;">▼</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0;">
+
+          <!-- ProjectSidebar 160 -->
+          <div style="width:160px;flex:none;display:flex;flex-direction:column;background:#f8fafc;border-right:1px solid #e2e8f0;">
+            <div style="height:40px;flex:none;padding:0 12px;display:flex;align-items:center;border-bottom:1px solid #e2e8f0;">
+              <div style="font-size:12px;font-weight:600;color:#1e293b;">프로젝트</div>
+            </div>
+            <div style="flex:1;overflow:hidden;">
+              <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;color:#64748b;border-bottom:1px solid #e2e8f0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                <span style="font-size:12px;">New</span>
+              </div>
+              <div style="padding:8px 12px;border-left:2px solid #0284c7;background:#ffffff;">
+                <div style="font-size:12px;font-weight:500;color:#0284c7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PUBG 32.1 패치노트 로컬라이제이션</div>
+                <div style="font-size:10px;color:#64748b;">2026. 7. 28.</div>
+              </div>
+              <div style="padding:8px 12px;border-left:2px solid transparent;">
+                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">스토어 상품 설명 KR</div>
+                <div style="font-size:10px;color:#64748b;">2026. 7. 24.</div>
+              </div>
+              <div style="padding:8px 12px;border-left:2px solid transparent;">
+                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">시즌 27 시네마틱 자막</div>
+                <div style="font-size:10px;color:#64748b;">2026. 7. 19.</div>
+              </div>
+              <div style="padding:8px 12px;border-left:2px solid transparent;">
+                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Dev Letter #14</div>
+                <div style="font-size:10px;color:#64748b;">2026. 7. 11.</div>
+              </div>
+              <div style="padding:8px 12px;border-left:2px solid transparent;">
+                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">CS 매크로 문구 2차</div>
+                <div style="font-size:10px;color:#64748b;">2026. 6. 30.</div>
+              </div>
+            </div>
+            <div style="padding:8px 12px;border-top:1px solid #e2e8f0;flex:none;">
+              <div style="padding:6px 8px;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:#64748b;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>앱 설정</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LeftSidebar 250 : 검수 탭 -->
+          <div style="width:250px;flex:none;display:flex;flex-direction:column;background:#ffffff;border-right:1px solid #e2e8f0;">
+            <div style="height:40px;flex:none;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;">
+              <div style="padding:8px;color:#64748b;display:flex;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
+              </div>
+              <div style="height:40px;padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:500;color:#64748b;border-right:1px solid #e2e8f0;min-width:60px;">설정</div>
+              <div style="height:40px;padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:500;color:#0284c7;background:#f8fafc;border-right:1px solid #e2e8f0;border-bottom:2px solid #0284c7;min-width:60px;">검수</div>
+              <div style="height:40px;padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:500;color:#64748b;border-right:1px solid #e2e8f0;min-width:60px;">코멘트</div>
+            </div>
+            <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#ffffff;">
+              <div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:16px;">
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <span style="font-weight:500;">총 5건</span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                      <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(239,68,68,.1);color:#dc2626;">심각 1</span>
+                      <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(249,115,22,.1);color:#ea580c;">중요 2</span>
+                      <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(59,130,246,.1);color:#3b82f6;">경미 2</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(239,68,68,.1);color:#dc2626;">오역 1</span>
+                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(249,115,22,.1);color:#ea580c;">누락 1</span>
+                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(245,158,11,.1);color:#d97706;">직역투 2</span>
+                    <span style="padding:2px 8px;border-radius:4px;font-size:10px;background:rgba(59,130,246,.1);color:#2563eb;">용어 1</span>
+                  </div>
+                </div>
+                <div style="flex:1;min-height:0;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+                  <table style="width:100%;font-size:12px;table-layout:fixed;border-collapse:collapse;">
+                    <colgroup><col style="width:16.67%"><col style="width:50%"><col style="width:33.33%"></colgroup>
+                    <thead>
+                      <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                        <th style="padding:8px;text-align:center;font-weight:500;color:#64748b;"><span style="display:inline-block;width:14px;height:14px;border:1px solid #cbd5e1;border-radius:3px;vertical-align:middle;"></span></th>
+                        <th style="padding:8px 12px;text-align:left;font-weight:500;color:#64748b;">수정 제안</th>
+                        <th style="padding:8px 12px;text-align:left;font-weight:500;color:#64748b;">설명</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style="border-bottom:1px solid rgba(226,232,240,.5);background:rgba(2,132,199,.05);">
+                        <td style="padding:8px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                            <span style="display:inline-block;width:14px;height:14px;border:1px solid #0284c7;border-radius:3px;background:#0284c7;"></span>
+                            <span style="font-size:10px;color:#64748b;font-weight:500;">1</span>
+                            <span style="font-size:10px;font-weight:500;color:#dc2626;">심각</span>
+                            <span style="padding:2px 6px;border-radius:4px;font-size:10px;background:rgba(239,68,68,.1);color:#dc2626;white-space:nowrap;">오역</span>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;gap:6px;">
+                            <span style="word-break:break-word;line-height:1.45;">첫 4발 구간의 수직 반동이</span>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#0284c7;color:#fff;">적용</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:rgba(2,132,199,.1);color:#0369a1;">복사</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#f8fafc;color:#64748b;">무시</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;line-height:1.45;">'초탄 4발'은 원문 first four shots의 오역</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(226,232,240,.5);">
+                        <td style="padding:8px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                            <span style="display:inline-block;width:14px;height:14px;border:1px solid #cbd5e1;border-radius:3px;"></span>
+                            <span style="font-size:10px;color:#64748b;font-weight:500;">2</span>
+                            <span style="font-size:10px;font-weight:500;color:#ea580c;">중요</span>
+                            <span style="padding:2px 6px;border-radius:4px;font-size:10px;background:rgba(249,115,22,.1);color:#ea580c;white-space:nowrap;">누락</span>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;gap:6px;">
+                            <span style="word-break:break-word;line-height:1.45;">커뮤니티에서 제보된 편의성 개선</span>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:rgba(2,132,199,.1);color:#0369a1;">복사</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#f8fafc;color:#64748b;">무시</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;line-height:1.45;">quality-of-life 수식이 빠짐</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(226,232,240,.5);">
+                        <td style="padding:8px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                            <span style="display:inline-block;width:14px;height:14px;border:1px solid #cbd5e1;border-radius:3px;"></span>
+                            <span style="font-size:10px;color:#64748b;font-weight:500;">3</span>
+                            <span style="font-size:10px;font-weight:500;color:#ea580c;">중요</span>
+                            <span style="padding:2px 6px;border-radius:4px;font-size:10px;background:rgba(59,130,246,.1);color:#2563eb;white-space:nowrap;">용어</span>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;gap:6px;">
+                            <span style="word-break:break-word;line-height:1.45;">론도 맵 로테이션 신규 추가</span>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#0284c7;color:#fff;">적용</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:rgba(2,132,199,.1);color:#0369a1;">복사</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#f8fafc;color:#64748b;">무시</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;line-height:1.45;">용어집 등록어 확인 필요</td>
+                      </tr>
+                      <tr style="border-bottom:1px solid rgba(226,232,240,.5);">
+                        <td style="padding:8px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                            <span style="display:inline-block;width:14px;height:14px;border:1px solid #cbd5e1;border-radius:3px;"></span>
+                            <span style="font-size:10px;color:#64748b;font-weight:500;">4</span>
+                            <span style="font-size:10px;font-weight:500;color:#3b82f6;">경미</span>
+                            <span style="padding:2px 6px;border-radius:4px;font-size:10px;background:rgba(245,158,11,.1);color:#d97706;white-space:nowrap;">직역투</span>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;">
+                          <div style="display:flex;flex-direction:column;gap:6px;">
+                            <span style="word-break:break-word;line-height:1.45;">탄창 용량은 그대로입니다</span>
+                            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#0284c7;color:#fff;">적용</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:rgba(2,132,199,.1);color:#0369a1;">복사</span>
+                              <span style="padding:2px 6px;border-radius:4px;font-size:12px;background:#f8fafc;color:#64748b;">무시</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="padding:8px 12px;vertical-align:top;line-height:1.45;">번역투 문장</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div style="padding:8px 12px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;">
+                <div style="font-size:12px;color:#64748b;">1개 선택됨</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="padding:6px 12px;font-size:12px;font-weight:600;border-radius:4px;background:#3b82f6;color:#fff;">재번역</div>
+                  <div style="padding:6px 12px;font-size:12px;font-weight:600;border-radius:4px;background:#10b981;color:#fff;">다시 검수</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor column -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f8fafc;">
+            <div style="height:40px;flex:none;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;">
+              <div style="font-size:12px;font-weight:700;letter-spacing:.02em;">에디터</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="height:28px;min-width:130px;padding:0 8px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;">
+                  <span>Claude Sonnet 4.5</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+                <div style="display:inline-flex;align-items:stretch;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#ffffff;">
+                  <div style="padding:4px 10px;font-size:12px;font-weight:600;background:#0284c7;color:#fff;display:flex;align-items:center;gap:4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                    <span>번역</span>
+                  </div>
+                  <div style="padding:4px 10px;font-size:12px;font-weight:600;border-left:1px solid #e2e8f0;">검수</div>
+                  <div style="padding:4px 10px;font-size:12px;font-weight:600;border-left:1px solid #e2e8f0;">폴리싱</div>
+                </div>
+                <div style="padding:6px;border-radius:6px;color:#64748b;display:flex;align-items:center;gap:4px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>
+                  <span style="font-size:11px;font-weight:600;color:#1e293b;">3</span>
+                </div>
+                <div style="padding:6px;border-radius:6px;color:#64748b;display:flex;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m10 15-3-3 3-3"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;display:flex;">
+              <!-- Source panel -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+                <div style="height:32px;flex:none;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(14,165,233,.2);background:rgba(14,165,233,.05);">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.06em;color:rgba(7,89,133,.8);">원문</span>
+                    <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:500;color:#64748b;">숨기기</span>
+                  </div>
+                  <span style="font-size:10px;color:#64748b;">1,248 단어</span>
+                </div>
+                <div style="flex:none;display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#ffffff;flex-wrap:wrap;color:#1e293b;">
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M6 20V4M18 20V4"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 4h-9M14 20H5M15 4 9 20"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 5 8 8M12 5l-8 8"/><path d="M20 19h-4c0-1.5.44-2 1.5-2.5S20 15.33 20 14c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.07"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 19 8-8M12 19 4 11"/><path d="M20 12h-4c0-1.5.44-2 1.5-2.5S20 8.33 20 7c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.06"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h11M10 18h11M10 6h11M4 10h2M4 6h1v4M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="display:flex;align-items:center;gap:2px;">
+                    <div style="padding:6px;display:flex;align-items:center;"><span style="font-size:12px;font-weight:500;">A</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></div>
+                    <span style="font-size:12px;color:#64748b;width:28px;text-align:center;">14</span>
+                    <div style="padding:6px;display:flex;align-items:center;"><span style="font-size:12px;font-weight:500;">A</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></div>
+                  </div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="display:flex;align-items:center;gap:2px;">
+                    <div style="padding:6px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18l4 4 4-4M8 6l4-4 4 4M12 2v20"/></svg><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></div>
+                    <span style="font-size:12px;color:#64748b;width:28px;text-align:center;">1.4</span>
+                    <div style="padding:6px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18l4 4 4-4M8 6l4-4 4 4M12 2v20"/></svg><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></div>
+                  </div>
+                </div>
+                <div style="flex:1;min-height:0;background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+                  <div style="padding:16px 24px;font-size:14px;line-height:1.4;">
+                    <div style="font-size:23.8px;line-height:1.35;font-weight:600;margin:24px 0 12px;">Update 32.1 — Patch Notes</div>
+                    <p style="margin:12px 0;">This update focuses on weapon balance, the new Rondo map rotation, and a set of quality-of-life fixes reported by the community.</p>
+                    <div style="font-size:19.6px;line-height:1.4;font-weight:600;margin:20px 0 8px;">Weapon Balance</div>
+                    <ul style="list-style:disc;padding-left:24px;margin:12px 0;">
+                      <li style="margin:4px 0;">Beryl M762: vertical recoil reduced by 6% during the first four shots.</li>
+                      <li style="margin:4px 0;">MK14 EBR: damage lowered from 61 to 58; magazine capacity unchanged.</li>
+                      <li style="margin:4px 0;">Throwables now respect the new physics volume near vehicles.</li>
+                    </ul>
+                    <div style="font-size:19.6px;line-height:1.4;font-weight:600;margin:20px 0 8px;">Known Issues</div>
+                    <p style="margin:12px 0;">Players may occasionally see a delayed inventory refresh after looting a care package. A fix is planned for 32.2.</p>
+                    <p style="margin:12px 0;">Ranked rewards for Season 27 will be distributed within 48 hours of the maintenance window closing.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style="width:4px;flex:none;background:#e2e8f0;"></div>
+
+              <!-- Target panel -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+                <div style="height:32px;flex:none;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(16,185,129,.2);background:rgba(16,185,129,.05);">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.06em;color:rgba(6,95,70,.8);">번역문</span>
+                    <span style="padding:2px 6px;border-radius:4px;font-size:10px;font-weight:500;color:#64748b;">숨기기</span>
+                    <div style="height:28px;min-width:80px;padding:0 8px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;">
+                      <span>한국어</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  </div>
+                  <span style="font-size:10px;color:#64748b;">1,102 단어</span>
+                </div>
+                <div style="flex:none;display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#ffffff;flex-wrap:wrap;color:#1e293b;">
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M6 20V4M18 20V4"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 4h-9M14 20H5M15 4 9 20"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 5 8 8M12 5l-8 8"/><path d="M20 19h-4c0-1.5.44-2 1.5-2.5S20 15.33 20 14c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.07"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 19 8-8M12 19 4 11"/><path d="M20 12h-4c0-1.5.44-2 1.5-2.5S20 8.33 20 7c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.06"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></svg></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h11M10 18h11M10 6h11M4 10h2M4 6h1v4M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="padding:6px;display:flex;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="display:flex;align-items:center;gap:2px;">
+                    <div style="padding:6px;display:flex;align-items:center;"><span style="font-size:12px;font-weight:500;">A</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></div>
+                    <span style="font-size:12px;color:#64748b;width:28px;text-align:center;">14</span>
+                    <div style="padding:6px;display:flex;align-items:center;"><span style="font-size:12px;font-weight:500;">A</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></div>
+                  </div>
+                  <div style="width:1px;height:20px;background:#e2e8f0;margin:0 4px;"></div>
+                  <div style="display:flex;align-items:center;gap:2px;">
+                    <div style="padding:6px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18l4 4 4-4M8 6l4-4 4 4M12 2v20"/></svg><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></div>
+                    <span style="font-size:12px;color:#64748b;width:28px;text-align:center;">1.4</span>
+                    <div style="padding:6px;display:flex;align-items:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18l4 4 4-4M8 6l4-4 4 4M12 2v20"/></svg><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></div>
+                  </div>
+                </div>
+                <div style="flex:1;min-height:0;background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;position:relative;">
+                  <div style="padding:16px 24px;font-size:14px;line-height:1.4;">
+                    <div style="font-size:23.8px;line-height:1.35;font-weight:600;margin:24px 0 12px;">업데이트 32.1 — 패치 노트</div>
+                    <p style="margin:12px 0;">이번 업데이트는 무기 밸런스, 신규 론도 맵 로테이션, 그리고 커뮤니티에서 제보된 개선 사항에 초점을 맞췄습니다.</p>
+                    <div style="font-size:19.6px;line-height:1.4;font-weight:600;margin:20px 0 8px;">무기 밸런스</div>
+                    <ul style="list-style:disc;padding-left:24px;margin:12px 0;">
+                      <li style="margin:4px 0;">베릴 M762: <span style="background:rgba(239,68,68,.14);border-bottom:2px solid #dc2626;">초탄 4발 구간</span>의 수직 반동이 6% 감소합니다.</li>
+                      <li style="margin:4px 0;">MK14 EBR: 데미지가 61에서 58로 하향됩니다. 탄창 용량은 변경되지 않습니다.</li>
+                      <li style="margin:4px 0;">투척류는 이제 차량 주변의 신규 물리 볼륨을 따릅니다.</li>
+                    </ul>
+                    <div style="font-size:19.6px;line-height:1.4;font-weight:600;margin:20px 0 8px;">알려진 문제</div>
+                    <p style="margin:12px 0;">보급 상자를 파밍한 뒤 인벤토리 갱신이 지연되는 현상이 발생할 수 있습니다. 32.2에서 수정될 예정입니다.</p>
+                    <p style="margin:12px 0;">시즌 27 랭크 보상은 점검 종료 후 48시간 이내에 지급됩니다.</p>
+                  </div>
+                  <div style="position:absolute;top:8px;right:8px;padding:4px;border-radius:4px;font-size:10px;background:rgba(248,250,252,.6);border:1px solid rgba(226,232,240,.4);display:flex;align-items:center;gap:4px;color:#64748b;opacity:.5;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"/></svg>
+                    복사
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════ 1b — 보수적 개선 ══════════════════════════ -->
+    <div id="1b" data-screen-label="1b 보수적 개선" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:26px;padding:0 9px;background:#ec3013;color:#f3f2f2;font:800 13px/1 Archivo,sans-serif;">1b</span>
+        <span style="font:800 26px/1 Archivo,Pretendard,sans-serif;">보수적 개선 — 골격 유지, 숨은 기능을 밖으로</span>
+      </div>
+      <div style="display:flex;gap:32px;font:500 14px/1.5 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.62);max-width:1920px;">
+        <span>① Tools 드롭다운 해체 → 상단 바에 라벨 달린 버튼</span>
+        <span>② 번역·검수·폴리싱을 워크플로 순서대로 크게, 단축키 노출</span>
+        <span>③ 상태 스트립 신설 (저장·스냅샷·진행률)</span>
+        <span>④ 우클릭 전용이던 선택 액션을 인라인 툴바로</span>
+      </div>
+      <div style="width:1920px;height:1080px;overflow:hidden;background:#f3f2f2;box-shadow:0 12px 32px rgba(45,43,43,.22);display:flex;flex-direction:column;font-family:Archivo,Pretendard,system-ui,sans-serif;color:#201e1d;">
+
+        <!-- Top command bar -->
+        <div style="height:56px;flex:none;border-bottom:2px solid rgba(32,30,29,.4);background:#f3f2f2;display:flex;align-items:stretch;">
+          <div style="width:280px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-right:2px solid rgba(32,30,29,.4);">
+            <img src="assets/app-icon-64.png" alt="" style="width:26px;height:26px;display:block;flex:none;">
+            <div style="min-width:0;">
+              <div style="font:800 14px/1.2 Archivo,Pretendard,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PUBG 32.1 패치노트</div>
+              <div style="font-size:11px;color:rgba(32,30,29,.55);">EN → KO · 게임</div>
+            </div>
+          </div>
+
+          <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 20px;">
+            <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;background:#ec3013;color:#f3f2f2;" style-hover="background:#dd2b0f;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <span style="font:800 14px/1 Archivo,Pretendard,sans-serif;">문서 번역</span>
+              <span style="font-size:11px;padding:2px 5px;background:rgba(243,242,242,.22);letter-spacing:.03em;">⌘T</span>
+            </div>
+            <div style="width:16px;height:2px;background:rgba(32,30,29,.3);"></div>
+            <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border:1px solid rgba(32,30,29,.4);background:#f3f2f2;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+              <span style="font:800 14px/1 Archivo,Pretendard,sans-serif;">검수</span>
+              <span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:#ec3013;color:#f3f2f2;font:800 11px/1 Archivo,sans-serif;">5</span>
+              <span style="font-size:11px;padding:2px 5px;background:rgba(32,30,29,.08);color:rgba(32,30,29,.6);">⌘R</span>
+            </div>
+            <div style="width:16px;height:2px;background:rgba(32,30,29,.3);"></div>
+            <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border:1px solid rgba(32,30,29,.4);background:#f3f2f2;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+              <span style="font:800 14px/1 Archivo,Pretendard,sans-serif;">폴리싱</span>
+              <span style="font-size:11px;padding:2px 5px;background:rgba(32,30,29,.08);color:rgba(32,30,29,.6);">⌘P</span>
+            </div>
+            <div style="width:1px;height:24px;background:rgba(32,30,29,.25);margin:0 6px;"></div>
+            <div style="height:38px;min-width:190px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <div style="display:flex;flex-direction:column;line-height:1.1;">
+                <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(32,30,29,.5);">AI 모델</span>
+                <span style="font-size:13px;font-weight:600;">Claude Sonnet 4.5</span>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(32,30,29,.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+
+          <div style="flex:none;display:flex;align-items:center;gap:4px;padding:0 16px;border-left:1px solid rgba(32,30,29,.25);">
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>
+              <span style="font-size:13px;font-weight:600;">코멘트 3</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span style="font-size:13px;font-weight:600;">AI 채팅</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span style="font-size:13px;font-weight:600;">히스토리</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span style="font-size:13px;font-weight:600;">내보내기</span>
+            </div>
+            <div style="width:1px;height:22px;background:rgba(32,30,29,.25);margin:0 6px;"></div>
+            <div style="display:flex;align-items:center;height:34px;padding:0 9px;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status strip -->
+        <div style="height:30px;flex:none;border-bottom:1px solid rgba(32,30,29,.25);background:#eae9e9;display:flex;align-items:center;gap:20px;padding:0 16px;font-size:12px;color:rgba(32,30,29,.7);">
+          <span style="display:flex;align-items:center;gap:6px;"><span style="width:7px;height:7px;background:#ec3013;display:inline-block;"></span><span style="font-weight:600;color:#201e1d;">검수 진행 중 · 청크 3/6</span></span>
+          <div style="width:220px;height:6px;background:rgba(32,30,29,.14);"><div style="width:50%;height:6px;background:#ec3013;"></div></div>
+          <span>1분 12초 경과</span>
+          <div style="width:1px;height:14px;background:rgba(32,30,29,.2);"></div>
+          <span>모든 변경사항 저장됨 · 14:32</span>
+          <div style="width:1px;height:14px;background:rgba(32,30,29,.2);"></div>
+          <span>자동 스냅샷 3분 전 (번역 적용)</span>
+          <div style="flex:1;"></div>
+          <span>원문 1,248 단어 · 번역문 1,102 단어 · 진행률 88%</span>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0;">
+
+          <!-- Project sidebar 232 -->
+          <div style="width:232px;flex:none;display:flex;flex-direction:column;background:#eae9e9;border-right:2px solid rgba(32,30,29,.4);">
+            <div style="height:40px;flex:none;padding:0 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(32,30,29,.25);">
+              <div style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.6);">프로젝트</div>
+              <div style="display:flex;align-items:center;gap:5px;height:24px;padding:0 8px;background:#201e1d;color:#f3f2f2;font-size:11px;font-weight:700;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                새 프로젝트
+              </div>
+            </div>
+            <div style="flex:1;overflow:hidden;">
+              <div style="padding:11px 14px;background:#f3f2f2;border-left:3px solid #ec3013;border-bottom:1px solid rgba(32,30,29,.14);">
+                <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PUBG 32.1 패치노트</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                  <div style="flex:1;height:4px;background:rgba(32,30,29,.14);"><div style="width:88%;height:4px;background:#ec3013;"></div></div>
+                  <span style="font-size:10px;font-weight:700;color:#ae1800;">88%</span>
+                </div>
+                <div style="font-size:10px;color:rgba(32,30,29,.5);margin-top:4px;">검수 중 · 오늘 14:32</div>
+              </div>
+              <div style="padding:11px 14px;border-left:3px solid transparent;border-bottom:1px solid rgba(32,30,29,.14);">
+                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">스토어 상품 설명 KR</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                  <div style="flex:1;height:4px;background:rgba(32,30,29,.14);"><div style="width:100%;height:4px;background:rgba(32,30,29,.45);"></div></div>
+                  <span style="font-size:10px;font-weight:700;color:rgba(32,30,29,.5);">완료</span>
+                </div>
+                <div style="font-size:10px;color:rgba(32,30,29,.5);margin-top:4px;">7월 24일</div>
+              </div>
+              <div style="padding:11px 14px;border-left:3px solid transparent;border-bottom:1px solid rgba(32,30,29,.14);">
+                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">시즌 27 시네마틱 자막</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                  <div style="flex:1;height:4px;background:rgba(32,30,29,.14);"><div style="width:42%;height:4px;background:rgba(32,30,29,.45);"></div></div>
+                  <span style="font-size:10px;font-weight:700;color:rgba(32,30,29,.5);">42%</span>
+                </div>
+                <div style="font-size:10px;color:rgba(32,30,29,.5);margin-top:4px;">7월 19일</div>
+              </div>
+              <div style="padding:11px 14px;border-left:3px solid transparent;border-bottom:1px solid rgba(32,30,29,.14);">
+                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Dev Letter #14</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                  <div style="flex:1;height:4px;background:rgba(32,30,29,.14);"><div style="width:100%;height:4px;background:rgba(32,30,29,.45);"></div></div>
+                  <span style="font-size:10px;font-weight:700;color:rgba(32,30,29,.5);">완료</span>
+                </div>
+                <div style="font-size:10px;color:rgba(32,30,29,.5);margin-top:4px;">7월 11일</div>
+              </div>
+              <div style="padding:11px 14px;border-left:3px solid transparent;border-bottom:1px solid rgba(32,30,29,.14);">
+                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">CS 매크로 문구 2차</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+                  <div style="flex:1;height:4px;background:rgba(32,30,29,.14);"><div style="width:16%;height:4px;background:rgba(32,30,29,.45);"></div></div>
+                  <span style="font-size:10px;font-weight:700;color:rgba(32,30,29,.5);">16%</span>
+                </div>
+                <div style="font-size:10px;color:rgba(32,30,29,.5);margin-top:4px;">6월 30일</div>
+              </div>
+            </div>
+            <div style="padding:10px 14px;border-top:1px solid rgba(32,30,29,.25);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:rgba(32,30,29,.65);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              앱 설정
+            </div>
+          </div>
+
+          <!-- Work panel 320 : 검수 -->
+          <div style="width:320px;flex:none;display:flex;flex-direction:column;background:#f3f2f2;border-right:2px solid rgba(32,30,29,.4);">
+            <div style="height:40px;flex:none;display:flex;align-items:stretch;border-bottom:2px solid rgba(32,30,29,.4);">
+              <div style="flex:1;display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:0 14px;background:#201e1d;color:#f3f2f2;font:800 13px/1 Archivo,Pretendard,sans-serif;">
+                검수
+                <span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;background:#ec3013;font:800 10px/1 Archivo,sans-serif;">5</span>
+              </div>
+              <div style="flex:1;display:flex;align-items:center;padding:0 14px;font:600 13px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.6);border-right:1px solid rgba(32,30,29,.25);border-left:1px solid rgba(32,30,29,.25);">코멘트 3</div>
+              <div style="flex:1;display:flex;align-items:center;padding:0 14px;font:600 13px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.6);">용어집</div>
+              <div style="width:38px;flex:none;display:flex;align-items:center;justify-content:center;border-left:1px solid rgba(32,30,29,.25);color:rgba(32,30,29,.55);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="0"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
+              </div>
+            </div>
+
+            <div style="flex:none;padding:12px 14px;border-bottom:1px solid rgba(32,30,29,.25);display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font:800 13px/1 Archivo,Pretendard,sans-serif;">총 5건</span>
+                <div style="flex:1;"></div>
+                <span style="font-size:11px;color:rgba(32,30,29,.55);">심각도 필터</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;padding:7px 9px;border:1px solid #ec3013;background:#fff2ef;">
+                  <span style="font:800 17px/1 Archivo,sans-serif;color:#ae1800;">1</span>
+                  <span style="font-size:11px;font-weight:600;color:#ae1800;">심각</span>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;padding:7px 9px;border:1px solid rgba(32,30,29,.4);">
+                  <span style="font:800 17px/1 Archivo,sans-serif;">2</span>
+                  <span style="font-size:11px;font-weight:600;color:rgba(32,30,29,.65);">중요</span>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;padding:7px 9px;border:1px solid rgba(32,30,29,.4);">
+                  <span style="font:800 17px/1 Archivo,sans-serif;">2</span>
+                  <span style="font-size:11px;font-weight:600;color:rgba(32,30,29,.65);">경미</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;">
+              <div style="padding:12px 14px;border-bottom:1px solid rgba(32,30,29,.2);background:#fff2ef;border-left:3px solid #ec3013;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="width:14px;height:14px;border:1px solid #ec3013;background:#ec3013;display:inline-flex;align-items:center;justify-content:center;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f3f2f2" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                  </span>
+                  <span style="padding:2px 7px;background:#ec3013;color:#f3f2f2;font:800 10px/1.5 Archivo,Pretendard,sans-serif;letter-spacing:.04em;">심각 · 오역</span>
+                  <span style="font-size:11px;color:rgba(32,30,29,.55);">문단 3 · 무기 밸런스</span>
+                </div>
+                <div style="font-size:13px;line-height:1.5;">
+                  <div style="color:rgba(32,30,29,.6);text-decoration:line-through;">초탄 4발 구간의 수직 반동이</div>
+                  <div style="font-weight:700;color:#ae1800;">첫 4발 구간의 수직 반동이</div>
+                </div>
+                <div style="font-size:12px;color:rgba(32,30,29,.65);line-height:1.5;">원문 "first four shots"은 발사 초기 4발을 뜻합니다. '초탄'은 첫 발만 가리키는 게임 용어라 의미가 달라집니다.</div>
+                <div style="display:flex;gap:6px;">
+                  <div style="height:28px;padding:0 12px;background:#ec3013;color:#f3f2f2;display:flex;align-items:center;font:800 12px/1 Archivo,Pretendard,sans-serif;">적용</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;">본문에서 보기</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.6);">무시</div>
+                </div>
+              </div>
+
+              <div style="padding:12px 14px;border-bottom:1px solid rgba(32,30,29,.2);border-left:3px solid transparent;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="width:14px;height:14px;border:1px solid rgba(32,30,29,.4);display:inline-block;"></span>
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.4);font:800 10px/1.5 Archivo,Pretendard,sans-serif;letter-spacing:.04em;">중요 · 누락</span>
+                  <span style="font-size:11px;color:rgba(32,30,29,.55);">문단 1</span>
+                </div>
+                <div style="font-size:13px;line-height:1.5;font-weight:600;">"편의성" 수식이 빠졌습니다 → 커뮤니티에서 제보된 <span style="background:#ffe0d9;">편의성</span> 개선 사항</div>
+                <div style="display:flex;gap:6px;">
+                  <div style="height:28px;padding:0 12px;background:#ec3013;color:#f3f2f2;display:flex;align-items:center;font:800 12px/1 Archivo,Pretendard,sans-serif;">적용</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;">본문에서 보기</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.6);">무시</div>
+                </div>
+              </div>
+
+              <div style="padding:12px 14px;border-bottom:1px solid rgba(32,30,29,.2);border-left:3px solid transparent;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="width:14px;height:14px;border:1px solid rgba(32,30,29,.4);display:inline-block;"></span>
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.4);font:800 10px/1.5 Archivo,Pretendard,sans-serif;letter-spacing:.04em;">중요 · 용어</span>
+                  <span style="font-size:11px;color:rgba(32,30,29,.55);">문단 1 · 용어집 불일치</span>
+                </div>
+                <div style="font-size:13px;line-height:1.5;font-weight:600;">신규 론도 맵 로테이션 → 론도 맵 로테이션 신규 추가</div>
+                <div style="display:flex;gap:6px;">
+                  <div style="height:28px;padding:0 12px;background:#ec3013;color:#f3f2f2;display:flex;align-items:center;font:800 12px/1 Archivo,Pretendard,sans-serif;">적용</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;">본문에서 보기</div>
+                  <div style="height:28px;padding:0 12px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.6);">무시</div>
+                </div>
+              </div>
+
+              <div style="padding:12px 14px;border-bottom:1px solid rgba(32,30,29,.2);border-left:3px solid transparent;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="width:14px;height:14px;border:1px solid rgba(32,30,29,.4);display:inline-block;"></span>
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.4);font:800 10px/1.5 Archivo,Pretendard,sans-serif;letter-spacing:.04em;">경미 · 직역투</span>
+                  <span style="font-size:11px;color:rgba(32,30,29,.55);">문단 4</span>
+                </div>
+                <div style="font-size:13px;line-height:1.5;font-weight:600;">탄창 용량은 변경되지 않습니다 → 탄창 용량은 그대로입니다</div>
+              </div>
+            </div>
+
+            <div style="flex:none;padding:12px 14px;border-top:2px solid rgba(32,30,29,.4);display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="font-size:12px;font-weight:600;color:rgba(32,30,29,.6);">1건 선택됨</span>
+              <div style="display:flex;gap:8px;">
+                <div style="height:32px;padding:0 14px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font:600 12px/1 Archivo,Pretendard,sans-serif;">선택 재번역</div>
+                <div style="height:32px;padding:0 14px;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;font:800 12px/1 Archivo,Pretendard,sans-serif;">모두 적용</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f3f2f2;">
+            <div style="flex:none;height:38px;display:flex;align-items:center;gap:2px;padding:0 12px;border-bottom:1px solid rgba(32,30,29,.25);background:#eae9e9;">
+              <span style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.5);margin-right:10px;">서식</span>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M6 20V4M18 20V4"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 4h-9M14 20H5M15 4 9 20"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg></div>
+              <div style="width:1px;height:18px;background:rgba(32,30,29,.22);margin:0 6px;"></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h11M10 18h11M10 6h11M4 10h2M4 6h1v4M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></div>
+              <div style="padding:5px;display:flex;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></div>
+              <div style="width:1px;height:18px;background:rgba(32,30,29,.22);margin:0 6px;"></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(32,30,29,.65);">
+                <span style="font-weight:600;">본문 14px</span><span>·</span><span style="font-weight:600;">행간 1.4</span>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font-size:12px;font-weight:600;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+                찾기 · 바꾸기 <span style="font-size:11px;padding:1px 4px;background:rgba(32,30,29,.08);color:rgba(32,30,29,.6);">⌘F</span>
+              </div>
+              <div style="width:8px;"></div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font-size:12px;font-weight:600;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/></svg>
+                양쪽 스크롤 동기화
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;display:flex;">
+              <!-- source -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:2px solid rgba(32,30,29,.4);">
+                <div style="height:34px;flex:none;padding:0 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid rgba(32,30,29,.4);background:#eae9e9;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font:800 12px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;">원문 · EN</span>
+                    <span style="font-size:11px;color:rgba(32,30,29,.5);">1,248 단어</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:rgba(32,30,29,.6);">
+                    <span style="display:flex;align-items:center;gap:5px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"/></svg>
+                      복사
+                    </span>
+                    <span>·</span>
+                    <span>숨기기</span>
+                  </div>
+                </div>
+                <div style="flex:1;min-height:0;background:#ffffff;padding:22px 28px;font-size:14px;line-height:1.65;">
+                  <div style="font:800 26px/1.25 Archivo,Pretendard,sans-serif;margin:0 0 14px;">Update 32.1 — Patch Notes</div>
+                  <p style="margin:14px 0;">This update focuses on weapon balance, the new Rondo map rotation, and a set of <span style="background:#ffe0d9;">quality-of-life</span> fixes reported by the community.</p>
+                  <div style="font:800 18px/1.3 Archivo,Pretendard,sans-serif;margin:22px 0 8px;">Weapon Balance</div>
+                  <ul style="list-style:disc;padding-left:22px;margin:12px 0;">
+                    <li style="margin:6px 0;">Beryl M762: vertical recoil reduced by 6% during the <span style="background:#ffe0d9;">first four shots</span>.</li>
+                    <li style="margin:6px 0;">MK14 EBR: damage lowered from 61 to 58; magazine capacity unchanged.</li>
+                    <li style="margin:6px 0;">Throwables now respect the new physics volume near vehicles.</li>
+                  </ul>
+                  <div style="font:800 18px/1.3 Archivo,Pretendard,sans-serif;margin:22px 0 8px;">Known Issues</div>
+                  <p style="margin:14px 0;">Players may occasionally see a delayed inventory refresh after looting a care package. A fix is planned for 32.2.</p>
+                  <p style="margin:14px 0;">Ranked rewards for Season 27 will be distributed within 48 hours of the maintenance window closing.</p>
+                </div>
+              </div>
+              <!-- target -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+                <div style="height:34px;flex:none;padding:0 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid rgba(32,30,29,.4);background:#eae9e9;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font:800 12px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;">번역문 · KO</span>
+                    <span style="display:flex;align-items:center;gap:5px;height:22px;padding:0 8px;border:1px solid rgba(32,30,29,.4);font-size:11px;font-weight:600;">
+                      한국어
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </span>
+                    <span style="font-size:11px;color:rgba(32,30,29,.5);">1,102 단어</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:rgba(32,30,29,.6);">
+                    <span style="display:flex;align-items:center;gap:5px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"/></svg>
+                      복사
+                    </span>
+                    <span>·</span>
+                    <span>숨기기</span>
+                  </div>
+                </div>
+                <div style="flex:1;min-height:0;background:#ffffff;padding:22px 28px;font-size:14px;line-height:1.65;position:relative;">
+                  <div style="font:800 26px/1.25 Archivo,Pretendard,sans-serif;margin:0 0 14px;">업데이트 32.1 — 패치 노트</div>
+                  <p style="margin:14px 0;">이번 업데이트는 무기 밸런스, 신규 론도 맵 로테이션, 그리고 커뮤니티에서 제보된 개선 사항에 초점을 맞췄습니다.</p>
+                  <div style="font:800 18px/1.3 Archivo,Pretendard,sans-serif;margin:22px 0 8px;">무기 밸런스</div>
+                  <ul style="list-style:disc;padding-left:22px;margin:12px 0;">
+                    <li style="margin:6px 0;">베릴 M762: <span style="background:#ffe0d9;border-bottom:2px solid #ec3013;padding-bottom:1px;">초탄 4발 구간</span>의 수직 반동이 6% 감소합니다.</li>
+                    <li style="margin:6px 0;">MK14 EBR: 데미지가 61에서 58로 하향됩니다. 탄창 용량은 변경되지 않습니다.</li>
+                    <li style="margin:6px 0;">투척류는 이제 차량 주변의 신규 물리 볼륨을 따릅니다.</li>
+                  </ul>
+
+                  <!-- inline selection toolbar : 우클릭 전용이던 액션을 노출 -->
+                  <div style="position:absolute;left:28px;top:238px;display:flex;align-items:stretch;border:1px solid #201e1d;background:#f3f2f2;box-shadow:0 3px 10px rgba(45,43,43,.16);">
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:34px;background:#ec3013;color:#f3f2f2;font:800 12px/1 Archivo,Pretendard,sans-serif;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                      부분 재번역
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:34px;border-left:1px solid rgba(32,30,29,.3);font:600 12px/1 Archivo,Pretendard,sans-serif;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      채팅에 추가 <span style="font-size:10px;color:rgba(32,30,29,.5);">⌘L</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:34px;border-left:1px solid rgba(32,30,29,.3);font:600 12px/1 Archivo,Pretendard,sans-serif;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>
+                      코멘트
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 12px;height:34px;border-left:1px solid rgba(32,30,29,.3);font:600 12px/1 Archivo,Pretendard,sans-serif;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"/></svg>
+                      복사
+                    </div>
+                  </div>
+
+                  <div style="font:800 18px/1.3 Archivo,Pretendard,sans-serif;margin:64px 0 8px;">알려진 문제</div>
+                  <p style="margin:14px 0;">보급 상자를 파밍한 뒤 인벤토리 갱신이 지연되는 현상이 발생할 수 있습니다. 32.2에서 수정될 예정입니다.</p>
+                  <p style="margin:14px 0;">시즌 27 랭크 보상은 점검 종료 후 48시간 이내에 지급됩니다.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════ 1c — 과감한 재구성 ══════════════════════════ -->
+    <div id="1c" data-screen-label="1c 과감한 재구성" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:26px;padding:0 9px;background:#ec3013;color:#f3f2f2;font:800 13px/1 Archivo,sans-serif;">1c</span>
+        <span style="font:800 26px/1 Archivo,Pretendard,sans-serif;">과감한 재구성 — 워크플로 스테퍼 + 세그먼트 정렬 뷰</span>
+      </div>
+      <div style="display:flex;gap:32px;font:500 14px/1.5 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.62);max-width:1920px;">
+        <span>① 상단에 5단계 워크플로 스테퍼 + 다음 액션 하나만 크게</span>
+        <span>② 자유 2분할 → 세그먼트 정렬 테이블 (원문↔번역 1:1)</span>
+        <span>③ 세그먼트마다 상태·이슈·코멘트 배지, 행 위 인라인 액션</span>
+        <span>④ 우측 인스펙터 = 선택된 세그먼트의 모든 맥락</span>
+      </div>
+      <div style="width:1920px;height:1080px;overflow:hidden;background:#f3f2f2;box-shadow:0 12px 32px rgba(45,43,43,.22);display:flex;flex-direction:column;font-family:Archivo,Pretendard,system-ui,sans-serif;color:#201e1d;">
+
+        <!-- Workflow header -->
+        <div style="height:72px;flex:none;border-bottom:2px solid rgba(32,30,29,.4);display:flex;align-items:stretch;background:#f3f2f2;">
+          <div style="width:264px;flex:none;display:flex;align-items:center;gap:11px;padding:0 18px;border-right:2px solid rgba(32,30,29,.4);">
+            <img src="assets/app-icon-64.png" alt="" style="width:32px;height:32px;display:block;flex:none;">
+            <div style="min-width:0;">
+              <div style="font:800 15px/1.2 Archivo,Pretendard,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PUBG 32.1 패치노트</div>
+              <div style="font-size:11px;color:rgba(32,30,29,.55);display:flex;align-items:center;gap:6px;margin-top:2px;">EN → KO · 42 세그먼트 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+            </div>
+          </div>
+
+          <div style="flex:1;display:flex;align-items:center;padding:0 22px;gap:0;">
+            <div style="display:flex;align-items:center;gap:10px;padding-right:22px;">
+              <span style="width:22px;height:22px;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;justify-content:center;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div style="line-height:1.15;">
+                <div style="font:800 13px/1.2 Archivo,Pretendard,sans-serif;">원문 준비</div>
+                <div style="font-size:11px;color:rgba(32,30,29,.5);">42 세그먼트</div>
+              </div>
+            </div>
+            <div style="width:34px;height:2px;background:rgba(32,30,29,.35);"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:0 22px;">
+              <span style="width:22px;height:22px;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;justify-content:center;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+              </span>
+              <div style="line-height:1.15;">
+                <div style="font:800 13px/1.2 Archivo,Pretendard,sans-serif;">번역</div>
+                <div style="font-size:11px;color:rgba(32,30,29,.5);">Sonnet 4.5 · 14:12</div>
+              </div>
+            </div>
+            <div style="width:34px;height:2px;background:rgba(32,30,29,.35);"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:0 22px;background:#f0f9ff;border:2px solid #0284c7;height:52px;">
+              <span style="width:22px;height:22px;background:#0284c7;color:#f3f2f2;display:flex;align-items:center;justify-content:center;font:800 12px/1 Archivo,sans-serif;">3</span>
+              <div style="line-height:1.15;">
+                <div style="font:800 13px/1.2 Archivo,Pretendard,sans-serif;color:#075985;">검수 진행 중</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:3px;">
+                  <div style="width:96px;height:5px;background:rgba(32,30,29,.15);"><div style="width:50%;height:5px;background:#0284c7;"></div></div>
+                  <span style="font-size:11px;font-weight:700;color:#075985;">청크 3/6</span>
+                </div>
+              </div>
+            </div>
+            <div style="width:34px;height:2px;background:rgba(32,30,29,.35);"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:0 22px;opacity:.45;">
+              <span style="width:22px;height:22px;border:2px solid rgba(32,30,29,.5);display:flex;align-items:center;justify-content:center;font:800 12px/1 Archivo,sans-serif;">4</span>
+              <div style="line-height:1.15;">
+                <div style="font:800 13px/1.2 Archivo,Pretendard,sans-serif;">폴리싱</div>
+                <div style="font-size:11px;">검수 후 진행</div>
+              </div>
+            </div>
+            <div style="width:34px;height:2px;background:rgba(32,30,29,.35);"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding-left:22px;opacity:.45;">
+              <span style="width:22px;height:22px;border:2px solid rgba(32,30,29,.5);display:flex;align-items:center;justify-content:center;font:800 12px/1 Archivo,sans-serif;">5</span>
+              <div style="line-height:1.15;">
+                <div style="font:800 13px/1.2 Archivo,Pretendard,sans-serif;">내보내기</div>
+                <div style="font-size:11px;">DOCX · PDF</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex:none;display:flex;align-items:center;gap:10px;padding:0 18px;border-left:1px solid rgba(32,30,29,.25);">
+            <div style="display:flex;align-items:center;gap:9px;height:44px;padding:0 20px;background:#0284c7;color:#f3f2f2;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+              <div style="line-height:1.15;text-align:left;">
+                <div style="font:800 15px/1.2 Archivo,Pretendard,sans-serif;">이슈 5건 검토하기</div>
+                <div style="font-size:11px;opacity:.85;">다음 단계 · 심각 1건 포함</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid rgba(32,30,29,.4);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid rgba(32,30,29,.4);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;min-height:0;">
+
+          <!-- Workflow rail -->
+          <div style="width:88px;flex:none;background:#eae9e9;border-right:2px solid rgba(32,30,29,.4);display:flex;flex-direction:column;">
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:#201e1d;color:#f3f2f2;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">문서</span>
+            </div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid rgba(32,30,29,.2);position:relative;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">검수</span>
+              <span style="position:absolute;top:12px;right:20px;min-width:16px;height:16px;padding:0 4px;background:#0284c7;color:#f3f2f2;font:800 10px/16px Archivo,sans-serif;text-align:center;">5</span>
+            </div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid rgba(32,30,29,.2);position:relative;color:rgba(32,30,29,.72);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">코멘트</span>
+              <span style="position:absolute;top:12px;right:22px;min-width:16px;height:16px;padding:0 4px;background:#201e1d;color:#f3f2f2;font:800 10px/16px Archivo,sans-serif;text-align:center;">3</span>
+            </div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid rgba(32,30,29,.2);color:rgba(32,30,29,.72);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">용어집</span>
+            </div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid rgba(32,30,29,.2);color:rgba(32,30,29,.72);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">AI 채팅</span>
+            </div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-bottom:1px solid rgba(32,30,29,.2);color:rgba(32,30,29,.72);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">히스토리</span>
+            </div>
+            <div style="flex:1;"></div>
+            <div style="height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-top:1px solid rgba(32,30,29,.2);color:rgba(32,30,29,.72);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span style="font:800 10px/1 Archivo,Pretendard,sans-serif;">내보내기</span>
+            </div>
+          </div>
+
+          <!-- Segment table -->
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f3f2f2;">
+            <div style="height:38px;flex:none;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:2px solid rgba(32,30,29,.4);background:#eae9e9;">
+              <div style="display:flex;align-items:stretch;border:1px solid rgba(32,30,29,.4);">
+                <span style="padding:0 12px;height:26px;display:flex;align-items:center;background:#201e1d;color:#f3f2f2;font:800 11px/1 Archivo,Pretendard,sans-serif;">정렬 보기</span>
+                <span style="padding:0 12px;height:26px;display:flex;align-items:center;border-left:1px solid rgba(32,30,29,.4);font:600 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.65);">문서 보기</span>
+              </div>
+              <div style="width:1px;height:18px;background:rgba(32,30,29,.22);"></div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid #0284c7;background:#f0f9ff;font:700 11px/1 Archivo,Pretendard,sans-serif;color:#075985;">이슈 있는 세그먼트만 <span style="opacity:.7;">5</span></div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font:600 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.65);">미확정만 12</div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font:600 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.65);">코멘트 3</div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font:600 11px/1 Archivo,Pretendard,sans-serif;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+                찾기 · 바꾸기 <span style="font-size:10px;color:rgba(32,30,29,.5);">⌘F</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid rgba(32,30,29,.4);font:600 11px/1 Archivo,Pretendard,sans-serif;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M6 20V4M18 20V4"/></svg>
+                서식
+              </div>
+            </div>
+
+            <div style="height:34px;flex:none;display:flex;align-items:stretch;border-bottom:2px solid rgba(32,30,29,.4);background:#f3f2f2;font:800 10px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.55);">
+              <div style="width:56px;flex:none;display:flex;align-items:center;padding-left:18px;">#</div>
+              <div style="flex:1;display:flex;align-items:center;padding-left:18px;border-left:1px solid rgba(32,30,29,.2);">원문 · EN</div>
+              <div style="flex:1;display:flex;align-items:center;padding-left:18px;border-left:2px solid rgba(32,30,29,.4);">번역문 · KO</div>
+              <div style="width:132px;flex:none;display:flex;align-items:center;padding-left:14px;border-left:1px solid rgba(32,30,29,.2);">상태</div>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow:hidden;background:#ffffff;">
+              <!-- row 01 -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">01</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font:800 22px/1.25 Archivo,Pretendard,sans-serif;">Update 32.1 — Patch Notes</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font:800 22px/1.25 Archivo,Pretendard,sans-serif;">업데이트 32.1 — 패치 노트</div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font:700 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.55);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    확정
+                  </span>
+                </div>
+              </div>
+
+              <!-- row 02 : has omission issue -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">02</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">This update focuses on weapon balance, the new Rondo map rotation, and a set of <span style="background:#e0f2fe;">quality-of-life</span> fixes reported by the community.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;">이번 업데이트는 무기 밸런스, <span style="background:#e0f2fe;">신규 론도 맵 로테이션</span>, 그리고 커뮤니티에서 제보된 개선 사항에 초점을 맞췄습니다.</div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">누락 1</span>
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">용어 1</span>
+                </div>
+              </div>
+
+              <!-- row 03 : heading -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">03</div>
+                <div style="flex:1;padding:12px 20px;border-left:1px solid rgba(32,30,29,.12);font:800 17px/1.3 Archivo,Pretendard,sans-serif;">Weapon Balance</div>
+                <div style="flex:1;padding:12px 20px;border-left:2px solid rgba(32,30,29,.4);font:800 17px/1.3 Archivo,Pretendard,sans-serif;">무기 밸런스</div>
+                <div style="width:132px;flex:none;padding:14px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font:700 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.55);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    확정
+                  </span>
+                </div>
+              </div>
+
+              <!-- row 04 : ACTIVE, critical issue -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);background:#f5fbff;border-left:4px solid #0284c7;">
+                <div style="width:52px;flex:none;padding:16px 0 0 14px;font:800 12px/1 Archivo,sans-serif;color:#0284c7;">04</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">Beryl M762: vertical recoil reduced by 6% during the <span style="background:#e0f2fe;">first four shots</span>.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;position:relative;">
+                  베릴 M762: <span style="background:#e0f2fe;border-bottom:2px solid #0284c7;padding-bottom:1px;">초탄 4발 구간</span>의 수직 반동이 6% 감소합니다.
+                  <div style="display:flex;align-items:stretch;margin-top:12px;border:1px solid #201e1d;background:#f3f2f2;width:fit-content;">
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 11px;height:30px;background:#0284c7;color:#f3f2f2;font:800 11px/1 Archivo,Pretendard,sans-serif;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                      부분 재번역
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 11px;height:30px;border-left:1px solid rgba(32,30,29,.3);font:600 11px/1 Archivo,Pretendard,sans-serif;">채팅에 추가 <span style="font-size:10px;color:rgba(32,30,29,.5);">⌘L</span></div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 11px;height:30px;border-left:1px solid rgba(32,30,29,.3);font:600 11px/1 Archivo,Pretendard,sans-serif;">코멘트</div>
+                    <div style="display:flex;align-items:center;gap:6px;padding:0 11px;height:30px;border-left:1px solid rgba(32,30,29,.3);font:600 11px/1 Archivo,Pretendard,sans-serif;">확정</div>
+                  </div>
+                </div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                  <span style="padding:2px 7px;background:#0284c7;color:#f3f2f2;font:800 10px/1.5 Archivo,Pretendard,sans-serif;">심각 · 오역</span>
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">코멘트 1</span>
+                </div>
+              </div>
+
+              <!-- row 05 -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">05</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">MK14 EBR: damage lowered from 61 to 58; magazine capacity unchanged.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;">MK14 EBR: 데미지가 61에서 58로 하향됩니다. <span style="background:#e0f2fe;">탄창 용량은 변경되지 않습니다.</span></div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">직역투 1</span>
+                </div>
+              </div>
+
+              <!-- row 06 -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">06</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">Throwables now respect the new physics volume near vehicles.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;">투척류는 이제 차량 주변의 신규 물리 볼륨을 따릅니다.</div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font:700 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.55);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    확정
+                  </span>
+                </div>
+              </div>
+
+              <!-- row 07 heading -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">07</div>
+                <div style="flex:1;padding:12px 20px;border-left:1px solid rgba(32,30,29,.12);font:800 17px/1.3 Archivo,Pretendard,sans-serif;">Known Issues</div>
+                <div style="flex:1;padding:12px 20px;border-left:2px solid rgba(32,30,29,.4);font:800 17px/1.3 Archivo,Pretendard,sans-serif;">알려진 문제</div>
+                <div style="width:132px;flex:none;padding:14px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font:700 11px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.55);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+                    확정
+                  </span>
+                </div>
+              </div>
+
+              <!-- row 08 -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">08</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">Players may occasionally see a delayed inventory refresh after looting a care package. A fix is planned for 32.2.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;">보급 상자를 파밍한 뒤 인벤토리 갱신이 지연되는 현상이 발생할 수 있습니다. 32.2에서 수정될 예정입니다.</div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">미확정</span>
+                </div>
+              </div>
+
+              <!-- row 09 -->
+              <div style="display:flex;align-items:stretch;border-bottom:1px solid rgba(32,30,29,.15);">
+                <div style="width:56px;flex:none;padding:16px 0 0 18px;font:800 12px/1 Archivo,sans-serif;color:rgba(32,30,29,.4);">09</div>
+                <div style="flex:1;padding:14px 20px;border-left:1px solid rgba(32,30,29,.12);font-size:14px;line-height:1.6;">Ranked rewards for Season 27 will be distributed within 48 hours of the maintenance window closing.</div>
+                <div style="flex:1;padding:14px 20px;border-left:2px solid rgba(32,30,29,.4);font-size:14px;line-height:1.6;">시즌 27 랭크 보상은 점검 종료 후 48시간 이내에 지급됩니다.</div>
+                <div style="width:132px;flex:none;padding:16px 14px;border-left:1px solid rgba(32,30,29,.12);">
+                  <span style="padding:2px 7px;border:1px solid rgba(32,30,29,.45);font:700 10px/1.5 Archivo,Pretendard,sans-serif;">미확정</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- bottom composer -->
+            <div style="height:52px;flex:none;border-top:2px solid rgba(32,30,29,.4);background:#eae9e9;display:flex;align-items:center;gap:12px;padding:0 18px;">
+              <span style="display:flex;align-items:center;gap:7px;height:32px;padding:0 12px;border:1px solid rgba(32,30,29,.4);background:#f3f2f2;font:700 12px/1 Archivo,Pretendard,sans-serif;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                세그먼트 04
+              </span>
+              <div style="flex:1;height:32px;border:1px solid rgba(32,30,29,.4);background:#ffffff;display:flex;align-items:center;padding:0 12px;font-size:13px;color:rgba(32,30,29,.45);">선택한 세그먼트에 대해 물어보거나 수정을 요청하세요…</div>
+              <span style="font-size:11px;color:rgba(32,30,29,.5);">⌘K</span>
+              <div style="height:32px;padding:0 16px;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;font:800 12px/1 Archivo,Pretendard,sans-serif;">보내기</div>
+            </div>
+          </div>
+
+          <!-- Inspector -->
+          <div style="width:376px;flex:none;background:#f3f2f2;border-left:2px solid rgba(32,30,29,.4);display:flex;flex-direction:column;">
+            <div style="height:38px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:2px solid rgba(32,30,29,.4);background:#eae9e9;">
+              <span style="font:800 11px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;">세그먼트 04 — 인스펙터</span>
+              <div style="display:flex;align-items:center;gap:8px;color:rgba(32,30,29,.55);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;">
+              <div style="padding:16px;border-bottom:1px solid rgba(32,30,29,.22);display:flex;flex-direction:column;gap:10px;background:#f0f9ff;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="padding:3px 8px;background:#0284c7;color:#f3f2f2;font:800 10px/1.5 Archivo,Pretendard,sans-serif;letter-spacing:.04em;">심각 · 오역</span>
+                  <span style="font-size:11px;color:rgba(32,30,29,.55);">Claude Sonnet 4.5 검출</span>
+                </div>
+                <div style="font-size:13px;line-height:1.55;">
+                  <div style="color:rgba(32,30,29,.55);text-decoration:line-through;">초탄 4발 구간의 수직 반동이 6% 감소합니다.</div>
+                  <div style="font-weight:700;color:#075985;margin-top:4px;">첫 4발 구간의 수직 반동이 6% 감소합니다.</div>
+                </div>
+                <div style="font-size:12px;line-height:1.55;color:rgba(32,30,29,.7);">원문 "first four shots"은 발사 초기 4발 전체를 뜻합니다. '초탄'은 첫 발만 가리키는 관용어라 사거리 감각이 달라집니다.</div>
+                <div style="display:flex;gap:8px;">
+                  <div style="flex:1;height:34px;background:#0284c7;color:#f3f2f2;display:flex;align-items:center;padding:0 14px;font:800 12px/1 Archivo,Pretendard,sans-serif;">수정 적용 <span style="margin-left:auto;font-size:11px;opacity:.8;">⏎</span></div>
+                  <div style="height:34px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;padding:0 14px;font:600 12px/1 Archivo,Pretendard,sans-serif;color:rgba(32,30,29,.65);">무시</div>
+                </div>
+              </div>
+
+              <div style="padding:16px;border-bottom:1px solid rgba(32,30,29,.22);display:flex;flex-direction:column;gap:10px;">
+                <div style="font:800 11px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.55);">이 세그먼트의 용어</div>
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid rgba(32,30,29,.14);">
+                    <span style="font-weight:600;">Beryl M762</span>
+                    <span style="color:rgba(32,30,29,.65);">베릴 M762</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid rgba(32,30,29,.14);">
+                    <span style="font-weight:600;">vertical recoil</span>
+                    <span style="color:rgba(32,30,29,.65);">수직 반동</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                    <span style="font-weight:600;">first four shots</span>
+                    <span style="color:#075985;font-weight:700;">첫 4발 <span style="font-weight:500;font-size:11px;">(신규 제안)</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:16px;border-bottom:1px solid rgba(32,30,29,.22);display:flex;flex-direction:column;gap:10px;">
+                <div style="font:800 11px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.55);">코멘트 1</div>
+                <div style="display:flex;gap:10px;">
+                  <div style="width:26px;height:26px;flex:none;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;justify-content:center;font:800 11px/1 Archivo,sans-serif;">현</div>
+                  <div style="min-width:0;">
+                    <div style="font-size:12px;font-weight:700;">김현상 <span style="font-weight:500;color:rgba(32,30,29,.5);">14:26</span></div>
+                    <div style="font-size:13px;line-height:1.5;margin-top:3px;">밸런스 수치는 QA 시트 기준으로 한 번 더 확인 필요. 6% 맞는지 체크해주세요.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+                <div style="font:800 11px/1 Archivo,Pretendard,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(32,30,29,.55);">버전 기록</div>
+                <div style="display:flex;flex-direction:column;gap:9px;font-size:12px;">
+                  <div style="display:flex;gap:10px;">
+                    <span style="width:44px;flex:none;color:rgba(32,30,29,.5);">14:12</span>
+                    <span style="flex:1;">AI 번역 적용 <span style="color:rgba(32,30,29,.5);">Sonnet 4.5</span></span>
+                  </div>
+                  <div style="display:flex;gap:10px;">
+                    <span style="width:44px;flex:none;color:rgba(32,30,29,.5);">14:19</span>
+                    <span style="flex:1;">직접 편집 — '감소됩니다' → '감소합니다'</span>
+                  </div>
+                  <div style="display:flex;gap:10px;">
+                    <span style="width:44px;flex:none;color:rgba(32,30,29,.5);">14:31</span>
+                    <span style="flex:1;">검수에서 오역 1건 검출</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="height:44px;flex:none;border-top:2px solid rgba(32,30,29,.4);background:#eae9e9;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;color:rgba(32,30,29,.65);">
+              <span>이슈 1 / 5</span>
+              <div style="display:flex;gap:8px;">
+                <span style="height:26px;padding:0 11px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font-weight:600;">이전</span>
+                <span style="height:26px;padding:0 11px;border:1px solid rgba(32,30,29,.4);display:flex;align-items:center;font-weight:600;">다음 이슈 →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080}}"></script>
+</body>
+</html>
