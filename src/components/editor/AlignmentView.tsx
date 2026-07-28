@@ -247,7 +247,7 @@ export function AlignmentView(): JSX.Element {
       <div className="h-9 shrink-0 px-[18px] flex items-center border-b border-editor-border">
         <span className="h-6 px-[9px] inline-flex items-center gap-1.5 bg-editor-surface border border-editor-border rounded text-[11px] font-semibold text-editor-muted">
           <Lock size={12} />
-          {t('editor.alignment.readOnly', '읽기 전용')}
+          {t('editor.alignment.readOnly')}
         </span>
       </div>
 
@@ -258,13 +258,13 @@ export function AlignmentView(): JSX.Element {
       >
         <div className={`w-[52px] shrink-0 pl-[18px] ${HEADER_CELL_CLASS}`}>#</div>
         <div className={`flex-1 min-w-0 pl-[18px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {columnLabel(t('editor.alignment.sourceColumn', '원문'), sourceLanguage)}
+          {columnLabel(t('editor.alignment.sourceColumn'), sourceLanguage)}
         </div>
         <div className={`flex-1 min-w-0 pl-[18px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {columnLabel(t('editor.alignment.targetColumn', '번역문'), targetLanguage)}
+          {columnLabel(t('editor.alignment.targetColumn'), targetLanguage)}
         </div>
         <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {t('editor.alignment.alignColumn', '정렬')}
+          {t('editor.alignment.alignColumn')}
         </div>
       </div>
 
@@ -272,7 +272,7 @@ export function AlignmentView(): JSX.Element {
       <div className="flex-1 min-h-0 overflow-auto">
         {blocks.length === 0 ? (
           <div className="px-[18px] py-6 text-sm text-editor-muted">
-            {t('editor.alignment.empty', '정렬할 문단이 없습니다.')}
+            {t('editor.alignment.empty')}
           </div>
         ) : (
           blocks.map((block) => {
@@ -303,7 +303,7 @@ export function AlignmentView(): JSX.Element {
                     {mismatchHeadline(t, block, totals)}
                   </span>
                   <span className="text-[11px] text-amber-800">
-                    {t('editor.alignment.mismatch.note', '이 구간은 짝을 추정하지 않고 그대로 표시합니다.')}
+                    {t('editor.alignment.mismatch.note')}
                   </span>
                   {(() => {
                     const entry = firstUnitOf(block);
@@ -315,7 +315,7 @@ export function AlignmentView(): JSX.Element {
                         className="ml-auto h-6 px-2.5 shrink-0 border border-amber-700 bg-white rounded text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
                         data-testid="alignment-band-open"
                       >
-                        {t('editor.alignment.mismatch.openInDocument', '이 구간 문서 보기로 열기 ↗')}
+                        {t('editor.alignment.mismatch.openInDocument')}
                       </button>
                     );
                   })()}
@@ -352,7 +352,7 @@ export function AlignmentView(): JSX.Element {
       {/* 하단 정렬 요약 */}
       <div className="h-14 shrink-0 border-t border-editor-border bg-editor-surface flex items-center gap-[18px] px-[18px]">
         <span className="text-[10px] font-extrabold tracking-[.1em] uppercase text-editor-muted shrink-0">
-          {t('editor.alignment.summaryLabel', '정렬 상태')}
+          {t('editor.alignment.summaryLabel')}
         </span>
         <span className="text-sm font-bold shrink-0">
           {t('editor.alignment.summaryTotal', { count: alignResult.totalUnits })}
@@ -374,7 +374,7 @@ export function AlignmentView(): JSX.Element {
         {/* degraded를 조용히 넘기지 않는다 — 순번 폴백 결과를 정상으로 믿게 두면 안 된다 */}
         {alignResult.degraded && (
           <span className="text-[11px] font-semibold text-amber-700 shrink-0" data-testid="alignment-degraded">
-            {t('editor.alignment.degraded', '정렬 정확도 낮음 (문단 수 과다)')}
+            {t('editor.alignment.degraded')}
           </span>
         )}
 
@@ -386,7 +386,7 @@ export function AlignmentView(): JSX.Element {
           data-testid="alignment-export-report"
         >
           <Download size={12} />
-          {t('editor.alignment.exportReport', '정렬 리포트')}
+          {t('editor.alignment.exportReport')}
         </button>
       </div>
     </div>

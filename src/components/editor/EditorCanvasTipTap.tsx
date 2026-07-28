@@ -1492,11 +1492,11 @@ export function EditorCanvasTipTap(): JSX.Element {
         <div
           className="flex items-center shrink-0 rounded-md border border-editor-border overflow-hidden"
           role="group"
-          aria-label={t('editor.viewMode.label', '보기 모드')}
+          aria-label={t('editor.viewMode.label')}
         >
           {([
-            { mode: 'document' as const, label: t('editor.viewMode.document', '문서 보기') },
-            { mode: 'alignment' as const, label: t('editor.viewMode.alignment', '정렬 검사') },
+            { mode: 'document' as const, label: t('editor.viewMode.document') },
+            { mode: 'alignment' as const, label: t('editor.viewMode.alignment') },
           ]).map(({ mode, label }) => (
             <button
               key={mode}

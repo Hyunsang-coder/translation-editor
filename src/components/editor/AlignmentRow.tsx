@@ -99,7 +99,7 @@ export function AlignmentRow({
         </div>
       ) : (
         <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} flex items-center`}>
-          <span className={placeholderClass}>{t('editor.alignment.mismatch.noSource', '대응하는 원문 없음')}</span>
+          <span className={placeholderClass}>{t('editor.alignment.mismatch.noSource')}</span>
         </div>
       )}
 
@@ -116,13 +116,13 @@ export function AlignmentRow({
               className="ml-2.5 h-6 px-2.5 inline-flex items-center align-middle border border-primary-500 bg-white rounded text-[11px] font-bold text-accent-deep hover:bg-accent-tint transition-colors"
               data-testid="alignment-row-edit"
             >
-              {t('editor.alignment.editUnit', '이 문단 편집 ↗')}
+              {t('editor.alignment.editUnit')}
             </button>
           )}
         </div>
       ) : (
         <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} flex items-center`}>
-          <span className={placeholderClass}>{t('editor.alignment.mismatch.noTarget', '대응하는 번역문 없음')}</span>
+          <span className={placeholderClass}>{t('editor.alignment.mismatch.noTarget')}</span>
         </div>
       )}
 
