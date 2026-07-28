@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, MessageSquare, Clock3, Download, NotebookPen, PanelLeft, PanelLeftOpen } from 'lucide-react';
+import { Settings, MessageSquare, Clock3, Download, NotebookPen, RotateCcw } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { isChatPanel } from '@/types';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCommentStore } from '@/stores/commentStore';
 
+import { ProjectPicker } from '@/components/layout/ProjectPicker';
 import { WorkflowActions } from '@/components/layout/WorkflowActions';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
@@ -24,7 +25,7 @@ const TOOL_LABEL_CLASS = 'hidden xl:inline';
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, openCommentsPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId, projectSidebarCollapsed, toggleProjectSidebar } =
+  const { openPanel, openCommentsPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId } =
     useUIStore(useShallow((s) => ({
       openPanel: s.openPanel,
       openCommentsPanel: s.openCommentsPanel,
@@ -32,8 +33,6 @@ export function Toolbar(): JSX.Element {
       leftSidebar: s.leftSidebar,
       rightSidebar: s.rightSidebar,
       floatingChatSessionId: s.floatingChatSessionId,
-      projectSidebarCollapsed: s.projectSidebarCollapsed,
-      toggleProjectSidebar: s.toggleProjectSidebar,
     })));
   const project = useProjectStore((s) => s.project);
   const commentCount = useCommentStore((s) => s.comments.length);
@@ -101,45 +100,39 @@ export function Toolbar(): JSX.Element {
 
   return (
     <header className="h-[52px] border-b border-editor-border bg-editor-surface flex items-center justify-between gap-3 px-2 shrink-0">
-      {/* 좌측: 사이드바 토글 + 프로젝트 제목 (아래 영역이 이 프로젝트 소속임을 나타냄) */}
-      <div className="flex items-center gap-1.5 min-w-0 shrink">
-        <button
-          type="button"
-          onClick={toggleProjectSidebar}
-          className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors shrink-0"
-          title={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
-          aria-label={projectSidebarCollapsed ? t('projectSidebar.showSidebar') : t('projectSidebar.collapseSidebar')}
-          data-testid="toolbar-sidebar-toggle"
-        >
-          {projectSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeft size={18} />}
-        </button>
-        <h1 className="text-sm font-extrabold text-editor-text truncate">
-          {project?.metadata.title ?? t('common.untitledProject')}
-        </h1>
+      {/* 좌측: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
+      <div className="flex items-center min-w-0 shrink">
+        <ProjectPicker />
       </div>
 
-      {/* 중앙: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델 */}
-      <div className="shrink-0">
-        <WorkflowActions />
-      </div>
+      {/* 중앙: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
+      {project && (
+        <div className="shrink-0">
+          <WorkflowActions />
+        </div>
+      )}
 
       {/* 우측: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
       <div className="flex items-center gap-1 min-w-0 justify-end">
-        {/* Chrome-style zoom indicator */}
-        {zoomVisible && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-editor-bg border border-editor-border text-[11px] text-editor-muted animate-in fade-in duration-150 shrink-0">
-            <span className="font-medium">{zoomPercent}%</span>
-            {zoomPercent !== 100 && (
-              <button
-                type="button"
-                onClick={resetEditorZoom}
-                className="px-1 py-0.5 rounded text-[11px] hover:text-editor-text hover:bg-editor-border transition-colors"
-                title={t('editor.zoom.reset', '초기화')}
-              >
-                {t('editor.zoom.reset', 'Reset')}
-              </button>
-            )}
-          </div>
+        {/* 배율 인디케이터 — 100%가 아니면 계속 보인다(되돌릴 방법이 항상 있어야 한다).
+            100%일 때는 방금 조작했을 때만 잠깐 보여주고 사라진다. */}
+        {(zoomVisible || zoomPercent !== 100) && (
+          zoomPercent === 100 ? (
+            <span className="px-2 h-[26px] inline-flex items-center rounded-md bg-editor-bg border border-editor-border text-[11px] font-medium text-editor-muted animate-in fade-in duration-150 shrink-0 tabular-nums">
+              100%
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={resetEditorZoom}
+              className="px-2 h-[26px] inline-flex items-center gap-1 rounded-md bg-editor-bg border border-primary-500 text-[11px] font-medium text-primary-600 dark:text-primary-400 hover:bg-editor-border transition-colors shrink-0 tabular-nums focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+              title={t('editor.zoom.resetTo100', '클릭하면 100%로 되돌립니다')}
+              data-testid="toolbar-zoom-reset"
+            >
+              <span>{zoomPercent}%</span>
+              <RotateCcw size={11} />
+            </button>
+          )
         )}
 
         <button

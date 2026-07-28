@@ -12,12 +12,4 @@ export const LAYOUT = {
   CHAT_SIDEBAR_MIN: 260,
   /** 사이드바 최대 너비 (px) — 드래그 상한 */
   SIDEBAR_MAX: 600,
-  /** ProjectSidebar 기본 확장 너비 (px) */
-  PROJECT_EXPANDED: 160,
-  /** ProjectSidebar 최소 너비 (px) — 리사이즈 하한 */
-  PROJECT_MIN: 160,
-  /** ProjectSidebar 최대 너비 (px) — 리사이즈 상한 */
-  PROJECT_MAX: 300,
-  /** ProjectSidebar 축소 너비 (px) */
-  PROJECT_COLLAPSED: 48,
 } as const;

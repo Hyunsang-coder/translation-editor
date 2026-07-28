@@ -25,7 +25,9 @@ const TEXT = {
 };
 
 async function openAppSettings(page: Page): Promise<void> {
-  await page.getByRole('button', { name: TEXT.appSettings }).click();
+  // 앱 설정 진입점은 툴바의 프로젝트 드롭다운 하단에 있다.
+  await page.getByTestId('project-picker-trigger').click();
+  await page.getByTestId('project-app-settings-button').click();
   await expect(page.getByRole('heading', { name: TEXT.appSettings })).toBeVisible();
 }
 
@@ -37,7 +39,9 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.getByRole('button', { name: '새 프로젝트 시작하기' })).toBeVisible();
-    await expect(page.getByRole('button', { name: TEXT.appSettings })).toBeVisible();
+    // 프로젝트가 없어도 툴바(프로젝트 드롭다운)는 렌더된다 — 목록·앱 설정 진입점이 여기뿐이다.
+    await page.getByTestId('project-picker-trigger').click();
+    await expect(page.getByTestId('project-app-settings-button')).toBeVisible();
   });
 
   test('Phase 1: 앱 설정에서 OpenAI/Anthropic API 키 등록', async ({ page }) => {
@@ -189,7 +193,11 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    const projectRow = page.locator('[title="API Integration Guide Translation"]').first();
+    await page.getByTestId('project-picker-trigger').click();
+    const projectRow = page
+      .getByTestId('project-picker-menu')
+      .locator('[title="API Integration Guide Translation"]')
+      .first();
     await expect(projectRow).toBeVisible();
 
     await projectRow.click({ button: 'right' });

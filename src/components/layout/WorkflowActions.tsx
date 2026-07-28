@@ -149,16 +149,15 @@ export function WorkflowActions(): JSX.Element {
 
       <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />
 
-      {/* 번역 모델 */}
+      {/* 번역 모델 — 워크플로 버튼보다 낮은 위계라 기존 md 사이즈를 그대로 쓴다 */}
       <Select
         value={translationModel}
         onChange={setTranslationModel}
         options={enabledPresets}
         aria-label={t('editor.translationModelAriaLabel')}
         title={t('editor.translationModel')}
-        size="lg"
-        caption={t('workflow.aiModel')}
-        className="min-w-[150px]"
+        size="md"
+        className="min-w-[118px]"
       />
     </div>
   );

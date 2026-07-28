@@ -27,9 +27,7 @@ export interface SelectProps {
   className?: string;
   'aria-label'?: string;
   title?: string;
-  size?: 'sm' | 'md' | 'lg';
-  /** lg 사이즈에서 선택값 위에 표시할 캡션 (2행 트리거) */
-  caption?: string;
+  size?: 'sm' | 'md';
   /** 드롭다운 열림 방향: 'bottom' (기본) 또는 'top' */
   anchor?: 'bottom' | 'top';
   'data-testid'?: string;
@@ -55,7 +53,6 @@ export function Select({
   'aria-label': ariaLabel,
   title,
   size = 'md',
-  caption,
   anchor: anchorPosition = 'bottom',
   'data-testid': dataTestId,
 }: SelectProps): JSX.Element {
@@ -75,9 +72,7 @@ export function Select({
 
   const sizeClasses = size === 'sm'
     ? 'h-7 text-[11px] px-2'
-    : size === 'lg'
-      ? 'h-[38px] text-[13px] px-3'
-      : 'h-8 text-[11px] px-3';
+    : 'h-8 text-[11px] px-3';
 
   // anchor prop 설정 (Headless UI가 자동으로 Portal과 위치 처리)
   const anchorConfig = anchorPosition === 'top'
@@ -97,14 +92,7 @@ export function Select({
           title={title}
           data-testid={dataTestId}
         >
-          {caption && size === 'lg' ? (
-            <span className="flex flex-col items-start min-w-0 leading-tight">
-              <span className="text-[10px] uppercase tracking-[.1em] text-editor-muted">{caption}</span>
-              <span className="truncate font-semibold">{getSelectedLabel()}</span>
-            </span>
-          ) : (
-            <span className="truncate">{getSelectedLabel()}</span>
-          )}
+          <span className="truncate">{getSelectedLabel()}</span>
           <svg
             className="w-3 h-3 text-editor-muted shrink-0"
             fill="none"

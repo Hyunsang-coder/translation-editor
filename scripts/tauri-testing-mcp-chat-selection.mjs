@@ -65,17 +65,18 @@ async function runScenario(client) {
 
   try {
     await callTool(client, 'tauri_dom_wait_for_selector', {
-      selector: "button[data-testid='toolbar-sidebar-toggle']",
+      selector: "button[data-testid='project-picker-trigger']",
       timeout: 15000,
       visible: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 750));
+    // 프로젝트 목록은 툴바 드롭다운 안에 있다 — 닫혀 있으면 연다
     try {
       await callTool(client, 'tauri_dom_query_selector', {
         selector: "button[data-testid='project-new-button']",
       });
     } catch {
-      await clickWhenReady(client, "button[data-testid='toolbar-sidebar-toggle']");
+      await clickWhenReady(client, "button[data-testid='project-picker-trigger']");
     }
     await clickWhenReady(client, "button[data-testid='project-new-button']", 15000);
     await callTool(client, 'tauri_dom_wait_for_selector', {

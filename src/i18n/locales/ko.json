@@ -317,8 +317,6 @@
   "projectSidebar": {
     "projects": "프로젝트",
     "appSettings": "앱 설정",
-    "showSidebar": "사이드바 표시",
-    "collapseSidebar": "프로젝트 사이드바 접기",
     "newProject": "새 프로젝트",
     "projectTitlePlaceholder": "프로젝트 제목"
   },
@@ -393,7 +391,8 @@
     "hideTarget": "숨기기",
     "showTarget": "번역문 표시",
     "zoom": {
-      "reset": "줌 초기화"
+      "reset": "줌 초기화",
+      "resetTo100": "클릭하면 100%로 되돌립니다"
     },
     "chunks": "섹션",
     "completedIn": "완료",

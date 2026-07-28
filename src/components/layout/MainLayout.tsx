@@ -8,7 +8,6 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { ProjectSidebar } from '@/components/layout/ProjectSidebar';
 import { createProject } from '@/tauri/project';
 import { FloatingChatPanel } from '@/components/chat/FloatingChatPanel';
 
@@ -19,7 +18,7 @@ const ReviewTestPanel = lazy(() =>
 
 /**
  * 메인 레이아웃 컴포넌트
- * Panel Layout: [ProjectSidebar] | [LeftSidebar] | Editor | [RightSidebar]
+ * Panel Layout: [LeftSidebar] | Editor | [RightSidebar]
  * 각 패널은 자체적으로 접힌 상태(아이콘만)와 펼친 상태를 가짐
  */
 export function MainLayout(): JSX.Element {
@@ -122,15 +121,13 @@ export function MainLayout(): JSX.Element {
     <div className="flex flex-col h-screen">
       <ToastHost />
 
-      {/* 전역 상단 헤더 밴드 — 창 전체 폭을 덮어 아래 모든 영역(목록/사이드바/에디터)이
-          현재 프로젝트에 속함을 위계로 드러낸다. (프로젝트가 있을 때만) */}
-      {project && <Toolbar />}
+      {/* 전역 상단 헤더 밴드 — 창 전체 폭을 덮어 아래 모든 영역이 현재 프로젝트에
+          속함을 위계로 드러낸다. 프로젝트가 없을 때도 렌더한다 — 프로젝트 목록과
+          앱 설정 진입점(ProjectPicker)이 여기에만 있기 때문. */}
+      <Toolbar />
 
-      {/* 메인 영역: [ProjectSidebar] | [LeftSidebar] | 에디터 | [RightSidebar] */}
+      {/* 메인 영역: [LeftSidebar] | 에디터 | [RightSidebar] */}
       <main ref={zoomContainerRef} className="flex-1 flex overflow-hidden min-h-0 relative">
-        {/* 프로젝트 사이드바 (접히면 완전히 숨김) */}
-        <ProjectSidebar />
-
         {/* 좌측 사이드바 (프로젝트 있을 때만) */}
         {project && (
           <ErrorBoundary name="LeftSidebar">
@@ -154,7 +151,7 @@ export function MainLayout(): JSX.Element {
                     <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
                     <p className="text-editor-muted leading-relaxed">
                       문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
-                      기존 프로젝트가 있다면 왼쪽 사이드바에서 선택할 수 있습니다.
+                      기존 프로젝트가 있다면 상단의 프로젝트 메뉴에서 선택할 수 있습니다.
                     </p>
                   </div>
                   <button

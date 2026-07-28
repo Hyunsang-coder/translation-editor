@@ -137,6 +137,8 @@ async function runScenario() {
   try {
     await client.connect(transport);
     await callTool(client, 'tauri_dom_wait_for_text', { text: 'New', timeout: 15000 });
+    // 프로젝트 목록은 툴바 드롭다운 안에 있다 — 먼저 연다
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
     await callTool(client, 'tauri_dom_query_selector', { selector: "button[data-testid='project-new-button']" });
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-new-button']" });
     await callTool(client, 'tauri_dom_wait_for_selector', {

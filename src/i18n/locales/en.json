@@ -319,8 +319,6 @@
   "projectSidebar": {
     "projects": "Projects",
     "appSettings": "App Settings",
-    "showSidebar": "Show sidebar",
-    "collapseSidebar": "Collapse project sidebar",
     "newProject": "New Project",
     "projectTitlePlaceholder": "Project title"
   },
@@ -395,7 +393,8 @@
     "hideTarget": "Hide",
     "showTarget": "Show Translation",
     "zoom": {
-      "reset": "Reset Zoom"
+      "reset": "Reset Zoom",
+      "resetTo100": "Click to reset to 100%"
     },
     "chunks": "sections",
     "completedIn": "Completed in",

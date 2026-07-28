@@ -276,6 +276,8 @@ async function runScenario(client) {
   // ── Phase 1: 프로젝트 생성 ──
   log('\n═══ Phase 1: Create Project ═══');
   await callTool(client, 'tauri_dom_wait_for_text', { text: 'New', timeout: 15000 });
+  // 프로젝트 목록은 툴바 드롭다운 안에 있다 — 먼저 연다
+  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
   await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-new-button']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: "input[data-testid='project-title-input']", timeout: 5000 });
   await callTool(client, 'tauri_dom_fill', { selector: "input[data-testid='project-title-input']", value: projectTitle });
@@ -285,6 +287,8 @@ async function runScenario(client) {
 
   // ── Phase 2: Anthropic 활성화 ──
   log('\n═══ Phase 2: Ensure Anthropic Enabled ═══');
+  // 앱 설정 진입점도 프로젝트 드롭다운 하단에 있다
+  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='project-app-settings-button']", timeout: 10000 });
   await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-app-settings-button']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: '#anthropic-enabled', timeout: 10000 });

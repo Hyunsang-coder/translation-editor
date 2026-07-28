@@ -729,7 +729,6 @@ export interface EditorUIState {
   selectedBlockId: string | null;
   showDiff: boolean;
   sidebarCollapsed: boolean;
-  projectSidebarCollapsed: boolean;
 }
 
 /**
