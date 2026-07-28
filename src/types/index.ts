@@ -261,7 +261,7 @@ export type ProjectMemoryCategory =
   | 'reference_fact'
   | 'general';
 
-export type ProjectMemoryStatus = 'proposed' | 'active' | 'archived';
+export type ProjectMemoryStatus = 'proposed' | 'active';
 
 export interface ProjectMemoryItem {
   id: string;
@@ -274,7 +274,6 @@ export interface ProjectMemoryItem {
   sourceSessionId?: string;
   sourceMessageId?: string;
   sourceSelectionId?: string;
-  supersedesId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -366,7 +365,8 @@ export interface ProjectMemoryChangeProposal {
   proposalId: string;
   /** 제안이 생성된 프로젝트. 적용 시점에 프로젝트가 바뀌었는지 검증한다. */
   projectId?: string;
-  operation: 'add' | 'replace' | 'archive';
+  /** `archive`는 삭제 시맨틱으로 통일되기 전의 legacy 값으로, 읽기 시 `delete`로 정규화한다. */
+  operation: 'add' | 'replace' | 'delete';
   category: ProjectMemoryCategory;
   content?: string;
   targetItemId?: string;

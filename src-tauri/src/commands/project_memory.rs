@@ -108,7 +108,6 @@ pub struct ReplaceProjectMemoryItemArgs {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplaceProjectMemoryItemResult {
-    pub archived: ProjectMemoryItemRow,
     pub item: ProjectMemoryItemRow,
     pub revision: i64,
 }
@@ -119,7 +118,7 @@ pub async fn replace_project_memory_item(
     db_state: State<'_, DbState>,
 ) -> CommandResult<ReplaceProjectMemoryItemResult> {
     run_db_task(&db_state, move |db| {
-        let (archived, item, revision) = db
+        let (item, revision) = db
             .replace_project_memory_item(
                 &args.project_id,
                 &args.target_item_id,
@@ -131,39 +130,28 @@ pub async fn replace_project_memory_item(
                 args.source_selection_id.as_deref(),
             )
             .map_err(CommandError::from)?;
-        Ok(ReplaceProjectMemoryItemResult {
-            archived,
-            item,
-            revision,
-        })
+        Ok(ReplaceProjectMemoryItemResult { item, revision })
     })
     .await
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ArchiveProjectMemoryItemArgs {
+pub struct DeleteProjectMemoryItemArgs {
     pub project_id: String,
     pub item_id: String,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchiveProjectMemoryItemResult {
-    pub item: ProjectMemoryItemRow,
-    pub revision: i64,
-}
-
 #[tauri::command]
-pub async fn archive_project_memory_item(
-    args: ArchiveProjectMemoryItemArgs,
+pub async fn delete_project_memory_item(
+    args: DeleteProjectMemoryItemArgs,
     db_state: State<'_, DbState>,
-) -> CommandResult<ArchiveProjectMemoryItemResult> {
+) -> CommandResult<ProjectMemoryRevisionResult> {
     run_db_task(&db_state, move |db| {
-        let (item, revision) = db
-            .archive_project_memory_item(&args.project_id, &args.item_id)
+        let revision = db
+            .delete_project_memory_item(&args.project_id, &args.item_id)
             .map_err(CommandError::from)?;
-        Ok(ArchiveProjectMemoryItemResult { item, revision })
+        Ok(ProjectMemoryRevisionResult { revision })
     })
     .await
 }

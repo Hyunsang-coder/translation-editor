@@ -380,12 +380,12 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         createdAt: 0,
         updatedAt: 0,
       };
-      const archivedItem: ProjectMemoryItem = {
+      const proposedItem: ProjectMemoryItem = {
         ...memoryItem,
         id: 'm2',
-        content: '더 이상 유효하지 않은 설정',
+        content: '아직 승인되지 않은 설정',
         normalizedHash: 'hash-m2',
-        status: 'archived',
+        status: 'proposed',
       };
       const term: ForbiddenTerm = {
         id: 't1',
@@ -398,7 +398,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       };
       useProjectMemoryStore.setState({
         activeProjectId: 'project-1',
-        items: [memoryItem, archivedItem],
+        items: [memoryItem, proposedItem],
         forbiddenTerms: [term],
         revision: 7,
       });

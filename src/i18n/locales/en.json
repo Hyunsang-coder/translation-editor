@@ -551,9 +551,33 @@
   "memory": {
     "settingsTitle": "Project memory",
     "settingsDescription": "Approved items are reused in new chats, translation, review, and polishing.",
+    "category": {
+      "domain": "Domain",
+      "audience": "Audience",
+      "product": "Product",
+      "worldbuilding": "Worldbuilding",
+      "character": "Character",
+      "intent": "Intent",
+      "decision": "Decision",
+      "reference_fact": "Reference fact",
+      "general": "General"
+    },
+    "status": {
+      "proposed": "Proposed",
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "source": {
+      "user": "Manual",
+      "chat": "Chat",
+      "review": "Review",
+      "import": "Import",
+      "legacy": "Legacy"
+    },
     "newItemPlaceholder": "Project information to keep across conversations",
     "add": "Add",
-    "archive": "Archive",
+    "deleteTitle": "Delete memory",
+    "deleteConfirm": "Delete this memory item? This cannot be undone.",
     "forbiddenTermsTitle": "Forbidden terms",
     "forbiddenTerm": "Forbidden term",
     "replacement": "Preferred replacement",

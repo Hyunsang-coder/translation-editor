@@ -553,9 +553,9 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     if (!isProposalProjectActive(proposal.projectId)) return;
     try {
       const memoryStore = useProjectMemoryStore.getState();
-      if (mode === 'requested' && proposal.operation === 'archive') {
-        if (!proposal.targetItemId) throw new Error('보관할 메모리 항목이 없습니다.');
-        await memoryStore.archiveItem(proposal.targetItemId);
+      if (mode === 'requested' && proposal.operation === 'delete') {
+        if (!proposal.targetItemId) throw new Error('삭제할 메모리 항목이 없습니다.');
+        await memoryStore.deleteItem(proposal.targetItemId);
       } else {
         if (!proposal.content?.trim()) throw new Error('추가할 메모리 내용이 없습니다.');
         const input = {

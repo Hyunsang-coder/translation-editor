@@ -77,7 +77,6 @@ pub struct ProjectMemoryItemRow {
     pub source_session_id: Option<String>,
     pub source_message_id: Option<String>,
     pub source_selection_id: Option<String>,
-    pub supersedes_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -289,7 +288,7 @@ fn validate_memory_category(value: &str) -> Result<(), IteError> {
 }
 
 fn validate_memory_status(value: &str) -> Result<(), IteError> {
-    if ["proposed", "active", "archived"].contains(&value) {
+    if ["proposed", "active"].contains(&value) {
         Ok(())
     } else {
         Err(IteError::InvalidOperation(format!(
@@ -408,6 +407,73 @@ impl Database {
         }
 
         self.migrate_named_glossaries()?;
+        self.migrate_drop_project_memory_archive()?;
+        Ok(())
+    }
+
+    /// 프로젝트 메모리에서 보관(archive)·supersede 개념을 제거합니다.
+    ///
+    /// 편집은 제자리 갱신, 제거는 하드 삭제로 통일되어 archived 행과 supersedes_id는
+    /// 어느 경로에서도 생성·노출되지 않습니다. supersedes_id 컬럼이 이미 없으면
+    /// 건너뛰므로 재실행에도 안전합니다.
+    fn migrate_drop_project_memory_archive(&self) -> Result<(), IteError> {
+        let mut columns = self
+            .conn
+            .prepare("PRAGMA table_info(project_memory_items)")?;
+        let column_names = columns
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(columns);
+
+        if !column_names.iter().any(|name| name == "supersedes_id") {
+            return Ok(());
+        }
+
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "CREATE TABLE project_memory_items_new (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                category TEXT NOT NULL CHECK (
+                    category IN (
+                        'domain', 'audience', 'product', 'worldbuilding', 'character',
+                        'intent', 'decision', 'reference_fact', 'general'
+                    )
+                ),
+                content TEXT NOT NULL,
+                normalized_hash TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('proposed', 'active')),
+                source TEXT NOT NULL CHECK (
+                    source IN ('user', 'chat', 'review', 'import', 'legacy')
+                ),
+                source_session_id TEXT,
+                source_message_id TEXT,
+                source_selection_id TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+             );
+             INSERT INTO project_memory_items_new (
+                id, project_id, category, content, normalized_hash, status, source,
+                source_session_id, source_message_id, source_selection_id,
+                created_at, updated_at
+             )
+             SELECT id, project_id, category, content, normalized_hash, status, source,
+                    source_session_id, source_message_id, source_selection_id,
+                    created_at, updated_at
+             FROM project_memory_items
+             WHERE status <> 'archived';
+             DROP TABLE project_memory_items;
+             ALTER TABLE project_memory_items_new RENAME TO project_memory_items;",
+        )?;
+        tx.commit()?;
+
+        self.conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_project_memory_project_status
+                ON project_memory_items(project_id, status);
+             CREATE INDEX IF NOT EXISTS idx_project_memory_project_hash
+                ON project_memory_items(project_id, category, normalized_hash);",
+        )?;
         Ok(())
     }
 
@@ -2519,7 +2585,7 @@ impl Database {
             let mut stmt = self.conn.prepare(
                 "SELECT id, project_id, category, content, normalized_hash, status, source,
                         source_session_id, source_message_id, source_selection_id,
-                        supersedes_id, created_at, updated_at
+                        created_at, updated_at
                  FROM project_memory_items
                  WHERE project_id = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -2536,9 +2602,8 @@ impl Database {
                     source_session_id: row.get(7)?,
                     source_message_id: row.get(8)?,
                     source_selection_id: row.get(9)?,
-                    supersedes_id: row.get(10)?,
-                    created_at: row.get(11)?,
-                    updated_at: row.get(12)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             })?;
             rows.collect::<Result<Vec<_>, _>>()?
@@ -2597,12 +2662,11 @@ impl Database {
             let mut stmt = self.conn.prepare(
                 "SELECT id, project_id, category, content, normalized_hash, status, source,
                         source_session_id, source_message_id, source_selection_id,
-                        supersedes_id, created_at, updated_at
+                        created_at, updated_at
                  FROM project_memory_items
                  WHERE project_id = ?1
                    AND category = ?2
                    AND normalized_hash = ?3
-                   AND status != 'archived'
                  ORDER BY created_at ASC
                  LIMIT 1",
             )?;
@@ -2620,9 +2684,8 @@ impl Database {
                         source_session_id: row.get(7)?,
                         source_message_id: row.get(8)?,
                         source_selection_id: row.get(9)?,
-                        supersedes_id: row.get(10)?,
-                        created_at: row.get(11)?,
-                        updated_at: row.get(12)?,
+                        created_at: row.get(10)?,
+                        updated_at: row.get(11)?,
                     })
                 },
             )
@@ -2648,7 +2711,6 @@ impl Database {
             source_session_id: source_session_id.map(str::to_string),
             source_message_id: source_message_id.map(str::to_string),
             source_selection_id: source_selection_id.map(str::to_string),
-            supersedes_id: None,
             created_at: now,
             updated_at: now,
         };
@@ -2657,8 +2719,8 @@ impl Database {
             "INSERT INTO project_memory_items (
                 id, project_id, category, content, normalized_hash, status, source,
                 source_session_id, source_message_id, source_selection_id,
-                supersedes_id, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             rusqlite::params![
                 item.id,
                 item.project_id,
@@ -2670,7 +2732,6 @@ impl Database {
                 item.source_session_id,
                 item.source_message_id,
                 item.source_selection_id,
-                item.supersedes_id,
                 item.created_at,
                 item.updated_at,
             ],
@@ -2691,7 +2752,7 @@ impl Database {
         source_session_id: Option<&str>,
         source_message_id: Option<&str>,
         source_selection_id: Option<&str>,
-    ) -> Result<(ProjectMemoryItemRow, ProjectMemoryItemRow, i64), IteError> {
+    ) -> Result<(ProjectMemoryItemRow, i64), IteError> {
         validate_memory_category(category)?;
         validate_memory_source(source)?;
         let content = normalize_memory_content(content);
@@ -2707,95 +2768,67 @@ impl Database {
             .ok_or_else(|| {
                 IteError::InvalidOperation("Project memory item was not found.".to_string())
             })?;
-        if original.status == "archived" {
-            return Err(IteError::InvalidOperation(
-                "Archived project memory cannot be replaced.".to_string(),
-            ));
-        }
 
         let now = chrono::Utc::now().timestamp_millis();
-        let mut archived = original.clone();
-        archived.status = "archived".to_string();
-        archived.updated_at = now;
-        let replacement = ProjectMemoryItemRow {
-            id: uuid::Uuid::new_v4().to_string(),
+        let updated = ProjectMemoryItemRow {
+            id: original.id,
             project_id: project_id.to_string(),
             category: category.to_string(),
             normalized_hash: memory_content_hash(&content),
             content,
-            status: "active".to_string(),
+            status: original.status,
             source: source.to_string(),
             source_session_id: source_session_id.map(str::to_string),
             source_message_id: source_message_id.map(str::to_string),
             source_selection_id: source_selection_id.map(str::to_string),
-            supersedes_id: Some(target_item_id.to_string()),
-            created_at: now,
+            created_at: original.created_at,
             updated_at: now,
         };
 
         let tx = self.conn.transaction()?;
         tx.execute(
             "UPDATE project_memory_items
-             SET status = 'archived', updated_at = ?3
+             SET category = ?3, content = ?4, normalized_hash = ?5, source = ?6,
+                 source_session_id = ?7, source_message_id = ?8, source_selection_id = ?9,
+                 updated_at = ?10
              WHERE id = ?1 AND project_id = ?2",
-            rusqlite::params![target_item_id, project_id, now],
-        )?;
-        tx.execute(
-            "INSERT INTO project_memory_items (
-                id, project_id, category, content, normalized_hash, status, source,
-                source_session_id, source_message_id, source_selection_id,
-                supersedes_id, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             rusqlite::params![
-                replacement.id,
-                replacement.project_id,
-                replacement.category,
-                replacement.content,
-                replacement.normalized_hash,
-                replacement.status,
-                replacement.source,
-                replacement.source_session_id,
-                replacement.source_message_id,
-                replacement.source_selection_id,
-                replacement.supersedes_id,
-                replacement.created_at,
-                replacement.updated_at,
+                updated.id,
+                updated.project_id,
+                updated.category,
+                updated.content,
+                updated.normalized_hash,
+                updated.source,
+                updated.source_session_id,
+                updated.source_message_id,
+                updated.source_selection_id,
+                updated.updated_at,
             ],
         )?;
         let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
         tx.commit()?;
-        Ok((archived, replacement, revision))
+        Ok((updated, revision))
     }
 
-    pub fn archive_project_memory_item(
+    pub fn delete_project_memory_item(
         &mut self,
         project_id: &str,
         item_id: &str,
-    ) -> Result<(ProjectMemoryItemRow, i64), IteError> {
-        let (items, _, revision) = self.load_project_memory(project_id)?;
-        let mut item = items
-            .into_iter()
-            .find(|item| item.id == item_id)
-            .ok_or_else(|| {
-                IteError::InvalidOperation("Project memory item was not found.".to_string())
-            })?;
-        if item.status == "archived" {
-            return Ok((item, revision));
-        }
-
+    ) -> Result<i64, IteError> {
         let now = chrono::Utc::now().timestamp_millis();
-        item.status = "archived".to_string();
-        item.updated_at = now;
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE project_memory_items
-             SET status = 'archived', updated_at = ?3
-             WHERE id = ?1 AND project_id = ?2",
-            rusqlite::params![item_id, project_id, now],
+        let deleted = tx.execute(
+            "DELETE FROM project_memory_items WHERE id = ?1 AND project_id = ?2",
+            rusqlite::params![item_id, project_id],
         )?;
+        if deleted == 0 {
+            return Err(IteError::InvalidOperation(
+                "Project memory item was not found.".to_string(),
+            ));
+        }
         let revision = Self::bump_project_memory_revision(&tx, project_id, now)?;
         tx.commit()?;
-        Ok((item, revision))
+        Ok(revision)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2922,9 +2955,9 @@ impl Database {
             "INSERT INTO project_memory_items (
                 id, project_id, category, content, normalized_hash, status, source,
                 source_session_id, source_message_id, source_selection_id,
-                supersedes_id, created_at, updated_at
+                created_at, updated_at
              ) VALUES (?1, ?2, 'general', ?3, ?4, 'active', 'legacy',
-                       NULL, NULL, NULL, NULL, ?5, ?5)",
+                       NULL, NULL, NULL, ?5, ?5)",
             rusqlite::params![
                 uuid::Uuid::new_v4().to_string(),
                 project_id,
@@ -2970,8 +3003,8 @@ impl Database {
                 "INSERT INTO project_memory_items (
                     id, project_id, category, content, normalized_hash, status, source,
                     source_session_id, source_message_id, source_selection_id,
-                    supersedes_id, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12)",
+                    created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 rusqlite::params![
                     id_map[&item.id],
                     target_project_id,
@@ -2987,16 +3020,6 @@ impl Database {
                     now,
                 ],
             )?;
-        }
-        for item in &source_items {
-            if let Some(supersedes_id) = item.supersedes_id.as_ref() {
-                if let Some(mapped_supersedes_id) = id_map.get(supersedes_id) {
-                    tx.execute(
-                        "UPDATE project_memory_items SET supersedes_id = ?2 WHERE id = ?1",
-                        rusqlite::params![id_map[&item.id], mapped_supersedes_id],
-                    )?;
-                }
-            }
         }
         for term in &source_terms {
             tx.execute(
@@ -4464,7 +4487,7 @@ mod tests {
         assert_eq!(duplicate_revision, 1);
         assert!(is_duplicate);
 
-        let (archived, replacement, replace_revision) = db
+        let (replacement, replace_revision) = db
             .replace_project_memory_item(
                 &project.id,
                 &first.id,
@@ -4476,12 +4499,15 @@ mod tests {
                 None,
             )
             .expect("replace memory");
-        assert_eq!(archived.status, "archived");
-        assert_eq!(
-            replacement.supersedes_id.as_deref(),
-            Some(first.id.as_str())
-        );
+        // 편집은 제자리 갱신이므로 항목이 늘지 않고 id/생성 시각이 유지된다.
+        assert_eq!(replacement.id, first.id);
+        assert_eq!(replacement.created_at, first.created_at);
+        assert_eq!(replacement.content, "Enterprise IT administrators");
         assert_eq!(replace_revision, 2);
+        let (items_after_replace, _, _) = db
+            .load_project_memory(&project.id)
+            .expect("load memory after replace");
+        assert_eq!(items_after_replace.len(), 1);
 
         let (term, term_revision) = db
             .upsert_forbidden_term(
@@ -4501,11 +4527,23 @@ mod tests {
         let (clone_items, clone_terms, clone_revision) = db
             .load_project_memory(&clone.id)
             .expect("load cloned memory");
-        assert_eq!(clone_items.len(), 2);
+        assert_eq!(clone_items.len(), 1);
         assert_eq!(clone_terms.len(), 1);
         assert_eq!(clone_revision, 3);
         assert!(clone_items.iter().all(|item| item.project_id == clone.id));
         assert!(clone_items.iter().all(|item| item.id != first.id));
+
+        let delete_revision = db
+            .delete_project_memory_item(&project.id, &first.id)
+            .expect("delete memory");
+        assert_eq!(delete_revision, 4);
+        let (items_after_delete, _, _) = db
+            .load_project_memory(&project.id)
+            .expect("load memory after delete");
+        assert!(items_after_delete.is_empty());
+        assert!(db
+            .delete_project_memory_item(&project.id, &first.id)
+            .is_err());
 
         db.delete_project(&project.id)
             .expect("delete memory project");

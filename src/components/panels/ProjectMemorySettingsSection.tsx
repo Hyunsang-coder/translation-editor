@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
 import type { ProjectMemoryCategory } from '@/types';
@@ -23,21 +24,19 @@ export function ProjectMemorySettingsSection(): JSX.Element {
   const {
     items,
     forbiddenTerms,
-    revision,
     saving,
     addItem,
     replaceItem,
-    archiveItem,
+    deleteItem,
     saveForbiddenTerm,
     removeForbiddenTerm,
   } = useProjectMemoryStore(useShallow((state) => ({
     items: state.items,
     forbiddenTerms: state.forbiddenTerms,
-    revision: state.revision,
     saving: state.saving,
     addItem: state.addItem,
     replaceItem: state.replaceItem,
-    archiveItem: state.archiveItem,
+    deleteItem: state.deleteItem,
     saveForbiddenTerm: state.saveForbiddenTerm,
     removeForbiddenTerm: state.removeForbiddenTerm,
   })));
@@ -75,15 +74,26 @@ export function ProjectMemorySettingsSection(): JSX.Element {
     }
   };
 
+  const handleDelete = async (itemId: string): Promise<void> => {
+    const ok = await confirm(t('memory.deleteConfirm'), {
+      title: t('memory.deleteTitle'),
+      kind: 'warning',
+    });
+    if (!ok) return;
+    try {
+      await deleteItem(itemId);
+      if (editing?.id === itemId) setEditing(null);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
   return (
     <>
       <section className="space-y-3" data-testid="project-memory-settings">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-editor-text">
-            {t('memory.settingsTitle', '프로젝트 메모리')}
-          </h3>
-          <span className="text-[10px] text-editor-muted">rev {revision}</span>
-        </div>
+        <h3 className="text-xs font-semibold text-editor-text">
+          {t('memory.settingsTitle', '프로젝트 메모리')}
+        </h3>
         <p className="text-[10px] leading-relaxed text-editor-muted">
           {t('memory.settingsDescription', '승인된 항목은 다음 채팅과 번역·검수·폴리싱에 사용됩니다.')}
         </p>
@@ -94,7 +104,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
           >
             {CATEGORIES.map((value) => (
-              <option key={value} value={value}>{value}</option>
+              <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
             ))}
           </select>
           <input
@@ -119,15 +129,13 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           {items.map((item) => (
             <div
               key={item.id}
-              className={`rounded-xl border border-editor-border p-3 ${
-                item.status === 'archived' ? 'opacity-55' : 'bg-editor-surface'
-              }`}
+              className="rounded-xl border border-editor-border bg-editor-surface p-3"
             >
               <div className="flex items-center gap-2 text-[10px] text-editor-muted">
-                <span>{item.category}</span>
+                <span>{t(`memory.category.${item.category}`)}</span>
                 <span>·</span>
-                <span>{item.status}</span>
-                <span className="ml-auto">{item.source}</span>
+                <span>{t(`memory.status.${item.status}`)}</span>
+                <span className="ml-auto">{t(`memory.source.${item.source}`)}</span>
               </div>
               {editing?.id === item.id ? (
                 <textarea
@@ -177,10 +185,12 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                       </button>
                       <button
                         type="button"
-                        className="text-[11px] text-editor-muted"
-                        onClick={() => void archiveItem(item.id).catch(reportError)}
+                        data-testid="project-memory-delete"
+                        className="text-[11px] text-editor-muted hover:text-red-500"
+                        disabled={saving}
+                        onClick={() => void handleDelete(item.id)}
                       >
-                        {t('memory.archive', '보관')}
+                        {t('common.delete', '삭제')}
                       </button>
                     </>
                   )}

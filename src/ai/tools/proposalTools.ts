@@ -22,7 +22,7 @@ export const proposeProjectMemoryChange = tool(
     description:
       '다음 대화와 번역 작업에도 유지할 프로젝트 메모리 변경을 제안합니다. 직접 저장하지 않습니다.',
     schema: z.object({
-      operation: z.enum(['add', 'replace', 'archive']),
+      operation: z.enum(['add', 'replace', 'delete']),
       category: z.enum([
         'domain',
         'audience',

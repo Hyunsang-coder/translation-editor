@@ -28,7 +28,7 @@ async function callBridge(method: string, params: Record<string, unknown> = {}):
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "oddeyes-desktop",
-    version: "0.8.0",
+    version: "0.9.0",
   });
 
   registerDocumentTools(server, callBridge);

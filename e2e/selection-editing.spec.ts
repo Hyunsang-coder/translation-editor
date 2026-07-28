@@ -83,7 +83,7 @@ test.describe('Selection editing and scoped context', () => {
     ).not.toContainText(sourceText);
   });
 
-  test('Target selection opens a scoped preview with every optional context off', async ({ page }) => {
+  test('Target selection opens a scoped preview with only global constraints on', async ({ page }) => {
     const targetEditor = page.locator(
       "[data-testid='target-editor'] [contenteditable='true']",
     );
@@ -95,12 +95,11 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
     await expect(page.getByTestId('selection-edit-modal')).toContainText(sourceText);
     await expect(page.getByTestId('selection-edit-modal')).toContainText(targetText);
-    for (const option of [
-      'translationRules',
-      'forbiddenTerms',
-      'glossary',
-      'projectContext',
-    ]) {
+    // 번역 규칙·금칙어는 모든 문장에 적용되는 전역 제약이라 부분 수정에도 기본 on이다.
+    for (const option of ['translationRules', 'forbiddenTerms']) {
+      await expect(page.getByTestId(`selection-reference-${option}`)).toBeChecked();
+    }
+    for (const option of ['glossary', 'projectContext']) {
       await expect(page.getByTestId(`selection-reference-${option}`)).not.toBeChecked();
     }
   });
@@ -154,6 +153,7 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('project-memory-settings')).toContainText(
       'Audience: enterprise administrators',
     );
-    await expect(page.getByTestId('project-memory-settings')).toContainText('rev 1');
+    // 보관이 아니라 하드 삭제 하나로 통일됐다.
+    await expect(page.getByTestId('project-memory-delete')).toBeVisible();
   });
 });

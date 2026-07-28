@@ -109,16 +109,14 @@ CREATE TABLE IF NOT EXISTS project_memory_items (
     ),
     content TEXT NOT NULL,
     normalized_hash TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('proposed', 'active', 'archived')),
+    status TEXT NOT NULL CHECK (status IN ('proposed', 'active')),
     source TEXT NOT NULL CHECK (source IN ('user', 'chat', 'review', 'import', 'legacy')),
     source_session_id TEXT,
     source_message_id TEXT,
     source_selection_id TEXT,
-    supersedes_id TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (supersedes_id) REFERENCES project_memory_items(id) ON DELETE SET NULL
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_memory_project_status

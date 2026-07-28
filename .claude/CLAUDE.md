@@ -84,9 +84,18 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-07-27)
+## Recent Updates (2026-07-28)
 
-- **Desktop MCP 0.8.0 (25 tools)**: 앱의 지식 모델이 legacy `projectContext` → 승인 기반 Project Memory·금칙어로 바뀐 것을 MCP에 반영. ① `oddeyes_set_translation_context`에서 `projectContext` 파라미터 **제거**(breaking) — v2.13.0 이후 채팅에 주입되지 않고 메모리 0건일 때만 스치는 죽은 쓰기였다. ② `oddeyes_get_translation_context`가 `projectContext` 대신 `projectMemory`(active)·`forbiddenTerms`(enabled)·`revision` 반환. ③ Project Memory/금칙어 도구 6종 추가: `oddeyes_list_project_memory`, `add`/`replace`/`archive_project_memory_item`, `upsert`/`delete_forbidden_term`. 외부 쓰기는 `source='import'`·`status='active'`로 즉시 반영되고 Settings에서 출처 확인·보관 가능(제안 승인 UI는 채팅 카드 전용이라 `proposed`로 넣으면 승인할 방법이 없음). ④ `oddeyes_get_status`에 `projectMemoryRevision`·카운트 추가(미로드 시 0이 아니라 `null`). 브리지 메서드는 `oddeyesAppBridge.ts`, hydrate 보증은 `ensureProjectMemory`.
+- **프로젝트 메모리에서 보관(archive) 개념 제거**: 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.
+  - **DB**: `project_memory_items`에서 `supersedes_id` 컬럼과 `status='archived'`를 제거(CHECK는 `('proposed','active')`). 기존 DB는 `migrate_drop_project_memory_archive`가 테이블 재구성으로 archived 행을 삭제하며, `supersedes_id` 컬럼 유무로 판정해 재실행에 안전하다. `delete_project_memory_item` 커맨드 신설.
+  - **편집은 제자리 갱신**: `replace_project_memory_item`이 원본 archive + 새 행 insert 대신 UPDATE만 한다. id·`created_at`이 유지되고 행이 늘지 않는다. 결과에서 `archived` 필드 제거.
+  - **UI**: Settings의 `rev N` 표시 제거, 버튼은 `편집 / 삭제`(네이티브 confirm 경유). 카테고리·상태·출처 라벨을 `memory.category.*`/`status.*`/`source.*`로 현지화.
+  - **채팅 제안**: `propose_project_memory_change`의 `operation`이 `add|replace|delete`. 저장된 legacy `'archive'` 값은 `knowledgeProposals.ts`의 `normalizeOperation`이 읽기 시점에 `delete`로 정규화한다.
+  - **Desktop MCP 0.9.0 (breaking)**: `oddeyes_archive_project_memory_item` → `oddeyes_delete_project_memory_item`, `list`의 status enum에서 `archived` 제거, `replace` 응답에서 `archived` 제거. 배포 시 `.mcpb` 재번들 + `npm publish` 필요.
+
+### Previous (2026-07-27)
+
+- **Desktop MCP 0.8.0 (25 tools)**: 앱의 지식 모델이 legacy `projectContext` → 승인 기반 Project Memory·금칙어로 바뀐 것을 MCP에 반영. ① `oddeyes_set_translation_context`에서 `projectContext` 파라미터 **제거**(breaking) — v2.13.0 이후 채팅에 주입되지 않고 메모리 0건일 때만 스치는 죽은 쓰기였다. ② `oddeyes_get_translation_context`가 `projectContext` 대신 `projectMemory`(active)·`forbiddenTerms`(enabled)·`revision` 반환. ③ Project Memory/금칙어 도구 6종 추가: `oddeyes_list_project_memory`, `add`/`replace`/`archive_project_memory_item`(0.9.0에서 `delete_*`로 대체), `upsert`/`delete_forbidden_term`. 외부 쓰기는 `source='import'`·`status='active'`로 즉시 반영되고 Settings에서 출처 확인·삭제 가능(제안 승인 UI는 채팅 카드 전용이라 `proposed`로 넣으면 승인할 방법이 없음). ④ `oddeyes_get_status`에 `projectMemoryRevision`·카운트 추가(미로드 시 0이 아니라 `null`). 브리지 메서드는 `oddeyesAppBridge.ts`, hydrate 보증은 `ensureProjectMemory`.
 - **동적 프로젝트 지식 루프 수정 (D1–D7, `docs/dynamic-project-knowledge-fix-plan.md`)**: 채팅 ↔ Project Memory 갱신 경로의 결함 7건 수정.
 - **채팅 컨텍스트 주입 구조 (D1)**: 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
 - **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.

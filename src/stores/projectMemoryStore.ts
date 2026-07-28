@@ -5,8 +5,8 @@ import type {
 } from '@/types';
 import {
   addProjectMemoryItem,
-  archiveProjectMemoryItem,
   deleteForbiddenTerm,
+  deleteProjectMemoryItem,
   loadProjectMemory,
   migrateLegacyProjectMemory,
   replaceProjectMemoryItem,
@@ -33,7 +33,7 @@ interface ProjectMemoryActions {
     targetItemId: string,
     input: ProjectMemoryItemInput,
   ) => ReturnType<typeof replaceProjectMemoryItem>;
-  archiveItem: (itemId: string) => ReturnType<typeof archiveProjectMemoryItem>;
+  deleteItem: (itemId: string) => Promise<void>;
   saveForbiddenTerm: (
     input: ForbiddenTermInput,
   ) => ReturnType<typeof upsertForbiddenTerm>;
@@ -158,10 +158,7 @@ export const useProjectMemoryStore = create<ProjectMemoryState & ProjectMemoryAc
       });
       if (get().activeProjectId === projectId) {
         set((state) => ({
-          items: replaceById(
-            replaceById(state.items, result.archived),
-            result.item,
-          ),
+          items: replaceById(state.items, result.item),
           revision: result.revision,
           saving: false,
         }));
@@ -175,19 +172,18 @@ export const useProjectMemoryStore = create<ProjectMemoryState & ProjectMemoryAc
     }
   },
 
-  archiveItem: async (itemId) => {
+  deleteItem: async (itemId) => {
     const projectId = requireProjectId(get().activeProjectId);
     set({ saving: true, error: null });
     try {
-      const result = await archiveProjectMemoryItem({ projectId, itemId });
+      const result = await deleteProjectMemoryItem({ projectId, itemId });
       if (get().activeProjectId === projectId) {
         set((state) => ({
-          items: replaceById(state.items, result.item),
+          items: state.items.filter((item) => item.id !== itemId),
           revision: result.revision,
           saving: false,
         }));
       }
-      return result;
     } catch (error) {
       if (get().activeProjectId === projectId) {
         set({ saving: false, error: errorMessage(error) });

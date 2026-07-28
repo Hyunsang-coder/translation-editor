@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "oddeyes-desktop",
   "display_name": "OddEyes Desktop",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Connect Claude Desktop to a running OddEyes app and send preview-first translation actions.",
   "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and project knowledge (translation rules, project memory, forbidden terms, glossary) from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
   "author": {
@@ -69,11 +69,11 @@
     },
     {
       "name": "oddeyes_replace_project_memory_item",
-      "description": "Replace a project memory item with corrected content, archiving the old one."
+      "description": "Replace a project memory item with corrected content, updating it in place."
     },
     {
-      "name": "oddeyes_archive_project_memory_item",
-      "description": "Archive a project memory item so it stops being injected into prompts."
+      "name": "oddeyes_delete_project_memory_item",
+      "description": "Permanently delete a project memory item."
     },
     {
       "name": "oddeyes_upsert_forbidden_term",

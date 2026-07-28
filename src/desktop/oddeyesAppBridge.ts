@@ -496,7 +496,7 @@ async function addProjectMemoryItemBridge(params: BridgeParams): Promise<unknown
     category: parseMemoryCategory(params.category),
     content: requireContent(params.content),
     // 외부 반입은 source='import'로 남긴다 — Settings의 프로젝트 메모리 목록에 출처가
-    // 그대로 보이고, 사용자가 보관(archive)으로 되돌릴 수 있다.
+    // 그대로 보이고, 사용자가 직접 삭제할 수 있다.
     source: 'import',
     status: 'active',
   });
@@ -530,13 +530,12 @@ async function replaceProjectMemoryItemBridge(params: BridgeParams): Promise<unk
   return {
     ok: true,
     projectId: project.id,
-    archived: toMemoryWire(result.archived),
     item: toMemoryWire(result.item),
     revision: result.revision,
   };
 }
 
-async function archiveProjectMemoryItemBridge(params: BridgeParams): Promise<unknown> {
+async function deleteProjectMemoryItemBridge(params: BridgeParams): Promise<unknown> {
   const project = assertActiveProject(params);
   await ensureProjectMemory(project.id);
   const itemId = typeof params.itemId === 'string' ? params.itemId.trim() : '';
@@ -547,12 +546,12 @@ async function archiveProjectMemoryItemBridge(params: BridgeParams): Promise<unk
     throw new Error(`Unknown memory item: ${itemId}`);
   }
 
-  const result = await store.archiveItem(itemId);
+  await store.deleteItem(itemId);
   return {
     ok: true,
     projectId: project.id,
-    item: toMemoryWire(result.item),
-    revision: result.revision,
+    itemId,
+    revision: useProjectMemoryStore.getState().revision,
   };
 }
 
@@ -884,7 +883,7 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.listProjectMemory': async (params) => await listProjectMemoryBridge(params ?? {}),
   'oddeyes.addProjectMemoryItem': async (params) => await addProjectMemoryItemBridge(params ?? {}),
   'oddeyes.replaceProjectMemoryItem': async (params) => await replaceProjectMemoryItemBridge(params ?? {}),
-  'oddeyes.archiveProjectMemoryItem': async (params) => await archiveProjectMemoryItemBridge(params ?? {}),
+  'oddeyes.deleteProjectMemoryItem': async (params) => await deleteProjectMemoryItemBridge(params ?? {}),
   'oddeyes.upsertForbiddenTerm': async (params) => await upsertForbiddenTermBridge(params ?? {}),
   'oddeyes.deleteForbiddenTerm': async (params) => await deleteForbiddenTermBridge(params ?? {}),
 

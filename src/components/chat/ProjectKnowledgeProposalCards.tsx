@@ -92,8 +92,8 @@ export function ProjectKnowledgeProposalCards({
               disabled={busy}
               onClick={() => onApplyMemory(proposal, 'requested')}
             >
-              {proposal.operation === 'archive'
-                ? t('memory.archive', '보관')
+              {proposal.operation === 'delete'
+                ? t('common.delete', '삭제')
                 : proposal.operation === 'replace'
                   ? t('memory.update', '업데이트')
                   : t('memory.add', '추가')}

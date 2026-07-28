@@ -490,9 +490,11 @@ export function createAiActions(
               typeof evt.args.category === 'string'
             ) {
               const operation =
-                evt.args.operation === 'replace' || evt.args.operation === 'archive'
-                  ? evt.args.operation
-                  : 'add';
+                evt.args.operation === 'replace'
+                  ? 'replace'
+                  : evt.args.operation === 'delete' || evt.args.operation === 'archive'
+                    ? 'delete'
+                    : 'add';
               const proposal: ProjectMemoryChangeProposal = {
                 proposalId: uuidv4(),
                 ...(project ? { projectId: project.id } : {}),

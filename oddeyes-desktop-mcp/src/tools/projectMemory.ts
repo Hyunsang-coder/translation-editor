@@ -23,7 +23,7 @@ const MEMORY_CATEGORIES = [
  * OddEyes는 v2.13.0부터 자유 서술형 "project context" 대신 승인된 Project Memory 항목과
  * 금칙어 목록을 프롬프트 근거로 쓴다. 이 도구들이 그 저장소에 대한 외부 접근 경로다.
  * 쓰기는 source='import', status='active'로 즉시 반영되며, 사용자는 앱 Settings의
- * 프로젝트 메모리 목록에서 출처를 확인하고 보관(archive)할 수 있다.
+ * 프로젝트 메모리 목록에서 출처를 확인하고 직접 삭제할 수 있다.
  */
 export function registerProjectMemoryTools(
   server: McpServer,
@@ -37,12 +37,13 @@ export function registerProjectMemoryTools(
         "Project memory holds durable facts about the project (domain, audience, product, " +
         "worldbuilding, characters, intent, decisions, reference facts) that OddEyes injects into " +
         "translation, review, polishing, and chat. " +
-        "Defaults to status='active' (what the app actually uses); pass 'all' to audit archived items. " +
-        "Use this before adding memory to avoid duplicates and to obtain ids for replace/archive. " +
+        "Defaults to status='active' (what the app actually uses); pass 'all' to include items " +
+        "still awaiting approval. " +
+        "Use this before adding memory to avoid duplicates and to obtain ids for replace/delete. " +
         "Returns { ok, projectId, revision, total, truncated, items, forbiddenTerms }.",
       inputSchema: {
         projectId: z.string().optional(),
-        status: z.enum(["active", "proposed", "archived", "all"]).optional()
+        status: z.enum(["active", "proposed", "all"]).optional()
           .describe("Filter by item status. Default 'active'."),
         category: z.enum(MEMORY_CATEGORIES).optional(),
         query: z.string().optional()
@@ -68,7 +69,7 @@ export function registerProjectMemoryTools(
       description:
         "Add a durable project memory item. It takes effect immediately in the app's translation, " +
         "review, polishing, and chat prompts, and is stored with source='import' so the user can see " +
-        "where it came from and archive it in Settings → Project Memory. " +
+        "where it came from and delete it in Settings → Project Memory. " +
         "Write ONE self-contained fact per item — not a paragraph of mixed notes; items are selected " +
         "and capped per workflow, so a long blob crowds out other knowledge. " +
         "Duplicate content is deduplicated by the app: check `duplicate` in the response. " +
@@ -95,12 +96,12 @@ export function registerProjectMemoryTools(
     {
       description:
         "Replace an existing project memory item with corrected content. " +
-        "The old item is archived (kept for provenance) and a new active item supersedes it. " +
+        "The item is updated in place — its id is kept and no extra row is created. " +
         "Requires targetItemId from oddeyes_list_project_memory. Category defaults to the old item's. " +
-        "Returns { ok, archived, item, revision }.",
+        "Returns { ok, item, revision }.",
       inputSchema: {
         projectId: z.string().optional(),
-        targetItemId: z.string().describe("Id of the item being superseded."),
+        targetItemId: z.string().describe("Id of the item being corrected."),
         content: z.string().describe("Corrected content (required)."),
         category: z.enum(MEMORY_CATEGORIES).optional(),
       },
@@ -115,19 +116,19 @@ export function registerProjectMemoryTools(
   );
 
   server.registerTool(
-    "oddeyes_archive_project_memory_item",
+    "oddeyes_delete_project_memory_item",
     {
       description:
-        "Archive a project memory item so it stops being injected into prompts. " +
-        "The item is kept in the ledger (not deleted) and remains visible in Settings. " +
-        "Requires itemId from oddeyes_list_project_memory. Returns { ok, item, revision }.",
+        "Permanently delete a project memory item. No undo — the row is removed, not archived. " +
+        "To correct an item instead of removing it, use oddeyes_replace_project_memory_item. " +
+        "Requires itemId from oddeyes_list_project_memory. Returns { ok, itemId, revision }.",
       inputSchema: {
         projectId: z.string().optional(),
         itemId: z.string(),
       },
     },
     async ({ projectId, itemId }) =>
-      textResult(await callBridge("oddeyes.archiveProjectMemoryItem", { projectId, itemId })),
+      textResult(await callBridge("oddeyes.deleteProjectMemoryItem", { projectId, itemId })),
   );
 
   server.registerTool(

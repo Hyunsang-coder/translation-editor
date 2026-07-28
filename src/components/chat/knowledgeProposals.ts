@@ -21,10 +21,25 @@ function normalize<T extends AnyProposal>(list: T[] | undefined, single: T | und
   return single ? [single] : [];
 }
 
+/**
+ * 저장된 제안의 operation을 현재 시맨틱으로 정규화한다.
+ * 2026-07-28 이전 메시지는 삭제 제안을 'archive'로 저장했다.
+ */
+function normalizeOperation(
+  proposal: ProjectMemoryChangeProposal,
+): ProjectMemoryChangeProposal {
+  return (proposal.operation as string) === 'archive'
+    ? { ...proposal, operation: 'delete' }
+    : proposal;
+}
+
 export function readMemoryProposals(
   metadata?: ChatMessageMetadata,
 ): ProjectMemoryChangeProposal[] {
-  return normalize(metadata?.projectMemoryProposals, metadata?.projectMemoryProposal);
+  return normalize(
+    metadata?.projectMemoryProposals,
+    metadata?.projectMemoryProposal,
+  ).map(normalizeOperation);
 }
 
 export function readForbiddenTermProposals(

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addProjectMemoryItem,
-  archiveProjectMemoryItem,
+  deleteProjectMemoryItem,
   loadProjectMemory,
   migrateLegacyProjectMemory,
   replaceProjectMemoryItem,
@@ -14,7 +14,7 @@ vi.mock('@/tauri/projectMemory', () => ({
   migrateLegacyProjectMemory: vi.fn(),
   addProjectMemoryItem: vi.fn(),
   replaceProjectMemoryItem: vi.fn(),
-  archiveProjectMemoryItem: vi.fn(),
+  deleteProjectMemoryItem: vi.fn(),
   upsertForbiddenTerm: vi.fn(),
   deleteForbiddenTerm: vi.fn(),
 }));
@@ -130,14 +130,11 @@ describe('projectMemoryStore', () => {
     expect(useProjectMemoryStore.getState().items).toHaveLength(1);
   });
 
-  it('replace archives the old item and links the replacement', async () => {
-    const archived = { ...memoryItem, status: 'archived' as const, updatedAt: 2 };
-    const replacement = {
+  it('replace updates the item in place without adding a row', async () => {
+    const updated = {
       ...memoryItem,
-      id: 'memory-2',
       content: 'Enterprise IT administrators',
       normalizedHash: 'hash-2',
-      supersedesId: memoryItem.id,
       updatedAt: 2,
     };
     useProjectMemoryStore.setState({
@@ -146,45 +143,57 @@ describe('projectMemoryStore', () => {
       revision: 1,
     });
     vi.mocked(replaceProjectMemoryItem).mockResolvedValue({
-      archived,
-      item: replacement,
+      item: updated,
       revision: 2,
     });
 
     await useProjectMemoryStore.getState().replaceItem(memoryItem.id, {
       category: 'audience',
-      content: replacement.content,
+      content: updated.content,
       source: 'chat',
     });
 
-    expect(useProjectMemoryStore.getState().items).toEqual([archived, replacement]);
+    expect(useProjectMemoryStore.getState().items).toEqual([updated]);
     expect(useProjectMemoryStore.getState().revision).toBe(2);
   });
 
-  it('archives memory and upserts forbidden terms', async () => {
+  it('upserts forbidden terms', async () => {
     useProjectMemoryStore.setState({
       activeProjectId: 'project-1',
       items: [memoryItem],
       revision: 1,
-    });
-    vi.mocked(archiveProjectMemoryItem).mockResolvedValue({
-      item: { ...memoryItem, status: 'archived', updatedAt: 2 },
-      revision: 2,
     });
     vi.mocked(upsertForbiddenTerm).mockResolvedValue({
       term: forbiddenTerm,
       revision: 3,
     });
 
-    await useProjectMemoryStore.getState().archiveItem(memoryItem.id);
     await useProjectMemoryStore.getState().saveForbiddenTerm({
       term: 'blacklist',
       replacement: 'denylist',
       enabled: true,
     });
 
-    expect(useProjectMemoryStore.getState().items[0]?.status).toBe('archived');
     expect(useProjectMemoryStore.getState().forbiddenTerms).toEqual([forbiddenTerm]);
     expect(useProjectMemoryStore.getState().revision).toBe(3);
+  });
+
+  it('removes deleted memory from the list', async () => {
+    useProjectMemoryStore.setState({
+      activeProjectId: 'project-1',
+      items: [memoryItem, { ...memoryItem, id: 'memory-2' }],
+      revision: 1,
+    });
+    vi.mocked(deleteProjectMemoryItem).mockResolvedValue({ revision: 2 });
+
+    await useProjectMemoryStore.getState().deleteItem(memoryItem.id);
+
+    expect(deleteProjectMemoryItem).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      itemId: memoryItem.id,
+    });
+    expect(useProjectMemoryStore.getState().items.map((item) => item.id)).toEqual(['memory-2']);
+    expect(useProjectMemoryStore.getState().revision).toBe(2);
+    expect(useProjectMemoryStore.getState().saving).toBe(false);
   });
 });

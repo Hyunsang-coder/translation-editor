@@ -34,7 +34,7 @@ describe('renderChatMemoryDigest', () => {
     const digest = renderChatMemoryDigest({
       items: [
         memoryItem({ id: 'a', content: 'SF 세계관', category: 'worldbuilding' }),
-        memoryItem({ id: 'b', content: '보관됨', status: 'archived' }),
+        memoryItem({ id: 'b', content: '미승인 제안', status: 'proposed' }),
       ],
       forbiddenTerms: [],
     });
@@ -107,7 +107,7 @@ describe('renderChatMemoryDigest', () => {
     const digest = renderChatMemoryDigest({
       items: [
         memoryItem({ id: 'a', content: 'A', category: 'domain' }),
-        memoryItem({ id: 'b', content: 'B', status: 'archived' }),
+        memoryItem({ id: 'b', content: 'B', status: 'proposed' }),
         memoryItem({ id: 'c', content: 'C', category: 'reference_fact' }),
       ],
       forbiddenTerms: [],

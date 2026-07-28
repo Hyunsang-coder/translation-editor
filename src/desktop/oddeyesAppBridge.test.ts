@@ -166,11 +166,11 @@ const memoryItem: ProjectMemoryItem = {
   updatedAt: 1,
 };
 
-const archivedMemoryItem: ProjectMemoryItem = {
+const proposedMemoryItem: ProjectMemoryItem = {
   ...memoryItem,
   id: 'm-2',
   content: '오래된 사실',
-  status: 'archived',
+  status: 'proposed',
 };
 
 const forbiddenTerm: ForbiddenTerm = {
@@ -187,7 +187,7 @@ const memoryStore = {
   activeProjectId: 'test-project' as string | null,
   loading: false,
   revision: 7,
-  items: [memoryItem, archivedMemoryItem] as ProjectMemoryItem[],
+  items: [memoryItem, proposedMemoryItem] as ProjectMemoryItem[],
   forbiddenTerms: [forbiddenTerm] as ForbiddenTerm[],
   hydrate: vi.fn(async () => undefined),
   addItem: vi.fn(async ({ category, content, source, status }) => ({
@@ -196,14 +196,10 @@ const memoryStore = {
     duplicate: false,
   })),
   replaceItem: vi.fn(async (targetItemId: string, { category, content, source }) => ({
-    archived: { ...memoryItem, id: targetItemId, status: 'archived' as const },
-    item: { ...memoryItem, id: 'm-new', category, content, source },
+    item: { ...memoryItem, id: targetItemId, category, content, source },
     revision: 9,
   })),
-  archiveItem: vi.fn(async (itemId: string) => ({
-    item: { ...memoryItem, id: itemId, status: 'archived' as const },
-    revision: 10,
-  })),
+  deleteItem: vi.fn(async () => undefined),
   saveForbiddenTerm: vi.fn(async (input) => ({
     term: { ...forbiddenTerm, ...input },
     revision: 11,
@@ -272,7 +268,7 @@ describe('oddeyesAppBridge — getTranslationContext', () => {
     expect(result).toHaveProperty('translationRules');
     expect(result).not.toHaveProperty('projectContext');
     expect(result).not.toHaveProperty('translatorPersona');
-    // archived 항목은 프롬프트에 들어가지 않으므로 여기서도 제외된다
+    // 승인 전(proposed) 항목은 프롬프트에 들어가지 않으므로 여기서도 제외된다
     expect(result.projectMemory).toEqual([
       expect.objectContaining({ id: 'm-1', status: 'active' }),
     ]);
@@ -655,12 +651,12 @@ describe('oddeyesAppBridge — project memory', () => {
     initializeOddEyesAppBridge();
     memoryStore.activeProjectId = 'test-project';
     memoryStore.loading = false;
-    memoryStore.items = [memoryItem, archivedMemoryItem];
+    memoryStore.items = [memoryItem, proposedMemoryItem];
     memoryStore.forbiddenTerms = [forbiddenTerm];
     memoryStore.hydrate.mockClear();
     memoryStore.addItem.mockClear();
     memoryStore.replaceItem.mockClear();
-    memoryStore.archiveItem.mockClear();
+    memoryStore.deleteItem.mockClear();
     memoryStore.saveForbiddenTerm.mockClear();
     memoryStore.removeForbiddenTerm.mockClear();
   });
@@ -673,7 +669,7 @@ describe('oddeyesAppBridge — project memory', () => {
     expect(res.revision).toBe(7);
   });
 
-  it("status='all'은 archived까지 포함", async () => {
+  it("status='all'은 승인 전 항목까지 포함", async () => {
     const res = await callBridge('oddeyes.listProjectMemory', { status: 'all' }) as Record<string, unknown>;
     expect(res.total).toBe(2);
   });
@@ -725,14 +721,22 @@ describe('oddeyesAppBridge — project memory', () => {
     }));
   });
 
-  it('없는 항목의 replace/archive는 거부', async () => {
+  it('없는 항목의 replace/delete는 거부', async () => {
     await expect(callBridge('oddeyes.replaceProjectMemoryItem', {
       targetItemId: 'ghost', content: 'x',
     })).rejects.toThrow('Unknown memory item: ghost');
-    await expect(callBridge('oddeyes.archiveProjectMemoryItem', { itemId: 'ghost' }))
+    await expect(callBridge('oddeyes.deleteProjectMemoryItem', { itemId: 'ghost' }))
       .rejects.toThrow('Unknown memory item: ghost');
     expect(memoryStore.replaceItem).not.toHaveBeenCalled();
-    expect(memoryStore.archiveItem).not.toHaveBeenCalled();
+    expect(memoryStore.deleteItem).not.toHaveBeenCalled();
+  });
+
+  it('삭제는 항목을 완전히 제거한다', async () => {
+    const res = await callBridge('oddeyes.deleteProjectMemoryItem', {
+      itemId: 'm-1',
+    }) as Record<string, unknown>;
+    expect(memoryStore.deleteItem).toHaveBeenCalledWith('m-1');
+    expect(res).toMatchObject({ ok: true, itemId: 'm-1', revision: 7 });
   });
 
   it('금칙어 신규 생성은 enabled 기본 true', async () => {
@@ -768,7 +772,7 @@ describe('oddeyesAppBridge — project memory', () => {
       'oddeyes.listProjectMemory',
       'oddeyes.addProjectMemoryItem',
       'oddeyes.replaceProjectMemoryItem',
-      'oddeyes.archiveProjectMemoryItem',
+      'oddeyes.deleteProjectMemoryItem',
       'oddeyes.upsertForbiddenTerm',
       'oddeyes.deleteForbiddenTerm',
     ]) {
@@ -782,7 +786,7 @@ describe('oddeyesAppBridge — getStatus 프로젝트 지식', () => {
   beforeEach(() => {
     initializeOddEyesAppBridge();
     memoryStore.activeProjectId = 'test-project';
-    memoryStore.items = [memoryItem, archivedMemoryItem];
+    memoryStore.items = [memoryItem, proposedMemoryItem];
     memoryStore.forbiddenTerms = [forbiddenTerm];
   });
 

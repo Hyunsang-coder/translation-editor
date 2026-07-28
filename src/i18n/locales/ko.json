@@ -549,9 +549,33 @@
   "memory": {
     "settingsTitle": "프로젝트 메모리",
     "settingsDescription": "승인된 항목은 새 채팅과 번역·검수·폴리싱에 사용됩니다.",
+    "category": {
+      "domain": "도메인",
+      "audience": "대상 독자",
+      "product": "제품",
+      "worldbuilding": "세계관",
+      "character": "캐릭터",
+      "intent": "의도",
+      "decision": "결정 사항",
+      "reference_fact": "참고 사실",
+      "general": "일반"
+    },
+    "status": {
+      "proposed": "제안됨",
+      "active": "사용 중",
+      "archived": "보관됨"
+    },
+    "source": {
+      "user": "직접 입력",
+      "chat": "채팅",
+      "review": "검수",
+      "import": "외부 연동",
+      "legacy": "이전 설정"
+    },
     "newItemPlaceholder": "대화가 바뀌어도 유지할 프로젝트 정보",
     "add": "추가",
-    "archive": "보관",
+    "deleteTitle": "메모리 삭제",
+    "deleteConfirm": "이 메모리를 삭제할까요? 되돌릴 수 없습니다.",
     "forbiddenTermsTitle": "금칙어",
     "forbiddenTerm": "금칙어",
     "replacement": "권장 표현",

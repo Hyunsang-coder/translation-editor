@@ -7,12 +7,11 @@ import { invoke } from '@/tauri/invoke';
 
 interface ProjectMemoryItemWire extends Omit<
   ProjectMemoryItem,
-  'sourceSessionId' | 'sourceMessageId' | 'sourceSelectionId' | 'supersedesId'
+  'sourceSessionId' | 'sourceMessageId' | 'sourceSelectionId'
 > {
   sourceSessionId: string | null;
   sourceMessageId: string | null;
   sourceSelectionId: string | null;
-  supersedesId: string | null;
 }
 
 interface ForbiddenTermWire extends Omit<ForbiddenTerm, 'replacement' | 'note'> {
@@ -59,12 +58,6 @@ export interface AddProjectMemoryResult {
 }
 
 export interface ReplaceProjectMemoryResult {
-  archived: ProjectMemoryItem;
-  item: ProjectMemoryItem;
-  revision: number;
-}
-
-export interface ArchiveProjectMemoryResult {
   item: ProjectMemoryItem;
   revision: number;
 }
@@ -86,7 +79,6 @@ function fromMemoryWire(item: ProjectMemoryItemWire): ProjectMemoryItem {
     ...(item.sourceSessionId ? { sourceSessionId: item.sourceSessionId } : {}),
     ...(item.sourceMessageId ? { sourceMessageId: item.sourceMessageId } : {}),
     ...(item.sourceSelectionId ? { sourceSelectionId: item.sourceSelectionId } : {}),
-    ...(item.supersedesId ? { supersedesId: item.supersedesId } : {}),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -153,7 +145,6 @@ export async function replaceProjectMemoryItem(params: {
   input: ProjectMemoryItemInput;
 }): Promise<ReplaceProjectMemoryResult> {
   const result = await invoke<{
-    archived: ProjectMemoryItemWire;
     item: ProjectMemoryItemWire;
     revision: number;
   }>('replace_project_memory_item', {
@@ -166,24 +157,16 @@ export async function replaceProjectMemoryItem(params: {
       sourceSelectionId: params.input.sourceSelectionId ?? null,
     },
   });
-  return {
-    archived: fromMemoryWire(result.archived),
-    item: fromMemoryWire(result.item),
-    revision: result.revision,
-  };
+  return { item: fromMemoryWire(result.item), revision: result.revision };
 }
 
-export async function archiveProjectMemoryItem(params: {
+export async function deleteProjectMemoryItem(params: {
   projectId: string;
   itemId: string;
-}): Promise<ArchiveProjectMemoryResult> {
-  const result = await invoke<{
-    item: ProjectMemoryItemWire;
-    revision: number;
-  }>('archive_project_memory_item', {
+}): Promise<{ revision: number }> {
+  return await invoke<{ revision: number }>('delete_project_memory_item', {
     args: params,
   });
-  return { item: fromMemoryWire(result.item), revision: result.revision };
 }
 
 export async function upsertForbiddenTerm(params: {

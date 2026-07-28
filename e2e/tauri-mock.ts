@@ -202,7 +202,6 @@ function buildMockScript(seedProjects: MockProject[]): string {
         sourceSessionId: a?.sourceSessionId ?? null,
         sourceMessageId: a?.sourceMessageId ?? null,
         sourceSelectionId: a?.sourceSelectionId ?? null,
-        supersedesId: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -215,44 +214,37 @@ function buildMockScript(seedProjects: MockProject[]): string {
       const state = projectMemory.get(a?.projectId);
       const current = state?.items.find(item => item.id === a?.targetItemId);
       if (!state || !current) throw new Error('Project memory item not found');
-      const now = Date.now();
-      const archived = { ...current, status: 'archived', updatedAt: now };
       const item = {
         ...current,
-        id: uid(),
         category: a?.category ?? current.category,
         content: String(a?.content ?? '').trim(),
         normalizedHash: String(a?.content ?? '').trim().toLowerCase(),
-        status: 'active',
         source: a?.source ?? 'user',
         sourceSessionId: a?.sourceSessionId ?? null,
         sourceMessageId: a?.sourceMessageId ?? null,
         sourceSelectionId: a?.sourceSelectionId ?? null,
-        supersedesId: current.id,
-        createdAt: now,
-        updatedAt: now,
+        updatedAt: Date.now(),
       };
       const next = {
         ...state,
-        items: state.items.map(existing => existing.id === current.id ? archived : existing).concat(item),
-        revision: state.revision + 1,
-      };
-      projectMemory.set(a?.projectId, next);
-      return { archived, item, revision: next.revision };
-    },
-    archive_project_memory_item: (args) => {
-      const a = args?.args ?? args;
-      const state = projectMemory.get(a?.projectId);
-      const current = state?.items.find(item => item.id === a?.itemId);
-      if (!state || !current) throw new Error('Project memory item not found');
-      const item = { ...current, status: 'archived', updatedAt: Date.now() };
-      const next = {
-        ...state,
-        items: state.items.map(existing => existing.id === item.id ? item : existing),
+        items: state.items.map(existing => existing.id === current.id ? item : existing),
         revision: state.revision + 1,
       };
       projectMemory.set(a?.projectId, next);
       return { item, revision: next.revision };
+    },
+    delete_project_memory_item: (args) => {
+      const a = args?.args ?? args;
+      const state = projectMemory.get(a?.projectId);
+      const current = state?.items.find(item => item.id === a?.itemId);
+      if (!state || !current) throw new Error('Project memory item not found');
+      const next = {
+        ...state,
+        items: state.items.filter(existing => existing.id !== current.id),
+        revision: state.revision + 1,
+      };
+      projectMemory.set(a?.projectId, next);
+      return { revision: next.revision };
     },
     upsert_forbidden_term: (args) => {
       const a = args?.args ?? args;
