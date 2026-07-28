@@ -9,7 +9,12 @@ import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
+import {
+  useAlignmentAnnotations,
+  type UnitAnnotations,
+} from '@/components/editor/useAlignmentAnnotations';
 import type { TranslationUnit, TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
+import type { IssueSeverity } from '@/stores/reviewStore';
 
 interface NumberedOp {
   op: AlignOp;
@@ -73,6 +78,14 @@ function jumpToUnit(unitId: string, field: 'source' | 'target'): void {
   requestAnimationFrame(() => {
     editor.chain().focus().setTextSelection(pos!).run();
   });
+}
+
+const SEVERITY_RANK: Record<IssueSeverity, number> = { critical: 3, major: 2, minor: 1 };
+
+function pickTopSeverity(a: IssueSeverity | null, b: IssueSeverity | null): IssueSeverity | null {
+  if (!a) return b;
+  if (!b) return a;
+  return SEVERITY_RANK[a]! >= SEVERITY_RANK[b]! ? a : b;
 }
 
 /** 구간의 첫 유닛 — 배너의 "문서 보기로 열기"가 향할 곳. */
@@ -176,6 +189,28 @@ export function AlignmentView(): JSX.Element {
     { source: 0, target: 0 }
   ), [alignResult]);
 
+  const annotations = useAlignmentAnnotations(alignResult.ops);
+
+  /** 한 행의 배지 — 원문 쪽 코멘트와 번역문 쪽 이슈·코멘트를 합친다 */
+  const annotationsFor = (op: AlignOp): UnitAnnotations | null => {
+    const ids = [
+      op.kind === 'target-only' ? null : op.source.id,
+      op.kind === 'source-only' ? null : op.target.id,
+    ].filter((id): id is string => Boolean(id));
+
+    const entries = ids
+      .map((id) => annotations.byUnitId.get(id))
+      .filter((entry): entry is UnitAnnotations => entry !== undefined);
+    if (entries.length === 0) return null;
+    if (entries.length === 1) return entries[0]!;
+
+    return entries.reduce((merged, entry) => ({
+      issueCount: merged.issueCount + entry.issueCount,
+      commentCount: merged.commentCount + entry.commentCount,
+      topSeverity: pickTopSeverity(merged.topSeverity, entry.topSeverity),
+    }));
+  };
+
   const sourceLanguage = useMemo(() => {
     const sample = alignResult.ops
       .flatMap((op) => (op.kind === 'target-only' ? [] : [op.source.text]))
@@ -229,6 +264,7 @@ export function AlignmentView(): JSX.Element {
                   active={unitId !== null && unitId === activeAlignmentUnitId}
                   onSelect={() => setActiveAlignmentUnitId(unitId)}
                   onEdit={unitId === null ? null : () => jumpToUnit(unitId, 'target')}
+                  annotations={annotationsFor(block.op)}
                 />
               );
             }
@@ -270,11 +306,24 @@ export function AlignmentView(): JSX.Element {
                     active={false}
                     onSelect={null}
                     onEdit={null}
+                    annotations={annotationsFor(op)}
                   />
                 ))}
               </div>
             );
           })
+        )}
+
+        {/* 매핑 실패한 이슈는 버리지 않는다 — 이 수치 자체가 정렬 품질 지표다 */}
+        {annotations.unmappedIssueCount > 0 && (
+          <button
+            type="button"
+            onClick={() => useUIStore.getState().openReviewPanel()}
+            className="w-full px-[18px] py-3 text-left text-xs text-editor-muted hover:bg-editor-bg transition-colors"
+            data-testid="alignment-unmapped-issues"
+          >
+            {t('editor.alignment.unmappedIssues', { count: annotations.unmappedIssueCount })}
+          </button>
         )}
       </div>
     </div>

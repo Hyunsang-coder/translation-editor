@@ -2,6 +2,20 @@ import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 import type { AlignOp } from '@/utils/alignUnits';
 import type { TranslationUnit } from '@/editor/extensions/TranslationUnitId';
+import type { UnitAnnotations } from '@/components/editor/useAlignmentAnnotations';
+import type { IssueSeverity } from '@/stores/reviewStore';
+
+/** 배지 색은 검수 패널의 심각도 색을 그대로 쓴다 */
+function severityBadgeClass(severity: IssueSeverity | null): string {
+  switch (severity) {
+    case 'critical':
+      return 'bg-red-500/10 text-red-600';
+    case 'major':
+      return 'bg-orange-500/10 text-orange-600';
+    default:
+      return 'bg-blue-500/10 text-blue-600';
+  }
+}
 
 interface AlignmentRowProps {
   /** 표시 번호 (ops 기준 1-based — 불일치 행이 섞여도 번호가 밀리지 않는다) */
@@ -12,6 +26,8 @@ interface AlignmentRowProps {
   onSelect: (() => void) | null;
   /** 활성 행에서만 노출되는 "이 문단 편집" — 문서 보기로 전환하고 커서를 옮긴다 */
   onEdit: (() => void) | null;
+  /** 이 행에 매핑된 이슈·코멘트. 매핑된 게 없으면 null */
+  annotations: UnitAnnotations | null;
 }
 
 /** heading은 본문보다 크게 — 표에서도 문서 구조가 읽히도록. */
@@ -27,7 +43,14 @@ function unitTextClass(unit: TranslationUnit): string {
  * 플레이스홀더로 표시한다. **짝을 추정하지 않는다** — 틀린 짝을 믿게 하느니
  * 불일치를 그대로 드러낸다.
  */
-export function AlignmentRow({ index, op, active, onSelect, onEdit }: AlignmentRowProps): JSX.Element {
+export function AlignmentRow({
+  index,
+  op,
+  active,
+  onSelect,
+  onEdit,
+  annotations,
+}: AlignmentRowProps): JSX.Element {
   const { t } = useTranslation();
 
   const isPair = op.kind === 'pair';
@@ -103,7 +126,7 @@ export function AlignmentRow({ index, op, active, onSelect, onEdit }: AlignmentR
         </div>
       )}
 
-      <div className={`w-[120px] shrink-0 pl-[14px] py-3 border-l ${cellBorder} flex items-start`}>
+      <div className={`w-[120px] shrink-0 pl-[14px] py-3 border-l ${cellBorder} flex flex-col items-start gap-[5px]`}>
         {isPair ? (
           <span className="flex items-start gap-1 text-[11px] font-semibold text-editor-muted">
             <Check size={12} className="mt-[3px] shrink-0" />
@@ -112,6 +135,22 @@ export function AlignmentRow({ index, op, active, onSelect, onEdit }: AlignmentR
         ) : (
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-700">
             {op.kind === 'source-only' ? '1:0' : '0:1'}
+          </span>
+        )}
+        {annotations && annotations.issueCount > 0 && (
+          <span
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${severityBadgeClass(annotations.topSeverity)}`}
+            data-testid="alignment-issue-badge"
+          >
+            {t('editor.alignment.issueBadge', { count: annotations.issueCount })}
+          </span>
+        )}
+        {annotations && annotations.commentCount > 0 && (
+          <span
+            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-500/10 text-slate-600"
+            data-testid="alignment-comment-badge"
+          >
+            {t('editor.alignment.commentBadge', { count: annotations.commentCount })}
           </span>
         )}
       </div>

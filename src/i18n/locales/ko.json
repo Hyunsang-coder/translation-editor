@@ -332,6 +332,9 @@
       "targetColumn": "번역문",
       "alignColumn": "정렬",
       "empty": "정렬할 문단이 없습니다.",
+      "issueBadge": "이슈 {{count}}",
+      "commentBadge": "코멘트 {{count}}",
+      "unmappedIssues": "위치를 특정하지 못한 이슈 {{count}}건 — 클릭하면 검수 패널이 열립니다",
       "editUnit": "이 문단 편집 ↗",
       "mismatch": {
         "openInDocument": "이 구간 문서 보기로 열기 ↗",
