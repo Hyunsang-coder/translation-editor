@@ -529,6 +529,8 @@
     "category.consistency.desc": "Same term translated differently",
     "apply": "Apply",
     "copy": "Copy",
+    "viewInDocument": "Show in document",
+    "viewNotFound": "Could not locate this passage in the document.",
     "ignore": "Done",
     "applySuccess": "Suggested fix applied.",
     "copySuccess": "Copied to clipboard. Paste it in the appropriate location.",

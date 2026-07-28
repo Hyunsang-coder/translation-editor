@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
-
-/** 컬럼 기본 너비 비율(%) — 통합 / 수정 제안 / 설명 */
-const DEFAULT_COL_PCT: [number, number, number] = [16.67, 50, 33.33];
-/** 각 컬럼 최소 너비(%) */
-const MIN_COL_PCT = 8;
 
 interface ReviewResultsTableProps {
   issues: ReviewIssue[];
@@ -15,6 +10,8 @@ interface ReviewResultsTableProps {
   onDelete?: (issueId: string) => void;
   onCopy?: (issue: ReviewIssue) => void;
   onApply?: (issue: ReviewIssue) => void;
+  /** 이슈가 가리키는 번역문 구절을 에디터에서 선택·포커스한다 */
+  onViewInDocument?: (issue: ReviewIssue) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
   severityFilter?: IssueSeverity[];
@@ -75,73 +72,13 @@ export function ReviewResultsTable({
   onDelete,
   onCopy,
   onApply,
+  onViewInDocument,
   allChecked = false,
   totalIssuesFound = 0,
   severityFilter,
   onToggleSeverity,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
-
-  // 컬럼 너비(%) 상태 — 드래그로 조정. 합은 항상 100% 유지(인접 컬럼 간 교환).
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const [colPct, setColPct] = useState<[number, number, number]>(DEFAULT_COL_PCT);
-  const dragRef = useRef<{
-    index: number;
-    startX: number;
-    startLeft: number;
-    startRight: number;
-    totalPx: number;
-  } | null>(null);
-
-  const handleResizeStart = useCallback(
-    (index: number) => (e: React.MouseEvent) => {
-      e.preventDefault();
-      const totalPx = tableScrollRef.current?.clientWidth ?? 0;
-      if (totalPx <= 0) return;
-      dragRef.current = {
-        index,
-        startX: e.clientX,
-        startLeft: colPct[index]!,
-        startRight: colPct[index + 1]!,
-        totalPx,
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    },
-    [colPct],
-  );
-
-  const resetColumnWidths = useCallback(() => setColPct(DEFAULT_COL_PCT), []);
-
-  useEffect(() => {
-    const handleMove = (e: MouseEvent): void => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      const deltaPct = ((e.clientX - drag.startX) / drag.totalPx) * 100;
-      const minDelta = -(drag.startLeft - MIN_COL_PCT);
-      const maxDelta = drag.startRight - MIN_COL_PCT;
-      const clamped = Math.max(minDelta, Math.min(maxDelta, deltaPct));
-      setColPct((prev) => {
-        const next: [number, number, number] = [prev[0], prev[1], prev[2]];
-        next[drag.index] = drag.startLeft + clamped;
-        next[drag.index + 1] = drag.startRight - clamped;
-        return next;
-      });
-    };
-    const handleUp = (): void => {
-      if (dragRef.current) {
-        dragRef.current = null;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('mouseup', handleUp);
-    };
-  }, []);
 
   // 전체 이슈에서 심각도별 카운트 (필터링 전)
   const severityCounts = useMemo(
@@ -285,143 +222,111 @@ export function ReviewResultsTable({
         </div>
       </div>
 
-      {/* 테이블 - 컬럼 순서: 통합 컬럼(체크|#|심각도|유형) | 수정 제안 | 설명
-          컬럼 너비는 colgroup으로 제어하며, 헤더 경계의 핸들을 드래그해 조정 */}
-      <div ref={tableScrollRef} className="overflow-x-auto flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
-        <table className="w-full text-xs table-fixed">
-          <colgroup>
-            <col style={{ width: `${colPct[0]}%` }} />
-            <col style={{ width: `${colPct[1]}%` }} />
-            <col style={{ width: `${colPct[2]}%` }} />
-          </colgroup>
-          <thead className="sticky top-0 bg-editor-surface z-10">
-            <tr className="border-b border-editor-border">
-              {/* 통합 컬럼 헤더 */}
-              <th className="relative px-2 py-2 text-center font-medium text-editor-muted">
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  onChange={() => onToggleAll?.()}
-                  className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                  aria-label={t('review.selectAll', '전체 선택')}
-                />
-                <span
-                  role="separator"
-                  aria-orientation="vertical"
-                  title={t('review.resizeColumn', '열 너비 조정 (더블클릭 시 초기화)')}
-                  onMouseDown={handleResizeStart(0)}
-                  onDoubleClick={resetColumnWidths}
-                  className="absolute top-0 right-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-primary-500/40 active:bg-primary-500/60 transition-colors select-none"
-                />
-              </th>
-              {/* 수정 제안 */}
-              <th className="relative px-3 py-2 text-left font-medium text-editor-muted">
-                {t('review.suggestedFix', '수정 제안')}
-                <span
-                  role="separator"
-                  aria-orientation="vertical"
-                  title={t('review.resizeColumn', '열 너비 조정 (더블클릭 시 초기화)')}
-                  onMouseDown={handleResizeStart(1)}
-                  onDoubleClick={resetColumnWidths}
-                  className="absolute top-0 right-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-primary-500/40 active:bg-primary-500/60 transition-colors select-none"
-                />
-              </th>
-              {/* 설명 */}
-              <th className="px-3 py-2 text-left font-medium text-editor-muted">
-                {t('review.description', '설명')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIssues.map((issue, idx) => (
-              <tr
-                key={issue.id}
-                className={`
-                  border-b border-editor-border/50 hover:bg-editor-bg/50 transition-colors
-                  ${issue.checked ? 'bg-primary-500/5' : ''}
-                `}
-              >
-                {/* 통합 컬럼: 체크박스, #, 심각도, 유형을 세로로 배치 */}
-                <td className="px-2 py-2 align-top">
-                  <div className="flex flex-col items-center gap-1.5">
-                    {/* 체크박스 */}
-                    <input
-                      type="checkbox"
-                      checked={issue.checked}
-                      onChange={() => onToggleCheck?.(issue.id)}
-                      className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
-                      aria-label={t('review.selectIssue', '이슈 선택')}
-                    />
-                    {/* 번호 */}
-                    <span className="text-editor-muted font-medium text-[10px]">
-                      {idx + 1}
-                    </span>
-                    {/* 심각도 */}
-                    <span className={`text-[10px] font-medium ${getSeverityColor(issue.severity)}`}>
-                      {t(severityLabelKeys[issue.severity])}
-                    </span>
-                    {/* 유형 */}
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
-                      {t(issueTypeLabelKeys[issue.type])}
-                    </span>
-                  </div>
-                </td>
-                {/* 수정 제안 */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="break-words">
-                      {issue.suggestedFix ? stripRichTextMarkup(issue.suggestedFix) : '-'}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {/* 적용 가능 조건: 교체 앵커(targetExcerpt)와 제안이 모두 있을 때.
-                          완전 누락((missing) → targetExcerpt 없음)은 삽입 위치를 특정할 수 없어 복사만 제공 */}
-                      {issue.suggestedFix && issue.targetExcerpt && onApply && (
-                        <button
-                          type="button"
-                          onClick={() => onApply(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-                          title={t('review.apply', '적용')}
-                        >
-                          {t('review.apply', '적용')}
-                        </button>
-                      )}
-                      {issue.suggestedFix && onCopy && (
-                        <button
-                          type="button"
-                          onClick={() => onCopy(issue)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
-                          title={t('review.copy', '복사')}
-                        >
-                          {t('review.copy', '복사')}
-                        </button>
-                      )}
-                      {issue.suggestedFix && onDelete && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(issue.id)}
-                          className="px-1.5 py-0.5 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                          title={t('review.ignore', '무시')}
-                        >
-                          {t('review.ignore', '무시')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                {/* 설명 (bullet 없음) */}
-                <td className="px-3 py-2 text-editor-text text-xs align-top">
-                  {issue.description ? (
-                    <div className="space-y-0.5">
-                      {stripRichTextMarkup(issue.description).split(' | ').map((item, i) => (
-                        <div key={`${issue.id}-desc-${i}`} className="break-words">{item}</div>
-                      ))}
-                    </div>
-                  ) : '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* 이슈 카드 리스트 — 250px 사이드바에서 3열 table-fixed가 뭉개지던 것을 대체 */}
+      <div className="flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
+        <label className="sticky top-0 z-10 flex items-center gap-2 px-3.5 py-2 bg-editor-surface border-b border-editor-border text-[11px] text-editor-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={() => onToggleAll?.()}
+            className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+            aria-label={t('review.selectAll', '전체 선택')}
+          />
+          <span>{t('review.selectAll', '전체 선택')}</span>
+        </label>
+
+        {filteredIssues.map((issue, idx) => (
+          <div
+            key={issue.id}
+            data-testid="review-issue-card"
+            className={`
+              p-3.5 border-b border-editor-border border-l-[3px] transition-colors
+              ${issue.checked
+                ? 'bg-accent-tint border-l-primary-500'
+                : 'border-l-transparent hover:bg-editor-bg/50'}
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={issue.checked}
+                onChange={() => onToggleCheck?.(issue.id)}
+                className="w-3.5 h-3.5 shrink-0 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                aria-label={t('review.selectIssue', '이슈 선택')}
+              />
+              <span className={`text-[10px] font-bold ${getSeverityColor(issue.severity)}`}>
+                {t(severityLabelKeys[issue.severity])}
+              </span>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
+                {t(issueTypeLabelKeys[issue.type])}
+              </span>
+              <span className="ml-auto text-[11px] text-editor-muted tabular-nums">{idx + 1}</span>
+            </div>
+
+            {issue.targetExcerpt && (
+              <p className="mt-2 text-xs text-editor-muted line-through break-words">
+                {stripRichTextMarkup(issue.targetExcerpt)}
+              </p>
+            )}
+            {issue.suggestedFix && (
+              <p className="mt-1 text-xs font-bold text-accent-deep break-words">
+                {stripRichTextMarkup(issue.suggestedFix)}
+              </p>
+            )}
+            {issue.description && (
+              <div className="mt-1.5 space-y-0.5 text-xs text-editor-muted">
+                {stripRichTextMarkup(issue.description).split(' | ').map((item, i) => (
+                  <div key={`${issue.id}-desc-${i}`} className="break-words">{item}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+              {/* 적용 가능 조건: 교체 앵커(targetExcerpt)와 제안이 모두 있을 때.
+                  완전 누락((missing) → targetExcerpt 없음)은 삽입 위치를 특정할 수 없어 복사만 제공 */}
+              {issue.suggestedFix && issue.targetExcerpt && onApply && (
+                <button
+                  type="button"
+                  onClick={() => onApply(issue)}
+                  className="h-7 px-2 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                  title={t('review.apply', '적용')}
+                >
+                  {t('review.apply', '적용')}
+                </button>
+              )}
+              {issue.targetExcerpt && onViewInDocument && (
+                <button
+                  type="button"
+                  onClick={() => onViewInDocument(issue)}
+                  className="h-7 px-2 text-xs rounded bg-editor-surface text-editor-text hover:bg-editor-border transition-colors"
+                  title={t('review.viewInDocument', '본문에서 보기')}
+                >
+                  {t('review.viewInDocument', '본문에서 보기')}
+                </button>
+              )}
+              {issue.suggestedFix && onCopy && (
+                <button
+                  type="button"
+                  onClick={() => onCopy(issue)}
+                  className="h-7 px-2 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
+                  title={t('review.copy', '복사')}
+                >
+                  {t('review.copy', '복사')}
+                </button>
+              )}
+              {issue.suggestedFix && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(issue.id)}
+                  className="h-7 px-2 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                  title={t('review.ignore', '무시')}
+                >
+                  {t('review.ignore', '무시')}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

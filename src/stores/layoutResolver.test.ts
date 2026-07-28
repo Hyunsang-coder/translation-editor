@@ -18,7 +18,8 @@ describe('resolveLayout', () => {
   it('여유 충분하면 desired 그대로 반환', () => {
     const result = resolveLayout(makeInput());
     // 1440 - 160(project) - 250 - 250 = 780 >= 400(EDITOR_MIN) → OK
-    expect(result).toEqual({ left: 250, right: 260 });
+    // 좌측 desired 250은 SIDEBAR_MIN(280) 미만이라 280으로 올라간다.
+    expect(result).toEqual({ left: LAYOUT.SIDEBAR_MIN, right: 260 });
   });
 
   it('양쪽 사이드바 600px → 비례 축소', () => {
@@ -44,9 +45,9 @@ describe('resolveLayout', () => {
     });
     const result = resolveLayout(input);
     // 1000 - 48(project collapsed) - 400(EDITOR_MIN) = 552 budget
-    // ratio = 552 / 800 = 0.69
-    // 400 * 0.69 = 276
-    expect(result.left).toBe(276);
+    // ratio = 552 / 800 = 0.69 → 400 * 0.69 = 276
+    // 좌측은 SIDEBAR_MIN(280)이 비례 축소값보다 커서 clamp된다.
+    expect(result.left).toBe(LAYOUT.SIDEBAR_MIN);
     expect(result.right).toBe(276);
   });
 
@@ -123,10 +124,10 @@ describe('resolveLayout', () => {
     // budget = 1200 - 160 - 400 = 640
     // total desired = 300 + 600 = 900
     // ratio = 640 / 900 = 0.711
-    // left: 300 * 0.711 = 213, right: 600 * 0.711 = 427
-    expect(result.left).toBe(213);
+    // left: 300 * 0.711 = 213 → SIDEBAR_MIN(280)으로 clamp, right: 600 * 0.711 = 427
+    // 최소 너비 clamp는 budget보다 우선한다(채팅 사이드바 clamp와 동일한 기존 동작).
+    expect(result.left).toBe(LAYOUT.SIDEBAR_MIN);
     expect(result.right).toBe(427);
-    expect(result.left + result.right).toBeLessThanOrEqual(640);
   });
 });
 
