@@ -120,6 +120,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
   const toggleSourceOnlyMode = useUIStore((s) => s.toggleSourceOnlyMode);
+  const editorViewMode = useUIStore((s) => s.editorViewMode);
+  const setEditorViewMode = useUIStore((s) => s.setEditorViewMode);
 
   // 숨긴 사이드바 되살림 (에디터 헤더 양 끝) — 바 내부엔 UI가 없어 에디터 쪽에 노출.
   // 좌/우 모두 hidden뿐 아니라 panels 빈 상태(렌더 null)도 되살림 대상 (좌우 대칭).
@@ -1466,6 +1468,7 @@ export function EditorCanvasTipTap(): JSX.Element {
   const showSource = !focusMode;
   const showTarget = !sourceOnlyMode;
   const showSplitHandle = showSource && showTarget;
+  const isAlignmentMode = editorViewMode === 'alignment';
 
   return (
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
@@ -1484,6 +1487,32 @@ export function EditorCanvasTipTap(): JSX.Element {
             <PanelLeftOpen className="w-4 h-4" />
           </button>
         )}
+        {/* 보기 모드 — 문서 보기(편집) ↔ 정렬 검사(읽기 전용 대조) */}
+        <div
+          className="flex items-center shrink-0 rounded-md border border-editor-border overflow-hidden"
+          role="group"
+          aria-label={t('editor.viewMode.label', '보기 모드')}
+        >
+          {([
+            { mode: 'document' as const, label: t('editor.viewMode.document', '문서 보기') },
+            { mode: 'alignment' as const, label: t('editor.viewMode.alignment', '정렬 검사') },
+          ]).map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setEditorViewMode(mode)}
+              aria-pressed={editorViewMode === mode}
+              className={`h-[26px] px-3 text-[11px] transition-colors ${
+                editorViewMode === mode
+                  ? 'bg-primary-500 text-white font-extrabold'
+                  : 'font-semibold text-editor-muted hover:bg-editor-border'
+              }`}
+              data-testid={`editor-view-mode-${mode}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <StatusStrip />
         {rightSidebarInvisible && (
           <button
@@ -1501,6 +1530,14 @@ export function EditorCanvasTipTap(): JSX.Element {
 
       {/* Editor Panels */}
       <div className="flex-1 min-h-0 min-w-0 relative">
+      {/* 정렬 검사 모드에서도 PanelGroup을 언마운트하지 않는다 — 언마운트하면 TipTap
+          인스턴스가 파괴되고 editorStore가 비어 점프·검수 적용이 깨진다.
+          visibility:hidden은 레이아웃을 유지하므로 스크롤 위치가 보존되고, 숨은 동안
+          contenteditable이 포커스를 받을 수 없어 읽기 전용도 함께 강제된다. */}
+      <div
+        className="h-full min-h-0 min-w-0"
+        style={isAlignmentMode ? { visibility: 'hidden' } : undefined}
+      >
       <PanelGroup orientation="horizontal" className="h-full min-h-0 min-w-0" id="editor-panels">
         {/* Source Panel */}
         {showSource && (
@@ -1668,6 +1705,15 @@ export function EditorCanvasTipTap(): JSX.Element {
         </Panel>
         )}
       </PanelGroup>
+      </div>
+
+      {/* 정렬 검사 뷰 — 3단계에서 AlignmentView로 채운다 */}
+      {isAlignmentMode && (
+        <div
+          className="absolute inset-0 bg-editor-surface overflow-auto"
+          data-testid="alignment-view"
+        />
+      )}
 
       </div>
 

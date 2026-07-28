@@ -323,6 +323,11 @@
     "projectTitlePlaceholder": "Project title"
   },
   "editor": {
+    "viewMode": {
+      "label": "View mode",
+      "document": "Document",
+      "alignment": "Alignment"
+    },
     "translationModel": "Translation Model",
     "translationModelAriaLabel": "Translation model",
     "translate": "Translate",

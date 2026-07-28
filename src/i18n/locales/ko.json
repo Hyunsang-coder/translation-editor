@@ -321,6 +321,11 @@
     "projectTitlePlaceholder": "프로젝트 제목"
   },
   "editor": {
+    "viewMode": {
+      "label": "보기 모드",
+      "document": "문서 보기",
+      "alignment": "정렬 검사"
+    },
     "translationModel": "번역 모델",
     "translationModelAriaLabel": "번역 모델",
     "translate": "번역",

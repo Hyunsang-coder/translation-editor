@@ -11,6 +11,9 @@ import { useChatStore } from '@/stores/chatStore';
 // Store State Interface
 // ============================================
 
+/** 에디터 본문 영역의 보기 모드. 기본은 `document`(2분할 편집). */
+export type EditorViewMode = 'document' | 'alignment';
+
 interface UIState extends EditorUIState {
   theme: 'light' | 'dark' | 'system';
   language: 'ko' | 'en';
@@ -44,6 +47,11 @@ interface UIState extends EditorUIState {
   focusMode: boolean;
   sourceOnlyMode: boolean;
 
+  // 정렬 검사 뷰 (Phase 4.5) — 문서 보기와 배타적인 읽기 전용 대조 뷰.
+  // 정렬 결과 자체는 스토어에 두지 않는다. AlignmentView가 문서 리비전으로 계산한다.
+  editorViewMode: EditorViewMode;
+  activeAlignmentUnitId: string | null; // 인스펙터가 볼 대상 (target 유닛 id). 비영속.
+
   // AI 워크플로 (번역/폴리싱) — 실행 로직은 EditorCanvasTipTap이 소유하고,
   // 툴바는 nonce 트리거로 요청만 보낸다 (reviewStore.reviewTrigger와 동일 패턴).
   // 비영속(persist 제외).
@@ -59,6 +67,10 @@ interface UIActions {
   setFocusMode: (focusMode: boolean) => void;
   toggleSourceOnlyMode: () => void;
   setSourceOnlyMode: (sourceOnlyMode: boolean) => void;
+
+  // 정렬 검사 뷰
+  setEditorViewMode: (mode: EditorViewMode) => void;
+  setActiveAlignmentUnitId: (unitId: string | null) => void;
 
   // Panel
   setActivePanel: (panel: 'source' | 'target' | 'chat') => void;
@@ -166,6 +178,8 @@ export const useUIStore = create<UIStore>()(
       // Initial State
       focusMode: false,
       sourceOnlyMode: false,
+      editorViewMode: 'document',
+      activeAlignmentUnitId: null,
       activePanel: 'target',
       selectedBlockId: null,
       showDiff: false,
@@ -226,6 +240,15 @@ export const useUIStore = create<UIStore>()(
 
       setSourceOnlyMode: (sourceOnlyMode: boolean): void => {
         set({ sourceOnlyMode, ...(sourceOnlyMode ? { focusMode: false } : {}) });
+      },
+
+      // 정렬 검사 뷰
+      setEditorViewMode: (mode: EditorViewMode): void => {
+        set({ editorViewMode: mode });
+      },
+
+      setActiveAlignmentUnitId: (unitId: string | null): void => {
+        set({ activeAlignmentUnitId: unitId });
       },
 
       // Panel
@@ -975,6 +998,8 @@ export const useUIStore = create<UIStore>()(
         language: state.language,
         focusMode: state.focusMode,
         sourceOnlyMode: state.sourceOnlyMode,
+        // 사용자가 고른 보기 모드는 유지한다 (activeAlignmentUnitId는 persist 안함)
+        editorViewMode: state.editorViewMode,
         isPanelsSwapped: state.isPanelsSwapped,
         // Dual sidebar persist
         leftSidebar: state.leftSidebar,

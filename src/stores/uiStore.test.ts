@@ -2,6 +2,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { chatPanelId } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 
+describe('uiStore editorViewMode', () => {
+  it('기본 보기 모드는 문서 보기다', () => {
+    expect(useUIStore.getInitialState().editorViewMode).toBe('document');
+  });
+
+  it('setEditorViewMode로 정렬 검사와 문서 보기를 오간다', () => {
+    useUIStore.getState().setEditorViewMode('alignment');
+    expect(useUIStore.getState().editorViewMode).toBe('alignment');
+
+    useUIStore.getState().setEditorViewMode('document');
+    expect(useUIStore.getState().editorViewMode).toBe('document');
+  });
+});
+
 describe('uiStore syncChatPanels', () => {
   beforeEach(() => {
     useUIStore.setState({
