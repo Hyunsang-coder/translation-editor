@@ -628,6 +628,17 @@ function buildMockScript(seedProjects: MockProject[]): string {
     'plugin:dialog|confirm': () => true,
     'plugin:dialog|ask': () => true,
     'plugin:dialog|message': () => null,
+    'plugin:dialog|save': (args) => {
+      const options = args?.options ?? {};
+      return '/mock/' + (options.defaultPath || 'download');
+    },
+
+    // ── File write (내보내기 검증용) — 실제로 쓰지 않고 window에 모아둔다 ──
+    write_text_file: (args) => {
+      window.__MOCK_WRITTEN_FILES__ = window.__MOCK_WRITTEN_FILES__ || [];
+      window.__MOCK_WRITTEN_FILES__.push({ path: args?.path, content: args?.content });
+      return null;
+    },
   };
 
   // ── __TAURI_INTERNALS__ injection ──

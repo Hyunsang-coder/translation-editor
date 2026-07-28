@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useShallow } from 'zustand/shallow';
-import { Lock, TriangleAlert } from 'lucide-react';
+import { Download, Lock, TriangleAlert } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
+import { buildAlignmentReport, saveAlignmentReport } from '@/utils/alignmentReport';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
 import {
   useAlignmentAnnotations,
@@ -146,11 +147,12 @@ function columnLabel(base: string, language: string | null): string {
 export function AlignmentView(): JSX.Element {
   const { t } = useTranslation();
 
-  const { sourceDocJson, targetDocJson, targetLanguage } = useProjectStore(
+  const { sourceDocJson, targetDocJson, targetLanguage, projectId } = useProjectStore(
     useShallow((s) => ({
       sourceDocJson: s.sourceDocJson,
       targetDocJson: s.targetDocJson,
       targetLanguage: s.project?.metadata.targetLanguage ?? null,
+      projectId: s.project?.id ?? null,
     }))
   );
 
@@ -209,6 +211,26 @@ export function AlignmentView(): JSX.Element {
       commentCount: merged.commentCount + entry.commentCount,
       topSeverity: pickTopSeverity(merged.topSeverity, entry.topSeverity),
     }));
+  };
+
+  const pairedPercent = alignResult.totalUnits === 0
+    ? 100
+    : Math.round((alignResult.pairedCount / alignResult.totalUnits) * 100);
+
+  const exportReport = async (): Promise<void> => {
+    if (!projectId) return;
+    const report = buildAlignmentReport(projectId, alignResult, annotations.unmappedIssueCount);
+    try {
+      const outcome = await saveAlignmentReport(report);
+      if (outcome === 'saved') {
+        useUIStore.getState().addToast({ type: 'success', message: t('editor.alignment.reportSaved') });
+      }
+    } catch (error) {
+      useUIStore.getState().addToast({
+        type: 'error',
+        message: t('editor.alignment.reportFailed', { message: String(error) }),
+      });
+    }
   };
 
   const sourceLanguage = useMemo(() => {
@@ -325,6 +347,47 @@ export function AlignmentView(): JSX.Element {
             {t('editor.alignment.unmappedIssues', { count: annotations.unmappedIssueCount })}
           </button>
         )}
+      </div>
+
+      {/* 하단 정렬 요약 */}
+      <div className="h-14 shrink-0 border-t border-editor-border bg-editor-surface flex items-center gap-[18px] px-[18px]">
+        <span className="text-[10px] font-extrabold tracking-[.1em] uppercase text-editor-muted shrink-0">
+          {t('editor.alignment.summaryLabel', '정렬 상태')}
+        </span>
+        <span className="text-sm font-bold shrink-0">
+          {t('editor.alignment.summaryTotal', { count: alignResult.totalUnits })}
+          <span className="mx-1.5 text-editor-muted font-normal">·</span>
+          <span className="text-primary-500">
+            {t('editor.alignment.summaryPaired', { count: alignResult.pairedCount })}
+          </span>
+          <span className="mx-1.5 text-editor-muted font-normal">·</span>
+          <span className="text-amber-700">
+            {t('editor.alignment.summaryMismatched', { count: alignResult.mismatchCount })}
+          </span>
+        </span>
+
+        <span className="flex-1 max-w-[420px] h-2 bg-editor-border rounded overflow-hidden flex" aria-hidden="true">
+          <span className="h-full bg-primary-500" style={{ width: `${pairedPercent}%` }} />
+          <span className="h-full bg-amber-400" style={{ width: `${100 - pairedPercent}%` }} />
+        </span>
+
+        {/* degraded를 조용히 넘기지 않는다 — 순번 폴백 결과를 정상으로 믿게 두면 안 된다 */}
+        {alignResult.degraded && (
+          <span className="text-[11px] font-semibold text-amber-700 shrink-0" data-testid="alignment-degraded">
+            {t('editor.alignment.degraded', '정렬 정확도 낮음 (문단 수 과다)')}
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void exportReport()}
+          disabled={!projectId}
+          className="ml-auto h-[26px] px-2.5 shrink-0 inline-flex items-center gap-1.5 border border-editor-border rounded text-[11px] font-semibold text-editor-text hover:bg-editor-bg disabled:opacity-50 transition-colors"
+          data-testid="alignment-export-report"
+        >
+          <Download size={12} />
+          {t('editor.alignment.exportReport', '정렬 리포트')}
+        </button>
       </div>
     </div>
   );
