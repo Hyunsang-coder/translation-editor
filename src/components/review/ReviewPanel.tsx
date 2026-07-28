@@ -10,7 +10,7 @@ import { runReview } from '@/ai/review/runReview';
 import { serializeUserComments } from '@/ai/commentContext';
 import { useCommentStore } from '@/stores/commentStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildAlignedChunksAsync, type AlignedSegment, type AlignedChunk } from '@/ai/tools/reviewTool';
+import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
@@ -39,42 +39,7 @@ import { stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { tipTapJsonToHtml } from '@/utils/markdownConverter';
-
-/**
- * Source 텍스트의 언어를 감지
- * 간단한 휴리스틱: 한글/영문/일본어/중국어 비율로 판단
- */
-function detectSourceLanguage(segments: AlignedSegment[]): string {
-  const sampleText = segments
-    .slice(0, 3)
-    .map((s) => s.sourceText)
-    .join(' ')
-    .slice(0, 500);
-
-  if (!sampleText.trim()) return '원문';
-
-  // 각 문자 체계 비율 계산
-  const koreanChars = (sampleText.match(/[\uAC00-\uD7AF\u1100-\u11FF]/g) || []).length;
-  const japaneseChars = (sampleText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
-  const chineseChars = (sampleText.match(/[\u4E00-\u9FFF]/g) || []).length;
-  const latinChars = (sampleText.match(/[a-zA-Z]/g) || []).length;
-
-  const total = koreanChars + japaneseChars + chineseChars + latinChars;
-  if (total === 0) return '원문';
-
-  const koreanRatio = koreanChars / total;
-  const japaneseRatio = japaneseChars / total;
-  const chineseRatio = chineseChars / total;
-  const latinRatio = latinChars / total;
-
-  // 가장 높은 비율의 언어 반환
-  if (koreanRatio > 0.3) return 'Korean';
-  if (japaneseRatio > 0.3) return 'Japanese';
-  if (chineseRatio > 0.3) return 'Chinese';
-  if (latinRatio > 0.5) return 'English';
-
-  return '원문';
-}
+import { detectSourceLanguage } from '@/utils/detectLanguage';
 
 /**
  * Review Panel 컴포넌트
@@ -307,7 +272,9 @@ export function ReviewPanel(): JSX.Element {
           const response = await runReview({
             segments: chunk.segments,
             resolvedContext,
-            sourceLanguage: detectSourceLanguage(chunk.segments),
+            sourceLanguage: detectSourceLanguage(
+              chunk.segments.slice(0, 3).map((s) => s.sourceText).join(' '),
+            ),
             targetLanguage: project.metadata.targetLanguage,
             ...(serializedComments ? { userComments: serializedComments } : {}),
             abortSignal: controller.signal,

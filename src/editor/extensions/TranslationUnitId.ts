@@ -19,6 +19,8 @@ export interface TranslationUnit {
   type: string;
   path: number[];
   text: string;
+  /** heading일 때만 채워진다. 정렬에서 h2↔h3 오매칭을 막는 용도(alignUnits.ts) */
+  level?: number;
 }
 
 export interface TranslationUnitReattachmentResult {
@@ -75,11 +77,13 @@ export function collectTranslationUnits(doc: TranslationUnitDocument): Translati
   visitDocument(doc, (node, path) => {
     if (!isTranslationUnit(node)) return;
     const id = node.attrs?.translationUnitId;
+    const level = node.attrs?.level;
     units.push({
       ...(typeof id === 'string' && id.length > 0 ? { id } : {}),
       type: node.type,
       path,
       text: nodeText(node),
+      ...(typeof level === 'number' ? { level } : {}),
     });
   });
   return units;

@@ -321,6 +321,39 @@
     "projectTitlePlaceholder": "프로젝트 제목"
   },
   "editor": {
+    "viewMode": {
+      "label": "보기 모드",
+      "document": "문서 보기",
+      "alignment": "정렬 검사"
+    },
+    "alignment": {
+      "readOnly": "읽기 전용",
+      "sourceColumn": "원문",
+      "targetColumn": "번역문",
+      "alignColumn": "정렬",
+      "empty": "정렬할 문단이 없습니다.",
+      "summaryLabel": "정렬 상태",
+      "summaryTotal": "문단 {{count}}개",
+      "summaryPaired": "{{count}}개 정렬",
+      "summaryMismatched": "{{count}}개 불일치",
+      "degraded": "정렬 정확도 낮음 (문단 수 과다)",
+      "exportReport": "정렬 리포트",
+      "reportSaved": "정렬 리포트를 저장했습니다.",
+      "reportFailed": "정렬 리포트 저장에 실패했습니다: {{message}}",
+      "issueBadge": "이슈 {{count}}",
+      "commentBadge": "코멘트 {{count}}",
+      "unmappedIssues": "위치를 특정하지 못한 이슈 {{count}}건 — 클릭하면 검수 패널이 열립니다",
+      "editUnit": "이 문단 편집 ↗",
+      "mismatch": {
+        "openInDocument": "이 구간 문서 보기로 열기 ↗",
+        "extraTarget": "정렬 불일치 — 번역문에 문단이 {{count}}개 더 있습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",
+        "extraSource": "정렬 불일치 — 원문에 문단이 {{count}}개 더 있습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",
+        "both": "정렬 불일치 — 원문 {{sourceCount}}개, 번역문 {{targetCount}}개가 짝을 찾지 못했습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",
+        "note": "이 구간은 짝을 추정하지 않고 그대로 표시합니다.",
+        "noSource": "대응하는 원문 없음",
+        "noTarget": "대응하는 번역문 없음"
+      }
+    },
     "translationModel": "번역 모델",
     "translationModelAriaLabel": "번역 모델",
     "translate": "번역",
