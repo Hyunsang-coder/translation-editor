@@ -334,7 +334,9 @@
       "targetColumn": "Target",
       "alignColumn": "Alignment",
       "empty": "No paragraphs to align.",
+      "editUnit": "Edit this paragraph ↗",
       "mismatch": {
+        "openInDocument": "Open this range in document view ↗",
         "extraTarget": "Alignment mismatch — the target has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",
         "extraTarget_one": "Alignment mismatch — the target has {{count}} extra paragraph (source {{sourceTotal}} : target {{targetTotal}})",
         "extraTarget_other": "Alignment mismatch — the target has {{count}} extra paragraphs (source {{sourceTotal}} : target {{targetTotal}})",

@@ -10,6 +10,8 @@ interface AlignmentRowProps {
   active: boolean;
   /** 정상 쌍만 선택할 수 있다. 불일치 행은 null (구간 배너의 버튼으로 이동한다) */
   onSelect: (() => void) | null;
+  /** 활성 행에서만 노출되는 "이 문단 편집" — 문서 보기로 전환하고 커서를 옮긴다 */
+  onEdit: (() => void) | null;
 }
 
 /** heading은 본문보다 크게 — 표에서도 문서 구조가 읽히도록. */
@@ -25,7 +27,7 @@ function unitTextClass(unit: TranslationUnit): string {
  * 플레이스홀더로 표시한다. **짝을 추정하지 않는다** — 틀린 짝을 믿게 하느니
  * 불일치를 그대로 드러낸다.
  */
-export function AlignmentRow({ index, op, active, onSelect }: AlignmentRowProps): JSX.Element {
+export function AlignmentRow({ index, op, active, onSelect, onEdit }: AlignmentRowProps): JSX.Element {
   const { t } = useTranslation();
 
   const isPair = op.kind === 'pair';
@@ -81,6 +83,19 @@ export function AlignmentRow({ index, op, active, onSelect }: AlignmentRowProps)
       {target ? (
         <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} ${unitTextClass(target)}`}>
           {target.text}
+          {active && onEdit && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="ml-2.5 h-6 px-2.5 inline-flex items-center align-middle border border-primary-500 bg-white rounded text-[11px] font-bold text-accent-deep hover:bg-accent-tint transition-colors"
+              data-testid="alignment-row-edit"
+            >
+              {t('editor.alignment.editUnit', '이 문단 편집 ↗')}
+            </button>
+          )}
         </div>
       ) : (
         <div className={`flex-1 min-w-0 px-5 py-3 border-l ${cellBorder} flex items-center`}>

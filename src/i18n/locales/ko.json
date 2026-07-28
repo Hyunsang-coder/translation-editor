@@ -332,7 +332,9 @@
       "targetColumn": "번역문",
       "alignColumn": "정렬",
       "empty": "정렬할 문단이 없습니다.",
+      "editUnit": "이 문단 편집 ↗",
       "mismatch": {
+        "openInDocument": "이 구간 문서 보기로 열기 ↗",
         "extraTarget": "정렬 불일치 — 번역문에 문단이 {{count}}개 더 있습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",
         "extraSource": "정렬 불일치 — 원문에 문단이 {{count}}개 더 있습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",
         "both": "정렬 불일치 — 원문 {{sourceCount}}개, 번역문 {{targetCount}}개가 짝을 찾지 못했습니다 (원문 {{sourceTotal}} : 번역문 {{targetTotal}})",

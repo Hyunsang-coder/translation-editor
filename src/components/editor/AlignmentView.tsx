@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { useShallow } from 'zustand/shallow';
 import { Lock, TriangleAlert } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
@@ -42,6 +43,49 @@ function groupIntoBlocks(ops: AlignOp[]): RenderBlock[] {
 
 function rowKey(number: number, unit: TranslationUnit): string {
   return `${number}-${unit.id ?? unit.path.join('.')}`;
+}
+
+/**
+ * 문서 보기로 전환하고 해당 문단에 커서를 놓는다.
+ *
+ * `scrollIntoView()`를 쓰지 않는다(앱 규칙) — `setTextSelection` + `focus()`가
+ * ProseMirror의 자체 스크롤 로직을 태우므로 그것으로 충분하다.
+ */
+function jumpToUnit(unitId: string, field: 'source' | 'target'): void {
+  const editor = field === 'source'
+    ? useEditorStore.getState().sourceEditor
+    : useEditorStore.getState().targetEditor;
+  if (!editor || editor.isDestroyed) return;
+
+  let pos: number | null = null;
+  editor.state.doc.descendants((node, nodePos) => {
+    if (pos !== null) return false;
+    if (node.attrs?.translationUnitId === unitId) {
+      pos = nodePos + 1;
+      return false;
+    }
+    return true;
+  });
+  if (pos === null) return;
+
+  useUIStore.getState().setEditorViewMode('document');
+  // 모드 전환 후 에디터가 다시 보이게 될 때까지 한 프레임 기다린다
+  requestAnimationFrame(() => {
+    editor.chain().focus().setTextSelection(pos!).run();
+  });
+}
+
+/** 구간의 첫 유닛 — 배너의 "문서 보기로 열기"가 향할 곳. */
+function firstUnitOf(block: Extract<RenderBlock, { kind: 'mismatch' }>): {
+  id: string;
+  field: 'source' | 'target';
+} | null {
+  for (const { op } of block.items) {
+    const unit = op.kind === 'target-only' ? op.target : op.source;
+    const field = op.kind === 'target-only' ? 'target' : 'source';
+    if (unit.id) return { id: unit.id, field };
+  }
+  return null;
 }
 
 /**
@@ -184,6 +228,7 @@ export function AlignmentView(): JSX.Element {
                   op={block.op}
                   active={unitId !== null && unitId === activeAlignmentUnitId}
                   onSelect={() => setActiveAlignmentUnitId(unitId)}
+                  onEdit={unitId === null ? null : () => jumpToUnit(unitId, 'target')}
                 />
               );
             }
@@ -202,6 +247,20 @@ export function AlignmentView(): JSX.Element {
                   <span className="text-[11px] text-amber-800">
                     {t('editor.alignment.mismatch.note', '이 구간은 짝을 추정하지 않고 그대로 표시합니다.')}
                   </span>
+                  {(() => {
+                    const entry = firstUnitOf(block);
+                    if (!entry) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => jumpToUnit(entry.id, entry.field)}
+                        className="ml-auto h-6 px-2.5 shrink-0 border border-amber-700 bg-white rounded text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                        data-testid="alignment-band-open"
+                      >
+                        {t('editor.alignment.mismatch.openInDocument', '이 구간 문서 보기로 열기 ↗')}
+                      </button>
+                    );
+                  })()}
                 </div>
                 {block.items.map(({ op, number }) => (
                   <AlignmentRow
@@ -210,6 +269,7 @@ export function AlignmentView(): JSX.Element {
                     op={op}
                     active={false}
                     onSelect={null}
+                    onEdit={null}
                   />
                 ))}
               </div>

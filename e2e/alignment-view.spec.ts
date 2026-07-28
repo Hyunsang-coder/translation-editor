@@ -126,4 +126,43 @@ test.describe('Alignment mismatch band', () => {
     await mismatchRow.click();
     await expect(mismatchRow).toHaveAttribute('data-active', 'false');
   });
+
+  test('배너의 열기 버튼은 문서 보기로 되돌린다', async ({ page }) => {
+    await page.getByTestId('editor-view-mode-alignment').click();
+    await page.getByTestId('alignment-band-open').click();
+
+    await expect(page.getByTestId('alignment-view')).toHaveCount(0);
+    await expect(page.getByTestId('editor-view-mode-document')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe('Alignment jump to document', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(
+      page,
+      '<p data-translation-unit-id="s1">First paragraph.</p><p data-translation-unit-id="s2">Second paragraph.</p>',
+      '<p data-translation-unit-id="t1">첫 번째 문단.</p><p data-translation-unit-id="t2">두 번째 문단.</p>',
+    );
+  });
+
+  test('활성 행의 편집 버튼이 문서 보기의 해당 문단으로 커서를 옮긴다', async ({ page }) => {
+    await page.getByTestId('editor-view-mode-alignment').click();
+
+    const secondRow = page.getByTestId('alignment-row').nth(1);
+    await secondRow.click();
+
+    const editButton = secondRow.getByTestId('alignment-row-edit');
+    await expect(editButton).toBeVisible();
+    await editButton.click();
+
+    await expect(page.getByTestId('alignment-view')).toHaveCount(0);
+
+    // 커서가 두 번째 문단 안에 있다 (scrollIntoView 없이 setTextSelection + focus)
+    const caretText = await page.evaluate(() => {
+      const selection = document.getSelection();
+      const node = selection?.anchorNode ?? null;
+      return node ? (node.textContent ?? '') : '';
+    });
+    expect(caretText).toContain('두 번째 문단');
+  });
 });
