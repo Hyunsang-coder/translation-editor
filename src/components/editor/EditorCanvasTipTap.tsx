@@ -31,6 +31,7 @@ import {
   SELECTION_INLINE_TOOLBAR_HEIGHT,
 } from '@/components/ui/SelectionActionMenu';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+import { AlignmentView } from '@/components/editor/AlignmentView';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
@@ -1707,12 +1708,11 @@ export function EditorCanvasTipTap(): JSX.Element {
       </PanelGroup>
       </div>
 
-      {/* 정렬 검사 뷰 — 3단계에서 AlignmentView로 채운다 */}
+      {/* 정렬 검사 뷰 — 편집 중인 두 에디터 위에 얹는다 */}
       {isAlignmentMode && (
-        <div
-          className="absolute inset-0 bg-editor-surface overflow-auto"
-          data-testid="alignment-view"
-        />
+        <div className="absolute inset-0 overflow-hidden">
+          <AlignmentView />
+        </div>
       )}
 
       </div>

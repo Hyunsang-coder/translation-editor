@@ -326,6 +326,13 @@
       "document": "문서 보기",
       "alignment": "정렬 검사"
     },
+    "alignment": {
+      "readOnly": "읽기 전용",
+      "sourceColumn": "원문",
+      "targetColumn": "번역문",
+      "alignColumn": "정렬",
+      "empty": "정렬할 문단이 없습니다."
+    },
     "translationModel": "번역 모델",
     "translationModelAriaLabel": "번역 모델",
     "translate": "번역",

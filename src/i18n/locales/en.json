@@ -328,6 +328,13 @@
       "document": "Document",
       "alignment": "Alignment"
     },
+    "alignment": {
+      "readOnly": "Read only",
+      "sourceColumn": "Source",
+      "targetColumn": "Target",
+      "alignColumn": "Alignment",
+      "empty": "No paragraphs to align."
+    },
     "translationModel": "Translation Model",
     "translationModelAriaLabel": "Translation model",
     "translate": "Translate",

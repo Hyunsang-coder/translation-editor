@@ -73,4 +73,18 @@ test.describe('Alignment inspection view', () => {
     await expect(targetEditor).toBeVisible();
     await expect(targetEditor).toContainText(targetText);
   });
+
+  test('짝이 맞는 문단은 한 행에 나란히 보이고, 클릭하면 활성 행이 된다', async ({ page }) => {
+    await page.getByTestId('editor-view-mode-alignment').click();
+
+    const row = page.getByTestId('alignment-row');
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(sourceText);
+    await expect(row).toContainText(targetText);
+    await expect(row).toContainText('1:1');
+    await expect(row).toHaveAttribute('data-active', 'false');
+
+    await row.click();
+    await expect(row).toHaveAttribute('data-active', 'true');
+  });
 });
