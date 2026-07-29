@@ -84,7 +84,16 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
 4. **Markdown for AI**: Translation uses Markdown as intermediate format
 
-## Recent Updates (2026-07-28)
+## Recent Updates (2026-07-29)
+
+- **프로젝트 메모리 설정 UI 정리 + 상한 선별에 출처 반영**: 항목당 5줄 카드를 한 줄 리스트로 줄이고, 상한에 걸려 실제로 무엇이 주입되는지를 화면에 드러냈다.
+  - **선별 우선순위에 `source` 축 추가**: `selectMemoryItems`가 카테고리보다 `source === 'user'`를 먼저 본다. 설정 화면 수동 입력은 기본 카테고리가 `general`(우선순위 9개 중 7번째)로 굳어 있어, 손으로 친 항목이 채팅 제안 승인분(`source='chat'`)보다 **항상 먼저 잘리던** 역전 현상이 있었다. `ContextSnapshot.projectMemoryItems`에 `source`를 optional로 실어 워크플로우(상한 40) 경로에도 같은 규칙을 적용한다 — 필드 추가 이전 스냅샷은 비-user로 취급.
+  - **주입 카운터는 `renderChatMemoryDigest`로 계산**: 개수 상한(12)만 세면 과대 보고다. digest는 문자 예산(1500)에서도 잘리므로 실제 주입분은 렌더러에게 물어야 한다. 헤더의 `채팅 12/14`가 그 결과이고, 주입되지 않은 행은 흐리게 + "번역·검수에는 포함됩니다" 툴팁 — **상한이 mode별로 다르므로(채팅 12, 문서 워크플로우 40) "주입 안 됨"으로 단정하지 않는다.**
+  - **카테고리는 enum 9개를 유지하고 화면만 3단계 색 점으로 압축**한다(정확한 값은 툴팁). 줄이려면 DB CHECK 재구성 + MCP breaking이 따라오는데 실기능은 우선순위 정렬 하나뿐이라 이득이 없다. 추가 폼의 select 순서도 `MEMORY_CATEGORY_PRIORITY`에서 파생 — 이전에는 표시 순서와 우선순위가 어긋나 `intent`가 `general`보다 위에 보이면서 실제로는 먼저 잘렸다.
+  - **행 액션은 숨기지 않는다**: hover 시 나타나게 하면 키보드·터치에서 닿지 않고 `e2e/selection-editing.spec.ts:182`의 `project-memory-delete` 가시성 단언도 깨진다. 항상 렌더하고 `opacity`만 낮춘다. 상태 라벨은 `active`가 아닐 때만 표시하되 **편집·삭제 버튼은 상태와 무관하게 항상 렌더** — `load_project_memory`가 status를 필터하지 않으므로(`db/mod.rs:2586`), 버튼을 status로 가리면 언젠가 "지울 수 없는 항목"이 생긴다(보관 개념을 걷어낸 이유와 같은 함정).
+  - **금칙어 설명 문구 추가**: 금칙어는 검색 없이 모든 AI 요청에 전량 실리는 **지시**이고 문서 검사기가 아니다(하드 체크는 `EditorCanvasTipTap.tsx:709`의 부분 수정 적용 경로 하나뿐). 용어집은 `instr(query, source)`로 **원문 쪽** 히트만 주입되므로 출력 측 금지어를 대체할 수 없다 — 둘은 합쳐지지 않는다.
+
+### Previous (2026-07-28)
 
 - **정렬 검사 뷰 (Phase 4.5, `design_handoff_oddeyes_editor_ui/PHASE_4_5_alignment_view.md`)**: 원문↔번역문 문단을 나란히 놓는 **읽기 전용** 대조 뷰. 상단 상태 스트립의 `문서 보기 | 정렬 검사` 토글로 오간다(기본은 문서 보기, `uiStore.editorViewMode`만 persist). **정렬은 저장하지 않는다** — `project.segments`는 죽은 모델이고 `translationUnitId`는 두 에디터에서 독립 발급되므로, 뷰를 열 때마다 `alignUnits.ts`가 시그니처(`type:depth:level`) 시퀀스 LCS로 계산하고 짝이 안 맞는 구간은 **고치지 않고 불일치로 표시**한다(1:1 / 1:0 / 0:1만, 1:N 미지원).
   - **에디터 언마운트 금지**: 정렬 뷰는 `PanelGroup` 위에 오버레이로 얹고 문서 보기 쪽은 `visibility:hidden`으로 가린다. 언마운트하면 TipTap 인스턴스가 파괴돼 `editorStore`가 비고 점프·검수 적용이 깨진다. `display:none`이 아닌 `visibility`인 이유는 ① 레이아웃이 남아 스크롤 위치가 보존되고(실측 1500 → 1500) ② 숨은 요소는 포커스를 못 받아 읽기 전용이 함께 강제되기 때문(React 18이라 `inert` 사용 불가).

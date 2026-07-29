@@ -59,7 +59,7 @@ describe('workflow context snapshot', () => {
 
     memoryItems[0]!.content = '나중에 변경됨';
     expect(snapshot.projectMemoryItems).toEqual([
-      { id: 'active-1', category: 'audience', content: 'IT 관리자 대상' },
+      { id: 'active-1', category: 'audience', content: 'IT 관리자 대상', source: 'user' },
     ]);
     expect(snapshot.forbiddenTerms.map((term) => term.id)).toEqual(['term-1']);
   });
@@ -79,6 +79,7 @@ describe('workflow context snapshot', () => {
       id: 'legacy-project-context',
       category: 'general',
       content: 'Enterprise release notes for administrators.',
+      source: 'legacy',
     }]);
   });
 
