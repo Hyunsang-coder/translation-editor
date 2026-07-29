@@ -99,9 +99,9 @@ export async function pickExportDocumentPath(
   return path ?? null;
 }
 
-export async function pickQualityLedgerPath(defaultName = 'quality-ledger'): Promise<string | null> {
+export async function pickJsonlExportPath(defaultName = 'export'): Promise<string | null> {
   const path = await save({
-    title: 'Export Quality Ledger',
+    title: 'Export JSONL',
     defaultPath: `${defaultName}.jsonl`,
     filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }],
   });

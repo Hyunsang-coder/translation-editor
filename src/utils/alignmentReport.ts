@@ -1,5 +1,5 @@
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
-import { pickQualityLedgerPath } from '@/tauri/dialog';
+import { pickJsonlExportPath } from '@/tauri/dialog';
 import type { AlignResult } from '@/utils/alignUnits';
 
 /**
@@ -48,7 +48,7 @@ export async function saveAlignmentReport(
   const jsonl = `${JSON.stringify(report)}\n`;
 
   if (isTauriRuntime()) {
-    const path = await pickQualityLedgerPath(defaultName);
+    const path = await pickJsonlExportPath(defaultName);
     if (!path) return 'cancelled';
     await invoke<void>('write_text_file', { path, content: jsonl });
     return 'saved';
