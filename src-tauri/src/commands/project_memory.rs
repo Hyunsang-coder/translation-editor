@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::run_db_task;
-use crate::db::{DbState, ForbiddenTermRow, ProjectMemoryItemRow};
+use crate::db::{DbState, ForbiddenTermRow, ProjectMemoryImportOutcome, ProjectMemoryItemRow};
 use crate::error::{CommandError, CommandResult};
 
 #[derive(Debug, Deserialize)]
@@ -152,6 +152,32 @@ pub async fn delete_project_memory_item(
             .delete_project_memory_item(&args.project_id, &args.item_id)
             .map_err(CommandError::from)?;
         Ok(ProjectMemoryRevisionResult { revision })
+    })
+    .await
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportProjectMemoryArgs {
+    pub source_project_id: String,
+    pub target_project_id: String,
+    pub item_ids: Vec<String>,
+    pub term_ids: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn import_project_memory_items(
+    args: ImportProjectMemoryArgs,
+    db_state: State<'_, DbState>,
+) -> CommandResult<ProjectMemoryImportOutcome> {
+    run_db_task(&db_state, move |db| {
+        db.import_project_memory_data(
+            &args.source_project_id,
+            &args.target_project_id,
+            &args.item_ids,
+            &args.term_ids,
+        )
+        .map_err(CommandError::from)
     })
     .await
 }

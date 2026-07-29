@@ -81,6 +81,18 @@ pub struct ProjectMemoryItemRow {
     pub updated_at: i64,
 }
 
+/// 다른 프로젝트에서 가져온 결과. 건너뛴 수를 함께 돌려줘야 사용자가
+/// "선택한 만큼 안 들어왔다"를 중복 때문이라고 이해할 수 있다.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMemoryImportOutcome {
+    pub imported_items: usize,
+    pub skipped_items: usize,
+    pub imported_terms: usize,
+    pub skipped_terms: usize,
+    pub revision: i64,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForbiddenTermRow {
@@ -2971,6 +2983,118 @@ impl Database {
         Ok(true)
     }
 
+    /// 다른 프로젝트의 메모리·금칙어를 선택한 것만 가져와 덧붙인다.
+    ///
+    /// 프로젝트 복제(`copy_project_memory_data`)와 달리 대상을 비우지 않고, 이미
+    /// 같은 것이 있으면 건너뛴다. 세 가지가 복제와 다르다.
+    /// - 시각은 지금으로 새로 찍는다. 원본 시각을 그대로 가져오면 목록
+    ///   (`created_at ASC`)에서 중간에 파묻히고 상한 선별에서도 "오래된 것"으로
+    ///   먼저 잘린다.
+    /// - `source`는 `import`로 덮어 어디서 왔는지 설정 화면에서 구분되게 한다.
+    /// - 출처 세션/메시지 id는 버린다. 원본 프로젝트의 대화를 가리키므로 대상에서는
+    ///   따라갈 수 없는 참조다.
+    pub fn import_project_memory_data(
+        &mut self,
+        source_project_id: &str,
+        target_project_id: &str,
+        item_ids: &[String],
+        term_ids: &[String],
+    ) -> Result<ProjectMemoryImportOutcome, IteError> {
+        let (source_items, source_terms, _) = self.load_project_memory(source_project_id)?;
+        let (target_items, target_terms, _) = self.load_project_memory(target_project_id)?;
+
+        // 메모리 중복은 카테고리를 빼고 내용만 본다. add_project_memory_item은
+        // (category, hash)로 보지만, 그건 사용자가 카테고리를 골라 넣는 단건 추가다.
+        // 설정 화면의 수동 추가는 기본값 general로 굳어 있어, 원본에서 domain으로
+        // 분류된 같은 문장이 카테고리 기준으로는 중복이 아니게 된다. 대량 복사에서
+        // 같은 문장이 두 벌 들어가면 상한만 잡아먹으므로 여기서는 내용을 기준으로 한다.
+        let mut seen_items: std::collections::HashSet<String> = target_items
+            .iter()
+            .map(|item| item.normalized_hash.clone())
+            .collect();
+        let mut seen_terms: std::collections::HashSet<String> = target_terms
+            .iter()
+            .map(|term| term.term.trim().to_ascii_lowercase())
+            .collect();
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let mut outcome = ProjectMemoryImportOutcome {
+            imported_items: 0,
+            skipped_items: 0,
+            imported_terms: 0,
+            skipped_terms: 0,
+            revision: 0,
+        };
+
+        let tx = self.conn.transaction()?;
+        for item in source_items
+            .iter()
+            .filter(|item| item.status == "active" && item_ids.iter().any(|id| id == &item.id))
+        {
+            if !seen_items.insert(item.normalized_hash.clone()) {
+                outcome.skipped_items += 1;
+                continue;
+            }
+            tx.execute(
+                "INSERT INTO project_memory_items (
+                    id, project_id, category, content, normalized_hash, status, source,
+                    source_session_id, source_message_id, source_selection_id,
+                    created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, 'active', 'import', NULL, NULL, NULL, ?6, ?7)",
+                rusqlite::params![
+                    uuid::Uuid::new_v4().to_string(),
+                    target_project_id,
+                    item.category,
+                    item.content,
+                    item.normalized_hash,
+                    now,
+                    now,
+                ],
+            )?;
+            outcome.imported_items += 1;
+        }
+
+        for term in source_terms
+            .iter()
+            .filter(|term| term_ids.iter().any(|id| id == &term.id))
+        {
+            if !seen_terms.insert(term.term.trim().to_ascii_lowercase()) {
+                outcome.skipped_terms += 1;
+                continue;
+            }
+            tx.execute(
+                "INSERT INTO forbidden_terms (
+                    id, project_id, term, replacement, note, enabled, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    uuid::Uuid::new_v4().to_string(),
+                    target_project_id,
+                    term.term,
+                    term.replacement,
+                    term.note,
+                    term.enabled as i64,
+                    now,
+                    now,
+                ],
+            )?;
+            outcome.imported_terms += 1;
+        }
+
+        outcome.revision = if outcome.imported_items > 0 || outcome.imported_terms > 0 {
+            Self::bump_project_memory_revision(&tx, target_project_id, now)?
+        } else {
+            tx.query_row(
+                "SELECT revision FROM project_memory_state WHERE project_id = ?1",
+                [target_project_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(0)
+        };
+        tx.commit()?;
+        Ok(outcome)
+    }
+
     pub fn copy_project_memory_data(
         &mut self,
         source_project_id: &str,
@@ -4553,6 +4677,116 @@ mod tests {
         assert!(after_delete_items.is_empty());
         assert!(after_delete_terms.is_empty());
         assert_eq!(after_delete_revision, 0);
+    }
+
+    #[test]
+    fn project_memory_import_appends_dedupes_and_restamps() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let mut db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let source = build_test_project("memory-import-source");
+        let target = build_test_project("memory-import-target");
+        db.save_project(&source).expect("save source project");
+        db.save_project(&target).expect("save target project");
+
+        let (shared, _, _) = db
+            .add_project_memory_item(
+                &source.id,
+                "audience",
+                "국내 PC 유저",
+                "active",
+                "chat",
+                Some("session-1"),
+                None,
+                None,
+            )
+            .expect("add shared item");
+        let (fresh, _, _) = db
+            .add_project_memory_item(
+                &source.id,
+                "domain",
+                "FPS 배틀로얄",
+                "active",
+                "chat",
+                None,
+                None,
+                None,
+            )
+            .expect("add fresh item");
+        let (term, _) = db
+            .upsert_forbidden_term(&source.id, None, "배그", Some("PUBG"), None, true)
+            .expect("add source term");
+
+        // 대상에 이미 같은 내용이 있으면 건너뛴다. 카테고리가 달라도 마찬가지다 —
+        // 설정 화면 수동 추가는 general로 굳어 있어 카테고리까지 보면 못 거른다.
+        db.add_project_memory_item(
+            &target.id,
+            "general",
+            "국내 PC 유저",
+            "active",
+            "user",
+            None,
+            None,
+            None,
+        )
+        .expect("seed target duplicate");
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let before_import = chrono::Utc::now().timestamp_millis();
+        let outcome = db
+            .import_project_memory_data(
+                &source.id,
+                &target.id,
+                &[shared.id.clone(), fresh.id.clone()],
+                &[term.id.clone()],
+            )
+            .expect("import memory");
+        assert_eq!(outcome.imported_items, 1);
+        assert_eq!(outcome.skipped_items, 1);
+        assert_eq!(outcome.imported_terms, 1);
+        assert_eq!(outcome.skipped_terms, 0);
+
+        let (items, terms, revision) = db
+            .load_project_memory(&target.id)
+            .expect("load target memory");
+        assert_eq!(items.len(), 2);
+        assert_eq!(terms.len(), 1);
+        assert_eq!(revision, outcome.revision);
+
+        let imported = items
+            .iter()
+            .find(|item| item.category == "domain")
+            .expect("imported item");
+        assert_eq!(imported.source, "import");
+        assert_ne!(imported.id, fresh.id);
+        // 원본 시각을 복사하면 목록 중간에 파묻히고 상한 선별에서 먼저 잘린다.
+        assert!(imported.created_at >= before_import);
+        assert!(fresh.created_at < before_import);
+        // 출처 세션 id는 원본 프로젝트의 대화를 가리키므로 따라오면 안 된다.
+        assert!(items
+            .iter()
+            .all(|item| item.source_session_id.is_none() || item.source != "import"));
+
+        // 같은 선택을 다시 가져와도 늘지 않는다.
+        let again = db
+            .import_project_memory_data(
+                &source.id,
+                &target.id,
+                &[shared.id, fresh.id],
+                &[term.id],
+            )
+            .expect("re-import memory");
+        assert_eq!(again.imported_items, 0);
+        assert_eq!(again.imported_terms, 0);
+        assert_eq!(again.skipped_items, 2);
+        assert_eq!(again.skipped_terms, 1);
+        assert_eq!(again.revision, outcome.revision);
+        let (items_after, terms_after, _) = db
+            .load_project_memory(&target.id)
+            .expect("load target after re-import");
+        assert_eq!(items_after.len(), 2);
+        assert_eq!(terms_after.len(), 1);
     }
 
     #[test]

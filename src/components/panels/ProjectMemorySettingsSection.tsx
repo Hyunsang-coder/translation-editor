@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/shallow';
 import type { ProjectMemoryCategory } from '@/types';
 import { MEMORY_CATEGORY_PRIORITY } from '@/ai/context/projectMemoryPolicy';
 import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
+import { ProjectMemoryImportModal } from '@/components/panels/ProjectMemoryImportModal';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useUIStore } from '@/stores/uiStore';
 
@@ -55,6 +56,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [term, setTerm] = useState('');
   const [replacement, setReplacement] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
 
   /**
    * 개수 상한만 세면 과대 보고가 된다 — digest는 문자 예산에서도 잘리므로
@@ -119,9 +121,17 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           <h3 className="text-xs font-semibold text-editor-text">
             {t('memory.settingsTitle', '프로젝트 메모리')}
           </h3>
+          <button
+            type="button"
+            data-testid="project-memory-import-open"
+            className="ml-auto text-[10px] text-editor-muted hover:text-primary-500"
+            onClick={() => setImportOpen(true)}
+          >
+            {t('memory.import.open', '가져오기')}
+          </button>
           {activeCount > 0 && (
             <span
-              className={`ml-auto text-[10px] ${
+              className={`text-[10px] ${
                 chatDigest.truncated ? 'text-primary-500' : 'text-editor-muted'
               }`}
               title={t('memory.chatInjectionHint', {
@@ -349,6 +359,8 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           ))}
         </div>
       </section>
+
+      <ProjectMemoryImportModal open={importOpen} onClose={() => setImportOpen(false)} />
     </>
   );
 }

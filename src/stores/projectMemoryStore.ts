@@ -7,11 +7,13 @@ import {
   addProjectMemoryItem,
   deleteForbiddenTerm,
   deleteProjectMemoryItem,
+  importProjectMemoryItems,
   loadProjectMemory,
   migrateLegacyProjectMemory,
   replaceProjectMemoryItem,
   upsertForbiddenTerm,
   type ForbiddenTermInput,
+  type ProjectMemoryImportResult,
   type ProjectMemoryItemInput,
 } from '@/tauri/projectMemory';
 
@@ -34,6 +36,11 @@ interface ProjectMemoryActions {
     input: ProjectMemoryItemInput,
   ) => ReturnType<typeof replaceProjectMemoryItem>;
   deleteItem: (itemId: string) => Promise<void>;
+  importFrom: (params: {
+    sourceProjectId: string;
+    itemIds: string[];
+    termIds: string[];
+  }) => Promise<ProjectMemoryImportResult>;
   saveForbiddenTerm: (
     input: ForbiddenTermInput,
   ) => ReturnType<typeof upsertForbiddenTerm>;
@@ -184,6 +191,38 @@ export const useProjectMemoryStore = create<ProjectMemoryState & ProjectMemoryAc
           saving: false,
         }));
       }
+    } catch (error) {
+      if (get().activeProjectId === projectId) {
+        set({ saving: false, error: errorMessage(error) });
+      }
+      throw error;
+    }
+  },
+
+  importFrom: async ({ sourceProjectId, itemIds, termIds }) => {
+    const projectId = requireProjectId(get().activeProjectId);
+    set({ saving: true, error: null });
+    try {
+      const result = await importProjectMemoryItems({
+        sourceProjectId,
+        targetProjectId: projectId,
+        itemIds,
+        termIds,
+      });
+      // 삽입 결과를 되짚어 조립하는 대신 다시 읽는다. 가져오기는 드물고,
+      // 중복 건너뛰기 때문에 무엇이 실제로 들어갔는지는 DB만 정확히 안다.
+      if (get().activeProjectId === projectId) {
+        const snapshot = await loadProjectMemory(projectId);
+        if (get().activeProjectId === projectId) {
+          set({
+            items: snapshot.items,
+            forbiddenTerms: snapshot.forbiddenTerms,
+            revision: snapshot.revision,
+            saving: false,
+          });
+        }
+      }
+      return result;
     } catch (error) {
       if (get().activeProjectId === projectId) {
         set({ saving: false, error: errorMessage(error) });

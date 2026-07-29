@@ -462,6 +462,7 @@ pub fn run() {
             commands::project_memory::add_project_memory_item,
             commands::project_memory::replace_project_memory_item,
             commands::project_memory::delete_project_memory_item,
+            commands::project_memory::import_project_memory_items,
             commands::project_memory::upsert_forbidden_term,
             commands::project_memory::delete_forbidden_term,
             commands::project_memory::migrate_legacy_project_memory,

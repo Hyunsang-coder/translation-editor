@@ -86,6 +86,12 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-29)
 
+- **다른 프로젝트에서 메모리 가져오기**: Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
+  - **공유 링크(glossary식) 대신 복사를 택했다**: `project_memory_state.revision`이 프로젝트 단위라 공유 세트 1건 수정 시 링크된 모든 프로젝트의 revision을 bump해야 하고, MCP 6종이 projectId 단수 전제라 breaking이 된다. 용어집은 이미 `setProjectGlossaries`로 프로젝트에 링크할 수 있어 범위 밖.
+  - **`created_at`은 지금으로 새로 찍는다**: 프로젝트 복제용 `copy_project_memory_data`는 원본 시각을 복사하는데, 가져오기가 그러면 목록(`created_at ASC`) 중간에 파묻히고 상한 동점 처리(index 기준)에서 "오래된 것"으로 먼저 잘린다. `source`는 `import`로 덮고, 출처 세션·메시지 id는 원본 프로젝트의 대화를 가리키므로 버린다.
+  - **금칙어는 복사가 아니라 upsert 의미로 넣는다**: 스키마에 `(project_id, term)` UNIQUE가 없고 중복 병합은 `upsert_forbidden_term`에만 있어서, 복사 루프를 그대로 쓰면 가져올 때마다 증식한다.
+  - **메모리 중복 판정은 카테고리를 뺀 내용 해시만 본다** — `add_project_memory_item`의 `(category, hash)`와 다르다. 설정 화면 수동 추가가 기본값 `general`로 굳어 있어, 원본에서 `domain`으로 분류된 같은 문장이 카테고리 기준으로는 중복으로 안 잡힌다(E2E에서 실제로 재현됨). 대량 복사에서 같은 문장이 두 벌 들어가면 상한만 잡아먹는다.
+  - 항목별 체크박스는 필수다 — 통째로 가져오면 채팅 상한 12를 넘겨 새 프로젝트 고유 메모리가 digest에서 밀린다. 예상 활성 수가 상한을 넘으면 모달이 미리 알린다.
 - **프로젝트 메모리 설정 UI 정리 + 상한 선별에 출처 반영**: 항목당 5줄 카드를 한 줄 리스트로 줄이고, 상한에 걸려 실제로 무엇이 주입되는지를 화면에 드러냈다.
   - **선별 우선순위에 `source` 축 추가**: `selectMemoryItems`가 카테고리보다 `source === 'user'`를 먼저 본다. 설정 화면 수동 입력은 기본 카테고리가 `general`(우선순위 9개 중 7번째)로 굳어 있어, 손으로 친 항목이 채팅 제안 승인분(`source='chat'`)보다 **항상 먼저 잘리던** 역전 현상이 있었다. `ContextSnapshot.projectMemoryItems`에 `source`를 optional로 실어 워크플로우(상한 40) 경로에도 같은 규칙을 적용한다 — 필드 추가 이전 스냅샷은 비-user로 취급.
   - **주입 카운터는 `renderChatMemoryDigest`로 계산**: 개수 상한(12)만 세면 과대 보고다. digest는 문자 예산(1500)에서도 잘리므로 실제 주입분은 렌더러에게 물어야 한다. 헤더의 `채팅 12/14`가 그 결과이고, 주입되지 않은 행은 흐리게 + "번역·검수에는 포함됩니다" 툴팁 — **상한이 mode별로 다르므로(채팅 12, 문서 워크플로우 40) "주입 안 됨"으로 단정하지 않는다.**
