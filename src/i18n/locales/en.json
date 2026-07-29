@@ -512,13 +512,6 @@
     "cancel": "Cancel",
     "close": "Close",
     "reset": "Reset",
-    "ledger": {
-      "export": "Export Ledger",
-      "exportTooltip": "Export this project's quality ledger as JSONL.",
-      "exportSuccess": "Quality ledger exported.",
-      "exportEmpty": "No quality ledger records to export.",
-      "exportError": "Failed to export quality ledger."
-    },
     "start": "Start Review",
     "restart": "Review Again",
     "polish": "Polish",

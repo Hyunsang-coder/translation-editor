@@ -86,7 +86,7 @@ Implemented in `src/ai/chat.ts` with LangChain tools:
 실행 중인 앱을 읽고 쓰는 역방향 채널이다. WebSocket → `window.__ODDEYES_APP_BRIDGE__`
 (`src/desktop/oddeyesAppBridge.ts`) → Zustand store. 읽기(문서/컨텍스트/preview) + preview-first 쓰기 +
 검수 주입(`set_review_issues`) + 컨텍스트 주입(`set_translation_context`: rules/projectContext) +
-용어집(list/add/update/delete entry + link/unlink) + 품질 장부. 상세는 `patterns.md`의 "Desktop Bridge MCP".
+용어집(list/add/update/delete entry + link/unlink). 상세는 `patterns.md`의 "Desktop Bridge MCP".
 
 ### 5. State Management (Zustand Stores)
 

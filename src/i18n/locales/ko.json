@@ -499,13 +499,6 @@
     "cancel": "취소",
     "close": "닫기",
     "reset": "초기화",
-    "ledger": {
-      "export": "장부 내보내기",
-      "exportTooltip": "이 프로젝트의 품질 장부를 JSONL로 내보냅니다.",
-      "exportSuccess": "품질 장부를 내보냈습니다.",
-      "exportEmpty": "내보낼 품질 장부 기록이 없습니다.",
-      "exportError": "품질 장부 내보내기에 실패했습니다."
-    },
     "start": "검수",
     "restart": "재검수",
     "polish": "폴리싱",

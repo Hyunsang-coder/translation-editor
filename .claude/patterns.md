@@ -789,7 +789,6 @@ const methods = { 'oddeyes.setTranslationContext': async (p) => setTranslationCo
 - 쓰기(컨텍스트): `set_translation_context` → `chatStore` 세터 (**`translationRules` / `projectContext`만**, replace|append). `translatorPersona`는 제거됨 — 톤·문체는 Rules로 통합.
 - 읽기(컨텍스트): `get_translation_context` → rules + projectContext + **source 기준 glossary 프롬프트 문자열** (구조화 entry 목록 아님)
 - 용어집: `list_project_glossaries`, `list_glossary_entries` (query + limit≤500), `add`/`update`/`delete` entry, `link_project_glossary` / `unlink_project_glossary` (incremental·idempotent; hard-delete 아님)
-- 품질 장부: `get_quality_records`, `log_quality_records`
 
 **범위 메모**: CSV import·참고 문서(attachments) MCP는 의도적으로 없음. 관리 UI에서 용어집 생성 시 자동 연결하지 않음(연결은 토글/MCP link). 미연결 용어집에 용어 추가 시에는 orphan 방지로 자동 연결 유지.
 

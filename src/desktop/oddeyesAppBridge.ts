@@ -7,14 +7,6 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
-import {
-  getQualityRecords,
-  logQualityRecords,
-  recordIssuesProposed,
-  type QualityRecordFilter,
-  type QualityRecordInput,
-  type ReviewLedgerContext,
-} from '@/quality';
 import { hashContent } from '@/utils/hash';
 import {
   htmlToTipTapJson,
@@ -270,28 +262,6 @@ async function setReviewIssues(params: BridgeParams): Promise<unknown> {
 
   useReviewStore.getState().ingestExternalReview({ projectId: project.id, issues });
 
-  // 품질 장부: 외부(에이전트) 반입 이슈를 proposed로 적재 (executor=claude_agent, WP-A1 요구사항 2-④)
-  // 정규화된 이슈(결정론적 id 포함)를 store에서 읽어 origin을 채운다. best-effort —
-  // 기록 실패가 반입 자체를 막지 않도록 완전히 격리한다.
-  try {
-    const getAll = useReviewStore.getState().getAllIssues;
-    const normalized = typeof getAll === 'function' ? getAll() : [];
-    if (normalized.length > 0) {
-      const ctx: ReviewLedgerContext = {
-        stage: 's1_translate',
-        caughtBy: 'review_agent',
-        executor: 'claude_agent',
-        direction: null,
-        contentType: project.metadata.domain ?? null,
-        reviewerModel: null,
-        producerModel: null,
-      };
-      void recordIssuesProposed(project.id, normalized, ctx);
-    }
-  } catch (err) {
-    console.warn('[quality-ledger] setReviewIssues ledger log skipped (best-effort):', err);
-  }
-
   return { ok: true, count: issues.length, dropped: rawIssues.length - issues.length };
 }
 
@@ -337,46 +307,6 @@ async function setTranslationContext(params: BridgeParams): Promise<unknown> {
   apply('translationRules',  params.translationRules,  chat.setTranslationRules,  chat.appendToTranslationRules);
 
   return { ok: true, mode, updated };
-}
-
-/**
- * 품질 장부에 §4.1 레코드 배열을 push (§4.7 #1 oddeyes_log_quality_records).
- * 앱이 id·created_at을 발급하고 저장 개수를 반환한다. 에이전트가 mono-review 판정
- * (채택·반려 포함)을 기록하는 통로다.
- */
-async function logQualityRecordsBridge(params: BridgeParams): Promise<unknown> {
-  const project = useProjectStore.getState().project;
-  if (!project) throw new Error('No project loaded');
-  if (typeof params.projectId === 'string' && params.projectId.length > 0 && params.projectId !== project.id) {
-    throw new Error(`Project mismatch: expected ${project.id}, got ${params.projectId}`);
-  }
-  const rawRecords = Array.isArray(params.records) ? params.records : [];
-  // 에이전트가 §4.1 형태(중첩 객체)로 보내는 것을 신뢰하되, 최소 형태만 방어적으로 검증.
-  const inputs: QualityRecordInput[] = rawRecords
-    .map((raw) => asRecord(raw) as unknown as QualityRecordInput)
-    .filter((r) => r.finding && r.origin && r.segment && r.disposition);
-  const saved = await logQualityRecords(project.id, inputs);
-  return { ok: true, count: saved.length, dropped: rawRecords.length - saved.length };
-}
-
-/**
- * 품질 장부를 필터로 조회 (§4.7 #2 oddeyes_get_quality_records). 마이닝(WP-B5)의 입력.
- */
-async function getQualityRecordsBridge(params: BridgeParams): Promise<unknown> {
-  const project = useProjectStore.getState().project;
-  if (!project) throw new Error('No project loaded');
-  if (typeof params.projectId === 'string' && params.projectId.length > 0 && params.projectId !== project.id) {
-    throw new Error(`Project mismatch: expected ${project.id}, got ${params.projectId}`);
-  }
-  const raw = asRecord(params.filter);
-  const filter: QualityRecordFilter = {};
-  if (typeof raw.since === 'number') filter.since = raw.since;
-  if (typeof raw.stage === 'string') filter.stage = raw.stage;
-  if (typeof raw.disposition === 'string') filter.disposition = raw.disposition;
-  if (typeof raw.promotionStatus === 'string') filter.promotionStatus = raw.promotionStatus;
-  if (typeof raw.limit === 'number') filter.limit = raw.limit;
-  const records = await getQualityRecords(project.id, filter);
-  return { ok: true, count: records.length, records };
 }
 
 function assertActiveProject(params: BridgeParams) {
@@ -877,8 +807,6 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.setReviewIssues': async (params) => await setReviewIssues(params ?? {}),
   'oddeyes.setTranslationContext': async (params) => await setTranslationContext(params ?? {}),
 
-  'oddeyes.logQualityRecords': async (params) => await logQualityRecordsBridge(params ?? {}),
-  'oddeyes.getQualityRecords': async (params) => await getQualityRecordsBridge(params ?? {}),
 
   'oddeyes.listProjectMemory': async (params) => await listProjectMemoryBridge(params ?? {}),
   'oddeyes.addProjectMemoryItem': async (params) => await addProjectMemoryItemBridge(params ?? {}),

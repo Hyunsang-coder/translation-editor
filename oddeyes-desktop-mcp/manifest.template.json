@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "oddeyes-desktop",
   "display_name": "OddEyes Desktop",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "Connect Claude Desktop to a running OddEyes app and send preview-first translation actions.",
   "long_description": "OddEyes Desktop lets Claude Desktop read the source document, target document, and project knowledge (translation rules, project memory, forbidden terms, glossary) from the currently running OddEyes app. Translation output is sent to OddEyes as a preview first, so users can review and explicitly apply or discard it inside OddEyes.",
   "author": {
@@ -82,14 +82,6 @@
     {
       "name": "oddeyes_delete_forbidden_term",
       "description": "Permanently delete a forbidden term (no undo)."
-    },
-    {
-      "name": "oddeyes_log_quality_records",
-      "description": "Append quality-ledger records (findings/fixes/verdicts, including rejected ones) to the OddEyes SQLite ledger."
-    },
-    {
-      "name": "oddeyes_get_quality_records",
-      "description": "Query the OddEyes quality ledger with filters (since, stage, disposition, promotionStatus, limit) for mining."
     },
     {
       "name": "oddeyes_list_project_glossaries",

@@ -23,7 +23,6 @@ import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
-import { countWords, logQualityRun } from '@/quality';
 import {
   getSelectionActionMenuHeight,
   SelectionActionMenu,
@@ -1187,18 +1186,6 @@ export function EditorCanvasTipTap(): JSX.Element {
           console.warn('[history] auto snapshot after translate failed:', err);
         });
       }
-      // 여기의 fresh project.id는 위 L2 가드 ①에 의해 요청 시점 프로젝트와 동일함이 보장된다.
-      // 품질 장부: 번역 적용을 quality_run으로 기록 (best-effort, WP-A1 요구사항 2)
-      void logQualityRun(project.id, {
-        stage: 's1_translate',
-        executor: 'app',
-        model: useAiConfigStore.getState().translationModel,
-        direction: null,
-        route_id: null,
-        doc_words: countWords(targetEditorRef.current?.getText() ?? ''),
-        findings_count: null,
-        notes: 'applied',
-      });
     }
   }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged, computeTargetRevision]);
 
@@ -1275,17 +1262,6 @@ export function EditorCanvasTipTap(): JSX.Element {
           console.warn('[history] auto snapshot after polish failed:', err);
         });
       }
-      // 품질 장부: 폴리싱 적용을 quality_run으로 기록 (best-effort, WP-A1 요구사항 2)
-      void logQualityRun(project.id, {
-        stage: 's2_polish',
-        executor: 'app',
-        model: useAiConfigStore.getState().translationModel,
-        direction: null,
-        route_id: null,
-        doc_words: countWords(targetEditorRef.current?.getText() ?? ''),
-        findings_count: null,
-        notes: 'applied',
-      });
     }
   }, [addToast, t, createSnapshotIfChanged, handlePolishClose, computeTargetRevision]);
 
