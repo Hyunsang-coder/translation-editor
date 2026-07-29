@@ -77,22 +77,25 @@ This `.claude/` directory contains:
 - `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 
+**결정의 근거는 `/docs/adr/`** ([README](../docs/adr/README.md)). 아래 "Recent Updates"는 현재 코드 상태의 요약이고, ADR은 **왜 그렇게 됐고 무엇을 버렸는지**를 담습니다. 둘이 어긋나면 근거는 ADR이 진실입니다.
+되돌리기 비싼 결정(스키마 변경, MCP breaking, 기능 폐기, 대안을 버린 선택)을 할 때는 ADR을 함께 씁니다 — 규칙은 `docs/adr/README.md`.
+
 ## Core Principles
 
-1. **No Auto-Apply**: AI never modifies documents without user confirmation
-2. **Preview-First**: Translation results shown in modal before applying
-3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage
-4. **Markdown for AI**: Translation uses Markdown as intermediate format
+1. **No Auto-Apply**: AI never modifies documents without user confirmation ([ADR-0003](../docs/adr/0003-no-auto-apply-preview-first.md))
+2. **Preview-First**: Translation results shown in modal before applying ([ADR-0003](../docs/adr/0003-no-auto-apply-preview-first.md))
+3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
+4. **Markdown for AI**: Translation uses Markdown as intermediate format ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
 
 ## Recent Updates (2026-07-29)
 
 - **연속 hardBreak 축소 수정 (`docBlockDiff.ts`)**: `extractBlockText`가 hardBreak를 하위 블록 구분자(`parts.join('\n')`)에 맡겨서, 사이에 텍스트가 없는 hardBreak는 `parts`에 아무것도 넣지 못하고 사라졌다 — `A\n\nB`가 `A\nB`로 줄고 앞뒤에 붙은 것은 아예 소실. hardBreak를 인라인 줄바꿈으로 보고 `inlineBuffer`에 직접 넣는다. `blockKey`가 `\s+ → ' '`로 정규화하므로 블록 매칭은 무영향, hardBreak 문단은 `isFlatTextBlock`이 false라 swap 경로로 가므로 부분 병합 재조립 계약도 그대로 — 바뀌는 건 swap 카드에 표시되는 원본 텍스트뿐. 2026-07-08 폴리싱 diff 수정 때 "원인이 달라 별도 이슈"로 남겨둔 항목(`docs/polish-diff-whitespace-bug.md`).
-- **품질 장부(Quality Ledger) 제거**: 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
+- **품질 장부(Quality Ledger) 제거** ([ADR-0007](../docs/adr/0007-remove-quality-ledger.md)): 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
   - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.
   - **Desktop MCP 1.0.0 (breaking)**: `oddeyes_log_quality_records`/`oddeyes_get_quality_records` 제거(25 → 23 tools). **`.mcpb` 재번들 + `npm publish` 미실시** — 배포는 별도로 해야 클라이언트에 반영된다.
   - `src/tauri/dialog.ts`의 `pickQualityLedgerPath`는 **남겼다** — 정렬 리포트(`alignmentReport.ts`)가 아직 쓴다. 다이얼로그 제목이 `Export Quality Ledger`인 건 4.5 때부터 있던 부정확한 재사용이라 이번 범위 밖.
 - **선택 도구 신뢰경계 절단 수정**: `get_selection_surroundings`(캡 4000)/`get_aligned_selection_context`(6000)의 출력이 캡을 넘으면 `chatAgent/middleware.ts:276-280`이 통째로 잘라 닫는 `</untrusted>`가 사라지고 JSON도 중간에서 끊겼다. 문서 데이터가 신뢰경계 밖으로 새는 형태라 단순 절단보다 성질이 나쁘다. `renderSelectionToolOutput`이 **본문 텍스트를 줄여** 캡에 맞춘다 — 문서 도구(`renderDocumentToolOutput`)는 마크다운이라 문자열을 잘라내면 되지만 여기는 JSON이라 같은 수를 못 쓴다. 여유분을 빼는 대신 **래핑까지 마친 실제 길이를 재서** 비교한다(JSON 이스케이프·무해화 삽입 때문에 길이 예측이 부정확). 함께: 선택 도구에도 `neutralizeUntrustedMarkers`를 적용 — 문서 텍스트에 `</untrusted>`가 들어 있으면 경계를 위조할 수 있었다(문서 도구에는 이미 있던 방어).
-- **다른 프로젝트에서 메모리 가져오기**: Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
+- **다른 프로젝트에서 메모리 가져오기** ([ADR-0009](../docs/adr/0009-project-memory-import-by-copy.md)): Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
   - **공유 링크(glossary식) 대신 복사를 택했다**: `project_memory_state.revision`이 프로젝트 단위라 공유 세트 1건 수정 시 링크된 모든 프로젝트의 revision을 bump해야 하고, MCP 6종이 projectId 단수 전제라 breaking이 된다. 용어집은 이미 `setProjectGlossaries`로 프로젝트에 링크할 수 있어 범위 밖.
   - **`created_at`은 지금으로 새로 찍는다**: 프로젝트 복제용 `copy_project_memory_data`는 원본 시각을 복사하는데, 가져오기가 그러면 목록(`created_at ASC`) 중간에 파묻히고 상한 동점 처리(index 기준)에서 "오래된 것"으로 먼저 잘린다. `source`는 `import`로 덮고, 출처 세션·메시지 id는 원본 프로젝트의 대화를 가리키므로 버린다.
   - **금칙어는 복사가 아니라 upsert 의미로 넣는다**: 스키마에 `(project_id, term)` UNIQUE가 없고 중복 병합은 `upsert_forbidden_term`에만 있어서, 복사 루프를 그대로 쓰면 가져올 때마다 증식한다.
@@ -107,14 +110,14 @@ This `.claude/` directory contains:
 
 ### Previous (2026-07-28)
 
-- **정렬 검사 뷰 (Phase 4.5, `design_handoff_oddeyes_editor_ui/PHASE_4_5_alignment_view.md`)**: 원문↔번역문 문단을 나란히 놓는 **읽기 전용** 대조 뷰. 상단 상태 스트립의 `문서 보기 | 정렬 검사` 토글로 오간다(기본은 문서 보기, `uiStore.editorViewMode`만 persist). **정렬은 저장하지 않는다** — `project.segments`는 죽은 모델이고 `translationUnitId`는 두 에디터에서 독립 발급되므로, 뷰를 열 때마다 `alignUnits.ts`가 시그니처(`type:depth:level`) 시퀀스 LCS로 계산하고 짝이 안 맞는 구간은 **고치지 않고 불일치로 표시**한다(1:1 / 1:0 / 0:1만, 1:N 미지원).
+- **정렬 검사 뷰 (Phase 4.5, `design_handoff_oddeyes_editor_ui/PHASE_4_5_alignment_view.md`)** ([ADR-0008](../docs/adr/0008-alignment-computed-not-persisted.md)): 원문↔번역문 문단을 나란히 놓는 **읽기 전용** 대조 뷰. 상단 상태 스트립의 `문서 보기 | 정렬 검사` 토글로 오간다(기본은 문서 보기, `uiStore.editorViewMode`만 persist). **정렬은 저장하지 않는다** — `project.segments`는 죽은 모델이고 `translationUnitId`는 두 에디터에서 독립 발급되므로, 뷰를 열 때마다 `alignUnits.ts`가 시그니처(`type:depth:level`) 시퀀스 LCS로 계산하고 짝이 안 맞는 구간은 **고치지 않고 불일치로 표시**한다(1:1 / 1:0 / 0:1만, 1:N 미지원).
   - **에디터 언마운트 금지**: 정렬 뷰는 `PanelGroup` 위에 오버레이로 얹고 문서 보기 쪽은 `visibility:hidden`으로 가린다. 언마운트하면 TipTap 인스턴스가 파괴돼 `editorStore`가 비고 점프·검수 적용이 깨진다. `display:none`이 아닌 `visibility`인 이유는 ① 레이아웃이 남아 스크롤 위치가 보존되고(실측 1500 → 1500) ② 숨은 요소는 포커스를 못 받아 읽기 전용이 함께 강제되기 때문(React 18이라 `inert` 사용 불가).
   - **재계산 트리거**: `onUpdate`가 아니라 300ms 디바운스된 문서 JSON 스냅샷. 스펙이 제안한 리비전 해시 비교는 markdown 변환+해시가 `alignUnits`보다 싸지 않아 넣지 않았다.
   - **이슈·코멘트 배지**: `useAlignmentAnnotations.ts`가 `targetExcerpt`/`excerpt` **텍스트 포함 검사**로 유닛에 매핑한다(`segmentGroupId`는 신뢰 불가). 여러 유닛에 걸리면 매핑하지 않고 하단 `위치를 특정하지 못한 이슈 N건`으로 모은다 — 이 수치가 정렬 품질 지표다. 정규화는 `normalizeForSearch`의 기존 함수 재사용.
   - **정렬 리포트**: 하단 `정렬 리포트` 버튼이 `AlignResult` 요약을 JSONL 한 줄로 내보낸다(`alignmentReport.ts`, `saveQualityJsonl`과 같은 방식). **자동 수집 없음.** 이 줄의 `ratio`가 Phase 5(영속 정렬, 4–6주) 착수 판단 근거다 — 0.95 이상이면 불필요, 0.7 근처면 착수 가치 있음.
   - 부수 변경: `ReviewPanel`의 `detectSourceLanguage` → `src/utils/detectLanguage.ts`로 이관(반환 문자열은 검수 프롬프트에 들어가므로 그대로), `TranslationUnit`에 `level?: number` 추가, `e2e/tauri-mock.ts`에 `plugin:dialog|save`·`write_text_file` 목 추가(쓰인 내용은 `window.__MOCK_WRITTEN_FILES__`).
   - **Phase 4-3(세그먼트 인스펙터)은 폐기** — 전제한 `segmentGroupId` 경로가 스키마에 없고, 4.5가 이를 대체한다.
-- **프로젝트 메모리에서 보관(archive) 개념 제거**: 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.
+- **프로젝트 메모리에서 보관(archive) 개념 제거** ([ADR-0006](../docs/adr/0006-hard-delete-instead-of-archive.md)): 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.
   - **DB**: `project_memory_items`에서 `supersedes_id` 컬럼과 `status='archived'`를 제거(CHECK는 `('proposed','active')`). 기존 DB는 `migrate_drop_project_memory_archive`가 테이블 재구성으로 archived 행을 삭제하며, `supersedes_id` 컬럼 유무로 판정해 재실행에 안전하다. `delete_project_memory_item` 커맨드 신설.
   - **편집은 제자리 갱신**: `replace_project_memory_item`이 원본 archive + 새 행 insert 대신 UPDATE만 한다. id·`created_at`이 유지되고 행이 늘지 않는다. 결과에서 `archived` 필드 제거.
   - **UI**: Settings의 `rev N` 표시 제거, 버튼은 `편집 / 삭제`(네이티브 confirm 경유). 카테고리·상태·출처 라벨을 `memory.category.*`/`status.*`/`source.*`로 현지화.
@@ -125,7 +128,7 @@ This `.claude/` directory contains:
 
 - **Desktop MCP 0.8.0 (25 tools)**: 앱의 지식 모델이 legacy `projectContext` → 승인 기반 Project Memory·금칙어로 바뀐 것을 MCP에 반영. ① `oddeyes_set_translation_context`에서 `projectContext` 파라미터 **제거**(breaking) — v2.13.0 이후 채팅에 주입되지 않고 메모리 0건일 때만 스치는 죽은 쓰기였다. ② `oddeyes_get_translation_context`가 `projectContext` 대신 `projectMemory`(active)·`forbiddenTerms`(enabled)·`revision` 반환. ③ Project Memory/금칙어 도구 6종 추가: `oddeyes_list_project_memory`, `add`/`replace`/`archive_project_memory_item`(0.9.0에서 `delete_*`로 대체), `upsert`/`delete_forbidden_term`. 외부 쓰기는 `source='import'`·`status='active'`로 즉시 반영되고 Settings에서 출처 확인·삭제 가능(제안 승인 UI는 채팅 카드 전용이라 `proposed`로 넣으면 승인할 방법이 없음). ④ `oddeyes_get_status`에 `projectMemoryRevision`·카운트 추가(미로드 시 0이 아니라 `null`). 브리지 메서드는 `oddeyesAppBridge.ts`, hydrate 보증은 `ensureProjectMemory`.
 - **동적 프로젝트 지식 루프 수정 (D1–D7, `docs/dynamic-project-knowledge-fix-plan.md`)**: 채팅 ↔ Project Memory 갱신 경로의 결함 7건 수정.
-- **채팅 컨텍스트 주입 구조 (D1)**: 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
+- **채팅 컨텍스트 주입 구조 (D1)** ([ADR-0004](../docs/adr/0004-approval-based-project-memory.md)): 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
 - **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.
 - **제안 다건 지원 (D3)**: `ChatMessageMetadata`에 `projectMemoryProposals`/`forbiddenTermProposals`/`glossaryEntryProposals` 배열 추가. 단수 필드는 과거 메시지 호환용 deprecated. 읽기/갱신은 `components/chat/knowledgeProposals.ts`의 `read*`/`patchProposalStatus`로 일원화(legacy 단수 필드 자동 정규화).
 - **승인 안전성 (D4/D5/D7)**: `duplicate` 플래그 토스트 노출, 저장 중 승인 버튼 잠금(`saving`), 제안의 `projectId`와 활성 프로젝트 일치 검증.
@@ -136,7 +139,7 @@ This `.claude/` directory contains:
 
 - **Anchored selection editing**: Source/Target 선택을 raw composer 문자열 대신 `SelectionContext` 카드로 유지. Target은 직접 부분 재번역 또는 채팅의 `propose_selection_edit`만 허용하며, 공통 preview + anchor/project/text guard를 통과한 뒤 정확한 range를 한 transaction으로 적용.
 - **Dynamic project knowledge**: 승인 기반 Project Memory·Forbidden Terms SQLite 저장/관리 UI 및 chat proposal 도구 추가. 프로젝트 복제/삭제와 revision이 함께 관리되며 legacy `projectContext`는 idempotent migration/fallback으로 보존.
-- **Workflow ContextSnapshot**: 전체 번역·검수·폴리싱·부분 재번역이 작업 시작 시 고정 snapshot을 사용. 리뷰의 모든 chunk가 동일 snapshot revision을 공유하고 `ContextManifest`로 참조 ID/도구/토큰 정보를 표시.
+- **Workflow ContextSnapshot** ([ADR-0005](../docs/adr/0005-fixed-context-snapshot-per-workflow.md)): 전체 번역·검수·폴리싱·부분 재번역이 작업 시작 시 고정 snapshot을 사용. 리뷰의 모든 chunk가 동일 snapshot revision을 공유하고 `ContextManifest`로 참조 ID/도구/토큰 정보를 표시.
 - **Tool registry profiles**: general/selection-source/selection-target/selection-retranslate profile별 allowlist, trust/effect/output cap을 단일 registry에서 파생. 직접 부분 재번역은 tools=0.
 - **선택 재번역 안정화 (v2.13.0)**: ① `retranslateSelection` 출력 토큰 4096→16384(`SELECTION_EDIT_MAX_TOKENS`) — thinking/reasoning이 예산을 잠식해 END 마커가 truncation되던 재번역 실패 수정. ② 앵커(하이라이트) 수명 정리 — apply 성공 외에도 chip dismiss·proposal 폐기/stale·새 선택 교체·프로젝트 전환 시 `removeSelectionAnchor` 호출(하이라이트 영구 잔존 버그). ③ `normalizeSelectionAnchorRange`가 가장자리 공백을 범위에서 제외 — `SelectionContext.text`(트림)와 `anchor.originalText`(textBetween) 불일치로 proposal 적용이 항상 stale 처리되던 오탐 수정. ④ e2e `tauri-mock`에 `ai_stream`/`ai_complete` 마커-에코 목 추가로 생성→적용 경로 웹 E2E 검증.
 - **legacy projectContext 내부 제거 (v2.13.0)**: Settings의 "프로젝트 컨텍스트" 편집 필드와 chat 시스템 프롬프트 직접 주입 제거. 승인 기반 Project Memory로 완전 대체. 스토어 필드·DB persist·hydrate migration·워크플로우 `legacyProjectContext` fallback은 호환을 위해 유지(=데이터/계약 안전). MCP 파라미터는 0.8.0에서 제거됨(위 항목).
