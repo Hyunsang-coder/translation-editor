@@ -21,8 +21,21 @@
 swap 강등 로직은 그대로. 회귀 없음.
 
 **검증**: `docBlockDiff.test.ts`에 오탐 방지 테스트 2건 추가. `npx tsc --noEmit` 통과,
-`npm run test:run` 802 passed / 55 files. 연속 hardBreak 축소(§48-49)는 원인이 달라
-별도 이슈로 미해결.
+`npm run test:run` 802 passed / 55 files.
+
+## 후속: 연속 hardBreak 축소 (수정 완료 2026-07-29)
+
+아래 §72-73이 "원인이 달라 별도 이슈"로 남겨둔 항목. `extractBlockText`가 hardBreak를
+하위 블록 구분자(`parts.join('\n')`)에 맡기고 있어서, 텍스트가 사이에 없는 hardBreak는
+`parts`에 아무것도 넣지 못하고 사라졌다 — `A\n\nB` → `A\nB`, 앞뒤에 붙은 것은 아예 소실.
+
+hardBreak를 인라인 줄바꿈으로 보고 `inlineBuffer`에 직접 넣도록 고쳤다. 블록 구분자
+경로는 그대로다. `blockKey`가 `\s+ → ' '`로 정규화하므로 블록 *매칭*은 영향 없고,
+hardBreak 문단은 `isFlatTextBlock`이 false라 swap 경로로 가므로 부분 병합 재조립
+계약도 그대로다. 바뀌는 것은 swap 카드에 표시되는 원본 텍스트뿐.
+
+**검증**: `docBlockDiff.test.ts`에 2건 추가(연속 hardBreak, 앞뒤 hardBreak).
+tsc clean, 유닛 1154, 웹 E2E 36.
 
 ---
 

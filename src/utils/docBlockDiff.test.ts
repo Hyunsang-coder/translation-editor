@@ -802,6 +802,32 @@ describe('평탄하지 않은 블록은 통째 swap (F5)', () => {
     expect(hasBreak).toBe(true);
   });
 
+  it('연속 hardBreak를 빈 줄로 보존한다', () => {
+    // 렌더링은 빈 줄 하나를 보여주는데 A\nB로 줄면 diff 표시가 문서와 어긋난다.
+    const para = {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Line one.' },
+        { type: 'hardBreak' },
+        { type: 'hardBreak' },
+        { type: 'text', text: 'Line two.' },
+      ],
+    };
+    expect(extractBlockText(para)).toBe('Line one.\n\nLine two.');
+  });
+
+  it('앞뒤에 붙은 hardBreak도 줄바꿈으로 남는다', () => {
+    const para = {
+      type: 'paragraph',
+      content: [
+        { type: 'hardBreak' },
+        { type: 'text', text: 'Body.' },
+        { type: 'hardBreak' },
+      ],
+    };
+    expect(extractBlockText(para)).toBe('\nBody.\n');
+  });
+
   it('평탄 문단은 기존처럼 문장 부분 병합이 유지된다 (회귀 방지)', () => {
     const a = doc(p('Alpha old one. Same middle here. Beta old two.'));
     const b = doc(p('Alpha new one. Same middle here. Beta new two.'));

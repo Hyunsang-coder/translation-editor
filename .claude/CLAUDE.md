@@ -86,6 +86,7 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-29)
 
+- **연속 hardBreak 축소 수정 (`docBlockDiff.ts`)**: `extractBlockText`가 hardBreak를 하위 블록 구분자(`parts.join('\n')`)에 맡겨서, 사이에 텍스트가 없는 hardBreak는 `parts`에 아무것도 넣지 못하고 사라졌다 — `A\n\nB`가 `A\nB`로 줄고 앞뒤에 붙은 것은 아예 소실. hardBreak를 인라인 줄바꿈으로 보고 `inlineBuffer`에 직접 넣는다. `blockKey`가 `\s+ → ' '`로 정규화하므로 블록 매칭은 무영향, hardBreak 문단은 `isFlatTextBlock`이 false라 swap 경로로 가므로 부분 병합 재조립 계약도 그대로 — 바뀌는 건 swap 카드에 표시되는 원본 텍스트뿐. 2026-07-08 폴리싱 diff 수정 때 "원인이 달라 별도 이슈"로 남겨둔 항목(`docs/polish-diff-whitespace-bug.md`).
 - **품질 장부(Quality Ledger) 제거**: 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
   - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.
   - **Desktop MCP 1.0.0 (breaking)**: `oddeyes_log_quality_records`/`oddeyes_get_quality_records` 제거(25 → 23 tools). **`.mcpb` 재번들 + `npm publish` 미실시** — 배포는 별도로 해야 클라이언트에 반영된다.

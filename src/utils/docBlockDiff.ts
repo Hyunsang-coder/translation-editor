@@ -61,6 +61,11 @@ export function extractBlockText(node: TipTapNodeJson): string {
   for (const child of node.content) {
     if (child.text !== undefined || child.type === 'text') {
       inlineBuffer += child.text ?? '';
+    } else if (child.type === 'hardBreak') {
+      // 인라인 줄바꿈이므로 버퍼에 직접 넣는다. 하위 블록 구분자(parts.join)에
+      // 맡기면 텍스트 없는 연속 hardBreak가 통째로 사라져 A\n\nB가 A\nB로 줄고
+      // 앞뒤에 붙은 것은 아예 없어진다(렌더링과 불일치).
+      inlineBuffer += '\n';
     } else {
       const childText = extractBlockText(child);
       if (inlineBuffer) {
