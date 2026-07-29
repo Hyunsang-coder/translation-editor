@@ -21,13 +21,14 @@ export function buildContextSnapshot(
 ): ContextSnapshot {
   const activeProjectMemoryItems = input.projectMemoryItems
     .filter((item) => item.status === 'active')
-    .map(({ id, category, content }) => ({ id, category, content }));
+    .map(({ id, category, content, source }) => ({ id, category, content, source }));
   const legacyProjectContext = input.legacyProjectContext?.trim();
   if (activeProjectMemoryItems.length === 0 && legacyProjectContext) {
     activeProjectMemoryItems.push({
       id: 'legacy-project-context',
       category: 'general',
       content: legacyProjectContext,
+      source: 'legacy',
     });
   }
 

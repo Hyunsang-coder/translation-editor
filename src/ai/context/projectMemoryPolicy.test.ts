@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { ProjectMemoryCategory } from '@/types';
+import type { ProjectMemoryCategory, ProjectMemoryItem } from '@/types';
 import { memoryItemLimit, selectMemoryItems } from './projectMemoryPolicy';
 
-function item(id: string, category: ProjectMemoryCategory) {
-  return { id, category };
+function item(
+  id: string,
+  category: ProjectMemoryCategory,
+  source?: ProjectMemoryItem['source'],
+): { id: string; category: ProjectMemoryCategory; source?: ProjectMemoryItem['source'] } {
+  return { id, category, ...(source ? { source } : {}) };
 }
 
 describe('selectMemoryItems', () => {
@@ -55,6 +59,33 @@ describe('selectMemoryItems', () => {
     ];
     const result = selectMemoryItems(items, 1);
     expect(result.selected.map((entry) => entry.id)).toEqual(['legacy']);
+  });
+
+  it('직접 입력한 항목을 카테고리 우선순위보다 먼저 남긴다', () => {
+    const items = [
+      item('chat-domain', 'domain', 'chat'),
+      item('user-general', 'general', 'user'),
+    ];
+    const result = selectMemoryItems(items, 1);
+    expect(result.selected.map((entry) => entry.id)).toEqual(['user-general']);
+  });
+
+  it('source가 없으면 비-user로 취급한다 (필드 추가 이전 스냅샷)', () => {
+    const items = [
+      item('snapshot-domain', 'domain'),
+      item('user-fact', 'reference_fact', 'user'),
+    ];
+    const result = selectMemoryItems(items, 1);
+    expect(result.selected.map((entry) => entry.id)).toEqual(['user-fact']);
+  });
+
+  it('직접 입력끼리는 기존 카테고리 우선순위를 따른다', () => {
+    const items = [
+      item('general', 'general', 'user'),
+      item('domain', 'domain', 'user'),
+    ];
+    const result = selectMemoryItems(items, 1);
+    expect(result.selected.map((entry) => entry.id)).toEqual(['domain']);
   });
 
   it('상한이 0 이하면 전부 제외한다', () => {

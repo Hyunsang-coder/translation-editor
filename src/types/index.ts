@@ -299,7 +299,14 @@ export type WorkflowContextMode =
 
 export interface ContextSnapshot {
   revision: number;
-  projectMemoryItems: Array<Pick<ProjectMemoryItem, 'id' | 'category' | 'content'>>;
+  /**
+   * `source`는 상한 절단 시 사용자 직접 입력을 우선 보존하는 데 쓴다.
+   * 이 필드가 생기기 전에 저장된 스냅샷에는 없으므로 optional이다.
+   */
+  projectMemoryItems: Array<
+    Pick<ProjectMemoryItem, 'id' | 'category' | 'content'>
+    & Partial<Pick<ProjectMemoryItem, 'source'>>
+  >;
   translationRules: string;
   forbiddenTerms: Array<Pick<ForbiddenTerm, 'id' | 'term' | 'replacement' | 'note'>>;
   glossaryEntries: Array<{

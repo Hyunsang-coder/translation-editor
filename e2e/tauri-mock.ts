@@ -246,6 +246,75 @@ function buildMockScript(seedProjects: MockProject[]): string {
       projectMemory.set(a?.projectId, next);
       return { revision: next.revision };
     },
+    import_project_memory_items: (args) => {
+      const a = args?.args ?? args;
+      const source = projectMemory.get(a?.sourceProjectId);
+      const target = projectMemory.get(a?.targetProjectId) ?? {
+        projectId: a?.targetProjectId,
+        items: [],
+        forbiddenTerms: [],
+        revision: 0,
+      };
+      const itemIds = a?.itemIds ?? [];
+      const termIds = a?.termIds ?? [];
+      const now = Date.now();
+      // 카테고리는 보지 않는다 (db::import_project_memory_data와 동일).
+      const seenItems = new Set(target.items.map(item => item.normalizedHash));
+      const seenTerms = new Set(
+        target.forbiddenTerms.map(term => String(term.term).trim().toLowerCase()),
+      );
+      const items = [...target.items];
+      const forbiddenTerms = [...target.forbiddenTerms];
+      let importedItems = 0;
+      let skippedItems = 0;
+      let importedTerms = 0;
+      let skippedTerms = 0;
+
+      for (const item of (source?.items ?? [])) {
+        if (item.status !== 'active' || !itemIds.includes(item.id)) continue;
+        const key = item.normalizedHash;
+        if (seenItems.has(key)) { skippedItems += 1; continue; }
+        seenItems.add(key);
+        items.push({
+          ...item,
+          id: uid(),
+          projectId: a?.targetProjectId,
+          status: 'active',
+          source: 'import',
+          sourceSessionId: null,
+          sourceMessageId: null,
+          sourceSelectionId: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        importedItems += 1;
+      }
+      for (const term of (source?.forbiddenTerms ?? [])) {
+        if (!termIds.includes(term.id)) continue;
+        const key = String(term.term).trim().toLowerCase();
+        if (seenTerms.has(key)) { skippedTerms += 1; continue; }
+        seenTerms.add(key);
+        forbiddenTerms.push({
+          ...term,
+          id: uid(),
+          projectId: a?.targetProjectId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        importedTerms += 1;
+      }
+
+      const revision = importedItems > 0 || importedTerms > 0
+        ? target.revision + 1
+        : target.revision;
+      projectMemory.set(a?.targetProjectId, {
+        ...target,
+        items,
+        forbiddenTerms,
+        revision,
+      });
+      return { importedItems, skippedItems, importedTerms, skippedTerms, revision };
+    },
     upsert_forbidden_term: (args) => {
       const a = args?.args ?? args;
       const state = projectMemory.get(a?.projectId) ?? {

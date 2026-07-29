@@ -67,6 +67,14 @@ export interface UpsertForbiddenTermResult {
   revision: number;
 }
 
+export interface ProjectMemoryImportResult {
+  importedItems: number;
+  skippedItems: number;
+  importedTerms: number;
+  skippedTerms: number;
+  revision: number;
+}
+
 function fromMemoryWire(item: ProjectMemoryItemWire): ProjectMemoryItem {
   return {
     id: item.id,
@@ -165,6 +173,21 @@ export async function deleteProjectMemoryItem(params: {
   itemId: string;
 }): Promise<{ revision: number }> {
   return await invoke<{ revision: number }>('delete_project_memory_item', {
+    args: params,
+  });
+}
+
+/**
+ * 다른 프로젝트에서 선택한 메모리·금칙어를 현재 프로젝트로 복사한다.
+ * 실시간 동기화가 아니라 스냅샷 복사다 — 원본이 나중에 바뀌어도 따라오지 않는다.
+ */
+export async function importProjectMemoryItems(params: {
+  sourceProjectId: string;
+  targetProjectId: string;
+  itemIds: string[];
+  termIds: string[];
+}): Promise<ProjectMemoryImportResult> {
+  return await invoke<ProjectMemoryImportResult>('import_project_memory_items', {
     args: params,
   });
 }

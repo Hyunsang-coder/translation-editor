@@ -1,4 +1,8 @@
-import type { ProjectMemoryCategory, WorkflowContextMode } from '@/types';
+import type {
+  ProjectMemoryCategory,
+  ProjectMemoryItem,
+  WorkflowContextMode,
+} from '@/types';
 
 /**
  * 상한에 걸렸을 때 어떤 항목을 남길지 정하는 우선순위 (작을수록 우선).
@@ -41,12 +45,30 @@ export interface SelectMemoryItemsResult<T> {
 }
 
 /**
+ * 사용자가 설정 화면에서 직접 입력한 항목은 카테고리보다 먼저 남긴다.
+ *
+ * 채팅 제안 승인(source='chat')도 사용자를 거치지만, 수동 입력은 기본 카테고리가 'general'
+ * (우선순위 9개 중 7번째)로 굳어 있어 카테고리만 보면 손으로 친 항목이 항상 먼저 잘렸다.
+ * 직접 타이핑이 가장 강한 의도 표시다.
+ *
+ * source가 없는 값은 비-user로 취급한다 — 이 필드가 생기기 전에 저장된 ContextSnapshot.
+ */
+function sourceTier(source: ProjectMemoryItem['source'] | undefined): number {
+  return source === 'user' ? 0 : 1;
+}
+
+/**
  * 우선순위 상위 maxItems개만 남긴다.
  *
  * 반환 순서는 입력 순서(= DB created_at ASC, 설정 화면 표시 순서)를 유지한다.
  * 선별 기준과 표시 순서를 분리해야 프롬프트가 사용자가 보는 목록과 같은 흐름으로 읽힌다.
  */
-export function selectMemoryItems<T extends { category: ProjectMemoryCategory }>(
+export function selectMemoryItems<
+  T extends {
+    category: ProjectMemoryCategory;
+    source?: ProjectMemoryItem['source'];
+  },
+>(
   items: T[],
   maxItems: number,
 ): SelectMemoryItemsResult<T> {
@@ -56,6 +78,8 @@ export function selectMemoryItems<T extends { category: ProjectMemoryCategory }>
   const kept = items
     .map((item, index) => ({ item, index }))
     .sort((a, b) => {
+      const bySource = sourceTier(a.item.source) - sourceTier(b.item.source);
+      if (bySource !== 0) return bySource;
       const byPriority =
         MEMORY_CATEGORY_PRIORITY[a.item.category] - MEMORY_CATEGORY_PRIORITY[b.item.category];
       if (byPriority !== 0) return byPriority;

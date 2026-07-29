@@ -1,22 +1,33 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
 import type { ProjectMemoryCategory } from '@/types';
+import { MEMORY_CATEGORY_PRIORITY } from '@/ai/context/projectMemoryPolicy';
+import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
+import { ProjectMemoryImportModal } from '@/components/panels/ProjectMemoryImportModal';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useUIStore } from '@/stores/uiStore';
 
-const CATEGORIES: ProjectMemoryCategory[] = [
-  'domain',
-  'audience',
-  'product',
-  'worldbuilding',
-  'character',
-  'intent',
-  'decision',
-  'reference_fact',
-  'general',
-];
+/**
+ * 선택지 순서는 상한 초과 시 남는 우선순위를 그대로 따른다.
+ * 둘이 어긋나면 사용자가 더 먼저 잘릴 카테고리를 위쪽 선택지로 착각한다.
+ */
+const CATEGORIES = (Object.keys(MEMORY_CATEGORY_PRIORITY) as ProjectMemoryCategory[])
+  .sort((a, b) => MEMORY_CATEGORY_PRIORITY[a] - MEMORY_CATEGORY_PRIORITY[b]);
+
+/**
+ * 카테고리 9개를 우선순위 3단계 색으로 압축한다. 라벨 9종을 모든 행에 노출하면
+ * 정작 읽어야 할 본문이 묻힌다. 정확한 카테고리는 점의 툴팁으로 확인한다.
+ */
+const TIER_DOT = ['bg-primary-500', 'bg-editor-text', 'bg-editor-muted'] as const;
+
+function categoryTier(category: ProjectMemoryCategory): number {
+  const priority = MEMORY_CATEGORY_PRIORITY[category];
+  if (priority <= 2) return 0;
+  if (priority <= 4) return 1;
+  return 2;
+}
 
 export function ProjectMemorySettingsSection(): JSX.Element {
   const { t } = useTranslation();
@@ -45,6 +56,21 @@ export function ProjectMemorySettingsSection(): JSX.Element {
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [term, setTerm] = useState('');
   const [replacement, setReplacement] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+
+  /**
+   * 개수 상한만 세면 과대 보고가 된다 — digest는 문자 예산에서도 잘리므로
+   * 실제 주입분은 렌더러 자신에게 물어야 한다.
+   */
+  const chatDigest = useMemo(
+    () => renderChatMemoryDigest({ items, forbiddenTerms }),
+    [items, forbiddenTerms],
+  );
+  const injectedIds = useMemo(() => new Set(chatDigest.itemIds), [chatDigest]);
+  const activeCount = useMemo(
+    () => items.filter((item) => item.status === 'active').length,
+    [items],
+  );
 
   const reportError = (error: unknown): void => {
     addToast({
@@ -91,64 +117,116 @@ export function ProjectMemorySettingsSection(): JSX.Element {
   return (
     <>
       <section className="space-y-3" data-testid="project-memory-settings">
-        <h3 className="text-xs font-semibold text-editor-text">
-          {t('memory.settingsTitle', '프로젝트 메모리')}
-        </h3>
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-xs font-semibold text-editor-text">
+            {t('memory.settingsTitle', '프로젝트 메모리')}
+          </h3>
+          <button
+            type="button"
+            data-testid="project-memory-import-open"
+            className="ml-auto text-[10px] text-editor-muted hover:text-primary-500"
+            onClick={() => setImportOpen(true)}
+          >
+            {t('memory.import.open', '가져오기')}
+          </button>
+          {activeCount > 0 && (
+            <span
+              className={`text-[10px] ${
+                chatDigest.truncated ? 'text-primary-500' : 'text-editor-muted'
+              }`}
+              title={t('memory.chatInjectionHint', {
+                injected: chatDigest.itemIds.length,
+                defaultValue: '채팅에는 상위 {{injected}}개만 전달됩니다. 번역·검수·폴리싱에는 전체가 전달됩니다.',
+              })}
+            >
+              {t('memory.chatInjection', {
+                injected: chatDigest.itemIds.length,
+                total: activeCount,
+                defaultValue: '채팅 {{injected}}/{{total}}',
+              })}
+            </span>
+          )}
+        </div>
         <p className="text-[10px] leading-relaxed text-editor-muted">
           {t('memory.settingsDescription', '승인된 항목은 다음 채팅과 번역·검수·폴리싱에 사용됩니다.')}
         </p>
-        <div className="flex gap-2">
-          <select
-            className="rounded-lg border border-editor-border bg-editor-surface px-2 py-2 text-xs text-editor-text"
-            value={category}
-            onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
-          >
-            {CATEGORIES.map((value) => (
-              <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
-            ))}
-          </select>
-          <input
-            data-testid="project-memory-new-item"
-            className="min-w-0 flex-1 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder={t('memory.newItemPlaceholder', '장기적으로 유지할 프로젝트 정보')}
-          />
-          <button
-            type="button"
-            data-testid="project-memory-add"
-            className="rounded-lg bg-primary-500 px-3 py-2 text-xs text-white disabled:opacity-50"
-            disabled={saving || !content.trim()}
-            onClick={() => void handleAdd()}
-          >
-            {t('memory.add', '추가')}
-          </button>
+
+        <div className="space-y-1.5">
+          <div className="flex gap-2">
+            <input
+              data-testid="project-memory-new-item"
+              className="min-w-0 flex-1 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder={t('memory.newItemPlaceholder', '장기적으로 유지할 프로젝트 정보')}
+            />
+            <button
+              type="button"
+              data-testid="project-memory-add"
+              className="rounded-lg bg-primary-500 px-3 py-2 text-xs text-white disabled:opacity-50"
+              disabled={saving || !content.trim()}
+              onClick={() => void handleAdd()}
+            >
+              {t('memory.add', '추가')}
+            </button>
+          </div>
+          {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
+          <label className="flex items-center gap-1 text-[10px] text-editor-muted">
+            {t('memory.categoryLabel', '카테고리')}
+            <select
+              className="bg-transparent text-[10px] text-editor-muted outline-none"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
+            >
+              {CATEGORIES.map((value) => (
+                <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-xl border border-editor-border bg-editor-surface p-3"
-            >
-              <div className="flex items-center gap-2 text-[10px] text-editor-muted">
-                <span>{t(`memory.category.${item.category}`)}</span>
-                <span>·</span>
-                <span>{t(`memory.status.${item.status}`)}</span>
-                <span className="ml-auto">{t(`memory.source.${item.source}`)}</span>
-              </div>
-              {editing?.id === item.id ? (
-                <textarea
-                  className="mt-2 min-h-16 w-full rounded-lg border border-editor-border bg-editor-bg px-2 py-1.5 text-xs text-editor-text"
-                  value={editing.content}
-                  onChange={(event) => setEditing({ id: item.id, content: event.target.value })}
+        <div className="space-y-0.5">
+          {items.map((item) => {
+            const isEditing = editing?.id === item.id;
+            const injected = injectedIds.has(item.id);
+            return (
+              <div
+                key={item.id}
+                className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-editor-surface"
+              >
+                <span
+                  className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${TIER_DOT[categoryTier(item.category)]}`}
+                  title={`${t(`memory.category.${item.category}`)} · ${t(`memory.source.${item.source}`)}`}
                 />
-              ) : (
-                <div className="mt-1 whitespace-pre-wrap text-xs text-editor-text">{item.content}</div>
-              )}
-              {item.status === 'active' && (
-                <div className="mt-2 flex gap-2">
-                  {editing?.id === item.id ? (
+                <div className="min-w-0 flex-1">
+                  {isEditing ? (
+                    <textarea
+                      className="min-h-16 w-full rounded-lg border border-editor-border bg-editor-bg px-2 py-1.5 text-xs text-editor-text"
+                      value={editing.content}
+                      onChange={(event) => setEditing({ id: item.id, content: event.target.value })}
+                    />
+                  ) : (
+                    <div
+                      className={`whitespace-pre-wrap break-words text-xs ${
+                        injected ? 'text-editor-text' : 'text-editor-muted'
+                      }`}
+                      title={injected ? undefined : t(
+                        'memory.notInChat',
+                        '채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.',
+                      )}
+                    >
+                      {item.content}
+                    </div>
+                  )}
+                  {item.status !== 'active' && (
+                    <span className="text-[10px] text-editor-muted">
+                      {t(`memory.status.${item.status}`)}
+                    </span>
+                  )}
+                </div>
+                {/* 항상 렌더하고 대비만 낮춘다. 숨기면 키보드·터치에서 닿지 않는다. */}
+                <div className="flex shrink-0 gap-2 opacity-50 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  {isEditing ? (
                     <>
                       <button
                         type="button"
@@ -178,7 +256,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     <>
                       <button
                         type="button"
-                        className="text-[11px] text-primary-500"
+                        className="text-[11px] text-editor-muted hover:text-primary-500"
                         onClick={() => setEditing({ id: item.id, content: item.content })}
                       >
                         {t('common.edit', '편집')}
@@ -195,16 +273,24 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     </>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </section>
 
       <section className="space-y-3" data-testid="forbidden-terms-settings">
-        <h3 className="text-xs font-semibold text-editor-text">
-          {t('memory.forbiddenTermsTitle', '금칙어')}
-        </h3>
+        <div className="space-y-1">
+          <h3 className="text-xs font-semibold text-editor-text">
+            {t('memory.forbiddenTermsTitle', '금칙어')}
+          </h3>
+          <p className="text-[10px] leading-relaxed text-editor-muted">
+            {t(
+              'memory.forbiddenTermsDescription',
+              '모든 AI 요청에 항상 전달되는 지시입니다. 문서를 검사하지는 않습니다.',
+            )}
+          </p>
+        </div>
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
           <input
             data-testid="forbidden-term-input"
@@ -239,11 +325,11 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             {t('memory.add', '추가')}
           </button>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-0.5">
           {forbiddenTerms.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-2 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs"
+              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-editor-surface"
             >
               <input
                 type="checkbox"
@@ -258,11 +344,13 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                   }).catch(reportError)
                 }
               />
-              <span className="text-editor-text">{item.term}</span>
+              <span className={item.enabled ? 'text-editor-text' : 'text-editor-muted'}>
+                {item.term}
+              </span>
               {item.replacement && <span className="text-editor-muted">→ {item.replacement}</span>}
               <button
                 type="button"
-                className="ml-auto text-editor-muted hover:text-red-500"
+                className="ml-auto shrink-0 text-editor-muted opacity-50 transition-opacity hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100"
                 onClick={() => void removeForbiddenTerm(item.id).catch(reportError)}
               >
                 {t('common.delete', '삭제')}
@@ -271,6 +359,8 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           ))}
         </div>
       </section>
+
+      <ProjectMemoryImportModal open={importOpen} onClose={() => setImportOpen(false)} />
     </>
   );
 }
