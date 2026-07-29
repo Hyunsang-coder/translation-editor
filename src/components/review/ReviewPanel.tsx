@@ -25,16 +25,6 @@ import {
   resolveSuggestionRange,
 } from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
-import {
-  appReviewContext,
-  ledgerIdForIssue,
-  recordIssuesProposed,
-  recordIssueAccepted,
-  recordIssuesRejected,
-  saveQualityJsonl,
-  updateQualityDisposition,
-  type ReviewLedgerContext,
-} from '@/quality';
 import { stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
@@ -79,14 +69,6 @@ export function ReviewPanel(): JSX.Element {
   // 검수 루프 중단 컨트롤러 (프로젝트 전환 effect에서도 abort할 수 있도록 ref로 보관)
   const reviewAbortRef = useRef<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-
-  // 품질 장부 맥락 (WP-A1): 앱 대조 리뷰의 origin 기본값. content_type=도메인.
-  // direction은 원문 언어가 세그먼트별 감지라 패널 레벨에선 null(설계서 §4.1 nullable 허용).
-  const ledgerContext = useCallback(
-    (): ReviewLedgerContext =>
-      appReviewContext({ contentType: project?.metadata.domain ?? null }),
-    [project?.metadata.domain],
-  );
 
   // 재번역 중간 모달 (지시사항 입력)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
@@ -303,12 +285,6 @@ export function ReviewPanel(): JSX.Element {
             chunkIndex: i,
             issues,
           });
-
-          // 품질 장부: 생성된 이슈를 proposed로 적재 (best-effort, WP-A1 요구사항 2-①)
-          // 반드시 검수를 시작한 프로젝트 ID(startProjectId)로 기록 (전환 시 장부 오염 방지, L4)
-          if (issues.length > 0) {
-            void recordIssuesProposed(startProjectId, issues, ledgerContext());
-          }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') {
             break;
@@ -344,7 +320,6 @@ export function ReviewPanel(): JSX.Element {
     addResult,
     handleChunkError,
     setStreamingText,
-    ledgerContext,
     t,
   ]);
 
@@ -459,11 +434,6 @@ export function ReviewPanel(): JSX.Element {
 
     if (status === 'applied' || status === 'applied-fuzzy') {
       deleteIssue(issue.id);
-      // 품질 장부: 적용된 이슈를 accepted로 갱신 (best-effort, WP-A1 요구사항 2-②)
-      const ledgerProjectId = useProjectStore.getState().project?.id;
-      if (ledgerProjectId) {
-        void recordIssueAccepted(ledgerProjectId, issue, ledgerContext(), issue.suggestedFix);
-      }
       addToast({
         type: 'success',
         message: status === 'applied-fuzzy'
@@ -485,7 +455,7 @@ export function ReviewPanel(): JSX.Element {
         message: t('review.applyError.missingData', '수정 제안 데이터가 없습니다.'),
       });
     }
-  }, [deleteIssue, ledgerContext, t]);
+  }, [deleteIssue, t]);
 
   /**
    * 재번역 버튼 클릭 - 중간 모달 열기
@@ -652,24 +622,6 @@ export function ReviewPanel(): JSX.Element {
     useProjectStore.getState().setTargetDocJson(doc);
     useProjectStore.getState().setTargetDocument(html);
 
-    // 품질 장부: 재번역에 반영된(checked) 이슈는 superseded, 나머지는 rejected (WP-A1 요구사항 2-③)
-    const ctx = ledgerContext();
-    const remaining = getAllIssues();
-    const checkedInRetranslate = remaining.filter(
-      (i) => i.checked && severityFilter.includes(i.severity),
-    );
-    const notAddressed = remaining.filter((i) => !checkedInRetranslate.includes(i));
-    if (checkedInRetranslate.length > 0) {
-      void updateQualityDisposition(
-        project.id,
-        checkedInRetranslate.map((i) => ledgerIdForIssue(i, ctx.caughtBy)),
-        'superseded',
-      );
-    }
-    if (notAddressed.length > 0) {
-      void recordIssuesRejected(project.id, notAddressed, ctx);
-    }
-
     // 검수 결과 초기화
     resetReview();
 
@@ -696,47 +648,19 @@ export function ReviewPanel(): JSX.Element {
       type: 'success',
       message: t('review.retranslate.applied', '재번역이 적용되었습니다.'),
     });
-  }, [resetReview, handleRetranslateClose, ledgerContext, getAllIssues, severityFilter, t]);
+  }, [resetReview, handleRetranslateClose, t]);
 
   const handleApplyRetranslation = useCallback(() => {
     if (!retranslatePreviewDoc) return;
     applyRetranslationDoc(retranslatePreviewDoc);
   }, [retranslatePreviewDoc, applyRetranslationDoc]);
 
-  // 품질 장부 JSONL export (WP-A1 요구사항 4)
-  const handleExportLedger = useCallback(async () => {
-    const proj = useProjectStore.getState().project;
-    if (!proj) return;
-    try {
-      const defaultName = proj.metadata.title.replace(/[/\\?%*:|"<>]/g, '_') || 'quality-ledger';
-      const result = await saveQualityJsonl(proj.id, `${defaultName}-quality`);
-      const { addToast } = useUIStore.getState();
-      if (result === 'saved') {
-        addToast({ type: 'success', message: t('review.ledger.exportSuccess', '품질 장부를 내보냈습니다.') });
-      } else if (result === 'empty') {
-        addToast({ type: 'info', message: t('review.ledger.exportEmpty', '내보낼 품질 장부 기록이 없습니다.') });
-      }
-    } catch (err) {
-      console.error('[quality-ledger] export failed:', err);
-      useUIStore.getState().addToast({
-        type: 'error',
-        message: t('review.ledger.exportError', '품질 장부 내보내기에 실패했습니다.'),
-      });
-    }
-  }, [t]);
-
   const handleReset = useCallback(() => {
     if (isReviewing) {
       handleCancel();
     }
-    // 품질 장부: 처리되지 않고 초기화되는 남은 이슈는 rejected ("무시"도 판정, WP-A1 요구사항 2-③)
-    const remaining = getAllIssues();
-    const ledgerProjectId = useProjectStore.getState().project?.id;
-    if (ledgerProjectId && remaining.length > 0) {
-      void recordIssuesRejected(ledgerProjectId, remaining, ledgerContext());
-    }
     resetReview(); // 내부에서 하이라이트 비활성화 + nonce 증가 처리
-  }, [isReviewing, handleCancel, resetReview, getAllIssues, ledgerContext]);
+  }, [isReviewing, handleCancel, resetReview]);
 
   // Memoize derived values to avoid recalculation on every render
   // (streamingText, elapsedSeconds 등 빈번한 상태 변경 시 불필요한 재계산 방지)
@@ -910,16 +834,6 @@ export function ReviewPanel(): JSX.Element {
                   className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
                 >
                   {t('review.retranslate.button', '재번역')}
-                </button>
-              )}
-              {results.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void handleExportLedger()}
-                  title={t('review.ledger.exportTooltip', '이 프로젝트의 품질 장부를 JSONL로 내보냅니다.')}
-                  className="px-3 py-1.5 text-xs font-semibold rounded border border-editor-border hover:bg-editor-bg transition-colors"
-                >
-                  {t('review.ledger.export', '장부 내보내기')}
                 </button>
               )}
               {results.length > 0 && (

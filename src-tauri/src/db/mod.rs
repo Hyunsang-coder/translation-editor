@@ -117,35 +117,6 @@ pub struct McpServerRow {
     pub updated_at: i64,
 }
 
-/// 품질 장부 레코드 (설계서 §4.1). 하이브리드 저장:
-/// KPI 쿼리용 필드는 평탄 컬럼, 상세 중첩 객체는 JSON 문자열 그대로 보관.
-/// `*_json` 필드는 프론트가 직렬화한 §4.1 하위 객체를 그대로 통과시킨다.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QualityRecordRow {
-    pub id: String,
-    pub created_at: i64,
-    // 작업 맥락 (nullable)
-    pub doc_ref: Option<String>,
-    pub route_id: Option<String>,
-    pub direction: Option<String>,
-    pub content_type: Option<String>,
-    // KPI 집계용 평탄 컬럼
-    pub stage: Option<String>,
-    pub caught_by: Option<String>,
-    pub executor: Option<String>,
-    pub producer_model: Option<String>,
-    pub reviewer_model: Option<String>,
-    pub finding_type: Option<String>,
-    pub severity: Option<String>,
-    pub disposition: Option<String>,
-    pub promotion_status: Option<String>,
-    pub matched_rule: Option<String>,
-    // 상세 JSON blob
-    pub segment_json: Option<String>,
-    pub finding_json: Option<String>,
-    pub origin_json: Option<String>,
-}
 
 /// AI 토큰 사용량 1건. 모델 호출 1회(도구 루프는 루프 전체)를 나타낸다.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -187,32 +158,7 @@ pub struct AiUsageDailyRow {
     pub request_count: i64,
 }
 
-/// 품질 장부 작업 기록 (설계서 §4.4). 레코드의 분모.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QualityRunRow {
-    pub id: String,
-    pub started_at: i64,
-    pub stage: String,
-    pub executor: Option<String>,
-    pub model: Option<String>,
-    pub direction: Option<String>,
-    pub route_id: Option<String>,
-    pub doc_words: Option<i64>,
-    pub findings_count_json: Option<String>,
-    pub notes: Option<String>,
-}
 
-/// 품질 장부 조회 필터 (설계서 §4.7 #2 oddeyes_get_quality_records).
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QualityRecordFilter {
-    pub since: Option<i64>,
-    pub stage: Option<String>,
-    pub disposition: Option<String>,
-    pub promotion_status: Option<String>,
-    pub limit: Option<i64>,
-}
 
 /// Glossary 임포트 공통 검증
 fn validate_glossary_rows(
@@ -420,6 +366,20 @@ impl Database {
 
         self.migrate_named_glossaries()?;
         self.migrate_drop_project_memory_archive()?;
+        self.migrate_drop_quality_ledger()?;
+        Ok(())
+    }
+
+    /// 품질 장부(quality_records / quality_runs) 테이블을 제거합니다.
+    ///
+    /// 장부는 기록만 하고 읽는 곳이 없어 걷어냈습니다. 코드만 지우면 스키마가
+    /// 죽은 채로 남으므로 테이블째 드롭합니다 — 쌓여 있던 행도 함께 사라집니다.
+    /// `DROP TABLE IF EXISTS`라 재실행과 신규 DB 양쪽에 안전합니다.
+    fn migrate_drop_quality_ledger(&self) -> Result<(), IteError> {
+        self.conn.execute_batch(
+            "DROP TABLE IF EXISTS quality_records;
+             DROP TABLE IF EXISTS quality_runs;",
+        )?;
         Ok(())
     }
 
@@ -689,14 +649,6 @@ impl Database {
             "DELETE FROM project_glossaries WHERE project_id = ?1",
             [project_id],
         )?;
-        tx.execute(
-            "DELETE FROM quality_records WHERE project_id = ?1",
-            [project_id],
-        )?;
-        tx.execute(
-            "DELETE FROM quality_runs WHERE project_id = ?1",
-            [project_id],
-        )?;
         tx.execute("DELETE FROM segments WHERE project_id = ?1", [project_id])?;
         tx.execute("DELETE FROM blocks WHERE project_id = ?1", [project_id])?;
         tx.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
@@ -721,8 +673,6 @@ impl Database {
         tx.execute("DELETE FROM project_memory_state", [])?;
         tx.execute("DELETE FROM history", [])?;
         tx.execute("DELETE FROM project_glossaries", [])?;
-        tx.execute("DELETE FROM quality_records", [])?;
-        tx.execute("DELETE FROM quality_runs", [])?;
         tx.execute("DELETE FROM segments", [])?;
         tx.execute("DELETE FROM blocks", [])?;
         tx.execute("DELETE FROM projects", [])?;
@@ -3234,207 +3184,10 @@ impl Database {
     // 품질 장부 (Quality Ledger, 설계서 §4)
     // ============================================
 
-    /// 품질 레코드 append 저장 (누적, 교체 아님).
-    /// 장부는 부산물이므로 실패해도 UX를 막지 않도록 커맨드 레이어에서 best-effort로 감싼다.
-    pub fn insert_quality_records(
-        &mut self,
-        project_id: &str,
-        records: &[QualityRecordRow],
-    ) -> Result<usize, IteError> {
-        let tx = self.conn.transaction()?;
-        {
-            let mut stmt = tx.prepare(
-                "INSERT OR REPLACE INTO quality_records (
-                    id, project_id, created_at,
-                    doc_ref, route_id, direction, content_type,
-                    stage, caught_by, executor, producer_model, reviewer_model,
-                    finding_type, severity, disposition, promotion_status, matched_rule,
-                    segment_json, finding_json, origin_json
-                ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                    ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
-                )",
-            )?;
-            for r in records {
-                stmt.execute(rusqlite::params![
-                    r.id,
-                    project_id,
-                    r.created_at,
-                    r.doc_ref,
-                    r.route_id,
-                    r.direction,
-                    r.content_type,
-                    r.stage,
-                    r.caught_by,
-                    r.executor,
-                    r.producer_model,
-                    r.reviewer_model,
-                    r.finding_type,
-                    r.severity,
-                    r.disposition,
-                    r.promotion_status,
-                    r.matched_rule,
-                    r.segment_json,
-                    r.finding_json,
-                    r.origin_json,
-                ])?;
-            }
-        }
-        tx.commit()?;
-        Ok(records.len())
-    }
 
-    /// 필터 조건으로 품질 레코드 조회 (설계서 §4.7 #2).
-    pub fn query_quality_records(
-        &self,
-        project_id: &str,
-        filter: &QualityRecordFilter,
-    ) -> Result<Vec<QualityRecordRow>, IteError> {
-        // 동적 WHERE 절 조립 (파라미터 바인딩으로 인젝션 방지)
-        let mut sql = String::from(
-            "SELECT id, created_at, doc_ref, route_id, direction, content_type,
-                    stage, caught_by, executor, producer_model, reviewer_model,
-                    finding_type, severity, disposition, promotion_status, matched_rule,
-                    segment_json, finding_json, origin_json
-             FROM quality_records WHERE project_id = ?1",
-        );
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(project_id.to_string())];
 
-        if let Some(since) = filter.since {
-            params.push(Box::new(since));
-            sql.push_str(&format!(" AND created_at >= ?{}", params.len()));
-        }
-        if let Some(stage) = &filter.stage {
-            params.push(Box::new(stage.clone()));
-            sql.push_str(&format!(" AND stage = ?{}", params.len()));
-        }
-        if let Some(disposition) = &filter.disposition {
-            params.push(Box::new(disposition.clone()));
-            sql.push_str(&format!(" AND disposition = ?{}", params.len()));
-        }
-        if let Some(promotion_status) = &filter.promotion_status {
-            params.push(Box::new(promotion_status.clone()));
-            sql.push_str(&format!(" AND promotion_status = ?{}", params.len()));
-        }
-        sql.push_str(" ORDER BY created_at ASC");
-        // limit은 clamp: 0 이하는 무제한 취급하지 않고 기본값으로 방어
-        let limit = filter.limit.filter(|&n| n > 0).unwrap_or(1000);
-        params.push(Box::new(limit));
-        sql.push_str(&format!(" LIMIT ?{}", params.len()));
 
-        let mut stmt = self.conn.prepare(&sql)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
-        let iter = stmt.query_map(param_refs.as_slice(), |row| {
-            Ok(QualityRecordRow {
-                id: row.get(0)?,
-                created_at: row.get(1)?,
-                doc_ref: row.get(2)?,
-                route_id: row.get(3)?,
-                direction: row.get(4)?,
-                content_type: row.get(5)?,
-                stage: row.get(6)?,
-                caught_by: row.get(7)?,
-                executor: row.get(8)?,
-                producer_model: row.get(9)?,
-                reviewer_model: row.get(10)?,
-                finding_type: row.get(11)?,
-                severity: row.get(12)?,
-                disposition: row.get(13)?,
-                promotion_status: row.get(14)?,
-                matched_rule: row.get(15)?,
-                segment_json: row.get(16)?,
-                finding_json: row.get(17)?,
-                origin_json: row.get(18)?,
-            })
-        })?;
 
-        let mut out = Vec::new();
-        for r in iter {
-            out.push(r?);
-        }
-        Ok(out)
-    }
-
-    /// 특정 레코드들의 disposition을 갱신 (proposed → accepted/rejected/superseded).
-    pub fn update_quality_records_disposition(
-        &mut self,
-        project_id: &str,
-        ids: &[String],
-        disposition: &str,
-    ) -> Result<usize, IteError> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-        let tx = self.conn.transaction()?;
-        let mut updated = 0usize;
-        {
-            let mut stmt = tx.prepare(
-                "UPDATE quality_records SET disposition = ?1
-                 WHERE project_id = ?2 AND id = ?3",
-            )?;
-            for id in ids {
-                updated += stmt.execute(rusqlite::params![disposition, project_id, id])?;
-            }
-        }
-        tx.commit()?;
-        Ok(updated)
-    }
-
-    /// 작업 기록(quality_run) append 저장.
-    pub fn insert_quality_run(
-        &self,
-        project_id: &str,
-        run: &QualityRunRow,
-    ) -> Result<(), IteError> {
-        self.conn.execute(
-            "INSERT OR REPLACE INTO quality_runs (
-                id, project_id, started_at, stage, executor, model,
-                direction, route_id, doc_words, findings_count_json, notes
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![
-                run.id,
-                project_id,
-                run.started_at,
-                run.stage,
-                run.executor,
-                run.model,
-                run.direction,
-                run.route_id,
-                run.doc_words,
-                run.findings_count_json,
-                run.notes,
-            ],
-        )?;
-        Ok(())
-    }
-
-    /// 프로젝트별 작업 기록 조회.
-    pub fn load_quality_runs(&self, project_id: &str) -> Result<Vec<QualityRunRow>, IteError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, started_at, stage, executor, model, direction, route_id,
-                    doc_words, findings_count_json, notes
-             FROM quality_runs WHERE project_id = ?1 ORDER BY started_at ASC",
-        )?;
-        let iter = stmt.query_map([project_id], |row| {
-            Ok(QualityRunRow {
-                id: row.get(0)?,
-                started_at: row.get(1)?,
-                stage: row.get(2)?,
-                executor: row.get(3)?,
-                model: row.get(4)?,
-                direction: row.get(5)?,
-                route_id: row.get(6)?,
-                doc_words: row.get(7)?,
-                findings_count_json: row.get(8)?,
-                notes: row.get(9)?,
-            })
-        })?;
-        let mut out = Vec::new();
-        for r in iter {
-            out.push(r?);
-        }
-        Ok(out)
-    }
 
     /// AI 토큰 사용량 append 저장. 같은 id 재전송은 멱등(중복 계상 방지).
     pub fn insert_ai_usage_record(&self, record: &AiUsageRecordRow) -> Result<(), IteError> {
@@ -4155,129 +3908,7 @@ mod tests {
         assert!(after_clear.is_empty());
     }
 
-    fn build_quality_record(id: &str, stage: &str, disposition: &str) -> super::QualityRecordRow {
-        super::QualityRecordRow {
-            id: id.to_string(),
-            created_at: 1_780_000_000_000,
-            doc_ref: None,
-            route_id: None,
-            direction: Some("ko_to_en".to_string()),
-            content_type: Some("design_doc".to_string()),
-            stage: Some(stage.to_string()),
-            caught_by: Some("review_agent".to_string()),
-            executor: Some("app".to_string()),
-            producer_model: None,
-            reviewer_model: Some("claude-opus-4-8".to_string()),
-            finding_type: Some("accuracy.omission".to_string()),
-            severity: Some("major".to_string()),
-            disposition: Some(disposition.to_string()),
-            promotion_status: Some("candidate".to_string()),
-            matched_rule: None,
-            segment_json: Some(r#"{"source":"원문","output":"bad","corrected":null,"context":null}"#.to_string()),
-            finding_json: Some(r#"{"type":"accuracy.omission","severity":"major","description":"누락","suggested_fix":null}"#.to_string()),
-            origin_json: Some(r#"{"stage":"s1_translate","caught_by":"review_agent","executor":"app"}"#.to_string()),
-        }
-    }
 
-    #[test]
-    fn quality_ledger_insert_query_update_and_cascade() {
-        let file = NamedTempFile::new().expect("failed to create temp db file");
-        let mut db = Database::new(file.path()).expect("failed to create database");
-        db.initialize().expect("failed to initialize database");
-
-        let project = build_test_project("project-quality-test");
-        db.save_project(&project).expect("failed to save project");
-
-        // append 삽입
-        let records = vec![
-            build_quality_record("qr_1", "s1_translate", "proposed"),
-            build_quality_record("qr_2", "s2_polish", "proposed"),
-        ];
-        let count = db
-            .insert_quality_records(&project.id, &records)
-            .expect("failed to insert records");
-        assert_eq!(count, 2);
-
-        // 전체 조회
-        let all = db
-            .query_quality_records(&project.id, &super::QualityRecordFilter::default())
-            .expect("failed to query");
-        assert_eq!(all.len(), 2);
-
-        // stage 필터
-        let polish_only = db
-            .query_quality_records(
-                &project.id,
-                &super::QualityRecordFilter {
-                    stage: Some("s2_polish".to_string()),
-                    ..Default::default()
-                },
-            )
-            .expect("failed to query filtered");
-        assert_eq!(polish_only.len(), 1);
-        assert_eq!(polish_only[0].id, "qr_2");
-
-        // disposition 갱신
-        let updated = db
-            .update_quality_records_disposition(&project.id, &["qr_1".to_string()], "accepted")
-            .expect("failed to update disposition");
-        assert_eq!(updated, 1);
-        let accepted = db
-            .query_quality_records(
-                &project.id,
-                &super::QualityRecordFilter {
-                    disposition: Some("accepted".to_string()),
-                    ..Default::default()
-                },
-            )
-            .expect("failed to query accepted");
-        assert_eq!(accepted.len(), 1);
-        assert_eq!(accepted[0].id, "qr_1");
-
-        // INSERT OR REPLACE 멱등성: 같은 id 재삽입은 중복을 만들지 않는다
-        db.insert_quality_records(
-            &project.id,
-            &[build_quality_record("qr_1", "s1_translate", "proposed")],
-        )
-        .expect("re-insert");
-        let after_reinsert = db
-            .query_quality_records(&project.id, &super::QualityRecordFilter::default())
-            .expect("query after reinsert");
-        assert_eq!(after_reinsert.len(), 2);
-
-        // quality_run 삽입/조회
-        let run = super::QualityRunRow {
-            id: "run_1".to_string(),
-            started_at: 1_780_000_000_000,
-            stage: "s2_polish".to_string(),
-            executor: Some("app".to_string()),
-            model: Some("gpt-5.5".to_string()),
-            direction: Some("ko_to_en".to_string()),
-            route_id: None,
-            doc_words: Some(1420),
-            findings_count_json: Some(r#"{"critical":0,"major":3,"minor":5}"#.to_string()),
-            notes: None,
-        };
-        db.insert_quality_run(&project.id, &run)
-            .expect("failed to insert run");
-        let runs = db
-            .load_quality_runs(&project.id)
-            .expect("failed to load runs");
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].doc_words, Some(1420));
-
-        // 프로젝트 삭제 시 장부도 CASCADE 정리
-        db.delete_project(&project.id)
-            .expect("failed to delete project");
-        let after_delete = db
-            .query_quality_records(&project.id, &super::QualityRecordFilter::default())
-            .expect("query after delete");
-        assert!(after_delete.is_empty());
-        let runs_after_delete = db
-            .load_quality_runs(&project.id)
-            .expect("load runs after delete");
-        assert!(runs_after_delete.is_empty());
-    }
 
     #[test]
     fn glossary_migration_preserves_legacy_and_global_rows_idempotently() {

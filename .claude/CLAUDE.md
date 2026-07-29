@@ -86,6 +86,10 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-29)
 
+- **품질 장부(Quality Ledger) 제거**: 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
+  - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.
+  - **Desktop MCP 1.0.0 (breaking)**: `oddeyes_log_quality_records`/`oddeyes_get_quality_records` 제거(25 → 23 tools). **`.mcpb` 재번들 + `npm publish` 미실시** — 배포는 별도로 해야 클라이언트에 반영된다.
+  - `src/tauri/dialog.ts`의 `pickQualityLedgerPath`는 **남겼다** — 정렬 리포트(`alignmentReport.ts`)가 아직 쓴다. 다이얼로그 제목이 `Export Quality Ledger`인 건 4.5 때부터 있던 부정확한 재사용이라 이번 범위 밖.
 - **선택 도구 신뢰경계 절단 수정**: `get_selection_surroundings`(캡 4000)/`get_aligned_selection_context`(6000)의 출력이 캡을 넘으면 `chatAgent/middleware.ts:276-280`이 통째로 잘라 닫는 `</untrusted>`가 사라지고 JSON도 중간에서 끊겼다. 문서 데이터가 신뢰경계 밖으로 새는 형태라 단순 절단보다 성질이 나쁘다. `renderSelectionToolOutput`이 **본문 텍스트를 줄여** 캡에 맞춘다 — 문서 도구(`renderDocumentToolOutput`)는 마크다운이라 문자열을 잘라내면 되지만 여기는 JSON이라 같은 수를 못 쓴다. 여유분을 빼는 대신 **래핑까지 마친 실제 길이를 재서** 비교한다(JSON 이스케이프·무해화 삽입 때문에 길이 예측이 부정확). 함께: 선택 도구에도 `neutralizeUntrustedMarkers`를 적용 — 문서 텍스트에 `</untrusted>`가 들어 있으면 경계를 위조할 수 있었다(문서 도구에는 이미 있던 방어).
 - **다른 프로젝트에서 메모리 가져오기**: Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
   - **공유 링크(glossary식) 대신 복사를 택했다**: `project_memory_state.revision`이 프로젝트 단위라 공유 세트 1건 수정 시 링크된 모든 프로젝트의 revision을 bump해야 하고, MCP 6종이 projectId 단수 전제라 breaking이 된다. 용어집은 이미 `setProjectGlossaries`로 프로젝트에 링크할 수 있어 범위 밖.

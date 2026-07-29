@@ -8,7 +8,6 @@ import { registerDocumentTools } from "./tools/documents.js";
 import { registerPreviewTools } from "./tools/preview.js";
 import { registerReviewTools } from "./tools/review.js";
 import { registerContextTools } from "./tools/context.js";
-import { registerQualityTools } from "./tools/quality.js";
 import { registerGlossaryTools } from "./tools/glossary.js";
 import { registerProjectMemoryTools } from "./tools/projectMemory.js";
 
@@ -28,14 +27,13 @@ async function callBridge(method: string, params: Record<string, unknown> = {}):
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "oddeyes-desktop",
-    version: "0.9.0",
+    version: "1.0.0",
   });
 
   registerDocumentTools(server, callBridge);
   registerPreviewTools(server, callBridge);
   registerReviewTools(server, callBridge);
   registerContextTools(server, callBridge);
-  registerQualityTools(server, callBridge);
   registerGlossaryTools(server, callBridge);
   registerProjectMemoryTools(server, callBridge);
 

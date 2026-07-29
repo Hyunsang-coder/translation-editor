@@ -5,7 +5,6 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { runReview } from '@/ai/review/runReview';
 import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
-import { recordIssuesProposed } from '@/quality';
 import { ReviewPanel } from './ReviewPanel';
 import { SettingsContent } from '@/components/panels/SettingsContent';
 import type { ITEProject } from '@/types';
@@ -39,21 +38,6 @@ vi.mock('@/ai/tools/reviewTool', () => ({
 vi.mock('@/ai/translateDocument', () => ({
   translateWithStreaming: vi.fn(),
   formatTranslationError: (e: unknown) => String(e),
-}));
-
-vi.mock('@/quality', () => ({
-  appReviewContext: vi.fn(() => ({
-    origin: 'app',
-    caughtBy: 'app_review',
-    contentType: null,
-    direction: null,
-  })),
-  ledgerIdForIssue: vi.fn(() => 'ledger-id'),
-  recordIssuesProposed: vi.fn(async () => {}),
-  recordIssueAccepted: vi.fn(async () => {}),
-  recordIssuesRejected: vi.fn(async () => {}),
-  saveQualityJsonl: vi.fn(async () => 'empty'),
-  updateQualityDisposition: vi.fn(async () => {}),
 }));
 
 vi.mock('@/components/editor/TranslatePreviewModal', () => ({
@@ -152,7 +136,6 @@ describe('ReviewPanel - Zustand Selectors', () => {
 
 const mockRunReview = vi.mocked(runReview);
 const mockBuildChunks = vi.mocked(buildAlignedChunksAsync);
-const mockRecordIssuesProposed = vi.mocked(recordIssuesProposed);
 
 function fakeProject(id: string): ITEProject {
   return {
@@ -263,7 +246,7 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
     expect(mockRunReview).toHaveBeenCalledTimes(1);
   });
 
-  it('정상 완료 시 품질 장부는 검수를 시작한 프로젝트 ID로 기록된다', async () => {
+  it('정상 완료하면 이슈가 적재된다', async () => {
     mockBuildChunks.mockResolvedValue([buildChunk(0, 'seg-1')]);
     mockRunReview.mockResolvedValue(AI_RESPONSE_WITH_ISSUE);
 
@@ -274,8 +257,6 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
       expect(useReviewStore.getState().isReviewing).toBe(false);
     });
 
-    expect(mockRecordIssuesProposed).toHaveBeenCalledTimes(1);
-    expect(mockRecordIssuesProposed.mock.calls[0]![0]).toBe('proj-a');
     expect(useReviewStore.getState().getAllIssues()).toHaveLength(1);
   });
 
@@ -358,8 +339,7 @@ describe('ReviewPanel 검수 실행 가드 (L4)', () => {
       expect(useReviewStore.getState().isReviewing).toBe(false);
     });
 
-    // 구 프로젝트 이슈가 새 프로젝트 상태/장부에 주입되지 않아야 함
-    expect(mockRecordIssuesProposed).not.toHaveBeenCalled();
+    // 구 프로젝트 이슈가 새 프로젝트 상태에 주입되지 않아야 함
     expect(useReviewStore.getState().getAllIssues()).toHaveLength(0);
   });
 });
