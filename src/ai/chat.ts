@@ -260,7 +260,7 @@ function buildToolGuideMessage(params: {
     toolGuide.push('- get_selection_surroundings: 선택 영역만으로 부족할 때 앞뒤 문맥을 제한적으로 조회.');
   }
   if (has('get_aligned_selection_context')) {
-    toolGuide.push('- get_aligned_selection_context: Target 선택의 원문 대조가 필요할 때만 조회.');
+    toolGuide.push('- get_aligned_selection_context: 선택 구간의 원문↔번역문 대조가 필요할 때 조회(Source 선택에서 번역 결과를 물어도 이 도구를 쓴다).');
   }
   if (has('get_project_guidance')) {
     toolGuide.push('- get_project_guidance: [프로젝트 메모리] 요약에 없는 규칙·금칙어·메모리 상세가 필요할 때 조회.');

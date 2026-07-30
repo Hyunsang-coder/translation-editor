@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { z } from 'zod';
-import type { ChatSelectionSnapshot } from '@/types';
+import type { ChatSelectionSnapshot, SelectionPanel } from '@/types';
 import {
   collectAlignedSourceUnits,
   collectTranslationUnits,
@@ -31,8 +31,17 @@ export interface AlignedSelectionContextResult {
   documentRevision?: string;
 }
 
+/**
+ * 앞뒤로 가져올 번역 단위 수의 상한. 단위는 문단·제목·표 셀이라 2개로는 표 한 줄도
+ * 못 채운다. 8개면 한국어 문단 기준 선택 포함 ~17단위이고, 그래도 도구 출력 상한
+ * (8,000자) 안에 넉넉히 들어간다.
+ */
+const MAX_SURROUNDING_UNITS = 8;
+/** 인자 없이 부르면 선택 영역만 돌아와 도구 호출이 헛되므로 기본값을 둔다. */
+const DEFAULT_SURROUNDING_UNITS = 2;
+
 function clampUnits(value: number | undefined): number {
-  return Math.max(0, Math.min(2, value ?? 0));
+  return Math.max(0, Math.min(MAX_SURROUNDING_UNITS, value ?? DEFAULT_SURROUNDING_UNITS));
 }
 
 function selectedUnitRange(
@@ -53,8 +62,9 @@ function selectedUnitRange(
 export function getSelectionSurroundings(
   doc: TranslationUnitDocument,
   selectedUnitIds: string[],
-  beforeUnits = 0,
-  afterUnits = 0,
+  // 기본값은 clampUnits가 정한다 — 여기서 0을 박으면 생략과 "0개 요청"이 구분되지 않는다.
+  beforeUnits?: number,
+  afterUnits?: number,
 ): SelectionSurroundingsResult {
   const units = collectTranslationUnits(doc);
   const range = selectedUnitRange(units, selectedUnitIds);
@@ -84,48 +94,67 @@ export function getSelectionSurroundings(
   };
 }
 
+/**
+ * 선택이 있는 쪽(panel)을 기준으로 확장하고, 같은 translationUnitId로 연결된
+ * 반대쪽을 함께 돌려준다. Source 선택에서도 번역문을 볼 수 있어야 하므로
+ * 양방향으로 동작한다 — `collectAlignedSourceUnits`는 "id가 일치하는 유닛"을
+ * 고르는 함수라 문서 인자를 바꾸면 그대로 반대 방향이 된다.
+ */
 export function getAlignedSelectionContext(
   sourceDoc: TranslationUnitDocument,
   targetDoc: TranslationUnitDocument,
   selectedUnitIds: string[],
-  beforeUnits = 0,
-  afterUnits = 0,
+  beforeUnits?: number,
+  afterUnits?: number,
+  panel: SelectionPanel = 'target',
 ): AlignedSelectionContextResult {
-  let targetContext: SelectionSurroundingsResult;
+  const primaryDoc = panel === 'source' ? sourceDoc : targetDoc;
+  const counterpartDoc = panel === 'source' ? targetDoc : sourceDoc;
+  const missingMessage = panel === 'source'
+    ? '연결된 번역문을 찾을 수 없습니다.'
+    : '연결된 원문을 찾을 수 없습니다.';
+
+  let primaryContext: SelectionSurroundingsResult;
   try {
-    targetContext = getSelectionSurroundings(
-      targetDoc,
+    primaryContext = getSelectionSurroundings(
+      primaryDoc,
       selectedUnitIds,
       beforeUnits,
       afterUnits,
     );
   } catch {
-    throw new Error('연결된 원문을 찾을 수 없습니다.');
+    throw new Error(missingMessage);
   }
-  const includedIds = new Set(targetContext.unitIds);
-  const sourceUnits = collectAlignedSourceUnits(
-    sourceDoc,
-    targetDoc,
-    targetContext.unitIds,
+  const includedIds = new Set(primaryContext.unitIds);
+  const counterpartUnits = collectAlignedSourceUnits(
+    counterpartDoc,
+    primaryDoc,
+    primaryContext.unitIds,
   );
-  const targetUnits = collectTranslationUnits(targetDoc)
+  const primaryUnits = collectTranslationUnits(primaryDoc)
     .filter((unit) => unit.id && includedIds.has(unit.id));
 
-  if (sourceUnits.length === 0 || sourceUnits.length !== targetUnits.length) {
-    throw new Error('연결된 원문을 찾을 수 없습니다.');
+  if (
+    counterpartUnits.length === 0 ||
+    counterpartUnits.length !== primaryUnits.length
+  ) {
+    throw new Error(missingMessage);
   }
 
+  const text = (units: TranslationUnit[]): string =>
+    units.map((unit) => unit.text).join('\n');
+
   return {
-    source: sourceUnits.map((unit) => unit.text).join('\n'),
-    target: targetUnits.map((unit) => unit.text).join('\n'),
-    unitIds: targetContext.unitIds,
+    source: text(panel === 'source' ? primaryUnits : counterpartUnits),
+    target: text(panel === 'source' ? counterpartUnits : primaryUnits),
+    unitIds: primaryContext.unitIds,
     truncated: false,
   };
 }
 
 const SurroundingsArgsSchema = z.object({
-  beforeUnits: z.number().int().min(0).max(2).optional(),
-  afterUnits: z.number().int().min(0).max(2).optional(),
+  beforeUnits: z.number().int().min(0).max(MAX_SURROUNDING_UNITS).optional(),
+  afterUnits: z.number().int().min(0).max(MAX_SURROUNDING_UNITS).optional(),
 });
 
 function currentDocument(
@@ -241,12 +270,13 @@ export function createSelectionTools(
     {
       name: 'get_selection_surroundings',
       description:
-        '현재 선택 영역의 앞뒤 번역 단위를 가져옵니다. 선택 영역만으로 답할 수 없을 때만 사용하세요.',
+        '현재 선택 영역의 앞뒤 번역 단위(문단·제목·표 셀)를 가져옵니다. '
+        + `beforeUnits/afterUnits로 방향별 개수를 정하며 각각 최대 ${MAX_SURROUNDING_UNITS}개, `
+        + `생략하면 ${DEFAULT_SURROUNDING_UNITS}개입니다. `
+        + '선택 영역만으로 답할 수 없을 때만 사용하세요.',
       schema: SurroundingsArgsSchema,
     },
   );
-
-  if (selection.panel === 'source') return [surroundings];
 
   const aligned = tool(
     async (rawArgs) => {
@@ -259,6 +289,7 @@ export function createSelectionTools(
             selection.translationUnitIds,
             parsed.beforeUnits,
             parsed.afterUnits,
+            selection.panel,
           ),
           documentRevision: selection.documentRevision,
         },
@@ -268,7 +299,9 @@ export function createSelectionTools(
     {
       name: 'get_aligned_selection_context',
       description:
-        '현재 Target 선택에 translationUnitId로 연결된 Source와 Target을 가져옵니다. 원문 대조가 필요할 때만 사용하세요.',
+        '현재 선택에 translationUnitId로 연결된 원문(Source)과 번역문(Target)을 짝지어 '
+        + '가져옵니다. 원문↔번역문 대조가 필요할 때 사용하세요. '
+        + `앞뒤 문맥은 beforeUnits/afterUnits로 각각 최대 ${MAX_SURROUNDING_UNITS}개까지 함께 옵니다.`,
       schema: SurroundingsArgsSchema,
     },
   );

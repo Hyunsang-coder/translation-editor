@@ -30,18 +30,22 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     profiles: ['selection-source', 'selection-target'],
     effect: 'read',
     trust: 'document',
-    maxOutputChars: 4_000,
+    // 선택 주변은 문서 전체 조회(8,000)보다 더 조여둘 이유가 없다. 프롬프트가
+    // 전체 조회 대신 이 도구를 쓰라고 유도하는데 창이 더 좁으면 앞뒤가 맞지 않는다.
+    maxOutputChars: 8_000,
     displayNameKey: 'chat.toolName.getSelectionSurroundings',
     requires: ['project'],
   },
   {
     name: 'get_aligned_selection_context',
-    profiles: ['selection-target'],
+    // Source 선택에서도 번역문 대조가 필요하다("이 문장 번역이 어떻게 됐어?").
+    profiles: ['selection-source', 'selection-target'],
     effect: 'read',
     trust: 'document',
-    maxOutputChars: 6_000,
+    // 같은 구간을 두 언어로 담으므로 다른 문서 도구의 2배가 필요하다.
+    maxOutputChars: 16_000,
     displayNameKey: 'chat.toolName.getAlignedSelectionContext',
-    requires: ['project', 'target-selection'],
+    requires: ['project'],
   },
   {
     name: 'get_review_results',

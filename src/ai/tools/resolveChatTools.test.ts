@@ -15,7 +15,7 @@ describe('resolveChatToolNames', () => {
     expect(names).not.toContain('propose_selection_edit');
   });
 
-  it('selection-source profile에는 선택 주변 조회만 있고 문서 수정 제안은 없다', () => {
+  it('selection-source profile에는 조회 도구만 있고 문서 수정 제안은 없다', () => {
     const names = resolveChatToolNames({
       profile: 'selection-source',
       hasProject: true,
@@ -23,8 +23,10 @@ describe('resolveChatToolNames', () => {
     });
 
     expect(names).toContain('get_selection_surroundings');
-    expect(names).not.toContain('get_aligned_selection_context');
+    // 원문을 고르고 "번역이 어떻게 됐어?"를 물을 수 있어야 한다.
+    expect(names).toContain('get_aligned_selection_context');
     expect(names).not.toContain('propose_selection_edit');
+    // 대조는 선택 구간으로 한정한다 — 번역문 전체 조회는 여전히 없다.
     expect(names).not.toContain('get_target_document');
   });
 

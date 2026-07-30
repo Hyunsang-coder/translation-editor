@@ -79,6 +79,57 @@ describe('selection tools', () => {
         unitIds: ['u1', 'u3'],
       });
   });
+
+  // 원문을 고르고 "이 문장 번역이 어떻게 됐어?"를 물을 수 있어야 한다.
+  it('Source 선택도 연결된 번역문을 짝지어 돌려준다', () => {
+    expect(getAlignedSelectionContext(sourceDoc, targetDoc, ['u2'], 0, 0, 'source'))
+      .toMatchObject({
+        source: 'Selected source',
+        target: '선택 번역',
+        unitIds: ['u2'],
+      });
+  });
+
+  it('Source 선택에서 연결이 끊기면 번역문 기준으로 실패를 알린다', () => {
+    expect(() =>
+      getAlignedSelectionContext(sourceDoc, targetDoc, ['missing'], 0, 0, 'source'),
+    ).toThrow('연결된 번역문');
+  });
+
+  it('앞뒤 개수를 생략하면 기본값만큼 가져온다', () => {
+    const wide = {
+      type: 'doc',
+      content: Array.from({ length: 9 }, (_, i) => ({
+        type: 'paragraph',
+        attrs: { translationUnitId: `w${i}` },
+        content: [{ type: 'text', text: `문단 ${i}` }],
+      })),
+    };
+
+    const omitted = getSelectionSurroundings(wide, ['w4']);
+
+    expect(omitted.before).toEqual(['문단 2', '문단 3']);
+    expect(omitted.after).toEqual(['문단 5', '문단 6']);
+  });
+
+  it('앞뒤 개수는 상한까지 늘릴 수 있다', () => {
+    const wide = {
+      type: 'doc',
+      content: Array.from({ length: 21 }, (_, i) => ({
+        type: 'paragraph',
+        attrs: { translationUnitId: `w${i}` },
+        content: [{ type: 'text', text: `문단 ${i}` }],
+      })),
+    };
+
+    // 상한(8)을 넘겨 요청해도 8개로 잘린다.
+    const widened = getSelectionSurroundings(wide, ['w10'], 20, 20);
+
+    expect(widened.before).toHaveLength(8);
+    expect(widened.after).toHaveLength(8);
+    expect(widened.before[0]).toBe('문단 2');
+    expect(widened.after.at(-1)).toBe('문단 18');
+  });
 });
 
 describe('renderSelectionToolOutput', () => {
@@ -103,8 +154,9 @@ describe('renderSelectionToolOutput', () => {
   });
 
   it('캡을 넘겨도 닫는 태그가 남고 JSON이 온전하다', () => {
-    // 긴 한국어 문단 5개(앞뒤 2 + 선택 1)면 4000자 캡을 쉽게 넘는다.
-    const long = '가'.repeat(1500);
+    // 캡에서 유도한다 — 캡을 조정할 때마다 픽스처가 상해서 truncation을 안 타면
+    // 테스트가 조용히 무의미해진다. 5개 필드 × 캡/2 = 캡의 2.5배.
+    const long = '가'.repeat(Math.ceil(surroundingsCap / 2));
     const rendered = renderSelectionToolOutput({
       selected: [long],
       before: [long, long],
@@ -121,7 +173,7 @@ describe('renderSelectionToolOutput', () => {
   });
 
   it('정렬 컨텍스트도 자체 캡 안에서 잘린다', () => {
-    const long = '나'.repeat(5000);
+    const long = '나'.repeat(alignedCap);
     const rendered = renderSelectionToolOutput({
       source: long,
       target: long,
