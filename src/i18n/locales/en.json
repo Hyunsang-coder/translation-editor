@@ -402,7 +402,7 @@
     "addToChat": "Add selected text to chat input",
     "addToChatLabel": "Add to chat",
     "copySelection": "Copy",
-    "retranslateSelection": "Retranslate selection",
+    "retranslateSelection": "Retranslate",
     "loadingProject": "Loading project...",
     "source": "Source",
     "target": "Target",
@@ -487,8 +487,6 @@
   "comment": {
     "title": "Comments",
     "addButton": "Comment",
-    "viewButton": "View comment",
-    "viewWithExcerpt": "Comment: {{excerpt}}",
     "resolvedBadge": "Resolved",
     "inputPlaceholder": "Write a comment…",
     "empty": "No comments yet.",

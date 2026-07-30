@@ -89,6 +89,9 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-29)
 
+- **선택 액션 진입점을 인라인 툴바 하나로 정리**: 우클릭 세로 메뉴(`SelectionActionMenu`)를 제거하고, 같은 액션을 제공하던 인라인 가로 툴바만 남겼다(`SelectionActionMenu.tsx` → `SelectionInlineToolbar.tsx`). 선택 영역 우클릭은 이제 OS/웹뷰 기본 메뉴가 뜬다.
+  - **툴바 줄바꿈 깨짐 수정**: `position:fixed`는 기본이 shrink-to-fit이라 오른쪽 끝에서 남은 폭만큼 좁아지고, 버튼 높이가 `h-[34px]` 고정이라 줄바꿈된 두 번째 줄이 `overflow-hidden`에 잘렸다. 폭을 `w-max`로 고정하고, 미리 알 수 없는 실제 폭은 **렌더 후 `useLayoutEffect`로 실측해** 화면 밖으로 나간 만큼만 왼쪽으로 되민다(기존의 `innerWidth - 320` 추정 클램프 삭제). 회귀 테스트는 `e2e/selection-editing.spec.ts`의 `scrollHeight > clientHeight` 단언.
+  - **기존 코멘트 보기 항목은 사라진다** — 우클릭 메뉴에만 있던 기능이고, 코멘트 마크를 클릭하면 같은 상세 popover가 열린다. 딸려서 죽는 것들 함께 제거: `SelectionBubble.existingComments`, `comment.viewButton`/`viewWithExcerpt` i18n, 메뉴 바깥 클릭 핸들러(`data-selection-action-menu`).
 - **연속 hardBreak 축소 수정 (`docBlockDiff.ts`)**: `extractBlockText`가 hardBreak를 하위 블록 구분자(`parts.join('\n')`)에 맡겨서, 사이에 텍스트가 없는 hardBreak는 `parts`에 아무것도 넣지 못하고 사라졌다 — `A\n\nB`가 `A\nB`로 줄고 앞뒤에 붙은 것은 아예 소실. hardBreak를 인라인 줄바꿈으로 보고 `inlineBuffer`에 직접 넣는다. `blockKey`가 `\s+ → ' '`로 정규화하므로 블록 매칭은 무영향, hardBreak 문단은 `isFlatTextBlock`이 false라 swap 경로로 가므로 부분 병합 재조립 계약도 그대로 — 바뀌는 건 swap 카드에 표시되는 원본 텍스트뿐. 2026-07-08 폴리싱 diff 수정 때 "원인이 달라 별도 이슈"로 남겨둔 항목(`docs/polish-diff-whitespace-bug.md`).
 - **품질 장부(Quality Ledger) 제거** ([ADR-0007](../docs/adr/0007-remove-quality-ledger.md)): 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
   - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.

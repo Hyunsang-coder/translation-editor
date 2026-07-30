@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { SelectionActionMenu } from './SelectionActionMenu';
+import { SelectionInlineToolbar } from './SelectionInlineToolbar';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -8,17 +8,15 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-describe('SelectionActionMenu', () => {
-  it('선택 영역을 클립보드에 복사하는 메뉴를 표시하고 실행한다', () => {
+describe('SelectionInlineToolbar', () => {
+  it('선택 영역을 클립보드에 복사하는 액션을 표시하고 실행한다', () => {
     const onCopy = vi.fn();
 
     render(
-      <SelectionActionMenu
+      <SelectionInlineToolbar
         onCopy={onCopy}
         onAddToChat={vi.fn()}
         onAddComment={vi.fn()}
-        onViewComment={vi.fn()}
-        onClose={vi.fn()}
       />,
     );
 
@@ -27,33 +25,29 @@ describe('SelectionActionMenu', () => {
     expect(onCopy).toHaveBeenCalledTimes(1);
   });
 
-  it('Source 선택에는 재번역 메뉴를 표시하지 않는다', () => {
+  it('Source 선택에는 재번역 액션을 표시하지 않는다', () => {
     render(
-      <SelectionActionMenu
+      <SelectionInlineToolbar
         panel="source"
         onCopy={vi.fn()}
         onAddToChat={vi.fn()}
         onRetranslateSelection={vi.fn()}
         onAddComment={vi.fn()}
-        onViewComment={vi.fn()}
-        onClose={vi.fn()}
       />,
     );
 
     expect(screen.queryByRole('button', { name: 'editor.retranslateSelection' })).toBeNull();
   });
 
-  it('Target 선택에는 재번역 메뉴를 표시하고 실행한다', () => {
+  it('Target 선택에는 재번역 액션을 표시하고 실행한다', () => {
     const onRetranslateSelection = vi.fn();
     render(
-      <SelectionActionMenu
+      <SelectionInlineToolbar
         panel="target"
         onCopy={vi.fn()}
         onAddToChat={vi.fn()}
         onRetranslateSelection={onRetranslateSelection}
         onAddComment={vi.fn()}
-        onViewComment={vi.fn()}
-        onClose={vi.fn()}
       />,
     );
 

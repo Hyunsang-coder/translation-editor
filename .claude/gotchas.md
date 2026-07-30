@@ -338,7 +338,7 @@ Critical implementation warnings learned from past issues.
 
 141. **createSnapshotIfChanged Dedup**: `historyStore.ts`의 `createSnapshotIfChanged()`는 `latestBlocksHash` 캐시로 중복 스냅샷 방지. Fast path (캐시 비교) → Slow path (스냅샷 로드 비교) → 변경 감지 시만 새 스냅샷 생성. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 `createSnapshot` 대신 사용.
 
-142. **Selection Text Raw Append 금지**: 선택 영역을 채팅에 보낼 때 `appendComposerText()`를 호출하면 scope/anchor/audit 정보가 사라진다. 우클릭 메뉴와 Cmd/Ctrl+K/L 모두 `SelectionContext`를 생성해 `setComposerSelection()`을 사용해야 한다.
+142. **Selection Text Raw Append 금지**: 선택 영역을 채팅에 보낼 때 `appendComposerText()`를 호출하면 scope/anchor/audit 정보가 사라진다. 인라인 선택 툴바와 Cmd/Ctrl+K/L 모두 `SelectionContext`를 생성해 `setComposerSelection()`을 사용해야 한다.
 
 143. **Selection Anchor는 영속 객체가 아님**: `SelectionAnchor`의 DecorationSet은 에디터 런타임에만 존재한다. 저장된 채팅 proposal을 재수화할 때 `active`로 복원하지 말고 `detached`로 표시해 재선택을 요구한다.
 

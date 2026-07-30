@@ -4,20 +4,15 @@ import { injectTauriMockWithProject } from './tauri-mock';
 const sourceText = 'The workspace is designed for enterprise administrators.';
 const targetText = '이 작업 공간은 엔터프라이즈 관리자를 위해 설계되었습니다.';
 
-async function selectAndOpenMenu(
+// 선택 액션의 진입점은 인라인 툴바 하나다(우클릭 메뉴는 중복이라 제거됨).
+async function selectAndOpenToolbar(
   page: Page,
   editor: Locator,
-  menuTestId: string,
+  toolbarTestId: string,
 ): Promise<void> {
+  await editor.click();
   await editor.selectText();
-  await editor.dispatchEvent('contextmenu', {
-    bubbles: true,
-    cancelable: true,
-    clientX: 240,
-    clientY: 240,
-    button: 2,
-  });
-  await expect(page.getByTestId(menuTestId)).toBeVisible();
+  await expect(page.getByTestId(toolbarTestId)).toBeVisible();
 }
 
 test.describe('Selection editing and scoped context', () => {
@@ -92,14 +87,39 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('selection-inline-add-chat')).toBeVisible();
   });
 
+  test('오른쪽 끝에서 선택해도 인라인 툴바는 한 줄로 화면 안에 들어온다', async ({ page }) => {
+    const targetEditor = page.locator(
+      "[data-testid='target-editor'] [contenteditable='true']",
+    );
+    await targetEditor.click();
+    // 문단 끝(패널 오른쪽 가장자리)을 선택해 툴바를 화면 밖으로 밀어본다.
+    await page.keyboard.press('End');
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.press('Shift+ArrowLeft');
+    }
+
+    const toolbar = page.getByTestId('selection-inline-toolbar-target');
+    await expect(toolbar).toBeVisible();
+    const box = await toolbar.boundingBox();
+    const viewport = page.viewportSize();
+    if (!box || !viewport) throw new Error('toolbar box를 측정할 수 없습니다.');
+
+    // 폭이 좁아지면 라벨이 줄바꿈되고, 버튼 높이는 34px로 고정이라 넘친 줄이
+    // overflow-hidden에 잘린다(= 화면상 정렬이 무너진 상태).
+    const overflow = await toolbar.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  });
+
   test('Source selection becomes metadata and never exposes retranslate', async ({ page }) => {
     const sourceEditor = page.locator(
       "[data-testid='source-editor'] [contenteditable='true']",
     );
-    await selectAndOpenMenu(page, sourceEditor, 'selection-action-menu-source');
+    await selectAndOpenToolbar(page, sourceEditor, 'selection-inline-toolbar-source');
 
-    await expect(page.getByTestId('selection-action-retranslate')).toHaveCount(0);
-    await page.getByTestId('selection-action-add-chat').click();
+    await expect(page.getByTestId('selection-inline-retranslate')).toHaveCount(0);
+    await page.getByTestId('selection-inline-add-chat').click();
 
     const chip = page.getByTestId('selection-context-chip');
     await expect(chip).toContainText('Source');
@@ -113,10 +133,10 @@ test.describe('Selection editing and scoped context', () => {
     const targetEditor = page.locator(
       "[data-testid='target-editor'] [contenteditable='true']",
     );
-    await selectAndOpenMenu(page, targetEditor, 'selection-action-menu-target');
+    await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
 
-    await expect(page.getByTestId('selection-action-retranslate')).toBeVisible();
-    await page.getByTestId('selection-action-retranslate').click();
+    await expect(page.getByTestId('selection-inline-retranslate')).toBeVisible();
+    await page.getByTestId('selection-inline-retranslate').click();
 
     await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
     await expect(page.getByTestId('selection-edit-modal')).toContainText(sourceText);
@@ -134,8 +154,8 @@ test.describe('Selection editing and scoped context', () => {
     const targetEditor = page.locator(
       "[data-testid='target-editor'] [contenteditable='true']",
     );
-    await selectAndOpenMenu(page, targetEditor, 'selection-action-menu-target');
-    await page.getByTestId('selection-action-retranslate').click();
+    await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
+    await page.getByTestId('selection-inline-retranslate').click();
 
     const modal = page.getByTestId('selection-edit-modal');
     await expect(modal).toBeVisible();
@@ -156,8 +176,8 @@ test.describe('Selection editing and scoped context', () => {
     const targetEditor = page.locator(
       "[data-testid='target-editor'] [contenteditable='true']",
     );
-    await selectAndOpenMenu(page, targetEditor, 'selection-action-menu-target');
-    await page.getByTestId('selection-action-add-chat').click();
+    await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
+    await page.getByTestId('selection-inline-add-chat').click();
 
     const chip = page.getByTestId('selection-context-chip');
     await expect(chip).toBeVisible();

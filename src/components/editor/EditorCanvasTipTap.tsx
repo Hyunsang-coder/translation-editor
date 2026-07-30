@@ -9,7 +9,7 @@ import { TipTapMenuBar } from './TipTapMenuBar';
 import { StatusStrip } from '@/components/layout/StatusStrip';
 import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { SearchBar } from './SearchBar';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Editor } from '@tiptap/react';
 import {
   translateWithStreaming,
@@ -24,11 +24,9 @@ import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import {
-  getSelectionActionMenuHeight,
-  SelectionActionMenu,
   SelectionInlineToolbar,
   SELECTION_INLINE_TOOLBAR_HEIGHT,
-} from '@/components/ui/SelectionActionMenu';
+} from '@/components/ui/SelectionInlineToolbar';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { AlignmentView } from '@/components/editor/AlignmentView';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
@@ -36,7 +34,7 @@ import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
 import { serializeUserComments } from '@/ai/commentContext';
-import { collectCommentIdsInRange, removeCommentMark } from '@/editor/utils/commentNavigation';
+import { removeCommentMark } from '@/editor/utils/commentNavigation';
 import {
   getChatSessionId,
   isChatPanel,
@@ -224,7 +222,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
-  // 우클릭 세로 메뉴와 인라인 가로 툴바가 같은 페이로드를 쓴다 (액션 핸들러 공유).
+  // 인라인 툴바와 단축키(⌘L) 경로가 같은 페이로드를 쓴다 (액션 핸들러 공유).
   interface SelectionBubble {
     top: number;
     left: number;
@@ -234,12 +232,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     from: number;
     to: number;
     segmentGroupId: string | undefined;
-    existingComments: Array<{ id: string; excerpt: string }>;
   }
 
-  const [addToChatBubble, setAddToChatBubble] = useState<SelectionBubble | null>(null);
-  // 선택만 해도 뜨는 인라인 툴바 (우클릭 없이 액션을 발견할 수 있게 한다)
+  // 텍스트를 선택하면 뜨는 인라인 툴바 (선택 액션의 유일한 진입점)
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionBubble | null>(null);
+  const selectionToolbarRef = useRef<HTMLDivElement>(null);
   const [selectionEdit, setSelectionEdit] = useState<null | {
     selection: SelectionContext;
     sourceText: string;
@@ -279,8 +276,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   }>(null);
 
   // 단어 수 계산 (debounced: 매 변경마다 stripHtml 재계산 방지)
-  // 현재 선택으로부터 액션 메뉴/툴바가 공통으로 쓰는 페이로드를 만든다.
-  // 좌표는 호출부가 채운다(우클릭은 마우스 위치, 인라인 툴바는 선택 영역 위).
+  // 현재 선택으로부터 액션 핸들러가 공통으로 쓰는 페이로드를 만든다.
+  // 좌표는 호출부가 채운다(툴바는 선택 영역 위).
   const buildSelectionBubble = useCallback((
     editor: Editor,
     field: CommentField,
@@ -309,46 +306,11 @@ export function EditorCanvasTipTap(): JSX.Element {
       segmentGroupId = inferSegmentGroupIdForSelection(project, field, selectedText);
     }
 
-    try {
-      const commentIds = collectCommentIdsInRange(editor.state.doc, from, to);
-      const store = useCommentStore.getState();
-      const existingComments = commentIds.flatMap((id) => {
-        const comment = store.getComment(id);
-        return comment ? [{ id: comment.id, excerpt: comment.excerpt }] : [];
-      });
-
-      return { text: selectedText, editor, field, from, to, segmentGroupId, existingComments };
-    } catch {
-      return null;
-    }
+    return { text: selectedText, editor, field, from, to, segmentGroupId };
   }, [project]);
 
-  // 선택 영역에서 우클릭하면 액션 메뉴를 마우스 위치에 띄운다.
-  // (선택이 없으면 커스텀 메뉴를 띄우지 않고 OS/브라우저 기본 메뉴를 그대로 둔다.)
-  const openSelectionActionMenuAt = useCallback((
-    editor: Editor,
-    field: CommentField,
-    clientX: number,
-    clientY: number,
-  ): boolean => {
-    const bubble = buildSelectionBubble(editor, field);
-    if (!bubble) return false;
-
-    // 마우스 우클릭 위치에 메뉴를 띄우되 화면 경계 안으로 클램프한다.
-    // 아래로 넘치면 커서 위쪽으로 올려 잘리지 않게 한다.
-    const menuHeight = getSelectionActionMenuHeight(bubble.existingComments.length, field);
-    const left = Math.min(window.innerWidth - 200, Math.max(8, clientX));
-    const top = clientY + menuHeight > window.innerHeight - 8
-      ? Math.max(8, clientY - menuHeight)
-      : clientY;
-
-    setCommentDetailPopover(null);
-    setSelectionToolbar(null);
-    setAddToChatBubble({ ...bubble, top, left });
-    return true;
-  }, [buildSelectionBubble]);
-
   // 선택 영역 위(넘치면 아래)에 인라인 툴바를 띄운다.
+  // 오른쪽 경계 클램프는 렌더 후 실측으로 처리한다(폭이 라벨 길이에 따라 달라짐).
   const openSelectionToolbar = useCallback((editor: Editor, field: CommentField): void => {
     const bubble = buildSelectionBubble(editor, field);
     if (!bubble) {
@@ -361,24 +323,28 @@ export function EditorCanvasTipTap(): JSX.Element {
       const end = editor.view.coordsAtPos(bubble.to);
       const above = start.top - SELECTION_INLINE_TOOLBAR_HEIGHT - 8;
       const top = above < 8 ? end.bottom + 8 : above;
-      const left = Math.min(window.innerWidth - 320, Math.max(8, start.left));
+      const left = Math.max(8, start.left);
       setSelectionToolbar({ ...bubble, top, left });
     } catch {
       setSelectionToolbar(null);
     }
   }, [buildSelectionBubble]);
 
-  const attachSelectionWatcher = useCallback((editor: Editor, field: CommentField) => {
-    const dom = editor.view.dom as HTMLElement;
+  // 툴바 폭은 라벨(i18n)·재번역 버튼 유무에 따라 달라져 미리 알 수 없다.
+  // 렌더 후 실측해서 화면 밖으로 나간 만큼만 왼쪽으로 되민다.
+  // (에디터 zoom과 툴바의 역-zoom이 상쇄돼 CSS px = 화면 px이므로 그대로 뺀다.)
+  useLayoutEffect(() => {
+    if (!selectionToolbar) return;
+    const el = selectionToolbarRef.current;
+    if (!el) return;
+    const overflowRight = el.getBoundingClientRect().right - (window.innerWidth - 8);
+    if (overflowRight <= 0) return;
+    const left = Math.max(8, selectionToolbar.left - overflowRight);
+    if (left === selectionToolbar.left) return;
+    setSelectionToolbar((prev) => (prev === selectionToolbar ? { ...prev, left } : prev));
+  }, [selectionToolbar]);
 
-    // 선택 영역에서 우클릭 → 액션 메뉴. 선택이 없으면 기본 메뉴 유지.
-    const onContextMenu = (e: MouseEvent): void => {
-      const opened = openSelectionActionMenuAt(editor, field, e.clientX, e.clientY);
-      if (opened) e.preventDefault();
-    };
-    // 선택이 열린 메뉴의 범위와 달라지면(다시 클릭/드래그) 메뉴를 닫는다.
-    // 우클릭 순간의 selectionUpdate는 같은 범위이므로 방금 연 메뉴를 닫지 않는다.
-    //
+  const attachSelectionWatcher = useCallback((editor: Editor, field: CommentField) => {
     // 인라인 툴바는 여기서 자동으로 띄운다. 드래그 중에 따라다니지 않도록 150ms
     // 디바운스하고, 선택이 비면 즉시 숨긴다.
     let toolbarTimer: number | null = null;
@@ -390,24 +356,17 @@ export function EditorCanvasTipTap(): JSX.Element {
     };
     const onSelection = (): void => {
       const { from, to } = editor.state.selection;
-      setAddToChatBubble((prev) => {
-        if (!prev || prev.editor !== editor) return prev;
-        return prev.from === from && prev.to === to ? prev : null;
-      });
-
       clearToolbarTimer();
       setSelectionToolbar((prev) => (prev?.editor === editor ? null : prev));
       if (from === to) return;
       toolbarTimer = window.setTimeout(() => {
         toolbarTimer = null;
-        // 우클릭 메뉴가 열려 있으면 둘을 겹쳐 띄우지 않는다.
         if (editor.state.selection.empty || !editor.isFocused) return;
         openSelectionToolbar(editor, field);
       }, SELECTION_TOOLBAR_DELAY_MS);
     };
     const onBlur = (): void => {
       clearToolbarTimer();
-      setAddToChatBubble(null);
       setSelectionToolbar((prev) => (prev?.editor === editor ? null : prev));
     };
     const onTransaction = (): void => {
@@ -433,22 +392,20 @@ export function EditorCanvasTipTap(): JSX.Element {
       }
     };
 
-    dom.addEventListener('contextmenu', onContextMenu);
     editor.on('selectionUpdate', onSelection);
     editor.on('blur', onBlur);
     editor.on('transaction', onTransaction);
 
     return () => {
       clearToolbarTimer();
-      dom.removeEventListener('contextmenu', onContextMenu);
       editor.off('selectionUpdate', onSelection);
       editor.off('blur', onBlur);
       editor.off('transaction', onTransaction);
     };
-  }, [openSelectionActionMenuAt, openSelectionToolbar, project?.id]);
+  }, [openSelectionToolbar, project?.id]);
 
   const createChatSelection = useCallback((
-    bubble: NonNullable<typeof addToChatBubble>,
+    bubble: SelectionBubble,
   ): SelectionContext | null => {
     if (!project) return null;
     try {
@@ -549,14 +506,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       from,
       to,
       segmentGroupId: inferSegmentGroupIdForSelection(project, field, text),
-      existingComments: [],
     });
     if (!selection) return;
     openChatWithSelection(selection);
   }, [createChatSelection, openChatWithSelection, project]);
 
   const openSelectionRetranslate = useCallback((
-    bubble: NonNullable<typeof addToChatBubble>,
+    bubble: SelectionBubble,
   ): void => {
     if (bubble.field !== 'target') return;
     const selection = createChatSelection(bubble);
@@ -598,7 +554,6 @@ export function EditorCanvasTipTap(): JSX.Element {
       loading: false,
       error: null,
     });
-    setAddToChatBubble(null);
   }, [createChatSelection, addToast, t]);
 
   const closeSelectionEdit = useCallback((): void => {
@@ -737,11 +692,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     closeSelectionEdit();
   }, [selectionEdit, project?.id, t, closeSelectionEdit]);
 
-  // 메뉴만 닫기 (닫기 버튼 / 메뉴 바깥 클릭). 선택 영역은 그대로 유지한다.
-  const dismissAddToChatBubble = useCallback((): void => {
-    setAddToChatBubble(null);
-  }, []);
-
   const openCommentDetail = useCallback((params: {
     commentId: string;
     editor: Editor;
@@ -749,7 +699,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     top: number;
     left: number;
   }): void => {
-    setAddToChatBubble(null);
+    setSelectionToolbar(null);
     setCommentPopover(null);
     setCommentDetailPopover(params);
   }, []);
@@ -1326,7 +1276,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     selectionEditAbortRef.current = null;
     setSelectionEdit(null);
     setSelectionToolbar(null);
-    setAddToChatBubble(null);
     selectionReferenceOptionsRef.current = { ...DEFAULT_SELECTION_REFERENCE_OPTIONS };
     setTranslatePreviewOpen(false);
     setTranslatePreviewDoc(null);
@@ -1393,7 +1342,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     const selectedText = text.trim();
     if (!selectedText) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
-      setAddToChatBubble(null);
       return;
     }
 
@@ -1402,8 +1350,6 @@ export function EditorCanvasTipTap(): JSX.Element {
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
-    } finally {
-      setAddToChatBubble(null);
     }
   }, [addToast, t]);
 
@@ -1416,19 +1362,6 @@ export function EditorCanvasTipTap(): JSX.Element {
       cleaners.forEach((fn) => fn());
     };
   }, [sourceEditor, targetEditor, attachSelectionWatcher]);
-
-  // 선택 액션 메뉴가 열려 있을 때, 메뉴 바깥(에디터 밖 여백/다른 UI)을 클릭하면
-  // 메뉴만 닫고 선택 영역은 유지한다. 에디터 본문 클릭은 selectionUpdate가 처리한다.
-  useEffect(() => {
-    if (!addToChatBubble) return;
-    const onPointerDown = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('[data-selection-action-menu]')) return;
-      dismissAddToChatBubble();
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
-  }, [addToChatBubble, dismissAddToChatBubble]);
 
   if (!project) {
     return (
@@ -1849,10 +1782,11 @@ export function EditorCanvasTipTap(): JSX.Element {
         {...(polishPreviewError ? { onRetry: handlePolishRetry } : {})}
       />
 
-      {/* 인라인 선택 툴바 (선택만 해도 표시) — 우클릭 메뉴가 열리면 양보한다 */}
-      {selectionToolbar && !addToChatBubble && !commentPopover && !commentDetailPopover && (
+      {/* 인라인 선택 툴바 (선택만 해도 표시) — 코멘트 popover가 열리면 양보한다 */}
+      {selectionToolbar && !commentPopover && !commentDetailPopover && (
         <SelectionInlineToolbar
           panel={selectionToolbar.field}
+          containerRef={selectionToolbarRef}
           style={{
             position: 'fixed',
             top: selectionToolbar.top,
@@ -1892,61 +1826,6 @@ export function EditorCanvasTipTap(): JSX.Element {
             });
             setSelectionToolbar(null);
           }}
-        />
-      )}
-
-      {/* TipTap 선택 액션 메뉴 (선택 영역 우클릭) */}
-      {addToChatBubble && !commentPopover && !commentDetailPopover && (
-        <SelectionActionMenu
-          panel={addToChatBubble.field}
-          existingComments={addToChatBubble.existingComments}
-          style={{
-            position: 'fixed',
-            top: addToChatBubble.top,
-            left: addToChatBubble.left,
-            zIndex: 80,
-            zoom: 1 / useUIStore.getState().editorZoom,
-            backgroundColor: 'color-mix(in srgb, var(--editor-surface) 90%, transparent)',
-          }}
-          onCopy={() => void handleCopySelectedText(addToChatBubble.text)}
-          onAddToChat={() => {
-            const selection = createChatSelection(addToChatBubble);
-            if (!selection) return;
-            openChatWithSelection(selection);
-            setAddToChatBubble(null);
-          }}
-          {...(addToChatBubble.field === 'target'
-            ? {
-                onRetranslateSelection: () =>
-                  openSelectionRetranslate(addToChatBubble),
-              }
-            : {})}
-          onAddComment={() => {
-            const b = addToChatBubble;
-            setCommentPopover({
-              top: b.top + getSelectionActionMenuHeight(b.existingComments.length, b.field),
-              left: b.left,
-              excerpt: b.text.trim(),
-              editor: b.editor,
-              field: b.field,
-              from: b.from,
-              to: b.to,
-              segmentGroupId: b.segmentGroupId,
-            });
-            setAddToChatBubble(null);
-          }}
-          onViewComment={(commentId) => {
-            const b = addToChatBubble;
-            openCommentDetail({
-              commentId,
-              editor: b.editor,
-              field: b.field,
-              top: b.top + getSelectionActionMenuHeight(b.existingComments.length, b.field),
-              left: b.left,
-            });
-            setAddToChatBubble(null);
-          }}
-          onClose={dismissAddToChatBubble}
         />
       )}
 
