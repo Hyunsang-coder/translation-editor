@@ -58,6 +58,27 @@ describe('selection tools', () => {
       getAlignedSelectionContext(sourceDoc, targetDoc, ['missing'], 0, 0),
     ).toThrow('연결된 원문');
   });
+
+  // 표에서 떨어진 셀을 고르면 선택 유닛이 연속하지 않는다(1·3열 → u1, u3).
+  // 최소~최대 인덱스 구간을 그대로 쓰면 고르지 않은 u2가 selected에 섞인다.
+  it('떨어져 있는 선택은 사이에 낀 유닛을 selected에 넣지 않는다', () => {
+    expect(getSelectionSurroundings(targetDoc, ['u1', 'u3'], 0, 0)).toEqual({
+      selected: ['이전', '이후'],
+      before: [],
+      after: [],
+      unitIds: ['u1', 'u3'],
+      truncated: false,
+    });
+  });
+
+  it('떨어져 있는 선택도 원문 대조는 고른 유닛만 짝짓는다', () => {
+    expect(getAlignedSelectionContext(sourceDoc, targetDoc, ['u1', 'u3'], 0, 0))
+      .toMatchObject({
+        source: 'Before\nAfter',
+        target: '이전\n이후',
+        unitIds: ['u1', 'u3'],
+      });
+  });
 });
 
 describe('renderSelectionToolOutput', () => {

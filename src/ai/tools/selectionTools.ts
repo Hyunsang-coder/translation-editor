@@ -65,7 +65,13 @@ export function getSelectionSurroundings(
   const beforeCount = clampUnits(beforeUnits);
   const afterCount = clampUnits(afterUnits);
   const before = units.slice(Math.max(0, range.start - beforeCount), range.start);
-  const selected = units.slice(range.start, range.end + 1);
+  // 표에서 떨어진 셀을 고르면(1·3열) 최소~최대 인덱스 구간에 고르지 않은 셀이 낀다.
+  // 구간은 before/after 계산에만 쓰고, selected는 실제로 고른 유닛만 남긴다.
+  // (id가 없는 유닛은 판정할 수 없으므로 위치 기준으로 남긴다.)
+  const selectedIds = new Set(selectedUnitIds);
+  const selected = units
+    .slice(range.start, range.end + 1)
+    .filter((unit) => !unit.id || selectedIds.has(unit.id));
   const after = units.slice(range.end + 1, range.end + 1 + afterCount);
   const included = [...before, ...selected, ...after];
 
