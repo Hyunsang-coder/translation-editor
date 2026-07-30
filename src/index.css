@@ -179,6 +179,50 @@
     animation: shimmer-text 2s linear infinite;
   }
 
+  /* Floating Chat Panel 분리/도킹 전환
+     도킹은 사이드바 쪽에 같은 세션이 다시 마운트되므로, 두 곳에 동시에 존재하지 않도록
+     퇴장 애니메이션이 끝난 뒤에 dock/close를 호출한다 (FloatingChatPanel.tsx). */
+  @keyframes floating-panel-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes floating-panel-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  .floating-panel-enter {
+    animation: floating-panel-in 150ms ease-out;
+  }
+
+  .floating-panel-exit {
+    animation: floating-panel-out 140ms ease-in forwards;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+
+    .floating-panel-enter,
+    .floating-panel-exit {
+      animation: none;
+    }
+  }
+
   /* Segment Group Container */
   .segment-group {
     @apply grid grid-cols-2 gap-4;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FloatingChatPanel } from './FloatingChatPanel';
 import { useUIStore } from '@/stores/uiStore';
@@ -82,13 +82,27 @@ describe('FloatingChatPanel', () => {
   });
 
   it('다시 도킹 버튼으로 채팅을 우측 사이드바에 복귀시킨다', () => {
-    renderPanel();
+    vi.useFakeTimers();
+    try {
+      renderPanel();
 
-    fireEvent.click(screen.getByTestId('floating-chat-dock'));
+      fireEvent.click(screen.getByTestId('floating-chat-dock'));
 
-    const state = useUIStore.getState();
-    expect(state.floatingChatSessionId).toBeNull();
-    expect(state.rightSidebar.hidden).toBe(false);
-    expect(state.rightSidebar.activePanel).toBe(panel);
+      // 퇴장 애니메이션이 끝나기 전에는 아직 플로팅 상태를 유지한다
+      // (사이드바에 같은 세션이 동시에 마운트되지 않도록).
+      expect(useUIStore.getState().floatingChatSessionId).toBe('session-a');
+      expect(screen.getByTestId('floating-chat-panel')).toHaveClass('floating-panel-exit');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      const state = useUIStore.getState();
+      expect(state.floatingChatSessionId).toBeNull();
+      expect(state.rightSidebar.hidden).toBe(false);
+      expect(state.rightSidebar.activePanel).toBe(panel);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
