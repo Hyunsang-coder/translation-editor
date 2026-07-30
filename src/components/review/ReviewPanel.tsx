@@ -5,7 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useHistoryStore } from '@/stores/historyStore';
-import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { getModelIdForUse } from '@/ai/config';
 import { runReview } from '@/ai/review/runReview';
 import { serializeUserComments } from '@/ai/commentContext';
 import { useCommentStore } from '@/stores/commentStore';
@@ -631,7 +631,7 @@ export function ReviewPanel(): JSX.Element {
     // 재번역 적용 후 자동 스냅샷
     const blocks = materializeBlocksForSnapshot();
     if (blocks) {
-      const model = useAiConfigStore.getState().translationModel;
+      const model = getModelIdForUse('translation');
       const dateLabel = new Date().toLocaleDateString('sv'); // YYYY-MM-DD
       const { createSnapshotIfChanged } = useHistoryStore.getState();
       void createSnapshotIfChanged({

@@ -115,7 +115,7 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.getByTestId('toolbar-menu-chat').click();
     // Chat panel may take a moment to create a session and render
     await expect(page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByLabel(/채팅 모델|Chat model/i)).toBeVisible();
+    await expect(page.getByLabel(/채팅 세션 AI provider|Chat session AI provider/i)).toBeVisible();
 
     await page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i }).click();
     await expect(page.getByText(TEXT.webSearch)).toBeVisible();

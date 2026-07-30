@@ -6,6 +6,7 @@ import type { ChatSession, ChatMessage, ChatSessionMemory } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { normalizeProvider, type SelectableProvider } from '@/ai/config';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { loadChatSessions, loadChatProjectSettings } from '@/tauri/chat';
@@ -26,11 +27,11 @@ import {
 // ── Session Actions ────────────────────────────────────────────────────
 
 /**
- * 새 세션/마이그레이션 세션의 기본 모델 프리셋.
- * 전역 aiConfigStore.chatModel은 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
+ * 새 세션/마이그레이션 세션이 고정(pin)할 provider.
+ * 전역 aiConfigStore.provider는 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
  */
-function getDefaultModelPreset(): string {
-  return useAiConfigStore.getState().chatModel;
+function getDefaultSessionProvider(): SelectableProvider {
+  return useAiConfigStore.getState().provider;
 }
 
 export function createSessionActions(
@@ -171,12 +172,17 @@ export function createSessionActions(
         return;
       }
 
-      // Migration: confluenceSearchEnabled 기본값 true, modelPreset 없으면 전역 기본값 상속
-      const defaultPreset = getDefaultModelPreset();
-      // modelPreset이 없던 레거시 세션은 이번 hydrate에서 현재 전역값으로 고정된다.
-      // 저장하지 않으면 다음 실행에서 그때의 전역값으로 다시 정해져 세션 모델이 흔들리고,
-      // 모델이 바뀌면 그 세션의 prompt cache 프리픽스도 함께 버려진다.
-      const hasUnpinnedSession = (sessionsRes ?? []).some((session) => !session.modelPreset);
+      // Migration: confluenceSearchEnabled 기본값 true, modelPreset(=provider pin) 정규화.
+      //
+      // v13 이전 세션에는 'claude-sonnet-5' 같은 프리셋 ID가 들어 있고, 아예 없는 세션도 있다.
+      // 둘 다 여기서 provider로 고쳐 쓴다. 저장하지 않으면 다음 실행에서 그때의 전역값으로
+      // 다시 정해져 세션 provider가 흔들리고, 그 세션의 prompt cache 프리픽스도 함께 버려진다.
+      const defaultProvider = getDefaultSessionProvider();
+      const pinFor = (session: { modelPreset?: string }): SelectableProvider =>
+        normalizeProvider(session.modelPreset) ?? defaultProvider;
+      const hasUnpinnedSession = (sessionsRes ?? []).some(
+        (session) => session.modelPreset !== pinFor(session),
+      );
       const migratedSessions = (sessionsRes ?? []).slice(0, MAX_CHAT_SESSIONS).map((session) => ({
         ...session,
         messages: session.messages.map((message) => {
@@ -194,7 +200,7 @@ export function createSessionActions(
           };
         }),
         confluenceSearchEnabled: session.confluenceSearchEnabled ?? true,
-        modelPreset: session.modelPreset ?? defaultPreset,
+        modelPreset: pinFor(session),
       }));
 
       const nextState: Partial<ChatStore> = {
@@ -324,8 +330,8 @@ export function createSessionActions(
       messages: [],
       contextBlockIds: [],
       confluenceSearchEnabled: true,
-      // 새 세션은 전역 기본 모델을 상속(이후 세션별로 독립 변경 가능)
-      modelPreset: getDefaultModelPreset(),
+      // 새 세션은 전역 기본 provider를 상속(첫 메시지 전까지 세션별로 독립 변경 가능)
+      modelPreset: getDefaultSessionProvider(),
     };
 
     set((state) => ({
@@ -394,20 +400,20 @@ export function createSessionActions(
   };
 
   /**
-   * 세션별 모델 프리셋을 변경한다(세션 범위, 전역 chatModel과 분리).
-   * - 전역 aiConfigStore.chatModel은 건드리지 않는다(새 세션 기본값 보존).
+   * 세션에 고정된 provider를 변경한다(세션 범위, 전역 provider와 분리).
+   * - 전역 aiConfigStore.provider는 건드리지 않는다(새 세션 기본값 보존).
    *
-   * 대화가 시작된 세션(메시지 ≥ 1)은 모델을 바꿀 수 없다. Anthropic prompt cache는
-   * (모델, API 키, 프리픽스) 조합으로 키가 잡혀서 모델을 바꾸면 그 세션이 쌓아온
+   * 대화가 시작된 세션(메시지 ≥ 1)은 바꿀 수 없다. Anthropic prompt cache는
+   * (모델, API 키, 프리픽스) 조합으로 키가 잡혀서 provider를 바꾸면 그 세션이 쌓아온
    * 캐시가 통째로 버려지고, 이후 매 턴 cache write를 다시 낸다. 아직 아무것도 보내지
    * 않은 세션은 캐시가 없으므로 자유롭게 바꿀 수 있다.
    */
-  const setSessionModelPreset = (sessionId: string, preset: string): void => {
+  const setSessionModelPreset = (sessionId: string, preset: SelectableProvider): void => {
     const target = get().sessions.find((s) => s.id === sessionId);
     if (!target || target.modelPreset === preset) return;
     if (target.messages.length > 0) {
       console.warn(
-        `[chat] 대화가 시작된 세션의 모델은 변경할 수 없습니다 (sessionId=${sessionId}).`,
+        `[chat] 대화가 시작된 세션의 provider는 변경할 수 없습니다 (sessionId=${sessionId}).`,
       );
       return;
     }

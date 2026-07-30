@@ -18,7 +18,7 @@ import {
 } from '@/ai/translateDocument';
 import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { getModelIdForUse } from '@/ai/config';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
 import { hashContent, stripHtml } from '@/utils/hash';
@@ -1165,7 +1165,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (project) {
       const blocks = materializeBlocksForSnapshot();
       if (blocks) {
-        const model = useAiConfigStore.getState().translationModel;
+        const model = getModelIdForUse('translation');
         const dateLabel = new Date().toLocaleDateString('sv'); // YYYY-MM-DD
         void createSnapshotIfChanged({
           projectId: project.id,
@@ -1241,7 +1241,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (project) {
       const blocks = materializeBlocksForSnapshot();
       if (blocks) {
-        const model = useAiConfigStore.getState().translationModel;
+        const model = getModelIdForUse('polish');
         const dateLabel = new Date().toLocaleDateString('sv');
         void createSnapshotIfChanged({
           projectId: project.id,

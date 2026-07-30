@@ -1,5 +1,5 @@
 import type { AiConfig } from '@/ai/config';
-import { resolveModelCallOptions, type ModelUseFor } from '@/ai/modelCallOptions';
+import { resolveModelCallOptions } from '@/ai/modelCallOptions';
 import { aiComplete, aiStream, aiStreamCancel, type AiCompletionMessage } from '@/tauri/ai';
 import { recordAiUsage, type AiUsageFeature } from '@/ai/usageLedger';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -77,9 +77,8 @@ function getProviderApiKey(cfg: AiConfig): string | undefined {
  */
 function getModelCallArgs(
   cfg: AiConfig,
-  useFor: ModelUseFor,
 ): { temperature?: number; adaptiveThinking?: boolean; effort?: string } {
-  const opts = resolveModelCallOptions(cfg, useFor);
+  const opts = resolveModelCallOptions(cfg);
   return {
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(opts.adaptiveThinking ? { adaptiveThinking: true } : {}),
@@ -112,7 +111,6 @@ export async function completeWithTauriAiBackend(params: {
   cfg: AiConfig;
   messages: AiPromptMessage[];
   maxTokens: number;
-  useFor?: ModelUseFor | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
   /** 사용량 장부에 남길 기능 구분. 생략하면 기록하지 않는다. */
@@ -121,7 +119,6 @@ export async function completeWithTauriAiBackend(params: {
   cacheSystem?: boolean | undefined;
 }): Promise<string> {
   const cancelMessage = params.cancelMessage ?? '번역이 취소되었습니다.';
-  const useFor = params.useFor ?? 'translation';
 
   // 사용자가 취소할 수 있는 Tauri 요청은 Rust의 cancellable streaming command로 통일한다.
   if (params.abortSignal) {
@@ -129,7 +126,6 @@ export async function completeWithTauriAiBackend(params: {
       cfg: params.cfg,
       messages: params.messages,
       maxTokens: params.maxTokens,
-      useFor,
       cancelMessage,
       abortSignal: params.abortSignal,
       usageFeature: params.usageFeature,
@@ -154,7 +150,7 @@ export async function completeWithTauriAiBackend(params: {
     model: params.cfg.model,
     maxTokens: params.maxTokens,
     messages: params.messages,
-    ...getModelCallArgs(params.cfg, useFor),
+    ...getModelCallArgs(params.cfg),
     ...(params.cacheSystem ? { cacheSystem: true } : {}),
   });
 
@@ -185,7 +181,6 @@ export async function streamWithTauriAiBackend(params: {
   cfg: AiConfig;
   messages: AiPromptMessage[];
   maxTokens: number;
-  useFor?: ModelUseFor | undefined;
   onAccumulated?: ((rawSoFar: string) => void) | undefined;
   cancelMessage?: string | undefined;
   abortSignal?: AbortSignal | undefined;
@@ -195,7 +190,6 @@ export async function streamWithTauriAiBackend(params: {
   cacheSystem?: boolean | undefined;
 }): Promise<string> {
   const cancelMessage = params.cancelMessage ?? '번역이 취소되었습니다.';
-  const useFor = params.useFor ?? 'translation';
   if (params.abortSignal?.aborted) {
     throw new Error(cancelMessage);
   }
@@ -222,7 +216,7 @@ export async function streamWithTauriAiBackend(params: {
       model: params.cfg.model,
       maxTokens: params.maxTokens,
       messages: params.messages,
-      ...getModelCallArgs(params.cfg, useFor),
+      ...getModelCallArgs(params.cfg),
       ...(params.cacheSystem ? { cacheSystem: true } : {}),
     },
     (event) => {

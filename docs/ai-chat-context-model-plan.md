@@ -5,6 +5,10 @@
 > 목적: 이 문서만 읽고 새 세션에서 TDD 구현을 이어갈 수 있도록 현재 문제, 확정 결정, 단계별 작업, 마이그레이션과 완료 조건을 정리한다.
 >
 > **진행 상황 요약은 [§16 Phase 3](#16-phase-3-구현-진행-2026-07-23) / [§17 Phase 4](#17-phase-4-구현-진행-2026-07-23) 참조.** 핵심 4단계 구현 완료.
+>
+> ⚠️ **모델 선택 관련 서술은 [ADR-0012](adr/0012-provider-only-model-selection.md)로 대체됐다** (2026-07-30).
+> `MODEL_PRESETS` / `resolveModelFromPreset` / 전역 `chatModel` / `ModelRunConfig.requestedPreset`는 모두 폐기됐고,
+> 사용자가 고르는 값은 provider 하나다. 세션 pin(`ChatSession.modelPreset`) 자체는 provider 축으로 유지된다.
 
 ## 1. 목표
 

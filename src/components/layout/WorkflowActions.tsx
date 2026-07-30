@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, ClipboardCheck, Highlighter } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
@@ -6,8 +6,8 @@ import { useShallow } from 'zustand/shallow';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
-import { Select, type SelectOptionGroup } from '@/components/ui/Select';
-import { MODEL_PRESETS } from '@/ai/config';
+import { Select, type SelectOption } from '@/components/ui/Select';
+import { PROVIDER_LABELS, type SelectableProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { shortcutLabel } from '@/utils/platform';
 
@@ -42,41 +42,18 @@ export function WorkflowActions(): JSX.Element {
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
-  const translationModel = useAiConfigStore((s) => s.translationModel);
-  const setTranslationModel = useAiConfigStore((s) => s.setTranslationModel);
+  const provider = useAiConfigStore((s) => s.provider);
+  const setProvider = useAiConfigStore((s) => s.setProvider);
 
-  const enabledPresets = useMemo((): SelectOptionGroup[] => {
-    const presets: SelectOptionGroup[] = [];
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    return presets;
-  }, [openaiEnabled, anthropicEnabled]);
-
-  // 모든 모델 플랫 리스트 (유효성 검사용)
-  const allTranslationModels = useMemo(
-    () => enabledPresets.flatMap((g) => g.options),
-    [enabledPresets],
-  );
-
-  // 선택된 모델이 비활성화된 프로바이더면 첫 번째 활성 모델로 변경
-  useEffect(() => {
-    if (allTranslationModels.length === 0) return;
-    const firstModel = allTranslationModels[0];
-    if (!firstModel) return;
-    if (!allTranslationModels.some((m) => m.value === translationModel)) {
-      setTranslationModel(firstModel.value);
-    }
-  }, [translationModel, allTranslationModels, setTranslationModel]);
+  // 비활성 provider가 선택되는 상황은 aiConfigStore의 enable 토글이 막는다.
+  // 현재 선택은 목록에 없더라도 항상 노출해 조용히 바뀌지 않게 한다.
+  const providerOptions = useMemo((): SelectOption[] => {
+    const enabled: SelectableProvider[] = [];
+    if (anthropicEnabled) enabled.push('anthropic');
+    if (openaiEnabled) enabled.push('openai');
+    if (!enabled.includes(provider)) enabled.unshift(provider);
+    return enabled.map((p) => ({ value: p, label: PROVIDER_LABELS[p] }));
+  }, [openaiEnabled, anthropicEnabled, provider]);
 
   return (
     <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap">
@@ -149,13 +126,14 @@ export function WorkflowActions(): JSX.Element {
 
       <div className="w-px h-[20px] bg-editor-border mx-1 shrink-0" />
 
-      {/* 번역 모델 — 워크플로 버튼보다 낮은 위계라 기존 md 사이즈를 그대로 쓴다 */}
+      {/* AI Provider — 워크플로 버튼보다 낮은 위계라 기존 md 사이즈를 그대로 쓴다.
+          용도별 모델·effort는 앱이 고정하므로 사용자가 고르는 값은 이것 하나다(ADR-0012). */}
       <Select
-        value={translationModel}
-        onChange={setTranslationModel}
-        options={enabledPresets}
-        aria-label={t('editor.translationModelAriaLabel')}
-        title={t('editor.translationModel')}
+        value={provider}
+        onChange={(v) => setProvider(v as SelectableProvider)}
+        options={providerOptions}
+        aria-label={t('editor.providerAriaLabel')}
+        title={t('editor.provider')}
         size="md"
         className="min-w-[118px]"
       />

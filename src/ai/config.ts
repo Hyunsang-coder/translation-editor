@@ -10,46 +10,76 @@ export type AiProvider = 'openai' | 'anthropic' | 'mock';
 
 export type ReasoningEffort = 'medium' | 'high';
 
-interface ModelPreset {
-  /** 설정 저장/UI 선택에 사용하는 고유 ID */
-  value: string;
-  label: string;
-  description: string;
-  /** value와 실제 API model ID가 다를 때 명시 */
-  apiModel?: string;
-  reasoningEffort?: ReasoningEffort;
+/** 사용자가 고르는 유일한 값. 모델·effort는 용도별로 앱이 고정한다 (ADR-0012). */
+export type SelectableProvider = 'anthropic' | 'openai';
+
+/**
+ * 모델 해석의 용도 축.
+ * - `translation`: 전체 번역 + 선택 재번역
+ * - `polish`: 폴리싱 (번역과 같은 모델이지만 축을 분리해 함께 움직이지 않게 한다)
+ * - `summary`: 대화 요약(내부, 사용자 비노출)
+ */
+export type ModelUseFor = 'translation' | 'chat' | 'review' | 'polish' | 'summary';
+
+export interface ModelSpec {
+  /** 실제 API 모델 ID */
+  model: string;
+  effort: ReasoningEffort;
 }
 
-export const MODEL_PRESETS: Record<'anthropic' | 'openai', readonly ModelPreset[]> = {
-  anthropic: [
-    { value: 'claude-opus-5', label: 'Opus 5', description: '높은 정확도, 복잡한 작업에 적합' },
-    { value: 'claude-sonnet-5', label: 'Sonnet 5', description: '성능/속도/비용 균형 (권장)' },
-    { value: 'claude-haiku-4-5', label: 'Haiku 4.5', description: '빠른 응답, 낮은 비용' },
-  ],
-  openai: [
-    {
-      value: 'gpt-5.6-sol-high',
-      label: 'GPT-5.6 Sol · High',
-      description: '최고 성능, 높은 추론 강도',
-      apiModel: 'gpt-5.6-sol',
-      reasoningEffort: 'high',
-    },
-    {
-      value: 'gpt-5.6-luna-high',
-      label: 'GPT-5.6 Luna · High',
-      description: '비용 효율 모델, 높은 추론 강도',
-      apiModel: 'gpt-5.6-luna',
-      reasoningEffort: 'high',
-    },
-    {
-      value: 'gpt-5.6-luna-medium',
-      label: 'GPT-5.6 Luna · Medium',
-      description: '빠른 응답과 비용 균형',
-      apiModel: 'gpt-5.6-luna',
-      reasoningEffort: 'medium',
-    },
-  ],
+/**
+ * provider × 용도 → 모델·effort 고정 매핑 (ADR-0012).
+ *
+ * 프리셋 6개를 사용자가 고르던 방식을 폐기하고 여기로 대체했다. 번역·검수·폴리싱이
+ * 설정 하나(`translationModel`)를 공유하던 탓에, 검수용으로 Opus로 바꾼 뒤 되돌리지
+ * 않으면 폴리싱까지 Opus로 돌던 문제를 구조적으로 없앤다.
+ *
+ * effort는 전부 high로 고정한다(요약만 medium). Anthropic 기본값이 이미 high지만
+ * 기본값이 바뀌어도 흔들리지 않도록 명시적으로 전송한다.
+ */
+export const MODEL_BY_USE: Readonly<
+  Record<SelectableProvider, Readonly<Record<ModelUseFor, ModelSpec>>>
+> = {
+  anthropic: {
+    translation: { model: 'claude-sonnet-5', effort: 'high' },
+    review: { model: 'claude-opus-5', effort: 'high' },
+    polish: { model: 'claude-sonnet-5', effort: 'high' },
+    chat: { model: 'claude-sonnet-5', effort: 'high' },
+    summary: { model: 'claude-sonnet-5', effort: 'medium' },
+  },
+  openai: {
+    translation: { model: 'gpt-5.6-luna', effort: 'high' },
+    review: { model: 'gpt-5.6-sol', effort: 'high' },
+    polish: { model: 'gpt-5.6-luna', effort: 'high' },
+    chat: { model: 'gpt-5.6-luna', effort: 'high' },
+    summary: { model: 'gpt-5.6-luna', effort: 'medium' },
+  },
 };
+
+export const PROVIDER_LABELS: Readonly<Record<SelectableProvider, string>> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+};
+
+export function resolveModelForUse(
+  provider: SelectableProvider,
+  useFor: ModelUseFor,
+): ModelSpec {
+  return MODEL_BY_USE[provider][useFor];
+}
+
+/**
+ * 저장된 값(현재 provider 또는 v13 이전 프리셋 ID)을 provider로 정규화한다.
+ *
+ * 세션 pin(`chat_sessions.model_preset`)과 과거 메시지의 `requestedModelPreset`에는
+ * `claude-sonnet-5` 같은 프리셋 ID가 남아 있다. 그대로 매핑 키로 쓰면 undefined를
+ * 인덱싱하게 되므로 읽는 지점에서 반드시 통과시킨다.
+ */
+export function normalizeProvider(value: string | undefined | null): SelectableProvider | null {
+  if (!value) return null;
+  if (value === 'anthropic' || value === 'openai') return value;
+  return value.startsWith('claude') ? 'anthropic' : 'openai';
+}
 
 export interface AiConfig {
   provider: AiProvider;
@@ -59,7 +89,7 @@ export interface AiConfig {
    * (값이 없으면 클라이언트에 temperature를 전달하지 않습니다.)
    */
   temperature?: number;
-  /** OpenAI Responses/Chat Completions reasoning effort */
+  /** Anthropic `output_config.effort` / OpenAI `reasoning_effort`로 전달할 추론 강도 */
   reasoningEffort?: ReasoningEffort;
   openaiApiKey?: string;
   anthropicApiKey?: string;
@@ -117,37 +147,16 @@ function getEnvApiKeyFallback(kind: 'openai' | 'anthropic'): string | undefined 
   );
 }
 
-/**
- * 프리셋 ID(rawModel) → provider/실제 모델 ID/추론 강도 해석
- * getAiConfig와 resolveModelRunConfig가 공유하는 단일 소스입니다.
- */
-export function resolveModelFromPreset(rawModel: string): {
-  provider: 'openai' | 'anthropic';
-  model: string;
-  reasoningEffort?: ReasoningEffort;
-} {
-  const provider: 'openai' | 'anthropic' = rawModel.startsWith('claude') ? 'anthropic' : 'openai';
-  const presets = MODEL_PRESETS[provider];
-  const preset = presets.find((p) => p.value === rawModel) ?? presets[0]!;
-  return {
-    provider,
-    model: preset.apiModel ?? preset.value,
-    ...(preset.reasoningEffort ? { reasoningEffort: preset.reasoningEffort } : {}),
-  };
-}
-
-export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'review' }): AiConfig {
+export function getAiConfig(options?: { useFor?: ModelUseFor }): AiConfig {
   // 1. Store에서 설정 가져오기 (런타임 변경사항 반영)
   const store = useAiConfigStore.getState();
 
-  // 2. 용도에 따른 모델 선택 (review는 번역 모델을 재사용)
+  // 2. provider × 용도 → 모델·effort (사용자는 provider만 고른다)
   const useFor = options?.useFor ?? 'chat'; // 기본값은 chat (가장 빈번함)
-  const rawModel = (useFor === 'translation' || useFor === 'review') ? store.translationModel : store.chatModel;
+  const provider = store.provider;
+  const { model, effort } = resolveModelForUse(provider, useFor);
 
-  // 3~4. 모델명에서 provider/실제 모델/추론 강도 해석
-  const { provider, model, reasoningEffort: presetReasoningEffort } = resolveModelFromPreset(rawModel);
-
-  // 5. API Key 우선순위
+  // 3. API Key 우선순위
   // - Store(설정/secure store) 우선
   // - 테스트·dev(serve): Store가 비어 있으면 .env/.env.local fallback
   // - production 빌드: Store만 사용 (번들에 env 키를 넣지 않음)
@@ -161,11 +170,19 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
     provider,
     model,
     ...(temperature !== undefined ? { temperature } : {}),
-    ...(presetReasoningEffort ? { reasoningEffort: presetReasoningEffort } : {}),
+    reasoningEffort: effort,
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),
     maxRecentMessages: 20,
   };
+}
+
+/**
+ * 현재 전역 provider 기준의 용도별 API 모델 ID (표시/기록 전용).
+ * 히스토리 스냅샷 설명처럼 "무엇으로 만들었는지"만 필요한 자리에서 쓴다.
+ */
+export function getModelIdForUse(useFor: ModelUseFor): string {
+  return resolveModelForUse(useAiConfigStore.getState().provider, useFor).model;
 }
 
 /**
@@ -177,10 +194,9 @@ export function getAiConfig(options?: { useFor?: 'translation' | 'chat' | 'revie
  * NOTE: capability profile / 토큰 예산 필드는 Phase 3(장기 대화 context manager)에서 확장됩니다.
  */
 export interface ModelRunConfig {
-  /** 사용자가 선택한 프리셋 ID (세션 modelPreset 또는 전역 기본값) */
-  requestedPreset: string;
   /** 실제 API 호출에 사용할 모델 ID */
   resolvedModel: string;
+  /** 세션에 고정된 provider(없으면 전역 provider) */
   provider: AiProvider;
   reasoningEffort?: ReasoningEffort;
   temperature?: number;
@@ -196,30 +212,27 @@ export interface ModelRunConfig {
 
 /**
  * 요청 실행 설정을 한 번 캡처합니다.
- * @param options.preset 세션별 modelPreset. 없으면 전역 chat/translation 모델 사용.
- * @param options.useFor 기본 'chat'. translation/review는 전역 translationModel 사용.
+ * @param options.provider 세션에 고정된 provider. 레거시 프리셋 ID도 정규화해서 받는다.
+ * @param options.useFor 기본 'chat'. provider × 용도로 모델·effort가 결정된다.
  */
 export function resolveModelRunConfig(options?: {
-  preset?: string;
-  useFor?: 'translation' | 'chat' | 'review';
+  provider?: string;
+  useFor?: ModelUseFor;
 }): ModelRunConfig {
   const store = useAiConfigStore.getState();
   const useFor = options?.useFor ?? 'chat';
-  const globalRaw =
-    useFor === 'translation' || useFor === 'review' ? store.translationModel : store.chatModel;
-  const rawModel = options?.preset ?? globalRaw;
+  const provider = normalizeProvider(options?.provider) ?? store.provider;
 
-  const { provider, model, reasoningEffort } = resolveModelFromPreset(rawModel);
+  const { model, effort } = resolveModelForUse(provider, useFor);
 
   const openaiApiKey = store.openaiApiKey || getEnvApiKeyFallback('openai');
   const anthropicApiKey = store.anthropicApiKey || getEnvApiKeyFallback('anthropic');
   const temperature = getEnvOptionalNumber('VITE_AI_TEMPERATURE');
 
   return Object.freeze({
-    requestedPreset: rawModel,
     resolvedModel: model,
     provider,
-    ...(reasoningEffort ? { reasoningEffort } : {}),
+    reasoningEffort: effort,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(anthropicApiKey ? { anthropicApiKey } : {}),

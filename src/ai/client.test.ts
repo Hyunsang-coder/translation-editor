@@ -23,8 +23,7 @@ describe('createChatModel - Opus 5 sampling parameter guard', () => {
     anthropicCtorSpy.mockClear();
     openaiCtorSpy.mockClear();
     useAiConfigStore.setState({
-      translationModel: 'claude-opus-5',
-      chatModel: 'claude-opus-5',
+      provider: 'anthropic',
       anthropicApiKey: 'sk-ant-test',
       openaiApiKey: undefined,
       anthropicEnabled: true,
@@ -36,11 +35,11 @@ describe('createChatModel - Opus 5 sampling parameter guard', () => {
     vi.unstubAllEnvs();
   });
 
-  it('claude-opus-5 호출 시 ChatAnthropic 생성자에 temperature가 전달되지 않음', async () => {
+  it('검수(claude-opus-5) 호출 시 ChatAnthropic 생성자에 temperature가 전달되지 않음', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
     const { createChatModel } = await import('@/ai/client');
 
-    createChatModel(undefined, { useFor: 'chat' });
+    createChatModel(undefined, { useFor: 'review' });
 
     expect(anthropicCtorSpy).toHaveBeenCalledTimes(1);
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -48,27 +47,20 @@ describe('createChatModel - Opus 5 sampling parameter guard', () => {
     expect('temperature' in callArgs).toBe(false);
   });
 
-  it('claude-haiku-4-5 호출 시에는 temperature가 정상 전달됨 (회귀 방지)', async () => {
+  // Haiku는 매핑에서 제거됐지만 sampling 가드 자체는 구형 모델용으로 남아 있어야 한다.
+  it('modelOverride로 claude-haiku-4-5를 지정하면 temperature가 정상 전달됨 (회귀 방지)', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
-    useAiConfigStore.setState({
-      translationModel: 'claude-haiku-4-5',
-      chatModel: 'claude-haiku-4-5',
-    });
     const { createChatModel } = await import('@/ai/client');
 
-    createChatModel(undefined, { useFor: 'chat' });
+    createChatModel('claude-haiku-4-5', { useFor: 'chat' });
 
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs.model).toBe('claude-haiku-4-5');
     expect(callArgs.temperature).toBe(0.7);
   });
 
-  it('claude-sonnet-5 호출 시 temperature가 전달되지 않음', async () => {
+  it('채팅(claude-sonnet-5) 호출 시 temperature가 전달되지 않음', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
-    useAiConfigStore.setState({
-      translationModel: 'claude-sonnet-5',
-      chatModel: 'claude-sonnet-5',
-    });
     const { createChatModel } = await import('@/ai/client');
 
     createChatModel(undefined, { useFor: 'chat' });
@@ -80,10 +72,6 @@ describe('createChatModel - Opus 5 sampling parameter guard', () => {
 
   it('modelOverride로 claude-opus-5를 직접 지정해도 temperature 차단', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.5');
-    useAiConfigStore.setState({
-      translationModel: 'claude-sonnet-4-6',
-      chatModel: 'claude-sonnet-4-6',
-    });
     const { createChatModel } = await import('@/ai/client');
 
     createChatModel('claude-opus-5', { useFor: 'chat' });
@@ -91,5 +79,20 @@ describe('createChatModel - Opus 5 sampling parameter guard', () => {
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs.model).toBe('claude-opus-5');
     expect('temperature' in callArgs).toBe(false);
+  });
+
+  // 폴리싱이 문서 한 벌을 통째로 뱉는데 채팅 상한(8192)이 걸리면 조용히 잘린다.
+  it('폴리싱은 번역과 같은 긴 출력 상한을 받는다', async () => {
+    const { createChatModel } = await import('@/ai/client');
+    const { DEFAULT_TRANSLATION_MAX_TOKENS, DEFAULT_CHAT_MAX_TOKENS } = await import('@/ai/constants');
+
+    createChatModel(undefined, { useFor: 'polish' });
+    const polishArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(polishArgs.maxTokens).toBe(DEFAULT_TRANSLATION_MAX_TOKENS);
+
+    anthropicCtorSpy.mockClear();
+    createChatModel(undefined, { useFor: 'chat' });
+    const chatArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(chatArgs.maxTokens).toBe(DEFAULT_CHAT_MAX_TOKENS);
   });
 });

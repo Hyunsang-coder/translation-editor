@@ -8,7 +8,7 @@
 
 import type { AiConfig } from '@/ai/config';
 
-export type ModelUseFor = 'translation' | 'chat' | 'review';
+export type { ModelUseFor } from '@/ai/config';
 
 export interface ModelCallOptions {
   /** 모델이 non-default sampling을 거부하면 undefined */
@@ -29,22 +29,21 @@ function isSonnet5(model: string): boolean {
 }
 
 /**
- * cfg(+useFor)에 대한 모델 호출 옵션을 결정한다.
+ * cfg에 대한 모델 호출 옵션을 결정한다.
+ *
+ * 용도(useFor)별 차이는 `MODEL_BY_USE`가 이미 모델·`cfg.reasoningEffort`로 해석해 넘겨준다.
+ * 여기서 판정하는 것은 **그 모델이 각 파라미터를 받아들이는가** 하나뿐이다.
  *
  * 규칙:
  * - temperature: Anthropic Opus 4.7+/Sonnet 5, OpenAI gpt-5* 는 non-default를
  *   400으로 거부하므로 전달하지 않는다. 그 외에는 cfg.temperature(있으면).
  * - adaptiveThinking(Anthropic): Opus 4.7+는 기본 꺼짐이라 항상 명시,
  *   Sonnet 5는 생략 시 기본 adaptive지만 명시성/일관성을 위해 함께 설정.
- * - effort: Anthropic Opus 4.7+는 항상 'high'(서버 기본값이라 사실상 no-op),
- *   Sonnet 5는 review일 때만 'high'. OpenAI 프리셋에 reasoningEffort가 있으면
- *   모든 용도에 해당 값을 전달하고, 없으면 gpt-5 계열 review에만 'high'를 쓴다.
- *   gpt-4o 등 비 gpt-5 모델에
- *   reasoning_effort를 보내면 400이 나므로 여기서(모델 판정 지점) 가드한다.
+ * - effort: cfg.reasoningEffort를 그대로 전달하되, 지원 모델에만 붙인다.
+ *   구형 Claude나 gpt-4o 등에 보내면 400이 나므로 여기서(모델 판정 지점) 가드한다.
  *   Rust 경로(commands/ai.rs)의 starts_with("gpt-5") 판정과 동일 기준. (A3)
  */
-export function resolveModelCallOptions(cfg: AiConfig, useFor: ModelUseFor): ModelCallOptions {
-  const isReview = useFor === 'review';
+export function resolveModelCallOptions(cfg: AiConfig): ModelCallOptions {
   const opts: ModelCallOptions = {};
 
   if (cfg.provider === 'anthropic') {
@@ -56,12 +55,9 @@ export function resolveModelCallOptions(cfg: AiConfig, useFor: ModelUseFor): Mod
       opts.temperature = cfg.temperature;
     }
 
-    if (opus47Plus) {
+    if (opus47Plus || sonnet5) {
       opts.adaptiveThinking = true;
-      opts.effort = 'high';
-    } else if (sonnet5) {
-      opts.adaptiveThinking = true;
-      if (isReview) opts.effort = 'high';
+      if (cfg.reasoningEffort) opts.effort = cfg.reasoningEffort;
     }
 
     return opts;
@@ -76,8 +72,6 @@ export function resolveModelCallOptions(cfg: AiConfig, useFor: ModelUseFor): Mod
   // 호출 경로(client.ts / backendCompletion.ts)는 이 결과를 신뢰해 그대로 전달한다. (A3)
   if (isGpt5 && cfg.reasoningEffort) {
     opts.effort = cfg.reasoningEffort;
-  } else if (isReview && isGpt5) {
-    opts.effort = 'high';
   }
 
   return opts;

@@ -9,7 +9,6 @@ import { summarizeConversation, resolveSummaryModelRunConfig } from './summarize
 
 function baseRc(overrides?: Partial<ModelRunConfig>): ModelRunConfig {
   return {
-    requestedPreset: 'claude-opus-4-8',
     resolvedModel: 'claude-opus-4-8',
     provider: 'anthropic',
     openaiApiKey: 'sk-openai',
@@ -29,23 +28,24 @@ beforeEach(() => {
 });
 
 describe('resolveSummaryModelRunConfig', () => {
-  it('anthropic 실행은 저비용 Haiku 프리셋으로 요약', () => {
+  it('anthropic 실행은 Sonnet 5 + effort medium으로 요약', () => {
     const rc = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-opus-4-8' }));
     expect(rc.provider).toBe('anthropic');
-    expect(rc.resolvedModel).toContain('haiku');
+    expect(rc.resolvedModel).toBe('claude-sonnet-5');
+    expect(rc.reasoningEffort).toBe('medium');
     expect(rc.anthropicApiKey).toBe('sk-ant');
   });
 
-  it('openai 실행은 저비용 Luna 프리셋으로 요약', () => {
+  it('openai 실행은 Luna + effort medium으로 요약', () => {
     const rc = resolveSummaryModelRunConfig(
-      baseRc({ provider: 'openai', resolvedModel: 'gpt-5.6-sol', requestedPreset: 'gpt-5.6-sol-high' }),
+      baseRc({ provider: 'openai', resolvedModel: 'gpt-5.6-sol' }),
     );
     expect(rc.provider).toBe('openai');
     expect(rc.resolvedModel).toBe('gpt-5.6-luna');
     expect(rc.openaiApiKey).toBe('sk-openai');
   });
 
-  it('채팅 모델을 바꿔도(같은 provider) 요약 모델은 고정 저비용 모델', () => {
+  it('실행 모델이 달라도(같은 provider) 요약 모델은 고정', () => {
     const a = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-opus-4-8' }));
     const b = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-sonnet-5' }));
     expect(a.resolvedModel).toBe(b.resolvedModel);
@@ -77,7 +77,8 @@ describe('summarizeConversation', () => {
     expect(createChatModel).toHaveBeenCalledTimes(1);
     // 저비용 요약 runConfig가 전달됐는지
     const opts = createChatModel.mock.calls[0]![1] as { runConfig: ModelRunConfig };
-    expect(opts.runConfig.resolvedModel).toContain('haiku');
+    expect(opts.runConfig.resolvedModel).toBe('claude-sonnet-5');
+    expect(opts.runConfig.reasoningEffort).toBe('medium');
     // 입력 메시지에 기존 요약과 새 대화 원문이 포함
     const passedMessages = invoke.mock.calls[0]![0] as { content: string }[];
     const joined = passedMessages.map((m) => String(m.content)).join('\n');

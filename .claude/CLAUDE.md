@@ -89,6 +89,14 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **모델 선택을 provider 하나로** ([ADR-0012](../docs/adr/0012-provider-only-model-selection.md)): 프리셋 6개 선택(`MODEL_PRESETS`)을 폐기하고 사용자가 고르는 값을 `provider: 'anthropic' | 'openai'` 하나로 줄였다. 용도별 모델·effort는 `config.ts`의 `MODEL_BY_USE`가 고정한다 — 검수만 Opus 5/Sol이고 번역·폴리싱·채팅은 Sonnet 5/Luna, effort는 전부 high(요약만 medium).
+  - **고친 문제**: 번역·검수·폴리싱이 `translationModel` **하나를 공유**해서, 검수용으로 Opus로 올린 뒤 되돌리지 않으면 폴리싱까지 Opus로 돌았다(20,000자 1사이클 $1.44 → $1.69). `presets[0]`(=Opus 5)로 조용히 튀던 fallback 3곳도 함께 사라졌다.
+  - **폴리싱 effort medium 안은 기각**: 산출물이 곧 문서 본문이라 effort 의존도가 번역보다 높은데 절감은 ~8%뿐이고, 선택 재번역이 `translation`(high)이라 **문단 하나가 문서 전체보다 effort가 높아지는 역전**이 생긴다. 긴 문서에서 `---POLISH_END---` 유실이 관측되면 재검토.
+  - **`polish`·`summary`가 `ModelUseFor`에 신설**됐다. 폴리싱은 더 이상 `useFor: 'translation'`이 아니다(`polishDocument.ts`). **Haiku 4.5는 매핑에서 완전히 사라졌지만 `pricing.ts`에는 남긴다** — 과거 사용량 장부가 API 모델 ID로 단가를 조회한다.
+  - **`resolveModelCallOptions`가 `useFor`를 안 받는다**: effort가 `cfg.reasoningEffort`로 실려 오므로 용도 분기가 죽었고, 남은 판정은 "이 **모델**이 이 파라미터를 받는가"뿐이다. `backendCompletion`의 `useFor` 파라미터도 같은 이유로 제거.
+  - **레거시 값은 읽는 지점에서 `normalizeProvider()`로 환산**한다. `chat_sessions.model_preset`은 **컬럼명을 유지하고 값 의미만** provider로 바꿨고(rename 비용 대비 실익 없음), v13 이전 세션에는 `claude-sonnet-5` 같은 프리셋 ID가 남아 있다. 정규화를 빠뜨리면 `MODEL_BY_USE`를 undefined로 인덱싱한다. hydrate가 결과를 되써서 고정한다.
+  - **`aiConfigStore` v13 → v14**: `translationModel`/`chatModel` → `provider`. `translationModel` 기준으로 추론(문서 작업이 주 용도). `VITE_AI_MODEL` env 오버라이드는 먹이던 상태가 사라져 함께 제거.
+  - **`requestedModelPreset` 새 쓰기 중단** — `provider` 필드와 값이 완전히 겹친다. 과거 메시지 읽기용으로만 남기고, `ChatContent`의 `pendingModelChange`는 `requestedModelPreset ?? provider`를 정규화해 비교한다(안 하면 레거시 세션에서 힌트가 상시 노출).
 - **Notion 연동 제거** ([ADR-0011](../docs/adr/0011-remove-notion-integration.md)): 한 번도 쓰지 않은 기능이고, 조사해보니 **구현이 두 벌인데 한 벌은 이미 죽어 있었다**. ① REST 경로(`src-tauri/src/notion/` + `commands/notion.rs` + `notionTools.ts`)가 프런트가 쓰는 유일한 경로였고, ② MCP/OAuth 경로(`mcp/notion_client.rs`·`notion_oauth.rs`·`McpServerId::Notion`, 616 LOC)는 `mcp_set_notion_config`를 e2e 목만 부르는 잔해였다 — REST로 갈아탄 흔적이 `McpClientManager`의 "Notion: REST API 직접 호출 (MCP 대신)" 주석에 남아 있었다. 둘 다 제거하고 `McpServerId`는 `Atlassian` 단일 variant로 축소.
   - **tool guide가 바인딩되지 않는 도구를 쓰라고 지시하고 있었다**: `chat.ts`가 "notion_search로 검색 후 `notion_get_page`로 조회"를 주입하는데 `notion_get_page`는 `CHAT_TOOL_REGISTRY`에 없어 절대 바인딩되지 않는다(`buildToolSpecs`가 모든 후보를 registry 파생 `allowedNames`로 필터). 이 발견이 제거를 촉발했다.
   - **vault 키 매핑은 남겼다** — `secrets/manager.rs`의 `notion:integration_token` 매핑은 오래된 vault를 읽는 마이그레이션 표라 지우면 기존 저장소 호환이 깨진다. **저장된 토큰도 vault에 남는다**(읽는 코드가 없어 무해하지만 자동 삭제되지 않음).

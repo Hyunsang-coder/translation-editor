@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
+// 타입 전용 import — 런타임 순환 참조(config.ts → aiConfigStore)가 생기지 않는다.
+import type { SelectableProvider } from '@/ai/config';
 
 const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
 
@@ -15,10 +17,11 @@ interface ApiKeysBundle {
 }
 
 interface AiConfigState {
-  // 번역용 모델/추론 프리셋 (예: gpt-5.6-sol-high)
-  translationModel: string;
-  // 채팅/질문용 모델/추론 프리셋 (예: gpt-5.6-luna-medium)
-  chatModel: string;
+  /**
+   * 사용자가 고르는 유일한 AI 설정. 용도별 모델·effort는 `MODEL_BY_USE`가 고정한다
+   * (ADR-0012). v13까지 있던 translationModel/chatModel을 대체한다.
+   */
+  provider: SelectableProvider;
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
@@ -30,19 +33,13 @@ interface AiConfigState {
 
 interface AiConfigActions {
   loadSecureKeys: () => Promise<void>;
-  setTranslationModel: (model: string) => void;
-  setChatModel: (model: string) => void;
+  setProvider: (provider: SelectableProvider) => void;
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
   clearApiKeysAfterSecureStorageReset: () => void;
   // NEW: 프로바이더 enabled 설정
   setOpenaiEnabled: (enabled: boolean) => void;
   setAnthropicEnabled: (enabled: boolean) => void;
-}
-
-// 환경변수 읽기 헬퍼
-function getEnv(key: string, def: string): string {
-  return (import.meta.env[key] as string) || def;
 }
 
 function normalizeKey(key: string | undefined): string | undefined {
@@ -124,20 +121,6 @@ function enqueuePersistAllKeys(
     });
 }
 
-// MODEL_PRESETS 정의 (순환 참조 회피)
-const MODEL_PRESETS: Record<string, Array<{ value: string }>> = {
-  openai: [
-    { value: 'gpt-5.6-sol-high' },
-    { value: 'gpt-5.6-luna-high' },
-    { value: 'gpt-5.6-luna-medium' },
-  ],
-  anthropic: [
-    { value: 'claude-sonnet-5' },
-    { value: 'claude-haiku-4-5' },
-    { value: 'claude-opus-5' },
-  ],
-};
-
 export function migrateAiConfig(
   persisted: Record<string, unknown>,
   version: number,
@@ -208,20 +191,29 @@ export function migrateAiConfig(
     data.translationModel = rename(data.translationModel);
     data.chatModel = rename(data.chatModel);
   }
+  // v13 → v14: 프리셋 2개(translationModel/chatModel) → provider 1개 (ADR-0012)
+  //
+  // translationModel 기준으로 통일한다. 두 값의 provider가 엇갈릴 수 있지만
+  // 문서 작업(번역·검수·폴리싱)이 주 용도이므로 그쪽을 살린다.
+  if (version < 14) {
+    const inferred =
+      typeof data.translationModel === 'string' && data.translationModel
+        ? data.translationModel
+        : typeof data.chatModel === 'string'
+          ? data.chatModel
+          : '';
+    data.provider = inferred && !inferred.startsWith('claude') ? 'openai' : 'anthropic';
+    delete data.translationModel;
+    delete data.chatModel;
+  }
   return data;
 }
 
 export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
   persist(
     (set, get) => {
-      // 환경변수 VITE_AI_MODEL이 있으면 사용, 없으면 기본값
-      const envModel = getEnv('VITE_AI_MODEL', '');
-      const defaultTranslationModel = envModel || 'claude-sonnet-5';
-      const defaultChatModel = envModel || 'claude-sonnet-5';
-
       return {
-        translationModel: defaultTranslationModel,
-        chatModel: defaultChatModel,
+        provider: 'anthropic' as SelectableProvider,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
         secureKeyPersistError: undefined,
@@ -315,8 +307,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
           return loadingPromise;
         },
 
-        setTranslationModel: (model) => set({ translationModel: model }),
-        setChatModel: (model) => set({ chatModel: model }),
+        setProvider: (provider) => set({ provider }),
 
         setOpenaiApiKey: (key) => {
           const version = ++persistVersion;
@@ -337,9 +328,14 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             openai: state.openaiApiKey,
             anthropic: next,
           }, version, set);
-          // API Key 삭제 시 해당 provider 비활성화
+          // API Key 삭제 시 해당 provider 비활성화.
+          // provider 선택도 함께 넘긴다 — 안 그러면 "비활성 provider가 선택된" 상태로 남아
+          // 모든 AI 호출이 키 없음으로 실패한다(조건상 openaiEnabled는 true).
           if (!next && state.anthropicEnabled && state.openaiEnabled) {
-            set({ anthropicEnabled: false });
+            set({
+              anthropicEnabled: false,
+              ...(state.provider === 'anthropic' ? { provider: 'openai' as const } : {}),
+            });
           }
         },
 
@@ -353,6 +349,8 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             secureKeyPersistError: undefined,
             openaiEnabled: false,
             anthropicEnabled: true,
+            // openaiEnabled=false로 되돌리므로 provider도 함께 기본값으로 (불일치 방지)
+            provider: 'anthropic',
           });
         },
 
@@ -364,16 +362,9 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             return;
           }
           set({ openaiEnabled: enabled });
-          // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
-          if (!enabled) {
-            const anthropicPresets = MODEL_PRESETS.anthropic;
-            const firstAnthropicModel = anthropicPresets?.[0]?.value ?? 'claude-sonnet-5';
-            if (!state.translationModel.startsWith('claude')) {
-              set({ translationModel: firstAnthropicModel });
-            }
-            if (!state.chatModel.startsWith('claude')) {
-              set({ chatModel: firstAnthropicModel });
-            }
+          // 비활성화한 provider가 선택돼 있었으면 남은 provider로 넘긴다
+          if (!enabled && state.provider === 'openai') {
+            set({ provider: 'anthropic' });
           }
         },
 
@@ -385,28 +376,20 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
             return;
           }
           set({ anthropicEnabled: enabled });
-          // 비활성화 시 선택된 모델이 해당 provider면 다른 provider의 첫 모델로 변경
-          if (!enabled) {
-            const openaiPresets = MODEL_PRESETS.openai;
-            const firstOpenaiModel = openaiPresets?.[0]?.value ?? 'gpt-5.6-sol-high';
-            if (state.translationModel.startsWith('claude')) {
-              set({ translationModel: firstOpenaiModel });
-            }
-            if (state.chatModel.startsWith('claude')) {
-              set({ chatModel: firstOpenaiModel });
-            }
+          // 비활성화한 provider가 선택돼 있었으면 남은 provider로 넘긴다
+          if (!enabled && state.provider === 'anthropic') {
+            set({ provider: 'openai' });
           }
         },
       };
     },
     {
       name: 'ite-ai-config',
-      version: 13,
+      version: 14,
       migrate: (persisted: unknown, version: number) =>
         migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({
-        translationModel: state.translationModel,
-        chatModel: state.chatModel,
+        provider: state.provider,
         openaiEnabled: state.openaiEnabled,
         anthropicEnabled: state.anthropicEnabled,
       }),

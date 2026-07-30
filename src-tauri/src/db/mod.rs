@@ -3435,7 +3435,7 @@ mod tests {
             messages: vec![],
             context_block_ids: vec![],
             confluence_search_enabled: true,
-            model_preset: Some("gpt-5.6-sol-high".to_string()),
+            model_preset: Some("openai".to_string()),
             memory: None,
         };
         let without_preset = ChatSession {
@@ -3461,7 +3461,7 @@ mod tests {
             .iter()
             .find(|s| s.id == "sess-with")
             .expect("with-preset session missing");
-        assert_eq!(loaded_with.model_preset.as_deref(), Some("gpt-5.6-sol-high"));
+        assert_eq!(loaded_with.model_preset.as_deref(), Some("openai"));
 
         let loaded_without = loaded
             .iter()

@@ -161,9 +161,11 @@ export interface ChatSession {
   contextBlockIds: string[]; // 관련 블록 ID들
   confluenceSearchEnabled?: boolean; // Rovo MCP 검색 사용 여부 (탭 단위)
   /**
-   * 이 세션의 채팅 모델 프리셋 ID (세션 단위 모델 선택).
-   * - 값이 없으면(레거시/마이그레이션) 전역 chatModel 기본값을 상속한다.
-   * - 전역 aiConfigStore.chatModel은 "새 세션 기본값"으로만 사용된다.
+   * 이 세션에 고정(pin)된 provider (`'anthropic' | 'openai'`).
+   * - v13 이전 세션에는 `claude-sonnet-5` 같은 프리셋 ID가 들어 있다. hydrate가
+   *   `normalizeProvider`로 고쳐 쓰므로 store 안에서는 항상 provider 값이다.
+   * - 값이 없으면(레거시) 전역 aiConfigStore.provider를 상속한다.
+   * - DB 컬럼명은 `model_preset` 그대로다(값 의미만 바뀜, ADR-0012).
    */
   modelPreset?: string;
   /**
@@ -463,7 +465,10 @@ export interface ChatMessageMetadata {
   model?: string;
   tokens?: number;
 
-  /** 사용자가 선택한 모델 프리셋 ID (세션 modelPreset 또는 전역 기본값 스냅샷) */
+  /**
+   * @deprecated v13 이전 메시지에만 있는 프리셋 ID. provider 단일 선택으로 바뀌면서
+   * `provider` 필드와 값이 겹쳐 새로 쓰지 않는다. 읽는 쪽은 `normalizeProvider`를 통과시킬 것.
+   */
   requestedModelPreset?: string;
   /** 실제 호출에 사용된 API 모델 ID (배지 표시 소스) */
   resolvedModel?: string;

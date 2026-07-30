@@ -7,6 +7,7 @@ import type {
   SendMessageOptions,
 } from '@/types';
 import type { AttachmentDto } from '@/tauri/attachments';
+import type { SelectableProvider } from '@/ai/config';
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -87,8 +88,8 @@ export interface ChatActions {
   switchSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => void;
   renameSession: (sessionId: string, name: string) => void;
-  /** 세션별 모델 프리셋 변경 (전역 chatModel과 분리, 다음 응답부터 적용) */
-  setSessionModelPreset: (sessionId: string, preset: string) => void;
+  /** 세션에 고정된 provider 변경 (전역 provider와 분리, 첫 메시지 전까지만 허용) */
+  setSessionModelPreset: (sessionId: string, preset: SelectableProvider) => void;
   /** 세션 장기 대화 요약(memory) 갱신 (Phase 3, transcript는 보존) */
   updateSessionMemory: (sessionId: string, memory: ChatSessionMemory) => void;
 

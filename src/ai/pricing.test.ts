@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MODEL_PRICES, estimateCost, formatUsd, getModelPrice } from './pricing';
-import { MODEL_PRESETS, resolveModelFromPreset } from './config';
+import { MODEL_BY_USE } from './config';
 
 describe('estimateCost', () => {
   it('입력/출력/캐시를 각각의 단가로 환산한다', () => {
@@ -58,15 +58,14 @@ describe('estimateCost', () => {
 });
 
 describe('가격표 커버리지', () => {
-  it('앱이 제공하는 모든 모델 프리셋에 단가가 있다', () => {
+  it('앱이 실제로 호출하는 모든 모델에 단가가 있다', () => {
     const missing: string[] = [];
-    for (const presets of Object.values(MODEL_PRESETS)) {
-      for (const preset of presets) {
-        const { model } = resolveModelFromPreset(preset.value);
-        if (!MODEL_PRICES[model]) missing.push(`${preset.value} → ${model}`);
+    for (const [provider, byUse] of Object.entries(MODEL_BY_USE)) {
+      for (const [useFor, spec] of Object.entries(byUse)) {
+        if (!MODEL_PRICES[spec.model]) missing.push(`${provider}.${useFor} → ${spec.model}`);
       }
     }
-    // 새 모델을 프리셋에 추가하고 단가를 빠뜨리면 여기서 잡힌다.
+    // MODEL_BY_USE에 새 모델을 넣고 단가를 빠뜨리면 여기서 잡힌다.
     expect(missing).toEqual([]);
   });
 });

@@ -34,7 +34,8 @@ export interface ModelPrice {
  *   캐시 할인 배수는 확인하지 못해 **생략**했다 → 캐시분도 정가로 계산되어 과대추정된다.
  *   정확한 비용이 필요하면 OpenAI 콘솔 단가로 이 표를 갱신할 것.
  *
- * 키는 `resolveModelFromPreset`이 돌려주는 **실제 API 모델 ID**다(프리셋 ID 아님).
+ * 키는 `MODEL_BY_USE`가 돌려주는 **실제 API 모델 ID**다. 매핑에서 빠진 모델(Haiku 등)도
+ * 과거 사용량 기록의 단가 조회에 필요하므로 남긴다.
  */
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
   // ── Anthropic (공식 문서 확인값) ──────────────────────────────

@@ -24,11 +24,13 @@ vi.mock('@/ai/chat', () => ({
 vi.mock('@/ai/config', () => ({
   getAiConfig: mocks.getAiConfig,
   resolveModelRunConfig: mocks.resolveModelRunConfig,
-  // resolveSummaryModelRunConfig(요약 저비용 모델 파생)이 사용하는 실 구현 스텁
-  resolveModelFromPreset: (raw: string) => ({
-    provider: raw.startsWith('claude') ? 'anthropic' : 'openai',
-    model: raw,
+  // resolveSummaryModelRunConfig(요약 모델 파생)이 사용하는 실 구현 스텁
+  resolveModelForUse: (provider: string) => ({
+    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-5.6-luna',
+    effort: 'medium',
   }),
+  normalizeProvider: (v: string | undefined | null) =>
+    !v ? null : v === 'anthropic' || v === 'openai' ? v : v.startsWith('claude') ? 'anthropic' : 'openai',
 }));
 
 vi.mock('@/ai/client', () => ({
@@ -64,7 +66,6 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       openaiApiKey: 'sk-test',
     });
     mocks.resolveModelRunConfig.mockReturnValue({
-      requestedPreset: 'gpt-5.6-luna-medium',
       resolvedModel: 'gpt-5.6-luna',
       provider: 'openai',
       reasoningEffort: 'medium',
@@ -304,7 +305,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       );
     });
 
-    it('assistant 메시지 메타데이터가 캡처된 runConfig(요청 프리셋/실제 모델/provider)와 일치', async () => {
+    it('assistant 메시지 메타데이터가 캡처된 runConfig(실제 모델/provider)와 일치', async () => {
       // Arrange
       useChatStore.getState().createSession('Meta Chat');
       const sessionId = useChatStore.getState().currentSessionId!;
@@ -322,7 +323,6 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       // Assert: 실제 호출에 쓰인 runConfig(mock)가 메시지 메타데이터로 기록됨
       const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
       const assistant = session?.messages.find((m) => m.role === 'assistant');
-      expect(assistant?.metadata?.requestedModelPreset).toBe('gpt-5.6-luna-medium');
       expect(assistant?.metadata?.resolvedModel).toBe('gpt-5.6-luna');
       expect(assistant?.metadata?.provider).toBe('openai');
       // usage_metadata가 finalize 후에도 보존됨

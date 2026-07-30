@@ -120,6 +120,7 @@ describe('backendCompletion', () => {
       provider: 'anthropic',
       model: 'claude-opus-5',
       anthropicApiKey: 'sk-ant-test',
+      reasoningEffort: 'high',
       maxRecentMessages: 20,
     };
 
@@ -130,19 +131,22 @@ describe('backendCompletion', () => {
     expect(args.effort).toBe('high');
   });
 
-  it('GPT-5 review 스트리밍에는 effort=high, 기본(translation)에는 미전달 (F8)', async () => {
-    const cfg: AiConfig = {
-      provider: 'openai',
+  // effort는 provider × 용도 매핑이 정해 cfg에 실려 온다. 백엔드 경로는 그 값을
+  // 그대로 흘려보내고, 값이 없으면 아무것도 붙이지 않는다 (F8).
+  it('GPT-5 스트리밍은 cfg의 effort를 그대로 전달하고, 없으면 미전달', async () => {
+    const base = {
+      provider: 'openai' as const,
       model: 'gpt-5.5',
       openaiApiKey: 'sk-test',
       maxRecentMessages: 20,
     };
 
-    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096, useFor: 'review' });
+    const withEffort: AiConfig = { ...base, reasoningEffort: 'high' };
+    await streamWithTauriAiBackend({ cfg: withEffort, messages, maxTokens: 4096 });
     const reviewArgs = mocks.aiStream.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(reviewArgs.effort).toBe('high');
 
-    await streamWithTauriAiBackend({ cfg, messages, maxTokens: 4096 });
+    await streamWithTauriAiBackend({ cfg: base, messages, maxTokens: 4096 });
     const translateArgs = mocks.aiStream.mock.calls[1]?.[0] as Record<string, unknown>;
     expect('effort' in translateArgs).toBe(false);
   });

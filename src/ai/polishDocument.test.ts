@@ -77,7 +77,7 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(result.doc.type).toBe('doc');
     expect(vi.mocked(createChatModel)).toHaveBeenCalledWith(
       undefined,
-      expect.objectContaining({ useFor: 'translation' }),
+      expect.objectContaining({ useFor: 'polish' }),
     );
 
     const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];

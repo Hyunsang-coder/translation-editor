@@ -59,10 +59,8 @@ vi.mock('@/stores/historyStore', () => ({
   },
 }));
 
-vi.mock('@/stores/aiConfigStore', () => ({
-  useAiConfigStore: {
-    getState: () => ({ translationModel: 'test-model' }),
-  },
+vi.mock('@/ai/config', () => ({
+  getModelIdForUse: () => 'test-model',
 }));
 
 // markdown 변환은 결정론적 직렬화로 대체 — revision 계산이 docJson 내용에 정확히 종속되게 한다

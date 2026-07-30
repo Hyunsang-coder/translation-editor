@@ -1,6 +1,6 @@
 import i18n from '@/i18n/config';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { useAiConfigStore } from '@/stores/aiConfigStore';
+import { getModelIdForUse } from '@/ai/config';
 import { useEditorStore } from '@/stores/editorStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -97,7 +97,7 @@ export async function applyDesktopTranslationPreview(): Promise<void> {
     return;
   }
 
-  const model = useAiConfigStore.getState().translationModel;
+  const model = getModelIdForUse('translation');
   const dateLabel = new Date().toLocaleDateString('sv');
   await useHistoryStore.getState().createSnapshotIfChanged({
     projectId: project.id,

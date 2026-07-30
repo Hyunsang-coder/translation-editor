@@ -25,130 +25,59 @@ async function flushPromises(): Promise<void> {
   }
 }
 
-describe('aiConfigStore - migrate v8 → latest', () => {
-  it('claude-opus-4-6 → 4-7 → 4-8 → 5 누적 rename', () => {
+describe('aiConfigStore - migrate → v14 (provider 단일 선택)', () => {
+  // v14는 translationModel 기준으로 provider를 정한다. 두 값의 provider가 엇갈릴 수
+  // 있지만 문서 작업(번역·검수·폴리싱)이 주 용도이므로 그쪽을 살린다.
+  it('Anthropic 프리셋 → provider anthropic', () => {
     const result = migrateAiConfig(
       { translationModel: 'claude-opus-4-6', chatModel: 'claude-opus-4-6' },
       8,
     );
-    expect(result.translationModel).toBe('claude-opus-5');
-    expect(result.chatModel).toBe('claude-opus-5');
+    expect(result.provider).toBe('anthropic');
   });
 
-  it('v9(과거 버전)에서도 최종적으로 opus-5까지 누적 마이그레이션', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-opus-4-7', chatModel: 'claude-opus-4-7' },
-      9,
-    );
-    expect(result.translationModel).toBe('claude-opus-5');
-    expect(result.chatModel).toBe('claude-opus-5');
-  });
-
-  it('gpt-5.4와 gpt-5.4-mini를 최신 GPT-5.6 프리셋까지 누적 rename', () => {
+  it('OpenAI 프리셋 → provider openai', () => {
     const result = migrateAiConfig(
       { translationModel: 'gpt-5.4', chatModel: 'gpt-5.4-mini' },
       8,
     );
-    expect(result.translationModel).toBe('gpt-5.6-sol-high');
-    expect(result.chatModel).toBe('gpt-5.6-luna-medium');
+    expect(result.provider).toBe('openai');
   });
 
-  it('claude-haiku-4-5 등 rename 대상이 아닌 모델은 그대로 유지', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'gpt-5.5', chatModel: 'claude-haiku-4-5' },
-      8,
-    );
-    expect(result.translationModel).toBe('gpt-5.6-sol-high');
-    expect(result.chatModel).toBe('claude-haiku-4-5');
+  it('두 모델의 provider가 엇갈리면 translationModel 기준', () => {
+    expect(
+      migrateAiConfig({ translationModel: 'gpt-5.5', chatModel: 'claude-haiku-4-5' }, 10).provider,
+    ).toBe('openai');
+    expect(
+      migrateAiConfig({ translationModel: 'claude-opus-4-8', chatModel: 'gpt-5.5' }, 10).provider,
+    ).toBe('anthropic');
   });
 
-  it('v10 설정에는 v11~v13 마이그레이션 적용', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-opus-4-8', chatModel: 'gpt-5.5' },
-      10,
-    );
-    expect(result.translationModel).toBe('claude-opus-5');
-    expect(result.chatModel).toBe('gpt-5.6-sol-high');
-  });
-
-  it('과거 버전(v5)에서 누적 마이그레이션: opus-4-5 → 4-6 → 4-7 → 4-8 → 5', () => {
+  it('과거 버전(v5)에서도 누적 마이그레이션 끝에 provider가 잡힌다', () => {
     const result = migrateAiConfig(
       { translationModel: 'claude-opus-4-5', chatModel: 'claude-opus-4-5' },
       5,
     );
-    expect(result.translationModel).toBe('claude-opus-5');
-    expect(result.chatModel).toBe('claude-opus-5');
-  });
-});
-
-describe('aiConfigStore - migrate v12 → v13 (Opus 4.8 → Opus 5)', () => {
-  it('claude-opus-4-8 → claude-opus-5 rename', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-opus-4-8', chatModel: 'claude-opus-4-8' },
-      12,
-    );
-    expect(result.translationModel).toBe('claude-opus-5');
-    expect(result.chatModel).toBe('claude-opus-5');
+    expect(result.provider).toBe('anthropic');
   });
 
-  it('claude-sonnet-5 등 다른 모델은 그대로 유지', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-sonnet-5', chatModel: 'gpt-5.6-sol-high' },
-      12,
-    );
-    expect(result.translationModel).toBe('claude-sonnet-5');
-    expect(result.chatModel).toBe('gpt-5.6-sol-high');
-  });
-});
-
-describe('aiConfigStore - migrate v10 → v11 (Sonnet 4.6 → Sonnet 5)', () => {
-  it('claude-sonnet-4-6 → claude-sonnet-5 rename', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-sonnet-4-6', chatModel: 'claude-sonnet-4-6' },
-      10,
-    );
-    expect(result.translationModel).toBe('claude-sonnet-5');
-    expect(result.chatModel).toBe('claude-sonnet-5');
+  it('v13 저장값(프리셋 rename이 이미 끝난 상태)도 provider로 환산', () => {
+    expect(migrateAiConfig({ translationModel: 'claude-sonnet-5' }, 13).provider).toBe('anthropic');
+    expect(migrateAiConfig({ translationModel: 'gpt-5.6-sol-high' }, 13).provider).toBe('openai');
   });
 
-  it('claude-haiku-4-5 등 다른 모델은 그대로 유지', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-haiku-4-5', chatModel: 'gpt-5.5' },
-      10,
-    );
-    expect(result.translationModel).toBe('claude-haiku-4-5');
-    expect(result.chatModel).toBe('gpt-5.6-sol-high');
+  // 값이 아예 없던 저장본이 openai로 튀면 키 없는 provider가 선택돼 앱이 바로 막힌다.
+  it('모델 값이 없으면 기본 provider(anthropic)로 떨어진다', () => {
+    expect(migrateAiConfig({}, 13).provider).toBe('anthropic');
   });
 
-  it('v5(과거 버전)에서도 최종적으로 sonnet-5까지 누적 마이그레이션', () => {
+  it('죽은 모델 필드는 남기지 않는다', () => {
     const result = migrateAiConfig(
-      { translationModel: 'claude-sonnet-4-5', chatModel: 'claude-sonnet-4-5' },
-      5,
+      { translationModel: 'claude-sonnet-5', chatModel: 'claude-sonnet-5' },
+      13,
     );
-    expect(result.translationModel).toBe('claude-sonnet-5');
-    expect(result.chatModel).toBe('claude-sonnet-5');
-  });
-});
-
-describe('aiConfigStore - migrate v11 → v12 (GPT-5.6 presets)', () => {
-  it('기존 flagship과 mini를 대응하는 GPT-5.6 조합으로 이전', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'gpt-5.5', chatModel: 'gpt-5.4-mini' },
-      11,
-    );
-
-    expect(result.translationModel).toBe('gpt-5.6-sol-high');
-    expect(result.chatModel).toBe('gpt-5.6-luna-medium');
-  });
-
-  it('Anthropic 모델은 GPT-5.6 이전에서 변경하지 않음', () => {
-    const result = migrateAiConfig(
-      { translationModel: 'claude-sonnet-5', chatModel: 'claude-haiku-4-5' },
-      11,
-    );
-
-    expect(result.translationModel).toBe('claude-sonnet-5');
-    expect(result.chatModel).toBe('claude-haiku-4-5');
+    expect('translationModel' in result).toBe(false);
+    expect('chatModel' in result).toBe(false);
   });
 });
 

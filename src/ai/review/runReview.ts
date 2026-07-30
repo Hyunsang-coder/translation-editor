@@ -139,7 +139,6 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       cfg,
       messages: promptMessages,
       maxTokens: REVIEW_MAX_TOKENS,
-      useFor: 'review',
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
@@ -153,7 +152,7 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   // 취소된 스트림도 생성분만큼 과금되므로 finally에서 기록한다.
   const streamUsage: AiUsageTokens = {};
   try {
-    // useFor: 'review'로 설정하여 Responses API 비활성화(성능 향상) + reasoning/thinking effort를 high로 상향
+    // useFor: 'review'로 설정하여 Responses API 비활성화(성능 향상) + 검수 전용 모델 해석
     const model = createChatModel(undefined, { useFor: 'review', maxTokens: REVIEW_MAX_TOKENS });
     const messages = [
       new SystemMessage(promptMessages[0]!.content),
@@ -184,7 +183,6 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       cfg,
       messages: promptMessages,
       maxTokens: REVIEW_MAX_TOKENS,
-      useFor: 'review',
       onAccumulated: params.onToken,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,

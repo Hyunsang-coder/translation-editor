@@ -152,7 +152,7 @@ function buildPolishMessages(params: {
   userComments?: string | undefined;
   polishMessage?: string | undefined;
 }) {
-  const cfg = getAiConfig({ useFor: 'translation' });
+  const cfg = getAiConfig({ useFor: 'polish' });
 
   if (cfg.provider === 'mock') {
     throw new Error('Mock provider는 더 이상 지원되지 않습니다. API 키를 설정해주세요.');
@@ -207,7 +207,7 @@ function buildPolishMessages(params: {
 
   const maxTokens = calculatedMaxTokens;
   const model = createChatModel(undefined, {
-    useFor: 'translation',
+    useFor: 'polish',
     maxTokens,
   });
 

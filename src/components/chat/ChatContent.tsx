@@ -17,9 +17,9 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { ChatComposerEditor } from '@/components/chat/ChatComposerEditor';
 import { SelectionContextChip } from '@/components/chat/SelectionContextChip';
-import { MODEL_PRESETS } from '@/ai/config';
+import { PROVIDER_LABELS, normalizeProvider, type SelectableProvider } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
-import { Select, type SelectOptionGroup } from '@/components/ui/Select';
+import { Select, type SelectOption } from '@/components/ui/Select';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
 import { useChatDragDrop } from '@/components/chat/useChatDragDrop';
 import { useChatScroll } from '@/components/chat/useChatScroll';
@@ -67,15 +67,6 @@ interface ChatContentProps {
  * 채팅 콘텐츠 컴포넌트
  * UnifiedSidebar 또는 DockedChatPanel 내부에 렌더링되는 채팅 기능
  */
-/** 프리셋 value → 표시 라벨 (양쪽 provider 검색, 없으면 value 그대로) */
-function findPresetLabel(value: string): string {
-  for (const group of [MODEL_PRESETS.anthropic, MODEL_PRESETS.openai]) {
-    const found = group.find((m) => m.value === value);
-    if (found) return found.label;
-  }
-  return value;
-}
-
 export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Element {
   const { t } = useTranslation();
 
@@ -180,70 +171,36 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
-  // 전역 chatModel은 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
-  const chatModel = useAiConfigStore((s) => s.chatModel);
-  const setChatModel = useAiConfigStore((s) => s.setChatModel);
+  // 전역 provider는 "새 세션 기본값"으로만 사용된다(세션별 선택과 분리).
+  const globalProvider = useAiConfigStore((s) => s.provider);
   const setSessionModelPreset = useChatStore((s) => s.setSessionModelPreset);
 
-  // 활성화된 프로바이더의 모델만 표시
-  const enabledChatPresets = useMemo((): SelectOptionGroup[] => {
-    const presets: SelectOptionGroup[] = [];
-    if (anthropicEnabled) {
-      presets.push({
-        label: 'Anthropic',
-        options: MODEL_PRESETS.anthropic.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    if (openaiEnabled) {
-      presets.push({
-        label: 'OpenAI',
-        options: MODEL_PRESETS.openai.map((m) => ({ value: m.value, label: m.label })),
-      });
-    }
-    return presets;
-  }, [anthropicEnabled, openaiEnabled]);
+  // 이 세션에 고정된 provider(없으면 전역 기본값 상속)
+  const sessionProvider = normalizeProvider(displaySession?.modelPreset) ?? globalProvider;
 
-  // 모든 모델 플랫 리스트 (유효성 검사용)
-  const allChatModels = useMemo(() => {
-    return enabledChatPresets.flatMap((g) => g.options);
-  }, [enabledChatPresets]);
+  // 세션 provider가 비활성화됐어도 현재 선택을 조용히 바꾸지 않고 그대로 노출한다.
+  const chatProviderOptions = useMemo((): SelectOption[] => {
+    const enabled: SelectableProvider[] = [];
+    if (anthropicEnabled) enabled.push('anthropic');
+    if (openaiEnabled) enabled.push('openai');
+    if (!enabled.includes(sessionProvider)) enabled.unshift(sessionProvider);
+    return enabled.map((p) => ({ value: p, label: PROVIDER_LABELS[p] }));
+  }, [anthropicEnabled, openaiEnabled, sessionProvider]);
 
-  // 전역 기본 모델이 비활성 프로바이더면 첫 활성 모델로 변경 (세션 모델은 건드리지 않음)
-  useEffect(() => {
-    if (allChatModels.length === 0) return;
-    const firstModel = allChatModels[0];
-    if (!firstModel) return;
-    if (!allChatModels.some((m) => m.value === chatModel)) {
-      setChatModel(firstModel.value);
-    }
-  }, [chatModel, allChatModels, setChatModel]);
-
-  // 이 세션의 모델 프리셋(없으면 전역 기본값 상속)
-  const sessionModelPreset = displaySession?.modelPreset ?? chatModel;
-
-  // 세션 모델의 provider가 비활성화됐어도 현재 선택을 조용히 바꾸지 않고 그대로 노출한다.
-  const chatModelSelectOptions = useMemo((): SelectOptionGroup[] => {
-    if (allChatModels.some((m) => m.value === sessionModelPreset)) return enabledChatPresets;
-    return [
-      {
-        label: t('chat.currentModelGroup'),
-        options: [{ value: sessionModelPreset, label: findPresetLabel(sessionModelPreset) }],
-      },
-      ...enabledChatPresets,
-    ];
-  }, [enabledChatPresets, allChatModels, sessionModelPreset, t]);
-
-  // 모델을 바꿨지만 아직 그 모델로 응답하지 않은 idle 상태 → "다음 응답부터 적용" 안내.
-  // 대화 시작 후에는 모델을 바꿀 수 없으므로, 이 안내는 마이그레이션으로 프리셋이 고정된
-  // 레거시 세션(과거 메시지가 다른 모델로 생성됨)에서만 나타난다.
+  // provider를 바꿨지만 아직 그 provider로 응답하지 않은 idle 상태 → "다음 응답부터 적용" 안내.
+  // 대화 시작 후에는 바꿀 수 없으므로, 이 안내는 마이그레이션으로 pin이 고쳐진
+  // 레거시 세션(과거 메시지가 다른 provider로 생성됨)에서만 나타난다.
   const pendingModelChange = useMemo(() => {
     const msgs = displaySession?.messages ?? [];
     const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
-    const lastPreset = lastAssistant?.metadata?.requestedModelPreset;
-    return !!lastPreset && lastPreset !== sessionModelPreset;
-  }, [displaySession, sessionModelPreset]);
+    // requestedModelPreset은 v13 이전 메시지에만 있다. 새 메시지는 provider가 기록된다.
+    const lastProvider = normalizeProvider(
+      lastAssistant?.metadata?.requestedModelPreset ?? lastAssistant?.metadata?.provider,
+    );
+    return !!lastProvider && lastProvider !== sessionProvider;
+  }, [displaySession, sessionProvider]);
 
-  // 대화가 시작되면 모델을 고정한다. 모델을 바꾸면 그 세션이 쌓은 prompt cache가
+  // 대화가 시작되면 provider를 고정한다. 바꾸면 그 세션이 쌓은 prompt cache가
   // 통째로 무효화되므로(캐시 키에 모델이 포함됨), 첫 메시지 전까지만 변경을 허용한다.
   const sessionModelLocked = (displaySession?.messages.length ?? 0) > 0;
 
@@ -1077,12 +1034,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 </span>
               )}
               <Select
-                value={sessionModelPreset}
-                onChange={(v) => setSessionModelPreset(effectiveSessionId, v)}
-                options={chatModelSelectOptions}
+                value={sessionProvider}
+                onChange={(v) => setSessionModelPreset(effectiveSessionId, v as SelectableProvider)}
+                options={chatProviderOptions}
                 disabled={globalIsLoading || sessionModelLocked}
-                aria-label={t('chat.chatModelAriaLabel')}
-                title={sessionModelLocked ? t('chat.chatModelLockedTitle') : t('chat.chatModelTitle')}
+                aria-label={t('chat.providerAriaLabel')}
+                title={sessionModelLocked ? t('chat.providerLockedTitle') : t('chat.providerTitle')}
                 size="sm"
                 className="min-w-0 max-w-[8.5rem] shrink"
                 anchor="top"

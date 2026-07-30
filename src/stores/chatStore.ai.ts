@@ -200,9 +200,9 @@ export function createAiActions(
       // fresh session 읽기 (caller가 truncation 등으로 변경했을 수 있음)
       const session = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
       const isSelectionRequest = contextMode === 'selection' && !!selectionScopeId;
-      // 요청 실행 설정을 한 번만 캡처: 이후 전역/세션 모델이 바뀌어도 이 요청의 모델은 고정된다.
-      // (세션별 modelPreset이 있으면 그것을, 없으면 전역 chat 기본값을 사용)
-      const runConfig = resolveModelRunConfig({ ...(session?.modelPreset ? { preset: session.modelPreset } : {}) });
+      // 요청 실행 설정을 한 번만 캡처: 이후 전역/세션 provider가 바뀌어도 이 요청의 모델은 고정된다.
+      // (세션에 고정된 provider가 있으면 그것을, 없으면 전역 provider를 사용)
+      const runConfig = resolveModelRunConfig({ ...(session?.modelPreset ? { provider: session.modelPreset } : {}) });
       const project = useProjectStore.getState().project;
       const webSearchEnabled = get().webSearchEnabled;
 
@@ -351,7 +351,6 @@ export function createAiActions(
       // Assistant 빈 메시지 추가 (스트리밍 버블)
       // 실행 출처 메타데이터를 캡처된 runConfig에서 만든다(기록 모델 = 실제 호출 모델 보장).
       const initialAssistantMetadata: NonNullable<ChatMessage['metadata']> = {
-        requestedModelPreset: runConfig.requestedPreset,
         resolvedModel: runConfig.resolvedModel,
         provider: runConfig.provider === 'mock' ? 'openai' : runConfig.provider,
         ...(runConfig.reasoningEffort ? { reasoningEffort: runConfig.reasoningEffort } : {}),
@@ -875,7 +874,7 @@ export function createAiActions(
 
       // /web 경로도 run config를 한 번만 캡처 (세션 모델 우선, 이후 전역 변경과 무관)
       const webSession = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
-      const webRunConfig = resolveModelRunConfig({ ...(webSession?.modelPreset ? { preset: webSession.modelPreset } : {}) });
+      const webRunConfig = resolveModelRunConfig({ ...(webSession?.modelPreset ? { provider: webSession.modelPreset } : {}) });
       const webSearchSpec = getBuiltInWebSearchSpec(webRunConfig.provider);
       const initialToolsInProgress = [webSearchSpec?.toolName ?? 'web_search'];
 
@@ -883,7 +882,6 @@ export function createAiActions(
         role: 'assistant',
         content: '',
         metadata: {
-          requestedModelPreset: webRunConfig.requestedPreset,
           resolvedModel: webRunConfig.resolvedModel,
           provider: webRunConfig.provider === 'mock' ? 'openai' : webRunConfig.provider,
           toolCallsInProgress: initialToolsInProgress,

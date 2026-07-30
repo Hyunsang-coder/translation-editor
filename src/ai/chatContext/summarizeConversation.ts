@@ -1,40 +1,32 @@
 /**
  * 증분 대화 요약 (Phase 3)
  *
- * 오래된 대화 구간을 "누적 요약 + 새 구간"으로 접는다. 세션 채팅 모델과 분리된
- * 저비용 모델을 사용하며(§2, §15.4), 사용자가 채팅 모델을 바꿔도 같은 provider 안에서는
- * 요약 모델이 따라 바뀌지 않는다. 요약 실패/빈 응답 시 기존 요약을 그대로 유지해
- * transcript 무손실을 보장한다(§7.3).
+ * 오래된 대화 구간을 "누적 요약 + 새 구간"으로 접는다. 채팅 본문과 같은 모델을 쓰되
+ * effort만 medium으로 낮춘 내부 호출이며(§2, §15.4), 사용자에게 노출되지 않는다.
+ * 요약 실패/빈 응답 시 기존 요약을 그대로 유지해 transcript 무손실을 보장한다(§7.3).
  */
 import type { ChatMessage } from '@/types';
 import type { ModelRunConfig } from '@/ai/config';
-import { resolveModelFromPreset } from '@/ai/config';
+import { resolveModelForUse } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { withRetry } from '@/ai/retry';
 
 /** 요약 출력 토큰 상한(저비용·짧은 요약). */
 const SUMMARY_MAX_TOKENS = 4_096;
 
-/** provider별 저비용 요약 프리셋. */
-const SUMMARY_PRESET_BY_PROVIDER: Record<'openai' | 'anthropic', string> = {
-  anthropic: 'claude-haiku-4-5',
-  openai: 'gpt-5.6-luna-medium',
-};
-
 /**
  * 실행 runConfig에서 요약용 저비용 runConfig를 파생한다.
+ * - 모델·effort는 `MODEL_BY_USE[provider].summary`가 정한다(요약만 effort medium).
  * - API 키/temperature는 base에서 그대로 물려받아(같은 인증) 사용한다.
  * - provider가 mock/미지원이면 base를 그대로 반환한다.
  */
 export function resolveSummaryModelRunConfig(base: ModelRunConfig): ModelRunConfig {
   if (base.provider !== 'openai' && base.provider !== 'anthropic') return base;
-  const preset = SUMMARY_PRESET_BY_PROVIDER[base.provider];
-  const resolved = resolveModelFromPreset(preset);
+  const spec = resolveModelForUse(base.provider, 'summary');
   return Object.freeze({
-    requestedPreset: preset,
-    resolvedModel: resolved.model,
-    provider: resolved.provider,
-    ...(resolved.reasoningEffort ? { reasoningEffort: resolved.reasoningEffort } : {}),
+    resolvedModel: spec.model,
+    provider: base.provider,
+    reasoningEffort: spec.effort,
     ...(base.temperature !== undefined ? { temperature: base.temperature } : {}),
     ...(base.openaiApiKey ? { openaiApiKey: base.openaiApiKey } : {}),
     ...(base.anthropicApiKey ? { anthropicApiKey: base.anthropicApiKey } : {}),
@@ -102,7 +94,7 @@ export async function summarizeConversation(input: {
 
   const summaryRc = resolveSummaryModelRunConfig(runConfig);
   const model = createChatModel(undefined, {
-    useFor: 'chat',
+    useFor: 'summary',
     runConfig: summaryRc,
     maxTokens: SUMMARY_MAX_TOKENS,
   });

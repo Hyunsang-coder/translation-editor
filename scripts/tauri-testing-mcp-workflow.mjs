@@ -264,7 +264,7 @@ async function runWorkflow() {
   const toolbarChatSelector = "button[data-testid='toolbar-menu-chat']";
   const chatSendButtonSelector = "button[data-testid='chat-send-button'], [data-testid='chat-composer-container'] ~ div button[type='submit']";
   const chatComposerEditableSelector = "[data-testid='chat-composer-container'] [contenteditable='true']";
-  const chatModelSelectSelector = "button[data-testid='chat-model-select']";
+  const chatProviderSelectSelector = "button[data-testid='chat-model-select']";
   const assistantMessageSelector = "div[data-testid='chat-message-assistant']";
   const sourceText = [
     '1. 결제 API 통합 체크리스트',
@@ -448,25 +448,20 @@ async function runWorkflow() {
       visible: true,
     });
 
-    // 가능하면 Anthropic 모델을 선택해 키 불일치로 인한 실패를 줄임
-    const modelSelectReady = await tryTool(client, 'tauri_dom_wait_for_selector', {
-      selector: chatModelSelectSelector,
+    // 가능하면 Anthropic을 선택해 키 불일치로 인한 실패를 줄임.
+    // 선택지는 provider 2개뿐이다(용도별 모델은 앱이 고정, ADR-0012).
+    const providerSelectReady = await tryTool(client, 'tauri_dom_wait_for_selector', {
+      selector: chatProviderSelectSelector,
       timeout: 5000,
     });
-    if (modelSelectReady) {
-      await callTool(client, 'tauri_dom_click', { selector: chatModelSelectSelector });
-      let modelSelected = await tryTool(client, 'tauri_dom_click_by_text', { text: 'Opus 4.6', visibleOnly: true, exact: true });
-      if (!modelSelected) {
-        modelSelected = await tryTool(client, 'tauri_dom_click_by_text', { text: 'Sonnet 4.5', visibleOnly: true, exact: true });
+    if (providerSelectReady) {
+      await callTool(client, 'tauri_dom_click', { selector: chatProviderSelectSelector });
+      let providerSelected = await tryTool(client, 'tauri_dom_click_by_text', { text: 'Anthropic', visibleOnly: true, exact: true });
+      if (!providerSelected) {
+        providerSelected = await tryTool(client, 'tauri_dom_click', { selector: "[role='option']", index: 0 });
       }
-      if (!modelSelected) {
-        modelSelected = await tryTool(client, 'tauri_dom_click_by_text', { text: 'Haiku 4.5', visibleOnly: true, exact: true });
-      }
-      if (!modelSelected) {
-        modelSelected = await tryTool(client, 'tauri_dom_click', { selector: "[role='option']", index: 0 });
-      }
-      if (!modelSelected) {
-        log('[warn] Could not explicitly switch chat model; continuing with current model');
+      if (!providerSelected) {
+        log('[warn] Could not explicitly switch chat provider; continuing with current provider');
       }
     }
 
