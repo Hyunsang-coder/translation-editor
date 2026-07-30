@@ -81,6 +81,17 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 |------|-------|
 | `e2e/user-story.spec.ts` | 프로젝트 생성, 문서 입력, 번역/리뷰 UI, 히스토리, 컨텍스트 메뉴 (7 TC) |
 | `e2e/paste-normalizer.spec.ts` | HTML 붙여넣기 정규화 (Confluence, XSS, 테이블 등) |
+| `e2e/selection-editing.spec.ts` | 인라인 툴바, 선택 재번역/적용, 멀티블록 선택, 표 셀 선택(채팅·코멘트·복사) |
+| `e2e/alignment-view.spec.ts` | 정렬 검사 뷰(문단 대조, 불일치 배너, 문서 보기 점프) |
+
+**여러 블록이 필요한 테스트는 문서를 주입한다** (`seedProject` in `selection-editing.spec.ts`):
+
+- 키보드로 문단을 늘리면(`ControlOrMeta+End` → Enter → 타이핑) 캐럿이 레이아웃에 따라 다른 곳에 놓여 **두 문단이 하나로 합쳐진다**. 실제로 이 셋업 사고로 테스트가 거짓 실패했다(단독 실행은 통과, 전체 실행은 실패).
+- 문서 본문은 `segments`를 타고 `blocks`에서 조립된다(`buildTargetDocument`). `segments: []`면 에디터가 **빈 문서**로 뜬다.
+- 표처럼 문서 구조를 바꾸는 픽스처는 별도 프로젝트(별도 `describe` + `beforeEach`)로 분리한다. 공용 문서에 표를 넣으면 기존 테스트의 문단 개수 단언이 깨진다.
+- 표 다중 셀 선택은 `page.mouse`로 첫 셀 → 마지막 셀 드래그해야 `CellSelection`이 만들어진다. `selectText()`로는 안 된다.
+- 클립보드 검증은 `page.context().grantPermissions(['clipboard-read', 'clipboard-write'])` 선행 필수(기본 설정은 권한을 주지 않는다).
+- 인라인 툴바는 150ms 디바운스 후 뜬다 — 병렬 부하에서 간헐적으로 놓칠 수 있다(관측된 flake).
 
 ### Test Harness
 

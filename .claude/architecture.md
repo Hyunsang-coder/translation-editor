@@ -63,14 +63,14 @@
 
 ### 3. Tool Calling Architecture
 
-Implemented in `src/ai/chat.ts` with LangChain tools:
-- `get_source_document`: Fetch Source as Markdown
-- `get_target_document`: Fetch Target as Markdown
-- `suggest_translation_rule`: AI proposes new rules
-- `suggest_project_context`: AI proposes context additions
-- `confluence_word_count`: Count words in Confluence pages (번역 분량 산정)
+Bound in `src/ai/chat.ts`; the **single source of truth is `src/ai/tools/toolRegistry.ts`** — each descriptor carries the profiles it belongs to, its trust level, and its output cap. Do not maintain a second list here.
 
-**Proactive Tool Usage**: AI calls document tools first rather than guessing. Tool calling loop allows up to 6 steps.
+- Profiles: `general`, `selection-source`, `selection-target`, `selection-retranslate` (binds zero tools). `resolveChatToolNames()` derives the allowlist from profile + runtime requirements.
+- Selection profiles swap whole-document reads for scoped ones: `get_selection_surroundings` (앞뒤 번역 단위, 방향별 최대 8) and `get_aligned_selection_context` (원문↔번역문 짝, 양방향).
+- Write-ish tools only ever *propose* (`propose_selection_edit`, `propose_project_memory_change`, `suggest_*`); nothing mutates the document or DB directly ([ADR-0003](../docs/adr/0003-no-auto-apply-preview-first.md)).
+- The tool list must not vary with message content — Anthropic renders the prefix as tools → system → messages, so a shifting list invalidates the system + history cache every turn.
+
+**Proactive Tool Usage**: AI calls document tools first rather than guessing. Tool loop is 6 steps, or 4 when a selection is attached.
 
 **MCP Direct Invocation**: `confluence_word_count`는 MCP tool을 Tauri command로 직접 호출하여 LangChain을 거치지 않음. 페이지 전체 내용이 LLM 컨텍스트에 노출되지 않아 토큰 절약.
 

@@ -823,20 +823,28 @@ npx tauri build --bundles nsis   # Windows
 Selection-based AI work uses runtime anchors instead of copying selected text into the composer.
 
 ```text
-TipTap selection
-→ SelectionAnchor DecorationSet (mapped through transactions)
+TipTap selection (selection.ranges — one per table cell)
+→ normalizeSelectionAnchorRanges (clamp into textblocks, trim, count blocks)
+→ SelectionAnchor DecorationSet, one inline decoration per range
 → SelectionContext metadata + selectionScopeId
 → proposal-only AI result
 → shared preview
-→ anchor/project/text validation
+→ anchor/project/text validation (single range only)
 → one replace transaction (one-step Undo)
 ```
 
-- `TranslationUnitId` is attached to paragraph/heading/tableCell nodes and reattached after full translation/polishing when topology matches.
-- Source selections are question-only. Only Target selections can create/apply edit proposals.
+**Reference vs apply** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)) — any selection can be a chat reference; only a **single-range, single-block** selection can be edited.
+
+- Read `selection.ranges`, never `selection.from/to`. A multi-cell table drag is a `CellSelection` whose `from/to` point at the head cell only, and not in document order. Merging ranges into one min/max span is wrong too — selecting columns 1 and 3 of a 3-column table would swallow column 2.
+- `SelectionAnchorRecord.ranges[]` holds them; `anchorId` stays singular so the 22 `removeSelectionAnchor`/`resolveSelectionAnchor` call sites need no guards.
+- Apply paths must go through `getSingleAnchorRange` — using `anchor.ranges[0]` directly overwrites one cell of a multi-cell selection. `applySelectionEdit` replaces the range with plain text, so multi-block/multi-range would flatten paragraphs, list items, and cells into one block.
+- `SelectionContext.spansMultipleBlocks` gates the two entry points: retranslation is refused **before** generating (otherwise the API call is wasted and only apply fails), and `propose_selection_edit` is dropped from the tool list (`chatStore.ai.ts`).
+- `normalizeSelectionAnchorRange` clamps into the first/last textblock the range covers — Cmd+A is an `AllSelection` whose `from=0` resolves to the doc node, so a same-parent check alone still rejects it. Edge whitespace is trimmed out so the anchor text matches the trimmed `SelectionContext.text`, then `blockCount` is recounted (trimming can drop a block's whole contribution).
+- Anchor text is read **with** the `'\n'` block separator (`readAnchorText`/`readAnchorRangesText`). Without it, merging two paragraphs leaves the text identical (`One`+`Two` → `OneTwo`) and the structural change is never marked stale.
+- `TranslationUnitId` is attached to paragraph/heading/tableCell nodes and reattached after full translation/polishing when topology matches. A table cell therefore yields **two** units (the cell and its paragraph) with identical text — `selectionTools.dropDuplicatedContainers` removes the ancestor at the tool level. Do not fix this in `TRANSLATION_UNIT_TYPES`: the alignment view shares `collectTranslationUnits`.
+- Source selections cannot edit the document, but they **can** read the counterpart translation via `get_aligned_selection_context` (`panel` argument). `get_target_document` stays out of the source profile — contrast is scoped to the selection.
 - Anchors are runtime-only. Hydrated proposals must be marked `detached`.
 - Anchor lifecycle: `applySelectionEdit` removes the anchor on success; every other exit path (chip dismiss, proposal discard/stale, replacing the selection, project switch) must call `removeSelectionAnchor`, or the highlight lingers.
-- `normalizeSelectionAnchorRange` trims edge whitespace out of the range so the anchor's `textBetween` matches the trimmed `SelectionContext.text` (otherwise apply always reads as stale).
 - Full document replacement dispatches the selection-anchor clear meta before replacing content.
 - Cmd/Ctrl+K or Cmd/Ctrl+L must create `composerSelection` metadata; never append the selected text to raw composer content.
 

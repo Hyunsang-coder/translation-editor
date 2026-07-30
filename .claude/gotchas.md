@@ -20,6 +20,12 @@ Critical implementation warnings learned from past issues.
 
 8. **ProseMirror Base Style Override**: `.ProseMirror` base styles (`px-6 py-4`, `min-h-[200px]`) apply to all TipTap editors. For chat composer, explicitly override with `.chat-composer-tiptap` using `@apply px-0 py-0 min-h-0`. Check full CSS inheritance chain when modifying UI.
 
+154. **선택 범위는 `selection.ranges`로 읽을 것 (`from/to` 금지)**: 표에서 여러 셀을 드래그하면 `CellSelection`이고 `selection.from/to`는 **head 셀 하나**만 가리킨다(문서 순서도 아님 — 실측 시 `[[23,27],[3,7],[9,13],[17,21]]`). `from/to`를 쓰면 조용히 한 셀만 처리된다(코멘트·복사가 실제로 그랬다). `ranges`의 min/max span으로 합치는 것도 틀렸다 — 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다. 범위마다 따로 처리하고 `from` 기준으로 정렬할 것(`buildSelectionBubble`). 코멘트 마크도 한 chain에서 범위마다 적용한다.
+
+155. **Cmd+A는 `sameParent`가 아니라 클램핑으로 처리**: 전체 선택은 `AllSelection`이고 `from=0`이 doc 노드를 가리켜 `isTextblock`이 false다. 동일 문단 검사를 풀어도 여전히 거부되므로, 범위가 덮는 첫/마지막 textblock **내부로 좁혀야** 한다(`textblockSpan`). 가장자리 공백 트림 뒤에는 블록 수를 다시 세야 한다 — 트림으로 앞 블록의 기여분이 공백뿐이었으면 사라진다.
+
+156. **앵커 텍스트는 블록 구분자를 포함해 읽을 것**: `doc.textBetween(from, to)`를 구분자 없이 쓰면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡는다. `readAnchorText`가 `'\n'`을 넣는다. 단일 블록에서는 두 값이 문자 단위로 동일하므로 무회귀이고, `SelectionContext.text`(`'\n'` + trim)와 값이 일치해 proposal 검증이 옳아진다.
+
 ## AI / Chat
 
 9. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.
@@ -51,6 +57,12 @@ Critical implementation warnings learned from past issues.
 145. **Target Polishing Is Not Review**: 폴리싱은 `src/ai/polishDocument.ts`의 Target-only 재작성 워크플로우다. ReviewPanel의 `reviewIssues`, 검수 chunk, source 문서를 사용하지 말 것. 버튼은 에디터 헤더에서 번역/검수 다음에 위치하며 Target이 비어 있으면 disabled여야 한다.
 
 146. **Polishing Prompt Must Preserve Meaning**: 폴리싱 프롬프트는 원어민 관점의 collocation, 표현, 문장 구조, 톤을 자연스럽게 다듬되 의미 변경, 정보 추가, 정보 삭제를 금지해야 한다. 번역 품질 개선처럼 보이더라도 Source 없이 새 의미를 추정하면 안 된다.
+
+157. **도구 인자 기본값을 함수 시그니처에 박지 말 것**: `getSelectionSurroundings(doc, ids, beforeUnits = 0, afterUnits = 0)`처럼 두면 "생략"과 "0개 요청"이 구분되지 않아 `clampUnits`의 기본값이 죽는다. 실제로 모델이 인자 없이 호출하면 선택 영역만 돌아와 **도구 스텝만 낭비**했다. 시그니처는 `beforeUnits?: number`로 두고 기본값은 clamp 함수 한 곳에서 정한다. zod 스키마의 `min/max`도 clamp와 같은 값으로 유지할 것 — 스키마가 먼저 거절하므로 어긋나면 clamp가 무의미하다.
+
+158. **표 셀은 번역 단위 2개로 세어진다**: `TRANSLATION_UNIT_TYPES`에 `paragraph`와 `tableCell`이 모두 있어 셀 하나가 **셀 + 안쪽 문단** 두 칸을 차지하고 텍스트가 중복된다(`selected: ["셀1","셀1"]`, 표 뒤 문단의 `before: ["셀2","셀2"]`). 앞뒤 N칸이 표에서 실질 N/2칸이 된다. `selectionTools.dropDuplicatedContainers`가 조상 단위를 **자손과 텍스트까지 같을 때만** 버린다(셀 안에 문단이 여러 개면 안 걸린다). `TRANSLATION_UNIT_TYPES` 자체를 고치지 말 것 — `collectTranslationUnits`를 정렬 검사 뷰(`alignUnits.ts`)와 문서 조회 도구가 같이 쓴다. `documentTools`의 `unitIds` 경로에도 같은 중복이 남아 있다.
+
+159. **선택 문맥의 "앞뒤 N칸"은 인덱스 구간이 아니다**: `selectedUnitRange`는 선택 유닛의 최소~최대 인덱스를 준다. 그 구간을 그대로 `selected`로 쓰면 떨어져 있는 선택(표 1·3열)에서 고르지 않은 2열이 "선택됨"으로 모델에 전달된다. 구간은 before/after 계산에만 쓰고 `selected`는 실제 id로 필터할 것(id가 없는 유닛은 판정 불가라 위치 기준으로 남긴다).
 
 ## AbortController / Async
 

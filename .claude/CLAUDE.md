@@ -89,6 +89,19 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **선택 영역을 문단·표를 가로질러 채팅에 넣을 수 있다** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)): 여러 문단을 드래그하면 "한 문단 안의 텍스트만 선택해주세요."로 막혔다. 제약은 `normalizeSelectionAnchorRange`의 `sameParent` 가드 하나이고 계획 문서 §7.4의 MVP 한계였다. 채팅 컨텍스트는 `from/to`를 안 쓰고(`ChatSelectionSnapshot`) 선택 도구도 유닛 배열을 다루므로 멀티블록에 이미 안전했다 — 진짜로 막히는 곳은 적용 경로 하나다.
+  - **`sameParent` → 클램핑**: 범위가 덮는 첫/마지막 textblock 내부로 좁힌다(`textblockSpan`). Cmd+A는 `AllSelection`이고 `from=0`의 부모가 doc 노드라 **`sameParent`만 풀어도 여전히 막혔다**. 트림으로 앞뒤 블록의 기여분이 사라질 수 있어 `blockCount`를 다시 센다. 단일 블록 무회귀는 전체 `(from,to)` 조합 완전탐색으로 확인(일치 873, 신규 허용 715, 회귀 0).
+  - **앵커 텍스트에 블록 구분자 `'\n'`(`readAnchorText`)**: 구분자가 없으면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡았다. `SelectionContext.text`와 값이 일치하게 돼 proposal 검증(`ChatContent`)이 구조적으로 옳아진다 — 단일 블록에서는 두 값이 문자 단위로 동일하다.
+  - **표 다중 셀 선택 지원 + 코멘트·복사 버그 수정**: `CellSelection`은 셀마다 range가 하나씩이고 `selection.from/to`는 **head 셀만** 가리킨다(문서 순서도 아님). 앵커를 `ranges[]`로 확장해 데코레이션·매핑·stale 판정이 범위별로 돈다. `anchorId`는 단수를 유지해 호출부 22곳은 무변경. `buildSelectionBubble`이 ranges를 만들므로 코멘트(범위마다 마크)·복사·채팅이 같은 값을 본다 — 기존에는 span 하나에 칠해 고르지 않은 셀까지 마킹됐다. **ranges의 min/max span은 쓸 수 없다**: 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다.
+  - **적용 경로는 단일 범위만**: `getSingleAnchorRange`가 null이면 거부. 재번역은 생성 전에 막고(API 호출 낭비 방지) `propose_selection_edit`은 도구 목록에서 뺀다. 셀 **안쪽** 선택은 단일 범위라 재번역까지 그대로 된다.
+  - **상한은 멀티블록에만 4,000자** — 단일 문단에 걸면 긴 문단 재번역이 오늘보다 나빠지는 회귀다. 선택 본문은 user 메시지에 그대로 실린다(`prompt.ts`의 SELECTION 블록).
+  - **버린 대안**: 블록 스냅 + 유닛 단위 교체는 모델의 유닛 개수 일치율 측정이 선행 조건이라 미룸(ADR-0010 참조).
+- **선택 문맥 조회 창 확대 + Source 선택 대조 허용**: 모델이 볼 수 있는 범위가 실사용에 비해 좁았다.
+  - **앞뒤 문맥 2 → 8개, 생략 시 0 → 2개**: 단위는 문단·제목·표 셀이라 2개로는 표 한 줄도 못 채운다. 기본값 0은 더 나빴다 — 인자 없이 부르면 선택 영역만 돌아와 **도구 스텝만 낭비**했다. 함수 시그니처의 `= 0`도 제거해야 한다(박아두면 "생략"과 "0개 요청"이 구분되지 않아 `clampUnits`의 기본값이 죽는다). zod 스키마의 `max`도 함께 올릴 것 — 스키마가 먼저 거절한다.
+  - **출력 상한**: `get_selection_surroundings` 4,000 → 8,000자, `get_aligned_selection_context` 6,000 → 16,000자. 전자는 **문서 전체 조회(8,000)보다 좁았다** — 프롬프트가 전체 조회 대신 이 도구를 쓰라고 유도하는데 창이 더 좁으면 앞뒤가 맞지 않는다. 후자는 같은 구간을 두 언어로 담는다. context window는 180k~360k라 기존 값이 근거 없이 보수적이었다.
+  - **Source 선택도 `get_aligned_selection_context`**: 원문을 고르고 "이 문장 번역이 어떻게 됐어?"를 물을 수 있어야 한다. `collectAlignedSourceUnits`는 id가 일치하는 유닛을 고르는 함수라 문서 인자를 바꾸면 그대로 반대 방향이 된다 — `panel` 파라미터로 확장 기준 문서를 고르고 결과의 source/target 라벨만 맞춘다. `get_target_document`는 여전히 안 준다(대조는 선택 구간으로 한정).
+  - **표 셀이 두 칸으로 세어지던 문제**: `tableCell`과 그 안의 `paragraph`가 **둘 다** 번역 단위라 `selected: ["셀1","셀1"]`, 표 뒤 문단의 `before: ["셀2","셀2"]`가 됐다 — 앞뒤 8칸이 표에서 실질 4칸. `dropDuplicatedContainers`가 조상 단위를 자손과 텍스트까지 같을 때만 버린다. **단위 정의는 안 건드렸다** — `collectTranslationUnits`를 정렬 검사 뷰가 같이 쓰므로 짝 맞추기 결과가 함께 바뀐다.
+  - **떨어져 있는 선택의 주변 조회**: `selectedUnitRange`의 최소~최대 인덱스 구간을 `selected`로 그대로 쓰면 표 1·3열 선택에서 2열이 "선택됨"으로 전달됐다. 구간은 before/after 계산에만 쓴다.
 - **번역 응답 파싱에서 원문 유실 수정 (`markdownConverter.ts`)**: 표로 시작하는 문서를 번역하면 표 사이의 문단·리스트가 통째로 사라지고 링크가 소실됐다. 모델을 바꿔도 재현되던 결정적 버그이며, 원인은 전부 `parseTranslationResponseToTipTap`의 HTML 경로 하나였다. LLM 입력(원문 직렬화)은 온전했다.
   - **라우팅 오판이 근본 원인**: `looksLikeBlockHtml`이 **첫 태그만** 보고 판정한다. 번역 직렬화는 표를 항상 raw HTML로 쓰므로(`TableForTranslation`) 표로 시작하는 문서는 응답도 `<table`로 시작하고, "마크다운 + HTML 표" 혼합 응답이 통째로 `convertHtmlListsToMarkdown`(DOM 파서)에 들어갔다. 판정에서 표 세그먼트를 제외한다 — `parseMarkdownWithTables`가 혼합을 이미 무손실로 처리하고, 표 밖 `<ul>`/`<p>`도 `html: true` 경로가 알아서 파싱한다(실측 확인). HTML 구제 경로 자체는 진짜 HTML 응답용으로 남겼다.
   - **텍스트 노드 유실**: `convertHtmlListsToMarkdown`이 `doc.body.children`(Element만)을 순회해, 표 사이 마크다운은 전부 텍스트 노드라 조용히 버려졌다. `childNodes` 순회로 바꿔 그대로 흘려보낸다.
