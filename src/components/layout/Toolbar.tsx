@@ -118,7 +118,7 @@ export function Toolbar(): JSX.Element {
             100%일 때는 방금 조작했을 때만 잠깐 보여주고 사라진다. */}
         {(zoomVisible || zoomPercent !== 100) && (
           zoomPercent === 100 ? (
-            <span className="px-2 h-[26px] inline-flex items-center rounded-md bg-editor-bg border border-editor-border text-[11px] font-medium text-editor-muted animate-in fade-in duration-150 shrink-0 tabular-nums">
+            <span className="px-2 h-[26px] inline-flex items-center rounded-md bg-editor-bg border border-editor-border text-[11px] font-medium text-editor-muted animate-fade-in shrink-0 tabular-nums">
               100%
             </span>
           ) : (
