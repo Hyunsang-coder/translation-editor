@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, ClipboardCheck, Highlighter } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
@@ -11,23 +11,42 @@ import { PROVIDER_LABELS, type SelectableProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { shortcutLabel } from '@/utils/platform';
 
+/** 검수·폴리싱 버튼의 공통 골격. 상태별 테두리/배경만 갈아끼운다. */
+const SECONDARY_BUTTON_CLASS =
+  'h-[34px] px-2.5 rounded-md border text-[13px] font-semibold flex items-center gap-1.5 transition-colors '
+  + 'disabled:cursor-not-allowed '
+  + 'focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2';
+
+// 툴바 헤더가 bg-editor-surface라 hover도 surface면 아무 변화가 없다 (다른 툴바 버튼과 동일하게 border 색을 쓴다).
+// 흐리게 처리는 idle 쪽에만 둔다 — 실행 중에도 disabled지만 그때는 진행 표시라 또렷해야 한다.
+const SECONDARY_IDLE_CLASS = 'border-editor-border text-editor-text hover:bg-editor-border disabled:opacity-50';
+const SECONDARY_RUNNING_CLASS = 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-400';
+
+const SHORTCUT_CHIP_CLASS = 'text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded';
+
 /**
- * 상단 툴바의 AI 워크플로 액션 (번역 → 검수 → 폴리싱) + 모델 선택.
+ * 상단 툴바의 AI 워크플로 액션 (번역 · 검수 · 폴리싱) + 모델 선택.
  *
- * 실행 로직은 `EditorCanvasTipTap`이 소유한다(양쪽 TipTap 인스턴스·프리뷰 모달과
- * 결합되어 있어 이동이 불가). 여기서는 `uiStore`의 nonce 트리거만 올리고,
- * 진행 상태는 `uiStore.translateLoading` / `polishLoading`으로 되돌려 받는다.
- * `reviewStore.reviewTrigger` ← `ReviewPanel` 과 같은 패턴이다.
+ * 세 액션 모두 "클릭 → 시작 모달 → 실행"으로 동작한다. 실행 로직은 각 소유자가
+ * 갖고 있어(번역·폴리싱은 `EditorCanvasTipTap`, 검수는 `ReviewPanel`) 여기서는
+ * `uiStore`의 nonce 트리거만 올린다. 진행 상태는 `uiStore.translateLoading` /
+ * `polishLoading`과 `reviewStore.isReviewing`으로 되돌려 받아 버튼에 표시한다.
+ *
+ * 검수 모달만 여기 있는 이유: `ReviewPanel`은 사이드바가 닫혀 있으면 언마운트라
+ * 모달을 열 수 없다. 실행 요청은 `reviewStore.requestReviewRun`이 상태로 들고
+ * 있다가 패널이 마운트되면 소비한다.
  */
 export function WorkflowActions(): JSX.Element {
   const { t } = useTranslation();
 
-  const { translateLoading, polishLoading, triggerTranslate, triggerPolish, openReviewPanel } = useUIStore(
+  const { translateLoading, polishLoading, reviewTrigger, triggerTranslate, triggerPolish, triggerReview, openReviewPanel } = useUIStore(
     useShallow((s) => ({
       translateLoading: s.translateLoading,
       polishLoading: s.polishLoading,
+      reviewTrigger: s.reviewTrigger,
       triggerTranslate: s.triggerTranslate,
       triggerPolish: s.triggerPolish,
+      triggerReview: s.triggerReview,
       openReviewPanel: s.openReviewPanel,
     }))
   );
@@ -39,6 +58,29 @@ export function WorkflowActions(): JSX.Element {
   );
 
   const issueCount = useReviewStore((s) => s.getAllIssues().length);
+  const isReviewing = useReviewStore((s) => s.isReviewing);
+
+  // 검수 시작 모달 (⌘R 단축키도 uiStore nonce를 통해 같은 모달을 연다)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewInstruction, setReviewInstruction] = useState('');
+
+  const openReviewModal = useCallback(() => {
+    if (useReviewStore.getState().isReviewing) return;
+    setReviewInstruction('');
+    setReviewModalOpen(true);
+  }, []);
+
+  const prevReviewTriggerRef = useRef(reviewTrigger);
+  useEffect(() => {
+    if (reviewTrigger > prevReviewTriggerRef.current) openReviewModal();
+    prevReviewTriggerRef.current = reviewTrigger;
+  }, [reviewTrigger, openReviewModal]);
+
+  const startReview = useCallback(() => {
+    setReviewModalOpen(false);
+    openReviewPanel();
+    useReviewStore.getState().requestReviewRun(reviewInstruction);
+  }, [openReviewPanel, reviewInstruction]);
 
   const openaiEnabled = useAiConfigStore((s) => s.openaiEnabled);
   const anthropicEnabled = useAiConfigStore((s) => s.anthropicEnabled);
@@ -56,6 +98,7 @@ export function WorkflowActions(): JSX.Element {
   }, [openaiEnabled, anthropicEnabled, provider]);
 
   return (
+    <>
     <div className="flex items-center gap-1.5 min-w-0 whitespace-nowrap">
       {/* 번역 실행 — 기본 액션 */}
       <button
@@ -80,48 +123,55 @@ export function WorkflowActions(): JSX.Element {
         )}
       </button>
 
-      <span className="w-3 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
-
       {/* 검수 */}
       <button
         type="button"
-        onClick={() => openReviewPanel()}
-        className="h-[34px] px-2.5 rounded-md border border-editor-border text-editor-text text-[13px] font-semibold flex items-center gap-1.5 hover:bg-editor-surface transition-colors focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        onClick={triggerReview}
+        disabled={isReviewing}
+        className={`${SECONDARY_BUTTON_CLASS} ${isReviewing ? SECONDARY_RUNNING_CLASS : SECONDARY_IDLE_CLASS}`}
         title={t('editor.reviewTitle', '번역 검수')}
         data-testid="editor-review-button"
       >
-        <ClipboardCheck size={15} />
-        <span>{t('editor.review', '검수')}</span>
-        {issueCount > 0 && (
-          <span className="min-w-[17px] h-[17px] px-1 bg-primary-500 text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
-            {issueCount}
-          </span>
+        {isReviewing ? (
+          <>
+            <span className="w-3.5 h-3.5 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+            <span>{t('status.reviewing', '검수 중')}</span>
+          </>
+        ) : (
+          <>
+            <ClipboardCheck size={15} />
+            <span>{t('editor.review', '검수')}</span>
+            {issueCount > 0 && (
+              <span className="min-w-[17px] h-[17px] px-1 bg-primary-500 text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
+                {issueCount}
+              </span>
+            )}
+            <span className={SHORTCUT_CHIP_CLASS}>{shortcutLabel('R')}</span>
+          </>
         )}
-        <span className="text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded">
-          {shortcutLabel('R')}
-        </span>
       </button>
-
-      <span className="w-3 h-0.5 bg-editor-border shrink-0" aria-hidden="true" />
 
       {/* 폴리싱 */}
       <button
         type="button"
         onClick={triggerPolish}
         disabled={!hasTargetContent || polishLoading}
-        className="h-[34px] px-2.5 rounded-md border border-editor-border text-editor-text text-[13px] font-semibold flex items-center gap-1.5 hover:bg-editor-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className={`${SECONDARY_BUTTON_CLASS} ${polishLoading ? SECONDARY_RUNNING_CLASS : SECONDARY_IDLE_CLASS}`}
         title={t('review.polish', '폴리싱')}
         data-testid="editor-polish-button"
       >
         {polishLoading ? (
-          <span className="w-3.5 h-3.5 border-2 border-editor-border border-t-primary-500 rounded-full animate-spin" />
+          <>
+            <span className="w-3.5 h-3.5 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+            <span>{t('editor.polishing', '폴리싱 중…')}</span>
+          </>
         ) : (
-          <Highlighter size={15} />
+          <>
+            <Highlighter size={15} />
+            <span>{t('review.polish', '폴리싱')}</span>
+            <span className={SHORTCUT_CHIP_CLASS}>{shortcutLabel('P')}</span>
+          </>
         )}
-        <span>{t('review.polish', '폴리싱')}</span>
-        <span className="text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded">
-          {shortcutLabel('P')}
-        </span>
       </button>
 
       <div className="w-px h-[20px] bg-editor-border mx-1 shrink-0" />
@@ -138,5 +188,61 @@ export function WorkflowActions(): JSX.Element {
         className="min-w-[118px]"
       />
     </div>
+
+    {/* 검수 시작 모달 — 번역/폴리싱 시작 모달과 같은 형태 */}
+    {reviewModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+          <div className="px-4 py-3 border-b border-editor-border">
+            <h3 className="text-sm font-semibold text-editor-text">
+              {t('editor.reviewModal.title', '검수')}
+            </h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-editor-muted">
+              {t('editor.reviewModal.description', '원문과 번역문을 대조해 오역·누락·불일치를 찾습니다.')}
+            </p>
+            <div>
+              <label className="text-xs font-medium text-editor-text">
+                {t('editor.reviewModal.messageLabel', '추가 지시사항')}
+                <span className="ml-1 text-editor-muted font-normal">
+                  {t('editor.reviewModal.optional', '(선택)')}
+                </span>
+              </label>
+              <textarea
+                value={reviewInstruction}
+                onChange={(e) => setReviewInstruction(e.target.value)}
+                placeholder={t('editor.reviewModal.placeholder', '예: 용어 일관성 위주로 봐주세요.')}
+                className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                autoFocus
+                data-testid="review-instruction-input"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startReview();
+                  if (e.key === 'Escape') setReviewModalOpen(false);
+                }}
+              />
+            </div>
+          </div>
+          <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setReviewModalOpen(false)}
+              className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+            >
+              {t('common.cancel', '취소')}
+            </button>
+            <button
+              type="button"
+              onClick={startReview}
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+              data-testid="review-modal-start"
+            >
+              {t('editor.reviewModal.execute', '검수 시작')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

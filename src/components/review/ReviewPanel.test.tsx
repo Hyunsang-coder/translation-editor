@@ -67,7 +67,7 @@ describe('ReviewPanel - Zustand Selectors', () => {
       initializedProjectId: null,
       totalIssuesFound: 0,
       streamingText: '',
-      reviewTrigger: 0,
+      pendingReviewRun: null,
     });
   });
 

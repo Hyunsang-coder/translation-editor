@@ -4,7 +4,6 @@ import { toast as sonnerToast } from 'sonner';
 import type { EditorUIState, Toast, DockingSidebarState, PanelType, SidebarSide, ChatPanelType, FloatingChatRect } from '@/types';
 import { isChatPanel, chatPanelId } from '@/types';
 import { LAYOUT } from '@/constants/layout';
-import { useReviewStore } from '@/stores/reviewStore';
 import { useChatStore } from '@/stores/chatStore';
 
 // ============================================
@@ -52,13 +51,15 @@ interface UIState extends EditorUIState {
   editorViewMode: EditorViewMode;
   activeAlignmentUnitId: string | null; // 인스펙터가 볼 대상 (target 유닛 id). 비영속.
 
-  // AI 워크플로 (번역/폴리싱) — 실행 로직은 EditorCanvasTipTap이 소유하고,
-  // 툴바는 nonce 트리거로 요청만 보낸다 (reviewStore.reviewTrigger와 동일 패턴).
-  // 비영속(persist 제외).
+  // AI 워크플로 (번역/검수/폴리싱) — 실행 로직은 각 소유자(EditorCanvasTipTap,
+  // ReviewPanel)에 있고 툴바는 nonce 트리거로 요청만 보낸다. 비영속(persist 제외).
+  // reviewTrigger는 "검수 시작 모달 열기"까지다 — 실제 실행 요청은
+  // reviewStore.requestReviewRun이 받는다.
   translateLoading: boolean;
   polishLoading: boolean;
   translateTrigger: number;
   polishTrigger: number;
+  reviewTrigger: number;
 }
 
 interface UIActions {
@@ -157,6 +158,8 @@ interface UIActions {
   setPolishLoading: (loading: boolean) => void;
   triggerTranslate: () => void;
   triggerPolish: () => void;
+  /** 검수 시작 모달 열기 요청 (WorkflowActions가 수신) */
+  triggerReview: () => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -218,6 +221,7 @@ export const useUIStore = create<UIStore>()(
       polishLoading: false,
       translateTrigger: 0,
       polishTrigger: 0,
+      reviewTrigger: 0,
 
       // Focus Mode
       toggleFocusMode: (): void => {
@@ -317,6 +321,8 @@ export const useUIStore = create<UIStore>()(
       },
 
       // Review Panel (delegates to docking model)
+      // 패널을 보여주기만 한다 — 검수 실행은 reviewStore.requestReviewRun의 몫이다.
+      // (여기서 검수를 시작하면 "패널 열기"를 원한 호출자까지 API를 태우게 된다)
       openReviewPanel: (): void => {
         const state = get();
         // review 패널이 어느 사이드에 있는지 찾기
@@ -328,11 +334,6 @@ export const useUIStore = create<UIStore>()(
         if (side) {
           const key = sidebarKey(side);
           const sb = state[key];
-          // 이미 열려있으면 triggerReview
-          if (!sb.hidden && sb.activePanel === 'review') {
-            useReviewStore.getState().triggerReview();
-            return;
-          }
           set({ [key]: { ...sb, hidden: false, activePanel: 'review' as PanelType } });
         } else {
           // 어디에도 없으면 left에 추가
@@ -855,6 +856,10 @@ export const useUIStore = create<UIStore>()(
 
       triggerPolish: (): void => {
         set((state) => ({ polishTrigger: state.polishTrigger + 1 }));
+      },
+
+      triggerReview: (): void => {
+        set((state) => ({ reviewTrigger: state.reviewTrigger + 1 }));
       },
     }),
     {

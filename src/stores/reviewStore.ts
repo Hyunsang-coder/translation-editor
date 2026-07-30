@@ -88,7 +88,15 @@ interface ReviewState {
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
   totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
   streamingText: string;  // 현재 청크의 AI 스트리밍 응답 텍스트
-  reviewTrigger: number;  // 외부에서 검수 시작 요청 트리거 (nonce 증가 시 ReviewPanel에서 검수 시작)
+  /**
+   * 외부(툴바)에서 온 검수 시작 요청. ReviewPanel이 소비(consume)하면 null로 돌아간다.
+   *
+   * nonce가 아니라 요청 객체인 이유: 툴바는 패널을 열면서 동시에 실행을 요청하는데,
+   * 그 순간 ReviewPanel은 아직 마운트 전이라 nonce 증가를 관측할 수 없다
+   * (마운트 시점의 값이 그대로 "이전 값"이 됨). 요청이 상태로 남아 있으면
+   * 새로 마운트된 패널도 첫 effect에서 집어갈 수 있다.
+   */
+  pendingReviewRun: { instruction: string } | null;
 }
 
 interface ReviewActions {
@@ -138,8 +146,15 @@ interface ReviewActions {
 
   /**
    * 외부에서 검수 시작 요청 (ReviewPanel이 감지하여 실행)
+   * @param instruction 이번 실행에만 적용할 추가 지시사항 (빈 문자열이면 없음)
    */
-  triggerReview: () => void;
+  requestReviewRun: (instruction?: string) => void;
+
+  /**
+   * 대기 중인 검수 시작 요청을 가져가면서 비운다 (ReviewPanel 전용).
+   * 요청이 없으면 null.
+   */
+  consumePendingReviewRun: () => { instruction: string } | null;
 
   /**
    * 특정 청크 가져오기
@@ -252,7 +267,7 @@ const initialState: ReviewState = {
   initializedProjectId: null,
   totalIssuesFound: 0,
   streamingText: '',
-  reviewTrigger: 0,
+  pendingReviewRun: null,
 };
 
 export const useReviewStore = create<ReviewStore>((set, get) => ({
@@ -393,11 +408,17 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     });
   },
 
-  triggerReview: () => {
-    const { isReviewing, reviewTrigger } = get();
+  requestReviewRun: (instruction?: string) => {
     // 이미 검수 중이면 무시
-    if (isReviewing) return;
-    set({ reviewTrigger: reviewTrigger + 1 });
+    if (get().isReviewing) return;
+    set({ pendingReviewRun: { instruction: instruction?.trim() ?? '' } });
+  },
+
+  consumePendingReviewRun: () => {
+    const { pendingReviewRun } = get();
+    if (!pendingReviewRun) return null;
+    set({ pendingReviewRun: null });
+    return pendingReviewRun;
   },
 
   getChunk: (chunkIndex: number) => {

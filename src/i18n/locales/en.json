@@ -359,6 +359,7 @@
     "providerAriaLabel": "AI provider",
     "translate": "Translate",
     "translating": "Translating...",
+    "polishing": "Polishing...",
     "translateTitle": "Translate entire Source → Preview",
     "retranslateModal": {
       "title": "Retranslate",
@@ -378,6 +379,14 @@
       "suggested": "After",
       "added": "(added)",
       "removed": "(removed)"
+    },
+    "reviewModal": {
+      "title": "Review",
+      "description": "Compare source and target to find mistranslations, omissions, and inconsistencies. Results appear in the Review panel.",
+      "messageLabel": "Additional Instructions",
+      "optional": "(Optional)",
+      "placeholder": "Example: Focus on terminology consistency.",
+      "execute": "Start Review"
     },
     "polishModal": {
       "title": "Polish",

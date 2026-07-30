@@ -109,8 +109,11 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('[contenteditable="true"]').first()).toBeVisible();
+    // 검수는 번역·폴리싱과 같이 시작 모달을 거쳐 패널을 연다
     await page.getByTestId('editor-review-button').click();
-    await expect(page.getByTestId('review-run-button')).toBeVisible();
+    await expect(page.getByTestId('review-instruction-input')).toBeVisible();
+    await page.getByTestId('review-modal-start').click();
+    await expect(page.getByTestId('review-panel')).toBeVisible();
 
     await page.getByTestId('toolbar-menu-chat').click();
     // Chat panel may take a moment to create a session and render

@@ -89,6 +89,13 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **워크플로 3버튼(번역·검수·폴리싱)을 같은 상호작용으로 통일**: 검수만 "패널 열기"였고 나머지는 "시작 모달 → 실행"이라 어긋나 있었다. 이제 셋 다 클릭 → 시작 모달(추가 지시사항 선택 입력) → 실행이다.
+  - **검수가 2클릭이었다**: `openReviewPanel`이 패널을 열기만 하고, *이미 활성일 때만* 검수를 실행했다(상태에 따라 1클릭이 열기도, 실행도 됨). 이제 `openReviewPanel`은 패널을 보여주기만 한다 — 정렬 뷰의 `매핑 실패 이슈` 버튼이 패널이 열려 있으면 검수를 새로 돌리던 부작용도 함께 사라졌다.
+  - **`reviewStore.reviewTrigger`(nonce) → `pendingReviewRun`(요청 객체)**: 툴바는 패널을 여는 것과 **동시에** 실행을 요청하는데, 그 순간 `ReviewPanel`은 마운트 전이라 nonce 증가를 관측할 수 없다(마운트 시점 값이 그대로 "이전 값"이 됨). 요청을 상태로 남기고 패널이 `consumePendingReviewRun`으로 집어간다. 소비 effect는 **ref 할당 effect보다 뒤에 선언**해야 한다(effect는 선언 순서대로 실행되므로 앞에 두면 첫 마운트에서 ref가 null).
+  - **검수 시작 모달은 `WorkflowActions`가 소유한다** — `ReviewPanel`은 사이드바가 닫히면 언마운트라 모달을 열 수 없다. `runReview`에 `userInstruction`이 추가됐고, 이번 실행에만 적용되므로 system(런 내 캐시 대상)이 아니라 user 메시지에 넣는다. 패널의 `검수 시작` 버튼은 지시사항 없이 그대로 실행한다.
+  - **호버가 안 보이던 버그**: 검수·폴리싱이 `hover:bg-editor-surface`인데 툴바 헤더 배경이 같은 `bg-editor-surface`였다. 다른 툴바 버튼과 같이 `hover:bg-editor-border`로 통일.
+  - **대시 연결선 제거**: 세 버튼을 `—`로 잇고 번역만 채워 그리면 "현재 단계=번역"인 스테퍼로 읽힌다. 대신 실행 중인 버튼에 스피너+파란 테두리(`SECONDARY_RUNNING_CLASS`)로 상태를 드러낸다 — `disabled:opacity-50`을 idle 클래스로 옮긴 이유(실행 중에도 disabled지만 그땐 흐려지면 안 됨).
+  - ko 라벨 `문서 번역` → `번역`(en은 원래 `Translate`). ⌘R은 패널 열기가 아니라 검수 모달을 연다.
 - **정렬 리포트 제거** ([ADR-0013](../docs/adr/0013-remove-alignment-report.md)): 정렬 뷰 하단의 `정렬 리포트` JSONL 내보내기 버튼을 걷어냈다. 번역가 화면에 개발 의사결정용 계측기가 노출돼 있었고, 수집된 데이터는 1년 가까이 0건이었다. `alignmentReport.ts`·`pickJsonlExportPath`·i18n 3키·E2E 단언을 함께 제거(`write_text_file`은 `ExportModal`이 계속 쓰므로 유지).
   - **Phase 5 착수 판단 근거가 사라진 건 의도된 것**이다. `ratio`는 애초에 "번역에서 문단이 빠졌다"와 "1:N이라 `alignUnits`가 못 짝지었다"를 구분하지 못해, 낮게 나와도 답이 영속 정렬인지 알고리즘 개선인지 번역 품질인지 갈리지 않았다.
   - **정렬 불일치는 화면이 아니라 문서의 증상**이다 — 고칠 대상은 정렬이 아니라 번역이고, 경로는 기존 `jumpToUnit`(문서 보기 점프) 그대로다. 1:0 행에서 곧바로 번역해 넣는 액션이 다음 후보지만 아직 결정 안 됨.

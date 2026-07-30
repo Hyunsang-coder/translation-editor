@@ -76,15 +76,30 @@ describe('reviewStore startReview', () => {
   });
 });
 
-describe('reviewStore triggerReview', () => {
+describe('reviewStore requestReviewRun / consumePendingReviewRun', () => {
   beforeEach(() => {
     useReviewStore.getState().resetReview();
   });
 
-  it('외부 검수 실행 요청 nonce를 증가시킨다', () => {
-    useReviewStore.getState().triggerReview();
-    const state = useReviewStore.getState();
-    expect(state.reviewTrigger).toBe(1);
+  it('요청은 소비될 때까지 상태로 남는다 (패널이 나중에 마운트돼도 집어갈 수 있어야 한다)', () => {
+    useReviewStore.getState().requestReviewRun('용어 일관성 위주로');
+
+    expect(useReviewStore.getState().pendingReviewRun).toEqual({ instruction: '용어 일관성 위주로' });
+
+    expect(useReviewStore.getState().consumePendingReviewRun()).toEqual({ instruction: '용어 일관성 위주로' });
+    expect(useReviewStore.getState().pendingReviewRun).toBeNull();
+    expect(useReviewStore.getState().consumePendingReviewRun()).toBeNull();
+  });
+
+  it('지시사항 없이 요청하면 빈 문자열이 된다', () => {
+    useReviewStore.getState().requestReviewRun();
+    expect(useReviewStore.getState().pendingReviewRun).toEqual({ instruction: '' });
+  });
+
+  it('검수 중에는 요청을 무시한다', () => {
+    useReviewStore.getState().acquireReviewRun('p1');
+    useReviewStore.getState().requestReviewRun('무시되어야 함');
+    expect(useReviewStore.getState().pendingReviewRun).toBeNull();
   });
 });
 

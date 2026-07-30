@@ -110,7 +110,7 @@ export function MainLayout(): JSX.Element {
       e.preventDefault();
       const ui = useUIStore.getState();
       if (key === 't') ui.triggerTranslate();
-      else if (key === 'r') ui.openReviewPanel();
+      else if (key === 'r') ui.triggerReview();
       else ui.triggerPolish();
     };
     document.addEventListener('keydown', handleKeyDown);

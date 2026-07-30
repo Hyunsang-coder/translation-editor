@@ -356,17 +356,18 @@ async function runScenario(client) {
   // ── Phase 5: 리뷰 실행 + 완료 대기 ──
   log('\n═══ Phase 5: Run Review & Wait for Completion ═══');
 
-  // 리뷰 패널이 닫혀있으면 열기
+  // 리뷰 패널이 닫혀있으면 툴바 버튼 → 시작 모달 → 실행 (패널이 열려 있으면 패널 버튼으로 실행)
   const reviewBtnExists = await tryTool(client, 'tauri_dom_wait_for_selector', {
     selector: "button[data-testid='review-run-button']",
     timeout: 2000,
   });
-  if (!reviewBtnExists) {
+  if (reviewBtnExists) {
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='review-run-button']" });
+  } else {
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='editor-review-button']" });
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='review-run-button']", timeout: 10000 });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='review-modal-start']", timeout: 10000 });
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='review-modal-start']" });
   }
-
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='review-run-button']" });
 
   // 리뷰 완료 대기: "다시 검수" 텍스트가 나타나면 리뷰가 끝난 것
   let reviewDone = false;

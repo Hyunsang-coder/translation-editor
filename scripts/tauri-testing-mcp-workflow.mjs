@@ -395,10 +395,10 @@ async function runWorkflow() {
     });
     log(`[list] Hierarchy preserved (${listCheck.count} items): ${listCheck.targetSig}`);
 
-    // 5) Review
+    // 5) Review — 툴바 버튼은 시작 모달을 연다 (번역·폴리싱과 동일)
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='editor-review-button']" });
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='review-run-button']", timeout: 10000 });
-    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='review-run-button']" });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='review-modal-start']", timeout: 10000 });
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='review-modal-start']" });
 
     // 검수는 모델/환경에 따라 완료 속도가 달라서 텍스트 2개를 fallback으로 확인
     const reviewing = await tryTool(client, 'tauri_dom_wait_for_text', { text: '분석하고 있습니다', timeout: 15000 });

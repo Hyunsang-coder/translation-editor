@@ -245,7 +245,7 @@
     "export": "내보내기"
   },
   "workflow": {
-    "translateDocument": "문서 번역",
+    "translateDocument": "번역",
     "aiModel": "AI 모델"
   },
   "status": {
@@ -346,6 +346,7 @@
     "providerAriaLabel": "AI provider",
     "translate": "번역",
     "translating": "번역 중…",
+    "polishing": "폴리싱 중…",
     "translateTitle": "원문 전체 번역 → 미리보기",
     "retranslateModal": {
       "title": "재번역",
@@ -365,6 +366,14 @@
       "suggested": "제안",
       "added": "(추가)",
       "removed": "(삭제)"
+    },
+    "reviewModal": {
+      "title": "검수",
+      "description": "원문과 번역문을 대조해 오역·누락·불일치를 찾습니다. 결과는 검수 패널에 표시됩니다.",
+      "messageLabel": "추가 지시사항",
+      "optional": "(선택)",
+      "placeholder": "예: 용어 일관성 위주로 봐주세요.",
+      "execute": "검수 시작"
     },
     "polishModal": {
       "title": "폴리싱",

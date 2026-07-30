@@ -42,7 +42,7 @@ export function ReviewPanel(): JSX.Element {
   const targetDocument = useProjectStore((s) => s.targetDocument);
   // 자주 변경되는 필드 → 별도 selector (리렌더 최소화)
   const streamingText = useReviewStore((s) => s.streamingText);
-  const reviewTrigger = useReviewStore((s) => s.reviewTrigger);
+  const pendingReviewRun = useReviewStore((s) => s.pendingReviewRun);
 
   // 덜 변경되는 필드 + 필터 → 개별 selector (무한 루프 방지)
   const severityFilter = useReviewStore((s) => s.severityFilter);
@@ -130,19 +130,9 @@ export function ReviewPanel(): JSX.Element {
   }, [project, initializeReview]);
 
   // 외부에서 검수 트리거 시 handleRunReview 실행을 위한 ref
-  const handleRunReviewRef = useRef<(() => Promise<void>) | null>(null);
-  // 이전 trigger 값 추적 (마운트 시 실행 방지)
-  const prevTriggerRef = useRef(reviewTrigger);
+  const handleRunReviewRef = useRef<((instruction?: string) => Promise<void>) | null>(null);
 
-  // reviewTrigger 증가 감지하여 검수 시작 (마운트 시에는 실행 안됨)
-  useEffect(() => {
-    if (reviewTrigger > prevTriggerRef.current && handleRunReviewRef.current) {
-      handleRunReviewRef.current();
-    }
-    prevTriggerRef.current = reviewTrigger;
-  }, [reviewTrigger]);
-
-  const handleRunReview = useCallback(async () => {
+  const handleRunReview = useCallback(async (extraInstruction?: string) => {
     // Snapshot: deps에 project?.id만 사용하므로 콜백 내에서 최신 project 참조
     const project = useProjectStore.getState().project;
     if (!project) return;
@@ -259,6 +249,7 @@ export function ReviewPanel(): JSX.Element {
             ),
             targetLanguage: project.metadata.targetLanguage,
             ...(serializedComments ? { userComments: serializedComments } : {}),
+            ...(extraInstruction?.trim() ? { userInstruction: extraInstruction } : {}),
             abortSignal: controller.signal,
             onToken: (text) => setStreamingText(text),
           });
@@ -327,6 +318,15 @@ export function ReviewPanel(): JSX.Element {
   useEffect(() => {
     handleRunReviewRef.current = handleRunReview;
   }, [handleRunReview]);
+
+  // 툴바에서 온 검수 시작 요청 소비. 위 ref 할당 effect보다 뒤에 선언해야
+  // (effect는 선언 순서대로 실행) 마운트 직후 요청도 ref가 채워진 뒤 처리된다 —
+  // 툴바는 패널을 여는 것과 동시에 요청하므로 이 경우가 기본 경로다.
+  useEffect(() => {
+    if (!pendingReviewRun) return;
+    const request = useReviewStore.getState().consumePendingReviewRun();
+    if (request) void handleRunReviewRef.current?.(request.instruction);
+  }, [pendingReviewRun]);
 
   const handleCancel = useCallback(() => {
     if (reviewAbortRef.current) {
@@ -673,7 +673,7 @@ export function ReviewPanel(): JSX.Element {
   const allChecked = useMemo(() => allIssues.length > 0 && allIssues.every((i) => i.checked), [allIssues]);
 
   return (
-    <div className="h-full flex min-h-0 flex-col bg-editor-bg">
+    <div className="h-full flex min-h-0 flex-col bg-editor-bg" data-testid="review-panel">
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
         {results.length === 0 && !isReviewing ? (
