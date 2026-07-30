@@ -218,6 +218,37 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     expect(jsonStr).toContain('2025-10-23 Weekly Meeting');
   });
 
+  it('parseTranslationResponseToTipTap: 연속된 <p>는 별개 문단으로 유지되어야 함', () => {
+    // 블록을 전부 '\n'으로 이으면 마크다운에서 두 문단이 하나로 합쳐졌다.
+    const json = parseTranslationResponseToTipTap('<p>First paragraph.</p><p>Second paragraph.</p>');
+    const paragraphs = (json.content as Array<{ type: string }>).filter((n) => n.type === 'paragraph');
+
+    expect(paragraphs).toHaveLength(2);
+    expect(JSON.stringify(json)).not.toContain('First paragraph. Second paragraph.');
+  });
+
+  it('parseTranslationResponseToTipTap: 중첩 HTML 리스트의 순서와 중첩이 보존되어야 함', () => {
+    // 중첩 리스트를 즉시 walk하면서 부모 항목은 루프 뒤에 방출해, 자식이 부모보다
+    // 먼저 나가고 중첩이 평탄화됐다 (Alpha, Inner → Inner, Alpha).
+    const json = parseTranslationResponseToTipTap(
+      '<ul><li><p>Alpha</p><ul><li>Inner</li></ul></li><li>Beta</li></ul>'
+    );
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr.indexOf('Alpha')).toBeLessThan(jsonStr.indexOf('Inner'));
+    expect(jsonStr.indexOf('Inner')).toBeLessThan(jsonStr.indexOf('Beta'));
+    // 평탄화되지 않고 중첩 리스트로 남아야 함
+    expect(jsonStr.match(/"type":"bulletList"/g)).toHaveLength(2);
+  });
+
+  it('parseTranslationResponseToTipTap: 중첩 리스트만 있는 <li>가 내용을 중복 방출하지 않아야 함', () => {
+    // parts가 비었는지로 폴백을 판정해서, 중첩 리스트가 이미 방출한 텍스트를
+    // el.textContent로 한 번 더 내보냈다.
+    const json = parseTranslationResponseToTipTap('<ul><li><ul><li>Inner</li></ul></li></ul>');
+
+    expect(JSON.stringify(json).match(/Inner/g)).toHaveLength(1);
+  });
+
   it('parseTranslationResponseToTipTap: 마크다운이면 markdownToTipTapJsonForTranslation과 동일하게 동작', () => {
     const markdown = '- Item 1\n- Item 2';
     const json = parseTranslationResponseToTipTap(markdown);
@@ -616,6 +647,55 @@ describe('parseTranslationResponseToTipTap - 테이블 내 리스트 보존', ()
     expect(jsonStr).toContain('Section 2');
     // 테이블 2개 존재
     expect((jsonStr.match(/"type":"table"/g) || []).length).toBe(2);
+  });
+
+  it('문서가 <table>로 시작해도 표 사이의 Markdown이 유실되지 않음 (회귀 테스트)', () => {
+    // 위 테스트는 `# Section 1`로 시작해 markdown 경로를 타지만, 표로 시작하는 문서는
+    // looksLikeBlockHtml → convertHtmlListsToMarkdown 경로로 들어간다.
+    // 이 경로가 Element만 순회해 표 사이 문단·리스트를 통째로 버리던 버그.
+    const input = [
+      '<table><tr><th><p>Before</p></th><th><p>After</p></th></tr></table>',
+      '',
+      '1. Rework of the sand mask texture is required.',
+      '',
+      '[Reference](https://example.com/artwork) (link shared)',
+      '',
+      '<table><tr><th><p>Reference Images</p></th></tr></table>',
+      '',
+      '(1) Please add faded glass detail to the Base texture.',
+    ].join('\n');
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain('Rework of the sand mask texture');
+    expect(jsonStr).toContain('example.com/artwork');
+    expect(jsonStr).toContain('faded glass detail');
+    expect((jsonStr.match(/"type":"table"/g) || []).length).toBe(2);
+  });
+
+  it('문서가 <table>로 시작해도 autolink 문단이 링크째로 살아남음 (회귀 테스트)', () => {
+    // tiptap-markdown은 텍스트 == href인 링크를 autolink(<https://…>)로 직렬화한다.
+    // 이걸 HTML 파서에 태우면 토크나이저가 미지의 시작 태그로 삼켜서 URL과 뒤따르는
+    // 문단이 통째로 사라지고, 남은 텍스트가 앞 리스트 항목에 흡수됐다(정렬 1:0 불일치).
+    const url = 'https://www.artstation.com/artwork/J98XEZ';
+    const input = [
+      '<table><tr><th><p>Existing Direction</p></th></tr></table>',
+      '',
+      '1. The B-type sand mask needs rework.',
+      '',
+      `<${url}> (Sharing the reference link.)`,
+      '',
+      '(1) Please add a faded look to the windows.',
+    ].join('\n');
+    const json = parseTranslationResponseToTipTap(input);
+    const jsonStr = JSON.stringify(json);
+
+    expect(jsonStr).toContain(`"href":"${url}"`);
+    expect(jsonStr).toContain('Sharing the reference link.');
+    // 링크 문단이 앞 리스트 항목으로 흡수되면 안 됨
+    expect(jsonStr).not.toContain('needs rework. (Sharing');
+    expect((json.content as Array<{ type: string }>).map((n) => n.type))
+      .toEqual(['table', 'orderedList', 'paragraph', 'paragraph']);
   });
 
   it('리스트 없는 단순 HTML 테이블도 정상 파싱 (회귀 테스트)', () => {

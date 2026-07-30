@@ -87,7 +87,17 @@ This `.claude/` directory contains:
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
 4. **Markdown for AI**: Translation uses Markdown as intermediate format ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
 
-## Recent Updates (2026-07-29)
+## Recent Updates (2026-07-30)
+
+- **번역 응답 파싱에서 원문 유실 수정 (`markdownConverter.ts`)**: 표로 시작하는 문서를 번역하면 표 사이의 문단·리스트가 통째로 사라지고 링크가 소실됐다. 모델을 바꿔도 재현되던 결정적 버그이며, 원인은 전부 `parseTranslationResponseToTipTap`의 HTML 경로 하나였다. LLM 입력(원문 직렬화)은 온전했다.
+  - **라우팅 오판이 근본 원인**: `looksLikeBlockHtml`이 **첫 태그만** 보고 판정한다. 번역 직렬화는 표를 항상 raw HTML로 쓰므로(`TableForTranslation`) 표로 시작하는 문서는 응답도 `<table`로 시작하고, "마크다운 + HTML 표" 혼합 응답이 통째로 `convertHtmlListsToMarkdown`(DOM 파서)에 들어갔다. 판정에서 표 세그먼트를 제외한다 — `parseMarkdownWithTables`가 혼합을 이미 무손실로 처리하고, 표 밖 `<ul>`/`<p>`도 `html: true` 경로가 알아서 파싱한다(실측 확인). HTML 구제 경로 자체는 진짜 HTML 응답용으로 남겼다.
+  - **텍스트 노드 유실**: `convertHtmlListsToMarkdown`이 `doc.body.children`(Element만)을 순회해, 표 사이 마크다운은 전부 텍스트 노드라 조용히 버려졌다. `childNodes` 순회로 바꿔 그대로 흘려보낸다.
+  - **autolink가 태그로 삼켜짐**: tiptap-markdown은 텍스트 == href인 링크를 `[url](url)`이 아니라 **autolink `<https://…>`**로 직렬화한다. HTML 토크나이저에겐 미지의 시작 태그라 URL이 소멸하고 뒤따르던 문단이 앞 리스트 항목에 흡수됐다 — 정렬 검사에서 1:0 불일치로 드러난다. 앱의 `링크 유지`(`pasteLinkPreserve`)는 **에디터 붙여넣기 전용**이라 이 증상과 무관하다.
+  - **연속 `<p>` 병합**: 블록을 전부 `'\n'`으로 이어 `<p>A</p><p>B</p>`가 문단 하나로 합쳐졌다. 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`으로 잇는다.
+  - **중첩 리스트 순서·중복**: 중첩 `<ul>`은 walk가 즉시 방출하는데 부모 텍스트(`parts`)는 루프 뒤에 방출해, 자식이 부모보다 먼저 나가고 중첩이 평탄화됐다(`Alpha > Inner` → `Inner, Alpha`). 내려가기 전에 flush한다. 폴백 판정도 `parts`가 비었는지 대신 **`blocks.length` 변화**로 바꿔, 중첩 리스트만 있는 `<li>`가 내용을 두 번 방출하던 중복을 없앴다.
+  - 회귀 테스트 5건은 `markdownConverter.test.ts`. 기존 혼합 테스트가 `# Section 1`로 **시작**해 정상 경로만 타는 바람에 이 버그를 못 잡았다 — 표로 시작하는 케이스를 추가했다.
+
+### Previous (2026-07-29)
 
 - **선택 액션 진입점을 인라인 툴바 하나로 정리**: 우클릭 세로 메뉴(`SelectionActionMenu`)를 제거하고, 같은 액션을 제공하던 인라인 가로 툴바만 남겼다(`SelectionActionMenu.tsx` → `SelectionInlineToolbar.tsx`). 선택 영역 우클릭은 이제 OS/웹뷰 기본 메뉴가 뜬다.
   - **툴바 줄바꿈 깨짐 수정**: `position:fixed`는 기본이 shrink-to-fit이라 오른쪽 끝에서 남은 폭만큼 좁아지고, 버튼 높이가 `h-[34px]` 고정이라 줄바꿈된 두 번째 줄이 `overflow-hidden`에 잘렸다. 폭을 `w-max`로 고정하고, 미리 알 수 없는 실제 폭은 **렌더 후 `useLayoutEffect`로 실측해** 화면 밖으로 나간 만큼만 왼쪽으로 되민다(기존의 `innerWidth - 320` 추정 클램프 삭제). 회귀 테스트는 `e2e/selection-editing.spec.ts`의 `scrollHeight > clientHeight` 단언.

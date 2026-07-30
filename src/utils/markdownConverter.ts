@@ -613,9 +613,17 @@ export function htmlToTipTapJson(html: string): TipTapDocJson {
  * 콘텐츠가 블록 레벨 HTML인지 감지 (AI가 마크다운 대신 HTML 반환한 경우)
  */
 function looksLikeBlockHtml(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith('<') || !trimmed.includes('</')) return false;
-  return /^<(ul|ol|li|p|div|table|tr|td|th)[\s>]/i.test(trimmed);
+  // 표는 판정에서 제외한다. parseMarkdownWithTables가 "마크다운 + HTML 표" 혼합을
+  // 이미 무손실로 처리하는데, 문서가 표로 시작한다는 이유만으로 응답 전체를 HTML로
+  // 몰면 표 사이의 마크다운이 DOM 파서에 먹힌다. 특히 autolink(`<https://…>`)는
+  // HTML 토크나이저가 미지의 시작 태그로 삼켜서 URL과 뒤따르는 문단이 통째로 사라진다.
+  const nonTable = splitTablesFromContent(text)
+    .filter((segment) => segment.type === 'markdown')
+    .map((segment) => segment.content)
+    .join('\n')
+    .trim();
+  if (!nonTable.startsWith('<') || !nonTable.includes('</')) return false;
+  return /^<(ul|ol|li|p|div|tr|td|th)[\s>]/i.test(nonTable);
 }
 
 /**
@@ -627,7 +635,13 @@ function convertHtmlListsToMarkdown(html: string): string {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    const lines: string[] = [];
+    // 리스트 항목은 서로 붙어 있어야 하나의 리스트로 파싱되지만, 그 외 블록은 사이에
+    // 빈 줄이 있어야 별개 문단이 된다. 전부 '\n'으로 이으면 <p>A</p><p>B</p>가
+    // 문단 하나로 합쳐지므로 블록 종류를 기억했다가 구분자를 골라 붙인다.
+    const blocks: Array<{ text: string; listItem: boolean }> = [];
+    const pushBlock = (text: string, listItem = false): void => {
+      blocks.push({ text, listItem });
+    };
 
     function walk(el: Element, indent = ''): void {
       if (el.tagName === 'UL' || el.tagName === 'OL') {
@@ -637,48 +651,82 @@ function convertHtmlListsToMarkdown(html: string): string {
         return;
       }
       if (el.tagName === 'LI') {
+        // 자식은 반드시 문서 순서대로 방출해야 한다. 중첩 리스트는 walk가 즉시
+        // blocks에 넣는데 parts는 루프가 끝난 뒤 넣으므로, flush 없이 두면 자식이
+        // 부모보다 먼저 나가고 들여쓰기만 남아 중첩이 통째로 깨진다.
+        const startIndex = blocks.length;
         const parts: string[] = [];
+        const flushParts = (): void => {
+          for (const part of parts) pushBlock(part, true);
+          parts.length = 0;
+        };
+
         for (const node of el.childNodes) {
           if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
             parts.push(`${indent}- ${node.textContent.trim()}`);
           } else if (node instanceof Element) {
             if (node.tagName === 'UL' || node.tagName === 'OL') {
+              flushParts();
               walk(node, indent + '  ');
             } else if (node.tagName === 'P') {
               const t = node.textContent?.trim();
               if (t) parts.push(`${indent}- ${t}`);
             } else {
+              flushParts();
               walk(node, indent);
             }
           }
         }
-        if (parts.length === 0) {
+        flushParts();
+
+        // 아무것도 못 알아본 경우에만 통째로 살린다. parts가 비었는지로 판정하면
+        // 중첩 리스트만 있는 <li>가 자식 텍스트를 한 번 더 방출한다(중복).
+        if (blocks.length === startIndex) {
           const t = el.textContent?.trim();
-          if (t) lines.push(`${indent}- ${t}`);
-        } else {
-          lines.push(...parts);
+          if (t) pushBlock(`${indent}- ${t}`, true);
         }
         return;
       }
       if (el.tagName === 'P') {
         const t = el.textContent?.trim();
-        if (t) lines.push(`${indent}${t}`);
+        if (t) pushBlock(`${indent}${t}`);
         return;
       }
       if (el.tagName === 'TABLE') {
         // 테이블은 HTML 그대로 유지 (markdownToTipTapJsonForTranslation이 html: true로 파싱)
-        lines.push((el as HTMLElement).outerHTML);
+        pushBlock((el as HTMLElement).outerHTML);
         return;
       }
-      for (const child of el.children) {
-        walk(child as Element, indent);
+      walkNodes(el.childNodes, indent);
+    }
+
+    // Element만 순회하면 텍스트 노드(= HTML 블록 사이에 낀 마크다운 본문)가 통째로 사라진다.
+    // 문서가 <table>로 시작하면 응답 전체가 이 경로로 들어오므로, 표 사이의 문단·리스트가
+    // 모두 유실됐다. 텍스트 노드는 마크다운으로 그대로 흘려보낸다.
+    function walkNodes(nodes: NodeListOf<ChildNode>, indent = ''): void {
+      for (const node of nodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          // 내부 줄바꿈은 마크다운 블록 구분이므로 양끝 공백만 제거한다.
+          const text = node.textContent?.trim();
+          if (text) pushBlock(text);
+        } else if (node instanceof Element) {
+          walk(node, indent);
+        }
       }
     }
 
-    for (const child of doc.body.children) {
-      walk(child as Element);
-    }
-    return lines.join('\n').trim() || html;
+    walkNodes(doc.body.childNodes);
+
+    const markdown = blocks
+      .map((block, i) => {
+        if (i === 0) return block.text;
+        const prev = blocks[i - 1];
+        const separator = block.listItem && prev?.listItem ? '\n' : '\n\n';
+        return separator + block.text;
+      })
+      .join('')
+      .trim();
+    return markdown || html;
   } catch {
     return html;
   }
