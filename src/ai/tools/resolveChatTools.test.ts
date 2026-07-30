@@ -68,7 +68,7 @@ describe('resolveChatToolNames', () => {
     expect(withResults).toContain('get_review_results');
   });
 
-  it('selection profile에는 Confluence 문서 쓰기 도구를 노출하지 않는다', () => {
+  it('selection profile에는 Confluence 도구를 노출하지 않는다', () => {
     const names = resolveChatToolNames({
       profile: 'selection-target',
       hasProject: true,
@@ -77,6 +77,18 @@ describe('resolveChatToolNames', () => {
     });
 
     expect(names).not.toContain('confluence_load_page');
+    expect(names).not.toContain('confluence_search');
+    expect(names).not.toContain('confluence_get_page');
+  });
+
+  it('Confluence 토글이 꺼져 있으면 검색·조회 도구도 빠진다', () => {
+    const off = resolveChatToolNames({ profile: 'general', hasProject: true });
+    const on = resolveChatToolNames({ profile: 'general', hasProject: true, confluenceEnabled: true });
+
+    expect(off).not.toContain('confluence_search');
+    expect(off).not.toContain('confluence_get_page');
+    expect(on).toContain('confluence_search');
+    expect(on).toContain('confluence_get_page');
   });
 
   it('같은 프로필·설정이면 사용자 메시지와 무관하게 도구 목록이 동일하다', () => {

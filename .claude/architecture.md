@@ -72,7 +72,7 @@ Bound in `src/ai/chat.ts`; the **single source of truth is `src/ai/tools/toolReg
 
 **Proactive Tool Usage**: AI calls document tools first rather than guessing. Tool loop is 6 steps, or 4 when a selection is attached.
 
-**MCP Direct Invocation**: `confluence_word_count`는 MCP tool을 Tauri command로 직접 호출하여 LangChain을 거치지 않음. 페이지 전체 내용이 LLM 컨텍스트에 노출되지 않아 토큰 절약.
+**MCP Direct Invocation**: Confluence 도구(`confluence_search`, `confluence_get_page`, `confluence_load_page`)는 서버 MCP 도구를 그대로 바인딩하지 않고, `mcp_call_tool` Tauri command를 호출하는 로컬 래퍼다 — 설명 토큰·결과 형태·출력 캡을 앱이 통제한다 ([ADR-0015](../docs/adr/0015-confluence-tools-as-local-wrappers.md)). `confluence_load_page`는 본문을 원문 에디터에 넣고 모델에는 성공 문구만 반환하므로 페이지 내용이 LLM 컨텍스트에 실리지 않는다. 반면 `confluence_get_page`는 본문을 모델에 넘기는 것이 목적이며, 신뢰경계(`<external_content>`)와 8,000자 캡이 적용된다.
 
 ### 4. MCP Integration (Rust Native)
 

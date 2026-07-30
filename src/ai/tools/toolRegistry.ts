@@ -129,6 +129,27 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     requires: ['web-enabled'],
   },
   {
+    name: 'confluence_search',
+    profiles: ['general'],
+    effect: 'external-read',
+    trust: 'external',
+    // 결과 건수·발췌는 도구가 먼저 줄인다(SEARCH_RESULT_LIMIT). 이 캡은 응답 형태가
+    // 바뀌어 원문을 그대로 흘릴 때의 상한이다.
+    maxOutputChars: 4_000,
+    displayNameKey: 'chat.toolName.confluenceSearch',
+    requires: ['confluence-enabled'],
+  },
+  {
+    name: 'confluence_get_page',
+    profiles: ['general'],
+    effect: 'external-read',
+    trust: 'external',
+    // 위키 페이지 본문. 문서 조회(8,000)와 같은 상한을 쓴다.
+    maxOutputChars: 8_000,
+    displayNameKey: 'chat.toolName.confluenceGetPage',
+    requires: ['confluence-enabled'],
+  },
+  {
     name: 'confluence_load_page',
     profiles: ['general'],
     effect: 'document-write',

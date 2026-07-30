@@ -21,6 +21,7 @@
 | [0012](0012-provider-only-model-selection.md) | 모델 선택을 provider 하나로 줄이고, 용도별 모델·effort는 앱이 고정한다 | Accepted | 2026-07-30 |
 | [0013](0013-remove-alignment-report.md) | 정렬 리포트를 제거하고, 영속 정렬은 계측 없이 보류한다 | Accepted | 2026-07-30 |
 | [0014](0014-pin-to-question-chat-scroll.md) | 채팅 스크롤은 하단을 추종하지 않고 질문을 상단에 고정한다 | Accepted | 2026-07-30 |
+| [0015](0015-confluence-tools-as-local-wrappers.md) | Confluence 도구는 MCP 서버 도구를 그대로 바인딩하지 않고 로컬 래퍼로 감싼다 | Accepted | 2026-07-30 |
 
 > **(소급)** = 결정 당시에는 ADR이 없었고, ADR 도입(0001) 시점에 기록을 복원한 항목입니다.
 > 결정일은 실제 결정 시점, 문서 작성일은 2026-07-29입니다.

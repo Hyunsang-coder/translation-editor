@@ -738,6 +738,8 @@
       "suggestTranslationRule": "Rule Suggestion",
       "suggestForbiddenTerm": "Forbidden Term Suggestion",
       "suggestGlossaryEntry": "Glossary Entry Suggestion",
+      "confluenceSearch": "Confluence Search",
+      "confluenceGetPage": "View Confluence Page",
       "confluenceLoadPage": "Import Confluence Page"
     },
     "toolProgressName": {

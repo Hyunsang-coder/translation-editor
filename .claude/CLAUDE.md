@@ -89,6 +89,12 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **Confluence 검색·페이지 조회를 로컬 래퍼로 되살림** ([ADR-0015](../docs/adr/0015-confluence-tools-as-local-wrappers.md)): `Confluence 검색` 토글이 기본 ON인데 **검색을 하나도 켜지 않고 있었다**. `buildToolSpecs`가 서버 MCP 도구를 `allowedNames`(registry 파생)로 필터하는데 Atlassian이 주는 이름(`search`, `searchConfluenceUsingCql` …)이 registry에 없어 전량 탈락했다 — `e38143d`(2026-07-24) allowlist 도입이 조용히 끊은 경로다. ADR-0011에서 본 것과 같은 계열.
+  - **`confluence_search` 신설**: Rovo `search`를 `mcp_call_tool`로 호출하고 ARI로 Confluence만 남긴다(Rovo는 Jira 이슈를 섞어 주고 파라미터로 못 좁힌다). 10건·발췌 200자·총 3,500자를 **도구가 먼저** 맞춘다 — registry 캡(4,000)에 맡기면 제목·URL 긴 결과에서 몇 건이 사라졌는지 알 수 없다. **검색 결과에 페이지 ID를 함께 싣는다**: 공간 홈 결과는 URL이 `/spaces/X/overview`라 `/pages/<id>`가 없어 URL만으론 열 수 없다.
+  - **`confluence_get_page` 신설**(읽기 전용): URL·ID·짧은 링크(`/wiki/x/...`)로 본문을 Markdown으로 반환. `confluence_load_page`는 **원문 문서를 덮어쓰는** 도구라 조회에 쓸 수 없어, 설명에 구분을 박고 tool guide에도 세 도구의 역할을 명시했다(지금까지 Confluence 안내는 `// Confluence 도구` 주석만 있고 본문이 없었다).
+  - **미연결이면 아예 바인딩하지 않는다**: 붙여도 첫 호출이 `mcp_call_tool`에서 실패해 모델 왕복만 버렸다. 세션 기본값은 `true` 유지 — 연결 상태로 기본값을 정하는 안은 `initialize()`가 비동기라 시작 직후 세션이 토큰 멀쩡한데도 OFF로 굳고 DB에 영속된다. 연결 시 드는 값은 실측 474토큰(search 146 / get_page 144 / load_page 184).
+  - **외부 도구 출력의 신뢰경계 무해화 추가**(`middleware.ts:neutralizeExternalMarkers`): 사내 위키 본문에 `</external_content>`가 있으면 그 뒤가 경계 밖 지시문으로 읽힌다. 기존 `wrapExternalToolOutput`은 무해화가 없었는데, 그 경로로 실제 외부 텍스트가 흐르는 건 이번 도구들이 처음이다(`web_search`는 provider 빌트인이라 ToolMessage를 안 거치고, `load_page`는 고정 문자열을 반환).
+  - **남은 한계**: 다중 사이트 계정은 `resources[0]`만 본다(검색 결과의 `metadata.cloudId`는 무시). `get_page`에 발췌 파라미터가 없어 8,000자 초과 페이지는 앞부분만 남는다. `McpClientManager.getTools()`/`loadTools`/`toolsCache`는 호출자가 0이 됐다(제거하지 않음). 웹 E2E 커버리지 없음 — `tauri-mock.ts`의 `mcp_get_status`가 `isConnected`가 아니라 `connected`를 반환한다.
 - **채팅 스크롤을 하단 추종에서 질문 고정으로** ([ADR-0014](../docs/adr/0014-pin-to-question-chat-scroll.md)): 청크마다 하단을 쫓느라 답변을 읽는 내내 화면이 튀었다. 전송한 사용자 메시지를 뷰포트 상단에 고정하고 아래에 한 화면치 여백을 깔면, 본문이 자라는 만큼 여백이 **정확히 같은 양으로** 줄어 총 스크롤 높이가 불변이 된다 — 추종할 대상 자체가 생기지 않는다.
   - **"부드러운 추종"은 선택지가 아니었다**: `behavior:'smooth'`는 duration·easing을 지정할 수 없고, 추종 경로를 smooth로 바꾸면 애니메이션이 끝나기 전에 다음 청크가 목표를 갈아치워 영원히 뒤처진다. 기존 `'auto'`(즉시)는 그 조건에서 옳은 선택이었다. 그래서 남은 길은 추종을 없애는 것뿐이었다.
   - **모달·사이드바 토글은 일부러 안 건드렸다** — 전문가용 편집 도구에서 snappy는 대체로 옳고, 반복 조작 경로에 애니메이션을 깔면 열 번째부터 느려진다. 채팅 스크롤만 성격이 다르다(조작이 아니라 읽는 동안 배경에서 계속 움직임).

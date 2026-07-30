@@ -725,6 +725,8 @@
       "suggestTranslationRule": "규칙 제안",
       "suggestForbiddenTerm": "금칙어 제안",
       "suggestGlossaryEntry": "용어집 항목 제안",
+      "confluenceSearch": "Confluence 검색",
+      "confluenceGetPage": "Confluence 문서 조회",
       "confluenceLoadPage": "Confluence 문서 가져오기"
     },
     "toolProgressName": {

@@ -10,7 +10,11 @@ import { createChatModel } from '@/ai/client';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule } from '@/ai/tools/suggestionTools';
-import { confluenceLoadPageTool } from '@/ai/tools/confluenceTools';
+import {
+  confluenceGetPageTool,
+  confluenceLoadPageTool,
+  confluenceSearchTool,
+} from '@/ai/tools/confluenceTools';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { BindToolsInput } from '@langchain/core/language_models/chat_models';
@@ -183,12 +187,17 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
   }
   const toolSpecs = candidates.filter((candidate) => allowedNames.has(candidate.name));
 
-  // MCP 도구 (Atlassian Confluence)
-  if (input.confluenceSearchEnabled) {
-    const allMcpTools = await mcpClientManager.getTools();
-    const mcpTools = allMcpTools.filter((candidate) => allowedNames.has(candidate.name));
-    toolSpecs.push(...mcpTools);
-    if (allowedNames.has(confluenceLoadPageTool.name)) toolSpecs.push(confluenceLoadPageTool);
+  // Confluence 도구 (Atlassian MCP를 Tauri command로 직접 호출하는 로컬 래퍼)
+  //
+  // 미연결 상태에서는 아예 바인딩하지 않는다. 붙여도 첫 호출이 mcp_call_tool에서 실패해
+  // 모델 왕복만 버리고, 쓸 수 없는 도구 스펙 토큰이 매 요청 실린다.
+  //
+  // 서버가 주는 MCP 도구를 그대로 바인딩하지는 않는다 — 이름이 registry에 없어 어차피
+  // allowedNames에서 전량 탈락하고, 서버 설명이 장문이라 tools 프리픽스만 커진다.
+  if (input.confluenceSearchEnabled && mcpClientManager.getStatus().isConnected) {
+    for (const confluenceTool of [confluenceSearchTool, confluenceGetPageTool, confluenceLoadPageTool]) {
+      if (allowedNames.has(confluenceTool.name)) toolSpecs.push(confluenceTool);
+    }
   }
 
   // 내장 웹 검색 도구
@@ -273,6 +282,16 @@ function buildToolGuideMessage(params: {
   }
 
   // Confluence 도구
+  if (has('confluence_search')) {
+    toolGuide.push('- confluence_search: 사내 Confluence 위키 검색. 사내 용례·표기·참고 문서를 찾을 때 사용.');
+  }
+  if (has('confluence_get_page')) {
+    toolGuide.push('- confluence_get_page: Confluence 페이지 URL의 본문을 읽는다(읽기 전용). 검색 결과 URL도 그대로 넘길 수 있다.');
+  }
+  if (has('confluence_load_page')) {
+    toolGuide.push('- confluence_load_page: Confluence 페이지를 원문 에디터에 로드. 원문 문서를 덮어쓰므로 번역을 시작할 때만 사용.');
+  }
+
   toolGuide.push('', '도구 선택 우선순위 (위에서 아래로 평가):', '');
 
   // 우선순위 가이드 (바인딩된 도구에 따라 동적 생성)
@@ -281,6 +300,19 @@ function buildToolGuideMessage(params: {
   if (has('get_source_document') || has('get_target_document')) {
     toolGuide.push(`${priority}. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")`);
     toolGuide.push('   → get_source_document + get_target_document로 문서 조회 후 답변');
+    toolGuide.push('');
+    priority++;
+  }
+
+  // 사내 표기·용례는 공개 웹보다 사내 위키가 먼저다.
+  if (has('confluence_search') || has('confluence_get_page')) {
+    toolGuide.push(`${priority}. 사내 문서 근거 필요 ("우리는 이 용어 뭐라고 쓰지?", "이 페이지 뭐라고 써있어?")`);
+    if (has('confluence_search')) {
+      toolGuide.push('   → confluence_search로 관련 페이지를 찾고, 필요하면 confluence_get_page로 본문 확인');
+    }
+    if (has('confluence_get_page')) {
+      toolGuide.push('   → 사용자가 Confluence URL을 주면 곧바로 confluence_get_page');
+    }
     toolGuide.push('');
     priority++;
   }

@@ -58,6 +58,8 @@ interface CachedPage {
   adf?: AdfDocument;
   /** Markdown 형식 콘텐츠 (있는 경우) */
   markdown?: string;
+  /** 페이지 제목 (응답에 포함된 경우) */
+  title?: string;
   /** 캐시 시간 */
   cachedAt: number;
 }
@@ -105,7 +107,12 @@ function getFromCache(pageId: string, preferredFormat: PageContentFormat = 'adf'
 /**
  * 페이지 캐시에 저장 (형식별 분리)
  */
-function saveToCache(pageId: string, content: string | AdfDocument, format: PageContentFormat): void {
+function saveToCache(
+  pageId: string,
+  content: string | AdfDocument,
+  format: PageContentFormat,
+  title?: string,
+): void {
   // 캐시 크기 제한: 오래된 항목부터 제거 (Map은 삽입 순서 유지)
   if (pageCache.size >= MAX_PAGE_CACHE_SIZE && !pageCache.has(pageId)) {
     const oldestKey = pageCache.keys().next().value;
@@ -122,6 +129,7 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
     } else {
       existing.markdown = content as string;
     }
+    if (title) existing.title = title;
     existing.cachedAt = now;
     console.warn(`[confluence_page] Updated cache for page ${pageId} (added ${format})`);
   } else {
@@ -132,9 +140,23 @@ function saveToCache(pageId: string, content: string | AdfDocument, format: Page
     } else {
       newCache.markdown = content as string;
     }
+    if (title) newCache.title = title;
     pageCache.set(pageId, newCache);
     console.warn(`[confluence_page] Cached page ${pageId} (format: ${format}, cache size: ${pageCache.size})`);
   }
+}
+
+/**
+ * URL(또는 ID) → Confluence 페이지 ID
+ *
+ * 짧은 링크(`/wiki/x/Fc1bBw`)는 숫자 ID가 아니라 인코딩된 ID를 그대로 넘긴다 —
+ * getConfluencePage가 tiny link ID를 받아 해석한다. 그 외는 기존 규칙(`/pages/123`, 숫자).
+ */
+function resolvePageId(input: string): string {
+  const tinyLink = input.match(/\/wiki\/x\/([A-Za-z0-9_-]+)/);
+  if (tinyLink?.[1]) return tinyLink[1];
+
+  return extractPageIdFromUrl(input);
 }
 
 /**
@@ -230,6 +252,20 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
 
   // 2b. Markdown 폴백
   console.warn('[confluence_page] Falling back to Markdown format...');
+  const { markdown } = await fetchMarkdownViaMcp(pageId, cloudId);
+
+  return { format: 'markdown', content: markdown };
+}
+
+/**
+ * Markdown 형식으로 페이지 가져오기 (캐시 저장 포함)
+ *
+ * ADF 폴백 경로와 confluence_get_page가 공유한다. 제목은 응답 JSON에 있을 때만 얻는다.
+ */
+async function fetchMarkdownViaMcp(
+  pageId: string,
+  cloudId: string,
+): Promise<{ title: string | null; markdown: string }> {
   const result = await invoke<McpToolResult>('mcp_call_tool', {
     name: 'getConfluencePage',
     arguments: { cloudId, pageId, contentFormat: 'markdown' },
@@ -245,20 +281,37 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
 
   // MCP 응답이 JSON인 경우 body 필드 추출
   let markdown = rawText;
+  let title: string | null = null;
   try {
     const parsed = JSON.parse(rawText);
     if (parsed.body && typeof parsed.body === 'string') {
       markdown = parsed.body;
       console.warn('[confluence_page] Extracted body from JSON response');
     }
+    if (typeof parsed.title === 'string') title = parsed.title;
   } catch {
     // JSON이 아니면 그대로 사용 (순수 markdown)
   }
 
-  // 3. 캐시에 저장
-  saveToCache(pageId, markdown, 'markdown');
+  saveToCache(pageId, markdown, 'markdown', title ?? undefined);
 
-  return { format: 'markdown', content: markdown };
+  return { title, markdown };
+}
+
+/**
+ * 페이지 본문을 Markdown으로 조회 (캐시 우선)
+ *
+ * ADF는 confluence_get_page에 쓰지 않는다 — 모델에게 줄 값이므로 JSON 구조가 아니라
+ * 읽을 수 있는 텍스트여야 하고, 캡에 걸려 잘려도 Markdown은 손상이 눈에 보인다.
+ */
+async function fetchPageMarkdown(pageId: string): Promise<{ title: string | null; markdown: string }> {
+  const cached = getFromCache(pageId, 'markdown');
+  if (cached?.format === 'markdown') {
+    return { title: pageCache.get(pageId)?.title ?? null, markdown: cached.content };
+  }
+
+  const cloudId = await getCloudId();
+  return fetchMarkdownViaMcp(pageId, cloudId);
 }
 
 // ============================================================================
@@ -273,7 +326,7 @@ async function fetchConfluencePageViaMcp(pageId: string): Promise<PageContent> {
  * 결과를 projectStore의 sourceDocument(HTML) + sourceDocJson(TipTap JSON)에 저장
  */
 export async function loadAdfAsSourceDocument(pageUrl: string): Promise<void> {
-  const pageId = extractPageIdFromUrl(pageUrl);
+  const pageId = resolvePageId(pageUrl);
   if (!pageId) {
     throw new Error(`Confluence 페이지 ID를 추출할 수 없습니다: ${pageUrl}`);
   }
@@ -309,11 +362,151 @@ export const confluenceLoadPageTool = tool(
   {
     name: 'confluence_load_page',
     description:
-      'Confluence 페이지를 원문(Source) 에디터 패널에 로드합니다. ' +
-      '번역 작업을 시작할 원문 페이지 URL을 받아 ADF 형식으로 가져온 뒤 에디터에 표시합니다. ' +
+      'Confluence 페이지를 원문(Source) 에디터 패널에 로드합니다. 현재 원문 문서를 덮어씁니다. ' +
+      '번역을 시작할 때만 사용하세요 — 내용을 읽고 답하기만 할 때는 confluence_get_page를 쓰세요. ' +
       '예: "이 페이지 번역해줘 https://..." → confluence_load_page(pageUrl) 호출.',
     schema: z.object({
       pageUrl: z.string().describe('Confluence 페이지 URL (예: https://your-domain.atlassian.net/wiki/spaces/.../pages/123456)'),
+    }),
+  }
+);
+
+// ============================================================================
+// confluence_search / confluence_get_page — 참고용 조회 (본문이 LLM에 전달됨)
+// ============================================================================
+
+/** Rovo Search 결과 항목 (mcp.atlassian.com `search` 응답) */
+interface RovoSearchResult {
+  id?: string;
+  title?: string;
+  text?: string;
+  url?: string;
+}
+
+/**
+ * 모델에 넘길 검색 결과 개수·발췌 길이.
+ *
+ * Rovo는 20건을 통째로 주는데(원본 ~7,000자) registry 캡 4,000자에 걸려 뒷부분이
+ * 잘린다. 잘린 조각을 주는 대신 건수와 발췌를 우리가 줄인다 — 부족하면 모델이
+ * confluence_get_page로 본문을 읽으면 된다.
+ */
+const SEARCH_RESULT_LIMIT = 10;
+const SEARCH_SNIPPET_CHARS = 200;
+/**
+ * 출력 총량 상한. registry 캡(4,000)보다 낮게 잡아 미들웨어 절단이 일어나지 않게 한다 —
+ * 제목·URL이 긴 결과가 10건 모이면 1건당 700자를 넘길 수 있고, 그때 절단은 몇 건이
+ * 사라졌는지 알려주지 않는다.
+ */
+const SEARCH_OUTPUT_CHARS = 3_500;
+
+/**
+ * ARI에서 페이지 ID 추출 (`ari:cloud:confluence:<cloudId>:page/433752286` → `433752286`)
+ *
+ * URL만으로는 열 수 없는 결과가 있다 — 공간 홈은 `/spaces/X/overview`로 와서
+ * `/pages/<id>`가 없다. ID를 함께 주면 confluence_get_page가 그대로 받는다.
+ */
+function pageIdFromAri(ari: string | undefined): string | null {
+  // page/blogpost로 한정한다 — comment·attachment ID를 pageId로 건네면 조회가 실패한다.
+  return ari?.match(/:(?:page|blogpost)\/(\d+)$/)?.[1] ?? null;
+}
+
+function formatSearchResults(results: RovoSearchResult[]): string {
+  const candidates = results.slice(0, SEARCH_RESULT_LIMIT);
+  const blocks: string[] = [];
+  let used = 0;
+
+  for (const [index, result] of candidates.entries()) {
+    const snippet = (result.text ?? '').replace(/\s+/g, ' ').trim().slice(0, SEARCH_SNIPPET_CHARS);
+    const pageId = pageIdFromAri(result.id);
+    const block = [
+      `${index + 1}. ${result.title ?? '(제목 없음)'}${pageId ? ` (ID: ${pageId})` : ''}`,
+      `   ${result.url ?? '(URL 없음)'}`,
+      snippet ? `   ${snippet}` : null,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
+
+    if (blocks.length > 0 && used + block.length > SEARCH_OUTPUT_CHARS) break;
+    blocks.push(block);
+    used += block.length + 2; // '\n\n'
+  }
+
+  if (blocks.length < candidates.length) {
+    blocks.push(`(길이 제한으로 상위 ${blocks.length}건만 표시했습니다. 더 좁은 검색어를 쓰세요.)`);
+  }
+
+  return blocks.join('\n\n');
+}
+
+/**
+ * confluence_search LangChain 도구
+ *
+ * Rovo Search(`search`)를 Tauri command로 직접 호출한다. MCP 서버 도구를 그대로
+ * 바인딩하지 않는 이유는 ① 서버 설명이 장문이라 tools 프리픽스가 커지고 ② 결과 형태·
+ * 건수를 우리가 통제해야 캡에서 잘리지 않기 때문이다.
+ */
+export const confluenceSearchTool = tool(
+  async ({ query }: { query: string }): Promise<string> => {
+    const result = await invoke<McpToolResult>('mcp_call_tool', {
+      name: 'search',
+      arguments: { query },
+    });
+
+    const text = result.content.map((c) => c.text || '').join('');
+    if (result.isError) {
+      throw new Error(`Confluence 검색 실패: ${text}`);
+    }
+
+    let results: RovoSearchResult[];
+    try {
+      results = JSON.parse(text).results;
+    } catch {
+      // 응답 형태가 바뀌었으면 원문을 그대로 넘긴다(캡은 미들웨어가 적용).
+      return text;
+    }
+    if (!Array.isArray(results)) return text;
+
+    // Rovo Search는 Jira 이슈까지 섞어 반환하고 파라미터로는 좁힐 수 없다.
+    // ARI(`ari:cloud:confluence:...`)로 Confluence만 남긴다.
+    const pages = results.filter((r) => r.id?.includes(':confluence:'));
+    if (pages.length === 0) return '검색 결과가 없습니다.';
+
+    return formatSearchResults(pages);
+  },
+  {
+    name: 'confluence_search',
+    description:
+      '사내 Confluence 위키를 검색해 관련 페이지의 제목·페이지 ID·URL·발췌를 반환합니다. ' +
+      '용례·사내 표기·참고 문서를 찾을 때 사용하세요. ' +
+      '본문 전체가 필요하면 결과의 URL이나 ID로 confluence_get_page를 호출하세요.',
+    schema: z.object({
+      query: z.string().describe('검색어 (자연어 키워드)'),
+    }),
+  }
+);
+
+/**
+ * confluence_get_page LangChain 도구
+ *
+ * 페이지 본문을 Markdown으로 모델에 넘긴다. 원문 패널을 건드리지 않는 읽기 전용 도구.
+ */
+export const confluenceGetPageTool = tool(
+  async ({ pageUrl }: { pageUrl: string }): Promise<string> => {
+    const pageId = resolvePageId(pageUrl);
+    const { title, markdown } = await fetchPageMarkdown(pageId);
+
+    return [title ? `# ${title}` : null, markdown]
+      .filter((part): part is string => part !== null)
+      .join('\n\n');
+  },
+  {
+    name: 'confluence_get_page',
+    description:
+      'Confluence 페이지 URL의 본문을 읽어옵니다(읽기 전용 — 문서를 변경하지 않습니다). ' +
+      '사용자가 준 URL이나 confluence_search 결과 URL을 넘기세요. ' +
+      '짧은 링크(/wiki/x/...)도 지원합니다.',
+    schema: z.object({
+      pageUrl: z.string().describe('Confluence 페이지 URL 또는 페이지 ID'),
     }),
   }
 );
