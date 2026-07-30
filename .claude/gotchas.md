@@ -60,7 +60,7 @@ Critical implementation warnings learned from past issues.
 
 157. **도구 인자 기본값을 함수 시그니처에 박지 말 것**: `getSelectionSurroundings(doc, ids, beforeUnits = 0, afterUnits = 0)`처럼 두면 "생략"과 "0개 요청"이 구분되지 않아 `clampUnits`의 기본값이 죽는다. 실제로 모델이 인자 없이 호출하면 선택 영역만 돌아와 **도구 스텝만 낭비**했다. 시그니처는 `beforeUnits?: number`로 두고 기본값은 clamp 함수 한 곳에서 정한다. zod 스키마의 `min/max`도 clamp와 같은 값으로 유지할 것 — 스키마가 먼저 거절하므로 어긋나면 clamp가 무의미하다.
 
-158. **표 셀은 번역 단위 2개로 세어진다**: `TRANSLATION_UNIT_TYPES`에 `paragraph`와 `tableCell`이 모두 있어 셀 하나가 **셀 + 안쪽 문단** 두 칸을 차지하고 텍스트가 중복된다(`selected: ["셀1","셀1"]`, 표 뒤 문단의 `before: ["셀2","셀2"]`). 앞뒤 N칸이 표에서 실질 N/2칸이 된다. `selectionTools.dropDuplicatedContainers`가 조상 단위를 **자손과 텍스트까지 같을 때만** 버린다(셀 안에 문단이 여러 개면 안 걸린다). `TRANSLATION_UNIT_TYPES` 자체를 고치지 말 것 — `collectTranslationUnits`를 정렬 검사 뷰(`alignUnits.ts`)와 문서 조회 도구가 같이 쓴다. `documentTools`의 `unitIds` 경로에도 같은 중복이 남아 있다.
+158. **표 셀은 번역 단위 2개로 세어진다**: `TRANSLATION_UNIT_TYPES`에 `paragraph`와 `tableCell`이 모두 있어 셀 하나가 **셀 + 안쪽 문단** 두 칸을 차지하고 텍스트가 중복된다(`selected: ["셀1","셀1"]`, 표 뒤 문단의 `before: ["셀2","셀2"]`). 앞뒤 N칸이 표에서 실질 N/2칸이 된다. `selectionTools.dropDuplicatedContainers`가 조상 단위를 **자손과 텍스트까지 같을 때만** 버린다(셀 안에 문단이 여러 개면 안 걸린다). `TRANSLATION_UNIT_TYPES` 자체를 고치지 말 것 — `collectTranslationUnits`를 정렬 검사 뷰(`alignUnits.ts`)와 문서 조회 도구가 같이 쓴다. 선택 재번역 경로는 `dropAncestorUnits`(`TranslationUnitId.ts`)로 조상 유닛을 텍스트 비교 없이 버린다 — 선택 문단의 원문만 필요한 경로라 규칙이 다르다. `documentTools`의 `unitIds` 경로에는 같은 중복이 남아 있다.
 
 159. **선택 문맥의 "앞뒤 N칸"은 인덱스 구간이 아니다**: `selectedUnitRange`는 선택 유닛의 최소~최대 인덱스를 준다. 그 구간을 그대로 `selected`로 쓰면 떨어져 있는 선택(표 1·3열)에서 고르지 않은 2열이 "선택됨"으로 모델에 전달된다. 구간은 before/after 계산에만 쓰고 `selected`는 실제 id로 필터할 것(id가 없는 유닛은 판정 불가라 위치 기준으로 남긴다).
 

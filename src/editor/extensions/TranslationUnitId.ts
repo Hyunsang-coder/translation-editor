@@ -180,6 +180,31 @@ export function collectAlignedSourceUnits(
   });
 }
 
+function isAncestorPath(ancestor: number[], descendant: number[]): boolean {
+  return (
+    ancestor.length < descendant.length &&
+    ancestor.every((index, depth) => descendant[depth] === index)
+  );
+}
+
+/**
+ * 조상 유닛을 버리고 가장 안쪽 유닛만 남긴다.
+ *
+ * 표 셀은 `tableCell`과 그 안의 `paragraph`가 **둘 다** 번역 단위라, 셀 안을
+ * 선택하면 `getTranslationUnitIdsAtRange`가 셀 ID와 문단 ID를 함께 돌려준다.
+ * 그대로 원문을 모으면 셀 전체 텍스트(제목·불릿이 구분자 없이 붙은 한 덩이)와
+ * 선택 문단 텍스트가 같이 들어가 원문이 중복된다.
+ *
+ * "선택한 한 문단의 원문"만 필요한 경로(선택 재번역)에서 쓴다 — 앞뒤 문맥을
+ * 세는 경로(`selectionTools.dropDuplicatedContainers`)는 조상을 확실히 중복일
+ * 때만 버리는 다른 규칙이다.
+ */
+export function dropAncestorUnits(units: TranslationUnit[]): TranslationUnit[] {
+  return units.filter(
+    (unit) => !units.some((other) => isAncestorPath(unit.path, other.path)),
+  );
+}
+
 export function getTranslationUnitIdsAtRange(
   doc: ProseMirrorNode,
   from: number,

@@ -5,6 +5,7 @@ import {
   TranslationUnitId,
   collectAlignedSourceUnits,
   collectTranslationUnits,
+  dropAncestorUnits,
   ensureTranslationUnitIds,
   reattachTranslationUnitIds,
 } from './TranslationUnitId';
@@ -197,6 +198,51 @@ describe('TranslationUnitId', () => {
       const units = collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b']);
 
       expect(units.map((unit) => unit.text)).toEqual(['Body']);
+    });
+  });
+
+  describe('dropAncestorUnits', () => {
+    // 표 셀 하나에 제목+문단 두 블록이 든 실제 문서 구조
+    const cellDoc = ensureTranslationUnitIds({
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                {
+                  type: 'tableCell',
+                  content: [
+                    { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'AS-IS' }] },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Body' }] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }, (() => {
+      let index = 0;
+      return () => `source-${++index}`;
+    })());
+
+    it('표 셀 안을 선택하면 셀 유닛을 버리고 안쪽 유닛만 남긴다', () => {
+      const units = collectTranslationUnits(cellDoc);
+      // 셀 + 제목 + 문단 3개가 잡히고, 셀 텍스트는 자식이 구분자 없이 붙는다
+      expect(units.map((unit) => unit.text)).toEqual(['AS-ISBody', 'AS-IS', 'Body']);
+
+      expect(dropAncestorUnits(units).map((unit) => unit.text)).toEqual(['AS-IS', 'Body']);
+    });
+
+    it('자손이 선택되지 않았으면 셀 유닛을 그대로 둔다', () => {
+      const cellOnly = collectTranslationUnits(cellDoc).filter(
+        (unit) => unit.type === 'tableCell',
+      );
+
+      expect(dropAncestorUnits(cellOnly)).toEqual(cellOnly);
     });
   });
 });

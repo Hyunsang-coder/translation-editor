@@ -53,6 +53,7 @@ import {
 import { getTranslationUnitIdsAtRange } from '@/editor/extensions/TranslationUnitId';
 import {
   collectAlignedSourceUnits,
+  dropAncestorUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
 import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
@@ -564,11 +565,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       return;
     }
-    const sourceText = collectAlignedSourceUnits(
+    // 표 셀 선택은 셀 유닛과 안쪽 문단 유닛이 함께 잡힌다. 조상(셀)을 버리지
+    // 않으면 셀 전체가 원문으로 들어가고 선택 문단이 한 번 더 반복된다.
+    const sourceText = dropAncestorUnits(collectAlignedSourceUnits(
       sourceDoc,
       bubble.editor.getJSON() as TranslationUnitDocument,
       selection.translationUnitIds,
-    )
+    ))
       .map((unit) => unit.text)
       .join('\n');
     if (!sourceText.trim()) {
