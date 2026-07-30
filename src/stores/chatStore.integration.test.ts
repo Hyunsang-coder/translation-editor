@@ -519,6 +519,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
           translationUnitIds: ['unit-1'],
           documentRevision: 'revision-1',
           status: 'active',
+          spansMultipleBlocks: false,
           createdAt: 1,
         },
       });

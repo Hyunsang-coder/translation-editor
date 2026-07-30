@@ -5,6 +5,7 @@ import {
   SelectionAnchor,
   clearSelectionAnchors,
   createSelectionAnchor,
+  normalizeSelectionAnchorRange,
   resolveSelectionAnchor,
 } from './SelectionAnchor';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
@@ -23,6 +24,14 @@ describe('SelectionAnchor', () => {
       content,
     });
     return editor;
+  }
+
+  function findTextPos(ed: Editor, text: string): number {
+    let pos = -1;
+    ed.state.doc.descendants((node, nodePos) => {
+      if (node.isText && node.text === text) pos = nodePos;
+    });
+    return pos;
   }
 
   function targetRange(ed: Editor, occurrence = 0): { from: number; to: number } {
@@ -127,5 +136,90 @@ describe('SelectionAnchor', () => {
     clearSelectionAnchors(ed);
 
     expect(resolveSelectionAnchor(ed, anchorId)).toBeNull();
+  });
+
+  describe('멀티블록 범위', () => {
+    const multiDoc = '<p>One</p><p>Two</p><ul><li><p>Three</p></li></ul>';
+
+    it('문단을 가로지르는 범위도 anchor로 만든다', () => {
+      const ed = createEditor(multiDoc);
+      const range = normalizeSelectionAnchorRange(ed, {
+        from: 2,
+        to: ed.state.doc.content.size - 2,
+      })!;
+
+      const anchorId = createSelectionAnchor(ed, range);
+
+      expect(range.blockCount).toBe(3);
+      expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
+        from: range.from,
+        to: range.to,
+        status: 'active',
+      });
+    });
+
+    it('Cmd+A(AllSelection)는 첫/마지막 textblock 내부로 좁힌다', () => {
+      const ed = createEditor(multiDoc);
+      ed.commands.selectAll();
+      const { from, to } = ed.state.selection;
+
+      const range = normalizeSelectionAnchorRange(ed, { from, to })!;
+
+      // from=0은 doc 노드를 가리켜 그대로는 텍스트 범위가 아니다.
+      expect(range).toMatchObject({ from: 1, blockCount: 3 });
+      expect(ed.state.doc.textBetween(range.from, range.to, '\n')).toBe('One\nTwo\nThree');
+    });
+
+    it('앵커 텍스트는 블록 구분자를 포함한다', () => {
+      const ed = createEditor(multiDoc);
+      const range = normalizeSelectionAnchorRange(ed, {
+        from: 0,
+        to: ed.state.doc.content.size,
+      })!;
+
+      const anchorId = createSelectionAnchor(ed, range);
+
+      expect(resolveSelectionAnchor(ed, anchorId)?.originalText).toBe('One\nTwo\nThree');
+    });
+
+    it('문단 병합은 stale로 잡는다', () => {
+      const ed = createEditor(multiDoc);
+      const anchorId = createSelectionAnchor(ed, normalizeSelectionAnchorRange(ed, {
+        from: 0,
+        to: ed.state.doc.content.size,
+      })!);
+
+      // 두 번째 문단의 시작 경계를 지워 첫 문단과 합친다.
+      // 구분자가 없으면 텍스트가 'OneTwoThree'로 동일해 변경을 놓친다.
+      const twoPos = findTextPos(ed, 'Two');
+      ed.view.dispatch(ed.state.tr.delete(twoPos - 2, twoPos));
+
+      expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
+    });
+
+    it('트림으로 앞 블록의 기여분이 사라지면 blockCount에서 제외한다', () => {
+      const ed = createEditor('<p>One</p><p>Two</p>');
+      // HTML 파서가 후행 공백을 지우므로 직접 넣는다.
+      ed.commands.insertContentAt(4, '  ');
+
+      const range = normalizeSelectionAnchorRange(ed, {
+        from: 4,
+        to: ed.state.doc.content.size - 1,
+      })!;
+
+      expect(range.blockCount).toBe(1);
+      expect(ed.state.doc.textBetween(range.from, range.to)).toBe('Two');
+    });
+
+    it('빈 문단만 걸친 범위는 거부한다', () => {
+      const ed = createEditor('<p>One</p><p></p><p>Two</p>');
+      // 빈 문단(size 2)을 통째로 덮는 범위 — 텍스트 기여분이 없다.
+      const emptyStart = ed.state.doc.child(0).nodeSize;
+
+      expect(normalizeSelectionAnchorRange(ed, {
+        from: emptyStart,
+        to: emptyStart + 2,
+      })).toBeNull();
+    });
   });
 });

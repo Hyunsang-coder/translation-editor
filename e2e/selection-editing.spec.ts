@@ -202,3 +202,111 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('project-memory-delete')).toBeVisible();
   });
 });
+
+// 문단을 가로지르는 선택은 채팅 참조로만 허용한다. 적용 경로(재번역·수정안 적용)는
+// 평문 하나로 교체하면 블록 구조가 뭉개져 막혀 있다.
+// 문서는 주입으로 만든다 — 키보드로 문단을 늘리면 캐럿 위치가 레이아웃에 따라 달라져
+// 두 문단이 하나로 합쳐지는 셋업 사고가 난다.
+test.describe('Multi-block selection', () => {
+  const secondSource = 'Administrators can revoke access at any time.';
+  const secondTarget = '관리자는 언제든지 접근 권한을 회수할 수 있습니다.';
+
+  test.beforeEach(async ({ page }) => {
+    const now = Date.now();
+    await injectTauriMockWithProject(page, {
+      id: 'multi-block-project',
+      metadata: {
+        title: 'Multi Block Project',
+        domain: 'technical',
+        targetLanguage: 'Korean',
+        createdAt: now,
+        updatedAt: now,
+        settings: {
+          strictnessLevel: 0.5,
+          autoSave: true,
+          autoSaveInterval: 5000,
+          theme: 'system',
+        },
+      },
+      // 문서 본문은 segments를 타고 blocks에서 조립된다(`buildTargetDocument`).
+      // segments가 비면 에디터가 빈 문서로 뜬다.
+      segments: [{
+        groupId: 'segment-1',
+        sourceIds: ['source-block'],
+        targetIds: ['target-block'],
+        isAligned: true,
+        order: 0,
+      }],
+      blocks: {
+        'source-block': {
+          id: 'source-block',
+          type: 'source',
+          content:
+            `<p data-translation-unit-id="unit-1">${sourceText}</p>` +
+            `<p data-translation-unit-id="unit-2">${secondSource}</p>`,
+          hash: '',
+          metadata: { createdAt: now, updatedAt: now, tags: [] },
+        },
+        'target-block': {
+          id: 'target-block',
+          type: 'target',
+          content:
+            `<p data-translation-unit-id="unit-1">${targetText}</p>` +
+            `<p data-translation-unit-id="unit-2">${secondTarget}</p>`,
+          hash: '',
+          metadata: { createdAt: now, updatedAt: now, tags: [] },
+        },
+      },
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  async function selectBothParagraphs(page: Page): Promise<Locator> {
+    const targetEditor = page.locator(
+      "[data-testid='target-editor'] [contenteditable='true']",
+    );
+    await expect(targetEditor.locator('p')).toHaveCount(2);
+    await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
+    return targetEditor;
+  }
+
+  test('can be added to chat, and the highlight spans both paragraphs', async ({ page }) => {
+    await selectBothParagraphs(page);
+
+    await page.getByTestId('selection-inline-add-chat').click();
+
+    const chip = page.getByTestId('selection-context-chip');
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText(targetText);
+    await expect(chip).toContainText(secondTarget);
+    // 인라인 데코레이션은 블록마다 하나씩 그려진다.
+    await expect(page.locator('.selection-anchor')).toHaveCount(2);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+  });
+
+  test('retranslate is blocked before generating and leaves no anchor', async ({ page }) => {
+    await selectBothParagraphs(page);
+
+    await page.getByTestId('selection-inline-retranslate').click();
+
+    await expect(page.locator('[data-sonner-toast]')).toBeVisible();
+    await expect(page.getByTestId('selection-edit-modal')).toHaveCount(0);
+    await expect(page.locator('.selection-anchor')).toHaveCount(0);
+  });
+
+  test('a selection inside one paragraph still allows retranslate', async ({ page }) => {
+    const targetEditor = page.locator(
+      "[data-testid='target-editor'] [contenteditable='true']",
+    );
+    await expect(targetEditor.locator('p')).toHaveCount(2);
+    await targetEditor.locator('p').first().click();
+    await targetEditor.locator('p').first().selectText();
+    await expect(page.getByTestId('selection-inline-toolbar-target')).toBeVisible();
+
+    await page.getByTestId('selection-inline-retranslate').click();
+
+    await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
+    await expect(page.locator('.selection-anchor')).toHaveCount(1);
+  });
+});

@@ -1,6 +1,9 @@
 import type { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
-import type { SelectionAnchorRecord } from '@/editor/extensions/SelectionAnchor';
+import {
+  readAnchorText,
+  type SelectionAnchorRecord,
+} from '@/editor/extensions/SelectionAnchor';
 import { pluginKeys } from '@/editor/plugins/pluginKeys';
 
 export type ApplySelectionEditResult = 'applied' | 'stale' | 'invalid';
@@ -20,9 +23,11 @@ export function applySelectionEdit(
     return anchor.status === 'stale' ? 'stale' : 'invalid';
   }
 
-  const currentText = editor.state.doc.textBetween(anchor.from, anchor.to);
+  const currentText = readAnchorText(editor.state.doc, anchor.from, anchor.to);
   if (currentText !== anchor.originalText) return 'stale';
 
+  // 멀티블록 범위는 앵커로 만들 수 있지만(참조·하이라이트용) 적용은 못 한다.
+  // 평문 하나로 교체하면 문단·리스트 항목이 한 블록으로 뭉개진다.
   const $from = editor.state.doc.resolve(anchor.from);
   const $to = editor.state.doc.resolve(anchor.to);
   if (!$from.sameParent($to) || !$from.parent.isTextblock) return 'invalid';

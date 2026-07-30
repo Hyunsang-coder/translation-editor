@@ -38,6 +38,7 @@ import { chatPanelId } from '@/types';
 import type { Editor } from '@tiptap/react';
 import { useEditorStore } from '@/stores/editorStore';
 import {
+  readAnchorText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
 } from '@/editor/extensions/SelectionAnchor';
@@ -399,7 +400,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     if (
       !anchor ||
       anchor.status !== 'active' ||
-      editor.state.doc.textBetween(anchor.from, anchor.to) !== proposal.originalText
+      readAnchorText(editor.state.doc, anchor.from, anchor.to) !== proposal.originalText
     ) {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {
@@ -436,6 +437,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       translationUnitIds: [...snapshot.translationUnitIds],
       documentRevision: snapshot.documentRevision,
       status: anchor.status,
+      // 수정안은 단일 블록 선택에서만 생성된다(멀티블록은 도구 자체가 빠짐).
+      spansMultipleBlocks: false,
       createdAt: proposal.createdAt,
     };
     updateMessage(messageId, {
@@ -477,7 +480,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       activeProject?.id !== proposal.projectId ||
       !anchor ||
       anchor.status !== 'active' ||
-      editor.state.doc.textBetween(anchor.from, anchor.to) !== proposal.originalText
+      readAnchorText(editor.state.doc, anchor.from, anchor.to) !== proposal.originalText
     ) {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {

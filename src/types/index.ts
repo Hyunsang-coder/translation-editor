@@ -214,6 +214,11 @@ export interface SelectionContext {
   segmentGroupId?: string;
   documentRevision: string;
   status: SelectionAnchorStatus;
+  /**
+   * 문단을 가로지르는 선택. 채팅 참조로는 쓸 수 있지만 재번역·수정안 적용은
+   * 막힌다(평문 교체로 블록 구조가 뭉개짐 — `applySelectionEdit` 참고).
+   */
+  spansMultipleBlocks: boolean;
   createdAt: number;
 }
 

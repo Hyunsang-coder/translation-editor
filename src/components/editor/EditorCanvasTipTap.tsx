@@ -45,6 +45,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   createSelectionAnchor,
   normalizeSelectionAnchorRange,
+  readAnchorText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
 } from '@/editor/extensions/SelectionAnchor';
@@ -97,6 +98,14 @@ function inferSegmentGroupIdForSelection(
 
 /** 인라인 선택 툴바 표시 지연 — 드래그 중에 따라다니지 않게 한다 */
 const SELECTION_TOOLBAR_DELAY_MS = 150;
+
+/**
+ * 멀티블록 선택 본문의 상한. 선택 텍스트는 user 메시지에 그대로 실리므로
+ * (`prompt.ts`의 SELECTION 블록) 문서 한 덩이를 통째로 넣는 것을 막는다.
+ * `get_selection_surroundings`의 출력 상한과 같은 값 — 도구가 심하게 축약되는
+ * 구간을 애초에 만들지 않는다.
+ */
+const MAX_MULTI_BLOCK_SELECTION_CHARS = 4_000;
 
 export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
@@ -409,19 +418,41 @@ export function EditorCanvasTipTap(): JSX.Element {
   ): SelectionContext | null => {
     if (!project) return null;
     try {
+      // 표의 여러 셀 선택(CellSelection)은 range가 셀마다 하나씩이고
+      // selection.from/to는 head 셀만 가리킨다. 단일 범위로 옮기면 한 셀만 남거나
+      // 선택하지 않은 셀이 섞이므로 받지 않는다(셀 안쪽 선택은 정상 동작).
+      if (bubble.editor.state.selection.ranges.length > 1) {
+        throw new Error(
+          t('selection.singleRangeRequired', '표의 여러 셀에 걸친 선택은 사용할 수 없습니다. 셀 안에서 선택해주세요.'),
+        );
+      }
       const range = normalizeSelectionAnchorRange(bubble.editor, {
         from: bubble.from,
         to: bubble.to,
       });
       if (!range) {
         throw new Error(
-          t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+          t('selection.textRequired', '선택 영역에서 텍스트를 찾을 수 없습니다.'),
         );
       }
-      const text = bubble.editor.state.doc
-        .textBetween(range.from, range.to, ' ')
-        .trim();
+      const text = readAnchorText(
+        bubble.editor.state.doc,
+        range.from,
+        range.to,
+      ).trim();
       if (!text) return null;
+      // 멀티블록 선택은 문서 한 덩이를 통째로 담을 수 있어 상한을 둔다. 단일 문단에는
+      // 걸지 않는다 — 긴 문단의 재번역이 오늘보다 나빠지면 회귀다.
+      const spansMultipleBlocks = range.blockCount > 1;
+      if (spansMultipleBlocks && text.length > MAX_MULTI_BLOCK_SELECTION_CHARS) {
+        throw new Error(
+          t('selection.tooLong', {
+            length: text.length,
+            max: MAX_MULTI_BLOCK_SELECTION_CHARS,
+            defaultValue: `선택이 너무 깁니다(${text.length}자). ${MAX_MULTI_BLOCK_SELECTION_CHARS}자 이하로 선택해주세요.`,
+          }),
+        );
+      }
       const anchorId = createSelectionAnchor(bubble.editor, {
         from: range.from,
         to: range.to,
@@ -444,6 +475,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         ...(bubble.segmentGroupId ? { segmentGroupId: bubble.segmentGroupId } : {}),
         documentRevision: hashContent(JSON.stringify(bubble.editor.getJSON())),
         status: 'active',
+        spansMultipleBlocks,
         createdAt: Date.now(),
       };
     } catch (error) {
@@ -452,7 +484,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         message:
           error instanceof Error
             ? error.message
-            : t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+            : t('selection.textRequired', '선택 영역에서 텍스트를 찾을 수 없습니다.'),
       });
       return null;
     }
@@ -517,6 +549,16 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (bubble.field !== 'target') return;
     const selection = createChatSelection(bubble);
     if (!selection) return;
+    // 적용 경로(applySelectionEdit)가 멀티블록을 거부하므로 생성 전에 막는다.
+    // 여기서 통과시키면 재번역을 다 받아놓고 적용 단계에서만 실패한다.
+    if (selection.spansMultipleBlocks) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+      });
+      return;
+    }
     const sourceDoc = sourceEditorRef.current?.getJSON() as TranslationUnitDocument | undefined;
     if (!sourceDoc) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);

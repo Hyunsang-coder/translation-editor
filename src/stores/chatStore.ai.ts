@@ -660,7 +660,8 @@ export function createAiActions(
           recentMessages: recent,
           userMessage: maskedUserContent,
           ...(selection ? { selection } : {}),
-          ...(selectionContext?.status === 'active'
+          // 멀티블록 선택은 적용 경로가 없으므로 수정안 제안 도구를 주지 않는다.
+          ...(selectionContext?.status === 'active' && !selectionContext.spansMultipleBlocks
             ? { selectionProposalEnabled: true }
             : {}),
           translationRules,

@@ -77,7 +77,9 @@ describe('applySelectionEdit', () => {
       anchorId: 'invalid',
       from: 2,
       to: editor.state.doc.content.size - 2,
-      originalText: 'neTw',
+      // 앵커 텍스트는 블록 구분자를 포함한다(readAnchorText 기준).
+      // stale이 아니라 블록 경계 가드에서 걸러져야 한다.
+      originalText: 'ne\nTw',
       status: 'active',
       createdAt: 1,
     }, 'replacement')).toBe('invalid');

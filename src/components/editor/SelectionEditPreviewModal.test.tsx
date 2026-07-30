@@ -25,6 +25,7 @@ const selection: SelectionContext = {
   translationUnitIds: ['unit-1'],
   documentRevision: 'revision-1',
   status: 'active',
+  spansMultipleBlocks: false,
   createdAt: 1,
 };
 
