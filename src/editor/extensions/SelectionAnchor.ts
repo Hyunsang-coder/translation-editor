@@ -15,6 +15,11 @@ const DOCUMENT_REPLACE_META = 'selectionAnchorDocumentReplace';
  */
 const ANCHOR_BLOCK_SEPARATOR = '\n';
 
+export interface SelectionRange {
+  from: number;
+  to: number;
+}
+
 /** 앵커 범위의 텍스트를 stale 비교와 같은 기준으로 읽는다 */
 export function readAnchorText(
   doc: ProseMirrorNode,
@@ -24,12 +29,26 @@ export function readAnchorText(
   return doc.textBetween(from, to, ANCHOR_BLOCK_SEPARATOR);
 }
 
+/**
+ * 여러 범위를 문서 순서대로 이어 읽는다. 표 다중 셀 선택은 셀마다 범위가 하나씩
+ * 생기고 그 사이에 선택하지 않은 셀이 낀다 — 하나의 span으로 읽으면 안 고른
+ * 셀까지 섞인다.
+ */
+export function readAnchorRangesText(
+  doc: ProseMirrorNode,
+  ranges: readonly SelectionRange[],
+): string {
+  return ranges
+    .map((range) => readAnchorText(doc, range.from, range.to))
+    .join(ANCHOR_BLOCK_SEPARATOR);
+}
+
 export type SelectionAnchorStatus = 'active' | 'stale';
 
 export interface SelectionAnchorRecord {
   anchorId: string;
-  from: number;
-  to: number;
+  /** 선택 범위(문서 순서, 최소 1개). 표 다중 셀 선택은 셀마다 하나씩 들어온다. */
+  ranges: SelectionRange[];
   originalText: string;
   status: SelectionAnchorStatus;
   createdAt: number;
@@ -41,17 +60,30 @@ export interface SelectionAnchorPluginState {
 }
 
 export interface CreateSelectionAnchorInput {
-  from: number;
-  to: number;
+  ranges: readonly SelectionRange[];
   anchorId?: string;
   createdAt?: number;
 }
 
-export interface NormalizedSelectionRange {
-  from: number;
-  to: number;
+export interface NormalizedSelectionRange extends SelectionRange {
   /** 범위가 실제로 걸친 textblock 수. 1보다 크면 문단을 가로지르는 선택이다. */
   blockCount: number;
+}
+
+export interface NormalizedSelectionRanges {
+  ranges: SelectionRange[];
+  /** 모든 범위가 걸친 textblock 총합. 1보다 크면 적용 경로를 쓸 수 없다. */
+  blockCount: number;
+}
+
+/**
+ * 단일 범위 앵커의 범위를 꺼낸다. 다중 범위(표 셀 선택)는 평문 하나로 교체할
+ * 방법이 없으므로 적용 경로에서 null로 걸러낸다.
+ */
+export function getSingleAnchorRange(
+  anchor: SelectionAnchorRecord,
+): SelectionRange | null {
+  return anchor.ranges.length === 1 ? anchor.ranges[0]! : null;
 }
 
 type SelectionAnchorMeta =
@@ -66,11 +98,13 @@ function buildDecorations(
 ): DecorationSet {
   const decorations = Object.values(anchors)
     .filter((anchor) => anchor.status === 'active')
-    .map((anchor) =>
-      Decoration.inline(anchor.from, anchor.to, {
-        class: 'selection-anchor',
-        'data-selection-anchor-id': anchor.anchorId,
-      }),
+    .flatMap((anchor) =>
+      anchor.ranges.map((range) =>
+        Decoration.inline(range.from, range.to, {
+          class: 'selection-anchor',
+          'data-selection-anchor-id': anchor.anchorId,
+        }),
+      ),
     );
 
   return DecorationSet.create(doc, decorations);
@@ -88,15 +122,18 @@ function mapAnchor(
   tr: Transaction,
   doc: ProseMirrorNode,
 ): SelectionAnchorRecord {
-  const from = tr.mapping.map(anchor.from, 1);
-  const to = tr.mapping.map(anchor.to, -1);
-  const rangeIsValid = from >= 0 && to > from && to <= doc.content.size;
-  const currentText = rangeIsValid ? readAnchorText(doc, from, to) : '';
+  const ranges = anchor.ranges.map((range) => ({
+    from: tr.mapping.map(range.from, 1),
+    to: tr.mapping.map(range.to, -1),
+  }));
+  const rangesAreValid = ranges.every(
+    (range) => range.from >= 0 && range.to > range.from && range.to <= doc.content.size,
+  );
+  const currentText = rangesAreValid ? readAnchorRangesText(doc, ranges) : '';
 
   return {
     ...anchor,
-    from,
-    to,
+    ranges,
     status:
       anchor.status === 'active' && currentText === anchor.originalText
         ? 'active'
@@ -213,7 +250,7 @@ function textblockSpan(
 
 export function normalizeSelectionAnchorRange(
   editor: Editor,
-  input: Pick<CreateSelectionAnchorInput, 'from' | 'to'>,
+  input: SelectionRange,
 ): NormalizedSelectionRange | null {
   const { doc } = editor.state;
   if (input.from < 0 || input.to <= input.from || input.to > doc.content.size) {
@@ -236,21 +273,37 @@ export function normalizeSelectionAnchorRange(
   return textblockSpan(doc, from, to);
 }
 
+/**
+ * 여러 범위를 각각 정규화한다. 표 다중 셀 선택(`CellSelection`)은 셀마다 범위가
+ * 하나씩 생기므로 하나로 합칠 수 없다 — 합치면 사이에 낀, 고르지 않은 셀이 섞인다.
+ * 정규화에서 탈락한 범위(빈 문단 등)는 버린다.
+ */
+export function normalizeSelectionAnchorRanges(
+  editor: Editor,
+  inputs: readonly SelectionRange[],
+): NormalizedSelectionRanges | null {
+  const normalized = inputs
+    .map((input) => normalizeSelectionAnchorRange(editor, input))
+    .filter((range): range is NormalizedSelectionRange => range !== null)
+    .sort((a, b) => a.from - b.from);
+  if (normalized.length === 0) return null;
+
+  return {
+    ranges: normalized.map(({ from, to }) => ({ from, to })),
+    blockCount: normalized.reduce((sum, range) => sum + range.blockCount, 0),
+  };
+}
+
 export function createSelectionAnchor(
   editor: Editor,
   input: CreateSelectionAnchorInput,
 ): string {
-  const range = normalizeSelectionAnchorRange(editor, input);
-  if (!range) {
-    const { from, to } = input;
-    if (from < 0 || to <= from || to > editor.state.doc.content.size) {
-      throw new Error('선택 범위가 유효하지 않습니다.');
-    }
+  const normalized = normalizeSelectionAnchorRanges(editor, input.ranges);
+  if (!normalized) {
     throw new Error('선택 범위에서 텍스트를 찾을 수 없습니다.');
   }
-  const { from, to } = range;
 
-  const originalText = readAnchorText(editor.state.doc, from, to);
+  const originalText = readAnchorRangesText(editor.state.doc, normalized.ranges);
   if (!originalText) {
     throw new Error('빈 선택 범위에는 앵커를 만들 수 없습니다.');
   }
@@ -260,8 +313,7 @@ export function createSelectionAnchor(
     type: 'create',
     anchor: {
       anchorId,
-      from,
-      to,
+      ranges: normalized.ranges,
       originalText,
       status: 'active',
       createdAt: input.createdAt ?? Date.now(),

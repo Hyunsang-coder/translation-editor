@@ -5,7 +5,10 @@ import {
   SelectionAnchor,
   clearSelectionAnchors,
   createSelectionAnchor,
+  getSingleAnchorRange,
   normalizeSelectionAnchorRange,
+  normalizeSelectionAnchorRanges,
+  readAnchorRangesText,
   resolveSelectionAnchor,
 } from './SelectionAnchor';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
@@ -48,22 +51,21 @@ describe('SelectionAnchor', () => {
   it('앞에서 입력하면 원래 선택 위치를 mapping하고 active를 유지한다', () => {
     const ed = createEditor();
     const range = targetRange(ed);
-    const anchorId = createSelectionAnchor(ed, range);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
     ed.commands.insertContentAt(1, 'New ');
 
     const anchor = resolveSelectionAnchor(ed, anchorId);
     expect(anchor?.status).toBe('active');
-    expect(anchor?.from).toBe(range.from + 4);
-    expect(ed.state.doc.textBetween(anchor!.from, anchor!.to)).toBe('target');
+    expect(anchor?.ranges[0]?.from).toBe(range.from + 4);
+    expect(ed.state.doc.textBetween(anchor!.ranges[0]!.from, anchor!.ranges[0]!.to)).toBe('target');
   });
 
   it('문단의 첫 글자부터 마지막 글자까지 선택한 범위도 anchor로 만든다', () => {
     const ed = createEditor('<p>Whole paragraph</p>');
 
     const anchorId = createSelectionAnchor(ed, {
-      from: 1,
-      to: 1 + ed.state.doc.textContent.length,
+      ranges: [{ from: 1, to: 1 + ed.state.doc.textContent.length }],
     });
 
     expect(resolveSelectionAnchor(ed, anchorId)?.originalText).toBe('Whole paragraph');
@@ -73,13 +75,11 @@ describe('SelectionAnchor', () => {
     const ed = createEditor('<p>Whole paragraph</p>');
 
     const anchorId = createSelectionAnchor(ed, {
-      from: 0,
-      to: ed.state.doc.content.size,
+      ranges: [{ from: 0, to: ed.state.doc.content.size }],
     });
 
     expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
-      from: 1,
-      to: ed.state.doc.content.size - 1,
+      ranges: [{ from: 1, to: ed.state.doc.content.size - 1 }],
       originalText: 'Whole paragraph',
     });
   });
@@ -87,13 +87,12 @@ describe('SelectionAnchor', () => {
   it('뒤에서 입력하면 위치와 active 상태를 유지한다', () => {
     const ed = createEditor();
     const range = targetRange(ed);
-    const anchorId = createSelectionAnchor(ed, range);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
     ed.commands.insertContentAt(ed.state.doc.content.size - 1, ' Later');
 
     expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
-      from: range.from,
-      to: range.to,
+      ranges: [{ from: range.from, to: range.to }],
       status: 'active',
     });
   });
@@ -101,7 +100,7 @@ describe('SelectionAnchor', () => {
   it('선택 범위 내부가 수정되면 stale로 전환한다', () => {
     const ed = createEditor();
     const range = targetRange(ed);
-    const anchorId = createSelectionAnchor(ed, range);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
     ed.commands.insertContentAt(range.from + 2, 'X');
 
@@ -111,18 +110,18 @@ describe('SelectionAnchor', () => {
   it('동일 문구가 여러 번 있어도 두 번째 원래 위치를 유지한다', () => {
     const ed = createEditor();
     const range = targetRange(ed, 1);
-    const anchorId = createSelectionAnchor(ed, range);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
     ed.commands.insertContentAt(1, 'target ');
 
     const anchor = resolveSelectionAnchor(ed, anchorId);
     expect(anchor?.status).toBe('active');
-    expect(anchor?.from).toBe(range.from + 7);
+    expect(anchor?.ranges[0]?.from).toBe(range.from + 7);
   });
 
   it('문서 전체 교체 시 anchor를 clear한다', () => {
     const ed = createEditor();
-    const anchorId = createSelectionAnchor(ed, targetRange(ed));
+    const anchorId = createSelectionAnchor(ed, { ranges: [targetRange(ed)] });
 
     replaceDocContent(ed, '<p>Replacement document</p>', { addToHistory: false });
 
@@ -131,7 +130,7 @@ describe('SelectionAnchor', () => {
 
   it('명시적으로 모든 anchor를 해제할 수 있다', () => {
     const ed = createEditor();
-    const anchorId = createSelectionAnchor(ed, targetRange(ed));
+    const anchorId = createSelectionAnchor(ed, { ranges: [targetRange(ed)] });
 
     clearSelectionAnchors(ed);
 
@@ -148,12 +147,11 @@ describe('SelectionAnchor', () => {
         to: ed.state.doc.content.size - 2,
       })!;
 
-      const anchorId = createSelectionAnchor(ed, range);
+      const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
       expect(range.blockCount).toBe(3);
       expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
-        from: range.from,
-        to: range.to,
+        ranges: [{ from: range.from, to: range.to }],
         status: 'active',
       });
     });
@@ -177,17 +175,19 @@ describe('SelectionAnchor', () => {
         to: ed.state.doc.content.size,
       })!;
 
-      const anchorId = createSelectionAnchor(ed, range);
+      const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
       expect(resolveSelectionAnchor(ed, anchorId)?.originalText).toBe('One\nTwo\nThree');
     });
 
     it('문단 병합은 stale로 잡는다', () => {
       const ed = createEditor(multiDoc);
-      const anchorId = createSelectionAnchor(ed, normalizeSelectionAnchorRange(ed, {
-        from: 0,
-        to: ed.state.doc.content.size,
-      })!);
+      const anchorId = createSelectionAnchor(ed, {
+        ranges: [normalizeSelectionAnchorRange(ed, {
+          from: 0,
+          to: ed.state.doc.content.size,
+        })!],
+      });
 
       // 두 번째 문단의 시작 경계를 지워 첫 문단과 합친다.
       // 구분자가 없으면 텍스트가 'OneTwoThree'로 동일해 변경을 놓친다.
@@ -220,6 +220,69 @@ describe('SelectionAnchor', () => {
         from: emptyStart,
         to: emptyStart + 2,
       })).toBeNull();
+    });
+  });
+
+  // 표에서 여러 셀을 드래그하면 CellSelection이고 셀마다 range가 하나씩 생긴다.
+  // 사이에 고르지 않은 셀이 낄 수 있어 하나의 span으로 합칠 수 없다.
+  describe('다중 범위(표 셀 선택)', () => {
+    const cellsDoc = '<p>Alpha</p><p>Beta</p><p>Gamma</p>';
+
+    /** Alpha와 Gamma만 고른 상황 — Beta는 사이에 낀 미선택 셀이다 */
+    function disjointRanges(ed: Editor): Array<{ from: number; to: number }> {
+      const range = (word: string): { from: number; to: number } => {
+        const from = findTextPos(ed, word);
+        return { from, to: from + word.length };
+      };
+      return [range('Alpha'), range('Gamma')];
+    }
+
+    it('범위를 문서 순서로 이어 읽고 사이에 낀 블록은 넣지 않는다', () => {
+      const ed = createEditor(cellsDoc);
+      const ranges = disjointRanges(ed);
+
+      // 입력 순서가 뒤집혀 있어도(CellSelection은 head 셀이 먼저 온다) 문서 순서로 정렬한다.
+      const normalized = normalizeSelectionAnchorRanges(ed, [ranges[1]!, ranges[0]!])!;
+
+      expect(normalized.ranges).toEqual(ranges);
+      expect(normalized.blockCount).toBe(2);
+      expect(readAnchorRangesText(ed.state.doc, normalized.ranges)).toBe('Alpha\nGamma');
+    });
+
+    it('범위마다 데코레이션을 그린다', () => {
+      const ed = createEditor(cellsDoc);
+      createSelectionAnchor(ed, { ranges: disjointRanges(ed) });
+
+      expect(ed.view.dom.querySelectorAll('.selection-anchor')).toHaveLength(2);
+    });
+
+    it('선택하지 않은 사이 블록을 고쳐도 stale이 되지 않는다', () => {
+      const ed = createEditor(cellsDoc);
+      const anchorId = createSelectionAnchor(ed, { ranges: disjointRanges(ed) });
+
+      ed.commands.insertContentAt(findTextPos(ed, 'Beta') + 2, 'X');
+
+      expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('active');
+    });
+
+    it('고른 범위 안을 고치면 stale이 된다', () => {
+      const ed = createEditor(cellsDoc);
+      const anchorId = createSelectionAnchor(ed, { ranges: disjointRanges(ed) });
+
+      ed.commands.insertContentAt(findTextPos(ed, 'Gamma') + 2, 'X');
+
+      expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
+    });
+
+    it('단일 범위 앵커만 적용 경로에 넘긴다', () => {
+      const ed = createEditor(cellsDoc);
+      const multi = createSelectionAnchor(ed, { ranges: disjointRanges(ed) });
+      const single = createSelectionAnchor(ed, {
+        ranges: [disjointRanges(ed)[0]!],
+      });
+
+      expect(getSingleAnchorRange(resolveSelectionAnchor(ed, multi)!)).toBeNull();
+      expect(getSingleAnchorRange(resolveSelectionAnchor(ed, single)!)).not.toBeNull();
     });
   });
 });

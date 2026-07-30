@@ -4,6 +4,59 @@ import { injectTauriMockWithProject } from './tauri-mock';
 const sourceText = 'The workspace is designed for enterprise administrators.';
 const targetText = '이 작업 공간은 엔터프라이즈 관리자를 위해 설계되었습니다.';
 
+/**
+ * 문서 본문은 segments를 타고 blocks에서 조립된다(`buildTargetDocument`) — segments가
+ * 비면 에디터가 빈 문서로 뜬다. 키보드로 문단을 늘리면 캐럿 위치가 레이아웃에 따라
+ * 달라져 두 문단이 하나로 합쳐지므로, 여러 블록이 필요한 테스트는 주입으로 만든다.
+ */
+async function seedProject(
+  page: Page,
+  doc: { id: string; source: string; target: string },
+): Promise<void> {
+  const now = Date.now();
+  await injectTauriMockWithProject(page, {
+    id: doc.id,
+    metadata: {
+      title: doc.id,
+      domain: 'technical',
+      targetLanguage: 'Korean',
+      createdAt: now,
+      updatedAt: now,
+      settings: {
+        strictnessLevel: 0.5,
+        autoSave: true,
+        autoSaveInterval: 5000,
+        theme: 'system',
+      },
+    },
+    segments: [{
+      groupId: 'segment-1',
+      sourceIds: ['source-block'],
+      targetIds: ['target-block'],
+      isAligned: true,
+      order: 0,
+    }],
+    blocks: {
+      'source-block': {
+        id: 'source-block',
+        type: 'source',
+        content: doc.source,
+        hash: '',
+        metadata: { createdAt: now, updatedAt: now, tags: [] },
+      },
+      'target-block': {
+        id: 'target-block',
+        type: 'target',
+        content: doc.target,
+        hash: '',
+        metadata: { createdAt: now, updatedAt: now, tags: [] },
+      },
+    },
+  });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+}
+
 // 선택 액션의 진입점은 인라인 툴바 하나다(우클릭 메뉴는 중복이라 제거됨).
 async function selectAndOpenToolbar(
   page: Page,
@@ -212,54 +265,15 @@ test.describe('Multi-block selection', () => {
   const secondTarget = '관리자는 언제든지 접근 권한을 회수할 수 있습니다.';
 
   test.beforeEach(async ({ page }) => {
-    const now = Date.now();
-    await injectTauriMockWithProject(page, {
+    await seedProject(page, {
       id: 'multi-block-project',
-      metadata: {
-        title: 'Multi Block Project',
-        domain: 'technical',
-        targetLanguage: 'Korean',
-        createdAt: now,
-        updatedAt: now,
-        settings: {
-          strictnessLevel: 0.5,
-          autoSave: true,
-          autoSaveInterval: 5000,
-          theme: 'system',
-        },
-      },
-      // 문서 본문은 segments를 타고 blocks에서 조립된다(`buildTargetDocument`).
-      // segments가 비면 에디터가 빈 문서로 뜬다.
-      segments: [{
-        groupId: 'segment-1',
-        sourceIds: ['source-block'],
-        targetIds: ['target-block'],
-        isAligned: true,
-        order: 0,
-      }],
-      blocks: {
-        'source-block': {
-          id: 'source-block',
-          type: 'source',
-          content:
-            `<p data-translation-unit-id="unit-1">${sourceText}</p>` +
-            `<p data-translation-unit-id="unit-2">${secondSource}</p>`,
-          hash: '',
-          metadata: { createdAt: now, updatedAt: now, tags: [] },
-        },
-        'target-block': {
-          id: 'target-block',
-          type: 'target',
-          content:
-            `<p data-translation-unit-id="unit-1">${targetText}</p>` +
-            `<p data-translation-unit-id="unit-2">${secondTarget}</p>`,
-          hash: '',
-          metadata: { createdAt: now, updatedAt: now, tags: [] },
-        },
-      },
+      source:
+        `<p data-translation-unit-id="unit-1">${sourceText}</p>` +
+        `<p data-translation-unit-id="unit-2">${secondSource}</p>`,
+      target:
+        `<p data-translation-unit-id="unit-1">${targetText}</p>` +
+        `<p data-translation-unit-id="unit-2">${secondTarget}</p>`,
     });
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
   });
 
   async function selectBothParagraphs(page: Page): Promise<Locator> {
@@ -308,5 +322,74 @@ test.describe('Multi-block selection', () => {
 
     await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
     await expect(page.locator('.selection-anchor')).toHaveCount(1);
+  });
+});
+
+// 표에서 여러 셀을 드래그하면 CellSelection이고, `selection.from/to`는 head 셀만
+// 가리킨다(문서 순서도 아니다). ranges를 쓰지 않으면 한 셀만 잡히거나, 하나의
+// span으로 훑으면 사이에 낀 미선택 셀까지 섞인다.
+test.describe('Table cell selection', () => {
+  const cellRow = (prefix: string): string =>
+    '<table><tbody><tr>' +
+    `<td><p data-translation-unit-id="${prefix}-1">${prefix} 하나</p></td>` +
+    `<td><p data-translation-unit-id="${prefix}-2">${prefix} 둘</p></td>` +
+    `<td><p data-translation-unit-id="${prefix}-3">${prefix} 셋</p></td>` +
+    '</tr></tbody></table>';
+
+  test.beforeEach(async ({ page }) => {
+    await seedProject(page, {
+      id: 'table-cell-project',
+      source: cellRow('source'),
+      target: cellRow('cell'),
+    });
+  });
+
+  /** 첫 셀에서 마지막 셀까지 드래그 — prosemirror-tables가 CellSelection으로 만든다 */
+  async function dragAcrossCells(page: Page): Promise<void> {
+    const cells = page.locator("[data-testid='target-editor'] td");
+    await expect(cells).toHaveCount(3);
+    const first = (await cells.nth(0).boundingBox())!;
+    const last = (await cells.nth(2).boundingBox())!;
+    await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.getByTestId('selection-inline-toolbar-target')).toBeVisible();
+  }
+
+  test('chat selection covers every selected cell', async ({ page }) => {
+    await dragAcrossCells(page);
+
+    await page.getByTestId('selection-inline-add-chat').click();
+
+    const chip = page.getByTestId('selection-context-chip');
+    await expect(chip).toContainText('cell 하나');
+    await expect(chip).toContainText('cell 셋');
+    // 셀마다 하나씩 그려진다.
+    await expect(page.locator('.selection-anchor')).toHaveCount(3);
+  });
+
+  test('a comment marks every selected cell', async ({ page }) => {
+    await dragAcrossCells(page);
+
+    await page.getByTestId('selection-inline-comment').click();
+    await page.locator('textarea').last().fill('표 전체에 대한 코멘트');
+    await page.getByRole('button', { name: '저장' }).click();
+
+    await expect(
+      page.locator("[data-testid='target-editor'] .comment-mark"),
+    ).toHaveCount(3);
+  });
+
+  test('copying uses every selected cell', async ({ page }) => {
+    // 기본 설정은 클립보드 권한을 주지 않는다.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await dragAcrossCells(page);
+
+    await page.getByTestId('selection-inline-copy').click();
+
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain('cell 하나');
+    expect(copied).toContain('cell 셋');
   });
 });

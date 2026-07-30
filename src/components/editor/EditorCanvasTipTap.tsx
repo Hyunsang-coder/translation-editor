@@ -44,10 +44,11 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import {
   createSelectionAnchor,
-  normalizeSelectionAnchorRange,
-  readAnchorText,
+  normalizeSelectionAnchorRanges,
+  readAnchorRangesText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
+  type SelectionRange,
 } from '@/editor/extensions/SelectionAnchor';
 import { getTranslationUnitIdsAtRange } from '@/editor/extensions/TranslationUnitId';
 import {
@@ -238,8 +239,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     text: string;
     editor: Editor;
     field: CommentField;
+    /** 선택 전체를 감싸는 범위 — 툴바 위치 계산용. 다중 범위는 사이가 비어 있을 수 있다. */
     from: number;
     to: number;
+    /** 실제 선택 범위(문서 순서). 표 다중 셀 선택은 셀마다 하나씩 들어온다. */
+    ranges: SelectionRange[];
     segmentGroupId: string | undefined;
   }
 
@@ -270,8 +274,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     excerpt: string;
     editor: Editor;
     field: CommentField;
-    from: number;
-    to: number;
+    /** 코멘트 마크를 붙일 범위(문서 순서). 표 다중 셀 선택은 셀마다 하나씩. */
+    ranges: SelectionRange[];
     segmentGroupId: string | undefined;
   }>(null);
 
@@ -291,10 +295,20 @@ export function EditorCanvasTipTap(): JSX.Element {
     editor: Editor,
     field: CommentField,
   ): Omit<SelectionBubble, 'top' | 'left'> | null => {
-    const { from, to } = editor.state.selection;
-    if (from === to) return null;
+    // 표에서 여러 셀을 드래그하면 CellSelection이고 셀마다 range가 하나씩 생긴다.
+    // `selection.from/to`는 head 셀만 가리키므로(문서 순서도 아님) ranges를 쓴다.
+    const ranges = editor.state.selection.ranges
+      .map((range) => ({ from: range.$from.pos, to: range.$to.pos }))
+      .filter((range) => range.to > range.from)
+      .sort((a, b) => a.from - b.from);
+    if (ranges.length === 0) return null;
+    const from = ranges[0]!.from;
+    const to = ranges[ranges.length - 1]!.to;
 
-    const selectedText = editor.state.doc.textBetween(from, to, ' ').trim();
+    const selectedText = ranges
+      .map((range) => editor.state.doc.textBetween(range.from, range.to, '\n'))
+      .join('\n')
+      .trim();
     if (!selectedText) return null;
 
     // 선택 범위가 속한 블록의 segmentGroupId 추출(중복 구절 모호성 완화)
@@ -315,7 +329,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       segmentGroupId = inferSegmentGroupIdForSelection(project, field, selectedText);
     }
 
-    return { text: selectedText, editor, field, from, to, segmentGroupId };
+    return { text: selectedText, editor, field, from, to, ranges, segmentGroupId };
   }, [project]);
 
   // 선택 영역 위(넘치면 아래)에 인라인 툴바를 띄운다.
@@ -418,32 +432,20 @@ export function EditorCanvasTipTap(): JSX.Element {
   ): SelectionContext | null => {
     if (!project) return null;
     try {
-      // 표의 여러 셀 선택(CellSelection)은 range가 셀마다 하나씩이고
-      // selection.from/to는 head 셀만 가리킨다. 단일 범위로 옮기면 한 셀만 남거나
-      // 선택하지 않은 셀이 섞이므로 받지 않는다(셀 안쪽 선택은 정상 동작).
-      if (bubble.editor.state.selection.ranges.length > 1) {
-        throw new Error(
-          t('selection.singleRangeRequired', '표의 여러 셀에 걸친 선택은 사용할 수 없습니다. 셀 안에서 선택해주세요.'),
-        );
-      }
-      const range = normalizeSelectionAnchorRange(bubble.editor, {
-        from: bubble.from,
-        to: bubble.to,
-      });
-      if (!range) {
+      const normalized = normalizeSelectionAnchorRanges(bubble.editor, bubble.ranges);
+      if (!normalized) {
         throw new Error(
           t('selection.textRequired', '선택 영역에서 텍스트를 찾을 수 없습니다.'),
         );
       }
-      const text = readAnchorText(
+      const text = readAnchorRangesText(
         bubble.editor.state.doc,
-        range.from,
-        range.to,
+        normalized.ranges,
       ).trim();
       if (!text) return null;
       // 멀티블록 선택은 문서 한 덩이를 통째로 담을 수 있어 상한을 둔다. 단일 문단에는
       // 걸지 않는다 — 긴 문단의 재번역이 오늘보다 나빠지면 회귀다.
-      const spansMultipleBlocks = range.blockCount > 1;
+      const spansMultipleBlocks = normalized.blockCount > 1;
       if (spansMultipleBlocks && text.length > MAX_MULTI_BLOCK_SELECTION_CHARS) {
         throw new Error(
           t('selection.tooLong', {
@@ -454,9 +456,10 @@ export function EditorCanvasTipTap(): JSX.Element {
         );
       }
       const anchorId = createSelectionAnchor(bubble.editor, {
-        from: range.from,
-        to: range.to,
+        ranges: normalized.ranges,
       });
+      const first = normalized.ranges[0]!;
+      const last = normalized.ranges[normalized.ranges.length - 1]!;
       const selectionId = uuidv4();
       return {
         selectionId,
@@ -464,14 +467,18 @@ export function EditorCanvasTipTap(): JSX.Element {
         projectId: project.id,
         panel: bubble.field,
         text,
-        from: range.from,
-        to: range.to,
+        from: first.from,
+        to: last.to,
         anchorId,
-        translationUnitIds: getTranslationUnitIdsAtRange(
-          bubble.editor.state.doc,
-          range.from,
-          range.to,
-        ),
+        // 범위마다 따로 모은다 — 다중 범위의 span으로 훑으면 고르지 않은 셀의
+        // 유닛까지 섞인다.
+        translationUnitIds: [...new Set(normalized.ranges.flatMap(
+          (range: SelectionRange) => getTranslationUnitIdsAtRange(
+            bubble.editor.state.doc,
+            range.from,
+            range.to,
+          ),
+        ))],
         ...(bubble.segmentGroupId ? { segmentGroupId: bubble.segmentGroupId } : {}),
         documentRevision: hashContent(JSON.stringify(bubble.editor.getJSON())),
         status: 'active',
@@ -525,23 +532,12 @@ export function EditorCanvasTipTap(): JSX.Element {
     editor: Editor,
     field: CommentField,
   ): void => {
-    const { from, to } = editor.state.selection;
-    if (from === to) return;
-    const text = editor.state.doc.textBetween(from, to, ' ').trim();
-    if (!text) return;
-    const selection = createChatSelection({
-      top: 0,
-      left: 0,
-      text,
-      editor,
-      field,
-      from,
-      to,
-      segmentGroupId: inferSegmentGroupIdForSelection(project, field, text),
-    });
+    const bubble = buildSelectionBubble(editor, field);
+    if (!bubble) return;
+    const selection = createChatSelection({ ...bubble, top: 0, left: 0 });
     if (!selection) return;
     openChatWithSelection(selection);
-  }, [createChatSelection, openChatWithSelection, project]);
+  }, [buildSelectionBubble, createChatSelection, openChatWithSelection]);
 
   const openSelectionRetranslate = useCallback((
     bubble: SelectionBubble,
@@ -787,8 +783,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       ctx: {
         editor: Editor;
         field: CommentField;
-        from: number;
-        to: number;
+        ranges: SelectionRange[];
         excerpt: string;
         segmentGroupId: string | undefined;
       },
@@ -806,11 +801,13 @@ export function EditorCanvasTipTap(): JSX.Element {
 
       // 선택 범위에 commentId 마크 적용
       // (에디터 onUpdate → setTarget/SourceDocument → write-through 저장으로 마크가 영속됨)
-      ctx.editor
-        .chain()
-        .focus()
-        .setTextSelection({ from: ctx.from, to: ctx.to })
-        .setComment(created.id)
+      // 표 다중 셀 선택은 범위가 여러 개다 — 하나의 span으로 칠하면 고르지 않은
+      // 셀까지 마킹된다. 한 chain(=한 transaction)에서 범위마다 적용한다.
+      ctx.ranges
+        .reduce(
+          (chain, range) => chain.setTextSelection(range).setComment(created.id),
+          ctx.editor.chain().focus(),
+        )
         .run();
 
       // 코멘트 본문 영속(프로젝트 저장 경로에서 commentStore를 함께 저장)
@@ -1862,8 +1859,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               excerpt: b.text.trim(),
               editor: b.editor,
               field: b.field,
-              from: b.from,
-              to: b.to,
+              ranges: b.ranges,
               segmentGroupId: b.segmentGroupId,
             });
             setSelectionToolbar(null);
@@ -1919,8 +1915,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               {
                 editor: commentPopover.editor,
                 field: commentPopover.field,
-                from: commentPopover.from,
-                to: commentPopover.to,
+                ranges: commentPopover.ranges,
                 excerpt: commentPopover.excerpt,
                 segmentGroupId: commentPopover.segmentGroupId,
               },

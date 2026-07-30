@@ -661,7 +661,6 @@
     "dismiss": "Remove selection",
     "sameBlockRequired": "Select text within a single paragraph.",
     "textRequired": "No text found in the selected range.",
-    "singleRangeRequired": "Selections spanning multiple table cells are not supported. Select inside a single cell.",
     "tooLong": "The selection is too long ({{length}} chars). Select {{max}} chars or fewer.",
     "preview": "Preview",
     "dismissProposal": "Dismiss",

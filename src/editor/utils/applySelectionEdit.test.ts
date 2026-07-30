@@ -24,8 +24,7 @@ describe('applySelectionEdit', () => {
     const text = editor.state.doc.textContent;
     const second = text.lastIndexOf('target') + 1;
     const anchorId = createSelectionAnchor(editor, {
-      from: second,
-      to: second + 'target'.length,
+      ranges: [{ from: second, to: second + 'target'.length }],
     });
     return { editor, anchorId };
   }
@@ -37,8 +36,8 @@ describe('applySelectionEdit', () => {
     expect(applySelectionEdit(ed, anchor, 'replacement')).toBe('applied');
     expect(ed.state.doc.textContent).toBe('First target and replacement.');
     expect(resolveSelectionAnchor(ed, anchorId)).toBeNull();
-    expect(ed.state.selection.from).toBe(anchor.from);
-    expect(ed.state.selection.to).toBe(anchor.from + 'replacement'.length);
+    expect(ed.state.selection.from).toBe(anchor.ranges[0]!.from);
+    expect(ed.state.selection.to).toBe(anchor.ranges[0]!.from + 'replacement'.length);
   });
 
   it('문단 전체 텍스트 anchor를 적용한다', () => {
@@ -47,8 +46,7 @@ describe('applySelectionEdit', () => {
       content: '<p>Whole paragraph</p>',
     });
     const anchorId = createSelectionAnchor(editor, {
-      from: 1,
-      to: 1 + editor.state.doc.textContent.length,
+      ranges: [{ from: 1, to: 1 + editor.state.doc.textContent.length }],
     });
 
     expect(
@@ -60,7 +58,7 @@ describe('applySelectionEdit', () => {
   it('선택 내부가 바뀐 stale anchor는 적용하지 않는다', () => {
     const { editor: ed, anchorId } = setup();
     const anchor = resolveSelectionAnchor(ed, anchorId)!;
-    ed.commands.insertContentAt(anchor.from + 1, 'X');
+    ed.commands.insertContentAt(anchor.ranges[0]!.from + 1, 'X');
 
     expect(applySelectionEdit(ed, resolveSelectionAnchor(ed, anchorId)!, 'replacement'))
       .toBe('stale');
@@ -75,8 +73,7 @@ describe('applySelectionEdit', () => {
 
     expect(applySelectionEdit(editor, {
       anchorId: 'invalid',
-      from: 2,
-      to: editor.state.doc.content.size - 2,
+      ranges: [{ from: 2, to: editor.state.doc.content.size - 2 }],
       // 앵커 텍스트는 블록 구분자를 포함한다(readAnchorText 기준).
       // stale이 아니라 블록 경계 가드에서 걸러져야 한다.
       originalText: 'ne\nTw',

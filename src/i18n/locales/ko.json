@@ -648,7 +648,6 @@
     "dismiss": "선택 영역 해제",
     "sameBlockRequired": "한 문단 안의 텍스트만 선택해주세요.",
     "textRequired": "선택 영역에서 텍스트를 찾을 수 없습니다.",
-    "singleRangeRequired": "표의 여러 셀에 걸친 선택은 사용할 수 없습니다. 셀 안에서 선택해주세요.",
     "tooLong": "선택이 너무 깁니다({{length}}자). {{max}}자 이하로 선택해주세요.",
     "preview": "미리보기",
     "dismissProposal": "폐기",

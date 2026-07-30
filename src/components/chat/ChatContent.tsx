@@ -38,6 +38,7 @@ import { chatPanelId } from '@/types';
 import type { Editor } from '@tiptap/react';
 import { useEditorStore } from '@/stores/editorStore';
 import {
+  getSingleAnchorRange,
   readAnchorText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
@@ -397,10 +398,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       return;
     }
     const anchor = resolveSelectionAnchor(editor, proposal.anchorId);
+    // 수정안은 단일 범위 선택에서만 만들어진다(다중 범위·멀티블록은 도구가 빠짐).
+    const anchorRange = anchor ? getSingleAnchorRange(anchor) : null;
     if (
       !anchor ||
+      !anchorRange ||
       anchor.status !== 'active' ||
-      readAnchorText(editor.state.doc, anchor.from, anchor.to) !== proposal.originalText
+      readAnchorText(editor.state.doc, anchorRange.from, anchorRange.to)
+        !== proposal.originalText
     ) {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {
@@ -431,8 +436,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       projectId: snapshot.projectId,
       panel: 'target',
       text: proposal.originalText,
-      from: anchor.from,
-      to: anchor.to,
+      from: anchorRange.from,
+      to: anchorRange.to,
       anchorId: proposal.anchorId,
       translationUnitIds: [...snapshot.translationUnitIds],
       documentRevision: snapshot.documentRevision,
@@ -475,12 +480,15 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     const activeProject = useProjectStore.getState().project;
     const editor = useEditorStore.getState().targetEditor;
     const anchor = editor ? resolveSelectionAnchor(editor, proposal.anchorId) : null;
+    const anchorRange = anchor ? getSingleAnchorRange(anchor) : null;
     if (
       !editor ||
       activeProject?.id !== proposal.projectId ||
       !anchor ||
+      !anchorRange ||
       anchor.status !== 'active' ||
-      readAnchorText(editor.state.doc, anchor.from, anchor.to) !== proposal.originalText
+      readAnchorText(editor.state.doc, anchorRange.from, anchorRange.to)
+        !== proposal.originalText
     ) {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {
