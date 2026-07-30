@@ -156,6 +156,10 @@ export async function retranslateSelection(
       cancelMessage: '재번역이 취소되었습니다.',
       onAccumulated: (accumulated) => input.onToken?.(filterMarkerText(accumulated)),
       usageFeature: 'selection-retranslate',
+      // 지시사항을 바꿔가며 여러 번 누르는 UI다. Anthropic은 cache_control이 없으면
+      // 규칙·금칙어·용어집·메모리가 든 system이 매번 정가로 재과금된다.
+      // (OpenAI는 서버 자동 캐싱이라 이 플래그와 무관)
+      cacheSystem: true,
     });
   } else {
     const model = createChatModel(undefined, {

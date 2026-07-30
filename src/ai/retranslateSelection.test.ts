@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { retranslateSelection } from './retranslateSelection';
 
 const streamMock = vi.fn();
+const backendStreamMock = vi.fn();
+const isTauriRuntimeMock = vi.fn(() => false);
+
+vi.mock('@/tauri/invoke', () => ({
+  isTauriRuntime: () => isTauriRuntimeMock(),
+}));
+
+vi.mock('@/ai/backendCompletion', () => ({
+  streamWithTauriAiBackend: (params: unknown) => backendStreamMock(params),
+}));
 
 vi.mock('@/ai/config', () => ({
   getAiConfig: () => ({
@@ -20,6 +30,8 @@ vi.mock('@/ai/client', () => ({
 describe('retranslateSelection', () => {
   beforeEach(() => {
     streamMock.mockReset();
+    backendStreamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
     streamMock.mockResolvedValue((async function* () {
       yield { content: '---SELECTION_EDIT_START---\n개선된 번역' };
       yield { content: '\n---SELECTION_EDIT_END---' };
@@ -96,5 +108,35 @@ describe('retranslateSelection', () => {
     expect(result.contextManifest.projectMemoryItemIds).toEqual(['memory-1']);
     expect(result.contextManifest.forbiddenTermIds).toEqual(['term-1']);
     expect(result.contextManifest.glossaryEntryIds).toEqual([]);
+  });
+
+  it('백엔드 경로에서 cacheSystem을 켠다 (지시사항만 바꿔 재호출해도 system은 캐시)', async () => {
+    isTauriRuntimeMock.mockReturnValue(true);
+    backendStreamMock.mockResolvedValue(
+      '---SELECTION_EDIT_START---\n개선된 번역\n---SELECTION_EDIT_END---',
+    );
+
+    await retranslateSelection({
+      projectId: 'project-1',
+      sourceText: 'Source',
+      currentTargetText: 'Target',
+      targetLanguage: 'Korean',
+      referenceOptions: {
+        translationRules: true,
+        forbiddenTerms: true,
+        glossary: false,
+        projectContext: true,
+      },
+      contextSnapshot: {
+        revision: 4,
+        projectMemoryItems: [],
+        translationRules: '합니다체',
+        forbiddenTerms: [],
+        glossaryEntries: [],
+        createdAt: 1,
+      },
+    });
+
+    expect(backendStreamMock.mock.calls[0]?.[0]).toMatchObject({ cacheSystem: true });
   });
 });
