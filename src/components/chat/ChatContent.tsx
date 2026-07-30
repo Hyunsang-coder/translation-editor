@@ -673,9 +673,16 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     createSession(t('chat.title'));
   }, [side, project?.id, isHydrating, chatSessions.length, createSession, t]);
 
-  // 스크롤 관리 (sendCurrent에서 scrollToBottom을 참조하므로 먼저 선언)
-  const { messagesContainerRef, showScrollToBottom, handleMessagesScroll, scrollToBottom } =
-    useChatScroll(chatPanelOpen, displaySession?.messages.length, streamingContent?.length ?? 0);
+  // 스크롤 관리 (sendCurrent에서 참조하므로 먼저 선언)
+  const {
+    messagesContainerRef,
+    messagesContentRef,
+    bottomSpacerRef,
+    showScrollToBottom,
+    handleMessagesScroll,
+    scrollToBottom,
+    requestPinToLatestUserMessage,
+  } = useChatScroll(chatPanelOpen, displaySession?.messages.length);
 
   const sendCurrent = useCallback(async (): Promise<void> => {
     if (!localComposerText.trim() || !displaySession?.id) return;
@@ -696,9 +703,9 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editorRef.current as any)?.clearComposerContent?.();
 
-    // 위로 스크롤한 상태에서 본인이 전송하면 화면이 따라가야 자연스럽다.
-    // scrollToBottom()이 shouldStickToBottomRef=true로 되돌려 이후 응답 스트리밍 follow도 복구된다.
-    scrollToBottom();
+    // 방금 보낸 메시지를 뷰포트 상단에 고정하고 아래에 여백을 깔아둔다.
+    // 답변은 그 여백을 채우며 흘러나오므로 스트리밍 중 화면이 움직이지 않는다.
+    requestPinToLatestUserMessage();
 
     await sendMessage(message, {
       ...(sessionId ? { targetSessionId: sessionId } : {}),
@@ -710,7 +717,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
           }
         : {}),
     });
-  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, activeComposerSelection, addToast, t, scrollToBottom]);
+  }, [localComposerText, globalIsLoading, isLoading, displaySession?.id, sendMessage, sessionId, activeComposerSelection, addToast, t, requestPinToLatestUserMessage]);
 
   // Chat 패널 열릴 때 포커스
   useEffect(() => {
@@ -785,9 +792,12 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       <div className="relative flex-1 min-h-0">
         <div
           ref={messagesContainerRef}
-          className="h-full overflow-y-auto overscroll-contain p-4 space-y-4"
+          className="h-full overflow-y-auto overscroll-contain p-4"
           onScroll={handleMessagesScroll}
         >
+        {/* 본문 래퍼: 높이 변화를 ResizeObserver로 감지하는 대상이다.
+            여백 div는 관찰 대상 밖에 둬야 여백 조절이 다시 관찰을 촉발하지 않는다. */}
+        <div ref={messagesContentRef} className="space-y-4">
         {displaySession?.messages.map((message) => {
           // P3: 스트리밍 관련 prop은 스트리밍 중인 메시지에만 전달.
           // 나머지 아이템은 토큰마다 prop이 변하지 않아 memo 비교가 즉시 통과한다.
@@ -827,6 +837,11 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             {showStreamingSkeleton && renderAssistantSkeleton()}
           </div>
         )}
+        </div>
+
+        {/* 고정한 사용자 메시지가 상단에 올 수 있도록 확보하는 여백.
+            높이는 useChatScroll이 직접 조절한다(스트리밍 중 리렌더를 피하려 명령형). */}
+        <div ref={bottomSpacerRef} aria-hidden="true" className="shrink-0" style={{ height: 0 }} />
         </div>
 
         {/* 최신 메시지로 스크롤 버튼 */}

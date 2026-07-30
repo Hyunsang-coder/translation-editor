@@ -234,6 +234,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       className={`chat-message group ${message.role === 'user' ? 'chat-message-user' : 'chat-message-ai w-full max-w-none'
         } ${isStreaming ? 'ring-1 ring-primary-300/70' : ''}`}
       data-testid={message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}
+      data-chat-role={message.role}
       data-message-id={message.id}
     >
       {/* Message toolbar */}
