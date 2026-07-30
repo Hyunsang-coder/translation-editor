@@ -99,15 +99,6 @@ export async function pickExportDocumentPath(
   return path ?? null;
 }
 
-export async function pickJsonlExportPath(defaultName = 'export'): Promise<string | null> {
-  const path = await save({
-    title: 'Export JSONL',
-    defaultPath: `${defaultName}.jsonl`,
-    filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }],
-  });
-  return path ?? null;
-}
-
 export async function pickChatAttachmentFile(): Promise<string | null> {
   const file = await open({
     title: '첨부할 파일/이미지 선택',

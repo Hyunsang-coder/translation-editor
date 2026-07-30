@@ -127,7 +127,7 @@ test.describe('Alignment mismatch band', () => {
     await expect(mismatchRow).toHaveAttribute('data-active', 'false');
   });
 
-  test('하단 요약과 정렬 리포트가 실제 수치를 담는다', async ({ page }) => {
+  test('하단 요약이 실제 수치를 담는다', async ({ page }) => {
     await page.getByTestId('editor-view-mode-alignment').click();
 
     const summary = page.getByTestId('alignment-view');
@@ -135,22 +135,6 @@ test.describe('Alignment mismatch band', () => {
     await expect(summary).toContainText('2개 정렬');
     await expect(summary).toContainText('1개 불일치');
     await expect(page.getByTestId('alignment-degraded')).toHaveCount(0);
-
-    await page.getByTestId('alignment-export-report').click();
-
-    const written = await page.evaluate(
-      () => (window as unknown as { __MOCK_WRITTEN_FILES__?: { content: string }[] }).__MOCK_WRITTEN_FILES__ ?? []
-    );
-    expect(written).toHaveLength(1);
-    expect(JSON.parse(written[0]!.content)).toMatchObject({
-      kind: 'alignment_check',
-      project_id: 'alignment-project',
-      total_units: 3,
-      paired: 2,
-      mismatched: 1,
-      unmapped_issues: 0,
-      degraded: false,
-    });
   });
 
   test('배너의 열기 버튼은 문서 보기로 되돌린다', async ({ page }) => {

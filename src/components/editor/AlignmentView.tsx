@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useShallow } from 'zustand/shallow';
-import { Download, Lock, TriangleAlert } from 'lucide-react';
+import { Lock, TriangleAlert } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
-import { buildAlignmentReport, saveAlignmentReport } from '@/utils/alignmentReport';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
 import {
   useAlignmentAnnotations,
@@ -147,12 +146,11 @@ function columnLabel(base: string, language: string | null): string {
 export function AlignmentView(): JSX.Element {
   const { t } = useTranslation();
 
-  const { sourceDocJson, targetDocJson, targetLanguage, projectId } = useProjectStore(
+  const { sourceDocJson, targetDocJson, targetLanguage } = useProjectStore(
     useShallow((s) => ({
       sourceDocJson: s.sourceDocJson,
       targetDocJson: s.targetDocJson,
       targetLanguage: s.project?.metadata.targetLanguage ?? null,
-      projectId: s.project?.id ?? null,
     }))
   );
 
@@ -216,22 +214,6 @@ export function AlignmentView(): JSX.Element {
   const pairedPercent = alignResult.totalUnits === 0
     ? 100
     : Math.round((alignResult.pairedCount / alignResult.totalUnits) * 100);
-
-  const exportReport = async (): Promise<void> => {
-    if (!projectId) return;
-    const report = buildAlignmentReport(projectId, alignResult, annotations.unmappedIssueCount);
-    try {
-      const outcome = await saveAlignmentReport(report);
-      if (outcome === 'saved') {
-        useUIStore.getState().addToast({ type: 'success', message: t('editor.alignment.reportSaved') });
-      }
-    } catch (error) {
-      useUIStore.getState().addToast({
-        type: 'error',
-        message: t('editor.alignment.reportFailed', { message: String(error) }),
-      });
-    }
-  };
 
   const sourceLanguage = useMemo(() => {
     const sample = alignResult.ops
@@ -377,17 +359,6 @@ export function AlignmentView(): JSX.Element {
             {t('editor.alignment.degraded')}
           </span>
         )}
-
-        <button
-          type="button"
-          onClick={() => void exportReport()}
-          disabled={!projectId}
-          className="ml-auto h-[26px] px-2.5 shrink-0 inline-flex items-center gap-1.5 border border-editor-border rounded text-[11px] font-semibold text-editor-text hover:bg-editor-bg disabled:opacity-50 transition-colors"
-          data-testid="alignment-export-report"
-        >
-          <Download size={12} />
-          {t('editor.alignment.exportReport')}
-        </button>
       </div>
     </div>
   );

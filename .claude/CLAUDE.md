@@ -89,6 +89,9 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **정렬 리포트 제거** ([ADR-0013](../docs/adr/0013-remove-alignment-report.md)): 정렬 뷰 하단의 `정렬 리포트` JSONL 내보내기 버튼을 걷어냈다. 번역가 화면에 개발 의사결정용 계측기가 노출돼 있었고, 수집된 데이터는 1년 가까이 0건이었다. `alignmentReport.ts`·`pickJsonlExportPath`·i18n 3키·E2E 단언을 함께 제거(`write_text_file`은 `ExportModal`이 계속 쓰므로 유지).
+  - **Phase 5 착수 판단 근거가 사라진 건 의도된 것**이다. `ratio`는 애초에 "번역에서 문단이 빠졌다"와 "1:N이라 `alignUnits`가 못 짝지었다"를 구분하지 못해, 낮게 나와도 답이 영속 정렬인지 알고리즘 개선인지 번역 품질인지 갈리지 않았다.
+  - **정렬 불일치는 화면이 아니라 문서의 증상**이다 — 고칠 대상은 정렬이 아니라 번역이고, 경로는 기존 `jumpToUnit`(문서 보기 점프) 그대로다. 1:0 행에서 곧바로 번역해 넣는 액션이 다음 후보지만 아직 결정 안 됨.
 - **모델 선택을 provider 하나로** ([ADR-0012](../docs/adr/0012-provider-only-model-selection.md)): 프리셋 6개 선택(`MODEL_PRESETS`)을 폐기하고 사용자가 고르는 값을 `provider: 'anthropic' | 'openai'` 하나로 줄였다. 용도별 모델·effort는 `config.ts`의 `MODEL_BY_USE`가 고정한다 — 검수만 Opus 5/Sol이고 번역·폴리싱·채팅은 Sonnet 5/Luna, effort는 전부 high(요약만 medium).
   - **고친 문제**: 번역·검수·폴리싱이 `translationModel` **하나를 공유**해서, 검수용으로 Opus로 올린 뒤 되돌리지 않으면 폴리싱까지 Opus로 돌았다(20,000자 1사이클 $1.44 → $1.69). `presets[0]`(=Opus 5)로 조용히 튀던 fallback 3곳도 함께 사라졌다.
   - **폴리싱 effort medium 안은 기각**: 산출물이 곧 문서 본문이라 effort 의존도가 번역보다 높은데 절감은 ~8%뿐이고, 선택 재번역이 `translation`(high)이라 **문단 하나가 문서 전체보다 effort가 높아지는 역전**이 생긴다. 긴 문서에서 `---POLISH_END---` 유실이 관측되면 재검토.
@@ -133,7 +136,7 @@ This `.claude/` directory contains:
 - **품질 장부(Quality Ledger) 제거** ([ADR-0007](../docs/adr/0007-remove-quality-ledger.md)): 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
   - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.
   - **Desktop MCP 1.0.0 (breaking)**: `oddeyes_log_quality_records`/`oddeyes_get_quality_records` 제거(25 → 23 tools). **`.mcpb` 재번들 + `npm publish` 미실시** — 배포는 별도로 해야 클라이언트에 반영된다.
-  - `src/tauri/dialog.ts`의 `pickQualityLedgerPath`는 **남겼다** — 정렬 리포트(`alignmentReport.ts`)가 아직 쓴다. 다이얼로그 제목이 `Export Quality Ledger`인 건 4.5 때부터 있던 부정확한 재사용이라 이번 범위 밖.
+  - `src/tauri/dialog.ts`의 JSONL 저장 다이얼로그는 정렬 리포트가 이어받았다가 2026-07-30에 함께 사라졌다([ADR-0013](../docs/adr/0013-remove-alignment-report.md)).
 - **선택 도구 신뢰경계 절단 수정**: `get_selection_surroundings`(캡 4000)/`get_aligned_selection_context`(6000)의 출력이 캡을 넘으면 `chatAgent/middleware.ts:276-280`이 통째로 잘라 닫는 `</untrusted>`가 사라지고 JSON도 중간에서 끊겼다. 문서 데이터가 신뢰경계 밖으로 새는 형태라 단순 절단보다 성질이 나쁘다. `renderSelectionToolOutput`이 **본문 텍스트를 줄여** 캡에 맞춘다 — 문서 도구(`renderDocumentToolOutput`)는 마크다운이라 문자열을 잘라내면 되지만 여기는 JSON이라 같은 수를 못 쓴다. 여유분을 빼는 대신 **래핑까지 마친 실제 길이를 재서** 비교한다(JSON 이스케이프·무해화 삽입 때문에 길이 예측이 부정확). 함께: 선택 도구에도 `neutralizeUntrustedMarkers`를 적용 — 문서 텍스트에 `</untrusted>`가 들어 있으면 경계를 위조할 수 있었다(문서 도구에는 이미 있던 방어).
 - **다른 프로젝트에서 메모리 가져오기** ([ADR-0009](../docs/adr/0009-project-memory-import-by-copy.md)): Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
   - **공유 링크(glossary식) 대신 복사를 택했다**: `project_memory_state.revision`이 프로젝트 단위라 공유 세트 1건 수정 시 링크된 모든 프로젝트의 revision을 bump해야 하고, MCP 6종이 projectId 단수 전제라 breaking이 된다. 용어집은 이미 `setProjectGlossaries`로 프로젝트에 링크할 수 있어 범위 밖.
@@ -154,7 +157,7 @@ This `.claude/` directory contains:
   - **에디터 언마운트 금지**: 정렬 뷰는 `PanelGroup` 위에 오버레이로 얹고 문서 보기 쪽은 `visibility:hidden`으로 가린다. 언마운트하면 TipTap 인스턴스가 파괴돼 `editorStore`가 비고 점프·검수 적용이 깨진다. `display:none`이 아닌 `visibility`인 이유는 ① 레이아웃이 남아 스크롤 위치가 보존되고(실측 1500 → 1500) ② 숨은 요소는 포커스를 못 받아 읽기 전용이 함께 강제되기 때문(React 18이라 `inert` 사용 불가).
   - **재계산 트리거**: `onUpdate`가 아니라 300ms 디바운스된 문서 JSON 스냅샷. 스펙이 제안한 리비전 해시 비교는 markdown 변환+해시가 `alignUnits`보다 싸지 않아 넣지 않았다.
   - **이슈·코멘트 배지**: `useAlignmentAnnotations.ts`가 `targetExcerpt`/`excerpt` **텍스트 포함 검사**로 유닛에 매핑한다(`segmentGroupId`는 신뢰 불가). 여러 유닛에 걸리면 매핑하지 않고 하단 `위치를 특정하지 못한 이슈 N건`으로 모은다 — 이 수치가 정렬 품질 지표다. 정규화는 `normalizeForSearch`의 기존 함수 재사용.
-  - **정렬 리포트**: 하단 `정렬 리포트` 버튼이 `AlignResult` 요약을 JSONL 한 줄로 내보낸다(`alignmentReport.ts`, `saveQualityJsonl`과 같은 방식). **자동 수집 없음.** 이 줄의 `ratio`가 Phase 5(영속 정렬, 4–6주) 착수 판단 근거다 — 0.95 이상이면 불필요, 0.7 근처면 착수 가치 있음.
+  - ~~**정렬 리포트**~~: 2026-07-30 제거([ADR-0013](../docs/adr/0013-remove-alignment-report.md)). Phase 5(영속 정렬, 4–6주)는 계측 없이 계속 보류한다.
   - 부수 변경: `ReviewPanel`의 `detectSourceLanguage` → `src/utils/detectLanguage.ts`로 이관(반환 문자열은 검수 프롬프트에 들어가므로 그대로), `TranslationUnit`에 `level?: number` 추가, `e2e/tauri-mock.ts`에 `plugin:dialog|save`·`write_text_file` 목 추가(쓰인 내용은 `window.__MOCK_WRITTEN_FILES__`).
   - **Phase 4-3(세그먼트 인스펙터)은 폐기** — 전제한 `segmentGroupId` 경로가 스키마에 없고, 4.5가 이를 대체한다.
 - **프로젝트 메모리에서 보관(archive) 개념 제거** ([ADR-0006](../docs/adr/0006-hard-delete-instead-of-archive.md)): 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.

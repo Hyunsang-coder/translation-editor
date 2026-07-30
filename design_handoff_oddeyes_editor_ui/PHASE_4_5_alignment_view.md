@@ -294,9 +294,11 @@ import { stripRichTextMarkup, normalizeForSearch } from '@/utils/normalizeForSea
 
 `h-14 border-t border-editor-border bg-editor-surface flex items-center gap-[18px] px-[18px]`
 
+> **2026-07-30 갱신**: `정렬 리포트` 버튼은 제거됐다 — [ADR-0013](../docs/adr/0013-remove-alignment-report.md). 아래 버튼·JSONL 스펙은 더 이상 구현되지 않으며, Phase 5는 계측 없이 보류한다.
+
 ```
 정렬 상태
-42개 문단 중 39개 정렬 · 3개 불일치     [████████████░]     [⬇ 정렬 리포트]
+42개 문단 중 39개 정렬 · 3개 불일치     [████████████░]
 ```
 
 - 라벨 `text-[10px] font-extrabold tracking-[.1em] uppercase text-editor-muted`
