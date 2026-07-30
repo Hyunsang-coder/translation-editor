@@ -4,124 +4,11 @@
  * OpenAI 빌트인 커넥터와 MCP 커넥터의 연결 상태를 표시하고 관리합니다.
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
-
-interface NotionTokenDialogProps {
-  isOpen: boolean;
-  hasStoredToken: boolean;
-  onClose: () => void;
-  onSubmit: (token: string | null) => void; // null = 기존 토큰 사용
-}
-
-function NotionTokenDialog({ isOpen, hasStoredToken, onClose, onSubmit }: NotionTokenDialogProps): JSX.Element | null {
-  const { t } = useTranslation();
-  const [token, setToken] = useState('');
-  const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      setToken('');
-      setError('');
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // 기존 토큰이 있고 새 토큰 입력 안 했으면 기존 토큰 사용
-    if (!token.trim() && hasStoredToken) {
-      onSubmit(null); // null = 기존 토큰 사용
-      onClose();
-      return;
-    }
-    
-    if (!token.trim()) {
-      setError(t('appSettings.connectors.notion.tokenRequired'));
-      return;
-    }
-    // Integration Token 형식 검증
-    if (!token.startsWith('ntn_') && !token.startsWith('secret_')) {
-      setError(t('appSettings.connectors.notion.invalidTokenFormat'));
-      return;
-    }
-    onSubmit(token.trim());
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-editor-bg border border-editor-border rounded-lg shadow-xl w-full max-w-md p-4">
-        <h3 className="text-lg font-semibold text-editor-text mb-2">
-          {t('appSettings.connectors.notion.dialogTitle')}
-        </h3>
-        <p className="text-sm text-editor-muted mb-4">
-          {t('appSettings.connectors.notion.dialogDescription')}
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-editor-text mb-1">
-              {t('appSettings.connectors.notion.tokenLabel')}
-            </label>
-            <input
-              ref={inputRef}
-              type="password"
-              value={token}
-              onChange={(e) => {
-                setToken(e.target.value);
-                setError('');
-              }}
-              placeholder={hasStoredToken ? "••••••••••••••••" : "ntn_xxx... or secret_xxx..."}
-              className="w-full px-3 py-2 bg-editor-bg border border-editor-border rounded text-sm text-editor-text focus:outline-none focus:border-primary-500"
-            />
-            {hasStoredToken && !token && (
-              <p className="text-xs text-editor-muted mt-1">
-                {t('appSettings.connectors.notion.useExistingToken')}
-              </p>
-            )}
-            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-editor-muted hover:text-editor-text transition-colors"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors"
-            >
-              {t('appSettings.connectors.connect')}
-            </button>
-          </div>
-        </form>
-        <div className="mt-4 pt-4 border-t border-editor-border">
-          <p className="text-xs text-editor-muted">
-            {t('appSettings.connectors.notion.helpText')}{' '}
-            <a
-              href="https://www.notion.so/my-integrations"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary-400 hover:underline"
-            >
-              notion.so/my-integrations
-            </a>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface ConnectorItemProps {
   icon: string;
@@ -298,44 +185,30 @@ export function ConnectorsSection(): JSX.Element {
     isConnecting: false,
   });
 
-  // Notion MCP 상태
-  const [notionStatus, setNotionStatus] = useState<McpConnectionStatus>({
-    isConnected: false,
-    isConnecting: false,
-  });
-
-  // Notion 토큰 다이얼로그
-  const [showNotionDialog, setShowNotionDialog] = useState(false);
-
   // 연결 시작 시점 추적 (타이머용)
   const [connectionStartedAt, setConnectionStartedAt] = useState<{
     atlassian: number | null;
-    notion: number | null;
-  }>({ atlassian: null, notion: null });
+  }>({ atlassian: null });
 
   // 경과 시간 (초)
   const [elapsedSeconds, setElapsedSeconds] = useState<{
     atlassian: number;
-    notion: number;
-  }>({ atlassian: 0, notion: 0 });
+  }>({ atlassian: 0 });
 
   // 연결 중일 때 타이머
   useEffect(() => {
-    if (!mcpStatus.isConnecting && !notionStatus.isConnecting) return;
+    if (!mcpStatus.isConnecting) return;
 
     const interval = setInterval(() => {
       setElapsedSeconds({
         atlassian: connectionStartedAt.atlassian
           ? Math.floor((Date.now() - connectionStartedAt.atlassian) / 1000)
           : 0,
-        notion: connectionStartedAt.notion
-          ? Math.floor((Date.now() - connectionStartedAt.notion) / 1000)
-          : 0,
       });
     }, 500);
 
     return () => clearInterval(interval);
-  }, [mcpStatus.isConnecting, notionStatus.isConnecting, connectionStartedAt]);
+  }, [mcpStatus.isConnecting, connectionStartedAt]);
 
   // Atlassian 연결 완료/실패 → 타이머 초기화
   useEffect(() => {
@@ -345,29 +218,11 @@ export function ConnectorsSection(): JSX.Element {
     }
   }, [mcpStatus.isConnecting]);
 
-  // Notion 연결 완료/실패 → 타이머 초기화
-  useEffect(() => {
-    if (!notionStatus.isConnecting) {
-      setConnectionStartedAt((prev) => ({ ...prev, notion: null }));
-      setElapsedSeconds((prev) => ({ ...prev, notion: 0 }));
-    }
-  }, [notionStatus.isConnecting]);
-
-  // MCP 상태 구독 (Atlassian + Notion 통합)
-  useEffect(() => {
-    const unsubAtlassian = mcpClientManager.subscribe((status) => {
-      setMcpStatus(status);
-      setTokenStatus('atlassian', status.hasStoredToken ?? false);
-    });
-    const unsubNotion = mcpClientManager.subscribeNotion((status) => {
-      setNotionStatus(status);
-      setTokenStatus('notion', status.hasStoredToken ?? false);
-    });
-    return () => {
-      unsubAtlassian();
-      unsubNotion();
-    };
-  }, [setTokenStatus]);
+  // MCP 상태 구독
+  useEffect(() => mcpClientManager.subscribe((status) => {
+    setMcpStatus(status);
+    setTokenStatus('atlassian', status.hasStoredToken ?? false);
+  }), [setTokenStatus]);
 
   // Atlassian MCP 연결
   const handleAtlassianConnect = useCallback(async () => {
@@ -388,49 +243,12 @@ export function ConnectorsSection(): JSX.Element {
     }
   }, []);
 
-  // Notion MCP 연결 (토큰 입력 다이얼로그 표시)
-  const handleNotionConnect = useCallback(() => {
-    setShowNotionDialog(true);
-  }, []);
-
-  // Notion 토큰 제출 및 연결
-  const handleNotionTokenSubmit = useCallback(async (token: string | null) => {
-    setConnectionStartedAt((prev) => ({ ...prev, notion: Date.now() }));
-    try {
-      // token이 null이면 기존 토큰 사용 (setNotionToken 스킵)
-      if (token) {
-        await mcpClientManager.setNotionToken(token);
-      }
-      await mcpClientManager.connectNotion();
-    } catch (error) {
-      console.error('[Connectors] Notion connect failed:', error);
-    }
-  }, []);
-
-  // Notion MCP 연결 해제 (토큰은 유지)
-  const handleNotionDisconnect = useCallback(async () => {
-    try {
-      await mcpClientManager.disconnectNotion();
-    } catch (error) {
-      console.error('[Connectors] Notion disconnect failed:', error);
-    }
-  }, []);
-
   // Atlassian 완전 초기화 (토큰 + 클라이언트 정보 모두 삭제)
   const handleAtlassianClearAll = useCallback(async () => {
     try {
       await mcpClientManager.clearAllAtlassian();
     } catch (error) {
       console.error('[Connectors] Atlassian clear all failed:', error);
-    }
-  }, []);
-
-  // Notion 완전 초기화
-  const handleNotionClearAll = useCallback(async () => {
-    try {
-      await mcpClientManager.clearAllNotion();
-    } catch (error) {
-      console.error('[Connectors] Notion clear all failed:', error);
     }
   }, []);
 
@@ -460,19 +278,6 @@ export function ConnectorsSection(): JSX.Element {
         comingSoon: false,
       };
     }
-    if (connectorId === 'notion') {
-      return {
-        hasToken: notionStatus.hasStoredToken ?? false,
-        isConnected: notionStatus.isConnected,
-        isConnecting: notionStatus.isConnecting,
-        error: notionStatus.error,
-        elapsedSeconds: elapsedSeconds.notion,
-        onConnect: handleNotionConnect,
-        onDisconnect: handleNotionDisconnect,
-        onClearAll: handleNotionClearAll,
-        comingSoon: false,
-      };
-    }
     return {
       hasToken: false,
       isConnected: false,
@@ -484,7 +289,7 @@ export function ConnectorsSection(): JSX.Element {
       onClearAll: undefined,
       comingSoon: true,
     };
-  }, [mcpStatus, notionStatus, elapsedSeconds, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll, handleNotionConnect, handleNotionDisconnect, handleNotionClearAll]);
+  }, [mcpStatus, elapsedSeconds, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll]);
 
   return (
     <section className="space-y-4">
@@ -531,14 +336,6 @@ export function ConnectorsSection(): JSX.Element {
           />
         ))}
       </div>
-
-      {/* Notion 토큰 입력 다이얼로그 */}
-      <NotionTokenDialog
-        isOpen={showNotionDialog}
-        hasStoredToken={notionStatus.hasStoredToken ?? false}
-        onClose={() => setShowNotionDialog(false)}
-        onSubmit={handleNotionTokenSubmit}
-      />
     </section>
   );
 }

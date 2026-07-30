@@ -17,6 +17,7 @@
 | [0008](0008-alignment-computed-not-persisted.md) | 문단 정렬은 계산하고 저장하지 않는다 | Accepted | 2026-07-28 (소급) |
 | [0009](0009-project-memory-import-by-copy.md) | 프로젝트 메모리 재사용은 공유 링크가 아닌 복사로 한다 | Accepted | 2026-07-29 (소급) |
 | [0010](0010-selection-apply-single-range-only.md) | 선택 영역 편집은 단일 범위에서만 적용하고, 그 밖의 선택은 참조 전용으로 둔다 | Accepted | 2026-07-30 |
+| [0011](0011-remove-notion-integration.md) | Notion 연동을 제거한다 | Accepted | 2026-07-30 |
 
 > **(소급)** = 결정 당시에는 ADR이 없었고, ADR 도입(0001) 시점에 기록을 복원한 항목입니다.
 > 결정일은 실제 결정 시점, 문서 작성일은 2026-07-29입니다.

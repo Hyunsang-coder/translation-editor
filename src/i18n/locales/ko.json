@@ -183,16 +183,7 @@
       "clearAll": "초기화",
       "clearAllTooltip": "토큰 및 인증 정보를 완전히 삭제합니다",
       "error": "오류",
-      "comingSoon": "준비 중",
-      "notion": {
-        "dialogTitle": "Notion 연결",
-        "dialogDescription": "Notion Integration Token을 입력하세요. 토큰은 Notion 설정에서 생성할 수 있습니다.",
-        "tokenLabel": "Integration Token",
-        "tokenRequired": "토큰을 입력해주세요",
-        "invalidTokenFormat": "잘못된 형식. 'ntn_' 또는 'secret_'로 시작해야 합니다.",
-        "helpText": "Integration Token은 Notion 설정에서 생성할 수 있습니다:",
-        "useExistingToken": "기존 토큰을 사용하려면 그대로 연결을 누르세요"
-      }
+      "comingSoon": "준비 중"
     },
     "claudeIntegration": {
       "title": "Claude 연동",
@@ -728,8 +719,7 @@
       "suggestTranslationRule": "규칙 제안",
       "suggestForbiddenTerm": "금칙어 제안",
       "suggestGlossaryEntry": "용어집 항목 제안",
-      "confluenceLoadPage": "Confluence 문서 가져오기",
-      "notionSearch": "Notion 검색"
+      "confluenceLoadPage": "Confluence 문서 가져오기"
     },
     "toolProgressName": {
       "webSearch": "웹 검색",
@@ -769,8 +759,7 @@
     "sessionLimitReachedTitle": "세션 제한",
     "addFileOrImage": "파일 또는 이미지 추가",
     "webSearch": "웹 검색",
-    "confluenceSearch": "Confluence 검색",
-    "notionSearch": "Notion 검색"
+    "confluenceSearch": "Confluence 검색"
   },
   "errors": {
     "openaiApiKeyMissing": "OpenAI API 키가 없습니다. 앱 설정에서 입력해주세요.",

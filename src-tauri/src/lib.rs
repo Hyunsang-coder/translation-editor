@@ -9,7 +9,6 @@ pub mod desktop_mcp;
 pub mod error;
 pub mod mcp;
 pub mod models;
-pub mod notion;
 pub mod secrets;
 pub mod utils;
 
@@ -528,7 +527,6 @@ pub fn run() {
             commands::mcp::mcp_registry_clear_all,
             commands::mcp::mcp_registry_get_tools,
             commands::mcp::mcp_registry_call_tool,
-            commands::mcp::mcp_set_notion_config,
             // 커넥터 (OpenAI 빌트인 + MCP)
             commands::connector::connector_set_token,
             commands::connector::connector_get_token,
@@ -537,14 +535,6 @@ pub fn run() {
             commands::connector::connector_start_oauth,
             // Confluence REST API (MCP OAuth 토큰 재사용)
             commands::confluence::confluence_get_page_html,
-            // Notion REST API
-            commands::notion::notion_set_token,
-            commands::notion::notion_has_token,
-            commands::notion::notion_clear_token,
-            commands::notion::notion_search,
-            commands::notion::notion_get_page,
-            commands::notion::notion_get_page_content,
-            commands::notion::notion_query_database,
             // Export / Import
             commands::export::read_text_file,
             commands::export::write_text_file,

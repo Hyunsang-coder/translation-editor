@@ -26,7 +26,6 @@ import {
 } from '@/ai/chatContext/summarizeConversation';
 import { DEFAULT_CHAT_MAX_TOKENS } from '@/ai/constants';
 import { useProjectStore } from '@/stores/projectStore';
-import { useConnectorStore } from '@/stores/connectorStore';
 import { formatGlossaryForPrompt, resolveGlossaryEntries } from '@/utils/glossaryInject';
 import {
   createGhostMaskSession,
@@ -679,10 +678,6 @@ export function createAiActions(
             .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
           webSearchEnabled,
           confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
-          notionSearchEnabled: (() => {
-            const { enabledMap, tokenMap } = useConnectorStore.getState();
-            return (enabledMap['notion'] ?? false) && (tokenMap['notion'] ?? false);
-          })(),
         },
         runConfig,
         callbacks,

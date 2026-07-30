@@ -185,16 +185,7 @@
       "clearAll": "Clear All",
       "clearAllTooltip": "Delete all tokens and authentication info",
       "error": "Error",
-      "comingSoon": "Coming Soon",
-      "notion": {
-        "dialogTitle": "Connect Notion",
-        "dialogDescription": "Enter your Notion Integration Token. You can create a token in your Notion settings.",
-        "tokenLabel": "Integration Token",
-        "tokenRequired": "Token is required",
-        "invalidTokenFormat": "Invalid token format. Token should start with 'ntn_' or 'secret_'.",
-        "helpText": "You can create an Integration Token in your Notion settings:",
-        "useExistingToken": "Press Connect to use your existing token"
-      }
+      "comingSoon": "Coming Soon"
     },
     "claudeIntegration": {
       "title": "Claude Integration",
@@ -741,8 +732,7 @@
       "suggestTranslationRule": "Rule Suggestion",
       "suggestForbiddenTerm": "Forbidden Term Suggestion",
       "suggestGlossaryEntry": "Glossary Entry Suggestion",
-      "confluenceLoadPage": "Import Confluence Page",
-      "notionSearch": "Notion Search"
+      "confluenceLoadPage": "Import Confluence Page"
     },
     "toolProgressName": {
       "webSearch": "Web Search",
@@ -782,8 +772,7 @@
     "sessionLimitReachedTitle": "Session Limit",
     "addFileOrImage": "Add file or image",
     "webSearch": "Web Search",
-    "confluenceSearch": "Confluence Search",
-    "notionSearch": "Notion Search"
+    "confluenceSearch": "Confluence Search"
   },
   "errors": {
     "openaiApiKeyMissing": "OpenAI API key is missing. Please enter it in App Settings.",

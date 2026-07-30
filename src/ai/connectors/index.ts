@@ -8,7 +8,7 @@
 /**
  * 커넥터 타입
  * - builtin: OpenAI 빌트인 커넥터 (connector_googledrive 등)
- * - mcp: Rust 네이티브 MCP (Atlassian, Notion 등)
+ * - mcp: Rust 네이티브 MCP (Atlassian 등)
  */
 export type ConnectorType = 'builtin' | 'mcp';
 
@@ -59,13 +59,6 @@ export const MCP_CONNECTORS: Omit<ConnectorConfig, 'enabled' | 'hasToken'>[] = [
     label: 'Atlassian Confluence',
     description: 'Confluence 페이지 검색 및 조회',
     icon: '/assets/images/rovo-logo.png',
-  },
-  {
-    id: 'notion',
-    type: 'mcp',
-    label: 'Notion',
-    description: 'Notion 페이지 및 데이터베이스 검색',
-    icon: '/assets/images/notion-logo.png',
   },
 ];
 

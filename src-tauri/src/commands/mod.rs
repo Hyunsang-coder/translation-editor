@@ -118,7 +118,6 @@ pub mod glossary;
 pub mod history;
 pub mod http_proxy;
 pub mod mcp;
-pub mod notion;
 pub mod project;
 pub mod project_memory;
 pub mod secrets;

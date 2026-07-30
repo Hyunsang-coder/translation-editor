@@ -1,9 +1,8 @@
 //! MCP 서버 레지스트리
 //!
-//! 여러 MCP 서버(Atlassian, Notion 등)를 통합 관리합니다.
+//! 여러 MCP 서버(Atlassian 등)를 통합 관리합니다.
 
 use crate::mcp::client::MCP_CLIENT;
-use crate::mcp::notion_client::NOTION_MCP_CLIENT;
 use crate::mcp::types::{McpConnectionStatus, McpTool, McpToolResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,21 +12,18 @@ use std::collections::HashMap;
 #[serde(rename_all = "lowercase")]
 pub enum McpServerId {
     Atlassian,
-    Notion,
 }
 
 impl McpServerId {
     pub fn as_str(&self) -> &'static str {
         match self {
             McpServerId::Atlassian => "atlassian",
-            McpServerId::Notion => "notion",
         }
     }
 
     pub fn display_name(&self) -> &'static str {
         match self {
             McpServerId::Atlassian => "Atlassian Confluence",
-            McpServerId::Notion => "Notion",
         }
     }
 }
@@ -58,14 +54,13 @@ pub struct McpRegistry;
 impl McpRegistry {
     /// 지원되는 모든 MCP 서버 목록
     pub fn supported_servers() -> Vec<McpServerId> {
-        vec![McpServerId::Atlassian, McpServerId::Notion]
+        vec![McpServerId::Atlassian]
     }
 
     /// 특정 MCP 서버에 연결
     pub async fn connect(server_id: McpServerId) -> Result<(), String> {
         match server_id {
             McpServerId::Atlassian => MCP_CLIENT.connect().await,
-            McpServerId::Notion => NOTION_MCP_CLIENT.connect().await,
         }
     }
 
@@ -75,9 +70,6 @@ impl McpRegistry {
             McpServerId::Atlassian => {
                 MCP_CLIENT.disconnect().await;
             }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.disconnect().await;
-            }
         }
     }
 
@@ -86,9 +78,6 @@ impl McpRegistry {
         match server_id {
             McpServerId::Atlassian => {
                 MCP_CLIENT.logout().await;
-            }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.logout().await;
             }
         }
     }
@@ -100,9 +89,6 @@ impl McpRegistry {
             McpServerId::Atlassian => {
                 MCP_CLIENT.clear_all().await;
             }
-            McpServerId::Notion => {
-                NOTION_MCP_CLIENT.clear_all().await;
-            }
         }
     }
 
@@ -110,7 +96,6 @@ impl McpRegistry {
     pub async fn get_status(server_id: McpServerId) -> McpConnectionStatus {
         match server_id {
             McpServerId::Atlassian => MCP_CLIENT.get_status().await,
-            McpServerId::Notion => NOTION_MCP_CLIENT.get_status().await,
         }
     }
 
@@ -135,11 +120,9 @@ impl McpRegistry {
                 display_name: server_id.display_name().to_string(),
                 description: match server_id {
                     McpServerId::Atlassian => "Confluence 페이지 검색 및 조회".to_string(),
-                    McpServerId::Notion => "Notion 페이지 및 데이터베이스 검색".to_string(),
                 },
                 icon: match server_id {
                     McpServerId::Atlassian => "🔗".to_string(),
-                    McpServerId::Notion => "📝".to_string(),
                 },
                 status,
             });
@@ -156,7 +139,6 @@ impl McpRegistry {
     pub async fn get_tools(server_id: McpServerId) -> Vec<McpTool> {
         match server_id {
             McpServerId::Atlassian => MCP_CLIENT.get_tools().await,
-            McpServerId::Notion => NOTION_MCP_CLIENT.get_tools().await,
         }
     }
 
@@ -185,16 +167,7 @@ impl McpRegistry {
     ) -> Result<McpToolResult, String> {
         match server_id {
             McpServerId::Atlassian => MCP_CLIENT.call_tool(name, arguments).await,
-            McpServerId::Notion => NOTION_MCP_CLIENT.call_tool(name, arguments).await,
         }
-    }
-
-    /// Notion MCP 설정 저장 (URL + Auth Token)
-    pub async fn set_notion_config(
-        mcp_url: Option<String>,
-        auth_token: String,
-    ) -> Result<(), String> {
-        NOTION_MCP_CLIENT.set_config(mcp_url, auth_token).await
     }
 
     /// 도구 이름으로 해당 MCP 서버 찾기

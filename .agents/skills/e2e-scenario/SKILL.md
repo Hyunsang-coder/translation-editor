@@ -21,7 +21,7 @@ allowed-tools:
 /e2e-scenario 프로젝트를 생성하고 설정을 채운 뒤 문서를 번역해봐
 /e2e-scenario 히스토리 스냅샷을 저장하고 복원하는 시나리오
 /e2e-scenario 채팅에서 번역문 요약을 요청하고 응답을 확인해봐
-/e2e-scenario 커넥터 설정(Notion/Confluence) 연결 흐름 테스트
+/e2e-scenario 커넥터 설정(Confluence) 연결 흐름 테스트
 /e2e-scenario --dry-run 리뷰 후 수정 제안을 적용하는 전체 흐름
 /e2e-scenario --attach-to-running 이미 실행 중인 Tauri 앱에 연결해서 채팅 테스트
 ```

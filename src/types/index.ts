@@ -422,8 +422,7 @@ export type ChatToolRequirement =
   | 'target-selection'
   | 'review-results'
   | 'web-enabled'
-  | 'confluence-enabled'
-  | 'notion-enabled';
+  | 'confluence-enabled';
 
 export interface ChatToolDescriptor {
   name: string;

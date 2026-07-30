@@ -1,7 +1,7 @@
 /**
  * MCP 레지스트리 Tauri IPC 래퍼
  * 
- * 여러 MCP 서버(Atlassian, Notion 등)를 통합 관리합니다.
+ * 여러 MCP 서버(Atlassian 등)를 통합 관리합니다.
  */
 
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
@@ -9,7 +9,7 @@ import { invoke, isTauriRuntime } from '@/tauri/invoke';
 /**
  * MCP 서버 ID
  */
-export type McpServerId = 'atlassian' | 'notion';
+export type McpServerId = 'atlassian';
 
 /**
  * MCP 연결 상태

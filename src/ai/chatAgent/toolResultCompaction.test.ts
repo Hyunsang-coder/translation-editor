@@ -28,7 +28,7 @@ describe('ToolResultCompactionEdit (도구 결과 축약)', () => {
       new AIMessage('call1'),
       toolMsg('t1', big, 'get_source_document'), // 오래됨 + 큼 → 축약 대상
       new AIMessage('call2'),
-      toolMsg('t2', 'short result', 'notion_search'), // 작음 → 유지
+      toolMsg('t2', 'short result', 'web_search'), // 작음 → 유지
       new AIMessage('call3'),
       toolMsg('t3', big, 'get_target_document'), // 최근 → 유지
     ];

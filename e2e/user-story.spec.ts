@@ -11,7 +11,6 @@ import { injectTauriMock, injectTauriMockWithProject } from './tauri-mock';
 const TEXT = {
   appSettings: /^(앱 설정|App Settings)$/,
   tools: /^(도구|Tools)$/,
-  connect: /^(연결|Connect)$/,
   clear: /^(지우기|Clear)$/,
   close: /^(닫기|Close)$/,
   history: /^(히스토리|History)$/,
@@ -20,7 +19,6 @@ const TEXT = {
   delete: /^(삭제|Delete)$/,
   webSearch: /^(웹 검색|Web Search)$/,
   confluenceSearch: /^(Confluence 검색|Confluence Search)$/,
-  notionSearch: /^(Notion 검색|Notion Search)$/,
   targetLanguageWarning: /타겟 언어를 선택하세요|Select target language/i,
 };
 
@@ -79,34 +77,6 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await expect(anthropicToggle).toBeChecked();
   });
 
-  test('Phase 2: Notion 커넥터 연결 다이얼로그 토큰 검증', async ({ page }) => {
-    await injectTauriMock(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    await openAppSettings(page);
-    await expect(page.getByRole('heading', { name: /^(커넥터|Connectors)$/ })).toBeVisible();
-
-    const notionItem = page
-      .locator('span', { hasText: /^Notion$/ })
-      .first()
-      .locator('xpath=ancestor::div[contains(@class,"p-3")][1]');
-    await notionItem.getByRole('button', { name: TEXT.connect }).click();
-
-    const notionDialogTitle = page.getByRole('heading', { name: /^(Notion 연결|Connect Notion)$/ });
-    await expect(notionDialogTitle).toBeVisible();
-
-    const notionTokenInput = page.getByPlaceholder('ntn_xxx... or secret_xxx...');
-    const notionDialogSubmit = page.locator('form').getByRole('button', { name: TEXT.connect });
-    await notionTokenInput.fill('invalid-token');
-    await notionDialogSubmit.click();
-    await expect(page.getByText(/잘못된 형식.*ntn_|Invalid token format/i)).toBeVisible();
-
-    await notionTokenInput.fill('ntn_test_token_1234');
-    await notionDialogSubmit.click();
-    await expect(notionDialogTitle).toBeHidden();
-  });
-
   test('Phase 3~5: 프로젝트 생성, Source 입력, 번역 가드', async ({ page }) => {
     await injectTauriMock(page);
     await page.goto('/');
@@ -150,7 +120,6 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.getByRole('button', { name: /검색 옵션 메뉴 열기|Open search options menu/i }).click();
     await expect(page.getByText(TEXT.webSearch)).toBeVisible();
     await expect(page.getByText(TEXT.confluenceSearch)).toBeVisible();
-    await expect(page.getByText(TEXT.notionSearch)).toBeVisible();
   });
 
   test('Phase 8: 히스토리 스냅샷 저장/이름변경/삭제', async ({ page }) => {

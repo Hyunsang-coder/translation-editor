@@ -451,22 +451,12 @@ function buildMockScript(seedProjects: MockProject[]): string {
     mcp_registry_call_tool: () => ({}),
     mcp_registry_clear_all: () => null,
     mcp_registry_logout: () => null,
-    mcp_set_notion_config: () => null,
 
     // ── Connector tokens ──
     connector_get_token: () => null,
     connector_set_token: () => null,
     connector_delete_token: () => null,
     connector_start_oauth: () => null,
-
-    // ── Notion ──
-    notion_has_token: () => false,
-    notion_set_token: () => null,
-    notion_clear_token: () => null,
-    notion_search: () => ({ results: [] }),
-    notion_get_page: () => null,
-    notion_get_page_content: () => '',
-    notion_query_database: () => ({ results: [] }),
 
     // ── Confluence ──
     confluence_get_page_html: () => '',

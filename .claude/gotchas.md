@@ -232,7 +232,7 @@ Critical implementation warnings learned from past issues.
 
 78. **Tool Error 반복 조기 중단**: 같은 도구에서 같은 에러가 `MAX_SAME_ERROR`(2)회 반복되면 루프 조기 중단. "Tool not found" 무한 반복 방지.
 
-79. **Tool Output Size Limit**: `notionTools.ts`, `McpClientManager.ts`에서 도구 출력을 `MAX_TOOL_OUTPUT_CHARS`(8000자)로 제한. 초과 시 앞 70% + 뒤 30% + `...[truncated]...` 마커로 자름.
+79. **Tool Output Size Limit**: `McpClientManager.ts`에서 도구 출력을 `MAX_TOOL_OUTPUT_CHARS`(8000자)로 제한. 초과 시 앞 70% + 뒤 30% + `...[truncated]...` 마커로 자름.
 
 80. **buildToolSpecs 공통 함수**: 스트리밍/비스트리밍 모두 `buildToolSpecs()`로 도구 빌드. `boundToolNames` 반환하여 `buildToolGuideMessage()`가 실제 바인딩된 도구 기반으로 가이드 동적 생성. 가이드-도구 불일치 에러("Tool not found") 방지.
 
@@ -262,7 +262,7 @@ Critical implementation warnings learned from past issues.
 
 92. **Rate Limit (429) Retry**: `src/ai/retry.ts`의 `withRetry()`로 AI 호출 래핑. Exponential backoff (1s → 30s) + jitter로 429/5xx 에러 자동 재시도.
 
-94. **Tool Call Timeout**: `chat.ts`에서 개별 tool.invoke()에 30초 timeout 적용. 느린 외부 API(Notion, Confluence)가 전체 채팅을 블록하지 않도록 방지.
+94. **Tool Call Timeout**: `chat.ts`에서 개별 tool.invoke()에 30초 timeout 적용. 느린 외부 API(Confluence)가 전체 채팅을 블록하지 않도록 방지.
 
 95. **CSV Import Batch Processing**: `db/mod.rs`의 `import_glossary_csv()`는 파일 읽기/파싱을 Lock 외부에서 수행 후 500개 단위 배치 커밋. DB Lock 유지 시간 최소화.
 
@@ -362,7 +362,7 @@ Critical implementation warnings learned from past issues.
 
 147. **Selection Retranslate Tool Binding**: 직접 부분 재번역은 단일 AI 호출이며 `selection-retranslate` profile의 bound tools는 항상 0개다. 외부 MCP/웹/커넥터 도구를 우회로 추가하지 않는다.
 
-148. **External Tool Gate**: MCP/Notion/Confluence/빌트인 커넥터는 registry allowlist와 explicit external intent를 모두 통과해야 한다. 특히 selection profile에서 동적 커넥터 배열을 무조건 `bindTools`에 합치면 최소 컨텍스트 계약이 깨진다.
+148. **External Tool Gate**: MCP/Confluence/빌트인 커넥터는 registry allowlist와 explicit external intent를 모두 통과해야 한다. 특히 selection profile에서 동적 커넥터 배열을 무조건 `bindTools`에 합치면 최소 컨텍스트 계약이 깨진다.
 
 149. **Selection Anchor 수명 = 모든 종료 경로에서 제거**: `createSelectionAnchor`로 만든 앵커(하이라이트)는 apply 성공(`applySelectionEdit`) 시에만 자동 제거된다. 그 외 종료 경로 — chat chip dismiss, proposal 폐기/stale, 새 선택으로 교체, 프로젝트 전환 — 에서 `removeSelectionAnchor`를 짝지어 호출하지 않으면 하이라이트가 `MAX_SELECTION_ANCHORS` eviction 전까지 영구 잔존한다. 앵커를 만드는 코드는 제거 경로를 함께 설계할 것.
 

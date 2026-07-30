@@ -21,7 +21,6 @@ import { MODEL_PRESETS } from '@/ai/config';
 import { SkeletonParagraph } from '@/components/ui/Skeleton';
 import { Select, type SelectOptionGroup } from '@/components/ui/Select';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
-import { useConnectorStore } from '@/stores/connectorStore';
 import { useChatDragDrop } from '@/components/chat/useChatDragDrop';
 import { useChatScroll } from '@/components/chat/useChatScroll';
 import { useChatComposerHandlers } from '@/components/chat/useChatComposerHandlers';
@@ -270,27 +269,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
 
   const [mcpStatus, setMcpStatus] = useState<McpConnectionStatus>(mcpClientManager.getStatus());
 
-  // MCP 및 Notion 상태 구독 (통합)
-  useEffect(() => {
-    const unsubMcp = mcpClientManager.subscribe(setMcpStatus);
-    const unsubNotion = mcpClientManager.subscribeNotion((status) => {
-      useConnectorStore.getState().setTokenStatus('notion', status.hasStoredToken ?? false);
-    });
-    return () => {
-      unsubMcp();
-      unsubNotion();
-    };
-  }, []);
+  // MCP 상태 구독
+  useEffect(() => mcpClientManager.subscribe(setMcpStatus), []);
 
   // 드래그 앤 드롭 (Tauri + HTML5 fallback)
   const { isDragging, handleDragOver, handleDragLeave, handleDrop } = useChatDragDrop(addComposerAttachment, {
     enabled: chatPanelOpen,
     dropZoneRef: composerFormRef,
   });
-
-  const notionEnabled = useConnectorStore((s) => s.enabledMap['notion'] ?? false);
-  const notionHasToken = useConnectorStore((s) => s.tokenMap['notion'] ?? false);
-  const setNotionEnabled = useConnectorStore((s) => s.setEnabled);
 
   const [showStreamingSkeleton, setShowStreamingSkeleton] = useState(false);
 
@@ -1073,33 +1059,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                     >
                       <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                       <span className="flex-1 text-left">{mcpStatus.isConnecting ? '연결 중...' : 'Atlassian 연결하기'}</span>
-                    </button>
-                  )}
-
-                  {/* Notion 검색 */}
-                  <label className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      className="accent-primary-500"
-                      checked={notionEnabled && notionHasToken}
-                      onChange={(e) => setNotionEnabled('notion', e.target.checked)}
-                      disabled={isLoading || !notionHasToken}
-                    />
-                    <span className="flex-1">{t('chat.notionSearch')}</span>
-                    <span className="text-[11px] text-editor-muted">{notionEnabled && notionHasToken ? 'ON' : 'OFF'}</span>
-                  </label>
-
-                  {notionEnabled && !notionHasToken && (
-                    <button
-                      type="button"
-                      className="w-full px-3 py-2 flex items-center gap-2 text-sm text-primary-500 hover:bg-editor-border/60 transition-colors"
-                      onClick={() => {
-                        setComposerMenuOpen(false);
-                        // TODO: Settings로 이동하여 Notion 연결 유도
-                      }}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                      <span className="flex-1 text-left">Notion 연결하기 (설정)</span>
                     </button>
                   )}
                 </div>

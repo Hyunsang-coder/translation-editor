@@ -124,31 +124,6 @@ Anthropic API Key: sk-ant-xyz123...
 
 ---
 
-### Step 2.2: Notion 커넥터 등록
-
-**마리아가 하는 일:**
-1. **"Notion"** 카드에서 "+ Connect" 클릭
-2. Notion 로그인 및 권한 승인 (Confluence와 동일)
-3. 마리아의 워크스페이스 선택 (드롭다운 제시)
-
-**입력값:**
-```
-Workspace: "Company Docs" 선택
-```
-
-**예상 결과:**
-- ✅ Notion 커넥터 활성화
-- ✅ Notion 데이터베이스 목록 표시 (선택 가능)
-
-**검증 포인트:**
-```
-[ ] Notion OAuth 정상 작동
-[ ] 토큰 키체인 저장
-[ ] 여러 워크스페이스 지원 (드롭다운)
-```
-
----
-
 ### Step 2.3: Web Search 활성화
 
 **마리아가 하는 일:**
@@ -593,26 +568,6 @@ API authentication in previous versions? I want to ensure consistency."
 
 ---
 
-### Step 7.4: Notion 참고 자료 추가
-
-**마리아가 하는 질문:**
-```
-"Can you check our Notion glossary for the official Spanish-to-English
-terminology for 'transacción'? I want to ensure it matches our brand
-guidelines."
-```
-
-**마리아가 하는 일:**
-1. 메시지 전송
-2. AI가 Notion 검색 도구 호출
-
-**예상 결과:**
-- ✅ Notion 검색 자동 호출
-- ✅ 용어 검색 및 결과 제공
-- ✅ Brand guidelines 반영
-
----
-
 ## Phase 8: 히스토리 (스냅샷) 관리
 
 ### Step 8.1: 히스토리 드로어 열기
@@ -850,7 +805,6 @@ guidelines."
 - [ ] 메시지 입력/전송 정상
 - [ ] AI 응답 스트리밍 정상
 - [ ] Confluence 검색 자동 호출
-- [ ] Notion 검색 자동 호출
 - [ ] 멀티턴 대화 일관성
 
 ### 히스토리 (스냅샷)
@@ -909,7 +863,7 @@ guidelines."
 
 이 사용자 스토리는 다음을 가정합니다:
 1. **API 키**: OpenAI + Anthropic 모두 유효
-2. **커넥터**: Confluence + Notion 로그인 유효
+2. **커넥터**: Confluence 로그인 유효
 3. **네트워크**: 인터넷 연결 안정적
 4. **OS**: macOS (또는 Windows/Linux로 조정)
 5. **언어**: 스페인어 → 영어 기본, 다른 언어도 가능

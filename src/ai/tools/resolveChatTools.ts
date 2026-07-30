@@ -17,7 +17,6 @@ export interface ResolveChatToolNamesInput {
   hasReviewResults?: boolean;
   webEnabled?: boolean;
   confluenceEnabled?: boolean;
-  notionEnabled?: boolean;
 }
 
 function requirementSatisfied(
@@ -37,8 +36,6 @@ function requirementSatisfied(
       return input.webEnabled === true;
     case 'confluence-enabled':
       return input.confluenceEnabled === true;
-    case 'notion-enabled':
-      return input.notionEnabled === true;
   }
 }
 

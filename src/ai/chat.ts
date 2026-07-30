@@ -75,11 +75,6 @@ export interface GenerateReplyInput {
    */
   confluenceSearchEnabled?: boolean;
   /**
-   * Notion 검색 사용 여부 (tool availability gate)
-   * - false면 Notion 도구를 모델에 바인딩/노출하지 않습니다.
-   */
-  notionSearchEnabled?: boolean;
-  /**
    * 활성화된 커넥터 설정 목록
    * - OpenAI 빌트인 커넥터 (Google, Dropbox, Microsoft 등)
    */
@@ -135,7 +130,6 @@ interface BuildToolSpecsInput {
   translationRules?: string | undefined;
   webSearchEnabled: boolean;
   confluenceSearchEnabled: boolean;
-  notionSearchEnabled: boolean;
   connectorConfigs?: ConnectorConfig[] | undefined;
   getConnectorToken?: ((connectorId: string) => Promise<string | null>) | undefined;
   provider: string;
@@ -149,7 +143,7 @@ interface BuildToolSpecsResult {
 
 async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpecsResult> {
   const memoryState = useProjectMemoryStore.getState();
-  // 도구 목록은 프로필과 설정(웹/Confluence/Notion 토글)으로만 정한다.
+  // 도구 목록은 프로필과 설정(웹/Confluence 토글)으로만 정한다.
   // 사용자 메시지 정규식으로 도구를 켜고 끄면 tools 블록이 매 턴 달라져
   // 그 뒤의 system·대화 이력 캐시가 통째로 무효화된다.
   const allowedNames = new Set(resolveChatToolNames({
@@ -160,7 +154,6 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     hasReviewResults: useReviewStore.getState().results.length > 0,
     webEnabled: input.webSearchEnabled,
     confluenceEnabled: input.confluenceSearchEnabled,
-    notionEnabled: input.notionSearchEnabled,
   }));
   if (!input.selectionProposalEnabled) {
     allowedNames.delete('propose_selection_edit');
@@ -196,12 +189,6 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     const mcpTools = allMcpTools.filter((candidate) => allowedNames.has(candidate.name));
     toolSpecs.push(...mcpTools);
     if (allowedNames.has(confluenceLoadPageTool.name)) toolSpecs.push(confluenceLoadPageTool);
-  }
-
-  // Notion 도구 (REST API 기반)
-  if (input.notionSearchEnabled) {
-    const notionTools = await mcpClientManager.getNotionTools();
-    toolSpecs.push(...notionTools.filter((candidate) => allowedNames.has(candidate.name)));
   }
 
   // 내장 웹 검색 도구
@@ -285,17 +272,6 @@ function buildToolGuideMessage(params: {
     toolGuide.push(`- 내장 웹 검색: 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용 (${providerHint})`);
   }
 
-  // Notion 도구
-  if (has('notion_search')) {
-    toolGuide.push('- notion_search: Notion 워크스페이스에서 페이지/데이터베이스 검색.');
-  }
-  if (has('notion_get_page')) {
-    toolGuide.push('- notion_get_page: Notion 페이지 내용 조회.');
-  }
-  if (has('notion_query_database')) {
-    toolGuide.push('- notion_query_database: Notion 데이터베이스의 항목 조회.');
-  }
-
   // Confluence 도구
   toolGuide.push('', '도구 선택 우선순위 (위에서 아래로 평가):', '');
 
@@ -312,13 +288,6 @@ function buildToolGuideMessage(params: {
   if (has('web_search')) {
     toolGuide.push(`${priority}. 최신 정보/실시간 데이터 필요 ("React 19 기능", "2025년 트렌드")`);
     toolGuide.push('   → 내장 웹 검색 사용');
-    toolGuide.push('');
-    priority++;
-  }
-
-  if (has('notion_search')) {
-    toolGuide.push(`${priority}. Notion 참조 필요`);
-    toolGuide.push('   → notion_search로 검색 후, notion_get_page로 내용 조회');
     toolGuide.push('');
     priority++;
   }
@@ -506,7 +475,6 @@ export async function streamAssistantReply(
     translationRules: input.translationRules,
     webSearchEnabled: !!input.webSearchEnabled,
     confluenceSearchEnabled: !!input.confluenceSearchEnabled,
-    notionSearchEnabled: !!input.notionSearchEnabled,
     connectorConfigs: input.connectorConfigs,
     getConnectorToken: input.getConnectorToken,
     provider: runConfig.provider,

@@ -25,8 +25,6 @@ MCP 서버 및 외부 연동 작업 시 적용되는 규칙.
 ```
 mcp/atlassian/oauth_token_json
 mcp/atlassian/client_json
-mcp/notion/config_json
-notion/integration_token
 ```
 
 ## Gate Pattern

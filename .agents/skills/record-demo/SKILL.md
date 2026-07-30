@@ -46,7 +46,7 @@ allowed-tools:
 |---------|------|------------|
 | **인하우스 번역가** | 기업 내 전문 번역 담당. 기술/마케팅/법률 문서. 10년차+ | 품질 관리, 일관성, 용어 통일 |
 | **프리랜서 번역가** | 다양한 분야. 빠른 납기 압박. 1인 운영 | 생산성, AI 활용, 비용 절감 |
-| **로컬라이제이션 팀** | 소프트웨어/게임/앱 번역. 다국어 동시 진행 | Confluence/Notion 연동, 협업 |
+| **로컬라이제이션 팀** | 소프트웨어/게임/앱 번역. 다국어 동시 진행 | Confluence 연동, 협업 |
 | **번역 에이전시** | 품질 검수 체계. 복수 번역가 관리 | 리뷰 기능, 히스토리 추적 |
 
 ### 경쟁 우위 (데모에서 반드시 드러나야 하는 것)
@@ -55,7 +55,7 @@ allowed-tools:
 2. **원클릭 번역** — 문서 전체를 한 번에 번역. 미리보기 후 적용.
 3. **AI 리뷰/검수** — 오역, 누락, 왜곡, 일관성 자동 검출. 하이라이트로 표시.
 4. **맥락 기반 AI 채팅** — 번역 문서를 참조하면서 질문/수정 요청 가능.
-5. **외부 연동** — Confluence/Notion 문서를 직접 가져와서 번역. 웹 검색 참조.
+5. **외부 연동** — Confluence 문서를 직접 가져와서 번역. 웹 검색 참조.
 6. **히스토리** — 스냅샷 저장/비교/복원. 번역 이력 추적.
 
 ---
@@ -242,19 +242,12 @@ await page.getByRole('button', { name: /^(앱 설정|App Settings)$/ }).click();
 // OpenAI API 키 입력
 page.getByPlaceholder(/OpenAI API 키를 입력하세요|Enter your OpenAI API key/i)
 
-// Notion 커넥터
-page.locator('span', { hasText: /^Notion$/ }).first()
-  .locator('xpath=ancestor::div[contains(@class,"p-3")][1]')
-
 // Confluence 커넥터
 page.locator('span', { hasText: /^Confluence$/ }).first()
   .locator('xpath=ancestor::div[contains(@class,"p-3")][1]')
 
 // 연결/Connect 버튼
 connectorItem.getByRole('button', { name: /^(연결|Connect)$/ })
-
-// Notion 토큰 입력
-page.getByPlaceholder('ntn_xxx... or secret_xxx...')
 
 // 닫기
 page.getByRole('button', { name: /^(닫기|Close)$/ })
@@ -362,7 +355,7 @@ await injectTauriMockWithProject(page, {
 - 히스토리 스냅샷 (create, list, get, delete, rename)
 - 시크릿/API 키 (get, set, delete)
 - MCP/커넥터 (기본 응답, 연결 성공 시뮬레이션)
-- Notion/Confluence (빈 결과 반환)
+- Confluence (빈 결과 반환)
 
 **주의**: Mock에서는 실제 AI 응답이 없습니다. 번역/리뷰/채팅 결과는 UI 인터랙션만 보여줍니다.
 

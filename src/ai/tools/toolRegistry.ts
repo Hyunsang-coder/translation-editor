@@ -137,15 +137,6 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     displayNameKey: 'chat.toolName.confluenceLoadPage',
     requires: ['confluence-enabled'],
   },
-  {
-    name: 'notion_search',
-    profiles: PROJECT_PROFILES,
-    effect: 'external-read',
-    trust: 'external',
-    maxOutputChars: 8_000,
-    displayNameKey: 'chat.toolName.notionSearch',
-    requires: ['notion-enabled'],
-  },
 ] as const;
 
 const BY_NAME = new Map(CHAT_TOOL_REGISTRY.map((descriptor) => [descriptor.name, descriptor]));

@@ -13,7 +13,7 @@
 - **내보내기**: PDF/DOCX/HTML/Markdown, 대역(Source+Target) 레이아웃 지원
 - **용어집**: 프로젝트별 용어 관리, 번역/검수 시 자동 참조
 - **검색/치환**: 에디터 내 검색 (Cmd+F) 및 치환 (Cmd+H, Target 전용)
-- **외부 연동**: Confluence (MCP), Notion, 웹검색
+- **외부 연동**: Confluence (MCP), 웹검색
 - **자동 업데이트**: GitHub Releases 기반 인앱 업데이트 (macOS/Windows)
 
 ## 기술 스택
@@ -170,7 +170,6 @@ GitHub Actions로 자동 빌드 (`v*` 태그 push 시):
 ├── src-tauri/               # Backend (Rust)
 │   ├── src/commands/        # Tauri 명령
 │   ├── src/mcp/             # MCP 클라이언트
-│   ├── src/notion/          # Notion API
 │   └── src/secrets/         # Secret Manager
 ├── crates/                  # Rust 크레이트
 │   └── tauri-plugin-testing/  # E2E 테스트 브리지 플러그인

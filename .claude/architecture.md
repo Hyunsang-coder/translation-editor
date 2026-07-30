@@ -77,7 +77,6 @@ Bound in `src/ai/chat.ts`; the **single source of truth is `src/ai/tools/toolReg
 ### 4. MCP Integration (Rust Native)
 
 - **Confluence Search**: Rust SSE client with OAuth 2.1 PKCE (`src-tauri/src/mcp/client.rs`)
-- **Notion Integration**: Rust HTTP client with Integration Token (`src-tauri/src/mcp/notion_client.rs`)
 - **Web Search**: Brave Search API + OpenAI Web Search
 - **OAuth Flow**: Lazy authentication - toggle enables tool, "Connect" initiates OAuth
 

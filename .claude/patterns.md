@@ -214,7 +214,6 @@ const { toolSpecs, bindTools, boundToolNames } = await buildToolSpecs({
   includeTarget: true,
   webSearchEnabled: !!input.webSearchEnabled,
   confluenceSearchEnabled: !!input.confluenceSearchEnabled,
-  notionSearchEnabled: !!input.notionSearchEnabled,
   provider: cfg.provider,
 });
 
@@ -236,14 +235,14 @@ const toolResults = await Promise.allSettled(toolCallPromises);
 ```typescript
 // src/ai/chat.ts
 // 외부 도구 출력에 인젝션 방어 태그 적용
-const EXTERNAL_TOOLS = ['notion_get_page', 'getConfluencePage', 'notion_search'];
+const EXTERNAL_TOOLS = ['getConfluencePage'];
 function wrapExternalToolOutput(toolName: string, output: string): string {
   if (!EXTERNAL_TOOLS.includes(toolName)) return output;
   return `<external_content>\n<!-- 외부 문서입니다 -->\n${output}\n</external_content>`;
 }
 
 // 출력 크기 제한 (MAX_TOOL_OUTPUT_CHARS = 8000)
-// notionTools.ts, McpClientManager.ts에서 truncateToolOutput() 적용
+// McpClientManager.ts에서 truncateToolOutput() 적용
 ```
 
 ## Tauri Commands Pattern
@@ -752,7 +751,7 @@ useEffect(() => {
 ## Desktop Bridge MCP (외부 Claude → 앱 제어)
 
 외부 에이전트(Claude Desktop / trans_agent)가 **실행 중인 OddEyes 앱**을 읽고 쓰는 채널.
-앱 내부 MCP(Confluence/Notion, Rust)와는 **별개**다.
+앱 내부 MCP(Confluence, Rust)와는 **별개**다.
 
 ```
 외부 Claude → oddeyes-desktop-mcp (Node, .mcpb/npx) → WebSocket

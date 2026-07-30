@@ -43,7 +43,6 @@ const TEXT = {
   save: /^(저장|Save)$/,
   webSearch: /^(웹 검색|Web Search)$/,
   confluenceSearch: /^(Confluence 검색|Confluence Search)$/,
-  notionSearch: /^(Notion 검색|Notion Search)$/,
   targetLanguageWarning: /타겟 언어를 선택하세요|Select target language/i,
 };
 
@@ -184,7 +183,7 @@ test.describe.serial('Demo Recordings', () => {
       .click();
     await page.waitForTimeout(STEP_PAUSE);
 
-    // 검색 옵션 목록 보여주기 (Web Search, Confluence, Notion)
+    // 검색 옵션 목록 보여주기 (Web Search, Confluence)
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 메뉴 닫기 (ESC 또는 바깥 클릭)
@@ -206,55 +205,6 @@ test.describe.serial('Demo Recordings', () => {
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     await renameVideo(page, 'Add_to_chat.webm');
-  });
-
-  test('4. Connector — MCP 커넥터 연결 워크플로우', async ({ page }) => {
-    await injectTauriMock(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(STEP_PAUSE);
-
-    // 앱 설정 열기
-    await openAppSettings(page);
-
-    // 커넥터 섹션으로 스크롤 (Notion 연결)
-    const notionItem = page
-      .locator('span', { hasText: /^Notion$/ })
-      .first()
-      .locator('xpath=ancestor::div[contains(@class,"p-3")][1]');
-
-    await notionItem.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(STEP_PAUSE);
-
-    await notionItem.getByRole('button', { name: TEXT.connect }).click();
-    await page.waitForTimeout(STEP_PAUSE);
-
-    // Notion 토큰 입력
-    const notionTokenInput = page.getByPlaceholder('ntn_xxx... or secret_xxx...');
-    await notionTokenInput.click();
-    await page.waitForTimeout(300);
-
-    // 잘못된 토큰 → 에러 표시
-    await page.keyboard.type('invalid-token', { delay: TYPE_DELAY });
-    await page.waitForTimeout(STEP_PAUSE);
-
-    const notionDialogSubmit = page.locator('form').getByRole('button', { name: TEXT.connect });
-    await notionDialogSubmit.click();
-    await page.waitForTimeout(EMPHASIS_PAUSE);
-
-    // 올바른 토큰으로 재입력
-    await notionTokenInput.clear();
-    await page.waitForTimeout(300);
-    await page.keyboard.type('ntn_valid_token_12345678', { delay: TYPE_DELAY });
-    await page.waitForTimeout(STEP_PAUSE);
-
-    await notionDialogSubmit.click();
-    await page.waitForTimeout(EMPHASIS_PAUSE);
-
-    // 연결 완료 상태 보여주기
-    await page.waitForTimeout(EMPHASIS_PAUSE);
-
-    await renameVideo(page, 'Connector.webm');
   });
 
   test('5. Get_confluence_info — Confluence 연동 워크플로우', async ({ page }) => {

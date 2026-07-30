@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with this repository.
 **OddEyes.ai** - AI-powered translation editor built with Tauri (Rust) + React (TypeScript).
 - Notion-style dual editor (TipTap) for Source/Target documents
 - AI chat with LangChain (OpenAI + Anthropic)
-- MCP integration (Confluence, Notion, Web Search)
+- MCP integration (Confluence, Web Search)
 - History snapshot workflow (save/compare/restore/rename, including snapshot↔snapshot diff)
 
 **Core Philosophy**: Translator-led workflow. AI assists only when requested.
@@ -89,6 +89,12 @@ This `.claude/` directory contains:
 
 ## Recent Updates (2026-07-30)
 
+- **Notion 연동 제거** ([ADR-0011](../docs/adr/0011-remove-notion-integration.md)): 한 번도 쓰지 않은 기능이고, 조사해보니 **구현이 두 벌인데 한 벌은 이미 죽어 있었다**. ① REST 경로(`src-tauri/src/notion/` + `commands/notion.rs` + `notionTools.ts`)가 프런트가 쓰는 유일한 경로였고, ② MCP/OAuth 경로(`mcp/notion_client.rs`·`notion_oauth.rs`·`McpServerId::Notion`, 616 LOC)는 `mcp_set_notion_config`를 e2e 목만 부르는 잔해였다 — REST로 갈아탄 흔적이 `McpClientManager`의 "Notion: REST API 직접 호출 (MCP 대신)" 주석에 남아 있었다. 둘 다 제거하고 `McpServerId`는 `Atlassian` 단일 variant로 축소.
+  - **tool guide가 바인딩되지 않는 도구를 쓰라고 지시하고 있었다**: `chat.ts`가 "notion_search로 검색 후 `notion_get_page`로 조회"를 주입하는데 `notion_get_page`는 `CHAT_TOOL_REGISTRY`에 없어 절대 바인딩되지 않는다(`buildToolSpecs`가 모든 후보를 registry 파생 `allowedNames`로 필터). 이 발견이 제거를 촉발했다.
+  - **vault 키 매핑은 남겼다** — `secrets/manager.rs`의 `notion:integration_token` 매핑은 오래된 vault를 읽는 마이그레이션 표라 지우면 기존 저장소 호환이 깨진다. **저장된 토큰도 vault에 남는다**(읽는 코드가 없어 무해하지만 자동 삭제되지 않음).
+  - **함께 제거**: `McpClientManager.getAllTools()`(Atlassian+Notion 병합이 유일한 존재 이유, 호출자 0), `NotionTokenDialog`, 채팅 검색 토글, i18n 양쪽, e2e 목 8개, `user-story.spec.ts` Phase 2, **데모 4번(`Connector.webm`)** — Atlassian은 OAuth 리다이렉트라 같은 흐름으로 대체 불가이고 Confluence는 데모 5번이 이미 다룬다.
+- **`prompt.ts`의 `[Add to Context]` 안내 제거**: 질문 모드 프롬프트가 D2에서 없어진 버튼을 누르라고 안내하고 있었다. `inferSuggestionFromAssistantText`는 rule만 추론하므로 버튼이 뜰 수 없어, 모델이 이 문구를 출력하면 사용자에게 **누를 수 없는 버튼**을 안내하는 셈이었다. `[Add to Rules]`는 `translationRules`가 실제로 주입되고 폴백 추론도 살아 있어 유지.
+  - **`src/ai/README.md`는 아직 드리프트 상태다** — `runToolCallingLoop`(현재는 `chatAgent/runAgentStream.ts`의 `runChatAgentStream`), `suggest_project_context`, 도구 목록 4개(실제 15개), "채팅에서 번역 생성 금지"(프롬프트는 허용) 등. `.claude/patterns.md:227`·`gotchas.md:229`에도 `runToolCallingLoop`가 남아 있다.
 - **선택 영역을 문단·표를 가로질러 채팅에 넣을 수 있다** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)): 여러 문단을 드래그하면 "한 문단 안의 텍스트만 선택해주세요."로 막혔다. 제약은 `normalizeSelectionAnchorRange`의 `sameParent` 가드 하나이고 계획 문서 §7.4의 MVP 한계였다. 채팅 컨텍스트는 `from/to`를 안 쓰고(`ChatSelectionSnapshot`) 선택 도구도 유닛 배열을 다루므로 멀티블록에 이미 안전했다 — 진짜로 막히는 곳은 적용 경로 하나다.
   - **`sameParent` → 클램핑**: 범위가 덮는 첫/마지막 textblock 내부로 좁힌다(`textblockSpan`). Cmd+A는 `AllSelection`이고 `from=0`의 부모가 doc 노드라 **`sameParent`만 풀어도 여전히 막혔다**. 트림으로 앞뒤 블록의 기여분이 사라질 수 있어 `blockCount`를 다시 센다. 단일 블록 무회귀는 전체 `(from,to)` 조합 완전탐색으로 확인(일치 873, 신규 허용 715, 회귀 0).
   - **앵커 텍스트에 블록 구분자 `'\n'`(`readAnchorText`)**: 구분자가 없으면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡았다. `SelectionContext.text`와 값이 일치하게 돼 proposal 검증(`ChatContent`)이 구조적으로 옳아진다 — 단일 블록에서는 두 값이 문자 단위로 동일하다.

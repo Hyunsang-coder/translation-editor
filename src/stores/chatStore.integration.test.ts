@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
-import { useConnectorStore } from '@/stores/connectorStore';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import type { ForbiddenTerm, ProjectMemoryItem } from '@/types';
 
@@ -82,18 +81,6 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
     mocks.createChatModel.mockReturnValue({
       invoke: mocks.webInvoke,
       bindTools: vi.fn().mockReturnThis(),
-    });
-
-    const connectorState = useConnectorStore.getState();
-    useConnectorStore.setState({
-      enabledMap: {
-        ...connectorState.enabledMap,
-        notion: false,
-      },
-      tokenMap: {
-        ...connectorState.tokenMap,
-        notion: false,
-      },
     });
 
     useProjectMemoryStore.getState().reset();
@@ -311,7 +298,6 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
         expect.objectContaining({
           userMessage: 'What is API endpoint?',
           confluenceSearchEnabled: true,
-          notionSearchEnabled: false,
         }),
         expect.any(Object),
         expect.any(Object),
@@ -546,34 +532,6 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       const manifest = session?.messages
         .find((m) => m.role === 'assistant')?.metadata?.contextManifest;
       expect(manifest?.included).not.toContain('project-memory');
-    });
-
-    it('Notion 토큰/활성 상태에 따라 도구 사용 가능 여부가 반영됨', async () => {
-      // Arrange
-      useConnectorStore.setState((state) => ({
-        enabledMap: {
-          ...state.enabledMap,
-          notion: true,
-        },
-        tokenMap: {
-          ...state.tokenMap,
-          notion: true,
-        },
-      }));
-      useChatStore.getState().createSession('Notion Session');
-      const sessionId = useChatStore.getState().currentSessionId!;
-
-      // Act
-      await useChatStore.getState().sendMessage('용어집에서 endpoint 정의를 확인해줘', sessionId);
-
-      // Assert
-      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
-        expect.objectContaining({
-          notionSearchEnabled: true,
-        }),
-        expect.any(Object),
-        expect.any(Object),
-      );
     });
   });
 

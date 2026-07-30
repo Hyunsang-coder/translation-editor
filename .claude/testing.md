@@ -136,7 +136,6 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/utils/markdownConverter.test.ts` | varies | TipTap ↔ Markdown conversion |
 | `src/utils/cleanSuggestionContent.test.ts` | 12 | Suggestion content cleanup |
 | `src/utils/adfParser.test.ts` | 54 | ADF document parsing, section extraction |
-| `src/ai/tools/notionTools.test.ts` | 9 | Notion token verification, error handling |
 | `src/stores/chatStore.helpers.test.ts` | 10 | Chat store pure helper functions |
 | `src/stores/layoutResolver.test.ts` | 13 | Layout resolver responsive breakpoints |
 | `src/components/history/HistoryCompareModal.test.tsx` | 2 | History compare modal diff display |
@@ -292,7 +291,6 @@ src-tauri/src/
 │   └── confluence.rs   # MCP tool direct invocation
 ├── mcp/
 │   ├── client.rs     # Confluence SSE client
-│   └── notion_client.rs
 └── utils/
     └── mod.rs        # Path validation
 ```

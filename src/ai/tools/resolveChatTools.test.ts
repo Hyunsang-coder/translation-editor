@@ -50,7 +50,6 @@ describe('resolveChatToolNames', () => {
       hasReviewResults: true,
       webEnabled: true,
       confluenceEnabled: true,
-      notionEnabled: true,
     })).toEqual([]);
   });
 
@@ -88,7 +87,6 @@ describe('resolveChatToolNames', () => {
       hasProject: true,
       webEnabled: true,
       confluenceEnabled: true,
-      notionEnabled: true,
     };
 
     expect(resolveChatToolNames(config)).toEqual(resolveChatToolNames(config));
