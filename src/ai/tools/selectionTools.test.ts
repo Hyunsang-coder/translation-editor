@@ -112,6 +112,44 @@ describe('selection tools', () => {
     expect(omitted.after).toEqual(['문단 5', '문단 6']);
   });
 
+  // 표 셀은 tableCell과 그 안의 paragraph가 둘 다 번역 단위라 같은 텍스트가 두 칸을
+  // 차지했다. 앞뒤 N칸이 표에서 실질 N/2칸이 되고 모델은 셀 내용을 두 번 봤다.
+  describe('표 셀 중복', () => {
+    const cell = (id: string, text: string) => ({
+      type: 'tableCell',
+      attrs: { translationUnitId: id },
+      content: [{
+        type: 'paragraph',
+        attrs: { translationUnitId: `${id}p` },
+        content: [{ type: 'text', text }],
+      }],
+    });
+    const tableDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'p1' }, content: [{ type: 'text', text: '문단1' }] },
+        { type: 'table', content: [{ type: 'tableRow', content: [cell('c1', '셀1'), cell('c2', '셀2')] }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'p2' }, content: [{ type: 'text', text: '문단2' }] },
+      ],
+    };
+
+    it('셀 선택에서 같은 텍스트가 두 번 나오지 않는다', () => {
+      expect(getSelectionSurroundings(tableDoc, ['c1', 'c1p'], 1, 1)).toEqual({
+        selected: ['셀1'],
+        before: ['문단1'],
+        after: ['셀2'],
+        unitIds: ['p1', 'c1p', 'c2p'],
+        truncated: false,
+      });
+    });
+
+    it('표 뒤 문단의 앞 문맥이 셀 중복으로 잠식되지 않는다', () => {
+      // 중복이 있으면 before가 ['셀2', '셀2']가 되어 앞 문맥을 못 봤다.
+      expect(getSelectionSurroundings(tableDoc, ['p2'], 2, 0).before)
+        .toEqual(['셀1', '셀2']);
+    });
+  });
+
   it('앞뒤 개수는 상한까지 늘릴 수 있다', () => {
     const wide = {
       type: 'doc',

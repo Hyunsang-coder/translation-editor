@@ -44,6 +44,32 @@ function clampUnits(value: number | undefined): number {
   return Math.max(0, Math.min(MAX_SURROUNDING_UNITS, value ?? DEFAULT_SURROUNDING_UNITS));
 }
 
+function isAncestorPath(ancestor: number[], descendant: number[]): boolean {
+  return (
+    ancestor.length < descendant.length &&
+    ancestor.every((index, depth) => descendant[depth] === index)
+  );
+}
+
+/**
+ * 표 셀은 `tableCell`과 그 안의 `paragraph`가 **둘 다** 번역 단위로 등록돼(둘 다
+ * `TRANSLATION_UNIT_TYPES`) 같은 텍스트가 두 칸을 차지한다. 그대로 두면 모델에게
+ * 셀 내용이 두 번 보이고, 앞뒤 8칸이 표에서는 실질 4칸이 된다.
+ *
+ * 조상 단위가 바로 뒤 자손 단위와 텍스트까지 같을 때만 조상을 버린다(pre-order라
+ * 부모가 첫 자식 바로 앞에 온다). 셀 안에 문단이 여러 개면 텍스트가 달라 그대로
+ * 남는데, 확실히 중복인 것만 지우는 쪽이 안전하다.
+ *
+ * 단위 정의(`TRANSLATION_UNIT_TYPES`) 자체는 건드리지 않는다 — 정렬 검사 뷰가
+ * 같은 목록을 쓰므로 짝 맞추기 결과가 함께 바뀐다.
+ */
+function dropDuplicatedContainers(units: TranslationUnit[]): TranslationUnit[] {
+  return units.filter((unit, index) => {
+    const next = units[index + 1];
+    return !(next && next.text === unit.text && isAncestorPath(unit.path, next.path));
+  });
+}
+
 function selectedUnitRange(
   units: TranslationUnit[],
   selectedUnitIds: string[],
@@ -66,7 +92,7 @@ export function getSelectionSurroundings(
   beforeUnits?: number,
   afterUnits?: number,
 ): SelectionSurroundingsResult {
-  const units = collectTranslationUnits(doc);
+  const units = dropDuplicatedContainers(collectTranslationUnits(doc));
   const range = selectedUnitRange(units, selectedUnitIds);
   if (!range) {
     throw new Error('현재 선택 영역의 번역 단위를 찾을 수 없습니다.');
