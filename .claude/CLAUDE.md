@@ -77,8 +77,20 @@ This `.claude/` directory contains:
 - `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 
-**결정의 근거는 `/docs/adr/`** ([README](../docs/adr/README.md)). 아래 "Recent Updates"는 현재 코드 상태의 요약이고, ADR은 **왜 그렇게 됐고 무엇을 버렸는지**를 담습니다. 둘이 어긋나면 근거는 ADR이 진실입니다.
-되돌리기 비싼 결정(스키마 변경, MCP breaking, 기능 폐기, 대안을 버린 선택)을 할 때는 ADR을 함께 씁니다 — 규칙은 `docs/adr/README.md`.
+### 무엇을 어디에 쓰나
+
+**이 파일은 문서가 아니라 매 세션 자동으로 실려가는 프롬프트입니다.** 그래서 판단 기준은 "정확한가"가 아니라 **"모든 작업에서 행동을 바꾸는가"** 입니다. 내용의 종류로 집을 정하고, 날짜로 쌓지 않습니다.
+
+| 종류 | 집 |
+|------|-----|
+| 왜 그렇게 됐나 / 무엇을 버렸나 | `docs/adr/` ([README](../docs/adr/README.md)) — 되돌리기 비싼 결정(스키마, MCP breaking, 기능 폐기, 대안을 버린 선택) |
+| 다시 밟으면 아픈 구현 함정 | `gotchas.md` — 주제별. 날짜순이 아니라 주제순이라 낡은 항목이 새 항목 옆에서 발각됩니다 |
+| 현재 구조·계약 | `architecture.md` / `patterns.md` — **덧붙이지 말고 갈아끼웁니다** |
+| 언제 무엇이 바뀌었나 | `git log` — 이 파일에 쓰지 않습니다 |
+
+**변경 이력 금지 규칙**: 이 파일에 "Recent Updates" 류의 이력 섹션을 만들지 않습니다. 2026-07-30에 13개 날짜 섹션(~14.8k 토큰, 파일의 87%)을 걷어냈습니다 — 지운 이유는 낡은 항목이 사라지지 않아서입니다(4월 항목이 ADR-0012와 정면으로 모순된 상태로 남아 있었습니다). 지운 내용은 `git show 2f157b2:.claude/CLAUDE.md`에 있습니다.
+
+**상한: 300줄.** 넘으면 무엇을 뺄지 결정합니다. 상한 없는 프롬프트는 반드시 자랍니다.
 
 ## Core Principles
 
@@ -86,183 +98,6 @@ This `.claude/` directory contains:
 2. **Preview-First**: Translation results shown in modal before applying ([ADR-0003](../docs/adr/0003-no-auto-apply-preview-first.md))
 3. **TipTap JSON is Canonical**: Never bypass JSON format for document storage ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
 4. **Markdown for AI**: Translation uses Markdown as intermediate format ([ADR-0002](../docs/adr/0002-tiptap-json-as-canonical-format.md))
-
-## Recent Updates (2026-07-30)
-
-- **Confluence 검색·페이지 조회를 로컬 래퍼로 되살림** ([ADR-0015](../docs/adr/0015-confluence-tools-as-local-wrappers.md)): `Confluence 검색` 토글이 기본 ON인데 **검색을 하나도 켜지 않고 있었다**. `buildToolSpecs`가 서버 MCP 도구를 `allowedNames`(registry 파생)로 필터하는데 Atlassian이 주는 이름(`search`, `searchConfluenceUsingCql` …)이 registry에 없어 전량 탈락했다 — `e38143d`(2026-07-24) allowlist 도입이 조용히 끊은 경로다. ADR-0011에서 본 것과 같은 계열.
-  - **`confluence_search` 신설**: Rovo `search`를 `mcp_call_tool`로 호출하고 ARI로 Confluence만 남긴다(Rovo는 Jira 이슈를 섞어 주고 파라미터로 못 좁힌다). 10건·발췌 200자·총 3,500자를 **도구가 먼저** 맞춘다 — registry 캡(4,000)에 맡기면 제목·URL 긴 결과에서 몇 건이 사라졌는지 알 수 없다. **검색 결과에 페이지 ID를 함께 싣는다**: 공간 홈 결과는 URL이 `/spaces/X/overview`라 `/pages/<id>`가 없어 URL만으론 열 수 없다.
-  - **`confluence_get_page` 신설**(읽기 전용): URL·ID·짧은 링크(`/wiki/x/...`)로 본문을 Markdown으로 반환. `confluence_load_page`는 **원문 문서를 덮어쓰는** 도구라 조회에 쓸 수 없어, 설명에 구분을 박고 tool guide에도 세 도구의 역할을 명시했다(지금까지 Confluence 안내는 `// Confluence 도구` 주석만 있고 본문이 없었다).
-  - **미연결이면 아예 바인딩하지 않는다**: 붙여도 첫 호출이 `mcp_call_tool`에서 실패해 모델 왕복만 버렸다. 세션 기본값은 `true` 유지 — 연결 상태로 기본값을 정하는 안은 `initialize()`가 비동기라 시작 직후 세션이 토큰 멀쩡한데도 OFF로 굳고 DB에 영속된다. 연결 시 드는 값은 실측 474토큰(search 146 / get_page 144 / load_page 184).
-  - **외부 도구 출력의 신뢰경계 무해화 추가**(`middleware.ts:neutralizeExternalMarkers`): 사내 위키 본문에 `</external_content>`가 있으면 그 뒤가 경계 밖 지시문으로 읽힌다. 기존 `wrapExternalToolOutput`은 무해화가 없었는데, 그 경로로 실제 외부 텍스트가 흐르는 건 이번 도구들이 처음이다(`web_search`는 provider 빌트인이라 ToolMessage를 안 거치고, `load_page`는 고정 문자열을 반환).
-  - **남은 한계**: 다중 사이트 계정은 `resources[0]`만 본다(검색 결과의 `metadata.cloudId`는 무시). `get_page`에 발췌 파라미터가 없어 8,000자 초과 페이지는 앞부분만 남는다. `McpClientManager.getTools()`/`loadTools`/`toolsCache`는 호출자가 0이 됐다(제거하지 않음). 웹 E2E 커버리지 없음 — `tauri-mock.ts`의 `mcp_get_status`가 `isConnected`가 아니라 `connected`를 반환한다.
-- **채팅 스크롤을 하단 추종에서 질문 고정으로** ([ADR-0014](../docs/adr/0014-pin-to-question-chat-scroll.md)): 청크마다 하단을 쫓느라 답변을 읽는 내내 화면이 튀었다. 전송한 사용자 메시지를 뷰포트 상단에 고정하고 아래에 한 화면치 여백을 깔면, 본문이 자라는 만큼 여백이 **정확히 같은 양으로** 줄어 총 스크롤 높이가 불변이 된다 — 추종할 대상 자체가 생기지 않는다.
-  - **"부드러운 추종"은 선택지가 아니었다**: `behavior:'smooth'`는 duration·easing을 지정할 수 없고, 추종 경로를 smooth로 바꾸면 애니메이션이 끝나기 전에 다음 청크가 목표를 갈아치워 영원히 뒤처진다. 기존 `'auto'`(즉시)는 그 조건에서 옳은 선택이었다. 그래서 남은 길은 추종을 없애는 것뿐이었다.
-  - **모달·사이드바 토글은 일부러 안 건드렸다** — 전문가용 편집 도구에서 snappy는 대체로 옳고, 반복 조작 경로에 애니메이션을 깔면 열 번째부터 느려진다. 채팅 스크롤만 성격이 다르다(조작이 아니라 읽는 동안 배경에서 계속 움직임).
-  - **패널 열기 튐 + 마지막 응답 잘림은 같은 뿌리였다**: 열기가 `setTimeout(100ms)` 뒤에 점프해 대화 맨 위가 잠깐 보였고, 그 시점 `scrollHeight`는 마크다운 레이아웃 전이라 실제보다 작아 덜 내려갔다. `useLayoutEffect`로 첫 페인트 전에 붙이고, 본문 래퍼의 **ResizeObserver**로 늦은 레이아웃까지 잡는다. 플로팅 채팅은 `chatPanelOpen`이 상수 `true`(`ChatContent.tsx:224`)라 마운트마다 이 경로를 탔다.
-  - **`streamingContentLength` 인자 제거** — 토큰 수라는 프록시 대신 실제 레이아웃 변화를 본다. **여백 div는 ResizeObserver 관찰 대상 밖**에 둬야 한다(안에 있으면 여백 조절이 관찰을 다시 촉발).
-  - **스크롤 애니메이션은 rAF 보간기 자작**(`animateScrollTo`, 거리 비례 260–520ms). 속도는 상단 상수 3개로 조절하며, 측정이 아니라 취향으로 정한 값이다. 보간기가 시작·종료를 직접 알아 "스크롤 이벤트로 애니메이션 종료를 추정"하던 로직이 사라졌다.
-  - **고정 중에는 `shouldStickToBottom`을 끈다** — 안 그러면 여백 소진 후 예전 추종이 되살아난다. 따라가며 읽기는 "최신 메시지로" 버튼을 누르는 **명시적 선택**으로만 남는다. DOM 계약 2개(사용자 메시지의 `data-chat-role="user"`, 여백 div의 위치)가 깨지면 고정이 조용히 멈춘다.
-- **플로팅 채팅 분리/도킹 전환 애니메이션**: 진입 150ms·퇴장 140ms scale+fade. **퇴장은 애니메이션이 끝난 뒤에 dock/close를 호출한다** — 즉시 커밋하면 사이드바에 같은 세션의 `ChatContent`가 동시에 마운트된다(순서가 취향이 아니라 제약). `prefers-reduced-motion`이면 지연까지 건너뛴다.
-- **효과 없는 애니메이션 클래스 정리**: `animate-in fade-in zoom-in-95`는 `tailwindcss-animate` 문법인데 플러그인이 없어(`plugins: []`) 무효였다 — 애니메이션을 의도한 유일한 두 곳이 조용히 죽어 있었다. `AppSettingsModal`은 삭제, `Toolbar` 줌 배지는 동작하는 `animate-fade-in`으로 교체. 사용처 0인 `slide-up`·`pulse-soft` 키프레임 제거(`fade-in`은 `.chat-message`가 사용).
-- **워크플로 3버튼(번역·검수·폴리싱)을 같은 상호작용으로 통일**: 검수만 "패널 열기"였고 나머지는 "시작 모달 → 실행"이라 어긋나 있었다. 이제 셋 다 클릭 → 시작 모달(추가 지시사항 선택 입력) → 실행이다.
-  - **검수가 2클릭이었다**: `openReviewPanel`이 패널을 열기만 하고, *이미 활성일 때만* 검수를 실행했다(상태에 따라 1클릭이 열기도, 실행도 됨). 이제 `openReviewPanel`은 패널을 보여주기만 한다 — 정렬 뷰의 `매핑 실패 이슈` 버튼이 패널이 열려 있으면 검수를 새로 돌리던 부작용도 함께 사라졌다.
-  - **`reviewStore.reviewTrigger`(nonce) → `pendingReviewRun`(요청 객체)**: 툴바는 패널을 여는 것과 **동시에** 실행을 요청하는데, 그 순간 `ReviewPanel`은 마운트 전이라 nonce 증가를 관측할 수 없다(마운트 시점 값이 그대로 "이전 값"이 됨). 요청을 상태로 남기고 패널이 `consumePendingReviewRun`으로 집어간다. 소비 effect는 **ref 할당 effect보다 뒤에 선언**해야 한다(effect는 선언 순서대로 실행되므로 앞에 두면 첫 마운트에서 ref가 null).
-  - **검수 시작 모달은 `WorkflowActions`가 소유한다** — `ReviewPanel`은 사이드바가 닫히면 언마운트라 모달을 열 수 없다. `runReview`에 `userInstruction`이 추가됐고, 이번 실행에만 적용되므로 system(런 내 캐시 대상)이 아니라 user 메시지에 넣는다. 패널의 `검수 시작` 버튼은 지시사항 없이 그대로 실행한다.
-  - **호버가 안 보이던 버그**: 검수·폴리싱이 `hover:bg-editor-surface`인데 툴바 헤더 배경이 같은 `bg-editor-surface`였다. 다른 툴바 버튼과 같이 `hover:bg-editor-border`로 통일.
-  - **대시 연결선 제거**: 세 버튼을 `—`로 잇고 번역만 채워 그리면 "현재 단계=번역"인 스테퍼로 읽힌다. 대신 실행 중인 버튼에 스피너+파란 테두리(`SECONDARY_RUNNING_CLASS`)로 상태를 드러낸다 — `disabled:opacity-50`을 idle 클래스로 옮긴 이유(실행 중에도 disabled지만 그땐 흐려지면 안 됨).
-  - ko 라벨 `문서 번역` → `번역`(en은 원래 `Translate`). ⌘R은 패널 열기가 아니라 검수 모달을 연다.
-- **정렬 리포트 제거** ([ADR-0013](../docs/adr/0013-remove-alignment-report.md)): 정렬 뷰 하단의 `정렬 리포트` JSONL 내보내기 버튼을 걷어냈다. 번역가 화면에 개발 의사결정용 계측기가 노출돼 있었고, 수집된 데이터는 1년 가까이 0건이었다. `alignmentReport.ts`·`pickJsonlExportPath`·i18n 3키·E2E 단언을 함께 제거(`write_text_file`은 `ExportModal`이 계속 쓰므로 유지).
-  - **Phase 5 착수 판단 근거가 사라진 건 의도된 것**이다. `ratio`는 애초에 "번역에서 문단이 빠졌다"와 "1:N이라 `alignUnits`가 못 짝지었다"를 구분하지 못해, 낮게 나와도 답이 영속 정렬인지 알고리즘 개선인지 번역 품질인지 갈리지 않았다.
-  - **정렬 불일치는 화면이 아니라 문서의 증상**이다 — 고칠 대상은 정렬이 아니라 번역이고, 경로는 기존 `jumpToUnit`(문서 보기 점프) 그대로다. 1:0 행에서 곧바로 번역해 넣는 액션이 다음 후보지만 아직 결정 안 됨.
-- **모델 선택을 provider 하나로** ([ADR-0012](../docs/adr/0012-provider-only-model-selection.md)): 프리셋 6개 선택(`MODEL_PRESETS`)을 폐기하고 사용자가 고르는 값을 `provider: 'anthropic' | 'openai'` 하나로 줄였다. 용도별 모델·effort는 `config.ts`의 `MODEL_BY_USE`가 고정한다 — 검수만 Opus 5/Sol이고 번역·폴리싱·채팅은 Sonnet 5/Luna, effort는 전부 high(요약만 medium).
-  - **고친 문제**: 번역·검수·폴리싱이 `translationModel` **하나를 공유**해서, 검수용으로 Opus로 올린 뒤 되돌리지 않으면 폴리싱까지 Opus로 돌았다(20,000자 1사이클 $1.44 → $1.69). `presets[0]`(=Opus 5)로 조용히 튀던 fallback 3곳도 함께 사라졌다.
-  - **폴리싱 effort medium 안은 기각**: 산출물이 곧 문서 본문이라 effort 의존도가 번역보다 높은데 절감은 ~8%뿐이고, 선택 재번역이 `translation`(high)이라 **문단 하나가 문서 전체보다 effort가 높아지는 역전**이 생긴다. 긴 문서에서 `---POLISH_END---` 유실이 관측되면 재검토.
-  - **`polish`·`summary`가 `ModelUseFor`에 신설**됐다. 폴리싱은 더 이상 `useFor: 'translation'`이 아니다(`polishDocument.ts`). **Haiku 4.5는 매핑에서 완전히 사라졌지만 `pricing.ts`에는 남긴다** — 과거 사용량 장부가 API 모델 ID로 단가를 조회한다.
-  - **`resolveModelCallOptions`가 `useFor`를 안 받는다**: effort가 `cfg.reasoningEffort`로 실려 오므로 용도 분기가 죽었고, 남은 판정은 "이 **모델**이 이 파라미터를 받는가"뿐이다. `backendCompletion`의 `useFor` 파라미터도 같은 이유로 제거.
-  - **레거시 값은 읽는 지점에서 `normalizeProvider()`로 환산**한다. `chat_sessions.model_preset`은 **컬럼명을 유지하고 값 의미만** provider로 바꿨고(rename 비용 대비 실익 없음), v13 이전 세션에는 `claude-sonnet-5` 같은 프리셋 ID가 남아 있다. 정규화를 빠뜨리면 `MODEL_BY_USE`를 undefined로 인덱싱한다. hydrate가 결과를 되써서 고정한다.
-  - **`aiConfigStore` v13 → v14**: `translationModel`/`chatModel` → `provider`. `translationModel` 기준으로 추론(문서 작업이 주 용도). `VITE_AI_MODEL` env 오버라이드는 먹이던 상태가 사라져 함께 제거.
-  - **`requestedModelPreset` 새 쓰기 중단** — `provider` 필드와 값이 완전히 겹친다. 과거 메시지 읽기용으로만 남기고, `ChatContent`의 `pendingModelChange`는 `requestedModelPreset ?? provider`를 정규화해 비교한다(안 하면 레거시 세션에서 힌트가 상시 노출).
-- **Notion 연동 제거** ([ADR-0011](../docs/adr/0011-remove-notion-integration.md)): 한 번도 쓰지 않은 기능이고, 조사해보니 **구현이 두 벌인데 한 벌은 이미 죽어 있었다**. ① REST 경로(`src-tauri/src/notion/` + `commands/notion.rs` + `notionTools.ts`)가 프런트가 쓰는 유일한 경로였고, ② MCP/OAuth 경로(`mcp/notion_client.rs`·`notion_oauth.rs`·`McpServerId::Notion`, 616 LOC)는 `mcp_set_notion_config`를 e2e 목만 부르는 잔해였다 — REST로 갈아탄 흔적이 `McpClientManager`의 "Notion: REST API 직접 호출 (MCP 대신)" 주석에 남아 있었다. 둘 다 제거하고 `McpServerId`는 `Atlassian` 단일 variant로 축소.
-  - **tool guide가 바인딩되지 않는 도구를 쓰라고 지시하고 있었다**: `chat.ts`가 "notion_search로 검색 후 `notion_get_page`로 조회"를 주입하는데 `notion_get_page`는 `CHAT_TOOL_REGISTRY`에 없어 절대 바인딩되지 않는다(`buildToolSpecs`가 모든 후보를 registry 파생 `allowedNames`로 필터). 이 발견이 제거를 촉발했다.
-  - **vault 키 매핑은 남겼다** — `secrets/manager.rs`의 `notion:integration_token` 매핑은 오래된 vault를 읽는 마이그레이션 표라 지우면 기존 저장소 호환이 깨진다. **저장된 토큰도 vault에 남는다**(읽는 코드가 없어 무해하지만 자동 삭제되지 않음).
-  - **함께 제거**: `McpClientManager.getAllTools()`(Atlassian+Notion 병합이 유일한 존재 이유, 호출자 0), `NotionTokenDialog`, 채팅 검색 토글, i18n 양쪽, e2e 목 8개, `user-story.spec.ts` Phase 2, **데모 4번(`Connector.webm`)** — Atlassian은 OAuth 리다이렉트라 같은 흐름으로 대체 불가이고 Confluence는 데모 5번이 이미 다룬다.
-- **`prompt.ts`의 `[Add to Context]` 안내 제거**: 질문 모드 프롬프트가 D2에서 없어진 버튼을 누르라고 안내하고 있었다. `inferSuggestionFromAssistantText`는 rule만 추론하므로 버튼이 뜰 수 없어, 모델이 이 문구를 출력하면 사용자에게 **누를 수 없는 버튼**을 안내하는 셈이었다. `[Add to Rules]`는 `translationRules`가 실제로 주입되고 폴백 추론도 살아 있어 유지.
-  - **`src/ai/README.md`는 아직 드리프트 상태다** — `runToolCallingLoop`(현재는 `chatAgent/runAgentStream.ts`의 `runChatAgentStream`), `suggest_project_context`, 도구 목록 4개(실제 15개), "채팅에서 번역 생성 금지"(프롬프트는 허용) 등. `.claude/patterns.md:227`·`gotchas.md:229`에도 `runToolCallingLoop`가 남아 있다.
-- **선택 영역을 문단·표를 가로질러 채팅에 넣을 수 있다** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)): 여러 문단을 드래그하면 "한 문단 안의 텍스트만 선택해주세요."로 막혔다. 제약은 `normalizeSelectionAnchorRange`의 `sameParent` 가드 하나이고 계획 문서 §7.4의 MVP 한계였다. 채팅 컨텍스트는 `from/to`를 안 쓰고(`ChatSelectionSnapshot`) 선택 도구도 유닛 배열을 다루므로 멀티블록에 이미 안전했다 — 진짜로 막히는 곳은 적용 경로 하나다.
-  - **`sameParent` → 클램핑**: 범위가 덮는 첫/마지막 textblock 내부로 좁힌다(`textblockSpan`). Cmd+A는 `AllSelection`이고 `from=0`의 부모가 doc 노드라 **`sameParent`만 풀어도 여전히 막혔다**. 트림으로 앞뒤 블록의 기여분이 사라질 수 있어 `blockCount`를 다시 센다. 단일 블록 무회귀는 전체 `(from,to)` 조합 완전탐색으로 확인(일치 873, 신규 허용 715, 회귀 0).
-  - **앵커 텍스트에 블록 구분자 `'\n'`(`readAnchorText`)**: 구분자가 없으면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡았다. `SelectionContext.text`와 값이 일치하게 돼 proposal 검증(`ChatContent`)이 구조적으로 옳아진다 — 단일 블록에서는 두 값이 문자 단위로 동일하다.
-  - **표 다중 셀 선택 지원 + 코멘트·복사 버그 수정**: `CellSelection`은 셀마다 range가 하나씩이고 `selection.from/to`는 **head 셀만** 가리킨다(문서 순서도 아님). 앵커를 `ranges[]`로 확장해 데코레이션·매핑·stale 판정이 범위별로 돈다. `anchorId`는 단수를 유지해 호출부 22곳은 무변경. `buildSelectionBubble`이 ranges를 만들므로 코멘트(범위마다 마크)·복사·채팅이 같은 값을 본다 — 기존에는 span 하나에 칠해 고르지 않은 셀까지 마킹됐다. **ranges의 min/max span은 쓸 수 없다**: 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다.
-  - **적용 경로는 단일 범위만**: `getSingleAnchorRange`가 null이면 거부. 재번역은 생성 전에 막고(API 호출 낭비 방지) `propose_selection_edit`은 도구 목록에서 뺀다. 셀 **안쪽** 선택은 단일 범위라 재번역까지 그대로 된다.
-  - **상한은 멀티블록에만 4,000자** — 단일 문단에 걸면 긴 문단 재번역이 오늘보다 나빠지는 회귀다. 선택 본문은 user 메시지에 그대로 실린다(`prompt.ts`의 SELECTION 블록).
-  - **버린 대안**: 블록 스냅 + 유닛 단위 교체는 모델의 유닛 개수 일치율 측정이 선행 조건이라 미룸(ADR-0010 참조).
-- **선택 문맥 조회 창 확대 + Source 선택 대조 허용**: 모델이 볼 수 있는 범위가 실사용에 비해 좁았다.
-  - **앞뒤 문맥 2 → 8개, 생략 시 0 → 2개**: 단위는 문단·제목·표 셀이라 2개로는 표 한 줄도 못 채운다. 기본값 0은 더 나빴다 — 인자 없이 부르면 선택 영역만 돌아와 **도구 스텝만 낭비**했다. 함수 시그니처의 `= 0`도 제거해야 한다(박아두면 "생략"과 "0개 요청"이 구분되지 않아 `clampUnits`의 기본값이 죽는다). zod 스키마의 `max`도 함께 올릴 것 — 스키마가 먼저 거절한다.
-  - **출력 상한**: `get_selection_surroundings` 4,000 → 8,000자, `get_aligned_selection_context` 6,000 → 16,000자. 전자는 **문서 전체 조회(8,000)보다 좁았다** — 프롬프트가 전체 조회 대신 이 도구를 쓰라고 유도하는데 창이 더 좁으면 앞뒤가 맞지 않는다. 후자는 같은 구간을 두 언어로 담는다. context window는 180k~360k라 기존 값이 근거 없이 보수적이었다.
-  - **Source 선택도 `get_aligned_selection_context`**: 원문을 고르고 "이 문장 번역이 어떻게 됐어?"를 물을 수 있어야 한다. `collectAlignedSourceUnits`는 id가 일치하는 유닛을 고르는 함수라 문서 인자를 바꾸면 그대로 반대 방향이 된다 — `panel` 파라미터로 확장 기준 문서를 고르고 결과의 source/target 라벨만 맞춘다. `get_target_document`는 여전히 안 준다(대조는 선택 구간으로 한정).
-  - **표 셀이 두 칸으로 세어지던 문제**: `tableCell`과 그 안의 `paragraph`가 **둘 다** 번역 단위라 `selected: ["셀1","셀1"]`, 표 뒤 문단의 `before: ["셀2","셀2"]`가 됐다 — 앞뒤 8칸이 표에서 실질 4칸. `dropDuplicatedContainers`가 조상 단위를 자손과 텍스트까지 같을 때만 버린다. **단위 정의는 안 건드렸다** — `collectTranslationUnits`를 정렬 검사 뷰가 같이 쓰므로 짝 맞추기 결과가 함께 바뀐다.
-  - **떨어져 있는 선택의 주변 조회**: `selectedUnitRange`의 최소~최대 인덱스 구간을 `selected`로 그대로 쓰면 표 1·3열 선택에서 2열이 "선택됨"으로 전달됐다. 구간은 before/after 계산에만 쓴다.
-- **번역 응답 파싱에서 원문 유실 수정 (`markdownConverter.ts`)**: 표로 시작하는 문서를 번역하면 표 사이의 문단·리스트가 통째로 사라지고 링크가 소실됐다. 모델을 바꿔도 재현되던 결정적 버그이며, 원인은 전부 `parseTranslationResponseToTipTap`의 HTML 경로 하나였다. LLM 입력(원문 직렬화)은 온전했다.
-  - **라우팅 오판이 근본 원인**: `looksLikeBlockHtml`이 **첫 태그만** 보고 판정한다. 번역 직렬화는 표를 항상 raw HTML로 쓰므로(`TableForTranslation`) 표로 시작하는 문서는 응답도 `<table`로 시작하고, "마크다운 + HTML 표" 혼합 응답이 통째로 `convertHtmlListsToMarkdown`(DOM 파서)에 들어갔다. 판정에서 표 세그먼트를 제외한다 — `parseMarkdownWithTables`가 혼합을 이미 무손실로 처리하고, 표 밖 `<ul>`/`<p>`도 `html: true` 경로가 알아서 파싱한다(실측 확인). HTML 구제 경로 자체는 진짜 HTML 응답용으로 남겼다.
-  - **텍스트 노드 유실**: `convertHtmlListsToMarkdown`이 `doc.body.children`(Element만)을 순회해, 표 사이 마크다운은 전부 텍스트 노드라 조용히 버려졌다. `childNodes` 순회로 바꿔 그대로 흘려보낸다.
-  - **autolink가 태그로 삼켜짐**: tiptap-markdown은 텍스트 == href인 링크를 `[url](url)`이 아니라 **autolink `<https://…>`**로 직렬화한다. HTML 토크나이저에겐 미지의 시작 태그라 URL이 소멸하고 뒤따르던 문단이 앞 리스트 항목에 흡수됐다 — 정렬 검사에서 1:0 불일치로 드러난다. 앱의 `링크 유지`(`pasteLinkPreserve`)는 **에디터 붙여넣기 전용**이라 이 증상과 무관하다.
-  - **연속 `<p>` 병합**: 블록을 전부 `'\n'`으로 이어 `<p>A</p><p>B</p>`가 문단 하나로 합쳐졌다. 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`으로 잇는다.
-  - **중첩 리스트 순서·중복**: 중첩 `<ul>`은 walk가 즉시 방출하는데 부모 텍스트(`parts`)는 루프 뒤에 방출해, 자식이 부모보다 먼저 나가고 중첩이 평탄화됐다(`Alpha > Inner` → `Inner, Alpha`). 내려가기 전에 flush한다. 폴백 판정도 `parts`가 비었는지 대신 **`blocks.length` 변화**로 바꿔, 중첩 리스트만 있는 `<li>`가 내용을 두 번 방출하던 중복을 없앴다.
-  - 회귀 테스트 5건은 `markdownConverter.test.ts`. 기존 혼합 테스트가 `# Section 1`로 **시작**해 정상 경로만 타는 바람에 이 버그를 못 잡았다 — 표로 시작하는 케이스를 추가했다.
-
-### Previous (2026-07-29)
-
-- **선택 액션 진입점을 인라인 툴바 하나로 정리**: 우클릭 세로 메뉴(`SelectionActionMenu`)를 제거하고, 같은 액션을 제공하던 인라인 가로 툴바만 남겼다(`SelectionActionMenu.tsx` → `SelectionInlineToolbar.tsx`). 선택 영역 우클릭은 이제 OS/웹뷰 기본 메뉴가 뜬다.
-  - **툴바 줄바꿈 깨짐 수정**: `position:fixed`는 기본이 shrink-to-fit이라 오른쪽 끝에서 남은 폭만큼 좁아지고, 버튼 높이가 `h-[34px]` 고정이라 줄바꿈된 두 번째 줄이 `overflow-hidden`에 잘렸다. 폭을 `w-max`로 고정하고, 미리 알 수 없는 실제 폭은 **렌더 후 `useLayoutEffect`로 실측해** 화면 밖으로 나간 만큼만 왼쪽으로 되민다(기존의 `innerWidth - 320` 추정 클램프 삭제). 회귀 테스트는 `e2e/selection-editing.spec.ts`의 `scrollHeight > clientHeight` 단언.
-  - **기존 코멘트 보기 항목은 사라진다** — 우클릭 메뉴에만 있던 기능이고, 코멘트 마크를 클릭하면 같은 상세 popover가 열린다. 딸려서 죽는 것들 함께 제거: `SelectionBubble.existingComments`, `comment.viewButton`/`viewWithExcerpt` i18n, 메뉴 바깥 클릭 핸들러(`data-selection-action-menu`).
-- **연속 hardBreak 축소 수정 (`docBlockDiff.ts`)**: `extractBlockText`가 hardBreak를 하위 블록 구분자(`parts.join('\n')`)에 맡겨서, 사이에 텍스트가 없는 hardBreak는 `parts`에 아무것도 넣지 못하고 사라졌다 — `A\n\nB`가 `A\nB`로 줄고 앞뒤에 붙은 것은 아예 소실. hardBreak를 인라인 줄바꿈으로 보고 `inlineBuffer`에 직접 넣는다. `blockKey`가 `\s+ → ' '`로 정규화하므로 블록 매칭은 무영향, hardBreak 문단은 `isFlatTextBlock`이 false라 swap 경로로 가므로 부분 병합 재조립 계약도 그대로 — 바뀌는 건 swap 카드에 표시되는 원본 텍스트뿐. 2026-07-08 폴리싱 diff 수정 때 "원인이 달라 별도 이슈"로 남겨둔 항목(`docs/polish-diff-whitespace-bug.md`).
-- **품질 장부(Quality Ledger) 제거** ([ADR-0007](../docs/adr/0007-remove-quality-ledger.md)): 기록만 하고 읽는 곳이 없어 전량 걷어냈다. WP-A2~A5도 함께 폐기. 지운 것 — `src/quality/`(모듈 전체), Rust `commands/quality.rs`·db 메서드 5개·`QualityRecordRow`/`QualityRunRow`/`QualityRecordFilter`, `quality_records`/`quality_runs` 테이블, ReviewPanel의 proposed/accepted/rejected 기록과 JSONL 내보내기 버튼, EditorCanvasTipTap의 `logQualityRun` 2곳, `oddeyesAppBridge`의 반입 기록·브리지 메서드 2개, `review.ledger.*` i18n.
-  - **테이블은 `migrate_drop_quality_ledger`로 드롭한다** — 코드만 지우면 죽은 스키마가 영구히 남는다. `DROP TABLE IF EXISTS`라 재실행·신규 DB 모두 안전하고, 쌓여 있던 행은 함께 사라진다.
-  - **Desktop MCP 1.0.0 (breaking)**: `oddeyes_log_quality_records`/`oddeyes_get_quality_records` 제거(25 → 23 tools). **`.mcpb` 재번들 + `npm publish` 미실시** — 배포는 별도로 해야 클라이언트에 반영된다.
-  - `src/tauri/dialog.ts`의 JSONL 저장 다이얼로그는 정렬 리포트가 이어받았다가 2026-07-30에 함께 사라졌다([ADR-0013](../docs/adr/0013-remove-alignment-report.md)).
-- **선택 도구 신뢰경계 절단 수정**: `get_selection_surroundings`(캡 4000)/`get_aligned_selection_context`(6000)의 출력이 캡을 넘으면 `chatAgent/middleware.ts:276-280`이 통째로 잘라 닫는 `</untrusted>`가 사라지고 JSON도 중간에서 끊겼다. 문서 데이터가 신뢰경계 밖으로 새는 형태라 단순 절단보다 성질이 나쁘다. `renderSelectionToolOutput`이 **본문 텍스트를 줄여** 캡에 맞춘다 — 문서 도구(`renderDocumentToolOutput`)는 마크다운이라 문자열을 잘라내면 되지만 여기는 JSON이라 같은 수를 못 쓴다. 여유분을 빼는 대신 **래핑까지 마친 실제 길이를 재서** 비교한다(JSON 이스케이프·무해화 삽입 때문에 길이 예측이 부정확). 함께: 선택 도구에도 `neutralizeUntrustedMarkers`를 적용 — 문서 텍스트에 `</untrusted>`가 들어 있으면 경계를 위조할 수 있었다(문서 도구에는 이미 있던 방어).
-- **다른 프로젝트에서 메모리 가져오기** ([ADR-0009](../docs/adr/0009-project-memory-import-by-copy.md)): Settings의 `가져오기`가 원본 프로젝트를 고르고 항목·금칙어를 체크해 현재 프로젝트로 **복사**한다. 실시간 동기화가 아니라 스냅샷 복사다 — 원본을 나중에 고쳐도 따라오지 않는다. 하류(ContextSnapshot·주입·MCP)는 무변경이고, 커맨드는 `import_project_memory_items` 하나가 추가됐다.
-  - **공유 링크(glossary식) 대신 복사를 택했다**: `project_memory_state.revision`이 프로젝트 단위라 공유 세트 1건 수정 시 링크된 모든 프로젝트의 revision을 bump해야 하고, MCP 6종이 projectId 단수 전제라 breaking이 된다. 용어집은 이미 `setProjectGlossaries`로 프로젝트에 링크할 수 있어 범위 밖.
-  - **`created_at`은 지금으로 새로 찍는다**: 프로젝트 복제용 `copy_project_memory_data`는 원본 시각을 복사하는데, 가져오기가 그러면 목록(`created_at ASC`) 중간에 파묻히고 상한 동점 처리(index 기준)에서 "오래된 것"으로 먼저 잘린다. `source`는 `import`로 덮고, 출처 세션·메시지 id는 원본 프로젝트의 대화를 가리키므로 버린다.
-  - **금칙어는 복사가 아니라 upsert 의미로 넣는다**: 스키마에 `(project_id, term)` UNIQUE가 없고 중복 병합은 `upsert_forbidden_term`에만 있어서, 복사 루프를 그대로 쓰면 가져올 때마다 증식한다.
-  - **메모리 중복 판정은 카테고리를 뺀 내용 해시만 본다** — `add_project_memory_item`의 `(category, hash)`와 다르다. 설정 화면 수동 추가가 기본값 `general`로 굳어 있어, 원본에서 `domain`으로 분류된 같은 문장이 카테고리 기준으로는 중복으로 안 잡힌다(E2E에서 실제로 재현됨). 대량 복사에서 같은 문장이 두 벌 들어가면 상한만 잡아먹는다.
-  - 항목별 체크박스는 필수다 — 통째로 가져오면 채팅 상한 12를 넘겨 새 프로젝트 고유 메모리가 digest에서 밀린다. 예상 활성 수가 상한을 넘으면 모달이 미리 알린다.
-- **프로젝트 메모리 설정 UI 정리 + 상한 선별에 출처 반영**: 항목당 5줄 카드를 한 줄 리스트로 줄이고, 상한에 걸려 실제로 무엇이 주입되는지를 화면에 드러냈다.
-  - **선별 우선순위에 `source` 축 추가**: `selectMemoryItems`가 카테고리보다 `source === 'user'`를 먼저 본다. 설정 화면 수동 입력은 기본 카테고리가 `general`(우선순위 9개 중 7번째)로 굳어 있어, 손으로 친 항목이 채팅 제안 승인분(`source='chat'`)보다 **항상 먼저 잘리던** 역전 현상이 있었다. `ContextSnapshot.projectMemoryItems`에 `source`를 optional로 실어 워크플로우(상한 40) 경로에도 같은 규칙을 적용한다 — 필드 추가 이전 스냅샷은 비-user로 취급.
-  - **주입 카운터는 `renderChatMemoryDigest`로 계산**: 개수 상한(12)만 세면 과대 보고다. digest는 문자 예산(1500)에서도 잘리므로 실제 주입분은 렌더러에게 물어야 한다. 헤더의 `채팅 12/14`가 그 결과이고, 주입되지 않은 행은 흐리게 + "번역·검수에는 포함됩니다" 툴팁 — **상한이 mode별로 다르므로(채팅 12, 문서 워크플로우 40) "주입 안 됨"으로 단정하지 않는다.**
-  - **카테고리는 enum 9개를 유지하고 화면만 3단계 색 점으로 압축**한다(정확한 값은 툴팁). 줄이려면 DB CHECK 재구성 + MCP breaking이 따라오는데 실기능은 우선순위 정렬 하나뿐이라 이득이 없다. 추가 폼의 select 순서도 `MEMORY_CATEGORY_PRIORITY`에서 파생 — 이전에는 표시 순서와 우선순위가 어긋나 `intent`가 `general`보다 위에 보이면서 실제로는 먼저 잘렸다.
-  - **행 액션은 숨기지 않는다**: hover 시 나타나게 하면 키보드·터치에서 닿지 않고 `e2e/selection-editing.spec.ts:182`의 `project-memory-delete` 가시성 단언도 깨진다. 항상 렌더하고 `opacity`만 낮춘다. 상태 라벨은 `active`가 아닐 때만 표시하되 **편집·삭제 버튼은 상태와 무관하게 항상 렌더** — `load_project_memory`가 status를 필터하지 않으므로(`db/mod.rs:2586`), 버튼을 status로 가리면 언젠가 "지울 수 없는 항목"이 생긴다(보관 개념을 걷어낸 이유와 같은 함정).
-  - **금칙어 설명 문구 추가**: 금칙어는 검색 없이 모든 AI 요청에 전량 실리는 **지시**이고 문서 검사기가 아니다(하드 체크는 `EditorCanvasTipTap.tsx:709`의 부분 수정 적용 경로 하나뿐). 용어집은 `instr(query, source)`로 **원문 쪽** 히트만 주입되므로 출력 측 금지어를 대체할 수 없다 — 둘은 합쳐지지 않는다.
-
-### Previous (2026-07-28)
-
-- **정렬 검사 뷰 (Phase 4.5, `design_handoff_oddeyes_editor_ui/PHASE_4_5_alignment_view.md`)** ([ADR-0008](../docs/adr/0008-alignment-computed-not-persisted.md)): 원문↔번역문 문단을 나란히 놓는 **읽기 전용** 대조 뷰. 상단 상태 스트립의 `문서 보기 | 정렬 검사` 토글로 오간다(기본은 문서 보기, `uiStore.editorViewMode`만 persist). **정렬은 저장하지 않는다** — `project.segments`는 죽은 모델이고 `translationUnitId`는 두 에디터에서 독립 발급되므로, 뷰를 열 때마다 `alignUnits.ts`가 시그니처(`type:depth:level`) 시퀀스 LCS로 계산하고 짝이 안 맞는 구간은 **고치지 않고 불일치로 표시**한다(1:1 / 1:0 / 0:1만, 1:N 미지원).
-  - **에디터 언마운트 금지**: 정렬 뷰는 `PanelGroup` 위에 오버레이로 얹고 문서 보기 쪽은 `visibility:hidden`으로 가린다. 언마운트하면 TipTap 인스턴스가 파괴돼 `editorStore`가 비고 점프·검수 적용이 깨진다. `display:none`이 아닌 `visibility`인 이유는 ① 레이아웃이 남아 스크롤 위치가 보존되고(실측 1500 → 1500) ② 숨은 요소는 포커스를 못 받아 읽기 전용이 함께 강제되기 때문(React 18이라 `inert` 사용 불가).
-  - **재계산 트리거**: `onUpdate`가 아니라 300ms 디바운스된 문서 JSON 스냅샷. 스펙이 제안한 리비전 해시 비교는 markdown 변환+해시가 `alignUnits`보다 싸지 않아 넣지 않았다.
-  - **이슈·코멘트 배지**: `useAlignmentAnnotations.ts`가 `targetExcerpt`/`excerpt` **텍스트 포함 검사**로 유닛에 매핑한다(`segmentGroupId`는 신뢰 불가). 여러 유닛에 걸리면 매핑하지 않고 하단 `위치를 특정하지 못한 이슈 N건`으로 모은다 — 이 수치가 정렬 품질 지표다. 정규화는 `normalizeForSearch`의 기존 함수 재사용.
-  - ~~**정렬 리포트**~~: 2026-07-30 제거([ADR-0013](../docs/adr/0013-remove-alignment-report.md)). Phase 5(영속 정렬, 4–6주)는 계측 없이 계속 보류한다.
-  - 부수 변경: `ReviewPanel`의 `detectSourceLanguage` → `src/utils/detectLanguage.ts`로 이관(반환 문자열은 검수 프롬프트에 들어가므로 그대로), `TranslationUnit`에 `level?: number` 추가, `e2e/tauri-mock.ts`에 `plugin:dialog|save`·`write_text_file` 목 추가(쓰인 내용은 `window.__MOCK_WRITTEN_FILES__`).
-  - **Phase 4-3(세그먼트 인스펙터)은 폐기** — 전제한 `segmentGroupId` 경로가 스키마에 없고, 4.5가 이를 대체한다.
-- **프로젝트 메모리에서 보관(archive) 개념 제거** ([ADR-0006](../docs/adr/0006-hard-delete-instead-of-archive.md)): 항목 제거는 하드 삭제 하나로 통일됐다. 보관은 AI 주입에서 이미 제외되는데도 목록에 영구히 남고 되돌릴 UI가 없어, 사용자에게는 "치울 수 없는 시체"였다.
-  - **DB**: `project_memory_items`에서 `supersedes_id` 컬럼과 `status='archived'`를 제거(CHECK는 `('proposed','active')`). 기존 DB는 `migrate_drop_project_memory_archive`가 테이블 재구성으로 archived 행을 삭제하며, `supersedes_id` 컬럼 유무로 판정해 재실행에 안전하다. `delete_project_memory_item` 커맨드 신설.
-  - **편집은 제자리 갱신**: `replace_project_memory_item`이 원본 archive + 새 행 insert 대신 UPDATE만 한다. id·`created_at`이 유지되고 행이 늘지 않는다. 결과에서 `archived` 필드 제거.
-  - **UI**: Settings의 `rev N` 표시 제거, 버튼은 `편집 / 삭제`(네이티브 confirm 경유). 카테고리·상태·출처 라벨을 `memory.category.*`/`status.*`/`source.*`로 현지화.
-  - **채팅 제안**: `propose_project_memory_change`의 `operation`이 `add|replace|delete`. 저장된 legacy `'archive'` 값은 `knowledgeProposals.ts`의 `normalizeOperation`이 읽기 시점에 `delete`로 정규화한다.
-  - **Desktop MCP 0.9.0 (breaking)**: `oddeyes_archive_project_memory_item` → `oddeyes_delete_project_memory_item`, `list`의 status enum에서 `archived` 제거, `replace` 응답에서 `archived` 제거. 배포 시 `.mcpb` 재번들 + `npm publish` 필요.
-
-### Previous (2026-07-27)
-
-- **Desktop MCP 0.8.0 (25 tools)**: 앱의 지식 모델이 legacy `projectContext` → 승인 기반 Project Memory·금칙어로 바뀐 것을 MCP에 반영. ① `oddeyes_set_translation_context`에서 `projectContext` 파라미터 **제거**(breaking) — v2.13.0 이후 채팅에 주입되지 않고 메모리 0건일 때만 스치는 죽은 쓰기였다. ② `oddeyes_get_translation_context`가 `projectContext` 대신 `projectMemory`(active)·`forbiddenTerms`(enabled)·`revision` 반환. ③ Project Memory/금칙어 도구 6종 추가: `oddeyes_list_project_memory`, `add`/`replace`/`archive_project_memory_item`(0.9.0에서 `delete_*`로 대체), `upsert`/`delete_forbidden_term`. 외부 쓰기는 `source='import'`·`status='active'`로 즉시 반영되고 Settings에서 출처 확인·삭제 가능(제안 승인 UI는 채팅 카드 전용이라 `proposed`로 넣으면 승인할 방법이 없음). ④ `oddeyes_get_status`에 `projectMemoryRevision`·카운트 추가(미로드 시 0이 아니라 `null`). 브리지 메서드는 `oddeyesAppBridge.ts`, hydrate 보증은 `ensureProjectMemory`.
-- **동적 프로젝트 지식 루프 수정 (D1–D7, `docs/dynamic-project-knowledge-fix-plan.md`)**: 채팅 ↔ Project Memory 갱신 경로의 결함 7건 수정.
-- **채팅 컨텍스트 주입 구조 (D1)** ([ADR-0004](../docs/adr/0004-approval-based-project-memory.md)): 일반 채팅 시스템 프롬프트에 `[프로젝트 메모리]`·`[금칙어]` 압축 요약을 push하고, 상세는 기존대로 `get_project_guidance`로 pull한다. v2.13.0에서 legacy `projectContext` 주입만 제거하고 대체 요약을 넣지 않아 승인된 메모리가 채팅에 전혀 반영되지 않던 문제. digest는 `renderChatMemoryDigest`(12개·1500자 상한), 우선순위는 `projectMemoryPolicy.ts`. **채팅 경로의 `projectContext` 슬롯은 제거됨** — `reviewTool.ts`/`translateDocument.ts`/`polishDocument.ts`의 동명 파라미터는 workflow `resolvedContext`에서 오는 별개 값이므로 혼동 주의.
-- **`[Add to Context]` 제거 (D2)**: 버튼이 쓰던 `chatStore.projectContext`는 채팅에 주입되지 않고 워크플로우에서도 메모리 0건일 때만 fallback이라 사실상 죽은 경로였다. 카드·`suggest_project_context` 도구·텍스트 폴백 추론·i18n 키 삭제. store 세터/DB persist는 Desktop MCP 계약 때문에 유지.
-- **제안 다건 지원 (D3)**: `ChatMessageMetadata`에 `projectMemoryProposals`/`forbiddenTermProposals`/`glossaryEntryProposals` 배열 추가. 단수 필드는 과거 메시지 호환용 deprecated. 읽기/갱신은 `components/chat/knowledgeProposals.ts`의 `read*`/`patchProposalStatus`로 일원화(legacy 단수 필드 자동 정규화).
-- **승인 안전성 (D4/D5/D7)**: `duplicate` 플래그 토스트 노출, 저장 중 승인 버튼 잠금(`saving`), 제안의 `projectId`와 활성 프로젝트 일치 검증.
-- **부분 수정의 전역 제약 (D9)**: 번역 규칙·금칙어는 모든 문장에 적용되는 전역 제약이므로 부분 수정 경로에도 기본 적용한다. `DEFAULT_SELECTION_REFERENCE_OPTIONS`의 `translationRules`/`forbiddenTerms`가 `true`(용어집·메모리는 `false` 유지), 참조 옵션은 선택마다 리셋하지 않고 프로젝트 단위 유지(`selectionReferenceOptionsRef`), 선택 채팅에도 규칙·금칙어를 주입. 프로젝트 메모리는 질의 의존적이라 선택 채팅에서 계속 제외하고 `get_project_guidance`에 맡긴다. 이전에는 문서를 고칠 수 있는 두 경로(직접 재번역·선택 채팅)에만 규칙이 빠져 있어, 다듬을수록 문서 내 일관성이 무너지는 구조였다.
-- **workflow 메모리 상한 (D6)**: `resolveWorkflowContextFromSnapshot`이 mode별 상한(full-translate/review/polish 40, selection-retranslate 20)을 적용하고 `manifest.projectMemoryItemIds`를 실제 주입분과 일치시킨다. `buildContextSnapshot`은 전체를 유지(스냅샷 의미 보존). **카테고리 하드 제외는 하지 않는다** — legacy 마이그레이션과 수동 추가가 모두 `general`이라 배제 시 데이터 누락.
-
-### Previous (2026-07-24)
-
-- **Anchored selection editing**: Source/Target 선택을 raw composer 문자열 대신 `SelectionContext` 카드로 유지. Target은 직접 부분 재번역 또는 채팅의 `propose_selection_edit`만 허용하며, 공통 preview + anchor/project/text guard를 통과한 뒤 정확한 range를 한 transaction으로 적용.
-- **Dynamic project knowledge**: 승인 기반 Project Memory·Forbidden Terms SQLite 저장/관리 UI 및 chat proposal 도구 추가. 프로젝트 복제/삭제와 revision이 함께 관리되며 legacy `projectContext`는 idempotent migration/fallback으로 보존.
-- **Workflow ContextSnapshot** ([ADR-0005](../docs/adr/0005-fixed-context-snapshot-per-workflow.md)): 전체 번역·검수·폴리싱·부분 재번역이 작업 시작 시 고정 snapshot을 사용. 리뷰의 모든 chunk가 동일 snapshot revision을 공유하고 `ContextManifest`로 참조 ID/도구/토큰 정보를 표시.
-- **Tool registry profiles**: general/selection-source/selection-target/selection-retranslate profile별 allowlist, trust/effect/output cap을 단일 registry에서 파생. 직접 부분 재번역은 tools=0.
-- **선택 재번역 안정화 (v2.13.0)**: ① `retranslateSelection` 출력 토큰 4096→16384(`SELECTION_EDIT_MAX_TOKENS`) — thinking/reasoning이 예산을 잠식해 END 마커가 truncation되던 재번역 실패 수정. ② 앵커(하이라이트) 수명 정리 — apply 성공 외에도 chip dismiss·proposal 폐기/stale·새 선택 교체·프로젝트 전환 시 `removeSelectionAnchor` 호출(하이라이트 영구 잔존 버그). ③ `normalizeSelectionAnchorRange`가 가장자리 공백을 범위에서 제외 — `SelectionContext.text`(트림)와 `anchor.originalText`(textBetween) 불일치로 proposal 적용이 항상 stale 처리되던 오탐 수정. ④ e2e `tauri-mock`에 `ai_stream`/`ai_complete` 마커-에코 목 추가로 생성→적용 경로 웹 E2E 검증.
-- **legacy projectContext 내부 제거 (v2.13.0)**: Settings의 "프로젝트 컨텍스트" 편집 필드와 chat 시스템 프롬프트 직접 주입 제거. 승인 기반 Project Memory로 완전 대체. 스토어 필드·DB persist·hydrate migration·워크플로우 `legacyProjectContext` fallback은 호환을 위해 유지(=데이터/계약 안전). MCP 파라미터는 0.8.0에서 제거됨(위 항목).
-
-### Previous (2026-07-15)
-
-- **Translator Persona 제거**: Settings UI / suggest tool / 프리셋 / Desktop MCP `translatorPersona` 필드 삭제. 기존 프로젝트 값은 hydrate 시 `translationRules` 앞에 흡수하고 DB에는 빈 문자열로 저장. 톤·문체 지시는 Rules로 통합.
-- **Desktop MCP A+B (`oddeyes-desktop-mcp` v0.7.0, 19 tools)**: persona 제거; glossary entry CRUD + project link/unlink. 관리 UI 생성 시 자동 연결 제거, Settings에서 연결 해제(✕). 배포 시 `.mcpb` 재번들 + `npm publish` 필요.
-
-### Previous (2026-07-03)
-
-- **릴리스 빌드 시간 최적화**: 태그 빌드가 캐시를 전혀 복원하지 못하던 문제(태그 ref 캐시는 다른 태그에서 접근 불가) 해결. ① `warm-cache.yml` — main push(src-tauri/crates 변경 시)/주간 cron에서 릴리스 프로필 빌드로 rust-cache+sccache 워밍, ② `ci.yml` — main push마다 unit+cargo test 실행 및 verify 캐시 저장, ③ `build.yml` — `build`가 `verify`를 기다리지 않고 병렬 실행(publish에서 게이트), 캐시는 `shared-key`로 main 캐시 복원 전용(`save-if: false`), ④ `Cargo.toml` — `lto = "thin"` 전환으로 링크 시간 단축. 기대: 릴리스 벽시계 ~24분 → ~8–10분(warm cache 기준).
-- **코드 리뷰 수정 계획 F1–F13 구현 완료** (`docs/code-review-fix-plan.md`): 검수 적용 안전성(F1–F3), 선택 적용 병합(F4/F5), 따옴표 처리(F6), Tauri AI 옵션 통합(F7/F8), 채팅 스크롤(F9/F10), 진단성/위생(F11/F12), 출력 토큰 상향(F13). 상세는 계획 문서 및 아래 항목 참조.
-- **검수 적용 안전성 (F1–F3)**: `reviewApply.ts` — 세그먼트 범위 fuzzy 매칭, 다중 매치 모호 시 교체 포기, 블록 경계 교체 차단. `SearchHighlight.ts` — find/replace도 동일 가드.
-- **선택 적용 병합 (F4/F5)**: 전체 선택 시 `mergeDocBySelection` 우회(full apply). `docBlockDiff` — 평탄 텍스트 블록만 문장 단위 diff, 중첩 구조는 swap 단위.
-- **따옴표 처리 (F6)**: parse 시 보존, apply 시 `resolveReplacementText`로 문서 컨텍스트 기반 조건부 벗김. `getWrappingQuotePair`로 균형 인용만 strip.
-- **AI 모델 호출 옵션 통합 (F7/F8)**: `src/ai/modelCallOptions.ts` — `resolveModelCallOptions(cfg, useFor)`가 LangChain(`client.ts`)과 Tauri(`backendCompletion.ts` → Rust `ai.rs`)의 temperature/adaptive thinking/effort를 일원화. Sonnet 5 temperature 400 방지 포함.
-- **출력 토큰 상향 (F13)**: `REVIEW_MAX_TOKENS` 16384, `DEFAULT_CHAT_MAX_TOKENS` 8192 (thinking 토큰이 max_tokens 예산을 잠식하는 무음 truncation 방지).
-- **채팅 스크롤 (F9/F10)**: `useChatScroll` — smooth 자동 스크롤 중간 프레임이 stick-to-bottom을 해제하지 않도록 `isAutoScrolling` 플래그. `ChatContent.sendCurrent`에서 본인 전송 시 `scrollToBottom()`.
-- **프로젝트 전환 후 검수 적용 실패 수정**: `EditorCanvasTipTap`은 프로젝트로 remount되지 않아 TipTap 인스턴스가 재사용되는데, `switchProjectById`의 `clearEditors()`만 호출되어 `editorStore.targetEditor`가 null로 방치되던 버그. `project?.id` 변경 시 살아있는 에디터를 스토어에 재등록하는 effect 추가.
-
-### Previous (2026-06-30)
-
-- **Chat clipboard image paste (Tauri)**: 채팅 컴포저 Cmd+V 이미지 붙여넣기 지원. WKWebView `clipboardData` 미노출 시 `tauri-plugin-clipboard-manager` `readImage()` fallback. macOS `validate_path`가 `/private/var/folders/` 임시 업로드 경로를 차단하던 버그 수정.
-
-### Previous (2026-06-10)
-
-- **Target Polishing workflow (v2.6.0)**: 에디터 패널 상단에 `번역 → 검수 → 폴리싱` 액션 추가. 폴리싱은 ReviewPanel 결과와 무관하게 현재 Target 문서만 입력으로 받아 원어민 관점의 어색한 collocation, 표현, 문장 구조를 다듬는 target-only 재번역 워크플로우입니다. 결과는 기존 번역과 동일하게 Preview modal에서 확인 후 적용합니다.
-- **Review prompt scope expanded**: 대조 검수에서도 누락/오역/왜곡/일관성뿐 아니라 원어민이 보기에 어색한 collocation, 표현, 문장 구조를 검수 기준에 명시합니다.
-- **Secure API key persistence fix (v2.6.1)**: SecretManager 초기화가 한 번 실패해도 다음 API 키 저장/읽기 시 Keychain 초기화를 재시도합니다. 설정 화면은 보안 저장 실패 시 generic warning만이 아니라 안전한 실패 원인 메시지도 표시합니다.
-- **Release verified**: `v2.6.1` GitHub Actions `Build` run succeeded for verify, macOS universal DMG, and Windows NSIS artifacts.
-
-### Previous (2026-06-01)
-
-- **Desktop Bridge MCP 쓰기 도구 추가 (`oddeyes-desktop-mcp` v0.2.0)**: 외부 Claude가 실행 중인 앱에 쓰는 도구 2종 추가 — `oddeyes_set_review_issues`(검수 결과 주입 → `reviewStore.ingestExternalReview`), `oddeyes_set_translation_context`(rules/projectContext 주입 → `chatStore` 세터, replace|append; persona 필드는 이후 제거됨). bridge는 기존 store 세터만 호출(신규 store 액션 없음). 상세는 `patterns.md`의 "Desktop Bridge MCP".
-- **MCP 배포 동기화 주의**: 도구 추가 시 `oddeyes-desktop-mcp`의 ① `package.json`/`manifest.template.json` 버전 bump ② manifest `tools` 배열 ③ `.mcpb` 재번들 + `npm publish`(npx 경로)까지 함께 해야 클라이언트가 새 도구를 인식. npm `oddeyes-desktop-mcp@0.2.0` 게시 완료.
-
-### Previous (2026-04-28)
-
-- **모델 마이그레이션 (v2.4.5)**: GPT-5.4 → GPT-5.5, Claude Opus 4.6 → 4.7. `aiConfigStore` v8 → v9 자동 rename. `gpt-5.4-mini`는 chat 저비용 옵션으로 유지.
-- **Opus 4.7 sampling 파라미터 가드**: `client.ts`에서 `claude-opus-4-7+` 모델 호출 시 `temperature` 미전달 (Anthropic 400 에러 방지). 정규식 `/^claude-opus-4-(7|[89]|\d{2,})/`로 향후 버전 자동 대응.
-- **`migrateAiConfig` export**: `aiConfigStore`의 마이그레이션 함수를 분리 export하여 단위 테스트 가능. 기존 closure 내부 정의는 제거.
-
-### Previous (2026-04-07)
-
-- **MCP 정리**: `tauri-testing-mcp`에서 `oddeyes_*` semantic tools 8개 제거, `desktop_mcp.rs`에서 미사용 `load_confluence_page` 커맨드 제거, AppSettingsModal Claude Desktop 섹션 간소화.
-- **테스트 타입 수정**: `adfToTipTap.test.ts`에 `AdfNode` 타입 적용, `confluenceTools.test.ts` 미사용 헬퍼 제거.
-- **Rust 미사용 import 정리**: 4개 파일에서 `tracing::{debug, error}` 미사용 import 제거.
-
-### Previous (2026-04-06)
-- **ADF→TipTap Converter**: ADF(Atlassian Document Format) → TipTap JSON 변환기 추가 (`adfToTipTap.ts`). `oddeyes_set_source_document`에서 `format: "adf"` 지원.
-- **ResizableProjectSidebar**: ProjectSidebar 너비 160–300px 범위에서 드래그 리사이즈 가능.
-- **Atlassian MCP SSE→Streamable HTTP 마이그레이션**: SSE 방식에서 Streamable HTTP로 전환.
-
-### Tauri Testing Bridge Notes
-- 이 브리지는 **Playwright 전체 엔진 대체가 아니라**, Tauri 런타임 내부 제어를 위한 RPC 레이어입니다.
-- Native dialog는 DOM에 나타나지 않을 수 있으므로 `dialog.*` 도구를 먼저 사용해 응답 정책을 설정하세요.
-- WebSocket 서버는 localhost 단일 클라이언트 + 토큰 인증 방식입니다.
 
 ## E2E Automation Testing (Tauri MCP Bridge)
 

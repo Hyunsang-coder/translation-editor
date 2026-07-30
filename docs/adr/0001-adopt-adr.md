@@ -1,6 +1,6 @@
 # ADR-0001: ADR을 도입한다
 
-- **Status**: Accepted
+- **Status**: Accepted — 단, "Recent Updates는 그대로 둔다" 조항은 [ADR-0016](0016-no-changelog-in-agent-prompt.md)으로 대체됨 (ADR 제도 자체는 유효)
 - **Date**: 2026-07-29
 - **관련**: [docs/INDEX.md](../INDEX.md), [.claude/CLAUDE.md](../../.claude/CLAUDE.md)
 

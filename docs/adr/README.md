@@ -7,7 +7,7 @@
 
 | # | 제목 | 상태 | 결정일 |
 |---|------|------|--------|
-| [0001](0001-adopt-adr.md) | ADR을 도입한다 | Accepted | 2026-07-29 |
+| [0001](0001-adopt-adr.md) | ADR을 도입한다 | Accepted (일부 조항 → 0016) | 2026-07-29 |
 | [0002](0002-tiptap-json-as-canonical-format.md) | TipTap JSON을 문서 정본으로 삼는다 | Accepted | 2026-01-22 (소급) |
 | [0003](0003-no-auto-apply-preview-first.md) | AI는 문서를 직접 수정하지 않는다 (Preview → Apply) | Accepted | 2026-01-22 (소급) |
 | [0004](0004-approval-based-project-memory.md) | 자유 텍스트 projectContext를 승인 기반 Project Memory로 대체한다 | Accepted | 2026-07-24 (소급) |
@@ -22,6 +22,7 @@
 | [0013](0013-remove-alignment-report.md) | 정렬 리포트를 제거하고, 영속 정렬은 계측 없이 보류한다 | Accepted | 2026-07-30 |
 | [0014](0014-pin-to-question-chat-scroll.md) | 채팅 스크롤은 하단을 추종하지 않고 질문을 상단에 고정한다 | Accepted | 2026-07-30 |
 | [0015](0015-confluence-tools-as-local-wrappers.md) | Confluence 도구는 MCP 서버 도구를 그대로 바인딩하지 않고 로컬 래퍼로 감싼다 | Accepted | 2026-07-30 |
+| [0016](0016-no-changelog-in-agent-prompt.md) | CLAUDE.md에 변경 이력을 두지 않고, 내용의 종류로 문서를 나눈다 | Accepted | 2026-07-30 |
 
 > **(소급)** = 결정 당시에는 ADR이 없었고, ADR 도입(0001) 시점에 기록을 복원한 항목입니다.
 > 결정일은 실제 결정 시점, 문서 작성일은 2026-07-29입니다.
