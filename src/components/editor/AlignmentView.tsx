@@ -233,25 +233,28 @@ export function AlignmentView(): JSX.Element {
         </span>
       </div>
 
-      {/* 테이블 헤더 */}
-      <div
-        className="h-8 shrink-0 flex items-stretch border-b border-editor-border bg-editor-bg"
-        role="row"
-      >
-        <div className={`w-[52px] shrink-0 pl-[18px] ${HEADER_CELL_CLASS}`}>#</div>
-        <div className={`flex-1 min-w-0 pl-[18px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {columnLabel(t('editor.alignment.sourceColumn'), sourceLanguage)}
-        </div>
-        <div className={`flex-1 min-w-0 pl-[18px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {columnLabel(t('editor.alignment.targetColumn'), targetLanguage)}
-        </div>
-        <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
-          {t('editor.alignment.alignColumn')}
-        </div>
-      </div>
-
       {/* 행 목록 */}
       <div className="flex-1 min-h-0 overflow-auto">
+        {/*
+          테이블 헤더는 스크롤 컨테이너 *안*에 둔다 — 밖에 두면 스크롤바 폭만큼
+          본문만 좁아져 열 경계가 헤더와 어긋난다. 패딩도 행 셀과 같은 값이어야 한다.
+        */}
+        <div
+          className="sticky top-0 z-10 h-8 flex items-stretch border-b border-editor-border bg-editor-bg"
+          role="row"
+        >
+          <div className={`w-[52px] shrink-0 pl-[18px] ${HEADER_CELL_CLASS}`}>#</div>
+          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+            {columnLabel(t('editor.alignment.sourceColumn'), sourceLanguage)}
+          </div>
+          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+            {columnLabel(t('editor.alignment.targetColumn'), targetLanguage)}
+          </div>
+          <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+            {t('editor.alignment.alignColumn')}
+          </div>
+        </div>
+
         {blocks.length === 0 ? (
           <div className="px-[18px] py-6 text-sm text-editor-muted">
             {t('editor.alignment.empty')}
