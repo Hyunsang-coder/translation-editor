@@ -383,12 +383,12 @@ function buildMockScript(seedProjects: MockProject[]): string {
     create_snapshot: (args) => {
       const a = args?.args ?? args;
       const id = uid();
-      const snap = { id, timestamp: Date.now(), description: a?.description ?? '', snapshotJson: a?.snapshotJson ?? '{}' };
+      const snap = { id, timestamp: Date.now(), description: a?.description ?? '', snapshotJson: a?.snapshotJson ?? '{}', kind: 'manual' };
       snapshots.set(id, snap);
       return snap;
     },
     list_history: () => Array.from(snapshots.values()).map(s => ({
-      id: s.id, timestamp: s.timestamp, description: s.description,
+      id: s.id, timestamp: s.timestamp, description: s.description, kind: s.kind ?? 'manual',
     })),
     get_snapshot: (args) => {
       const a = args?.args ?? args;

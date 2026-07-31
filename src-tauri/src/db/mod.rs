@@ -355,6 +355,8 @@ impl Database {
                 .execute_batch("ALTER TABLE history ADD COLUMN snapshot_json TEXT;")?;
         }
 
+        self.migrate_history_kind()?;
+
         let has_glossary_description = self
             .conn
             .prepare("SELECT description FROM glossaries LIMIT 0")
@@ -367,6 +369,59 @@ impl Database {
         self.migrate_named_glossaries()?;
         self.migrate_drop_project_memory_archive()?;
         self.migrate_drop_quality_ledger()?;
+        Ok(())
+    }
+
+    /// history.kind 컬럼을 도입합니다 — 스냅샷 종류를 description으로 판별하던 것을 대체합니다.
+    ///
+    /// description은 사용자가 rename으로 자유롭게 바꿀 수 있는 표시 문자열입니다. 이걸로
+    /// 종류를 판별하면 수동 스냅샷 이름을 '자동 저장 …'으로 바꾸는 순간 그 스냅샷이
+    /// 타임라인에서 사라지고 자동 슬롯의 덮어쓰기 대상이 되어 조용히 유실됩니다.
+    /// 게다가 판별 문자열이 한국어 리터럴이라 라벨을 i18n하면 매칭이 깨져 매 tick마다
+    /// 새 행이 쌓이고 50개 보존 한도가 수동 스냅샷을 밀어냅니다.
+    fn migrate_history_kind(&self) -> Result<(), IteError> {
+        let has_kind = self.conn.prepare("SELECT kind FROM history LIMIT 0").is_ok();
+
+        if !has_kind {
+            self.conn.execute_batch(
+                "ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'manual'
+                     CHECK (kind IN ('manual', 'auto'));",
+            )?;
+            // 기존 행 backfill. 레거시 description 매칭은 여기서 단 한 번만 쓰입니다
+            // (컬럼이 없을 때만 실행되므로, 나중에 rename된 수동 스냅샷을 auto로 되돌리지 않습니다).
+            // snapshot_json이 NULL인 행은 목록·복원에서 이미 제외되므로 manual로 남깁니다 —
+            // auto로 올리면 upsert가 되살릴 수 없는 빈 슬롯을 차지합니다.
+            self.conn.execute_batch(
+                "UPDATE history SET kind = 'auto'
+                 WHERE snapshot_json IS NOT NULL
+                   AND (description = 'autoSnapshot' OR description LIKE '자동 저장%');",
+            )?;
+        }
+
+        // 아래는 재실행에 안전하며, 인덱스 생성이 이전에 실패한 DB도 스스로 복구합니다.
+        // 프로젝트당 auto가 2개 이상이면(구버전의 'autoSnapshot' 행과 '자동 저장 …' 행이
+        // 함께 남은 DB가 있습니다) 유니크 인덱스를 만들 수 없으므로, 가장 최신 1개만 auto로
+        // 두고 나머지는 manual로 강등합니다. 지우지 않는 이유는 그 행들이 여태 타임라인에
+        // 보이지도 복원되지도 않던 고아 스냅샷이라, 드러내는 편이 안전하기 때문입니다.
+        // (GROUP BY + MAX()에서 bare column이 최댓값 행의 값을 갖는 것은 SQLite 보장 동작입니다)
+        self.conn.execute_batch(
+            "UPDATE history SET kind = 'manual'
+             WHERE kind = 'auto'
+               AND id NOT IN (
+                 SELECT id FROM (
+                   SELECT id, MAX(timestamp) FROM history
+                   WHERE kind = 'auto'
+                   GROUP BY project_id
+                 )
+               );",
+        )?;
+
+        // 자동 스냅샷은 프로젝트당 1개(덮어쓰기 슬롯)라는 불변식을 DB가 강제합니다.
+        self.conn.execute_batch(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_history_one_auto_per_project
+                 ON history(project_id) WHERE kind = 'auto';",
+        )?;
+
         Ok(())
     }
 
@@ -818,8 +873,8 @@ impl Database {
         let now = chrono::Utc::now().timestamp_millis();
 
         self.conn.execute(
-            "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary, kind)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'manual')",
             (
                 &snapshot_id,
                 project_id,
@@ -841,7 +896,7 @@ impl Database {
         project_id: &str,
     ) -> Result<Vec<HistorySnapshotMeta>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, timestamp, description, chat_summary
+            "SELECT id, timestamp, description, chat_summary, kind
              FROM history
              WHERE project_id = ?1
                AND snapshot_json IS NOT NULL
@@ -855,6 +910,7 @@ impl Database {
                 timestamp: row.get(1)?,
                 description: row.get(2)?,
                 chat_summary: row.get(3)?,
+                kind: row.get(4)?,
             })
         })?;
 
@@ -923,8 +979,9 @@ impl Database {
     }
 
     /// autoSnapshot 덮어쓰기 또는 신규 생성
-    /// description = 'autoSnapshot'인 최신 스냅샷이 있으면 content + timestamp를 갱신하고,
+    /// 프로젝트의 kind='auto' 슬롯이 있으면 content + timestamp + description을 갱신하고,
     /// 없으면 새로 생성한다. 반환값은 (snapshot_id, created: bool).
+    /// 슬롯 판별에 description을 쓰지 않는다 — rename으로 종류가 바뀌면 안 된다.
     pub fn upsert_auto_snapshot(
         &self,
         project_id: &str,
@@ -938,14 +995,12 @@ impl Database {
 
         let now = chrono::Utc::now().timestamp_millis();
 
-        // 기존 autoSnapshot 조회 (최신 1개)
+        // 기존 auto 슬롯 조회 (부분 유니크 인덱스가 프로젝트당 1개를 보장한다)
         let existing_id: Option<String> = {
             let mut stmt = self.conn.prepare(
                 "SELECT id FROM history
                  WHERE project_id = ?1
-                   AND (description = 'autoSnapshot' OR description LIKE '자동 저장%')
-                   AND snapshot_json IS NOT NULL
-                 ORDER BY timestamp DESC
+                   AND kind = 'auto'
                  LIMIT 1",
             )?;
             stmt.query_row([project_id], |row| row.get(0)).optional()?
@@ -969,8 +1024,8 @@ impl Database {
         } else {
             let snapshot_id = uuid::Uuid::new_v4().to_string();
             self.conn.execute(
-                "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary)
-                 VALUES (?1, ?2, ?3, ?4, '[]', ?5, ?6)",
+                "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary, kind)
+                 VALUES (?1, ?2, ?3, ?4, '[]', ?5, ?6, 'auto')",
                 (&snapshot_id, project_id, now, description, snapshot_json, chat_summary),
             )?;
             Ok((snapshot_id, true))
@@ -3837,6 +3892,133 @@ mod tests {
 
         let metas = db.list_history_metadata(&project.id).expect("list failed");
         assert_eq!(metas.len(), 2, "수동 + 자동 총 2개여야 한다");
+    }
+
+    #[test]
+    fn upsert_auto_snapshot_ignores_manual_snapshot_renamed_to_auto_label() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-rename");
+        db.save_project(&project).expect("failed to save project");
+
+        let manual_json =
+            serde_json::to_string(&project.blocks).expect("failed to serialize blocks");
+        let manual_id = db
+            .create_history_snapshot(&project.id, "1차 검수 완료", &manual_json, None)
+            .expect("manual snapshot failed");
+
+        // 사용자가 수동 스냅샷 이름을 자동 저장처럼 바꾼다 — 종류가 바뀌면 안 된다.
+        db.update_history_snapshot_description(&manual_id, &project.id, "자동 저장 백업")
+            .expect("rename failed");
+
+        let (auto_id, created) = db
+            .upsert_auto_snapshot(&project.id, "자동 저장 10:05", "{}", None)
+            .expect("upsert failed");
+
+        assert!(created, "auto 슬롯이 없으므로 새로 생성되어야 한다");
+        assert_ne!(auto_id, manual_id, "수동 스냅샷을 덮어쓰면 안 된다");
+
+        let manual = db
+            .get_history_snapshot(&manual_id, &project.id)
+            .expect("manual snapshot lookup failed");
+        assert_eq!(
+            manual.snapshot_json.as_deref(),
+            Some(manual_json.as_str()),
+            "수동 스냅샷 내용이 보존되어야 한다"
+        );
+
+        let metas = db.list_history_metadata(&project.id).expect("list failed");
+        assert_eq!(metas.len(), 2, "수동 + 자동 총 2개여야 한다");
+        let manual_meta = metas
+            .iter()
+            .find(|m| m.id == manual_id)
+            .expect("manual meta missing");
+        assert_eq!(
+            manual_meta.kind, "manual",
+            "rename은 kind를 바꾸지 않아야 한다"
+        );
+    }
+
+    #[test]
+    fn history_kind_index_rejects_second_auto_snapshot_per_project() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        let project = build_test_project("project-auto-unique");
+        db.save_project(&project).expect("failed to save project");
+
+        db.upsert_auto_snapshot(&project.id, "자동 저장 10:00", "{}", None)
+            .expect("first upsert failed");
+
+        let result = db.conn.execute(
+            "INSERT INTO history (id, project_id, timestamp, description, changes_json, snapshot_json, chat_summary, kind)
+             VALUES ('dup-auto', ?1, 999, '자동 저장 10:01', '[]', '{}', NULL, 'auto')",
+            [&project.id],
+        );
+
+        assert!(
+            result.is_err(),
+            "프로젝트당 auto 스냅샷은 1개만 허용되어야 한다"
+        );
+    }
+
+    #[test]
+    fn migrate_history_kind_backfills_and_dedupes_legacy_rows() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+
+        // kind 컬럼이 없던 시절의 스키마 + 데이터를 흉내낸다.
+        db.conn
+            .execute_batch(
+                "CREATE TABLE projects (
+                     id TEXT PRIMARY KEY, version TEXT NOT NULL, metadata_json TEXT NOT NULL,
+                     created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+                 CREATE TABLE history (
+                     id TEXT PRIMARY KEY, project_id TEXT NOT NULL, timestamp INTEGER NOT NULL,
+                     description TEXT NOT NULL, changes_json TEXT NOT NULL,
+                     snapshot_json TEXT, chat_summary TEXT);
+                 INSERT INTO projects VALUES ('p1', '1.0', '{}', 0, 0);
+                 INSERT INTO history VALUES ('h-manual', 'p1', 100, '1차 검수 완료', '[]', '{}', NULL);
+                 INSERT INTO history VALUES ('h-auto-old', 'p1', 200, 'autoSnapshot', '[]', '{}', NULL);
+                 INSERT INTO history VALUES ('h-auto-new', 'p1', 300, '자동 저장 10:05', '[]', '{}', NULL);
+                 INSERT INTO history VALUES ('h-auto-null', 'p1', 400, '자동 저장 11:00', '[]', NULL, NULL);",
+            )
+            .expect("legacy schema setup failed");
+
+        db.initialize().expect("migration failed");
+
+        let kind_of = |id: &str| -> String {
+            db.conn
+                .query_row("SELECT kind FROM history WHERE id = ?1", [id], |r| r.get(0))
+                .expect("kind lookup failed")
+        };
+
+        assert_eq!(kind_of("h-manual"), "manual");
+        assert_eq!(
+            kind_of("h-auto-new"),
+            "auto",
+            "가장 최신 auto 행만 슬롯으로 남아야 한다"
+        );
+        assert_eq!(
+            kind_of("h-auto-old"),
+            "manual",
+            "중복 auto 고아 행은 강등되어 타임라인에 드러나야 한다"
+        );
+        assert_eq!(
+            kind_of("h-auto-null"),
+            "manual",
+            "snapshot_json이 NULL인 행은 auto 슬롯을 차지하면 안 된다"
+        );
+
+        // 마이그레이션 이후 upsert는 남은 auto 슬롯을 덮어써야 한다 (신규 생성 아님).
+        let (id, created) = db
+            .upsert_auto_snapshot("p1", "자동 저장 12:00", "{}", None)
+            .expect("upsert after migration failed");
+        assert!(!created, "기존 auto 슬롯을 덮어써야 한다");
+        assert_eq!(id, "h-auto-new");
     }
 
     #[test]

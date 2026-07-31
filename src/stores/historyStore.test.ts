@@ -101,6 +101,7 @@ describe('historyStore', () => {
         id: 'new-snapshot',
         timestamp: 200,
         description: 'new',
+        kind: 'manual',
       },
     ]);
     await second;
@@ -110,6 +111,7 @@ describe('historyStore', () => {
         id: 'old-snapshot',
         timestamp: 100,
         description: 'old',
+        kind: 'manual',
       },
     ]);
     await first;
@@ -119,6 +121,7 @@ describe('historyStore', () => {
         id: 'new-snapshot',
         timestamp: 200,
         description: 'new',
+        kind: 'manual',
       },
     ]);
   });
@@ -147,6 +150,7 @@ describe('historyStore', () => {
           id: 'snapshot-1',
           timestamp: 100,
           description: 'before',
+          kind: 'manual',
         },
       ],
     });
@@ -183,6 +187,7 @@ describe('historyStore', () => {
         id: 'late-snapshot',
         timestamp: 200,
         description: 'late',
+        kind: 'manual',
       },
     ]);
 
@@ -206,6 +211,7 @@ describe('historyStore', () => {
         id: 'late-snapshot',
         timestamp: 200,
         description: 'late',
+        kind: 'manual',
       },
     ]);
 
@@ -280,7 +286,7 @@ describe('historyStore', () => {
     it('캐시가 null이고 최신 스냅샷과 동일하면 스킵한다', async () => {
       useHistoryStore.setState({
         latestBlocksHash: null,
-        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev', kind: 'manual' }],
       });
       tauriHistoryMock.getSnapshot.mockResolvedValue({
         id: 'snap-1',
@@ -307,7 +313,7 @@ describe('historyStore', () => {
     it('캐시가 null이고 최신 스냅샷과 다르면 새 스냅샷을 생성한다', async () => {
       useHistoryStore.setState({
         latestBlocksHash: null,
-        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev', kind: 'manual' }],
       });
       tauriHistoryMock.getSnapshot.mockResolvedValue({
         id: 'snap-1',
@@ -332,7 +338,7 @@ describe('historyStore', () => {
     it('getSnapshot 실패 시에도 스냅샷을 생성한다', async () => {
       useHistoryStore.setState({
         latestBlocksHash: null,
-        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+        snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev', kind: 'manual' }],
       });
       tauriHistoryMock.getSnapshot.mockRejectedValue(new Error('load failed'));
       tauriHistoryMock.createSnapshot.mockResolvedValue('snapshot-fallback');
@@ -397,7 +403,7 @@ describe('startAutoSnapshotWatch — 버그 2: latestBlocksHash null 시 즉시 
     // 대신 createSnapshotIfChanged의 동작이 null hash 시 서버 비교를 수행하는지 검증
     useHistoryStore.setState({
       latestBlocksHash: null,
-      snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev' }],
+      snapshots: [{ id: 'snap-1', timestamp: 100, description: 'prev', kind: 'manual' }],
     });
 
     // getSnapshot이 동일 hash 반환 → 스킵되어야 함

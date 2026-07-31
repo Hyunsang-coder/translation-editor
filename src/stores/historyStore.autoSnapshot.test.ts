@@ -123,6 +123,34 @@ describe('startAutoSnapshotWatch 라이프사이클', () => {
     expect(tauriHistoryMock.upsertAutoSnapshot).not.toHaveBeenCalled();
   });
 
+  it('덮어쓰기 후 목록 갱신은 kind로 auto 슬롯만 고른다 (description 매칭 금지)', async () => {
+    tauriHistoryMock.upsertAutoSnapshot.mockResolvedValue({ snapshotId: 'auto-1', created: false });
+
+    // 사용자가 수동 스냅샷 이름을 자동 저장처럼 바꿔둔 상태
+    useHistoryStore.setState({
+      snapshots: [
+        { id: 'auto-1', timestamp: 100, description: '자동 저장 09:00', kind: 'auto' },
+        { id: 'manual-1', timestamp: 90, description: '자동 저장 백업', kind: 'manual' },
+      ],
+      snapshotsProjectId: 'project-1',
+      latestBlocksHash: '',
+      latestBlocksHashProjectId: 'project-1',
+    });
+    setDirtyProject('project-1');
+
+    useHistoryStore.getState().startAutoSnapshotWatch();
+    await vi.advanceTimersByTimeAsync(600);
+
+    const updated = useHistoryStore.getState().snapshots;
+    expect(updated.find((s) => s.id === 'auto-1')?.description).not.toBe('자동 저장 09:00');
+    expect(updated.find((s) => s.id === 'manual-1')).toEqual({
+      id: 'manual-1',
+      timestamp: 90,
+      description: '자동 저장 백업',
+      kind: 'manual',
+    });
+  });
+
   it('전환 중 완료된 이전 프로젝트의 upsert는 새 프로젝트 state를 덮지 않는다', async () => {
     const deferred = createDeferred<{ snapshotId: string; created: boolean }>();
     tauriHistoryMock.upsertAutoSnapshot.mockReturnValue(deferred.promise);

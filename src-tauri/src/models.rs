@@ -115,6 +115,8 @@ pub struct HistorySnapshotMeta {
     pub description: String,
     #[serde(rename = "chatSummary")]
     pub chat_summary: Option<String>,
+    /// "manual" | "auto". 자동 스냅샷 슬롯 판별용 — description으로 판별하지 않는다.
+    pub kind: String,
 }
 
 /// 블록 변경 기록

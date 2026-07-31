@@ -10,6 +10,7 @@ import {
 } from '@/tauri/history';
 import { hashContent } from '@/utils/hash';
 import { useProjectStore } from '@/stores/projectStore';
+import i18n from '@/i18n/config';
 
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
@@ -341,11 +342,13 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
           autoSnapshotInFlight = true;
           autoSnapshotActiveProjectId = project.id;
           const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          // description은 표시용일 뿐이다 — 자동 슬롯 판별은 백엔드의 kind 컬럼이 한다.
+          const autoDescription = `${i18n.t('history.autoSnapshotLabel')} ${timeLabel}`;
           const snapshotProjectId = project.id;
           void tauriUpsertAutoSnapshot({
             projectId: snapshotProjectId,
             blocksJson: JSON.stringify(blocks),
-            description: `자동 저장 ${timeLabel}`,
+            description: autoDescription,
           })
             .then(({ created }) => {
               // stopAutoSnapshotWatch 또는 프로젝트 전환으로 projectId가 달라진 경우 폐기
@@ -363,8 +366,8 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
                 // 덮어쓴 경우 — description + timestamp 갱신 (재조회 없이)
                 set((state) => ({
                   snapshots: state.snapshots.map((s) =>
-                    s.description.startsWith('자동 저장')
-                      ? { ...s, description: `자동 저장 ${timeLabel}`, timestamp: Date.now() }
+                    s.kind === 'auto'
+                      ? { ...s, description: autoDescription, timestamp: Date.now() }
                       : s,
                   ),
                 }));

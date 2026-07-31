@@ -34,12 +34,12 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
   const reset = useHistoryStore((s) => s.reset);
 
   const autoSnapshotTimestamp = useMemo(() => {
-    const auto = snapshots.find((s) => s.description === 'autoSnapshot' || s.description.startsWith('자동 저장'));
+    const auto = snapshots.find((s) => s.kind === 'auto');
     return auto?.timestamp ?? null;
   }, [snapshots]);
 
   const visibleSnapshots = useMemo(
-    () => snapshots.filter((s) => s.description !== 'autoSnapshot' && !s.description.startsWith('자동 저장')),
+    () => snapshots.filter((s) => s.kind !== 'auto'),
     [snapshots],
   );
 

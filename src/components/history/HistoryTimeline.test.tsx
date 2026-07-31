@@ -13,8 +13,8 @@ vi.mock('react-i18next', () => ({
 
 const now = Date.now();
 const snapshots: HistorySnapshotMeta[] = [
-  { id: 's1', timestamp: now - 3000, description: 'Snapshot A' },
-  { id: 's2', timestamp: now - 1000, description: 'Snapshot B' },
+  { id: 's1', timestamp: now - 3000, description: 'Snapshot A', kind: 'manual' },
+  { id: 's2', timestamp: now - 1000, description: 'Snapshot B', kind: 'manual' },
 ];
 
 const defaultProps = {

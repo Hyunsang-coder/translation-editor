@@ -23,6 +23,8 @@
 | [0014](0014-pin-to-question-chat-scroll.md) | 채팅 스크롤은 하단을 추종하지 않고 질문을 상단에 고정한다 | Accepted | 2026-07-30 |
 | [0015](0015-confluence-tools-as-local-wrappers.md) | Confluence 도구는 MCP 서버 도구를 그대로 바인딩하지 않고 로컬 래퍼로 감싼다 | Accepted | 2026-07-30 |
 | [0016](0016-no-changelog-in-agent-prompt.md) | CLAUDE.md에 변경 이력을 두지 않고, 내용의 종류로 문서를 나눈다 | Accepted | 2026-07-30 |
+| [0017](0017-model-override-for-evaluation.md) | 용도별 모델을 직접 지정할 수 있게 한다 (평가 목적, ADR-0012 부분 수정) | Accepted | 2026-07-31 |
+| [0018](0018-snapshot-kind-column.md) | 스냅샷 종류를 description이 아니라 kind 컬럼으로 판별한다 | Accepted | 2026-07-31 |
 
 > **(소급)** = 결정 당시에는 ADR이 없었고, ADR 도입(0001) 시점에 기록을 복원한 항목입니다.
 > 결정일은 실제 결정 시점, 문서 작성일은 2026-07-29입니다.

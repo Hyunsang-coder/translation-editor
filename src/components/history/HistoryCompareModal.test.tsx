@@ -64,8 +64,8 @@ const mocks = vi.hoisted(() => {
   return {
     project,
     snapshots: [
-      { id: 's1', timestamp: now - 1000, description: 'Snapshot 1' },
-      { id: 's2', timestamp: now - 500, description: 'Snapshot 2' },
+      { id: 's1', timestamp: now - 1000, description: 'Snapshot 1', kind: 'manual' as const },
+      { id: 's2', timestamp: now - 500, description: 'Snapshot 2', kind: 'manual' as const },
     ],
     getSnapshot: vi.fn(),
     snapshotJsonById: {

@@ -44,6 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_segments_project ON segments(project_id);
 CREATE INDEX IF NOT EXISTS idx_segments_order ON segments(segment_order);
 
 -- 히스토리 테이블
+-- kind: 스냅샷 종류. description(사용자가 자유롭게 rename 가능한 표시 문자열)으로
+-- 종류를 판별하면 rename 한 번에 수동 스냅샷이 자동 슬롯의 덮어쓰기 대상이 되므로,
+-- 판별은 반드시 이 컬럼으로만 한다.
 CREATE TABLE IF NOT EXISTS history (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
@@ -52,12 +55,16 @@ CREATE TABLE IF NOT EXISTS history (
     changes_json TEXT NOT NULL,
     snapshot_json TEXT,
     chat_summary TEXT,
+    kind TEXT NOT NULL DEFAULT 'manual' CHECK (kind IN ('manual', 'auto')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
 -- 히스토리 인덱스
 CREATE INDEX IF NOT EXISTS idx_history_project ON history(project_id);
 CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp);
+-- NOTE: "프로젝트당 auto 1개" 부분 유니크 인덱스는 여기가 아니라
+-- Database::run_migrations에서 만든다. CREATE_SCHEMA는 기존 DB에서도 매번 먼저
+-- 실행되는데, 그 시점엔 아직 kind 컬럼이 추가되기 전이라 여기 두면 실패한다.
 
 -- 채팅 세션 테이블
 CREATE TABLE IF NOT EXISTS chat_sessions (

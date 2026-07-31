@@ -134,7 +134,14 @@ export interface HistorySnapshotMeta {
   timestamp: number;
   description: string;
   chatSummary?: string;
+  /**
+   * 스냅샷 종류. 'auto'는 프로젝트당 1개뿐인 자동 저장 슬롯이다.
+   * description은 사용자가 rename으로 바꿀 수 있으므로 종류 판별에 쓰지 않는다.
+   */
+  kind: HistorySnapshotKind;
 }
+
+export type HistorySnapshotKind = 'manual' | 'auto';
 
 /**
  * 블록 변경 기록
