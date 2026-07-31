@@ -284,12 +284,11 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
   },
 
   reset: (): void => {
-    // 모듈 레벨 타이머/플래그 정리 (프로젝트 전환 시 dangling timer 방지)
-    if (autoSnapshotTimer !== null) {
-      window.clearTimeout(autoSnapshotTimer);
-      autoSnapshotTimer = null;
-    }
-    autoSnapshotInFlight = false;
+    // 타이머는 라이프사이클(App mount/unmount)이 소유한다 — reset은 상태만 비운다.
+    // 여기서 타이머를 끄면 startAutoSnapshotWatch가 App 마운트 시 한 번만 호출되므로
+    // 프로젝트 전환 이후 auto snapshot이 세션 내내 멈춘다.
+    // autoSnapshotInFlight도 건드리지 않는다 — in-flight Promise의 finally가 소유하며,
+    // 여기서 미리 내리면 이전 요청이 끝나기 전에 다음 tick이 중복 upsert를 시작한다.
     lastCheckedChangeAt = 0;
     autoSnapshotActiveProjectId = null;
     createSnapshotIfChangedQueues.clear();

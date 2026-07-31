@@ -859,6 +859,13 @@ export const useProjectStore = create<ProjectStore>()(
         // L3: 이전 프로젝트 기준의 Desktop 번역 프리뷰 정리 (loadProject에서도 정리하지만,
         // 비동기 전환 중 stale 프리뷰가 apply되지 않도록 시작 시점에 즉시 정리)
         useTranslationPreviewStore.getState().clearPreview();
+        // 이전 프로젝트의 히스토리 상태 정리. 반드시 loadProject로 새 projectId가 반영되기
+        // "전"에 수행해야 한다 — reset이 loadHistoryRequestSeq를 올리므로, 새 projectId를 보고
+        // 뜬 App의 loadHistory보다 늦게 실행되면 그 로드가 무효화되어 latestBlocksHash가
+        // null로 남고 auto snapshot이 계속 조기 반환한다.
+        // (historyStore가 projectStore를 import하므로 순환을 피하려 동적 import를 쓴다)
+        const { useHistoryStore } = await import('@/stores/historyStore');
+        useHistoryStore.getState().reset();
         set({ isLoading: true, error: null });
 
         try {
@@ -891,9 +898,6 @@ export const useProjectStore = create<ProjectStore>()(
         } finally {
           // 최신 전환만 정리를 수행 (stale 전환의 finally가 진행 중인 전환을 방해하지 않도록)
           if (!isStaleSwitch()) {
-            // historyStore 상태 초기화: autoSnapshotTimer/activeProjectId 정리
-            const { useHistoryStore } = await import('@/stores/historyStore');
-            useHistoryStore.getState().reset();
             startAutoSave();
           }
         }
