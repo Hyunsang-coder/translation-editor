@@ -11,6 +11,7 @@ import { TranslatePreviewModal } from './TranslatePreviewModal';
 import { SearchBar } from './SearchBar';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Editor } from '@tiptap/react';
+import type { Slice } from '@tiptap/pm/model';
 import {
   translateWithStreaming,
   formatTranslationError,
@@ -71,6 +72,10 @@ import {
   buildContextSnapshot,
   resolveWorkflowContextFromSnapshot,
 } from '@/ai/context/resolveWorkflowContext';
+import {
+  serializeSelectionForClipboard,
+  writeRichClipboard,
+} from '@/utils/editorClipboard';
 
 /**
  * TipTap 기반 에디터 캔버스
@@ -245,6 +250,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     to: number;
     /** 실제 선택 범위(문서 순서). 표 다중 셀 선택은 셀마다 하나씩 들어온다. */
     ranges: SelectionRange[];
+    /** 선택 시점의 불변 ProseMirror 조각 — 툴바 클릭으로 포커스가 바뀌어도 복사 내용 유지. */
+    slice: Slice;
     segmentGroupId: string | undefined;
   }
 
@@ -330,7 +337,16 @@ export function EditorCanvasTipTap(): JSX.Element {
       segmentGroupId = inferSegmentGroupIdForSelection(project, field, selectedText);
     }
 
-    return { text: selectedText, editor, field, from, to, ranges, segmentGroupId };
+    return {
+      text: selectedText,
+      editor,
+      field,
+      from,
+      to,
+      ranges,
+      slice: editor.state.selection.content(),
+      segmentGroupId,
+    };
   }, [project]);
 
   // 선택 영역 위(넘치면 아래)에 인라인 툴바를 띄운다.
@@ -1365,12 +1381,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     try {
       const html = editor.getHTML();
       const markdown = tipTapJsonToMarkdownForTranslation(editor.getJSON() as Record<string, unknown>);
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([markdown], { type: 'text/plain' }),
-        }),
-      ]);
+      await writeRichClipboard({ html, markdown });
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
@@ -1380,15 +1391,15 @@ export function EditorCanvasTipTap(): JSX.Element {
   const handleCopySource = useCallback(() => copyEditorContent(sourceEditorRef.current), [copyEditorContent]);
   const handleCopyTarget = useCallback(() => copyEditorContent(targetEditorRef.current), [copyEditorContent]);
 
-  const handleCopySelectedText = useCallback(async (text: string): Promise<void> => {
-    const selectedText = text.trim();
-    if (!selectedText) {
+  const handleCopySelection = useCallback(async (bubble: SelectionBubble): Promise<void> => {
+    if (!bubble.text.trim()) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(selectedText);
+      const content = serializeSelectionForClipboard(bubble.editor, bubble.slice);
+      await writeRichClipboard(content);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
@@ -1837,7 +1848,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             zoom: 1 / useUIStore.getState().editorZoom,
           }}
           onCopy={() => {
-            void handleCopySelectedText(selectionToolbar.text);
+            void handleCopySelection(selectionToolbar);
             setSelectionToolbar(null);
           }}
           onAddToChat={() => {

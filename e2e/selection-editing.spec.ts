@@ -388,8 +388,21 @@ test.describe('Table cell selection', () => {
 
     await page.getByTestId('selection-inline-copy').click();
 
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
-    expect(copied).toContain('cell 하나');
-    expect(copied).toContain('cell 셋');
+    const copied = await page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      if (!item) throw new Error('클립보드 항목이 없습니다.');
+      return {
+        types: item.types,
+        html: await (await item.getType('text/html')).text(),
+        markdown: await (await item.getType('text/plain')).text(),
+      };
+    });
+    expect(copied.types).toEqual(expect.arrayContaining(['text/html', 'text/plain']));
+    expect(copied.html).toContain('<table');
+    expect(copied.html).toContain('cell 하나');
+    expect(copied.html).toContain('cell 셋');
+    expect(copied.markdown).toContain('<table');
+    expect(copied.markdown).toContain('cell 하나');
+    expect(copied.markdown).toContain('cell 셋');
   });
 });
