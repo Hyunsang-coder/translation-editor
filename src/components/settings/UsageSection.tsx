@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
 import { estimateCost, formatUsd } from '@/ai/pricing';
+import { CollapsibleSection } from './CollapsibleSection';
 
 /** Rust `AiUsageDailyRow`와 1:1 */
 interface UsageDailyRow {
@@ -136,12 +137,13 @@ export function UsageSection(): JSX.Element | null {
   if (!isTauriRuntime()) return null;
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-        <span className="text-lg">📊</span>
-        <h3 className="font-semibold text-editor-text">{t('appSettings.usage')}</h3>
-      </div>
-
+    // 집계는 접혀 있어도 돌린다 — 요약(기간 추정 비용)이 이 섹션을 열 이유가 되어야 한다.
+    <CollapsibleSection
+      icon="📊"
+      title={t('appSettings.usage')}
+      summary={`${formatUsd(totals.cost)}${totals.unpriced ? '*' : ''} · ${t('appSettings.usageLastNDays', { count: rangeDays })}`}
+      testId="app-settings-usage-toggle"
+    >
       <p className="text-xs text-editor-muted">{t('appSettings.usageEstimateNotice')}</p>
 
       <div className="flex items-center gap-2">
@@ -265,7 +267,7 @@ export function UsageSection(): JSX.Element | null {
       >
         {t('appSettings.usageClear')}
       </button>
-    </section>
+    </CollapsibleSection>
   );
 }
 

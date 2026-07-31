@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
 import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientManager';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface ConnectorItemProps {
   icon: string;
@@ -292,11 +293,16 @@ export function ConnectorsSection(): JSX.Element {
   }, [mcpStatus, elapsedSeconds, handleAtlassianConnect, handleAtlassianDisconnect, handleAtlassianClearAll]);
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-        <span className="text-lg">🔌</span>
-        <h3 className="font-semibold text-editor-text">{t('appSettings.connectors.title')}</h3>
-      </div>
+    <CollapsibleSection
+      icon="🔌"
+      title={t('appSettings.connectors.title')}
+      summary={
+        mcpStatus.isConnected
+          ? t('appSettings.connectors.connected')
+          : t('appSettings.connectors.notConnected')
+      }
+      testId="app-settings-connectors-toggle"
+    >
       <p className="text-xs text-editor-muted">
         {t('appSettings.connectors.description')}
       </p>
@@ -336,6 +342,6 @@ export function ConnectorsSection(): JSX.Element {
           />
         ))}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-shell';
 import { check } from '@tauri-apps/plugin-updater';
 import { getErrorMessage, useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
+import { CollapsibleSection } from './CollapsibleSection';
 import { ConnectorsSection } from './ConnectorsSection';
 import { ModelOverridesSection } from './ModelOverridesSection';
 import { UsageSection } from './UsageSection';
+import { PROVIDER_LABELS } from '@/ai/config';
 import { Modal } from '@/components/ui/Modal';
 import { invoke } from '@/tauri/invoke';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -38,6 +40,73 @@ const DESKTOP_SNIPPET = JSON.stringify({
 const CODE_SNIPPET = JSON.stringify({
   mcpServers: { oddeyes: MCP_NPX_ENTRY },
 }, null, 2);
+
+/**
+ * 라벨 한 칸 + 컨트롤 한 칸으로 된 설정 행.
+ *
+ * 설명문은 상시 노출하지 않고 `hint`의 ⓘ 툴팁으로 접는다 — 이 저장소에는 Tooltip 컴포넌트가
+ * 없고 native `title`을 쓰는 관례다(ConnectorsSection 참조).
+ */
+function SettingRow({ label, hint, htmlFor, children }: {
+  label: string;
+  hint?: string;
+  htmlFor?: string;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-4 min-h-[32px]">
+      <label htmlFor={htmlFor} className="shrink-0 text-sm text-editor-text">
+        {label}
+        {hint && (
+          <span className="ml-1.5 cursor-help text-editor-muted" title={hint} aria-label={hint}>
+            ⓘ
+          </span>
+        )}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 언어·테마·붙여넣기가 공유하는 단일 선택 컨트롤.
+ *
+ * 셋이 각각 라디오·큰 아이콘 버튼·pill로 갈라져 있던 것을 하나로 묶었다. 행 안에 들어가야 하므로
+ * 높이를 28px로 고정하고, 선택 강조는 크기(scale)가 아니라 색으로만 준다.
+ */
+function SegmentedControl<T extends string>({ value, options, onChange, label }: {
+  value: T;
+  options: readonly { value: T; label: string; title?: string }[];
+  onChange: (value: T) => void;
+  label: string;
+}): JSX.Element {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex shrink-0 items-center gap-0.5 rounded-lg border border-editor-border bg-editor-bg p-0.5"
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          aria-label={option.title}
+          title={option.title}
+          onClick={() => onChange(option.value)}
+          className={`h-7 rounded-md px-2.5 text-xs font-medium transition-colors ${
+            value === option.value
+              ? 'bg-primary-500 text-white shadow-sm'
+              : 'text-editor-muted hover:bg-editor-border/60 hover:text-editor-text'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface AppSettingsModalProps {
   onClose: () => void;
@@ -79,6 +148,13 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
       clearApiKeysAfterSecureStorageReset: s.clearApiKeysAfterSecureStorageReset,
     }))
   );
+
+  // 접힌 API 키 섹션의 요약 겸 자동 펼침 판정. 키가 있어도 꺼져 있으면 AI가 안 도므로
+  // "키가 있는지"가 아니라 "실제로 쓸 수 있는 provider가 있는지"로 센다.
+  const usableProviders = [
+    openaiEnabled && openaiApiKey ? PROVIDER_LABELS.openai : null,
+    anthropicEnabled && anthropicApiKey ? PROVIDER_LABELS.anthropic : null,
+  ].filter((v): v is string => Boolean(v));
 
   // Claude MCP 상태 (Desktop + Code 공용)
   const [mcpStatus, setMcpStatus] = useState<{ bridgePort: number } | null>(null);
@@ -198,161 +274,81 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-8">
+        {/* 섹션 대부분이 접히므로 헤더끼리 붙는다 — space-y-8은 접힌 목록에서 과하다 */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
             
-            {/* 0. Language */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🌐</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.language')}</h3>
+            {/* 일반 — 언어·테마·붙여넣기. 컨트롤 4개짜리라 섹션을 셋으로 쪼개면 헤더가 내용보다 커진다. */}
+            <section className="space-y-1">
+                <div className="flex items-center gap-2 pb-2 mb-2 border-b border-editor-border/50">
+                    <span className="text-lg">⚙️</span>
+                    <h3 className="font-semibold text-editor-text">{t('appSettings.general')}</h3>
                 </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.language')}</label>
-                    <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                            <input 
-                                type="radio" 
-                                name="language" 
-                                value="ko" 
-                                checked={language === 'ko'}
-                                onChange={() => handleLanguageChange('ko')}
-                                className="accent-primary-500 w-4 h-4 cursor-pointer"
-                            />
-                            <span className={`text-sm font-medium transition-colors ${language === 'ko' ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
-                                {t('appSettings.languageKorean')}
-                            </span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                            <input 
-                                type="radio" 
-                                name="language" 
-                                value="en" 
-                                checked={language === 'en'}
-                                onChange={() => handleLanguageChange('en')}
-                                className="accent-primary-500 w-4 h-4 cursor-pointer"
-                            />
-                            <span className={`text-sm font-medium transition-colors ${language === 'en' ? 'text-editor-text' : 'text-editor-muted group-hover:text-editor-text'}`}>
-                                {t('appSettings.languageEnglish')}
-                            </span>
-                        </label>
-                    </div>
-                </div>
+
+                <SettingRow label={t('appSettings.language')}>
+                    <SegmentedControl
+                        label={t('appSettings.language')}
+                        value={language}
+                        onChange={handleLanguageChange}
+                        options={[
+                            { value: 'ko', label: t('appSettings.languageKorean') },
+                            { value: 'en', label: t('appSettings.languageEnglish') },
+                        ]}
+                    />
+                </SettingRow>
+
+                <SettingRow label={t('appSettings.theme')}>
+                    <SegmentedControl
+                        label={t('appSettings.theme')}
+                        value={theme}
+                        onChange={handleThemeChange}
+                        options={[
+                            { value: 'light', label: '☀️', title: t('appSettings.themeLight') },
+                            { value: 'dark', label: '🌙', title: t('appSettings.themeDark') },
+                            { value: 'system', label: '🖥️', title: t('appSettings.themeSystem') },
+                        ]}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    label={t('appSettings.pasteImageMode')}
+                    hint={t('appSettings.pasteImageModeDescription')}
+                >
+                    <SegmentedControl
+                        label={t('appSettings.pasteImageMode')}
+                        value={pasteImageMode}
+                        onChange={setPasteImageMode}
+                        options={[
+                            { value: 'placeholder', label: t('appSettings.pasteImageModePlaceholder') },
+                            { value: 'original', label: t('appSettings.pasteImageModeOriginal') },
+                            { value: 'ignore', label: t('appSettings.pasteImageModeIgnore') },
+                        ]}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    label={t('appSettings.pasteLinkPreserve')}
+                    hint={t('appSettings.pasteLinkPreserveDescription')}
+                    htmlFor="paste-link-preserve"
+                >
+                    <input
+                        type="checkbox"
+                        id="paste-link-preserve"
+                        checked={pasteLinkPreserve}
+                        onChange={(e) => setPasteLinkPreserve(e.target.checked)}
+                        className="accent-primary-500 w-4 h-4 cursor-pointer"
+                    />
+                </SettingRow>
             </section>
 
-            {/* Theme */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🎨</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.theme')}</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => handleThemeChange('light')}
-                        className={`
-                            flex items-center justify-center w-12 h-12 rounded-lg
-                            transition-all duration-200
-                            ${theme === 'light'
-                                ? 'bg-primary-500 text-white shadow-md scale-105'
-                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
-                            }
-                        `}
-                        title={t('appSettings.themeLight')}
-                    >
-                        <span className="text-xl">☀️</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleThemeChange('dark')}
-                        className={`
-                            flex items-center justify-center w-12 h-12 rounded-lg
-                            transition-all duration-200
-                            ${theme === 'dark'
-                                ? 'bg-primary-500 text-white shadow-md scale-105'
-                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
-                            }
-                        `}
-                        title={t('appSettings.themeDark')}
-                    >
-                        <span className="text-xl">🌙</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleThemeChange('system')}
-                        className={`
-                            flex items-center justify-center w-12 h-12 rounded-lg
-                            transition-all duration-200
-                            ${theme === 'system'
-                                ? 'bg-primary-500 text-white shadow-md scale-105'
-                                : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
-                            }
-                        `}
-                        title={t('appSettings.themeSystem')}
-                    >
-                        <span className="text-xl">🖥️</span>
-                    </button>
-                </div>
-            </section>
-
-            {/* Paste Settings */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">📋</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.paste')}</h3>
-                </div>
-
-                {/* Image Paste Mode */}
-                <div className="space-y-2">
-                    <label className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.pasteImageMode')}</label>
-                    <p className="text-[10px] text-editor-muted">{t('appSettings.pasteImageModeDescription')}</p>
-                    <div className="flex items-center gap-2">
-                        {(['placeholder', 'original', 'ignore'] as const).map((mode) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setPasteImageMode(mode)}
-                                className={`
-                                    px-3 py-1.5 rounded-lg text-xs font-medium
-                                    transition-all duration-200
-                                    ${pasteImageMode === mode
-                                        ? 'bg-primary-500 text-white shadow-md scale-105'
-                                        : 'bg-editor-bg text-editor-muted hover:bg-editor-border hover:text-editor-text'
-                                    }
-                                `}
-                            >
-                                {t(`appSettings.pasteImageMode${mode.charAt(0).toUpperCase() + mode.slice(1)}`)}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Link Preserve */}
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            id="paste-link-preserve"
-                            checked={pasteLinkPreserve}
-                            onChange={(e) => setPasteLinkPreserve(e.target.checked)}
-                            className="accent-primary-500 w-4 h-4 cursor-pointer"
-                        />
-                        <label
-                            htmlFor="paste-link-preserve"
-                            className={`text-sm font-medium cursor-pointer ${pasteLinkPreserve ? 'text-editor-text' : 'text-editor-muted'}`}
-                        >
-                            {t('appSettings.pasteLinkPreserve')}
-                        </label>
-                    </div>
-                    <p className="text-[10px] text-editor-muted pl-6">{t('appSettings.pasteLinkPreserveDescription')}</p>
-                </div>
-            </section>
-
-            {/* API Keys & Provider Enable */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🔑</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.apiKeys')}</h3>
-                </div>
+            {/* API Keys & Provider Enable — 쓸 수 있는 provider가 없으면 펼친 채로 연다.
+                접힌 채로 두면 키를 넣을 곳을 못 찾는 것이 이 섹션의 유일한 실패 모드다. */}
+            <CollapsibleSection
+                icon="🔑"
+                title={t('appSettings.apiKeys')}
+                summary={usableProviders.join(' · ') || t('appSettings.apiKeysNoneSet')}
+                defaultOpen={usableProviders.length === 0}
+                testId="app-settings-api-keys-toggle"
+            >
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.apiKeysDescription')}
                 </p>
@@ -444,7 +440,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         <p className="text-[10px] text-editor-muted">{t('appSettings.apiKeyRequiredToEnable')}</p>
                     )}
                 </div>
-            </section>
+            </CollapsibleSection>
 
             {/* Connectors */}
             <ConnectorsSection />
@@ -457,11 +453,11 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
             {/* Security Recovery */}
             {isTauriRuntime() && (
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🔒</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.security')}</h3>
-                </div>
+            <CollapsibleSection
+                icon="🔒"
+                title={t('appSettings.security')}
+                testId="app-settings-security-toggle"
+            >
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.securityDescription')}
                 </p>
@@ -497,16 +493,17 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         </p>
                     )}
                 </div>
-            </section>
+            </CollapsibleSection>
             )}
 
             {/* Claude Integration */}
             {isTauriRuntime() && (
-            <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
-                    <span className="text-lg">🤖</span>
-                    <h3 className="font-semibold text-editor-text">{t('appSettings.claudeIntegration.title')}</h3>
-                </div>
+            <CollapsibleSection
+                icon="🤖"
+                title={t('appSettings.claudeIntegration.title')}
+                summary={desktopReg?.status === 'registered' ? t('appSettings.claudeDesktop.registered') : undefined}
+                testId="app-settings-claude-toggle"
+            >
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.claudeIntegration.description')}
                 </p>
@@ -580,22 +577,27 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </details>
                 </div>
 
-                {/* Sub-card: Claude Code */}
-                <div className="p-3 rounded-lg border border-editor-border bg-editor-bg/50 space-y-2">
-                    <h4 className="text-xs font-semibold text-editor-muted uppercase tracking-wider">{t('appSettings.claudeCode.title')}</h4>
-                    <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
-                    <div className="relative">
-                        <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{CODE_SNIPPET}</pre>
-                        <button
-                            type="button"
-                            onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
-                            className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
-                        >
-                            {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
-                        </button>
+                {/* Sub-card: Claude Code — Desktop 쪽 수동 설정과 대칭으로 접는다. 내용이 스니펫
+                    하나뿐이라 펼쳐 두면 이 카드가 섹션에서 가장 높은 칸이 된다. */}
+                <details className="p-3 rounded-lg border border-editor-border bg-editor-bg/50">
+                    <summary className="text-xs font-semibold text-editor-muted uppercase tracking-wider cursor-pointer hover:text-editor-text transition-colors select-none">
+                        {t('appSettings.claudeCode.title')}
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                        <p className="text-[10px] text-editor-muted">{t('appSettings.claudeCode.manualHint')}</p>
+                        <div className="relative">
+                            <pre className="text-[10px] leading-relaxed p-2.5 rounded-md bg-editor-bg border border-editor-border text-editor-text overflow-x-auto font-mono">{CODE_SNIPPET}</pre>
+                            <button
+                                type="button"
+                                onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
+                                className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                            >
+                                {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
+                            </button>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </details>
+            </CollapsibleSection>
             )}
 
             {/* Help & Info */}
