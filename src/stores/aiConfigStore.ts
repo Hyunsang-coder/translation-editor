@@ -2,7 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSecureSecret, setSecureSecret, type SecureKeyId } from '@/tauri/secureStore';
 // 타입 전용 import — 런타임 순환 참조(config.ts → aiConfigStore)가 생기지 않는다.
-import type { SelectableProvider } from '@/ai/config';
+import type {
+  ModelOverrideEntry,
+  ModelOverrides,
+  ModelUseFor,
+  ReasoningEffort,
+  SelectableProvider,
+} from '@/ai/config';
 
 const API_KEYS_BUNDLE_ID: SecureKeyId = 'api_keys_bundle';
 
@@ -22,6 +28,13 @@ interface AiConfigState {
    * (ADR-0012). v13까지 있던 translationModel/chatModel을 대체한다.
    */
   provider: SelectableProvider;
+  /**
+   * 용도별 모델 직접 지정 (ADR-0017). 비어 있는 칸은 `MODEL_BY_USE` 기본값을 쓴다.
+   *
+   * **기본값을 여기에 복사해 두지 않는다.** 지정한 칸만 담아야 `MODEL_BY_USE`가 바뀔 때
+   * 손대지 않은 용도가 따라 움직인다 — 전부 채워두면 단가·모델이 개편돼도 옛 값에 고정된다.
+   */
+  modelOverrides: ModelOverrides;
   // 사용자 입력 API Keys (OS 키체인/키링에 저장)
   openaiApiKey: string | undefined;
   anthropicApiKey: string | undefined;
@@ -34,6 +47,20 @@ interface AiConfigState {
 interface AiConfigActions {
   loadSecureKeys: () => Promise<void>;
   setProvider: (provider: SelectableProvider) => void;
+  /** `model`이 `null`이면 모델 지정만 걷어낸다(effort 지정은 남는다). */
+  setModelOverride: (
+    provider: SelectableProvider,
+    useFor: ModelUseFor,
+    model: string | null,
+  ) => void;
+  /** `effort`가 `null`이면 effort 지정만 걷어낸다(모델 지정은 남는다). */
+  setEffortOverride: (
+    provider: SelectableProvider,
+    useFor: ModelUseFor,
+    effort: ReasoningEffort | null,
+  ) => void;
+  /** 모든 provider·용도의 지정을 한 번에 걷어낸다(UI의 "전체 초기화"). */
+  clearModelOverrides: () => void;
   setOpenaiApiKey: (key: string | undefined) => void;
   setAnthropicApiKey: (key: string | undefined) => void;
   clearApiKeysAfterSecureStorageReset: () => void;
@@ -121,6 +148,34 @@ function enqueuePersistAllKeys(
     });
 }
 
+/**
+ * 지정 한 칸의 필드 하나를 갈아끼운다. `null`을 주면 그 필드만 걷어낸다.
+ *
+ * 빈 항목을 `undefined`로 남기지 않고 키째 지운다 — localStorage 직렬화에서 undefined는
+ * 사라지므로, 남겨 두면 메모리 상태와 hydrate 후 상태가 달라진다.
+ */
+function patchOverride(
+  current: ModelOverrides,
+  provider: SelectableProvider,
+  useFor: ModelUseFor,
+  patch: Partial<Record<keyof ModelOverrideEntry, string | null | undefined>>,
+): ModelOverrides {
+  const entry: ModelOverrideEntry = { ...(current[provider]?.[useFor] ?? {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value) entry[key as 'model'] = value as string;
+    else delete entry[key as 'model'];
+  }
+
+  const { [useFor]: _dropped, ...restForProvider } = current[provider] ?? {};
+  const nextForProvider =
+    Object.keys(entry).length > 0 ? { ...restForProvider, [useFor]: entry } : restForProvider;
+
+  const next: ModelOverrides = { ...current };
+  if (Object.keys(nextForProvider).length > 0) next[provider] = nextForProvider;
+  else delete next[provider];
+  return next;
+}
+
 export function migrateAiConfig(
   persisted: Record<string, unknown>,
   version: number,
@@ -206,6 +261,32 @@ export function migrateAiConfig(
     delete data.translationModel;
     delete data.chatModel;
   }
+  // v14 → v15: 용도별 모델 직접 지정 도입 (ADR-0017).
+  //
+  // 기존 사용자는 지정 없음(= MODEL_BY_USE 기본값)에서 시작한다. 여기서 기본값을 채워
+  // 넣으면 앱이 모델을 바꿔도 기존 사용자만 옛 모델에 고정되므로 반드시 비워 둔다.
+  if (version < 15) {
+    data.modelOverrides = {};
+  }
+  // v15 → v16: 지정 값이 모델 문자열 하나에서 `{model, effort}`로 넓어졌다 (ADR-0017).
+  // v15는 당일 배포라 저장된 값이 거의 없지만, 있으면 모델 지정으로 옮긴다.
+  if (version < 16) {
+    const raw = data.modelOverrides;
+    if (raw && typeof raw === 'object') {
+      const migrated: Record<string, Record<string, { model: string }>> = {};
+      for (const [provider, byUse] of Object.entries(raw as Record<string, unknown>)) {
+        if (!byUse || typeof byUse !== 'object') continue;
+        const entries: Record<string, { model: string }> = {};
+        for (const [useFor, value] of Object.entries(byUse as Record<string, unknown>)) {
+          if (typeof value === 'string' && value) entries[useFor] = { model: value };
+        }
+        if (Object.keys(entries).length > 0) migrated[provider] = entries;
+      }
+      data.modelOverrides = migrated;
+    } else {
+      data.modelOverrides = {};
+    }
+  }
   return data;
 }
 
@@ -214,6 +295,7 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     (set, get) => {
       return {
         provider: 'anthropic' as SelectableProvider,
+        modelOverrides: {} as ModelOverrides,
         openaiApiKey: undefined,
         anthropicApiKey: undefined,
         secureKeyPersistError: undefined,
@@ -309,6 +391,14 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
 
         setProvider: (provider) => set({ provider }),
 
+        setModelOverride: (provider, useFor, model) =>
+          set({ modelOverrides: patchOverride(get().modelOverrides, provider, useFor, { model }) }),
+
+        setEffortOverride: (provider, useFor, effort) =>
+          set({ modelOverrides: patchOverride(get().modelOverrides, provider, useFor, { effort }) }),
+
+        clearModelOverrides: () => set({ modelOverrides: {} }),
+
         setOpenaiApiKey: (key) => {
           const version = ++persistVersion;
           const next = normalizeKey(key);
@@ -385,11 +475,12 @@ export const useAiConfigStore = create<AiConfigState & AiConfigActions>()(
     },
     {
       name: 'ite-ai-config',
-      version: 14,
+      version: 16,
       migrate: (persisted: unknown, version: number) =>
         migrateAiConfig(persisted as Record<string, unknown>, version),
       partialize: (state) => ({
         provider: state.provider,
+        modelOverrides: state.modelOverrides,
         openaiEnabled: state.openaiEnabled,
         anthropicEnabled: state.anthropicEnabled,
       }),

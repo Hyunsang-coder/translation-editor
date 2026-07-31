@@ -6,6 +6,7 @@ import { getErrorMessage, useAiConfigStore } from '@/stores/aiConfigStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { ConnectorsSection } from './ConnectorsSection';
+import { ModelOverridesSection } from './ModelOverridesSection';
 import { UsageSection } from './UsageSection';
 import { Modal } from '@/components/ui/Modal';
 import { invoke } from '@/tauri/invoke';
@@ -447,6 +448,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
             {/* Connectors */}
             <ConnectorsSection />
+
+            {/* 용도별 모델 직접 지정 (실험) — 사용량 섹션 바로 위에 둬서 비교 대상과 결과를 붙여 놓는다 */}
+            <ModelOverridesSection />
 
             {/* AI 사용량 · 추정 비용 */}
             <UsageSection />

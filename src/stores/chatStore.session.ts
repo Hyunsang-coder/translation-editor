@@ -6,7 +6,11 @@ import type { ChatSession, ChatMessage, ChatSessionMemory } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
-import { normalizeProvider, type SelectableProvider } from '@/ai/config';
+import {
+  buildSessionPin,
+  normalizeSessionPin,
+  type SelectableProvider,
+} from '@/ai/config';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { loadChatSessions, loadChatProjectSettings } from '@/tauri/chat';
@@ -32,6 +36,15 @@ import {
  */
 function getDefaultSessionProvider(): SelectableProvider {
   return useAiConfigStore.getState().provider;
+}
+
+/**
+ * 세션이 고정할 pin — provider + (지정돼 있으면) 그 시점의 채팅 모델.
+ *
+ * 모델을 여기서 굳혀야 "채팅 모델 변경은 새 대화부터"가 지켜진다 (ADR-0017).
+ */
+function buildPinForProvider(provider: SelectableProvider): string {
+  return buildSessionPin(provider, useAiConfigStore.getState().modelOverrides);
 }
 
 export function createSessionActions(
@@ -177,9 +190,11 @@ export function createSessionActions(
       // v13 이전 세션에는 'claude-sonnet-5' 같은 프리셋 ID가 들어 있고, 아예 없는 세션도 있다.
       // 둘 다 여기서 provider로 고쳐 쓴다. 저장하지 않으면 다음 실행에서 그때의 전역값으로
       // 다시 정해져 세션 provider가 흔들리고, 그 세션의 prompt cache 프리픽스도 함께 버려진다.
+      // 모델 스냅샷이 붙은 pin("anthropic#claude-haiku-4-5")은 깎지 않고 보존한다 —
+      // 깎으면 진행 중 대화가 다음 실행에서 현재 설정의 모델로 갈아탄다 (ADR-0017).
       const defaultProvider = getDefaultSessionProvider();
-      const pinFor = (session: { modelPreset?: string }): SelectableProvider =>
-        normalizeProvider(session.modelPreset) ?? defaultProvider;
+      const pinFor = (session: { modelPreset?: string }): string =>
+        normalizeSessionPin(session.modelPreset, defaultProvider);
       const hasUnpinnedSession = (sessionsRes ?? []).some(
         (session) => session.modelPreset !== pinFor(session),
       );
@@ -331,7 +346,7 @@ export function createSessionActions(
       contextBlockIds: [],
       confluenceSearchEnabled: true,
       // 새 세션은 전역 기본 provider를 상속(첫 메시지 전까지 세션별로 독립 변경 가능)
-      modelPreset: getDefaultSessionProvider(),
+      modelPreset: buildPinForProvider(getDefaultSessionProvider()),
     };
 
     set((state) => ({
@@ -408,7 +423,10 @@ export function createSessionActions(
    * 캐시가 통째로 버려지고, 이후 매 턴 cache write를 다시 낸다. 아직 아무것도 보내지
    * 않은 세션은 캐시가 없으므로 자유롭게 바꿀 수 있다.
    */
-  const setSessionModelPreset = (sessionId: string, preset: SelectableProvider): void => {
+  const setSessionModelPreset = (sessionId: string, provider: SelectableProvider): void => {
+    // 새 provider의 채팅 모델 지정까지 함께 굳힌다 — provider만 저장하면 다음 실행에서
+    // 모델이 현재 설정값으로 흔들린다.
+    const preset = buildPinForProvider(provider);
     const target = get().sessions.find((s) => s.id === sessionId);
     if (!target || target.modelPreset === preset) return;
     if (target.messages.length > 0) {

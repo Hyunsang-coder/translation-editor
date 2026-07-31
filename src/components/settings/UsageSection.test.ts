@@ -28,24 +28,30 @@ describe('summarizeUsageRows', () => {
     expect(summaries[1]!.totalTokens).toBe(1500);
   });
 
-  it('캐시 read/write도 총 토큰에 포함한다', () => {
+  it('캐시 read/write는 입력에 이미 포함되어 있어 총 토큰에 다시 더하지 않는다', () => {
     const [summary] = summarizeUsageRows([
       row({
         day: '2026-07-01',
         model: 'claude-opus-5',
-        inputTokens: 100,
+        // 입력 1000 중 300은 캐시 read, 400은 캐시 write로 들어온 몫이다.
+        inputTokens: 1000,
         outputTokens: 200,
         cacheReadInputTokens: 300,
         cacheCreationInputTokens: 400,
       }),
     ]);
 
-    expect(summary!.totalTokens).toBe(1000);
+    expect(summary!.totalTokens).toBe(1200);
   });
 
   it('비용과 캐시 절감액을 단가로 환산한다', () => {
     const [summary] = summarizeUsageRows([
-      row({ day: '2026-07-01', model: 'claude-opus-5', cacheReadInputTokens: 1_000_000 }),
+      row({
+        day: '2026-07-01',
+        model: 'claude-opus-5',
+        inputTokens: 1_000_000,
+        cacheReadInputTokens: 1_000_000,
+      }),
     ]);
 
     // $5 정가 대신 $0.5 → 비용 $0.5, 절감 $4.5

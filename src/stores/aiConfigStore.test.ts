@@ -254,3 +254,75 @@ describe('aiConfigStore - API key bundle persist ordering', () => {
     expect(useAiConfigStore.getState().secureKeyPersistError).toBeUndefined();
   });
 });
+
+describe('모델 직접 지정 (ADR-0017)', () => {
+  beforeEach(() => {
+    useAiConfigStore.setState({ provider: 'anthropic', modelOverrides: {} });
+  });
+
+  it('v14 → v15 마이그레이션은 지정을 비운 채로 시작한다', () => {
+    // 기본값을 채워 넣으면 앱이 모델을 바꿔도 기존 사용자만 옛 모델에 고정된다.
+    const migrated = migrateAiConfig({ provider: 'anthropic' }, 14);
+    expect(migrated.modelOverrides).toEqual({});
+  });
+
+  it('provider별 지정이 서로를 덮어쓰지 않고 각자 남는다', () => {
+    // provider를 오갈 때마다 다시 고르지 않아도 되게, 두 벌이 독립적으로 보존돼야 한다.
+    const { setModelOverride, setEffortOverride } = useAiConfigStore.getState();
+
+    setModelOverride('anthropic', 'review', 'claude-sonnet-5');
+    setEffortOverride('anthropic', 'review', 'medium');
+    setModelOverride('openai', 'chat', 'gpt-5.6-terra');
+
+    expect(useAiConfigStore.getState().modelOverrides).toEqual({
+      anthropic: { review: { model: 'claude-sonnet-5', effort: 'medium' } },
+      openai: { chat: { model: 'gpt-5.6-terra' } },
+    });
+  });
+
+  it('모델과 effort는 서로를 지우지 않고 따로 걷힌다', () => {
+    const { setModelOverride, setEffortOverride } = useAiConfigStore.getState();
+    setModelOverride('anthropic', 'review', 'claude-sonnet-5');
+    setEffortOverride('anthropic', 'review', 'medium');
+
+    setModelOverride('anthropic', 'review', null);
+    expect(useAiConfigStore.getState().modelOverrides).toEqual({
+      anthropic: { review: { effort: 'medium' } },
+    });
+
+    setEffortOverride('anthropic', 'review', null);
+    // 마지막 필드까지 빠지면 빈 껍데기를 남기지 않고 키째 사라진다.
+    expect(useAiConfigStore.getState().modelOverrides).toEqual({});
+  });
+
+  it('저장 대상(partialize)에 지정이 포함된다', () => {
+    // 여기서 빠지면 앱을 껐다 켤 때마다 다시 골라야 한다.
+    const { setModelOverride } = useAiConfigStore.getState();
+    setModelOverride('anthropic', 'review', 'claude-sonnet-5');
+
+    const persisted = JSON.parse(localStorage.getItem('ite-ai-config') ?? '{}');
+    expect(persisted.state?.modelOverrides).toEqual({
+      anthropic: { review: { model: 'claude-sonnet-5' } },
+    });
+  });
+
+  it('v15 → v16은 모델 문자열을 { model } 형태로 옮긴다', () => {
+    const migrated = migrateAiConfig(
+      { provider: 'anthropic', modelOverrides: { anthropic: { review: 'claude-sonnet-5' } } },
+      15,
+    );
+    expect(migrated.modelOverrides).toEqual({
+      anthropic: { review: { model: 'claude-sonnet-5' } },
+    });
+  });
+
+  it('전체 초기화는 모든 provider의 지정을 한 번에 걷어낸다', () => {
+    const { setModelOverride, clearModelOverrides } = useAiConfigStore.getState();
+    setModelOverride('anthropic', 'review', 'claude-sonnet-5');
+    setModelOverride('openai', 'polish', 'gpt-5.6-terra');
+
+    clearModelOverrides();
+
+    expect(useAiConfigStore.getState().modelOverrides).toEqual({});
+  });
+});

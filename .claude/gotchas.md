@@ -64,6 +64,11 @@ Critical implementation warnings learned from past issues.
 
 159. **선택 문맥의 "앞뒤 N칸"은 인덱스 구간이 아니다**: `selectedUnitRange`는 선택 유닛의 최소~최대 인덱스를 준다. 그 구간을 그대로 `selected`로 쓰면 떨어져 있는 선택(표 1·3열)에서 고르지 않은 2열이 "선택됨"으로 모델에 전달된다. 구간은 before/after 계산에만 쓰고 `selected`는 실제 id로 필터할 것(id가 없는 유닛은 판정 불가라 위치 기준으로 남긴다).
 
+160. **`usage_metadata.input_tokens`는 캐시를 포함한 총합이다**: 장부(`usageLedger`)에 들어가는 입력 토큰에는 캐시 read/write가 **이미 들어 있다** — Anthropic 어댑터가 `input_tokens + cache_creation + cache_read`를 합쳐 내보내고(`@langchain/anthropic` `buildUsageMetadata`), OpenAI는 `prompt_tokens` 자체가 `cached_tokens`를 포함한다. 이걸 "캐시 제외 순수 입력"으로 읽고 캐시 비용을 위에 더하면 캐시분을 두 번 청구하고(`pricing.estimateCost`), 토큰 합계도 부풀린다(`UsageSection.summarize`) — 캐시가 잘 맞을수록 오차가 커져서 절감 효과가 거꾸로 보인다. 장부는 provider 보고값 그대로 두고, 정가 구간 분리(`input - cacheRead - cacheCreation`, 0으로 클램프)는 환산 지점에서만 한다.
+
+161. **세션 pin은 provider 문자열이 아닐 수 있다**: `chat_sessions.model_preset`은 `provider[#model[#effort]]` 형태다(채팅 지정 스냅샷, ADR-0017) — `"anthropic"`, `"anthropic#claude-haiku-4-5"`, effort만 지정하면 `"anthropic##medium"`처럼 모델 구간이 빈다. 읽을 때는 `normalizeProvider()`(구분자 뒤를 잘라냄)와 `pinnedChatSpec()`을 쓸 것. pin을 provider로 단정하고 `session.modelPreset !== provider`로 비교하면 스냅샷이 붙은 세션이 hydrate마다 "안 맞는 값"으로 판정돼 provider만 남기고 깎이고, 그러면 **진행 중 대화가 다음 실행에서 현재 설정의 모델로 갈아타 캐시 프리픽스를 버린다.** 정규화가 필요하면 `normalizeSessionPin()`을 쓸 것 — 이미 정규형이면 같은 문자열을 그대로 돌려주므로 불필요한 되쓰기가 없다. **해석 규칙: 채팅에 pin이 있으면 pin이 유일한 권위이고 현재 지정은 보지 않는다.** 스냅샷 없는 pin을 "지정 없음"으로 읽고 현재 지정으로 채우면, 기능을 켜는 순간 존재하던 모든 세션이 다음 턴에 모델을 갈아탄다(`resolveModelRunConfig`).
+
+162. **`resolveModelForUse`는 지정을 인자로 받는다 — 스토어를 안 읽는다**: 순수 함수라 3번째 인자를 빠뜨리면 사용자의 모델 지정이 **조용히 무시된다**(에러도 경고도 없다). 실제로 요약 경로(`resolveSummaryModelRunConfig`)가 그래서 드롭다운이 아무 일도 안 했다. 스토어를 읽어야 하는 자리에서는 `getModelSpecForUse(provider, useFor)`를 쓸 것. 순수 버전은 테스트와, 이미 스토어를 손에 쥔 호출부(`getAiConfig` 등)에서만 쓴다.
 ## AbortController / Async
 
 21. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.

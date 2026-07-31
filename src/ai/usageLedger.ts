@@ -21,9 +21,16 @@ export type AiUsageFeature =
   | 'selection-retranslate'
   | 'summary';
 
-/** 캐시 read/write를 입력과 분리해 담는 정규화된 사용량. */
+/** 캐시 read/write 내역을 함께 담는 정규화된 사용량. */
 export interface AiUsageTokens {
-  /** 캐시 read/write를 제외한 순수 입력 토큰 */
+  /**
+   * **캐시 read/write를 포함한 총 입력 토큰.**
+   *
+   * LangChain `usage_metadata.input_tokens`가 그렇게 정의되어 있고 양쪽 provider 모두
+   * 그 규약을 따른다 — Anthropic은 `input_tokens + cache_creation + cache_read`를 합쳐 내보내고,
+   * OpenAI는 `prompt_tokens` 자체가 `cached_tokens`를 포함한다. 여기서 빼지 않는 이유는
+   * 장부를 provider 보고값 그대로 두기 위해서다. 정가 구간 분리는 `pricing.estimateCost`가 한다.
+   */
   inputTokens?: number | undefined;
   outputTokens?: number | undefined;
   cacheReadInputTokens?: number | undefined;

@@ -29,8 +29,23 @@ vi.mock('@/ai/config', () => ({
     model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-5.6-luna',
     effort: 'medium',
   }),
-  normalizeProvider: (v: string | undefined | null) =>
-    !v ? null : v === 'anthropic' || v === 'openai' ? v : v.startsWith('claude') ? 'anthropic' : 'openai',
+  getModelSpecForUse: (provider: string) => ({
+    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-5.6-luna',
+    effort: 'medium',
+  }),
+  normalizeProvider: (v: string | undefined | null) => {
+    if (!v) return null;
+    const head = v.split('#', 1)[0]!;
+    return head === 'anthropic' || head === 'openai'
+      ? head
+      : head.startsWith('claude')
+        ? 'anthropic'
+        : 'openai';
+  },
+  // 세션 pin 스텁 — 이 테스트는 모델 지정을 쓰지 않으므로 provider만 담긴 형태로 충분하다.
+  buildSessionPin: (provider: string) => provider,
+  normalizeSessionPin: (v: string | undefined | null, fallback: string) =>
+    !v ? fallback : v.split('#', 1)[0]!,
 }));
 
 vi.mock('@/ai/client', () => ({

@@ -7,7 +7,7 @@
  */
 import type { ChatMessage } from '@/types';
 import type { ModelRunConfig } from '@/ai/config';
-import { resolveModelForUse } from '@/ai/config';
+import { getModelSpecForUse } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { withRetry } from '@/ai/retry';
 
@@ -22,7 +22,7 @@ const SUMMARY_MAX_TOKENS = 4_096;
  */
 export function resolveSummaryModelRunConfig(base: ModelRunConfig): ModelRunConfig {
   if (base.provider !== 'openai' && base.provider !== 'anthropic') return base;
-  const spec = resolveModelForUse(base.provider, 'summary');
+  const spec = getModelSpecForUse(base.provider, 'summary');
   return Object.freeze({
     resolvedModel: spec.model,
     provider: base.provider,

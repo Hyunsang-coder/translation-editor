@@ -1,8 +1,13 @@
 # ADR-0012: 모델 선택을 provider 하나로 줄이고, 용도별 모델·effort는 앱이 고정한다
 
-- **Status**: Accepted
+- **Status**: Accepted — 일부 수정됨 ([ADR-0017](0017-model-override-for-evaluation.md), 2026-07-31)
 - **Date**: 2026-07-30
 - **관련**: [작업 계획](../provider-only-model-selection-plan.md), [ADR-0005](0005-fixed-context-snapshot-per-workflow.md)
+
+> **ADR-0017이 아래 Consequences의 "사용자가 모델을 직접 고를 수 없다" 한 줄을 뒤집었다.**
+> 평가 목적의 용도별 모델 지정이 Settings에 생겼다. 다만 이 ADR의 핵심 — 사용자가 고르는
+> 값은 provider 하나이고 **기본값·effort·선택 가능 목록은 앱이 고정한다** — 는 그대로다.
+> 기각한 대안 4건(증분 검수 / effort 차등화 / 채팅=번역 통일 / 폴리싱만 medium)도 유효하다.
 
 ## Context
 
@@ -54,6 +59,11 @@ provider가 비활성이면 `presets[0]`(= Opus 5)로 말없이 교체된다(`co
 | `polish` (신설) | `claude-sonnet-5` · high | `gpt-5.6-luna` · high |
 | `chat` | `claude-sonnet-5` · high | `gpt-5.6-luna` · high |
 | `summary` (내부, 비노출) | `claude-sonnet-5` · **medium** | `gpt-5.6-luna` · **medium** |
+
+> 표는 이 ADR 작성 시점(v13)의 값이다. 이 ADR이 고정하는 것은 **"사용자는 provider만 고르고
+> 용도별 모델은 앱이 정한다"는 구조**이지 개별 모델 선택이 아니다 — 칸 안의 값은 단가·벤치마크가
+> 바뀌면 따라 움직인다. 현재 값은 항상 `MODEL_BY_USE`가 진실이다.
+> (2026-07-30 개편 후 OpenAI `review`는 `gpt-5.6-sol` → `gpt-5.6-terra`로 옮겼다.)
 
 - `MODEL_PRESETS` / `resolveModelFromPreset` 폐기 → `resolveModelForUse(provider, useFor)`.
 - **Haiku 4.5 완전 제거.** 요약이 Sonnet 5 · medium으로 옮겨가 남길 이유가 없다.

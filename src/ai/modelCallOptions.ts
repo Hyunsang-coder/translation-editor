@@ -29,6 +29,16 @@ function isSonnet5(model: string): boolean {
 }
 
 /**
+ * 이 모델이 effort(`output_config.effort` / `reasoning_effort`)를 받는가.
+ *
+ * Haiku 4.5처럼 받지 않는 모델에 보내면 400이 난다. UI가 effort 선택을 열지 말지도
+ * 이 판정을 쓴다 — 판정이 두 벌이 되면 "고를 수는 있는데 안 먹는" 칸이 생긴다.
+ */
+export function modelSupportsEffort(model: string): boolean {
+  return isOpus47Plus(model) || isSonnet5(model) || model.startsWith('gpt-5');
+}
+
+/**
  * cfg에 대한 모델 호출 옵션을 결정한다.
  *
  * 용도(useFor)별 차이는 `MODEL_BY_USE`가 이미 모델·`cfg.reasoningEffort`로 해석해 넘겨준다.

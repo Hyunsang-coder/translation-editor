@@ -59,11 +59,8 @@ function summarize(rows: UsageDailyRow[]): DaySummary[] {
       let hasUnpricedModel = false;
 
       for (const row of dayRows) {
-        totalTokens +=
-          row.inputTokens +
-          row.outputTokens +
-          row.cacheReadInputTokens +
-          row.cacheCreationInputTokens;
+        // inputTokens에 캐시 read/write가 이미 포함되어 있으므로 따로 더하지 않는다(중복 계상).
+        totalTokens += row.inputTokens + row.outputTokens;
         const cost = estimateCost(row.model, row);
         if (cost) {
           costUsd += cost.totalUsd;
