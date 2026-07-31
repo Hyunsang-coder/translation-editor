@@ -1,4 +1,4 @@
-import { Editor } from '@tiptap/react';
+import { Editor, useEditorState } from '@tiptap/react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
@@ -18,6 +18,10 @@ import {
   Minus,
   Plus,
   MoveVertical,
+  Table as TableIcon,
+  Rows3,
+  Columns3,
+  Trash2,
 } from 'lucide-react';
 
 interface TipTapMenuBarProps {
@@ -26,6 +30,24 @@ interface TipTapMenuBarProps {
 }
 
 const ICON_SIZE = 13;
+
+/**
+ * 표 행/열 편집 항목. i18n 키는 `editor.menuBar.<key>`.
+ * 셀 병합/분할은 의도적으로 제외 — 병합 셀은 번역 직렬화(raw HTML) 쪽 처리가 따로 필요하다.
+ */
+const TABLE_ACTIONS: ReadonlyArray<{
+  key: string;
+  Icon: typeof Rows3;
+  dividerBefore?: boolean;
+  run: (chain: ReturnType<Editor['chain']>) => void;
+}> = [
+  { key: 'tableAddRowBefore', Icon: Rows3, run: (c) => { c.addRowBefore().run(); } },
+  { key: 'tableAddRowAfter', Icon: Rows3, run: (c) => { c.addRowAfter().run(); } },
+  { key: 'tableDeleteRow', Icon: Trash2, run: (c) => { c.deleteRow().run(); } },
+  { key: 'tableAddColumnBefore', Icon: Columns3, dividerBefore: true, run: (c) => { c.addColumnBefore().run(); } },
+  { key: 'tableAddColumnAfter', Icon: Columns3, run: (c) => { c.addColumnAfter().run(); } },
+  { key: 'tableDeleteColumn', Icon: Trash2, run: (c) => { c.deleteColumn().run(); } },
+];
 
 /**
  * TipTap 에디터 포맷팅 메뉴바
@@ -51,6 +73,24 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
   const adjustLineHeight = panelType === 'source' ? adjustSourceLineHeight : adjustTargetLineHeight;
 
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
+  const [tableMenuOpen, setTableMenuOpen] = useState(false);
+
+  // 표 메뉴는 커서가 표 안에 있을 때만 쓸 수 있다. isActive는 렌더 시점 값이라
+  // 선택이 바뀌어도 갱신되지 않으므로, 이 값만 구독해 다시 그린다.
+  const inTable = useEditorState({
+    editor,
+    selector: ({ editor: e }) => e?.isActive('table') ?? false,
+  }) ?? false;
+
+  // 표 명령은 모두 같은 형태다(포커스 → 명령 → 메뉴 닫기).
+  const runTableCommand = useCallback(
+    (run: (chain: ReturnType<Editor['chain']>) => void) => {
+      if (!editor) return;
+      run(editor.chain().focus());
+      setTableMenuOpen(false);
+    },
+    [editor],
+  );
 
   const setHeading = useCallback(
     (level: 1 | 2 | 3 | 4 | 5 | 6) => {
@@ -234,6 +274,54 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
       >
         <Quote size={ICON_SIZE} />
       </button>
+
+      {/* 구분선 */}
+      <div className="w-px h-5 bg-editor-border mx-1" />
+
+      {/* 표 행/열 편집 — 커서가 표 안에 있을 때만 활성화된다 */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setTableMenuOpen(!tableMenuOpen)}
+          disabled={!inTable}
+          className={`${btnBase} ${tableMenuOpen ? btnActive : ''} disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent`}
+          title={inTable ? t('editor.menuBar.table') : t('editor.menuBar.tableDisabledTitle')}
+          aria-label={t('editor.menuBar.table')}
+          aria-haspopup="menu"
+          aria-expanded={tableMenuOpen}
+        >
+          <TableIcon size={ICON_SIZE} />
+        </button>
+        {tableMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setTableMenuOpen(false)}
+            />
+            <div
+              className="absolute top-full left-0 mt-1 bg-editor-surface border border-editor-border rounded shadow-lg z-50 min-w-[150px] py-0.5"
+              role="menu"
+              aria-label={t('editor.menuBar.table')}
+            >
+              {TABLE_ACTIONS.map(({ key, Icon, dividerBefore, run }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runTableCommand(run)}
+                  className={`
+                    flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-editor-bg transition-colors
+                    ${dividerBefore ? 'border-t border-editor-border' : ''}
+                  `}
+                >
+                  <Icon size={13} />
+                  <span>{t(`editor.menuBar.${key}`)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* 구분선 */}
       <div className="w-px h-5 bg-editor-border mx-1" />
