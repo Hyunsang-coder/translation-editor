@@ -22,7 +22,6 @@ vi.mock('@/stores/projectStore', () => ({
 }));
 
 const setRulesSpy = vi.fn();
-const setContextSpy = vi.fn();
 const appendRulesSpy = vi.fn();
 
 vi.mock('@/stores/chatStore', () => ({
@@ -32,8 +31,6 @@ vi.mock('@/stores/chatStore', () => ({
       projectContext: '',
       setTranslationRules: setRulesSpy,
       appendToTranslationRules: appendRulesSpy,
-      setProjectContext: setContextSpy,
-      appendToProjectContext: vi.fn(),
     }),
   },
 }));
@@ -355,7 +352,6 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
   beforeEach(() => {
     initializeOddEyesAppBridge();
     setRulesSpy.mockClear();
-    setContextSpy.mockClear();
     appendRulesSpy.mockClear();
   });
 
@@ -365,7 +361,6 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
     }) as Record<string, unknown>;
     expect(res.updated).toEqual(['translationRules']);
     expect(setRulesSpy).toHaveBeenCalledWith('rule A');
-    expect(setContextSpy).not.toHaveBeenCalled();
   });
 
   it('mode=append는 appendTo* 호출', async () => {
@@ -394,7 +389,6 @@ describe('oddeyesAppBridge — setTranslationContext', () => {
       projectContext: '죽은 값',
     }) as Record<string, unknown>;
     expect(res.updated).toEqual([]);
-    expect(setContextSpy).not.toHaveBeenCalled();
   });
 
   it('mode=append에서 빈 문자열은 스킵', async () => {

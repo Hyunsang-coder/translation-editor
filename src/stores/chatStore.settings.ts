@@ -142,8 +142,13 @@ export function createSettingsActions(
 ) {
   const { schedulePersist } = helpers;
 
+  const setTranslationRules = (rules: string): void => {
+    set({ translationRules: rules });
+    schedulePersist();
+  };
+
   /**
-   * 세미콜론 구분 스니펫을 불릿 포인트로 변환해 기존 필드에 추가.
+   * 세미콜론 구분 스니펫을 불릿 포인트로 변환해 번역 규칙에 추가.
    *
    * 이미 있는 항목은 붙이지 않는다 — 이 블롭은 상한 없이 매 번역·검수 요청에 전량
    * 주입되므로 중복이 쌓이면 그대로 모든 요청의 소음이 된다. 프로젝트 메모리는 DB가
@@ -151,13 +156,10 @@ export function createSettingsActions(
    *
    * @returns 실제로 추가된 항목이 있으면 true (전부 중복이면 false)
    */
-  const appendFormattedSnippet = (
-    fieldName: 'translationRules' | 'projectContext',
-    snippet: string,
-  ): boolean => {
+  const appendToTranslationRules = (snippet: string): boolean => {
     const incoming = snippet.trim();
     if (!incoming) return false;
-    const current = (get()[fieldName] as string).trim();
+    const current = get().translationRules.trim();
     const seen = new Set(
       current.split('\n').map(normalizeSnippetLine).filter(Boolean),
     );
@@ -172,27 +174,10 @@ export function createSettingsActions(
     if (additions.length === 0) return false;
 
     const formatted = additions.join('\n');
-    const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
-    set({ [fieldName]: next });
+    set({ translationRules: current.length > 0 ? `${current}\n\n${formatted}` : formatted });
     schedulePersist();
     return true;
   };
-
-  const setTranslationRules = (rules: string): void => {
-    set({ translationRules: rules });
-    schedulePersist();
-  };
-
-  const appendToTranslationRules = (snippet: string): boolean =>
-    appendFormattedSnippet('translationRules', snippet);
-
-  const setProjectContext = (memory: string): void => {
-    set({ projectContext: memory });
-    schedulePersist();
-  };
-
-  const appendToProjectContext = (snippet: string): boolean =>
-    appendFormattedSnippet('projectContext', snippet);
 
   const setWebSearchEnabled = (enabled: boolean): void => {
     set({ webSearchEnabled: enabled });
@@ -223,8 +208,6 @@ export function createSettingsActions(
   return {
     setTranslationRules,
     appendToTranslationRules,
-    setProjectContext,
-    appendToProjectContext,
     setWebSearchEnabled,
     setConfluenceSearchEnabled,
     setTranslationContextSessionId,

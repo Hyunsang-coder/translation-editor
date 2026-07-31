@@ -489,38 +489,3 @@ export async function buildLangChainMessages(
   });
 }
 
-// ============================================
-// 번역 전용 프롬프트 빌더 (간결한 응답)
-// ============================================
-
-export async function buildTranslateOnlyMessages(
-  sourceText: string,
-  opts?: {
-    targetLanguage?: string;
-    translationRules?: string;
-    projectContext?: string;
-  },
-): Promise<BaseMessage[]> {
-  const tgtLang = opts?.targetLanguage ?? 'Target';
-
-  const systemPrompt = [
-    '당신은 경험많은 전문 번역가입니다.',
-    `다음 원문을 ${tgtLang}로 자연스럽게 번역하세요.`,
-    '',
-    '중요: 번역문만 출력하세요.',
-    '- 설명, 인사, 부연 없이 오직 번역 결과만 응답합니다.',
-    '- 고유명사, 태그, 변수는 그대로 유지합니다.',
-    opts?.translationRules ? `\n[번역 규칙]\n${opts.translationRules}` : '',
-    opts?.projectContext ? `\n[Project Context]\n${opts.projectContext}` : '',
-  ].filter(Boolean).join('\n');
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    ['system', '{systemPrompt}'],
-    ['human', '{input}'],
-  ]);
-
-  return await prompt.formatMessages({
-    systemPrompt,
-    input: sourceText,
-  });
-}

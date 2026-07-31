@@ -337,8 +337,10 @@ export const reviewTranslationTool = tool(
       throw new Error('원문 또는 번역문이 없습니다. 문서를 먼저 로드해주세요.');
     }
 
-    // Translation Rules, Project Context, Attachments 가져오기
-    const { translationRules, projectContext, attachments } = useChatStore.getState();
+    // Translation Rules, Attachments 가져오기.
+    // legacy projectContext는 넘기지 않는다 — 프로젝트를 열 때 구조화 메모리 항목으로
+    // 변환되고, 그 항목은 이미 채팅 시스템 프롬프트의 [프로젝트 메모리]에 실린다.
+    const { translationRules, attachments } = useChatStore.getState();
 
     // 전체 청크 텍스트를 윈도우 검색해 후반 용어 누락을 줄인다.
     // (도구는 첫 호출에서 glossary를 한 번 제공; get_review_chunk는 세그먼트만 반환)
@@ -378,7 +380,6 @@ export const reviewTranslationTool = tool(
         })),
       },
       translationRules: translationRules?.trim() || undefined,
-      projectContext: projectContext?.trim() || undefined,
       glossary: glossaryText || undefined,
       attachments: attachmentsText || undefined,
       note: chunks.length > 1

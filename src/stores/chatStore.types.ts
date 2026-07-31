@@ -62,6 +62,11 @@ export interface ChatState {
   /** 외부 append 이벤트 (Cmd+L 등) → ChatContent가 subscribe로 소비 */
   pendingComposerAppend: PendingComposerAppend | null;
   translationRules: string;
+  /**
+   * 마이그레이션 전용 레거시 필드. 새로 쓰는 경로는 없다 — hydrate가 DB에서 읽어
+   * `projectMemoryStore.hydrate`에 넘기면 구조화 메모리 항목으로 1회 변환된다.
+   * `buildContextSnapshot`은 변환 실패 시에만 이 값을 폴백으로 쓴다.
+   */
   projectContext: string;
   /** 웹검색 사용 여부 (tool availability gate) */
   webSearchEnabled: boolean;
@@ -145,8 +150,6 @@ export interface ChatActions {
   setTranslationRules: (rules: string) => void;
   /** @returns 실제로 추가된 항목이 있으면 true (전부 중복이면 false) */
   appendToTranslationRules: (snippet: string) => boolean;
-  setProjectContext: (memory: string) => void;
-  appendToProjectContext: (snippet: string) => boolean;
   setWebSearchEnabled: (enabled: boolean) => void;
   setConfluenceSearchEnabled: (enabled: boolean, targetSessionId?: string) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;
