@@ -143,9 +143,10 @@ export interface ChatActions {
   setError: (error: string | null) => void;
   setStatusMessage: (message: string | null) => void;
   setTranslationRules: (rules: string) => void;
-  appendToTranslationRules: (snippet: string) => void;
+  /** @returns 실제로 추가된 항목이 있으면 true (전부 중복이면 false) */
+  appendToTranslationRules: (snippet: string) => boolean;
   setProjectContext: (memory: string) => void;
-  appendToProjectContext: (snippet: string) => void;
+  appendToProjectContext: (snippet: string) => boolean;
   setWebSearchEnabled: (enabled: boolean) => void;
   setConfluenceSearchEnabled: (enabled: boolean, targetSessionId?: string) => void;
   setTranslationContextSessionId: (sessionId: string | null) => void;

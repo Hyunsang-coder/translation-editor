@@ -42,6 +42,7 @@ import {
   reattachTranslationUnitIds,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 
 // TipTapDocJson 타입을 re-export
 export type { TipTapDocJson };
@@ -217,7 +218,7 @@ function buildTranslationSetup(params: {
       : params.translationRules
   )?.trim();
   if (rules) {
-    systemLines.push('[번역 규칙]', rules, '');
+    systemLines.push('[번역 규칙]', KNOWLEDGE_DIRECTIVES.translationRules, rules, '');
   }
 
   const projectContext = (
@@ -226,17 +227,12 @@ function buildTranslationSetup(params: {
       : params.projectContext
   )?.trim();
   if (projectContext) {
-    systemLines.push('[Project Context]', projectContext, '');
+    systemLines.push('[Project Context]', KNOWLEDGE_DIRECTIVES.projectMemory, projectContext, '');
   }
 
   const forbiddenTerms = params.resolvedContext?.rendered.forbiddenTerms?.trim();
   if (forbiddenTerms) {
-    systemLines.push(
-      '[금지 용어]',
-      '아래 용어는 번역문에 사용하지 마세요. 대체어가 있으면 반드시 대체어를 사용하세요:',
-      forbiddenTerms,
-      '',
-    );
+    systemLines.push('[금지 용어]', KNOWLEDGE_DIRECTIVES.forbiddenTerms, forbiddenTerms, '');
   }
 
   const glossary = (
@@ -245,7 +241,7 @@ function buildTranslationSetup(params: {
       : params.glossary
   )?.trim();
   if (glossary) {
-    systemLines.push('[용어집]', '아래 용어집의 번역을 준수하세요:', glossary, '');
+    systemLines.push('[용어집]', KNOWLEDGE_DIRECTIVES.glossary, glossary, '');
   }
 
   // 검수 이슈 (재번역 시)

@@ -7,6 +7,7 @@ import type {
 } from '@/types';
 import { hashContent } from '@/utils/hash';
 import { approxTokens } from '@/ai/chatContext/tokenBudget';
+import { formatGlossaryForPrompt } from '@/utils/glossaryInject';
 import {
   formatForbiddenTermLine,
   renderSnapshotMemory,
@@ -21,6 +22,21 @@ interface ResolveWorkflowContextFromSnapshotInput {
   mode: WorkflowContextMode;
   snapshot: ContextSnapshot;
   referenceOptions?: ContextReferenceOptions;
+}
+
+/**
+ * 용어집 notes 항목당 상한.
+ *
+ * 워크플로우는 30~40개 항목을 한 번에 주입하므로 notes에 상한이 없으면 용어집만으로
+ * 프롬프트가 불어난다. 판단 근거는 앞부분에 오므로 잘라도 쓸모가 남는다.
+ */
+const GLOSSARY_NOTE_MAX_CHARS = 100;
+
+function truncateNote(note: string): string {
+  const trimmed = note.trim();
+  return trimmed.length > GLOSSARY_NOTE_MAX_CHARS
+    ? `${trimmed.slice(0, GLOSSARY_NOTE_MAX_CHARS)}...`
+    : trimmed;
 }
 
 function includeAll(mode: WorkflowContextMode): boolean {
@@ -70,9 +86,15 @@ export function resolveWorkflowContextFromSnapshot(
     included.push('forbidden-terms');
   }
   if (useGlossary && snapshot.glossaryEntries.length > 0) {
-    rendered.glossary = snapshot.glossaryEntries
-      .map((entry) => `${entry.source} = ${entry.target}`)
-      .join('\n');
+    // notes(동음이의 판단 근거)를 버리지 않는다 — 채팅 도구는 이미 넣고 있어서,
+    // 버리면 같은 검수를 채팅으로 하느냐 패널로 하느냐에 따라 근거가 달라진다.
+    rendered.glossary = formatGlossaryForPrompt(
+      snapshot.glossaryEntries.map(({ source, target, notes }) => ({
+        source,
+        target,
+        ...(notes ? { notes: truncateNote(notes) } : {}),
+      })),
+    );
     included.push('glossary');
   }
 

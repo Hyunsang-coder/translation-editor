@@ -267,13 +267,30 @@ function buildToolGuideMessage(params: {
   if (has('propose_selection_edit')) {
     toolGuide.push('- propose_selection_edit: Target 선택 수정안을 구조화해 제안. 문서를 직접 변경하지 않음.');
   }
-  if (has('propose_project_memory_change')) {
-    toolGuide.push('- propose_project_memory_change: 장기 프로젝트 메모리 변경을 제안. 직접 저장하지 않음.');
-  }
-
-  // 제안 도구
-  if (has('suggest_translation_rule')) {
-    toolGuide.push('- suggest_translation_rule: Translation Rules 저장 제안 생성(정의/구분은 tool description을 따른다)');
+  // 저장 제안 도구 — 도구별 설명을 늘어놓는 대신 "무엇을 어디에"를 한 곳에 모은다.
+  // 잘못 고르면 비용이 여기서 끝나지 않는다: 용어집·금칙어는 구조화 저장이라 문서에
+  // 나올 때만 실리지만, 규칙·메모리는 블롭이라 이후 모든 번역·검수에 전량 실린다.
+  const knowledgeProposalTools = [
+    'suggest_glossary_entry',
+    'suggest_forbidden_term',
+    'suggest_translation_rule',
+    'propose_project_memory_change',
+  ].filter(has);
+  if (knowledgeProposalTools.length > 0) {
+    toolGuide.push('- 저장 제안 도구 — 넣을 곳을 먼저 고르세요(모두 제안만 하며, 사용자가 승인해야 저장됩니다):');
+    if (has('suggest_glossary_entry')) {
+      toolGuide.push('  · 원문 A를 번역 B로 고정 → suggest_glossary_entry');
+    }
+    if (has('suggest_forbidden_term')) {
+      toolGuide.push('  · 번역문에 쓰면 안 되는 표현 → suggest_forbidden_term');
+    }
+    if (has('suggest_translation_rule')) {
+      toolGuide.push('  · 문체·서식·표기 규칙 → suggest_translation_rule');
+    }
+    if (has('propose_project_memory_change')) {
+      toolGuide.push('  · 제품·독자·세계관 같은 배경 사실 → propose_project_memory_change');
+    }
+    toolGuide.push('  · 사용자가 명시적으로 요청했거나 대화에서 합의된 내용만 제안하세요. 추측으로 제안하지 마세요.');
   }
   // 웹 검색
   if (has('web_search')) {
@@ -332,10 +349,10 @@ function buildToolGuideMessage(params: {
     priority++;
   }
 
-  if (has('suggest_translation_rule')) {
-    toolGuide.push(`${priority}. 번역 스타일/포맷 규칙 발견`);
-    toolGuide.push('   → suggest_translation_rule');
-    toolGuide.push('   → 응답: "[Add to Rules] 버튼을 눌러 추가하세요"');
+  if (knowledgeProposalTools.length > 0) {
+    toolGuide.push(`${priority}. 다음 작업에도 남길 지식이 확인됨 (용어·금칙어·규칙·배경 사실)`);
+    toolGuide.push('   → 위 "저장 제안 도구"의 분류에 맞는 도구를 호출');
+    toolGuide.push('   → 응답: 저장됐다고 말하지 말고 승인 버튼을 안내');
     toolGuide.push('');
     priority++;
   }

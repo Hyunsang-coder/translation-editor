@@ -18,6 +18,7 @@ import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { mergeUsageFromChunk, recordAiUsage, type AiUsageTokens } from '@/ai/usageLedger';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 import type { ResolvedWorkflowContext } from '@/types';
 
 export interface RunReviewParams {
@@ -70,18 +71,16 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   const forbiddenTerms = params.resolvedContext?.rendered.forbiddenTerms?.trim();
 
   if (glossary) {
-    systemParts.push(`## 용어집\n${glossary}`);
+    systemParts.push(`## 용어집\n${KNOWLEDGE_DIRECTIVES.glossary}\n${glossary}`);
   }
   if (translationRules) {
-    systemParts.push(`## 번역 규칙\n${translationRules}`);
+    systemParts.push(`## 번역 규칙\n${KNOWLEDGE_DIRECTIVES.translationRules}\n${translationRules}`);
   }
   if (projectContext) {
-    systemParts.push(`## 프로젝트 컨텍스트\n${projectContext}`);
+    systemParts.push(`## 프로젝트 컨텍스트\n${KNOWLEDGE_DIRECTIVES.projectMemory}\n${projectContext}`);
   }
   if (forbiddenTerms) {
-    systemParts.push(
-      `## 금지 용어\n아래 용어는 번역문에서 허용되지 않습니다. 대체어가 있으면 사용하세요.\n${forbiddenTerms}`,
-    );
+    systemParts.push(`## 금지 용어\n${KNOWLEDGE_DIRECTIVES.forbiddenTerms}\n${forbiddenTerms}`);
   }
 
   const systemPrompt = systemParts.join('\n\n');

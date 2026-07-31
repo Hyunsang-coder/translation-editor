@@ -11,6 +11,7 @@ import {
 } from '@/ai/translateDocument';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 import {
   createMockChatModel,
   createMockAiConfig,
@@ -239,6 +240,19 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(systemPrompt).not.toContain('legacy rule');
       expect(systemPrompt).not.toContain('legacy context');
       expect(systemPrompt).not.toContain('legacy glossary');
+    });
+
+    it('주입된 지식 섹션마다 사용 지시문이 붙는다', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await translateWithStreaming({ project: mockProject, sourceDocJson, resolvedContext });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content);
+      for (const directive of Object.values(KNOWLEDGE_DIRECTIVES)) {
+        expect(systemPrompt).toContain(directive);
+      }
     });
 
     it('번역 중 취소 (AbortSignal)', async () => {

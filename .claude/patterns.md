@@ -869,3 +869,5 @@ projectMemoryStore + translationRules + enabled forbidden terms + matched glossa
 - Review resolves one snapshot before the chunk loop and passes the same `ResolvedWorkflowContext` to every chunk.
 - `ContextManifest` stores only audit IDs/hashes/token estimates, not duplicated full context strings.
 - If structured memory is empty, `legacyProjectContext` is preserved as the explicit `legacy-project-context` fallback until migration succeeds.
+- Glossary entries carry `notes` through the snapshot; the resolver renders them via `formatGlossaryForPrompt` with a per-note cap. Notes are the disambiguation basis — dropping them made the same review return different grounds depending on whether it started from chat or the panel.
+- Every injected knowledge section needs a usage directive, not just a heading. Korean prompts (translate, review) use `KNOWLEDGE_DIRECTIVES` in `projectKnowledgeRender.ts`; polish and selection retranslation are English-only prompts and keep their directives inline — do not add a language parameter to share one sentence.

@@ -35,7 +35,14 @@ export const proposeProjectMemoryChange = tool(
         'general',
       ]),
       content: z.string().min(1).max(5_000).optional(),
-      targetItemId: z.string().optional(),
+      targetItemId: z
+        .string()
+        .optional()
+        .describe(
+          'replace/delete에 필요한 기존 항목 id. '
+          + 'get_project_guidance로 project_memory를 조회해 얻은 id만 사용하세요. '
+          + '조회하지 않았다면 id를 만들어내지 말고 operation을 add로 두세요.',
+        ),
       reason: z.string().max(2_000).optional(),
     }),
   },

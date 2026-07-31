@@ -301,8 +301,14 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
   }, [deleteMessageFrom, sessionId]);
 
   const handleAppendToRules = useCallback((content: string) => {
-    appendToTranslationRules(content);
-  }, [appendToTranslationRules]);
+    // 전부 중복이면 아무것도 바뀌지 않는다. 카드는 사라지므로 이유를 알려준다.
+    if (!appendToTranslationRules(content)) {
+      addToast({
+        type: 'info',
+        message: t('chat.ruleAlreadyExists', '이미 번역 규칙에 있는 내용입니다.'),
+      });
+    }
+  }, [appendToTranslationRules, addToast, t]);
 
   const handleUpdateMessageMetadata = useCallback((messageId: string, metadata: Partial<ChatMessageMetadata>) => {
     updateMessage(messageId, { metadata }, sessionId);

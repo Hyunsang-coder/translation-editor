@@ -8,6 +8,24 @@ import { memoryItemLimit, selectMemoryItems } from './projectMemoryPolicy';
 type RenderableMemoryItem = Pick<ProjectMemoryItem, 'category' | 'content'>;
 type RenderableForbiddenTerm = Pick<ForbiddenTerm, 'term' | 'replacement' | 'note'>;
 
+/**
+ * 프로젝트 지식 섹션의 사용 지시문.
+ *
+ * 섹션 제목만 있고 "이걸 어떻게 쓰라"가 없으면 모델이 참고 목록으로 읽을지 지켜야 할
+ * 기준으로 읽을지가 운에 달린다. 번역과 검수가 같은 문장을 보도록 여기 모은다.
+ * 두 워크플로우가 같이 쓰므로 "번역하라"가 아니라 "기준이다"로 적는다.
+ *
+ * 폴리싱·선택 재번역은 프롬프트 전체가 영어라 각 파일에 영어로 둔다 — 한 문장을
+ * 억지로 공유하려고 언어 파라미터를 만들면 프롬프트가 한/영 혼용이 된다.
+ */
+export const KNOWLEDGE_DIRECTIVES = {
+  glossary: '아래 용어집의 번역이 이 프로젝트의 확정 번역입니다. 동의어로 대체하지 마세요.',
+  forbiddenTerms: '아래 용어는 번역문에 쓸 수 없습니다. 대체어가 있으면 반드시 대체어를 사용하세요.',
+  translationRules: '아래 번역 규칙이 이 프로젝트의 기준입니다. 일반적인 관례와 충돌하면 이 규칙을 우선합니다.',
+  projectMemory:
+    '아래는 배경 지식입니다. 용어 선택과 톤을 정하는 데만 사용하고, 이 내용을 번역문에 새로 추가하지 마세요.',
+} as const;
+
 export function formatMemoryLine(item: RenderableMemoryItem): string {
   return `- [${item.category}] ${item.content}`;
 }

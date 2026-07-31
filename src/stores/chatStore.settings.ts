@@ -125,6 +125,16 @@ export function createComposerActions(
 
 // ── Settings Actions ───────────────────────────────────────────────────
 
+/** 중복 판정용 정규화. 불릿 접두사·공백·대소문자 차이는 같은 항목으로 본다. */
+function normalizeSnippetLine(line: string): string {
+  return line
+    .replace(/^[-•*]\s*/, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase();
+}
+
 export function createSettingsActions(
   set: ChatSet,
   get: ChatGet,
@@ -132,23 +142,40 @@ export function createSettingsActions(
 ) {
   const { schedulePersist } = helpers;
 
-  /** 세미콜론 구분 스니펫을 불릿 포인트로 변환해 기존 필드에 추가 */
+  /**
+   * 세미콜론 구분 스니펫을 불릿 포인트로 변환해 기존 필드에 추가.
+   *
+   * 이미 있는 항목은 붙이지 않는다 — 이 블롭은 상한 없이 매 번역·검수 요청에 전량
+   * 주입되므로 중복이 쌓이면 그대로 모든 요청의 소음이 된다. 프로젝트 메모리는 DB가
+   * normalized_hash로 이미 같은 판정을 하므로, 판정 기준(공백 정규화 + 소문자)을 맞춘다.
+   *
+   * @returns 실제로 추가된 항목이 있으면 true (전부 중복이면 false)
+   */
   const appendFormattedSnippet = (
     fieldName: 'translationRules' | 'projectContext',
     snippet: string,
-  ): void => {
+  ): boolean => {
     const incoming = snippet.trim();
-    if (!incoming) return;
-    const formatted = incoming
-      .split(';')
-      .map((r) => r.trim())
-      .filter(Boolean)
-      .map((r) => `- ${r}`)
-      .join('\n');
+    if (!incoming) return false;
     const current = (get()[fieldName] as string).trim();
+    const seen = new Set(
+      current.split('\n').map(normalizeSnippetLine).filter(Boolean),
+    );
+
+    const additions: string[] = [];
+    for (const rule of incoming.split(';').map((r) => r.trim()).filter(Boolean)) {
+      const key = normalizeSnippetLine(rule);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      additions.push(`- ${rule}`);
+    }
+    if (additions.length === 0) return false;
+
+    const formatted = additions.join('\n');
     const next = current.length > 0 ? `${current}\n\n${formatted}` : formatted;
     set({ [fieldName]: next });
     schedulePersist();
+    return true;
   };
 
   const setTranslationRules = (rules: string): void => {
@@ -156,7 +183,7 @@ export function createSettingsActions(
     schedulePersist();
   };
 
-  const appendToTranslationRules = (snippet: string): void =>
+  const appendToTranslationRules = (snippet: string): boolean =>
     appendFormattedSnippet('translationRules', snippet);
 
   const setProjectContext = (memory: string): void => {
@@ -164,7 +191,7 @@ export function createSettingsActions(
     schedulePersist();
   };
 
-  const appendToProjectContext = (snippet: string): void =>
+  const appendToProjectContext = (snippet: string): boolean =>
     appendFormattedSnippet('projectContext', snippet);
 
   const setWebSearchEnabled = (enabled: boolean): void => {

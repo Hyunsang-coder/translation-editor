@@ -735,6 +735,7 @@
     "deleteAfterEdit": "Delete (deletes later messages)",
     "addToRules": "Add this content to Translation Rules",
     "addToRulesButton": "Add to Rules",
+    "ruleAlreadyExists": "This is already in your Translation Rules.",
     "suggestedRule": "Suggested Rule",
     "deleteConfirmMessage": "All messages after this will be deleted. Continue?",
     "deleteConfirmTitle": "Delete Conversation",

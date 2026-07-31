@@ -327,6 +327,8 @@ export interface ContextSnapshot {
     id: string;
     source: string;
     target: string;
+    /** 동음이의 판단 근거. 주입 시 항목당 상한이 적용된다(resolveWorkflowContext). */
+    notes?: string;
   }>;
   createdAt: number;
 }

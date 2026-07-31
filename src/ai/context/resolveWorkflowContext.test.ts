@@ -109,6 +109,30 @@ describe('workflow context snapshot', () => {
     expect(resolved.manifest.glossaryEntryIds).toEqual(['g1']);
   });
 
+  it('용어집 notes를 주입에 포함하고 항목당 상한으로 자른다', () => {
+    const longNote = '가'.repeat(150);
+    const snapshot = buildContextSnapshot({
+      revision: 3,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [
+        { id: 'g1', source: 'Bolt', target: '볼트', notes: '전기 부품 아님, 무기 이름' },
+        { id: 'g2', source: 'Cloud', target: '클라우드', notes: longNote },
+        { id: 'g3', source: 'Raid', target: '레이드', notes: null },
+      ],
+      createdAt: 100,
+    });
+    const resolved = resolveWorkflowContextFromSnapshot({ mode: 'full-translate', snapshot });
+
+    expect(resolved.rendered.glossary).toContain('Bolt = 볼트 (전기 부품 아님, 무기 이름)');
+    // notes 없는 항목은 괄호를 붙이지 않는다
+    expect(resolved.rendered.glossary).toContain('- Raid = 레이드');
+    expect(resolved.rendered.glossary).not.toContain('- Raid = 레이드 (');
+    expect(resolved.rendered.glossary).not.toContain(longNote);
+    expect(resolved.rendered.glossary).toContain(`${'가'.repeat(100)}...`);
+  });
+
   it('메모리가 상한을 넘으면 우선순위대로 잘라내고 manifest가 실제 주입분과 일치한다 (D6)', () => {
     const many = Array.from({ length: 45 }, (_, index) => ({
       id: `fact-${index}`,

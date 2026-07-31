@@ -62,11 +62,37 @@ function buildOptionalContext(input: RetranslateSelectionInput): {
     referenceOptions: input.referenceOptions,
   });
 
+  // 제목만 주면 모델이 "참고 목록"으로 읽을지 "지켜야 할 기준"으로 읽을지가 운에 달린다.
+  // 이 프롬프트는 전체가 영어라 KNOWLEDGE_DIRECTIVES(한국어) 대신 영어로 둔다.
   const sections: string[] = [];
-  if (rendered.projectMemory) sections.push('[Project Memory]', rendered.projectMemory);
-  if (rendered.translationRules) sections.push('[Translation Rules]', rendered.translationRules);
-  if (rendered.forbiddenTerms) sections.push('[Forbidden Terms]', rendered.forbiddenTerms);
-  if (rendered.glossary) sections.push('[Glossary]', rendered.glossary);
+  if (rendered.projectMemory) {
+    sections.push(
+      '[Project Memory]',
+      'Background only. Use it for terminology and tone; do not add its content to the translation.',
+      rendered.projectMemory,
+    );
+  }
+  if (rendered.translationRules) {
+    sections.push(
+      '[Translation Rules]',
+      'These rules take precedence over general convention.',
+      rendered.translationRules,
+    );
+  }
+  if (rendered.forbiddenTerms) {
+    sections.push(
+      '[Forbidden Terms]',
+      'Never use these terms. Use the given replacement when one is provided.',
+      rendered.forbiddenTerms,
+    );
+  }
+  if (rendered.glossary) {
+    sections.push(
+      '[Glossary]',
+      'These are the project\'s settled translations. Do not substitute synonyms.',
+      rendered.glossary,
+    );
+  }
   const text = sections.join('\n\n');
 
   return {

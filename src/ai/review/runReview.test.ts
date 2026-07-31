@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';
 import { runReview } from './runReview';
 import { parseReviewResult } from './parseReviewResult';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 import type { ResolvedWorkflowContext } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -229,6 +230,44 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(userPrompt).toContain('## 사용자 코멘트');
       expect(userPrompt).not.toContain('## 용어집');
       expect(userPrompt).not.toContain('## 번역 규칙');
+    });
+
+    it('주입된 지식 섹션마다 사용 지시문이 붙는다', async () => {
+      await runReview({
+        segments: mockSegments,
+        resolvedContext: {
+          snapshot: {
+            revision: 1,
+            projectMemoryItems: [],
+            translationRules: '',
+            forbiddenTerms: [],
+            glossaryEntries: [],
+            createdAt: 1,
+          },
+          manifest: {
+            mode: 'review',
+            revision: 1,
+            projectMemoryItemIds: [],
+            forbiddenTermIds: [],
+            glossaryEntryIds: [],
+            included: [],
+          },
+          rendered: {
+            projectMemory: '- [audience] Enterprise admins',
+            translationRules: 'Use a formal tone.',
+            forbiddenTerms: '- simply → directly',
+            glossary: '- endpoint = endpoint',
+          },
+        },
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
+
+      const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content);
+      for (const directive of Object.values(KNOWLEDGE_DIRECTIVES)) {
+        expect(systemPrompt).toContain(directive);
+      }
     });
 
     it('여러 청크 순차 리뷰 (Phase 6.1 - Multiple chunks)', async () => {
