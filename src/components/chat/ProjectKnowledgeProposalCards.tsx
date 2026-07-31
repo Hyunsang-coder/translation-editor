@@ -74,10 +74,12 @@ export function ProjectKnowledgeProposalCards({
           key={proposal.proposalId}
           className="rounded-xl border border-editor-border bg-editor-bg p-3"
         >
+          {/* 카테고리는 제목 옆에 붙인다 — 한 줄을 통째로 쓸 만큼의 정보가 아니다. */}
           <div className="text-[10px] font-semibold uppercase text-editor-muted">
             {t('memory.proposalTitle', '프로젝트 메모리 업데이트 제안')}
+            {' · '}
+            {t(`memory.category.${proposal.category}`)}
           </div>
-          <div className="mt-1 text-xs text-editor-muted">{proposal.category}</div>
           {proposal.content && (
             <div className="mt-1 whitespace-pre-wrap text-sm text-editor-text">
               {proposal.content}

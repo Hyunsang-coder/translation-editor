@@ -251,7 +251,8 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('project-memory-settings')).toContainText(
       'Audience: enterprise administrators',
     );
-    // 보관이 아니라 하드 삭제 하나로 통일됐다.
+    // 보관이 아니라 하드 삭제 하나로 통일됐다. 행 액션은 ⋯ 메뉴 안에 있다.
+    await page.getByTestId('project-memory-row-menu').click();
     await expect(page.getByTestId('project-memory-delete')).toBeVisible();
   });
 });

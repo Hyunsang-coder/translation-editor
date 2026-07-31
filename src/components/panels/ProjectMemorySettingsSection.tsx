@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
+import { MoreHorizontal } from 'lucide-react';
 import type { ProjectMemoryCategory } from '@/types';
 import { MEMORY_CATEGORY_PRIORITY } from '@/ai/context/projectMemoryPolicy';
 import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
@@ -17,16 +18,87 @@ const CATEGORIES = (Object.keys(MEMORY_CATEGORY_PRIORITY) as ProjectMemoryCatego
   .sort((a, b) => MEMORY_CATEGORY_PRIORITY[a] - MEMORY_CATEGORY_PRIORITY[b]);
 
 /**
- * 카테고리 9개를 우선순위 3단계 색으로 압축한다. 라벨 9종을 모든 행에 노출하면
- * 정작 읽어야 할 본문이 묻힌다. 정확한 카테고리는 점의 툴팁으로 확인한다.
+ * 행 액션을 ⋯ 하나로 모은다.
+ *
+ * 높이가 가변인 행에 버튼 두 개를 놓을 안정적인 자리가 없고(위 정렬은 아래가 비고 늘리면
+ * 짧은 행에서 안 벌어진다), 삭제를 편집 옆에 나란히 두면 오클릭을 부른다.
+ * 사용처가 한 곳뿐이라 별도 파일로 빼지 않는다.
  */
-const TIER_DOT = ['bg-primary-500', 'bg-editor-text', 'bg-editor-muted'] as const;
+function RowMenu({
+  onEdit,
+  onDelete,
+  deleteDisabled = false,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteDisabled?: boolean;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-function categoryTier(category: ProjectMemoryCategory): number {
-  const priority = MEMORY_CATEGORY_PRIORITY[category];
-  if (priority <= 2) return 0;
-  if (priority <= 4) return 1;
-  return 2;
+  useEffect(() => {
+    if (!open) return;
+    function onDocPointerDown(event: MouseEvent): void {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    // click(버블) 대신 mousedown — PromptPresetMenu와 같은 이유로 리렌더 경합을 피한다.
+    document.addEventListener('mousedown', onDocPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        type="button"
+        data-testid="project-memory-row-menu"
+        aria-label={t('common.moreActions', '더보기')}
+        aria-expanded={open}
+        className={`flex h-6 w-6 items-center justify-center rounded text-editor-muted transition-opacity hover:bg-editor-border/60 hover:text-editor-text ${
+          open ? 'opacity-100' : 'opacity-50 group-hover:opacity-100 focus-visible:opacity-100'
+        }`}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-10 min-w-24 rounded-lg border border-editor-border bg-editor-surface py-1 shadow-lg">
+          <button
+            type="button"
+            className="block w-full px-3 py-1.5 text-left text-[11px] text-editor-text hover:bg-editor-border/60"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+          >
+            {t('common.edit', '편집')}
+          </button>
+          <div className="my-1 border-t border-editor-border" />
+          <button
+            type="button"
+            data-testid="project-memory-delete"
+            disabled={deleteDisabled}
+            className="block w-full px-3 py-1.5 text-left text-[11px] text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            {t('common.delete', '삭제')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ProjectMemorySettingsSection(): JSX.Element {
@@ -192,12 +264,9 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             return (
               <div
                 key={item.id}
+                data-testid="project-memory-item"
                 className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-editor-surface"
               >
-                <span
-                  className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${TIER_DOT[categoryTier(item.category)]}`}
-                  title={`${t(`memory.category.${item.category}`)} · ${t(`memory.source.${item.source}`)}`}
-                />
                 <div className="min-w-0 flex-1">
                   {isEditing ? (
                     <textarea
@@ -210,10 +279,14 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                       className={`whitespace-pre-wrap break-words text-xs ${
                         injected ? 'text-editor-text' : 'text-editor-muted'
                       }`}
-                      title={injected ? undefined : t(
-                        'memory.notInChat',
-                        '채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.',
-                      )}
+                      /* 본문이 카테고리의 유일한 hover 대상이다. 기존 주입 경고를 덮지 말고 이어붙인다. */
+                      title={[
+                        `${t(`memory.category.${item.category}`)} · ${t(`memory.source.${item.source}`)}`,
+                        injected ? null : t(
+                          'memory.notInChat',
+                          '채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.',
+                        ),
+                      ].filter(Boolean).join('\n')}
                     >
                       {item.content}
                     </div>
@@ -224,55 +297,40 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     </span>
                   )}
                 </div>
-                {/* 항상 렌더하고 대비만 낮춘다. 숨기면 키보드·터치에서 닿지 않는다. */}
-                <div className="flex shrink-0 gap-2 opacity-50 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                  {isEditing ? (
-                    <>
-                      <button
-                        type="button"
-                        className="text-[11px] text-primary-500"
-                        onClick={() => {
-                          const next = editing.content.trim();
-                          if (!next) return;
-                          void replaceItem(item.id, {
-                            category: item.category,
-                            content: next,
-                            source: 'user',
-                            status: 'active',
-                          }).then(() => setEditing(null)).catch(reportError);
-                        }}
-                      >
-                        {t('common.save')}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-[11px] text-editor-muted"
-                        onClick={() => setEditing(null)}
-                      >
-                        {t('common.cancel')}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="text-[11px] text-editor-muted hover:text-primary-500"
-                        onClick={() => setEditing({ id: item.id, content: item.content })}
-                      >
-                        {t('common.edit', '편집')}
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="project-memory-delete"
-                        className="text-[11px] text-editor-muted hover:text-red-500"
-                        disabled={saving}
-                        onClick={() => void handleDelete(item.id)}
-                      >
-                        {t('common.delete', '삭제')}
-                      </button>
-                    </>
-                  )}
-                </div>
+                {/* 저장/취소는 한 쌍으로 읽혀야 하므로 메뉴에 넣지 않고 그대로 노출한다. */}
+                {isEditing ? (
+                  <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary-500"
+                      onClick={() => {
+                        const next = editing.content.trim();
+                        if (!next) return;
+                        void replaceItem(item.id, {
+                          category: item.category,
+                          content: next,
+                          source: 'user',
+                          status: 'active',
+                        }).then(() => setEditing(null)).catch(reportError);
+                      }}
+                    >
+                      {t('common.save')}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[11px] text-editor-muted"
+                      onClick={() => setEditing(null)}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                ) : (
+                  <RowMenu
+                    onEdit={() => setEditing({ id: item.id, content: item.content })}
+                    onDelete={() => void handleDelete(item.id)}
+                    deleteDisabled={saving}
+                  />
+                )}
               </div>
             );
           })}

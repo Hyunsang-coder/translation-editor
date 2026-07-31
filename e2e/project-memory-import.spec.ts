@@ -80,7 +80,7 @@ test.describe('Project memory import', () => {
     await expect(settings).toContainText('Battle royale shooter patch notes');
     await expect(page.getByTestId('forbidden-terms-settings')).toContainText('battlegrounds');
     // 중복된 항목은 한 번만 남는다. 직접 넣은 1건 + 가져온 1건 = 2행.
-    await expect(page.getByTestId('project-memory-delete')).toHaveCount(2);
+    await expect(page.getByTestId('project-memory-item')).toHaveCount(2);
     const settingsText = await settings.innerText();
     expect(settingsText.split('Korean PC and console players').length - 1).toBe(1);
   });
