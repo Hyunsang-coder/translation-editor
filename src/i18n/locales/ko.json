@@ -591,6 +591,7 @@
       "noSegments": "재번역할 세그먼트가 없습니다.",
       "cancelled": "재번역이 취소되었습니다.",
       "applied": "재번역 결과가 적용되었습니다.",
+      "applyFailed": "재번역 결과를 적용하지 못했습니다.",
       "button": "재번역",
       "preview": "재번역 미리보기",
       "modal": {

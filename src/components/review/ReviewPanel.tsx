@@ -28,7 +28,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
-import { tipTapJsonToHtml } from '@/utils/markdownConverter';
+import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { detectSourceLanguage } from '@/utils/detectLanguage';
 
 /**
@@ -614,13 +614,35 @@ export function ReviewPanel(): JSX.Element {
     const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
     if (!project) return;
 
-    // TipTapDocJson을 HTML로 변환하여 target document에 적용.
-    // JSON도 함께 갱신한다 — store의 targetDocument 교체는 에디터 content prop을 통해
-    // 반영되면서 pending 동기화를 취소하므로, 여기서 안 넣으면 targetDocJson이 재번역
-    // 이전 문서로 남아 AI 도구·정렬 뷰가 옛 내용을 본다.
-    const html = tipTapJsonToHtml(doc);
-    useProjectStore.getState().setTargetDocJson(doc);
-    useProjectStore.getState().setTargetDocument(html);
+    const { addToast } = useUIStore.getState();
+    const targetEditor = useEditorStore.getState().targetEditor;
+
+    if (!targetEditor || targetEditor.isDestroyed) {
+      addToast({
+        type: 'error',
+        message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.'),
+      });
+      return;
+    }
+
+    // 번역·폴리싱 적용과 같은 경로로 에디터에 직접 쓴다.
+    // - addToHistory: true → Ctrl+Z로 재번역 취소 가능. store를 거쳐 들어가면
+    //   content prop 동기화가 addToHistory:false 경로를 타서 undo가 불가능했다.
+    // - store의 targetDocument/targetDocJson은 onUpdate 디바운스 동기화가 함께 갱신하므로
+    //   여기서 직접 set하지 않는다. 아래 materializeBlocksForSnapshot이 내부에서
+    //   flushPendingEditorSyncs를 먼저 돌려 스냅샷 전에 반영을 보장한다.
+    try {
+      replaceDocContent(targetEditor, doc, { addToHistory: true });
+    } catch (e) {
+      // schema.nodeFromJSON은 스키마에 없는 노드에 throw한다. 적용만 포기하고
+      // 검수 결과와 프리뷰는 남겨, 사용자가 다시 시도할 수 있게 한다.
+      console.warn('[review] retranslation apply failed:', e);
+      addToast({
+        type: 'error',
+        message: t('review.retranslate.applyFailed', '재번역 결과를 적용하지 못했습니다.'),
+      });
+      return;
+    }
 
     // 검수 결과 초기화
     resetReview();

@@ -604,6 +604,7 @@
       "noSegments": "No segments to retranslate.",
       "cancelled": "Retranslation cancelled.",
       "applied": "Retranslation applied.",
+      "applyFailed": "Could not apply the retranslation.",
       "button": "Retranslate",
       "preview": "Retranslation Preview",
       "modal": {
