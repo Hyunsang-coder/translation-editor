@@ -49,6 +49,15 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
 
     await openAppSettings(page);
 
+    // API 키 섹션은 쓸 수 있는 provider가 있으면 접힌 채로 열리고(defaultOpen), 접히면
+    // 내용이 언마운트된다. .env.local의 OPENAI_API_KEY는 dev serve 번들에 주입되므로
+    // (vite.config.ts의 __DEV_OPENAI_API_KEY__) 로컬에서만 이 경로를 탔다. 명시적으로 펼친다.
+    const apiKeysToggle = page.getByTestId('app-settings-api-keys-toggle');
+    if ((await apiKeysToggle.getAttribute('aria-expanded')) !== 'true') {
+      await apiKeysToggle.click();
+    }
+    await expect(apiKeysToggle).toHaveAttribute('aria-expanded', 'true');
+
     const openaiToggle = page.locator('#openai-enabled');
     const openaiInput = page.getByPlaceholder(/OpenAI API 키를 입력하세요|Enter your OpenAI API key/i);
     const openaiSection = openaiToggle.locator('xpath=ancestor::div[contains(@class,"space-y-2")][1]');

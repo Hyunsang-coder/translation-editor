@@ -31,15 +31,11 @@ const EMPHASIS_PAUSE = 1500;
 
 /** Bilingual text patterns (same as user-story.spec.ts) */
 const TEXT = {
-  appSettings: /^(앱 설정|App Settings)$/,
   tools: /^(도구|Tools)$/,
   connect: /^(연결|Connect)$/,
   clear: /^(지우기|Clear)$/,
   close: /^(닫기|Close)$/,
-  translate: /^(번역|Translate)$/,
-  review: /^(검수|Review)$/,
   history: /^(히스토리|History)$/,
-  aiChat: /^(AI 채팅|AI Chat)$/,
   save: /^(저장|Save)$/,
   webSearch: /^(웹 검색|Web Search)$/,
   confluenceSearch: /^(Confluence 검색|Confluence Search)$/,
@@ -49,12 +45,10 @@ const TEXT = {
 // ── Helpers ──
 
 async function openAppSettings(page: Page): Promise<void> {
-  await page.getByRole('button', { name: TEXT.appSettings }).click();
+  // 앱 설정 진입점은 툴바의 프로젝트 드롭다운 하단에 있다(user-story.spec.ts와 동일).
+  await page.getByTestId('project-picker-trigger').click();
   await page.waitForTimeout(STEP_PAUSE);
-}
-
-async function openToolsMenu(page: Page): Promise<void> {
-  await page.locator('button[title="도구"], button[title="Tools"]').click();
+  await page.getByTestId('project-app-settings-button').click();
   await page.waitForTimeout(STEP_PAUSE);
 }
 
@@ -121,8 +115,8 @@ test.describe.serial('Demo Recordings', () => {
     await page.getByRole('option', { name: /^(영어|English)$/ }).click();
     await page.waitForTimeout(STEP_PAUSE);
 
-    // 번역 버튼 클릭
-    await page.getByRole('button', { name: TEXT.translate }).click();
+    // 번역 버튼 클릭 (record-ai.spec.ts와 같은 testid — 라벨 기반은 아이콘화되며 깨졌다)
+    await page.getByTestId('editor-translate-button').click();
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 번역 결과 대기 (mock이므로 즉시 완료, 잠시 보여주기)
@@ -143,8 +137,8 @@ test.describe.serial('Demo Recordings', () => {
     await page.locator('[contenteditable="true"]').first().waitFor();
     await page.waitForTimeout(STEP_PAUSE);
 
-    // Review 패널 열기
-    await page.getByRole('button', { name: TEXT.review }).click();
+    // Review 패널 열기 (라벨 기반은 아이콘 버튼으로 바뀌며 깨졌다 — testid로 잡는다)
+    await page.getByTestId('editor-review-button').click();
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 검수 시작 버튼
@@ -172,9 +166,8 @@ test.describe.serial('Demo Recordings', () => {
 
     await page.locator('[contenteditable="true"]').first().waitFor();
 
-    // 도구 메뉴 → AI Chat 열기
-    await openToolsMenu(page);
-    await page.getByRole('button', { name: TEXT.aiChat }).click();
+    // AI Chat 열기 — 도구 메뉴가 사라지고 툴바 버튼으로 옮겨졌다.
+    await page.getByTestId('toolbar-menu-chat').click();
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 검색 옵션 메뉴 열기
@@ -216,6 +209,14 @@ test.describe.serial('Demo Recordings', () => {
     // 앱 설정 열기
     await openAppSettings(page);
     await page.waitForTimeout(STEP_PAUSE);
+
+    // 쓸 수 있는 provider가 있으면 API 키 섹션이 접힌 채로 열리고 내용이 언마운트된다.
+    // (.env.local의 OPENAI_API_KEY가 dev serve 번들에 주입되는 경로 — user-story.spec.ts와 동일)
+    const apiKeysToggle = page.getByTestId('app-settings-api-keys-toggle');
+    if ((await apiKeysToggle.getAttribute('aria-expanded')) !== 'true') {
+      await apiKeysToggle.click();
+      await page.waitForTimeout(STEP_PAUSE);
+    }
 
     // API 키 섹션 — OpenAI 키 입력
     const openaiInput = page.getByPlaceholder(
