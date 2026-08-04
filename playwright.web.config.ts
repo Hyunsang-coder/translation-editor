@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const e2ePort = 1422;
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 // Web harness only.
 // Default E2E gate for this project is Tauri smoke (`npm run test:e2e`).
 export default defineConfig({
@@ -12,7 +15,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'http://localhost:1421',
+    baseURL: e2eBaseUrl,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -25,8 +28,12 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npx vite --port 1421',
-    url: 'http://localhost:1421',
+    // 1421 is reserved for the Tauri development server's HMR websocket.
+    command: `npx vite --host 127.0.0.1 --port ${e2ePort}`,
+    url: e2eBaseUrl,
+    env: {
+      ODDEYES_DISABLE_HMR: '1',
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
   },

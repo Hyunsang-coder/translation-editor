@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -16,6 +17,10 @@ interface ModalProps {
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// 여러 모달이 겹칠 때 전역 ESC는 가장 나중에 열린 모달만 처리해야 한다.
+// React context와 무관한 DOM 포털 간에도 순서를 공유할 수 있도록 모듈 스택을 사용한다.
+const modalStack: symbol[] = [];
 
 /**
  * 공통 모달 래퍼
@@ -36,6 +41,17 @@ export function Modal({
 }: ModalProps): JSX.Element | null {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const modalIdRef = useRef(Symbol('modal'));
+
+  useEffect(() => {
+    if (!open) return;
+    const modalId = modalIdRef.current;
+    modalStack.push(modalId);
+    return () => {
+      const index = modalStack.lastIndexOf(modalId);
+      if (index >= 0) modalStack.splice(index, 1);
+    };
+  }, [open]);
 
   // 열릴 때 이전 포커스 저장 + 초기 포커스 설정
   useEffect(() => {
@@ -54,20 +70,21 @@ export function Modal({
       }
     });
 
-    return () => cancelAnimationFrame(timer);
-  }, [open]);
-
-  // 닫힐 때 이전 포커스 복원
-  useEffect(() => {
-    if (open) return;
-    previousFocusRef.current?.focus();
+    return () => {
+      cancelAnimationFrame(timer);
+      const previousFocus = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (previousFocus?.isConnected) {
+        previousFocus.focus();
+      }
+    };
   }, [open]);
 
   // ESC 키 핸들링
   useEffect(() => {
     if (!open || !closeOnEsc) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && modalStack.at(-1) === modalIdRef.current) {
         e.preventDefault();
         onClose();
       }
@@ -107,7 +124,11 @@ export function Modal({
   // 오버레이 클릭 닫기
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent) => {
-      if (closeOnOverlay && e.target === e.currentTarget) {
+      if (
+        closeOnOverlay
+        && modalStack.at(-1) === modalIdRef.current
+        && e.target === e.currentTarget
+      ) {
         onClose();
       }
     },
@@ -116,9 +137,9 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center ${className}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center overscroll-none ${className}`}
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"
@@ -132,6 +153,7 @@ export function Modal({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -197,13 +197,16 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
 
   // 선택 적용 모드: 원본/결과 문서를 문장 단위 변경 unit으로 분해
   const diffPlan = useMemo(
-    () =>
-      docJson && originalDocJson && onApplySelective
-        ? buildDocDiffPlan(originalDocJson, docJson)
-        : null,
-    [docJson, originalDocJson, onApplySelective],
+    () => (docJson && originalDocJson ? buildDocDiffPlan(originalDocJson, docJson) : null),
+    [docJson, originalDocJson],
   );
-  const changeUnits = useMemo(() => diffPlan?.units ?? [], [diffPlan]);
+  // 콜백 함수의 참조가 바뀌는 것은 새 폴리싱 결과가 아니다. 선택 가능 여부만
+  // 콜백 존재로 결정하고 diff 계획은 문서 스냅샷에만 묶어 사용자 선택을 보존한다.
+  const selectiveEnabled = Boolean(onApplySelective);
+  const changeUnits = useMemo(
+    () => (selectiveEnabled ? (diffPlan?.units ?? []) : []),
+    [diffPlan, selectiveEnabled],
+  );
   const [selectedUnitIds, setSelectedUnitIds] = useState<ReadonlySet<string>>(new Set());
   // 결과 도착 시 기본값: 전체 선택
   useEffect(() => {
@@ -211,7 +214,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   }, [changeUnits]);
 
   const selectiveActive = changeUnits.length > 0;
-  const selectedCount = selectedUnitIds.size;
+  const selectedCount = changeUnits.filter((unit) => selectedUnitIds.has(unit.id)).length;
 
   const toggleUnit = useCallback((id: string) => {
     setSelectedUnitIds((prev) => {
@@ -225,10 +228,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     });
   }, []);
 
-  const toggleAllUnits = useCallback(() => {
-    setSelectedUnitIds((prev) =>
-      prev.size === changeUnits.length ? new Set() : new Set(changeUnits.map((u) => u.id)),
-    );
+  const toggleAllUnits = useCallback((selected: boolean) => {
+    setSelectedUnitIds(selected ? new Set(changeUnits.map((unit) => unit.id)) : new Set());
   }, [changeUnits]);
 
   // Apply 핸들러 래퍼
@@ -340,9 +341,9 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   }, [editor, docJson]);
 
   return (
-    <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-6" closeOnOverlay={false}>
-      <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
-        <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
+    <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-3 sm:p-6" closeOnOverlay={false}>
+      <div className="w-full max-w-6xl h-[85dvh] max-h-[calc(100dvh-1.5rem)] min-h-0 bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
+        <div className="h-12 shrink-0 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
             <div id="translate-preview-title" className="text-sm font-medium text-editor-text">
               {title ?? t('editor.previewDefaultTitle')}

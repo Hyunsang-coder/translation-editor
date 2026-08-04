@@ -8,6 +8,7 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { EditorCanvasTipTap } from '@/components/editor/EditorCanvasTipTap';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { Modal } from '@/components/ui/Modal';
 import { createProject } from '@/tauri/project';
 import { FloatingChatPanel } from '@/components/chat/FloatingChatPanel';
 
@@ -185,10 +186,16 @@ export function MainLayout(): JSX.Element {
 
       {/* 개발자 테스트 패널 (Ctrl+Shift+D로 토글) */}
       {devTestPanelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <Modal
+          open
+          onClose={() => setDevTestPanelOpen(false)}
+          labelId="review-test-panel-title"
+          className="bg-black/50 p-4"
+          closeOnOverlay={false}
+        >
           <div className="bg-editor-surface rounded-lg shadow-xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden">
             <div className="px-4 py-3 border-b border-editor-border flex items-center justify-between bg-editor-surface">
-              <h2 className="font-semibold text-editor-text">검수 테스트 패널 (Dev)</h2>
+              <h2 id="review-test-panel-title" className="font-semibold text-editor-text">검수 테스트 패널 (Dev)</h2>
               <button
                 type="button"
                 onClick={() => setDevTestPanelOpen(false)}
@@ -205,7 +212,7 @@ export function MainLayout(): JSX.Element {
               </Suspense>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

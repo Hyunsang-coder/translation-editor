@@ -7,6 +7,7 @@ import pkg from './package.json';
 const appVersion = pkg.version;
 
 const host = process.env.TAURI_DEV_HOST || '127.0.0.1';
+const disableHmr = process.env.ODDEYES_DISABLE_HMR === '1';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -139,11 +140,13 @@ export default defineConfig(({ command, mode }) => {
     port: 1420,
     strictPort: true,
     host,
-    hmr: {
-      protocol: 'ws',
-      host,
-      port: 1421,
-    },
+    hmr: disableHmr
+      ? false
+      : {
+          protocol: 'ws',
+          host,
+          port: 1421,
+        },
     watch: {
       // Tell Vite to ignore watching `src-tauri`
       ignored: ['**/src-tauri/**'],

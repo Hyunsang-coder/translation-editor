@@ -147,6 +147,8 @@ Critical implementation warnings learned from past issues.
 
 47. **Tauri WebView Prompt Reliability**: `window.prompt()` can be inconsistent in Tauri WebView (no UI or immediate null in some environments). For user input flows like history snapshot rename, use app-native modal components (`Modal`) instead of browser prompt APIs.
 
+163. **Modal은 CSS zoom 컨테이너 밖으로 포털한다**: `MainLayout`의 `<main>`에는 앱 확대를 위한 CSS `zoom`과 `overflow-hidden`이 함께 적용된다. 그 안에 raw `fixed inset-0` 모달을 만들면 120%에서 `85vh`가 화면보다 커지고 Tauri WebView의 체크박스 hit-test/리페인트 좌표도 어긋날 수 있다. 전체 화면 대화상자는 반드시 `components/ui/Modal`을 사용한다 — 이 컴포넌트는 `document.body` 포털, 최상위 모달만 ESC 처리하는 스택, 언마운트 시 포커스 복구를 소유한다. 확대 영역 안의 raw fixed는 메뉴 닫기용 backdrop처럼 의도적으로 확대 좌표계에 남아야 하는 경우에만 허용한다.
+
 ## Chat Composer
 
 51. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese). The `event.isComposing` check alone is not reliable across all browsers.

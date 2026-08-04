@@ -28,6 +28,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
+import { Modal } from '@/components/ui/Modal';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { detectSourceLanguage } from '@/utils/detectLanguage';
 
@@ -903,10 +904,16 @@ export function ReviewPanel(): JSX.Element {
 
       {/* 재번역 중간 모달 (지시사항 입력) */}
       {retranslateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+        <Modal
+          open
+          onClose={() => setRetranslateModalOpen(false)}
+          labelId="review-retranslate-instruction-title"
+          className="bg-black/50 p-4"
+          closeOnOverlay={false}
+        >
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
             <div className="px-4 py-3 border-b border-editor-border">
-              <h3 className="text-sm font-semibold text-editor-text">
+              <h3 id="review-retranslate-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('review.retranslate.modal.title', '재번역 설정')}
               </h3>
             </div>
@@ -949,7 +956,7 @@ export function ReviewPanel(): JSX.Element {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

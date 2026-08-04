@@ -22,6 +22,7 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import { getModelIdForUse } from '@/ai/config';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import {
@@ -1681,10 +1682,16 @@ export function EditorCanvasTipTap(): JSX.Element {
 
       {/* 폴리싱 지시사항 모달 */}
       {polishModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+        <Modal
+          open
+          onClose={() => setPolishModalOpen(false)}
+          labelId="polish-instruction-title"
+          className="bg-black/50 p-4"
+          closeOnOverlay={false}
+        >
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
             <div className="px-4 py-3 border-b border-editor-border">
-              <h3 className="text-sm font-semibold text-editor-text">
+              <h3 id="polish-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('editor.polishModal.title', '폴리싱')}
               </h3>
             </div>
@@ -1710,9 +1717,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                       setPolishModalOpen(false);
                       void openPolishPreview(polishMessage);
                     }
-                    if (e.key === 'Escape') {
-                      setPolishModalOpen(false);
-                    }
                   }}
                 />
               </div>
@@ -1737,15 +1741,21 @@ export function EditorCanvasTipTap(): JSX.Element {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* 재번역 지시사항 모달 (타겟에 이미 내용이 있을 때 번역 버튼 클릭 시) */}
       {retranslateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+        <Modal
+          open
+          onClose={() => setRetranslateModalOpen(false)}
+          labelId="retranslate-instruction-title"
+          className="bg-black/50 p-4"
+          closeOnOverlay={false}
+        >
+          <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
             <div className="px-4 py-3 border-b border-editor-border">
-              <h3 className="text-sm font-semibold text-editor-text">
+              <h3 id="retranslate-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('editor.retranslateModal.title', '재번역')}
               </h3>
             </div>
@@ -1771,9 +1781,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                       setRetranslateModalOpen(false);
                       void openTranslatePreview(retranslateMessage);
                     }
-                    if (e.key === 'Escape') {
-                      setRetranslateModalOpen(false);
-                    }
                   }}
                 />
               </div>
@@ -1798,7 +1805,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       <TranslatePreviewModal

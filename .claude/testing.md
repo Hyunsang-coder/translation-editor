@@ -141,7 +141,9 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 | `src/components/history/HistoryCompareModal.test.tsx` | 2 | History compare modal diff display |
 | `src/components/history/HistoryTimeline.test.tsx` | 10 | History timeline snapshot list/modified badge |
 | `src/components/history/HistoryRestoreDialog.autoSnapshot.test.tsx` | 2 | Auto-snapshot before restore |
-| `src/components/editor/TranslatePreviewModal.history.test.tsx` | 2 | Auto-snapshot before translation apply |
+| `src/components/ui/Modal.test.tsx` | 3 | Body portal under CSS zoom, unmount focus restore, nested-modal ESC stack |
+| `src/components/editor/TranslatePreviewModal.history.test.tsx` | 3 | Apply deduplication and loading cancel behavior |
+| `src/components/editor/TranslatePreviewModal.selection.test.tsx` | 2 | Select all/none/individual immediacy and callback-reference stability |
 | `src/components/review/ReviewPanel.test.tsx` | 3 | ReviewPanel empty document validation |
 | `src/desktop/oddeyesAppBridge.test.ts` | 10 | Desktop bridge: method routing, getStatus/getSource, `setReviewIssues`(정규화/드롭/projectId 가드), `setTranslationContext`(replace/append/빈문자열/projectId 가드) |
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as Diff from 'diff';
 import type { DocChangeUnit } from '@/utils/docBlockDiff';
@@ -7,7 +7,7 @@ interface SelectiveDiffListProps {
   units: DocChangeUnit[];
   selectedIds: ReadonlySet<string>;
   onToggle: (id: string) => void;
-  onToggleAll: () => void;
+  onToggleAll: (selected: boolean) => void;
 }
 
 /**
@@ -21,7 +21,16 @@ export function SelectiveDiffList({
   onToggleAll,
 }: SelectiveDiffListProps): JSX.Element {
   const { t } = useTranslation();
-  const allSelected = units.length > 0 && units.every((u) => selectedIds.has(u.id));
+  const selectedCount = units.filter((unit) => selectedIds.has(unit.id)).length;
+  const allSelected = units.length > 0 && selectedCount === units.length;
+  const partiallySelected = selectedCount > 0 && !allSelected;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = partiallySelected;
+    }
+  }, [partiallySelected]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -30,16 +39,17 @@ export function SelectiveDiffList({
         <div className="flex items-center gap-3 px-4 py-2.5">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
+              ref={selectAllRef}
               type="checkbox"
               checked={allSelected}
-              onChange={onToggleAll}
+              onChange={(event) => onToggleAll(event.currentTarget.checked)}
               className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
               aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
             />
             <span className="text-xs text-editor-text">
               {t('editor.selectiveDiff.changedCount', '변경 {{total}}개 중 {{selected}}개 선택', {
                 total: units.length,
-                selected: units.filter((u) => selectedIds.has(u.id)).length,
+                selected: selectedCount,
               })}
             </span>
           </label>

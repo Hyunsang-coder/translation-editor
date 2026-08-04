@@ -7,6 +7,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { Select, type SelectOption } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import { PROVIDER_LABELS, type SelectableProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { shortcutLabel } from '@/utils/platform';
@@ -191,10 +192,16 @@ export function WorkflowActions(): JSX.Element {
 
     {/* 검수 시작 모달 — 번역/폴리싱 시작 모달과 같은 형태 */}
     {reviewModalOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md mx-4">
+      <Modal
+        open
+        onClose={() => setReviewModalOpen(false)}
+        labelId="review-instruction-title"
+        className="bg-black/50 p-4"
+        closeOnOverlay={false}
+      >
+        <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
           <div className="px-4 py-3 border-b border-editor-border">
-            <h3 className="text-sm font-semibold text-editor-text">
+            <h3 id="review-instruction-title" className="text-sm font-semibold text-editor-text">
               {t('editor.reviewModal.title', '검수')}
             </h3>
           </div>
@@ -218,7 +225,6 @@ export function WorkflowActions(): JSX.Element {
                 data-testid="review-instruction-input"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startReview();
-                  if (e.key === 'Escape') setReviewModalOpen(false);
                 }}
               />
             </div>
@@ -241,7 +247,7 @@ export function WorkflowActions(): JSX.Element {
             </button>
           </div>
         </div>
-      </div>
+      </Modal>
     )}
     </>
   );
