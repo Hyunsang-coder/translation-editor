@@ -6,7 +6,7 @@
  * 여기의 미들웨어로 옮겨 동작을 그대로 유지한다.
  */
 import { createMiddleware } from 'langchain';
-import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { v4 as uuidv4 } from 'uuid';
 import i18n from '@/i18n/config';
 import { getChatToolDescriptor } from '@/ai/tools/toolRegistry';
@@ -27,6 +27,76 @@ const MAX_LOOP_MESSAGES = 80;
 
 /** 도구 결과 기본 길이 상한 (registry에 값이 없을 때) */
 const DEFAULT_TOOL_OUTPUT_CHARS = 8_000;
+
+/** 인자 힌트가 깨져도 빈 객체로 안전하게 실행할 수 있는 읽기 전용 도구 */
+const TOLERANT_READ_TOOLS = new Set(['get_source_document', 'get_target_document']);
+
+/**
+ * 도구 인자와 예외 메시지는 문서 발췌문·제안 내용 등 민감한 값을 포함할 수 있다.
+ * 실행 진단에는 값 대신 최상위 필드의 런타임 타입과 오류 종류만 남긴다.
+ */
+function describeToolArgumentTypes(args: unknown): Record<string, string> {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) return {};
+
+  return Object.fromEntries(
+    Object.entries(args).map(([key, value]) => [
+      key,
+      value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+    ]),
+  );
+}
+
+/**
+ * 모델이 읽기 도구 인자를 JSON 객체 대신 배열/문자열/null로 만든 경우만 복구한다.
+ * JSON 문법 자체가 깨진 호출이나 쓰기 도구 호출은 원래 오류 상태를 유지한다.
+ */
+function recoverTolerantReadToolCalls(message: AIMessage): AIMessage | null {
+  const invalidCalls = message.invalid_tool_calls ?? [];
+  const recovered = [];
+  const remaining = [];
+
+  for (const call of invalidCalls) {
+    if (!call.name || !TOLERANT_READ_TOOLS.has(call.name) || typeof call.args !== 'string') {
+      remaining.push(call);
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(call.args);
+    } catch {
+      remaining.push(call);
+      continue;
+    }
+
+    const isInvalidRoot =
+      typeof parsed !== 'object' || parsed === null || Array.isArray(parsed);
+    if (!isInvalidRoot) {
+      remaining.push(call);
+      continue;
+    }
+
+    recovered.push({
+      name: call.name,
+      args: {},
+      id: call.id ?? uuidv4(),
+      type: 'tool_call' as const,
+    });
+  }
+
+  if (recovered.length === 0) return null;
+
+  return new AIMessage({
+    content: message.content,
+    additional_kwargs: message.additional_kwargs,
+    response_metadata: message.response_metadata,
+    ...(message.id !== undefined ? { id: message.id } : {}),
+    ...(message.name !== undefined ? { name: message.name } : {}),
+    tool_calls: [...(message.tool_calls ?? []), ...recovered],
+    invalid_tool_calls: remaining,
+    ...(message.usage_metadata !== undefined ? { usage_metadata: message.usage_metadata } : {}),
+  });
+}
 
 /**
  * 마지막 스텝 진입 시 주입하는 최종 답변 강제 안내 (테스트에서 직접 참조).
@@ -216,6 +286,18 @@ export function createToolExecutionMiddleware(params: {
 
   const middleware = createMiddleware({
     name: 'ChatToolExecution',
+    afterModel: (state) => {
+      const lastMessage = state.messages.at(-1);
+      if (!AIMessage.isInstance(lastMessage)) return undefined;
+
+      const repaired = recoverTolerantReadToolCalls(lastMessage);
+      if (!repaired) return undefined;
+
+      console.warn('[AI tool_call] recovered non-object arguments', {
+        names: (repaired.tool_calls ?? []).map((call) => call.name),
+      });
+      return { messages: [...state.messages.slice(0, -1), repaired] };
+    },
     beforeModel: {
       canJumpTo: ['end'],
       hook: (state) => {
@@ -235,13 +317,23 @@ export function createToolExecutionMiddleware(params: {
     wrapToolCall: async (request, handler) => {
       const toolName = request.toolCall.name;
       const toolCallId = request.toolCall.id ?? uuidv4();
+      const rawArgs = request.toolCall.args;
+      const hasInvalidRootArgs =
+        typeof rawArgs !== 'object' || rawArgs === null || Array.isArray(rawArgs);
+      const handlerRequest = TOLERANT_READ_TOOLS.has(toolName) && hasInvalidRootArgs
+        ? { ...request, toolCall: { ...request.toolCall, args: {} } }
+        : request;
+      const toolArgs = handlerRequest.toolCall.args;
       if (!toolsUsed.includes(toolName)) toolsUsed.push(toolName);
-      console.warn('[AI tool_call]', { name: toolName, args: request.toolCall.args ?? {} });
+      console.warn('[AI tool_call]', {
+        name: toolName,
+        argTypes: describeToolArgumentTypes(toolArgs),
+      });
 
       params.cb?.onToolCall?.({
         phase: 'start',
         toolName,
-        ...(request.toolCall.args ? { args: request.toolCall.args } : {}),
+        ...(toolArgs ? { args: toolArgs } : {}),
       });
 
       if (!request.tool) {
@@ -258,18 +350,24 @@ export function createToolExecutionMiddleware(params: {
       let result: Awaited<ReturnType<typeof handler>>;
       try {
         result = await withTimeout(
-          Promise.resolve(handler(request)),
+          Promise.resolve(handler(handlerRequest)),
           TOOL_TIMEOUT_MS,
           `Tool ${toolName} timed out`,
         );
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'Tool execution failed';
+        console.warn('[AI tool_call] failed', {
+          name: toolName,
+          argTypes: describeToolArgumentTypes(toolArgs),
+          errorName: e instanceof Error ? e.constructor.name : typeof e,
+        });
         params.cb?.onToolCall?.({ phase: 'end', toolName, status: 'error' });
         recordError(toolName, 'execution');
         return new ToolMessage({
           tool_call_id: toolCallId,
           name: toolName,
           status: 'error',
-          content: e instanceof Error ? e.message : 'Tool execution failed',
+          content: errorMessage,
         });
       }
 

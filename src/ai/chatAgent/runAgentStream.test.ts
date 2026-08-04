@@ -38,6 +38,23 @@ const failingTool = tool(
   { name: 'fake_tool', description: 'fails', schema: z.object({}) },
 );
 
+const echoingFailureTool = tool(
+  async ({ query }) => {
+    throw new Error(`failed query: ${query}`);
+  },
+  {
+    name: 'fake_tool',
+    description: 'fails with the supplied query',
+    schema: z.object({ query: z.string() }),
+  },
+);
+
+const tolerantTargetDocumentTool = tool(async () => 'target document', {
+  name: 'get_target_document',
+  description: 'target document',
+  schema: z.object({}),
+});
+
 function baseMessages(): BaseMessage[] {
   return [new HumanMessage('질문')];
 }
@@ -268,6 +285,107 @@ describe('runChatAgentStream 도구 실행', () => {
     );
     // 2번째 실패 직후 중단 → 3번째 모델 호출은 없어야 한다
     expect(model.callCount).toBe(2);
+  });
+
+  it.each([
+    ['배열', '["not","an","object"]'],
+    ['문자열', '"not-an-object"'],
+    ['null', 'null'],
+  ])('읽기 도구의 %s 루트 인자를 빈 객체로 복구한다', async (_label, argsJson) => {
+    const model = makeModel([
+      [toolCallChunk('get_target_document', 'root-1', argsJson)],
+      [textChunk('복구 완료')],
+    ]);
+
+    const result = await run({
+      model,
+      tools: [tolerantTargetDocumentTool],
+      maxSteps: 3,
+    });
+
+    expect(result.finalText).toBe('복구 완료');
+    expect(model.callCount).toBe(2);
+    expect(model.seenMessages[1]!.find((message) => message.getType() === 'tool')?.content)
+      .toContain('target document');
+  });
+
+  it('파싱 불가능 JSON과 쓰기 도구의 비객체 인자는 복구하거나 실행하지 않는다', async () => {
+    const malformedReadHandler = vi.fn(async () => 'must not run');
+    const malformedReadTool = tool(malformedReadHandler, {
+      name: 'get_target_document',
+      description: 'target document',
+      schema: z.object({}),
+    });
+    const malformedReadModel = makeModel([
+      [toolCallChunk('get_target_document', 'bad-json-1', 'not-json')],
+    ]);
+
+    await run({ model: malformedReadModel, tools: [malformedReadTool], maxSteps: 3 });
+
+    expect(malformedReadHandler).not.toHaveBeenCalled();
+    expect(malformedReadModel.callCount).toBe(1);
+
+    const writeHandler = vi.fn(async () => 'must not run');
+    const writeTool = tool(writeHandler, {
+      name: 'suggest_translation_rule',
+      description: 'write suggestion',
+      schema: z.object({}),
+    });
+    const writeModel = makeModel([
+      [toolCallChunk('suggest_translation_rule', 'write-root-1', '[]')],
+    ]);
+
+    await run({ model: writeModel, tools: [writeTool], maxSteps: 3 });
+
+    expect(writeHandler).not.toHaveBeenCalled();
+    expect(writeModel.callCount).toBe(1);
+  });
+
+  it('도구 실행 로그에는 인자와 오류에 포함된 민감한 값을 남기지 않는다', async () => {
+    const secret = 'customer-secret-6f8a2c';
+    const model = makeModel([
+      [toolCallChunk(
+        'fake_tool',
+        'e1',
+        JSON.stringify({
+          query: secret,
+          maxChars: 'bad',
+          unitIds: ['u1'],
+          nullable: null,
+        }),
+      )],
+      [textChunk('오류를 반영한 답변')],
+    ]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await run({ model, tools: [echoingFailureTool], maxSteps: 3 });
+
+      const startLog = warn.mock.calls.find(([message]) => message === '[AI tool_call]');
+      const failureLog = warn.mock.calls.find(([message]) => message === '[AI tool_call] failed');
+      expect(startLog?.[1]).toEqual({
+        name: 'fake_tool',
+        argTypes: {
+          query: 'string',
+          maxChars: 'string',
+          unitIds: 'array',
+          nullable: 'null',
+        },
+      });
+      expect(failureLog?.[1]).toEqual({
+        name: 'fake_tool',
+        argTypes: {
+          query: 'string',
+          maxChars: 'string',
+          unitIds: 'array',
+          nullable: 'null',
+        },
+        errorName: 'Error',
+      });
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('콜백으로 도구 호출 시작/종료와 사용 도구 목록을 보고한다', async () => {
