@@ -493,7 +493,8 @@
       "lineHeightDecrease": "Decrease line height",
       "lineHeightDecreaseTitle": "Line height -0.1",
       "lineHeightIncrease": "Increase line height",
-      "lineHeightIncreaseTitle": "Line height +0.1"
+      "lineHeightIncreaseTitle": "Line height +0.1",
+      "clearAppliedChanges": "Clear applied-change highlights"
     },
     "search": {
       "placeholder": "Search...",

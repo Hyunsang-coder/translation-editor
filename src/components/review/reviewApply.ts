@@ -16,6 +16,7 @@ import {
   getWrappingQuotePair,
 } from '@/utils/normalizeForSearch';
 import type { ReviewIssue } from '@/stores/reviewStore';
+import { addAppliedChangeMarksToTransaction } from '@/editor/extensions/AppliedChangeHighlight';
 
 /** reviewStore가 새 적용 transaction을 redo로 오인하지 않도록 구분하는 meta. */
 export const REVIEW_SUGGESTION_APPLY_META = 'reviewSuggestionApply';
@@ -409,6 +410,10 @@ export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): App
   const tr = closeHistory(
     state.tr.replaceWith(resolved.from, resolved.to, state.schema.text(replacement)),
   ).setMeta(REVIEW_SUGGESTION_APPLY_META, true);
+  addAppliedChangeMarksToTransaction(tr, [{
+    from: resolved.from,
+    to: resolved.from + replacement.length,
+  }]);
   editor.view.dispatch(tr);
   return resolved.fuzzy ? 'applied-fuzzy' : 'applied';
 }

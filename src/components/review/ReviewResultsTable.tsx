@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
+import { sortReviewIssuesByDocumentOrder } from './reviewIssueOrder';
 
 interface ReviewResultsTableProps {
   issues: ReviewIssue[];
@@ -93,9 +94,13 @@ export function ReviewResultsTable({
     [issues],
   );
 
-  // severity 필터 적용
+  // severity 필터 적용 후 문서 위→아래 순서로 표시
   const filteredIssues = useMemo(
-    () => severityFilter ? issues.filter((issue) => severityFilter.includes(issue.severity)) : issues,
+    () => sortReviewIssuesByDocumentOrder(
+      severityFilter
+        ? issues.filter((issue) => severityFilter.includes(issue.severity))
+        : issues,
+    ),
     [issues, severityFilter],
   );
 

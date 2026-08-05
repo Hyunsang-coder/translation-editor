@@ -15,11 +15,43 @@ import {
   htmlToTipTapJson,
   fixMisalignedBoldMarks,
   parseTranslationResponseToTipTap,
+  tipTapJsonToHtml,
 } from './markdownConverter';
 import {
   collectTranslationUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+
+describe('markdownConverter - 적용 표시 영속성 경계', () => {
+  const markedDoc = {
+    type: 'doc',
+    content: [{
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: 'Polished text',
+        marks: [{ type: 'appliedChange', attrs: { changeId: 'change-1' } }],
+      }],
+    }],
+  };
+
+  it('적용 표시는 내보내기 HTML과 Markdown/AI 입력에서 제거한다', () => {
+    const html = tipTapJsonToHtml(markedDoc);
+    expect(html).toContain('Polished text');
+    expect(html).not.toContain('data-applied-change');
+    expect(tipTapJsonToMarkdown(markedDoc)).toBe('Polished text');
+    expect(tipTapJsonToMarkdownForTranslation(markedDoc)).toBe('Polished text');
+  });
+
+  it('프로젝트 HTML에 저장된 적용 표시는 TipTap JSON으로 복원한다', () => {
+    const json = htmlToTipTapJson(
+      '<p><span data-applied-change data-applied-change-id="change-1">Polished</span> text</p>',
+    );
+
+    expect(JSON.stringify(json)).toContain('appliedChange');
+    expect(JSON.stringify(json)).toContain('change-1');
+  });
+});
 
 describe('markdownConverter - 기존 함수 (html: false)', () => {
   it('Markdown 테이블이 올바르게 파싱되어야 함', () => {

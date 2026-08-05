@@ -20,6 +20,7 @@ import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { CommentMark } from '@/editor/extensions/CommentMark';
+import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { Markdown } from 'tiptap-markdown';
 
@@ -30,6 +31,22 @@ import { Markdown } from 'tiptap-markdown';
  * AI 프롬프트로 새지 않도록 한다. 코멘트는 excerpt 방식으로 별도 주입된다.
  */
 const CommentMarkForConversion = CommentMark.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: '', close: '', mixable: true, expelEnclosingWhitespace: true },
+        parse: {},
+      },
+    };
+  },
+});
+
+/**
+ * 적용 표시도 HTML/JSON 파싱 스키마에는 포함하되 Markdown에서는 투명하게 만든다.
+ * 프로젝트 재열기에는 data-applied-change span이 필요하지만 AI 입력에는 색상용
+ * 메타데이터가 섞이면 안 된다.
+ */
+const AppliedChangeHighlightForConversion = AppliedChangeHighlight.extend({
   addStorage() {
     return {
       markdown: {
@@ -88,6 +105,7 @@ function createExtensions() {
     Subscript,
     Superscript,
     CommentMarkForConversion,
+    AppliedChangeHighlightForConversion,
     TranslationUnitId.configure({ assignMissingIds: false }),
     Markdown.configure({
       html: false,                  // HTML 태그 비활성화
@@ -173,6 +191,7 @@ function createExtensionsForTranslation() {
     Subscript,
     Superscript,
     CommentMarkForConversion,
+    AppliedChangeHighlightForConversion,
     TranslationUnitId.configure({ assignMissingIds: false }),
     Markdown.configure({
       html: true,                   // HTML 태그 활성화 (테이블 지원)
@@ -905,5 +924,13 @@ export function tipTapJsonToHtml(docJson: TipTapDocJson): string {
 
   const html = editor.getHTML();
   editor.destroy();
-  return html;
+
+  // 적용 표시는 프로젝트 내부 검수 상태이며 내보낸 HTML 본문 서식이 아니다.
+  // 텍스트/다른 인라인 마크는 보존하면서 적용 표시 wrapper만 벗긴다.
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  container.querySelectorAll('span[data-applied-change]').forEach((element) => {
+    element.replaceWith(...Array.from(element.childNodes));
+  });
+  return container.innerHTML;
 }

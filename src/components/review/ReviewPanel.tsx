@@ -20,6 +20,7 @@ import {
   resolveWorkflowContextFromSnapshot,
 } from '@/ai/context/resolveWorkflowContext';
 import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
+import { resolveReviewIssueSegmentOrders } from '@/components/review/reviewIssueOrder';
 import {
   applySuggestionToEditor,
   deriveReplacementText,
@@ -292,7 +293,10 @@ export function ReviewPanel(): JSX.Element {
           // Issue #8 Fix: parseReviewResult try-catch 래핑
           let issues: ReturnType<typeof parseReviewResult>;
           try {
-            issues = parseReviewResult(response);
+            issues = resolveReviewIssueSegmentOrders(
+              parseReviewResult(response),
+              chunk.segments,
+            );
           } catch (parseError) {
             console.error(`[ReviewPanel] Failed to parse review result for chunk ${i}:`, parseError);
             handleChunkError(i, parseError instanceof Error ? parseError : new Error('JSON 파싱 실패'));

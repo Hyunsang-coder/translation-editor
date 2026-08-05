@@ -480,7 +480,8 @@
       "lineHeightDecrease": "줄 높이 줄이기",
       "lineHeightDecreaseTitle": "줄 높이 -0.1",
       "lineHeightIncrease": "줄 높이 늘리기",
-      "lineHeightIncreaseTitle": "줄 높이 +0.1"
+      "lineHeightIncreaseTitle": "줄 높이 +0.1",
+      "clearAppliedChanges": "적용 표시 지우기"
     },
     "search": {
       "placeholder": "검색어 입력...",

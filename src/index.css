@@ -932,6 +932,21 @@
   border-bottom-color: rgba(96, 165, 250, 0.75);
 }
 
+/* AI 제안이 실제 본문에 반영된 위치 — 프로젝트에 저장되는 적용 표시 */
+.applied-change-highlight {
+  --applied-change-bg: rgba(16, 185, 129, 0.28);
+  --applied-change-border: rgba(5, 150, 105, 0.85);
+  background: var(--applied-change-bg);
+  border-bottom: 2px solid var(--applied-change-border);
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+.dark .applied-change-highlight {
+  --applied-change-bg: rgba(52, 211, 153, 0.3);
+  --applied-change-border: rgba(52, 211, 153, 0.8);
+}
+
 /* ============================================
    Search Highlight - 검색 매치 하이라이트
    ============================================ */

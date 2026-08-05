@@ -22,7 +22,9 @@ import {
   Rows3,
   Columns3,
   Trash2,
+  Eraser,
 } from 'lucide-react';
+import { hasAppliedChangeHighlights } from '@/editor/extensions/AppliedChangeHighlight';
 
 interface TipTapMenuBarProps {
   editor: Editor | null;
@@ -80,6 +82,13 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
   const inTable = useEditorState({
     editor,
     selector: ({ editor: e }) => e?.isActive('table') ?? false,
+  }) ?? false;
+
+  const hasAppliedChanges = useEditorState({
+    editor,
+    selector: ({ editor: e }) => (
+      panelType === 'target' && e ? hasAppliedChangeHighlights(e.state.doc) : false
+    ),
   }) ?? false;
 
   // 표 명령은 모두 같은 형태다(포커스 → 명령 → 메뉴 닫기).
@@ -386,6 +395,21 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           </div>
         </button>
       </div>
+
+      {hasAppliedChanges && (
+        <>
+          <div className="w-px h-5 bg-editor-border mx-1" />
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().clearAppliedChangeHighlights().run()}
+            className={`${btnBase} text-emerald-600 dark:text-emerald-400`}
+            title={t('editor.menuBar.clearAppliedChanges')}
+            aria-label={t('editor.menuBar.clearAppliedChanges')}
+          >
+            <Eraser size={ICON_SIZE} />
+          </button>
+        </>
+      )}
     </div>
   );
 }

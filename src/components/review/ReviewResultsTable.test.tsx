@@ -103,3 +103,56 @@ describe('ReviewResultsTable 무시 동작', () => {
     expect(onIgnore).toHaveBeenCalledWith('ignored-issue');
   });
 });
+
+describe('ReviewResultsTable 문서 순서', () => {
+  it('심각도와 관계없이 문서 위쪽 세그먼트부터 표시한다', () => {
+    render(
+      <ReviewResultsTable
+        issues={[
+          makeIssue({
+            id: 'critical-late',
+            segmentOrder: 30,
+            severity: 'critical',
+            targetExcerpt: '문서 하단 문장',
+          }),
+          makeIssue({
+            id: 'minor-early',
+            segmentOrder: 10,
+            severity: 'minor',
+            targetExcerpt: '문서 초반 문장',
+          }),
+          makeIssue({
+            id: 'major-middle',
+            segmentOrder: 20,
+            severity: 'major',
+            targetExcerpt: '문서 중간 문장',
+          }),
+        ]}
+      />,
+    );
+
+    const cards = screen.getAllByTestId('review-issue-card');
+    expect(cards.map((card) => card.textContent)).toEqual([
+      expect.stringContaining('문서 초반 문장'),
+      expect.stringContaining('문서 중간 문장'),
+      expect.stringContaining('문서 하단 문장'),
+    ]);
+  });
+
+  it('같은 세그먼트의 이슈는 AI가 반환한 순서를 유지한다', () => {
+    render(
+      <ReviewResultsTable
+        issues={[
+          makeIssue({ id: 'same-1', segmentOrder: 10, targetExcerpt: '첫 번째 이슈' }),
+          makeIssue({ id: 'same-2', segmentOrder: 10, targetExcerpt: '두 번째 이슈' }),
+        ]}
+      />,
+    );
+
+    const cards = screen.getAllByTestId('review-issue-card');
+    expect(cards.map((card) => card.textContent)).toEqual([
+      expect.stringContaining('첫 번째 이슈'),
+      expect.stringContaining('두 번째 이슈'),
+    ]);
+  });
+});

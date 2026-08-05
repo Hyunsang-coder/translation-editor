@@ -13,6 +13,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
 import type { TipTapDocJson } from '@/ai/translateDocument';
+import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 
 /**
  * generateText에 필요한 TipTap extensions
@@ -29,6 +30,7 @@ const extensions = [
   TableHeader,
   TableCell,
   Image.configure({ inline: false, allowBase64: true }),
+  AppliedChangeHighlight,
 ];
 
 /**

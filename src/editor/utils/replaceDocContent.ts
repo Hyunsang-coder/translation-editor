@@ -1,6 +1,21 @@
 import type { Editor } from '@tiptap/core';
-import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
+import { DOMParser as PMDOMParser, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import DOMPurify from 'dompurify';
+
+/** 에디터 스키마로 교체용 문서를 생성한다. 문자열은 저장 전에 정화한다. */
+export function createDocumentFromContent(
+  editor: Editor,
+  content: string | Record<string, unknown>,
+): ProseMirrorNode {
+  const { schema } = editor.state;
+  return typeof content === 'string'
+    ? PMDOMParser.fromSchema(schema).parse(
+        Object.assign(document.createElement('div'), {
+          innerHTML: DOMPurify.sanitize(content),
+        }),
+      )
+    : schema.nodeFromJSON(content);
+}
 
 /**
  * ProseMirror 트랜잭션으로 에디터 콘텐츠를 교체합니다.
@@ -19,16 +34,8 @@ export function replaceDocContent(
   options: { addToHistory?: boolean } = {},
 ): void {
   const { addToHistory = true } = options;
-  const { state, schema } = editor;
-
-  const newDoc =
-    typeof content === 'string'
-      ? PMDOMParser.fromSchema(schema).parse(
-          Object.assign(document.createElement('div'), {
-            innerHTML: DOMPurify.sanitize(content),
-          }),
-        )
-      : schema.nodeFromJSON(content);
+  const { state } = editor;
+  const newDoc = createDocumentFromContent(editor, content);
 
   const { tr } = state;
   tr.replaceWith(0, state.doc.content.size, newDoc.content);

@@ -10,6 +10,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { createReviewDecorations } from '@/editor/extensions/ReviewHighlight';
+import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { applySuggestionToEditor } from '@/components/review/reviewApply';
 
 // 스크린샷과 동일한 구조: 문단 + 불릿리스트 (실제 에디터 스키마에는 segmentGroupId attr 없음)
@@ -49,7 +50,7 @@ describe('검수 통합: 파싱 → 하이라이트 → 적용', () => {
   let editor: Editor | null = null;
 
   function createRealEditor(): Editor {
-    editor = new Editor({ extensions: [StarterKit], content: TARGET_HTML });
+    editor = new Editor({ extensions: [StarterKit, AppliedChangeHighlight], content: TARGET_HTML });
     return editor;
   }
 
@@ -104,6 +105,8 @@ describe('검수 통합: 파싱 → 하이라이트 → 적용', () => {
     expect(text).not.toContain('when executing the task, well enough');
     // 다른 문장은 그대로
     expect(text).toContain('Can distinguish what they do and do not know');
+    const highlight = realEditor.view.dom.querySelector('[data-applied-change]');
+    expect(highlight?.textContent).toContain('at the time of performing the task');
   });
 
   it('excerpt가 문서와 조금 달라도 유사 문장 폴백으로 적용된다', () => {

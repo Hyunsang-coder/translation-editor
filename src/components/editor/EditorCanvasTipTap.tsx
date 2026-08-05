@@ -30,6 +30,7 @@ import {
   SELECTION_INLINE_TOOLBAR_HEIGHT,
 } from '@/components/ui/SelectionInlineToolbar';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { AlignmentView } from '@/components/editor/AlignmentView';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
@@ -1251,11 +1252,8 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
 
-    replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
+    replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
     handlePolishClose();
-
-    setTargetFlash(true);
-    setTimeout(() => setTargetFlash(false), 1000);
 
     const { project, materializeBlocksForSnapshot } = useProjectStore.getState();
     if (project) {

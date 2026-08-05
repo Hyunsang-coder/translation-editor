@@ -5,6 +5,12 @@
 
 export { GhostChipExtension } from './GhostChip';
 export { DiffMarkExtension } from './DiffMark';
+export {
+  AppliedChangeHighlight,
+  hasAppliedChangeHighlights,
+  markAppliedChanges,
+} from './AppliedChangeHighlight';
+export type { AppliedChangeRange } from './AppliedChangeHighlight';
 export { SearchHighlight, getSearchState } from './SearchHighlight';
 export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
 export { ImagePlaceholder, ImageOriginal } from './ImagePlaceholder';

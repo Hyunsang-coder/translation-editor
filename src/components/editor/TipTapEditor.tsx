@@ -21,6 +21,7 @@ import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { CommentMark } from '@/editor/extensions/CommentMark';
 import { SelectionAnchor } from '@/editor/extensions/SelectionAnchor';
 import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
+import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
@@ -99,6 +100,7 @@ function TipTapEditor({
       CommentMark,
       TranslationUnitId,
       SelectionAnchor,
+      AppliedChangeHighlight,
       ReviewHighlight.configure({
         highlightClass: 'review-highlight',
         excerptField: panelType === 'source' ? 'sourceExcerpt' : 'targetExcerpt',
