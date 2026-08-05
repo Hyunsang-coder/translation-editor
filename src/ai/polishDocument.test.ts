@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { TipTapDocJson } from '@/utils/markdownConverter';
+import {
+  tipTapJsonToMarkdownForTranslation,
+  type TipTapDocJson,
+} from '@/utils/markdownConverter';
 import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { createMockAiConfig } from '@/test/mocks/ai';
 import { getAiConfig } from '@/ai/config';
@@ -93,6 +96,19 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(userPrompt).not.toContain('Source (');
   });
 
+  it('명확한 문제가 없으면 입력과 동일한 문서를 정상 결과로 받아들인다', async () => {
+    mocks.stream.mockImplementationOnce(async function* () {
+      yield { content: '---POLISH_START---\n' };
+      yield { content: 'This sentence has awkward collocation.\n' };
+      yield { content: '---POLISH_END---' };
+    });
+
+    const result = await polishTargetDocumentWithStreaming({ targetDocJson });
+
+    expect(tipTapJsonToMarkdownForTranslation(result.doc))
+      .toBe(tipTapJsonToMarkdownForTranslation(targetDocJson));
+  });
+
   it('폴리싱에 고정된 메모리·규칙·금지 용어·용어집을 함께 적용한다', async () => {
     await polishTargetDocumentWithStreaming({
       targetDocJson,
@@ -113,7 +129,7 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(systemPrompt).not.toContain('legacy glossary');
   });
 
-  it('문서 구조는 보존하면서 번역투를 적극적으로 재구성하도록 프롬프트 계약을 명시한다', async () => {
+  it('명확한 번역투만 최소한으로 고치고 동등하게 자연스러운 표현은 보존하도록 계약한다', async () => {
     await polishTargetDocumentWithStreaming({
       targetDocJson,
       styleRules: 'Use a concise professional tone.',
@@ -127,10 +143,16 @@ describe('polishTargetDocumentWithStreaming', () => {
     const systemPrompt = String(messages[0]?.content);
     const userPrompt = String(messages[1]?.content);
 
-    expect(systemPrompt).toContain('as if it were originally written by a native writer');
-    expect(systemPrompt).toContain('grammatically correct but still sound translated');
-    expect(systemPrompt).toContain('Reorder words, phrases, and clauses');
-    expect(systemPrompt).toContain('Split or combine sentences within the same document block');
+    expect(systemPrompt).toContain('Treat an unchanged document as a successful result');
+    expect(systemPrompt).toContain('both natural, correct, and compliant with the applicable instructions');
+    expect(systemPrompt).toContain('keep the current wording exactly');
+    expect(systemPrompt).toContain('Do not edit merely for variety, personal preference');
+    expect(systemPrompt).toContain('does not justify rewriting a sentence that is already reasonably concise and direct');
+    expect(systemPrompt).toContain('When uncertain whether an edit is necessary, keep the original');
+    expect(systemPrompt).toContain('Make the smallest change that fully resolves the identified problem');
+    expect(systemPrompt).toContain('A substantial rewrite is allowed only when a smaller edit cannot');
+    expect(systemPrompt).not.toContain('Prefer natural target-language phrasing over preserving the current wording');
+    expect(systemPrompt).not.toContain('Editing freedom:');
     expect(systemPrompt).toContain('Preserve the document topology');
     expect(systemPrompt).toContain('Do not add, remove, reorder, merge, or split document blocks');
     expect(systemPrompt).toContain('Instruction priority:');
