@@ -181,9 +181,92 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
       .first();
     await expect(projectRow).toBeVisible();
 
+    // WKWebView에서는 툴바 안에 중첩된 팝오버가 뒤쪽 textarea보다 위에 보여도
+    // 우클릭 hit-test는 textarea가 가져갈 수 있다. 메뉴는 body 최상위 overlay여야 한다.
+    const menuUsesTopLevelOverlay = await page.getByTestId('project-picker-menu').evaluate(
+      (menu) => menu.parentElement === document.body
+    );
+    expect(menuUsesTopLevelOverlay).toBe(true);
+
     await projectRow.click({ button: 'right' });
     await page.getByRole('button', { name: '복제 (Duplicate)' }).click();
 
     await expect(page.getByText('API Integration Guide Translation (Copy)')).toBeVisible();
+  });
+
+  test('Phase 9: 프로젝트 컨텍스트 메뉴 - Rename/Delete', async ({ page }) => {
+    const originalTitle = 'Project Actions Test';
+    const renamedTitle = 'Renamed Project';
+    await injectTauriMockWithProject(page, {
+      metadata: { title: originalTitle } as never,
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('project-picker-trigger').click();
+    const originalRow = page.getByTestId('project-picker-menu').locator(`[title="${originalTitle}"]`);
+    await originalRow.click({ button: 'right' });
+    await page.getByRole('button', { name: '이름 변경 (Rename)' }).click();
+
+    const renameInput = page.getByTestId('project-picker-menu').locator('input').first();
+    await expect(renameInput).toHaveValue(originalTitle);
+    await renameInput.fill(renamedTitle);
+    await renameInput.press('Enter');
+    const renamedRow = page.getByTestId('project-picker-menu').locator(`[title="${renamedTitle}"]`);
+    await expect(renamedRow).toBeVisible();
+
+    await renamedRow.click({ button: 'right' });
+    await page.getByRole('button', { name: '삭제 (Delete)' }).click();
+    await expect(renamedRow).toBeHidden();
+  });
+
+  test('Phase 9: 프로젝트 선택 시 열린 컨텍스트 메뉴도 함께 닫힌다', async ({ page }) => {
+    const originalTitle = 'Context Menu Owner';
+    await injectTauriMockWithProject(page, {
+      metadata: { title: originalTitle } as never,
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('project-picker-trigger').click();
+    const menu = page.getByTestId('project-picker-menu');
+    const originalRow = menu.locator(`[title="${originalTitle}"]`);
+    await originalRow.click({ button: 'right' });
+    await page.getByRole('button', { name: '복제 (Duplicate)' }).click();
+
+    const copiedRow = menu.locator(`[title="${originalTitle} (Copy)"]`);
+    await expect(copiedRow).toBeVisible();
+    await originalRow.click({ button: 'right' });
+    await expect(page.getByRole('button', { name: '복제 (Duplicate)' })).toBeVisible();
+
+    // 컨텍스트 메뉴와 겹치지 않는 행의 왼쪽을 클릭해 프로젝트를 전환한다.
+    await copiedRow.click({ position: { x: 12, y: 12 } });
+    await expect(menu).toBeHidden();
+    await expect(page.getByRole('button', { name: '복제 (Duplicate)' })).toBeHidden();
+  });
+
+  test('Phase 9: 프로젝트 메뉴는 열린 모달보다 아래 레이어에 머문다', async ({ page }) => {
+    await injectTauriMockWithProject(page);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await openAppSettings(page);
+    const dialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: TEXT.appSettings }) });
+    await expect(dialog).toBeVisible();
+
+    await page.evaluate(() => window.dispatchEvent(new Event('app:open-project-picker')));
+    const projectMenu = page.getByTestId('project-picker-menu');
+    await expect(projectMenu).toBeAttached();
+
+    const { dialogZIndex, projectMenuZIndex } = await page.evaluate(() => {
+      const dialogElement = document.querySelector<HTMLElement>('[role="dialog"]');
+      const menuElement = document.querySelector<HTMLElement>('[data-testid="project-picker-menu"]');
+      if (!dialogElement || !menuElement) throw new Error('Expected modal and project menu');
+      return {
+        dialogZIndex: Number.parseInt(getComputedStyle(dialogElement).zIndex, 10),
+        projectMenuZIndex: Number.parseInt(getComputedStyle(menuElement).zIndex, 10),
+      };
+    });
+    expect(dialogZIndex).toBeGreaterThan(projectMenuZIndex);
   });
 });

@@ -341,7 +341,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   }, [editor, docJson]);
 
   return (
-    <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[70] bg-black/40 p-3 sm:p-6" closeOnOverlay={false}>
+    <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[210] bg-black/40 p-3 sm:p-6" closeOnOverlay={false}>
       <div className="w-full max-w-6xl h-[85dvh] max-h-[calc(100dvh-1.5rem)] min-h-0 bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 shrink-0 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">

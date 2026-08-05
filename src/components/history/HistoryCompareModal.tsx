@@ -128,7 +128,7 @@ export function HistoryCompareModal({
   if (!open) return null;
 
   return (
-    <Modal open={open} onClose={onClose} labelId="history-compare-title" className="!z-[80] bg-black/45 p-4">
+    <Modal open={open} onClose={onClose} labelId="history-compare-title" className="!z-[220] bg-black/45 p-4">
       <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
         <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
           <h3 id="history-compare-title" className="text-sm font-semibold text-editor-text">

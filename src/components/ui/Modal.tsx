@@ -139,7 +139,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center overscroll-none ${className}`}
+      className={`fixed inset-0 z-[200] flex items-center justify-center overscroll-none ${className}`}
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"

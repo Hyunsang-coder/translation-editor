@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, Cog, Plus } from 'lucide-react';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
@@ -50,9 +51,37 @@ export function ProjectPicker(): JSX.Element {
     y: number;
     projectId: string;
   } | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedId = project?.id ?? null;
+
+  const updateMenuPosition = useCallback((): void => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 300;
+    const viewportPadding = 8;
+    setMenuPosition({
+      top: rect.bottom + 4,
+      left: Math.max(
+        viewportPadding,
+        Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding)
+      ),
+    });
+  }, []);
+
+  const openPicker = useCallback((): void => {
+    setContextMenu(null);
+    updateMenuPosition();
+    setOpen(true);
+  }, [updateMenuPosition]);
+
+  const closePicker = useCallback((): void => {
+    setContextMenu(null);
+    setOpen(false);
+  }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -74,10 +103,17 @@ export function ProjectPicker(): JSX.Element {
 
   // 네이티브 View 메뉴의 "프로젝트" 항목에서 열기
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => openPicker();
     window.addEventListener('app:open-project-picker', handler);
     return () => window.removeEventListener('app:open-project-picker', handler);
-  }, []);
+  }, [openPicker]);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    return () => window.removeEventListener('resize', updateMenuPosition);
+  }, [open, updateMenuPosition]);
 
   // 바깥 클릭 / ESC로 닫기 (컨텍스트 메뉴가 열려 있으면 그것만 먼저 닫는다)
   useEffect(() => {
@@ -86,9 +122,11 @@ export function ProjectPicker(): JSX.Element {
     const onPointerDown = (e: MouseEvent): void => {
       const target = e.target as Node | null;
       if (target && containerRef.current?.contains(target)) return;
-      if (target instanceof HTMLElement && target.closest('[data-project-context-menu]')) return;
-      setContextMenu(null);
-      setOpen(false);
+      if (
+        target instanceof HTMLElement &&
+        target.closest('[data-project-picker-layer], [data-project-context-menu]')
+      ) return;
+      closePicker();
     };
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
@@ -97,7 +135,7 @@ export function ProjectPicker(): JSX.Element {
         return;
       }
       if (renamingId) return; // 입력 자체의 ESC 처리를 방해하지 않는다
-      setOpen(false);
+      closePicker();
     };
 
     document.addEventListener('mousedown', onPointerDown);
@@ -106,7 +144,7 @@ export function ProjectPicker(): JSX.Element {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, contextMenu, renamingId]);
+  }, [open, contextMenu, renamingId, closePicker]);
 
   useEffect(() => {
     if (renamingId && renameInputRef.current) {
@@ -160,7 +198,7 @@ export function ProjectPicker(): JSX.Element {
 
       loadProject(created);
       setShowNew(false);
-      setOpen(false);
+      closePicker();
       await refresh();
     } catch (e) {
       const reason = e instanceof Error ? e.message : '새 프로젝트 생성 실패';
@@ -277,7 +315,7 @@ export function ProjectPicker(): JSX.Element {
   };
 
   const handleSelect = (projectId: string): void => {
-    setOpen(false);
+    closePicker();
     void (async () => {
       try {
         await switchProjectById(projectId);
@@ -291,8 +329,15 @@ export function ProjectPicker(): JSX.Element {
   return (
     <div ref={containerRef} className="relative min-w-0">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (open) {
+            closePicker();
+          } else {
+            openPicker();
+          }
+        }}
         className="h-[34px] max-w-[280px] px-2 flex items-center gap-1.5 rounded-md hover:bg-editor-border transition-colors focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
         title={t('projectSidebar.projects')}
         aria-haspopup="menu"
@@ -305,11 +350,15 @@ export function ProjectPicker(): JSX.Element {
         <ChevronDown size={14} className="shrink-0 text-editor-muted" />
       </button>
 
-      {open && (
+      {/* Editor popovers use z-index <= 82; application modals start at 200. */}
+      {open && menuPosition && createPortal(
         <div
           role="menu"
-          className="absolute left-0 top-full mt-1 w-[300px] rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden z-50 flex flex-col"
+          data-project-picker-layer
+          className="fixed z-[90] w-[300px] rounded-lg border border-editor-border bg-editor-surface shadow-lg overflow-hidden flex flex-col"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
           data-testid="project-picker-menu"
+          onContextMenu={(e) => e.preventDefault()}
         >
           {showNew ? (
             <div className="p-3 border-b border-editor-border space-y-2">
@@ -419,7 +468,7 @@ export function ProjectPicker(): JSX.Element {
               type="button"
               className="w-full px-2 py-1.5 rounded-md text-left text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors flex items-center gap-2"
               onClick={() => {
-                setOpen(false);
+                closePicker();
                 setShowAppSettings(true);
               }}
               data-testid="project-app-settings-button"
@@ -428,19 +477,21 @@ export function ProjectPicker(): JSX.Element {
               <span>{t('projectSidebar.appSettings')}</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showAppSettings && (
         <AppSettingsModal onClose={() => setShowAppSettings(false)} />
       )}
 
-      {contextMenu && (
+      {open && contextMenu && createPortal(
         <div
           data-project-context-menu
-          className="fixed z-[60] min-w-[120px] bg-editor-surface border border-editor-border shadow-lg rounded-md py-1"
+          className="fixed z-[100] min-w-[120px] bg-editor-surface border border-editor-border shadow-lg rounded-md py-1"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <button
             className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
@@ -472,7 +523,8 @@ export function ProjectPicker(): JSX.Element {
           >
             삭제 (Delete)
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
