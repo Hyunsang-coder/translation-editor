@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ReviewResultsTable } from './ReviewResultsTable';
 import type { ReviewIssue } from '@/stores/reviewStore';
+import ko from '@/i18n/locales/ko.json';
 
 function makeIssue(overrides: Partial<ReviewIssue>): ReviewIssue {
   return {
@@ -19,13 +20,13 @@ function makeIssue(overrides: Partial<ReviewIssue>): ReviewIssue {
   };
 }
 
-function renderTable(issue: ReviewIssue): void {
+function renderTable(issue: ReviewIssue, onIgnore = () => undefined): void {
   render(
     <ReviewResultsTable
       issues={[issue]}
       onApply={() => undefined}
       onCopy={() => undefined}
-      onDelete={() => undefined}
+      onIgnore={onIgnore}
       onViewInDocument={() => undefined}
     />,
   );
@@ -75,5 +76,30 @@ describe('ReviewResultsTable 수정 제안 표시', () => {
 
     expect(screen.getByText('문서의 부록과 예시')).toBeTruthy();
     expect(screen.queryByText(/&lt;|<a|href=|\*\*|https:\/\//)).toBeNull();
+  });
+});
+
+describe('ReviewResultsTable 무시 동작', () => {
+  it('확인이 아닌 무시로 표시한다', () => {
+    renderTable(makeIssue({}));
+
+    expect(ko.review.ignore).toBe('무시');
+    expect(screen.getByRole('button', { name: '무시' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '확인' })).toBeNull();
+  });
+
+  it('수정 제안이 없어도 검수 항목을 무시할 수 있다', () => {
+    renderTable(makeIssue({ suggestedFix: '' }));
+
+    expect(screen.getByRole('button', { name: '무시' })).toBeTruthy();
+  });
+
+  it('무시하면 해당 이슈 ID를 전달한다', () => {
+    const onIgnore = vi.fn();
+    renderTable(makeIssue({ id: 'ignored-issue' }), onIgnore);
+
+    fireEvent.click(screen.getByRole('button', { name: '무시' }));
+
+    expect(onIgnore).toHaveBeenCalledWith('ignored-issue');
   });
 });

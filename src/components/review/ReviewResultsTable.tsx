@@ -7,7 +7,7 @@ interface ReviewResultsTableProps {
   issues: ReviewIssue[];
   onToggleCheck?: (issueId: string) => void;
   onToggleAll?: () => void;
-  onDelete?: (issueId: string) => void;
+  onIgnore?: (issueId: string) => void;
   onCopy?: (issue: ReviewIssue) => void;
   onApply?: (issue: ReviewIssue) => void;
   /** 이슈가 가리키는 번역문 구절을 에디터에서 선택·포커스한다 */
@@ -69,7 +69,7 @@ export function ReviewResultsTable({
   issues,
   onToggleCheck,
   onToggleAll,
-  onDelete,
+  onIgnore,
   onCopy,
   onApply,
   onViewInDocument,
@@ -314,10 +314,10 @@ export function ReviewResultsTable({
                   {t('review.copy', '복사')}
                 </button>
               )}
-              {issue.suggestedFix && onDelete && (
+              {onIgnore && (
                 <button
                   type="button"
-                  onClick={() => onDelete(issue.id)}
+                  onClick={() => onIgnore(issue.id)}
                   className="h-7 px-2 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
                   title={t('review.ignore', '무시')}
                 >

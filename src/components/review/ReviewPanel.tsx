@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Transaction } from '@tiptap/pm/state';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
@@ -22,6 +23,7 @@ import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import {
   applySuggestionToEditor,
   deriveReplacementText,
+  REVIEW_SUGGESTION_APPLY_META,
   resolveSuggestionRange,
 } from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
@@ -52,6 +54,8 @@ export function ReviewPanel(): JSX.Element {
   const isReviewing = useReviewStore((s) => s.isReviewing);
   const totalIssuesFound = useReviewStore((s) => s.totalIssuesFound);
   const progress = useReviewStore((s) => s.progress);
+  const reviewActionHistory = useReviewStore((s) => s.reviewActionHistory);
+  const registeredTargetEditor = useEditorStore((s) => s.targetEditor);
 
   // 액션 함수들 (참조 항상 동일)
   const initializeReview = useReviewStore((s) => s.initializeReview);
@@ -62,7 +66,7 @@ export function ReviewPanel(): JSX.Element {
   const resetReview = useReviewStore((s) => s.resetReview);
   const getAllIssues = useReviewStore((s) => s.getAllIssues);
   const toggleIssueCheck = useReviewStore((s) => s.toggleIssueCheck);
-  const deleteIssue = useReviewStore((s) => s.deleteIssue);
+  const ignoreIssue = useReviewStore((s) => s.ignoreIssue);
   const setAllIssuesChecked = useReviewStore((s) => s.setAllIssuesChecked);
   const getCheckedIssues = useReviewStore((s) => s.getCheckedIssues);
   const setStreamingText = useReviewStore((s) => s.setStreamingText);
@@ -129,6 +133,28 @@ export function ReviewPanel(): JSX.Element {
       initializeReview(project);
     }
   }, [project, initializeReview]);
+
+  // 검수 문장 적용은 ProseMirror history와 reviewStore의 해결 상태를 함께 움직인다.
+  // 키보드 Cmd/Ctrl+Z 및 redo도 이 listener를 거쳐 이슈/하이라이트가 즉시 복원·해결된다.
+  useEffect(() => {
+    const editor = registeredTargetEditor;
+    const projectId = project?.id;
+    if (!editor || editor.isDestroyed || !projectId || typeof editor.on !== 'function') return;
+
+    const onTransaction = ({ transaction }: { transaction: Transaction }): void => {
+      if (!transaction.docChanged || transaction.getMeta(REVIEW_SUGGESTION_APPLY_META)) return;
+      useReviewStore.getState().reconcileAppliedSuggestionTransaction({
+        projectId,
+        beforeDoc: transaction.before,
+        afterDoc: transaction.doc,
+      });
+    };
+
+    editor.on('transaction', onTransaction);
+    return () => {
+      editor.off('transaction', onTransaction);
+    };
+  }, [registeredTargetEditor, project?.id]);
 
   // 외부에서 검수 트리거 시 handleRunReview 실행을 위한 ref
   const handleRunReviewRef = useRef<((instruction?: string) => Promise<void>) | null>(null);
@@ -370,7 +396,7 @@ export function ReviewPanel(): JSX.Element {
 
   /**
    * 오역/문법 등 유형: targetExcerpt를 에디터에서 찾아 suggestedFix로 교체
-   * 성공 시 이슈를 목록에서 제거 (Ctrl+Z로 되돌리기 가능)
+   * 성공 시 이슈를 해결 상태로 숨기고, editor undo/redo와 해결 상태를 함께 동기화
    */
   // 이슈가 가리키는 구절을 번역문 에디터에서 선택·포커스한다.
   // 적용과 같은 탐색 로직(resolveSuggestionRange)을 쓰므로 적용 대상과 항상 일치한다.
@@ -404,6 +430,97 @@ export function ReviewPanel(): JSX.Element {
     targetEditor.commands.focus();
   }, [t]);
 
+  const handleUndoReviewAction = useCallback((actionId?: string) => {
+    const { addToast } = useUIStore.getState();
+    const reviewState = useReviewStore.getState();
+    const currentProjectId = useProjectStore.getState().project?.id ?? null;
+    const entry = actionId
+      ? reviewState.reviewActionHistory.find((item) =>
+        item.actionId === actionId
+        && item.state === 'resolved'
+        && item.projectId === currentProjectId,
+      )
+      : [...reviewState.reviewActionHistory].reverse().find((item) =>
+        item.state === 'resolved' && item.projectId === currentProjectId,
+      );
+
+    if (!entry) return;
+
+    if (entry.kind === 'ignored') {
+      if (!useReviewStore.getState().undoIgnoredIssue(entry.actionId)) return;
+      addToast({
+        type: 'info',
+        message: t('review.ignoreUndoSuccess', '무시한 검수 항목을 복원했습니다.'),
+      });
+      return;
+    }
+
+    const currentEditor = useEditorStore.getState().targetEditor;
+    if (
+      !currentEditor
+      || currentEditor.isDestroyed
+      || !currentEditor.state.doc.eq(entry.afterDoc)
+    ) {
+      addToast({
+        type: 'warning',
+        message: t(
+          'review.undoUnavailable',
+          '적용 후 문서가 변경되었습니다. 편집기의 실행 취소를 사용해 최근 변경부터 되돌려 주세요.',
+        ),
+      });
+      return;
+    }
+
+    const beforeUndo = currentEditor.state.doc;
+    if (!currentEditor.commands.undo()) {
+      addToast({
+        type: 'warning',
+        message: t('review.undoUnavailable', '이 적용을 더 이상 되돌릴 수 없습니다.'),
+      });
+      return;
+    }
+
+    const afterUndo = currentEditor.state.doc;
+    const transition = useReviewStore.getState().reconcileAppliedSuggestionTransaction({
+      projectId: entry.projectId,
+      beforeDoc: beforeUndo,
+      afterDoc: afterUndo,
+    });
+    if (transition !== 'undone') {
+      // 문서와 검수 상태를 원자적으로 유지한다. 상태 전환을 확인하지 못하면 문서도 되돌린다.
+      currentEditor.commands.redo();
+      addToast({
+        type: 'warning',
+        message: t('review.undoUnavailable', '검수 상태를 복원하지 못해 되돌리기를 취소했습니다.'),
+      });
+      return;
+    }
+
+    addToast({
+      type: 'info',
+      message: t('review.undoSuccess', '수정 제안 적용을 되돌렸습니다.'),
+    });
+  }, [t]);
+
+  const handleIgnoreIssue = useCallback((issueId: string) => {
+    const { addToast } = useUIStore.getState();
+    const projectId = useProjectStore.getState().project?.id ?? null;
+    if (!projectId) return;
+
+    const actionId = ignoreIssue({ issueId, projectId });
+    if (!actionId) return;
+
+    addToast({
+      type: 'info',
+      message: t('review.ignoreSuccess', '검수 항목을 무시했습니다.'),
+      duration: 5000,
+      action: {
+        label: t('review.undo', '되돌리기'),
+        onClick: () => handleUndoReviewAction(actionId),
+      },
+    });
+  }, [handleUndoReviewAction, ignoreIssue, t]);
+
   const handleApplySuggestion = useCallback((issue: ReviewIssue) => {
     const { addToast } = useUIStore.getState();
     const targetEditor = useEditorStore.getState().targetEditor;
@@ -416,6 +533,8 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
+    const beforeApply = targetEditor.state.doc;
+    const appliedProjectId = useProjectStore.getState().project?.id ?? null;
     let status: ReturnType<typeof applySuggestionToEditor>;
     try {
       status = applySuggestionToEditor(targetEditor, issue);
@@ -434,12 +553,33 @@ export function ReviewPanel(): JSX.Element {
     }
 
     if (status === 'applied' || status === 'applied-fuzzy') {
-      deleteIssue(issue.id);
+      const actionId = appliedProjectId === null
+        ? null
+        : useReviewStore.getState().recordAppliedSuggestion({
+          issueId: issue.id,
+          projectId: appliedProjectId,
+          beforeDoc: beforeApply,
+          afterDoc: targetEditor.state.doc,
+        });
+      if (!actionId) {
+        targetEditor.commands.undo();
+        addToast({
+          type: 'error',
+          message: t('review.applyError.unexpected', '수정 제안 적용 상태를 저장하지 못했습니다.'),
+        });
+        return;
+      }
+
       addToast({
         type: 'success',
         message: status === 'applied-fuzzy'
           ? t('review.fuzzyMatchApplied', '유사 매칭으로 수정 제안이 적용되었습니다.')
           : t('review.applySuccess', '수정 제안이 적용되었습니다.'),
+        duration: 5000,
+        action: {
+          label: t('review.undo', '되돌리기'),
+          onClick: () => handleUndoReviewAction(actionId),
+        },
       });
     } else if (status === 'not-found') {
       console.warn('[ReviewPanel] suggestion target not found:', {
@@ -456,7 +596,7 @@ export function ReviewPanel(): JSX.Element {
         message: t('review.applyError.missingData', '수정 제안 데이터가 없습니다.'),
       });
     }
-  }, [deleteIssue, t]);
+  }, [handleUndoReviewAction, t]);
 
   /**
    * 재번역 버튼 클릭 - 중간 모달 열기
@@ -687,13 +827,22 @@ export function ReviewPanel(): JSX.Element {
 
   // Memoize derived values to avoid recalculation on every render
   // (streamingText, elapsedSeconds 등 빈번한 상태 변경 시 불필요한 재계산 방지)
-  const allIssues = useMemo(() => getAllIssues(), [results]); // results 변경 시 highlightNonce도 함께 변경됨 → store 캐시 무효화
+  const allIssues = useMemo(
+    () => getAllIssues(),
+    [results, reviewActionHistory, getAllIssues],
+  );
   const checkedIssues = useMemo(
     () => allIssues.filter((issue) => issue.checked && severityFilter.includes(issue.severity)),
     [allIssues, severityFilter],
   );
   const hasErrors = useMemo(() => results.some((r) => r.error), [results]);
   const allChecked = useMemo(() => allIssues.length > 0 && allIssues.every((i) => i.checked), [allIssues]);
+  const hasReviewActionUndo = useMemo(
+    () => reviewActionHistory.some((entry) =>
+      entry.state === 'resolved' && entry.projectId === project?.id,
+    ),
+    [reviewActionHistory, project?.id],
+  );
 
   return (
     <div className="h-full flex min-h-0 flex-col bg-editor-bg" data-testid="review-panel">
@@ -770,7 +919,7 @@ export function ReviewPanel(): JSX.Element {
                 <ReviewResultsTable
                   issues={allIssues}
                   onToggleCheck={toggleIssueCheck}
-                  onDelete={deleteIssue}
+                  onIgnore={handleIgnoreIssue}
                   onCopy={handleCopySuggestion}
                   onApply={handleApplySuggestion}
                   onViewInDocument={handleViewInDocument}
@@ -815,7 +964,7 @@ export function ReviewPanel(): JSX.Element {
             <ReviewResultsTable
               issues={allIssues}
               onToggleCheck={toggleIssueCheck}
-              onDelete={deleteIssue}
+              onIgnore={handleIgnoreIssue}
               onCopy={handleCopySuggestion}
               onApply={handleApplySuggestion}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
@@ -848,6 +997,16 @@ export function ReviewPanel(): JSX.Element {
             </button>
           ) : (
             <>
+              {hasReviewActionUndo && (
+                <button
+                  type="button"
+                  onClick={() => handleUndoReviewAction()}
+                  className="px-3 py-1.5 text-xs font-semibold rounded border border-editor-border hover:bg-editor-bg transition-colors"
+                  data-testid="review-undo-last-action"
+                >
+                  {t('review.undoLastAction', '최근 처리 되돌리기')}
+                </button>
+              )}
               {/* 재번역 버튼 (체크된 이슈가 있을 때만 표시) */}
               {checkedIssues.length > 0 && results.length > 0 && (
                 <button

@@ -6,6 +6,7 @@ import {
   rangeCrossesBlockBoundary,
 } from '@/editor/extensions/SearchHighlight';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { closeHistory } from '@tiptap/pm/history';
 import type { Editor } from '@tiptap/react';
 import {
   normalizeForSearch,
@@ -15,6 +16,9 @@ import {
   getWrappingQuotePair,
 } from '@/utils/normalizeForSearch';
 import type { ReviewIssue } from '@/stores/reviewStore';
+
+/** reviewStore가 새 적용 transaction을 redo로 오인하지 않도록 구분하는 meta. */
+export const REVIEW_SUGGESTION_APPLY_META = 'reviewSuggestionApply';
 
 export function normalizeSegmentGroupId(segmentGroupId: string | undefined): string | undefined {
   if (!segmentGroupId) return undefined;
@@ -401,7 +405,10 @@ export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): App
   const matchedText = state.doc.textBetween(resolved.from, resolved.to, '\n');
   const replacement = resolveReplacementText(baseReplacement, matchedText);
 
-  const tr = state.tr.replaceWith(resolved.from, resolved.to, state.schema.text(replacement));
+  // 직전의 수동 입력과 같은 history 그룹으로 합쳐지지 않게 독립 undo 단위로 닫는다.
+  const tr = closeHistory(
+    state.tr.replaceWith(resolved.from, resolved.to, state.schema.text(replacement)),
+  ).setMeta(REVIEW_SUGGESTION_APPLY_META, true);
   editor.view.dispatch(tr);
   return resolved.fuzzy ? 'applied-fuzzy' : 'applied';
 }

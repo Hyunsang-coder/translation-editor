@@ -1,6 +1,40 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatPanelId } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
+
+const sonnerMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({ toast: sonnerMocks }));
+
+describe('uiStore addToast', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('사용자가 누를 수 있는 토스트 액션을 Sonner에 전달한다', () => {
+    const onClick = vi.fn();
+
+    useUIStore.getState().addToast({
+      type: 'success',
+      message: '수정 제안이 적용되었습니다.',
+      duration: 5000,
+      action: { label: '되돌리기', onClick },
+    });
+
+    expect(sonnerMocks.success).toHaveBeenCalledWith(
+      '수정 제안이 적용되었습니다.',
+      {
+        duration: 5000,
+        action: { label: '되돌리기', onClick },
+      },
+    );
+  });
+});
 
 describe('uiStore editorViewMode', () => {
   it('기본 보기 모드는 문서 보기다', () => {

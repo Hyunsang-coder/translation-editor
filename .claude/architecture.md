@@ -55,7 +55,7 @@
 - AI-assisted review for errors, omissions, distortions, consistency, and native-speaker naturalness
 - Document split into chunks → sequential AI review → Markdown parsing
 - Output format: Markdown with `---REVIEW_START/END---` markers (required `Suggestion` field)
-- Results displayed in table with Apply/Copy/Ignore actions
+- Results displayed in table with Apply/Copy/Ignore actions; Apply and Ignore use reversible soft-resolution history instead of deleting issues
 - **Tauri path**: `streamWithTauriAiBackend({ useFor: 'review' })` — model options via `resolveModelCallOptions` (thinking/effort/temperature)
 - **Apply safety**: ambiguity guards (multi-match, fuzzy segment scope), block-boundary replace guard, conditional quote stripping at apply time
 - **Comparison Review** (대조 검수): Source↔Target comparison plus target naturalness checks

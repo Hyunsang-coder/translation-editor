@@ -103,7 +103,7 @@ Critical implementation warnings learned from past issues.
 
 35. **Review Apply vs Copy by Issue Type**: "오역/왜곡/일관성" types use Apply (replace in editor), "누락" type uses Copy (clipboard) since the text doesn't exist in target document.
 
-36. **Review Apply Deletes Issue**: When "적용" button is clicked, `deleteIssue(issue.id)` removes the issue from results. The highlight disappears automatically on next `tr.docChanged` recalculation.
+36. **Review Resolution Is Reversible Soft State**: "적용"과 "무시"는 이슈를 `results`에서 삭제하지 않고 `resolvedIssueIds`로 숨긴다. `reviewActionHistory`의 고유 `actionId`로 정확한 작업만 되돌리며, 적용은 ProseMirror undo/redo와 동기화하고 무시는 검수 상태만 복원한다. 오래된 토스트가 최신 작업을 대신 취소하지 않도록 토스트 콜백에서 "최근 작업"을 찾지 말고 캡처한 `actionId`를 사용한다.
 
 148. **Review Apply Ambiguity Guards (F1/F2)**: `findExcerptRange` returns null when the same text appears multiple times without `segmentGroupId` (refuse wrong replacement). `findBestSentenceMatch` also returns null when multiple sentences exceed the similarity threshold document-wide. Fuzzy matching respects `segmentRange` when `segmentGroupId` is present.
 

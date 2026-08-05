@@ -301,6 +301,7 @@ export const useUIStore = create<UIStore>()(
       addToast: (toast: Omit<Toast, 'id'>): void => {
         const options = {
           duration: toast.duration ?? 3000,
+          ...(toast.action ? { action: toast.action } : {}),
         };
 
         switch (toast.type) {

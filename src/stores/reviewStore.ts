@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { ITEProject } from '@/types';
 import { buildAlignedChunksAsync, clearReviewChunkCache, type AlignedChunk } from '@/ai/tools/reviewTool';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
@@ -69,6 +70,28 @@ export interface ReviewResult {
   error?: string;
 }
 
+interface ReviewActionHistoryBase {
+  actionId: string;
+  issueId: string;
+  projectId: string;
+  state: 'resolved' | 'undone';
+}
+
+/** 한 문장 적용과 ProseMirror undo/redo 경계를 연결하는 세션 내 기록. */
+export interface AppliedSuggestionHistoryEntry extends ReviewActionHistoryBase {
+  kind: 'applied';
+  beforeDoc: ProseMirrorNode;
+  afterDoc: ProseMirrorNode;
+}
+
+/** 문서를 변경하지 않고 검수 항목을 무시한 세션 내 기록. */
+export interface IgnoredIssueHistoryEntry extends ReviewActionHistoryBase {
+  kind: 'ignored';
+}
+
+export type ReviewActionHistoryEntry = AppliedSuggestionHistoryEntry | IgnoredIssueHistoryEntry;
+export type AppliedSuggestionHistoryTransition = 'undone' | 'redone' | null;
+
 // ============================================
 // Review Store State
 // ============================================
@@ -88,6 +111,8 @@ interface ReviewState {
   initializedProjectId: string | null;  // 초기화된 프로젝트 ID (탭 전환 시 상태 유지)
   totalIssuesFound: number;  // 검수 완료 시점의 총 이슈 수 (UI 메시지 분기용)
   streamingText: string;  // 현재 청크의 AI 스트리밍 응답 텍스트
+  resolvedIssueIds: string[]; // 적용 또는 무시되어 현재 결과 목록/하이라이트에서 숨긴 이슈
+  reviewActionHistory: ReviewActionHistoryEntry[]; // 적용/무시 및 되돌리기를 순서대로 기록
   /**
    * 외부(툴바)에서 온 검수 시작 요청. ReviewPanel이 소비(consume)하면 null로 돌아간다.
    *
@@ -171,10 +196,27 @@ interface ReviewActions {
    */
   toggleIssueCheck: (issueId: string) => void;
 
+  /** 문서는 바꾸지 않고 이슈를 무시 상태로 숨긴다. 성공 시 고유 작업 ID를 반환한다. */
+  ignoreIssue: (params: { issueId: string; projectId: string }) => string | null;
+
+  /** 고유 작업 ID에 해당하는 무시만 되돌린다. */
+  undoIgnoredIssue: (actionId: string) => boolean;
+
   /**
-   * 이슈 삭제
+   * 한 문장 적용을 해결 처리하고 undo/redo 동기화용 문서 경계를 기록
    */
-  deleteIssue: (issueId: string) => void;
+  recordAppliedSuggestion: (
+    entry: Omit<AppliedSuggestionHistoryEntry, 'actionId' | 'kind' | 'state'>,
+  ) => string | null;
+
+  /**
+   * editor transaction이 기록된 적용의 undo/redo인지 판별하여 이슈 해결 상태와 동기화
+   */
+  reconcileAppliedSuggestionTransaction: (params: {
+    projectId: string;
+    beforeDoc: ProseMirrorNode;
+    afterDoc: ProseMirrorNode;
+  }) => AppliedSuggestionHistoryTransition;
 
   /**
    * 모든 이슈 체크 상태 설정
@@ -243,6 +285,50 @@ type ReviewStore = ReviewState & ReviewActions;
 
 let cachedAllIssues: ReviewIssue[] = [];
 let cachedNonce: number = -1;
+// 적용 이력은 TipTap history depth와 맞추고, 무시는 별도 한도를 사용한다.
+// 무시가 많아도 editor undo/redo와 연결된 적용 이력을 밀어내면 안 된다.
+// 창 밖으로 밀린 작업의 resolvedIssueIds는 유지되어 처리한 항목이 다시 나타나지 않는다.
+const MAX_REVIEW_ACTION_HISTORY_PER_KIND = 100;
+let reviewActionSequence = 0;
+
+function createReviewActionId(kind: ReviewActionHistoryEntry['kind']): string {
+  reviewActionSequence += 1;
+  return `${kind}-${reviewActionSequence}`;
+}
+
+function reconcileResolvedIssueId(
+  resolvedIssueIds: string[],
+  history: ReviewActionHistoryEntry[],
+  issueId: string,
+): string[] {
+  const remainsResolved = history.some((entry) =>
+    entry.issueId === issueId && entry.state === 'resolved',
+  );
+  if (remainsResolved) {
+    return resolvedIssueIds.includes(issueId) ? resolvedIssueIds : [...resolvedIssueIds, issueId];
+  }
+  return resolvedIssueIds.filter((id) => id !== issueId);
+}
+
+function trimReviewActionHistory(history: ReviewActionHistoryEntry[]): ReviewActionHistoryEntry[] {
+  let appliedCount = 0;
+  let ignoredCount = 0;
+  const kept: ReviewActionHistoryEntry[] = [];
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const entry = history[index]!;
+    if (entry.kind === 'applied') {
+      if (appliedCount >= MAX_REVIEW_ACTION_HISTORY_PER_KIND) continue;
+      appliedCount += 1;
+    } else {
+      if (ignoredCount >= MAX_REVIEW_ACTION_HISTORY_PER_KIND) continue;
+      ignoredCount += 1;
+    }
+    kept.push(entry);
+  }
+
+  return kept.reverse();
+}
 
 // initializeReview 경합 가드: A→B 빠른 전환 시 늦게 끝난 A의 set이 B 상태를 덮지 않도록
 // (projectStore hydrateCommentsForProject의 requestSeq 패턴과 동일)
@@ -267,6 +353,8 @@ const initialState: ReviewState = {
   initializedProjectId: null,
   totalIssuesFound: 0,
   streamingText: '',
+  resolvedIssueIds: [],
+  reviewActionHistory: [],
   pendingReviewRun: null,
 };
 
@@ -295,6 +383,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       progress: { completed: 0, total: chunks.length },
       initializedProjectId: project.id,
       highlightEnabled: false,  // 초기화 시 기존 하이라이트 무효화
+      resolvedIssueIds: [],
+      reviewActionHistory: [],
       highlightNonce: get().highlightNonce + 1,  // 에디터에 변경 알림
     });
   },
@@ -353,6 +443,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       initializedProjectId: projectId,
       severityFilter: ['critical', 'major', 'minor'],
       highlightEnabled: true,
+      resolvedIssueIds: [],
+      reviewActionHistory: [],
       highlightNonce: highlightNonce + 1,
       streamingText: '',
     });
@@ -384,6 +476,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
       currentChunkIndex: 0,
       chunks: nextChunks,
       progress: { completed: 0, total: nextChunks.length },
+      resolvedIssueIds: [],
+      reviewActionHistory: [],
       highlightNonce: highlightNonce + 1, // 즉시 이전 하이라이트 제거
       totalIssuesFound: 0, // 새 검수 시작 시 리셋
       streamingText: '', // 스트리밍 텍스트 초기화
@@ -391,10 +485,13 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   finishReview: () => {
-    const allIssues = get().getAllIssues();
+    // 해결/무시된 항목도 이번 검수에서 발견된 전체 건수에는 포함한다.
+    const totalIssues = new Set(
+      get().results.flatMap((result) => result.issues.map((issue) => issue.id)),
+    ).size;
     set({
       isReviewing: false,
-      totalIssuesFound: allIssues.length,
+      totalIssuesFound: totalIssues,
       // Note: streamingText는 초기화하지 않음 - 검수 완료 후에도 마지막 응답 확인 가능
     });
   },
@@ -428,7 +525,7 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
   },
 
   getAllIssues: () => {
-    const { results, highlightNonce } = get();
+    const { results, highlightNonce, resolvedIssueIds } = get();
 
     // 캐시 히트: nonce가 변경되지 않았으면 캐시된 값 반환
     if (cachedNonce === highlightNonce) {
@@ -436,7 +533,8 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     }
 
     // 캐시 미스: 전체 이슈 재계산
-    const allIssues = results.flatMap((r) => r.issues);
+    const resolved = new Set(resolvedIssueIds);
+    const allIssues = results.flatMap((r) => r.issues).filter((issue) => !resolved.has(issue.id));
 
     // 중복 제거: id 기반 (결정적 ID)
     const seen = new Map<string, ReviewIssue>();
@@ -464,13 +562,159 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
   },
 
-  deleteIssue: (issueId: string) => {
-    const { results, highlightNonce } = get();
-    const updatedResults = results.map((result) => ({
-      ...result,
-      issues: result.issues.filter((issue) => issue.id !== issueId),
-    }));
-    set({ results: updatedResults, highlightNonce: highlightNonce + 1 });
+  ignoreIssue: ({ issueId, projectId }) => {
+    const { results, initializedProjectId, resolvedIssueIds, reviewActionHistory, highlightNonce } = get();
+    if (
+      initializedProjectId !== projectId
+      || resolvedIssueIds.includes(issueId)
+      || !results.some((result) => result.issues.some((issue) => issue.id === issueId))
+    ) {
+      return null;
+    }
+
+    const entry: IgnoredIssueHistoryEntry = {
+      actionId: createReviewActionId('ignored'),
+      kind: 'ignored',
+      issueId,
+      projectId,
+      state: 'resolved',
+    };
+    const nextHistory = trimReviewActionHistory([
+      ...reviewActionHistory.filter((item) => !(item.kind === 'ignored' && item.issueId === issueId)),
+      entry,
+    ]);
+    set({
+      reviewActionHistory: nextHistory,
+      resolvedIssueIds: resolvedIssueIds.includes(issueId)
+        ? resolvedIssueIds
+        : [...resolvedIssueIds, issueId],
+      highlightNonce: highlightNonce + 1,
+    });
+    return entry.actionId;
+  },
+
+  undoIgnoredIssue: (actionId) => {
+    const { results, initializedProjectId, resolvedIssueIds, reviewActionHistory, highlightNonce } = get();
+    const actionIndex = reviewActionHistory.findIndex((entry) =>
+      entry.actionId === actionId
+      && entry.kind === 'ignored'
+      && entry.state === 'resolved'
+      && entry.projectId === initializedProjectId,
+    );
+    if (actionIndex < 0) return false;
+
+    const action = reviewActionHistory[actionIndex]!;
+    if (!results.some((result) => result.issues.some((issue) => issue.id === action.issueId))) {
+      return false;
+    }
+
+    const nextHistory = reviewActionHistory.map((entry, index) =>
+      index === actionIndex ? { ...entry, state: 'undone' as const } : entry,
+    );
+    set({
+      reviewActionHistory: nextHistory,
+      resolvedIssueIds: reconcileResolvedIssueId(resolvedIssueIds, nextHistory, action.issueId),
+      highlightNonce: highlightNonce + 1,
+    });
+    return true;
+  },
+
+  recordAppliedSuggestion: (entry) => {
+    const { results, resolvedIssueIds, reviewActionHistory, highlightNonce } = get();
+    if (!results.some((result) => result.issues.some((issue) => issue.id === entry.issueId))) {
+      return null;
+    }
+    if (resolvedIssueIds.includes(entry.issueId)) return null;
+
+    const appliedEntry: AppliedSuggestionHistoryEntry = {
+      ...entry,
+      actionId: createReviewActionId('applied'),
+      kind: 'applied',
+      state: 'resolved',
+    };
+    // 새 문서 변경은 ProseMirror redo 스택을 비우므로 undone 기록도 함께 폐기한다.
+    const nextHistory = trimReviewActionHistory([
+      ...reviewActionHistory.filter((item) => item.state === 'resolved'),
+      appliedEntry,
+    ]);
+    set({
+      resolvedIssueIds: [...resolvedIssueIds, entry.issueId],
+      reviewActionHistory: nextHistory,
+      highlightNonce: highlightNonce + 1,
+    });
+    return appliedEntry.actionId;
+  },
+
+  reconcileAppliedSuggestionTransaction: ({ projectId, beforeDoc, afterDoc }) => {
+    const { reviewActionHistory, resolvedIssueIds, highlightNonce } = get();
+
+    // 같은 transaction을 listener와 명시적 undo 경로가 연달아 확인해도 멱등적으로 처리한다.
+    const alreadyUndone = reviewActionHistory.find((entry) =>
+      entry.kind === 'applied'
+      && entry.projectId === projectId
+      && entry.state === 'undone'
+      && beforeDoc.eq(entry.afterDoc)
+      && afterDoc.eq(entry.beforeDoc),
+    );
+    if (alreadyUndone) return 'undone';
+
+    let undoIndex = -1;
+    for (let index = reviewActionHistory.length - 1; index >= 0; index -= 1) {
+      const entry = reviewActionHistory[index]!;
+      if (
+        entry.kind === 'applied'
+        && entry.projectId === projectId
+        && entry.state === 'resolved'
+        && beforeDoc.eq(entry.afterDoc)
+        && afterDoc.eq(entry.beforeDoc)
+      ) {
+        undoIndex = index;
+        break;
+      }
+    }
+    if (undoIndex >= 0) {
+      const action = reviewActionHistory[undoIndex]!;
+      const nextHistory = reviewActionHistory.map((item, index) =>
+        index === undoIndex ? { ...item, state: 'undone' as const } : item,
+      );
+      set({
+        reviewActionHistory: nextHistory,
+        resolvedIssueIds: reconcileResolvedIssueId(resolvedIssueIds, nextHistory, action.issueId),
+        highlightNonce: highlightNonce + 1,
+      });
+      return 'undone';
+    }
+
+    const alreadyRedone = reviewActionHistory.find((entry) =>
+      entry.kind === 'applied'
+      && entry.projectId === projectId
+      && entry.state === 'resolved'
+      && beforeDoc.eq(entry.beforeDoc)
+      && afterDoc.eq(entry.afterDoc),
+    );
+    if (alreadyRedone) return 'redone';
+
+    const redoIndex = reviewActionHistory.findIndex((entry) =>
+      entry.kind === 'applied'
+      && entry.projectId === projectId
+      && entry.state === 'undone'
+      && beforeDoc.eq(entry.beforeDoc)
+      && afterDoc.eq(entry.afterDoc),
+    );
+    if (redoIndex >= 0) {
+      const action = reviewActionHistory[redoIndex]!;
+      const nextHistory = reviewActionHistory.map((item, index) =>
+        index === redoIndex ? { ...item, state: 'resolved' as const } : item,
+      );
+      set({
+        reviewActionHistory: nextHistory,
+        resolvedIssueIds: reconcileResolvedIssueId(resolvedIssueIds, nextHistory, action.issueId),
+        highlightNonce: highlightNonce + 1,
+      });
+      return 'redone';
+    }
+
+    return null;
   },
 
   setAllIssuesChecked: (checked: boolean) => {
