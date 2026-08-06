@@ -38,12 +38,19 @@ function buildMockScript(seedProjects: MockProject[]): string {
 
   // 시스템 프롬프트의 ---X_START/END--- 마커를 감지해 같은 마커로 감싼
   // 고정 응답을 돌려준다 (번역/부분 재번역 등 마커 기반 워크플로우 공용).
+  // 부분 재번역처럼 출력 블록이 둘 이상인 경우에도 모든 블록을 반환한다.
   const MOCK_AI_BODY = 'Mock AI 응답입니다.';
   function buildMockAiText(a) {
     const system = (a && a.messages || []).find((m) => m.role === 'system');
-    const marker = ((system && system.content) || '').match(/---([A-Z_]+)_START---/);
-    if (!marker) return MOCK_AI_BODY;
-    return '---' + marker[1] + '_START---\\n' + MOCK_AI_BODY + '\\n---' + marker[1] + '_END---';
+    const markerNames = Array.from(
+      ((system && system.content) || '').matchAll(/---([A-Z_]+)_START---/g),
+      (match) => match[1],
+    );
+    const uniqueMarkerNames = Array.from(new Set(markerNames));
+    if (uniqueMarkerNames.length === 0) return MOCK_AI_BODY;
+    return uniqueMarkerNames.map((markerName) => (
+      '---' + markerName + '_START---\\n' + MOCK_AI_BODY + '\\n---' + markerName + '_END---'
+    )).join('\\n');
   }
 
   // ── Command handlers ──

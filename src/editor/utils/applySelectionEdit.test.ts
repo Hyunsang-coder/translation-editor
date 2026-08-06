@@ -6,6 +6,7 @@ import {
   createSelectionAnchor,
   resolveSelectionAnchor,
 } from '@/editor/extensions/SelectionAnchor';
+import { CommentMark } from '@/editor/extensions/CommentMark';
 import { applySelectionEdit } from './applySelectionEdit';
 
 describe('applySelectionEdit', () => {
@@ -80,5 +81,54 @@ describe('applySelectionEdit', () => {
       status: 'active',
       createdAt: 1,
     }, 'replacement')).toBe('invalid');
+  });
+
+  it('선택 전체에 공통인 굵게 서식을 교체문에도 보존한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, SelectionAnchor],
+      content: '<p><strong>Target text</strong></p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'Target text'.length }],
+    });
+
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+    ).toBe('applied');
+    expect(editor.getJSON().content?.[0]?.content?.[0]?.marks).toEqual([
+      { type: 'bold' },
+    ]);
+  });
+
+  it('서로 다른 인라인 서식을 가로지르는 선택은 문서를 바꾸지 않고 거부한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, SelectionAnchor],
+      content: '<p><strong>Bold</strong><em>Italic</em></p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'BoldItalic'.length }],
+    });
+    const before = editor.getJSON();
+
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+    ).toBe('formatting-conflict');
+    expect(editor.getJSON()).toEqual(before);
+  });
+
+  it('균일한 코멘트 마크를 교체문에도 유지한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, CommentMark, SelectionAnchor],
+      content: '<p><span data-comment-id="comment-1">Target</span></p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'Target'.length }],
+    });
+
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+    ).toBe('applied');
+    expect(editor.getHTML()).toContain('data-comment-id="comment-1"');
+    expect(editor.getHTML()).toContain('Replacement');
   });
 });

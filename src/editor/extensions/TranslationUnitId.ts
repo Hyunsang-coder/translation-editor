@@ -33,6 +33,14 @@ export interface TranslationUnitIdOptions {
   assignMissingIds: boolean;
 }
 
+export interface CollectAlignedSourceUnitsOptions {
+  /**
+   * ID가 하나도 맞지 않는 legacy 문서에서만 문서 순번 fallback을 허용한다.
+   * 직접 재번역은 잘못된 원문을 쓰는 것보다 중단하는 편이 안전하므로 기본 false다.
+   */
+  allowLegacyOrderFallback?: boolean;
+}
+
 function cloneDocument<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -149,20 +157,25 @@ export function reattachTranslationUnitIds(
 /**
  * Target 선택 유닛 ID에 대응하는 Source 유닛을 찾는다.
  * 1차: translationUnitId 직접 매칭 (전체 번역/폴리싱 적용 시 reattach된 문서).
- * 2차 fallback: reattach 이전 legacy 문서는 Source/Target ID가 독립 생성되어
- * 매칭되지 않는다. 빈 유닛(빈 문단 등)을 제외한 내용 유닛의 개수·타입이
- * 1:1로 일치할 때만 같은 순번의 Source 유닛으로 대응한다.
+ * 2차 fallback(명시적 opt-in): reattach 이전 legacy 문서는 Source/Target ID가
+ * 독립 생성되어 매칭되지 않는다. 빈 유닛(빈 문단 등)을 제외한 내용 유닛의
+ * 개수·타입이 1:1로 일치할 때만 같은 순번의 Source 유닛으로 대응한다.
  * (번역 과정에서 생기는 빈 문단 개수 차이에 관대하게 동작)
+ * 직접 재번역과 AI 선택 컨텍스트는 잘못된 원문 추측을 피하려고 기본 비활성화한다.
  */
 export function collectAlignedSourceUnits(
   sourceDoc: TranslationUnitDocument,
   targetDoc: TranslationUnitDocument,
   selectedUnitIds: string[],
+  options: CollectAlignedSourceUnitsOptions = {},
 ): TranslationUnit[] {
   const selectedIds = new Set(selectedUnitIds);
+  if (selectedIds.size === 0) return [];
   const sourceUnits = collectTranslationUnits(sourceDoc);
   const byId = sourceUnits.filter((unit) => unit.id && selectedIds.has(unit.id));
-  if (byId.length > 0) return byId;
+  if (byId.length === selectedIds.size) return byId;
+  // 일부만 맞는 혼합 상태에서 부분 원문을 반환하면 선택의 나머지가 조용히 빠진다.
+  if (byId.length > 0 || options.allowLegacyOrderFallback !== true) return [];
 
   const sourceContentUnits = sourceUnits.filter((unit) => unit.text.trim());
   const targetContentUnits = collectTranslationUnits(targetDoc)

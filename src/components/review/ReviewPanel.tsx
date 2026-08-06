@@ -28,12 +28,31 @@ import {
   resolveSuggestionRange,
 } from '@/components/review/reviewApply';
 import { useEditorStore } from '@/stores/editorStore';
-import { stripHtml } from '@/utils/hash';
+import { hashContent, stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { Modal } from '@/components/ui/Modal';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { detectSourceLanguage } from '@/utils/detectLanguage';
+
+interface RetranslateRequestMeta {
+  projectId: string;
+  targetRevision: string | null;
+}
+
+function getTargetEditorSnapshot(): {
+  doc: TipTapDocJson | null;
+  revision: string | null;
+} {
+  const editor = useEditorStore.getState().targetEditor;
+  if (!editor || editor.isDestroyed) return { doc: null, revision: null };
+  try {
+    const doc = editor.getJSON() as TipTapDocJson;
+    return { doc, revision: hashContent(JSON.stringify(doc)) };
+  } catch {
+    return { doc: null, revision: null };
+  }
+}
 
 /**
  * Review Panel 컴포넌트
@@ -89,6 +108,7 @@ export function ReviewPanel(): JSX.Element {
   const [retranslateError, setRetranslateError] = useState<string | null>(null);
   const [retranslateStreamingText, setRetranslateStreamingText] = useState<string>('');
   const retranslateAbortController = useRef<AbortController | null>(null);
+  const retranslateRequestMetaRef = useRef<RetranslateRequestMeta | null>(null);
   // 청크 캐시 (검수/재번역에서 사용)
   const chunksRef = useRef<AlignedChunk[]>([]);
 
@@ -122,6 +142,8 @@ export function ReviewPanel(): JSX.Element {
 
       // 진행 중 재번역 중단 + 프리뷰/설정 모달 닫기 (다른 프로젝트 문서에 적용 방지)
       retranslateAbortController.current?.abort();
+      retranslateAbortController.current = null;
+      retranslateRequestMetaRef.current = null;
       setRetranslateModalOpen(false);
       setRetranslatePreviewOpen(false);
       setRetranslatePreviewDoc(null);
@@ -134,6 +156,18 @@ export function ReviewPanel(): JSX.Element {
       initializeReview(project);
     }
   }, [project, initializeReview]);
+
+  // ReviewPanel은 사이드바를 닫으면 언마운트될 수 있다. 로컬 상태에 결과를 쓸 곳이
+  // 사라진 뒤에도 검수/재번역 스트림이 계속 과금되지 않도록 두 요청을 모두 중단한다.
+  useEffect(() => {
+    return () => {
+      reviewAbortRef.current?.abort();
+      reviewAbortRef.current = null;
+      retranslateAbortController.current?.abort();
+      retranslateAbortController.current = null;
+      retranslateRequestMetaRef.current = null;
+    };
+  }, []);
 
   // 검수 문장 적용은 ProseMirror history와 reviewStore의 해결 상태를 함께 움직인다.
   // 키보드 Cmd/Ctrl+Z 및 redo도 이 listener를 거쳐 이슈/하이라이트가 즉시 복원·해결된다.
@@ -643,6 +677,14 @@ export function ReviewPanel(): JSX.Element {
     // 프로젝트 ID 스냅샷 (완료 후 stale 검증용)
     const startProjectId = currentProject.id;
 
+    // Apply 시점까지 소유권을 검증할 수 있도록 요청 프로젝트와 Target 전체 JSON의
+    // revision을 고정한다. Markdown 해시는 comment/전용 mark를 놓치므로 JSON을 쓴다.
+    const targetSnapshot = getTargetEditorSnapshot();
+    retranslateRequestMetaRef.current = {
+      projectId: startProjectId,
+      targetRevision: targetSnapshot.revision,
+    };
+
     // 중간 모달 닫기
     setRetranslateModalOpen(false);
 
@@ -654,10 +696,7 @@ export function ReviewPanel(): JSX.Element {
     setRetranslateStreamingText('');
 
     // 선택 적용 diff 기준: 현재 Target 문서 스냅샷
-    const targetEditor = useEditorStore.getState().targetEditor;
-    setRetranslateOriginalDocJson(
-      targetEditor ? (targetEditor.getJSON() as TipTapDocJson) : null,
-    );
+    setRetranslateOriginalDocJson(targetSnapshot.doc);
 
     const controller = new AbortController();
     retranslateAbortController.current = controller;
@@ -716,6 +755,10 @@ export function ReviewPanel(): JSX.Element {
       });
 
       // 완료 후 프로젝트 전환 여부 확인 (stale 방지)
+      if (
+        controller.signal.aborted ||
+        retranslateAbortController.current !== controller
+      ) return;
       if (useProjectStore.getState().project?.id !== startProjectId) {
         setRetranslateError(t('review.retranslate.projectChanged', '재번역 중 프로젝트가 변경되었습니다. 결과가 폐기됩니다.'));
         return;
@@ -723,26 +766,32 @@ export function ReviewPanel(): JSX.Element {
 
       setRetranslatePreviewDoc(doc);
     } catch (error) {
+      // 프로젝트 전환/언마운트 후 old request가 새 상태를 덮지 않도록 소유권 확인.
+      if (retranslateAbortController.current !== controller) return;
       if (controller.signal.aborted) {
         setRetranslateError(t('review.retranslate.cancelled', '재번역이 취소되었습니다.'));
       } else {
         setRetranslateError(formatTranslationError(error));
       }
     } finally {
-      setRetranslateLoading(false);
-      // 본인 컨트롤러일 때만 해제 (이중 실행 가드의 기준값 보호)
+      // 본인 컨트롤러일 때만 로딩과 ref를 정리한다. 전환 직후 새 요청이 시작됐으면
+      // old finally가 새 요청의 로딩 상태를 내리면 안 된다.
       if (retranslateAbortController.current === controller) {
+        setRetranslateLoading(false);
         retranslateAbortController.current = null;
       }
     }
   }, [getCheckedIssues, retranslateMessage, t]);
 
   const handleRetranslateCancel = useCallback(() => {
-    if (retranslateAbortController.current) {
-      retranslateAbortController.current.abort();
+    const controller = retranslateAbortController.current;
+    if (controller) {
+      controller.abort();
+      retranslateAbortController.current = null;
     }
     setRetranslateLoading(false);
-  }, []);
+    setRetranslateError(t('review.retranslate.cancelled', '재번역이 취소되었습니다.'));
+  }, [t]);
 
   const handleRetranslateClose = useCallback(() => {
     setRetranslatePreviewOpen(false);
@@ -750,6 +799,7 @@ export function ReviewPanel(): JSX.Element {
     setRetranslateOriginalDocJson(null);
     setRetranslateError(null);
     setRetranslateStreamingText('');
+    retranslateRequestMetaRef.current = null;
   }, []);
 
   /**
@@ -766,6 +816,29 @@ export function ReviewPanel(): JSX.Element {
       addToast({
         type: 'error',
         message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.'),
+      });
+      return;
+    }
+
+    const requestMeta = retranslateRequestMetaRef.current;
+    if (!requestMeta || requestMeta.projectId !== project.id) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
+      });
+      handleRetranslateClose();
+      return;
+    }
+
+    const currentTargetRevision = getTargetEditorSnapshot().revision;
+    if (
+      requestMeta.targetRevision === null ||
+      currentTargetRevision === null ||
+      requestMeta.targetRevision !== currentTargetRevision
+    ) {
+      addToast({
+        type: 'warning',
+        message: t('editor.applyCancelledDocChanged', '재번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
       });
       return;
     }

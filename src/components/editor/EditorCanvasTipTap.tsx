@@ -37,7 +37,10 @@ import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
 import { serializeUserComments } from '@/ai/commentContext';
-import { removeCommentMark } from '@/editor/utils/commentNavigation';
+import {
+  collectCommentIdsInRange,
+  removeCommentMark,
+} from '@/editor/utils/commentNavigation';
 import {
   getChatSessionId,
   isChatPanel,
@@ -47,6 +50,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import {
   createSelectionAnchor,
+  getSingleAnchorRange,
   normalizeSelectionAnchorRanges,
   readAnchorRangesText,
   removeSelectionAnchor,
@@ -69,7 +73,15 @@ import {
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import { retranslateSelection } from '@/ai/retranslateSelection';
-import { applySelectionEdit } from '@/editor/utils/applySelectionEdit';
+import {
+  applySelectionEdit,
+  selectionHasUniformFormatting,
+} from '@/editor/utils/applySelectionEdit';
+import { syncCommentExcerpts } from '@/editor/utils/syncCommentExcerpts';
+import {
+  resolveInitialAlignedSourceRange,
+  type SourceAlignmentPrecision,
+} from '@/editor/utils/alignedSelectionRange';
 import {
   buildContextSnapshot,
   resolveWorkflowContextFromSnapshot,
@@ -262,7 +274,12 @@ export function EditorCanvasTipTap(): JSX.Element {
   const selectionToolbarRef = useRef<HTMLDivElement>(null);
   const [selectionEdit, setSelectionEdit] = useState<null | {
     selection: SelectionContext;
+    /** ID로 검증된 Source 번역 유닛 전체. AI 구절 판별의 진실 공급원. */
+    sourceUnitText: string;
+    /** UI에 표시할 현재 최선의 대응 범위(유닛 → 문장 → AI 검증 구절). */
     sourceText: string;
+    sourceAlignmentPrecision: SourceAlignmentPrecision;
+    currentTargetUnitText: string;
     instruction: string;
     referenceOptions: ContextReferenceOptions;
     replacementText: string;
@@ -574,6 +591,18 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       return;
     }
+    const selectionAnchor = resolveSelectionAnchor(bubble.editor, selection.anchorId);
+    if (!selectionAnchor || !selectionHasUniformFormatting(bubble.editor, selectionAnchor)) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t(
+          'selection.mixedFormattingUnsupported',
+          '서로 다른 서식이 섞인 범위는 재번역할 수 없습니다. 같은 서식 안에서 다시 선택해주세요.',
+        ),
+      });
+      return;
+    }
     const sourceDoc = sourceEditorRef.current?.getJSON() as TranslationUnitDocument | undefined;
     if (!sourceDoc) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
@@ -585,14 +614,14 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     // 표 셀 선택은 셀 유닛과 안쪽 문단 유닛이 함께 잡힌다. 조상(셀)을 버리지
     // 않으면 셀 전체가 원문으로 들어가고 선택 문단이 한 번 더 반복된다.
-    const sourceText = dropAncestorUnits(collectAlignedSourceUnits(
+    const sourceUnitText = dropAncestorUnits(collectAlignedSourceUnits(
       sourceDoc,
       bubble.editor.getJSON() as TranslationUnitDocument,
       selection.translationUnitIds,
     ))
       .map((unit) => unit.text)
       .join('\n');
-    if (!sourceText.trim()) {
+    if (!sourceUnitText.trim()) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
         type: 'error',
@@ -600,9 +629,38 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       return;
     }
+    const anchorRange = getSingleAnchorRange(selectionAnchor);
+    if (!anchorRange) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+      });
+      return;
+    }
+    const $from = bubble.editor.state.doc.resolve(anchorRange.from);
+    const $to = bubble.editor.state.doc.resolve(anchorRange.to);
+    if (!$from.sameParent($to) || !$from.parent.isTextblock) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
+      });
+      return;
+    }
+    const currentTargetUnitText = $from.parent.textContent;
+    const initialAlignment = resolveInitialAlignedSourceRange({
+      sourceUnitText,
+      targetUnitText: currentTargetUnitText,
+      targetSelectionStart: $from.parentOffset,
+      targetSelectionEnd: $to.parentOffset,
+    });
     setSelectionEdit({
       selection,
-      sourceText,
+      sourceUnitText,
+      sourceText: initialAlignment.text,
+      sourceAlignmentPrecision: initialAlignment.precision,
+      currentTargetUnitText,
       instruction: '',
       // 번역사는 한 문서에서 같은 참조 범위로 여러 문장을 고친다. 선택마다 초기화하면
       // 매번 같은 선택을 반복해야 하므로 프로젝트 안에서는 직전 설정을 유지한다.
@@ -662,7 +720,10 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       const result = await retranslateSelection({
         projectId: requestProjectId,
-        sourceText: request.sourceText,
+        sourceText: request.sourceUnitText,
+        suggestedSourceText: request.sourceText,
+        suggestedAlignmentPrecision: request.sourceAlignmentPrecision,
+        currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
         targetLanguage: project.metadata.targetLanguage ?? 'Target',
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
@@ -685,6 +746,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         current?.selection.selectionId === request.selection.selectionId
           ? {
               ...current,
+              sourceText: result.alignedSourceText,
+              sourceAlignmentPrecision: result.alignmentPrecision,
               replacementText: result.replacementText,
               contextManifest: result.contextManifest,
               forbiddenTermsUsed: request.referenceOptions.forbiddenTerms
@@ -740,13 +803,26 @@ export function EditorCanvasTipTap(): JSX.Element {
       } : null);
       return;
     }
+    const anchorRange = getSingleAnchorRange(anchor);
+    const affectedCommentIds = anchorRange
+      ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
+      : [];
     const result = applySelectionEdit(editor, anchor, request.replacementText);
     if (result !== 'applied') {
       setSelectionEdit((current) => current ? {
         ...current,
-        error: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+        error: result === 'formatting-conflict'
+          ? t(
+              'selection.mixedFormattingUnsupported',
+              '서로 다른 서식이 섞인 범위는 재번역할 수 없습니다. 같은 서식 안에서 다시 선택해주세요.',
+            )
+          : t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
       } : null);
       return;
+    }
+    syncCommentExcerpts(editor, affectedCommentIds);
+    if (affectedCommentIds.length > 0) {
+      void useProjectStore.getState().saveProject();
     }
     closeSelectionEdit();
   }, [selectionEdit, project?.id, t, closeSelectionEdit]);
@@ -1890,6 +1966,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         open={selectionEdit !== null}
         selection={selectionEdit?.selection ?? null}
         sourceText={selectionEdit?.sourceText ?? ''}
+        sourceAlignmentPrecision={selectionEdit?.sourceAlignmentPrecision}
         replacementText={selectionEdit?.replacementText ?? ''}
         instruction={selectionEdit?.instruction ?? ''}
         referenceOptions={

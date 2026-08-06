@@ -157,7 +157,7 @@ describe('TranslationUnitId', () => {
       expect(units.map((unit) => unit.text)).toEqual(['Body']);
     });
 
-    it('ID가 어긋나도 블록 구조가 같으면 같은 위치의 원문으로 fallback한다', () => {
+    it('ID가 어긋나면 기본 경로에서는 같은 순번의 원문을 추측하지 않는다', () => {
       // legacy 프로젝트: Target 에디터가 독립적으로 부여한 랜덤 ID
       const targetDoc = {
         type: 'doc',
@@ -168,6 +168,24 @@ describe('TranslationUnitId', () => {
       };
 
       const units = collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b']);
+
+      expect(units).toEqual([]);
+    });
+
+    it('호출부가 명시적으로 허용한 legacy 문서만 같은 위치의 원문으로 fallback한다', () => {
+      const targetDoc = {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 1, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
+        ],
+      };
+      const units = collectAlignedSourceUnits(
+        sourceDoc,
+        targetDoc,
+        ['random-b'],
+        { allowLegacyOrderFallback: true },
+      );
 
       expect(units.map((unit) => unit.text)).toEqual(['Body']);
     });
@@ -195,9 +213,28 @@ describe('TranslationUnitId', () => {
         ],
       };
 
-      const units = collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b']);
+      const units = collectAlignedSourceUnits(
+        sourceDoc,
+        targetDoc,
+        ['random-b'],
+        { allowLegacyOrderFallback: true },
+      );
 
       expect(units.map((unit) => unit.text)).toEqual(['Body']);
+    });
+
+    it('선택 ID 일부만 Source와 일치하면 부분 원문을 반환하지 않는다', () => {
+      const targetDoc = {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 1, translationUnitId: 'source-1' }, content: [{ type: 'text', text: '제목' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
+        ],
+      };
+
+      expect(
+        collectAlignedSourceUnits(sourceDoc, targetDoc, ['source-1', 'random-b']),
+      ).toEqual([]);
     });
   });
 

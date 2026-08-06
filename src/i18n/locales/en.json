@@ -615,6 +615,7 @@
     "retranslate": {
       "noSegments": "No segments to retranslate.",
       "cancelled": "Retranslation cancelled.",
+      "projectChanged": "The project changed during retranslation, so the result was discarded.",
       "applied": "Retranslation applied.",
       "applyFailed": "Could not apply the retranslation.",
       "button": "Retranslate",
@@ -706,9 +707,15 @@
     "generate": "Retranslate",
     "generating": "Generating proposal…",
     "alignedSourceMissing": "Could not find the aligned source.",
+    "mixedFormattingUnsupported": "Selections containing mixed formatting cannot be retranslated. Select text with the same formatting and try again.",
     "reselectRequired": "The document changed. Please select the text again.",
     "projectChanged": "The project changed, so this proposal cannot be applied.",
     "forbiddenTermViolation": "The proposal contains the forbidden term “{{term}}”.",
+    "alignment": {
+      "selection": "AI-aligned phrase",
+      "sentence": "Sentence alignment",
+      "unit": "Paragraph context"
+    },
     "reference": {
       "translationRules": "Translation rules",
       "forbiddenTerms": "Forbidden terms",

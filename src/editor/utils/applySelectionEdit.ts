@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import { Mark } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import {
   getSingleAnchorRange,
@@ -7,7 +8,42 @@ import {
 } from '@/editor/extensions/SelectionAnchor';
 import { pluginKeys } from '@/editor/plugins/pluginKeys';
 
-export type ApplySelectionEditResult = 'applied' | 'stale' | 'invalid';
+export type ApplySelectionEditResult =
+  | 'applied'
+  | 'stale'
+  | 'invalid'
+  | 'formatting-conflict';
+
+/**
+ * 선택 범위의 모든 텍스트 노드가 같은 mark 집합을 쓰는지 확인한다.
+ * 서로 다른 mark를 가로지르는 교체를 시작점 mark 하나로 평탄화하면 서식과 코멘트
+ * 범위가 조용히 바뀌므로, 직접 재번역에서는 안전하게 거부한다.
+ */
+export function getUniformSelectionMarks(
+  editor: Editor,
+  anchor: SelectionAnchorRecord,
+): readonly Mark[] | null {
+  const range = getSingleAnchorRange(anchor);
+  if (!range) return null;
+
+  const markSets: Mark[][] = [];
+  editor.state.doc.nodesBetween(range.from, range.to, (node, pos) => {
+    if (!node.isText) return;
+    const nodeTo = pos + node.nodeSize;
+    if (nodeTo <= range.from || pos >= range.to) return;
+    markSets.push([...node.marks]);
+  });
+  if (markSets.length === 0) return null;
+  const first = markSets[0]!;
+  return markSets.every((marks) => Mark.sameSet(first, marks)) ? first : null;
+}
+
+export function selectionHasUniformFormatting(
+  editor: Editor,
+  anchor: SelectionAnchorRecord,
+): boolean {
+  return getUniformSelectionMarks(editor, anchor) !== null;
+}
 
 export function applySelectionEdit(
   editor: Editor,
@@ -35,7 +71,19 @@ export function applySelectionEdit(
   const $to = editor.state.doc.resolve(range.to);
   if (!$from.sameParent($to) || !$from.parent.isTextblock) return 'invalid';
 
-  const tr = editor.state.tr.insertText(replacementText, range.from, range.to);
+  const marks = getUniformSelectionMarks(editor, anchor);
+  if (!marks) return 'formatting-conflict';
+
+  const tr = editor.state.tr;
+  if (replacementText) {
+    tr.replaceWith(
+      range.from,
+      range.to,
+      editor.schema.text(replacementText, [...marks]),
+    );
+  } else {
+    tr.delete(range.from, range.to);
+  }
   tr.setSelection(
     TextSelection.create(
       tr.doc,

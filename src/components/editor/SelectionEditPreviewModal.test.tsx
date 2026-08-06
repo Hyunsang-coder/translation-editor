@@ -71,4 +71,12 @@ describe('SelectionEditPreviewModal', () => {
     expect(second.props.onApply).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('dialog')).toHaveTextContent('개선된 번역');
   });
+
+  it('대응 원문의 정렬 정밀도를 표시한다', () => {
+    renderModal({ sourceAlignmentPrecision: 'sentence' });
+
+    expect(screen.getByTestId('selection-source-alignment-precision')).toHaveTextContent(
+      '문장 단위 대응',
+    );
+  });
 });

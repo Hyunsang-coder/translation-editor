@@ -7,11 +7,13 @@ import type {
   ContextReferenceOptions,
   SelectionContext,
 } from '@/types';
+import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
 
 interface SelectionEditPreviewModalProps {
   open: boolean;
   selection: SelectionContext | null;
   sourceText: string;
+  sourceAlignmentPrecision?: SourceAlignmentPrecision | undefined;
   replacementText: string;
   instruction: string;
   referenceOptions: ContextReferenceOptions;
@@ -40,6 +42,7 @@ export function SelectionEditPreviewModal({
   open,
   selection,
   sourceText,
+  sourceAlignmentPrecision,
   replacementText,
   instruction,
   referenceOptions,
@@ -61,6 +64,14 @@ export function SelectionEditPreviewModal({
     [selection, replacementText],
   );
   if (!open || !selection) return null;
+
+  const alignmentLabel = sourceAlignmentPrecision === 'selection'
+    ? t('selection.alignment.selection', 'AI 구절 대응')
+    : sourceAlignmentPrecision === 'sentence'
+      ? t('selection.alignment.sentence', '문장 단위 대응')
+      : sourceAlignmentPrecision === 'unit'
+        ? t('selection.alignment.unit', '문단 단위 참고')
+        : null;
 
   return (
     <Modal open={open} onClose={onClose} labelId="selection-edit-title">
@@ -90,7 +101,17 @@ export function SelectionEditPreviewModal({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Source</div>
+            <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+              <span>Source</span>
+              {alignmentLabel && (
+                <span
+                  data-testid="selection-source-alignment-precision"
+                  className="normal-case font-medium text-primary-500"
+                >
+                  {alignmentLabel}
+                </span>
+              )}
+            </div>
             <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
           </section>
           <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
