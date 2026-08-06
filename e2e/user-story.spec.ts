@@ -167,7 +167,7 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await expect(historyDrawer.getByText('번역 적용 전 최종본')).toBeHidden();
   });
 
-  test('Phase 9: 프로젝트 컨텍스트 메뉴 - Duplicate', async ({ page }) => {
+  test('Phase 9: 프로젝트 작업 메뉴 - Duplicate', async ({ page }) => {
     await injectTauriMockWithProject(page, {
       metadata: { title: 'API Integration Guide Translation' } as never,
     });
@@ -175,26 +175,30 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByTestId('project-picker-trigger').click();
-    const projectRow = page
-      .getByTestId('project-picker-menu')
-      .locator('[title="API Integration Guide Translation"]')
+    const pickerMenu = page.getByTestId('project-picker-menu');
+    const projectRow = pickerMenu
+      .locator('[data-project-row]')
+      .filter({ hasText: 'API Integration Guide Translation' })
       .first();
     await expect(projectRow).toBeVisible();
 
-    // WKWebView에서는 툴바 안에 중첩된 팝오버가 뒤쪽 textarea보다 위에 보여도
-    // 우클릭 hit-test는 textarea가 가져갈 수 있다. 메뉴는 body 최상위 overlay여야 한다.
-    const menuUsesTopLevelOverlay = await page.getByTestId('project-picker-menu').evaluate(
+    // WKWebView의 overflow/hit-test 영향을 피하려 두 메뉴 모두 body overlay를 사용한다.
+    const pickerUsesTopLevelOverlay = await pickerMenu.evaluate(
       (menu) => menu.parentElement === document.body
     );
-    expect(menuUsesTopLevelOverlay).toBe(true);
+    expect(pickerUsesTopLevelOverlay).toBe(true);
 
-    await projectRow.click({ button: 'right' });
-    await page.getByRole('button', { name: '복제 (Duplicate)' }).click();
+    await projectRow.locator('[data-project-action-trigger]').click();
+    const actionMenu = page.getByTestId('project-action-menu');
+    await expect(actionMenu).toBeVisible();
+    expect(await actionMenu.evaluate((menu) => menu.parentElement === document.body)).toBe(true);
+
+    await actionMenu.getByRole('menuitem', { name: '복사' }).click();
 
     await expect(page.getByText('API Integration Guide Translation (Copy)')).toBeVisible();
   });
 
-  test('Phase 9: 프로젝트 컨텍스트 메뉴 - Rename/Delete', async ({ page }) => {
+  test('Phase 9: 프로젝트 작업 메뉴 - Rename/Delete', async ({ page }) => {
     const originalTitle = 'Project Actions Test';
     const renamedTitle = 'Renamed Project';
     await injectTauriMockWithProject(page, {
@@ -204,23 +208,24 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByTestId('project-picker-trigger').click();
-    const originalRow = page.getByTestId('project-picker-menu').locator(`[title="${originalTitle}"]`);
-    await originalRow.click({ button: 'right' });
-    await page.getByRole('button', { name: '이름 변경 (Rename)' }).click();
+    const pickerMenu = page.getByTestId('project-picker-menu');
+    const originalRow = pickerMenu.locator('[data-project-row]').filter({ hasText: originalTitle });
+    await originalRow.locator('[data-project-action-trigger]').click();
+    await page.getByTestId('project-action-menu').getByRole('menuitem', { name: '이름 변경' }).click();
 
-    const renameInput = page.getByTestId('project-picker-menu').locator('input').first();
+    const renameInput = pickerMenu.locator('[data-testid^="project-rename-input-"]');
     await expect(renameInput).toHaveValue(originalTitle);
     await renameInput.fill(renamedTitle);
     await renameInput.press('Enter');
-    const renamedRow = page.getByTestId('project-picker-menu').locator(`[title="${renamedTitle}"]`);
+    const renamedRow = pickerMenu.locator('[data-project-row]').filter({ hasText: renamedTitle });
     await expect(renamedRow).toBeVisible();
 
-    await renamedRow.click({ button: 'right' });
-    await page.getByRole('button', { name: '삭제 (Delete)' }).click();
+    await renamedRow.locator('[data-project-action-trigger]').click();
+    await page.getByTestId('project-action-menu').getByRole('menuitem', { name: '삭제' }).click();
     await expect(renamedRow).toBeHidden();
   });
 
-  test('Phase 9: 프로젝트 선택 시 열린 컨텍스트 메뉴도 함께 닫힌다', async ({ page }) => {
+  test('Phase 9: 작업 버튼은 선택하지 않고 프로젝트 이름 버튼만 전환한다', async ({ page }) => {
     const originalTitle = 'Context Menu Owner';
     await injectTauriMockWithProject(page, {
       metadata: { title: originalTitle } as never,
@@ -230,19 +235,22 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
 
     await page.getByTestId('project-picker-trigger').click();
     const menu = page.getByTestId('project-picker-menu');
-    const originalRow = menu.locator(`[title="${originalTitle}"]`);
-    await originalRow.click({ button: 'right' });
-    await page.getByRole('button', { name: '복제 (Duplicate)' }).click();
+    const originalRow = menu.locator('[data-project-row]').filter({ hasText: originalTitle });
+    await originalRow.locator('[data-project-action-trigger]').click();
+    await page.getByTestId('project-action-menu').getByRole('menuitem', { name: '복사' }).click();
 
-    const copiedRow = menu.locator(`[title="${originalTitle} (Copy)"]`);
+    const copiedTitle = `${originalTitle} (Copy)`;
+    const copiedRow = menu.locator('[data-project-row]').filter({ hasText: copiedTitle });
     await expect(copiedRow).toBeVisible();
-    await originalRow.click({ button: 'right' });
-    await expect(page.getByRole('button', { name: '복제 (Duplicate)' })).toBeVisible();
 
-    // 컨텍스트 메뉴와 겹치지 않는 행의 왼쪽을 클릭해 프로젝트를 전환한다.
-    await copiedRow.click({ position: { x: 12, y: 12 } });
+    await copiedRow.locator('[data-project-action-trigger]').click();
+    await expect(page.getByTestId('project-action-menu')).toBeVisible();
+    await expect(page.getByTestId('project-picker-trigger')).toContainText(originalTitle);
+
+    await copiedRow.locator('[data-project-select]').click();
     await expect(menu).toBeHidden();
-    await expect(page.getByRole('button', { name: '복제 (Duplicate)' })).toBeHidden();
+    await expect(page.getByTestId('project-action-menu')).toBeHidden();
+    await expect(page.getByTestId('project-picker-trigger')).toContainText(copiedTitle);
   });
 
   test('Phase 9: 프로젝트 메뉴는 열린 모달보다 아래 레이어에 머문다', async ({ page }) => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Cog, Plus } from 'lucide-react';
+import { ChevronDown, Cog, MoreHorizontal, Plus } from 'lucide-react';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import {
@@ -46,10 +46,11 @@ export function ProjectPicker(): JSX.Element {
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const [showAppSettings, setShowAppSettings] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
+  const [actionMenu, setActionMenu] = useState<{
+    top: number;
+    left: number;
     projectId: string;
+    projectTitle: string;
   } | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
@@ -73,13 +74,13 @@ export function ProjectPicker(): JSX.Element {
   }, []);
 
   const openPicker = useCallback((): void => {
-    setContextMenu(null);
+    setActionMenu(null);
     updateMenuPosition();
     setOpen(true);
   }, [updateMenuPosition]);
 
   const closePicker = useCallback((): void => {
-    setContextMenu(null);
+    setActionMenu(null);
     setOpen(false);
   }, []);
 
@@ -111,11 +112,15 @@ export function ProjectPicker(): JSX.Element {
   useEffect(() => {
     if (!open) return;
     updateMenuPosition();
-    window.addEventListener('resize', updateMenuPosition);
-    return () => window.removeEventListener('resize', updateMenuPosition);
+    const onResize = (): void => {
+      setActionMenu(null);
+      updateMenuPosition();
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [open, updateMenuPosition]);
 
-  // 바깥 클릭 / ESC로 닫기 (컨텍스트 메뉴가 열려 있으면 그것만 먼저 닫는다)
+  // 바깥 클릭 / ESC로 닫기 (행 액션 메뉴가 열려 있으면 그것만 먼저 닫는다)
   useEffect(() => {
     if (!open) return;
 
@@ -123,15 +128,15 @@ export function ProjectPicker(): JSX.Element {
       const target = e.target as Node | null;
       if (target && containerRef.current?.contains(target)) return;
       if (
-        target instanceof HTMLElement &&
-        target.closest('[data-project-picker-layer], [data-project-context-menu]')
+        target instanceof Element &&
+        target.closest('[data-project-picker-layer], [data-project-action-menu]')
       ) return;
       closePicker();
     };
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
-      if (contextMenu) {
-        setContextMenu(null);
+      if (actionMenu) {
+        setActionMenu(null);
         return;
       }
       if (renamingId) return; // 입력 자체의 ESC 처리를 방해하지 않는다
@@ -144,7 +149,7 @@ export function ProjectPicker(): JSX.Element {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, contextMenu, renamingId, closePicker]);
+  }, [open, actionMenu, renamingId, closePicker]);
 
   useEffect(() => {
     if (renamingId && renameInputRef.current) {
@@ -326,6 +331,32 @@ export function ProjectPicker(): JSX.Element {
     })();
   };
 
+  const toggleActionMenu = (
+    projectId: string,
+    projectTitle: string,
+    trigger: HTMLButtonElement,
+  ): void => {
+    if (actionMenu?.projectId === projectId) {
+      setActionMenu(null);
+      return;
+    }
+
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 144;
+    const menuHeight = 112;
+    const viewportPadding = 8;
+    const preferredTop = rect.bottom + 4;
+    const top = preferredTop + menuHeight <= window.innerHeight - viewportPadding
+      ? preferredTop
+      : Math.max(viewportPadding, rect.top - menuHeight - 4);
+    const left = Math.max(
+      viewportPadding,
+      Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - viewportPadding),
+    );
+
+    setActionMenu({ top, left, projectId, projectTitle });
+  };
+
   return (
     <div ref={containerRef} className="relative min-w-0">
       <button
@@ -392,7 +423,10 @@ export function ProjectPicker(): JSX.Element {
             <button
               type="button"
               className="w-full px-3 py-2 flex items-center gap-2 text-editor-muted hover:text-primary-500 hover:bg-editor-bg transition-colors border-b border-editor-border"
-              onClick={() => setShowNew(true)}
+              onClick={() => {
+                setActionMenu(null);
+                setShowNew(true);
+              }}
               title="새 프로젝트"
               data-testid="project-new-button"
             >
@@ -401,7 +435,10 @@ export function ProjectPicker(): JSX.Element {
             </button>
           )}
 
-          <div className="flex-1 max-h-[320px] overflow-y-auto">
+          <div
+            className="flex-1 max-h-[320px] overflow-y-auto"
+            onScroll={() => setActionMenu(null)}
+          >
             {!!error && (
               <div className="px-3 py-2 text-[11px] text-red-600 border-b border-editor-border">
                 {error}
@@ -418,46 +455,70 @@ export function ProjectPicker(): JSX.Element {
                 return (
                   <div
                     key={p.id}
-                    role="menuitem"
-                    className={`px-3 py-2 flex items-center justify-between cursor-pointer border-l-2 ${active
+                    role="none"
+                    data-project-row
+                    data-testid={`project-row-${p.id}`}
+                    className={`group px-2 py-2 flex items-center gap-1 border-l-2 ${active
                       ? 'bg-editor-bg border-primary-500'
                       : 'hover:bg-editor-bg border-transparent'
                       }`}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({ x: e.clientX, y: e.clientY, projectId: p.id });
-                    }}
-                    onClick={() => {
-                      if (!isRenaming) handleSelect(p.id);
-                    }}
-                    title={p.title}
                   >
-                    <div className="flex-1 min-w-0">
-                      {isRenaming ? (
+                    {isRenaming ? (
+                      <div className="flex-1 min-w-0 px-1">
                         <input
                           ref={renameInputRef}
                           className="w-full text-sm px-1 py-0.5 rounded border border-primary-500 bg-editor-bg text-editor-text focus:outline-none"
                           value={renameTitle}
                           onChange={(e) => setRenameTitle(e.target.value)}
                           onBlur={() => void submitRename()}
+                          aria-label={t('projectSidebar.renameProject')}
+                          data-testid={`project-rename-input-${p.id}`}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') void submitRename();
                             if (e.key === 'Escape') setRenamingId(null);
                           }}
-                          onClick={(e) => e.stopPropagation()}
                         />
-                      ) : (
-                        <>
-                          <div className={`text-xs font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
-                            }`}>
-                            {p.title}
-                          </div>
-                          <div className="text-[10px] text-editor-muted truncate">
-                            {new Date(p.updatedAt ?? 0).toLocaleDateString()}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-project-select
+                        data-testid={`project-select-${p.id}`}
+                        className="min-w-0 flex-1 cursor-pointer rounded-sm px-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
+                        onClick={() => handleSelect(p.id)}
+                        title={p.title}
+                      >
+                        <div className={`text-xs font-medium truncate ${active ? 'text-primary-500' : 'text-editor-text'
+                          }`}>
+                          {p.title}
+                        </div>
+                        <div className="text-[10px] text-editor-muted truncate">
+                          {new Date(p.updatedAt ?? 0).toLocaleDateString()}
+                        </div>
+                      </button>
+                    )}
+                    {!isRenaming && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-project-action-trigger
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-editor-muted transition-colors hover:bg-editor-border hover:text-editor-text focus-visible:outline-2 focus-visible:outline-primary-500 ${
+                          actionMenu?.projectId === p.id
+                            ? 'bg-editor-border text-editor-text'
+                            : 'opacity-70 group-hover:opacity-100 focus-visible:opacity-100'
+                        }`}
+                        aria-label={t('projectSidebar.projectActions', { title: p.title })}
+                        aria-haspopup="menu"
+                        aria-expanded={actionMenu?.projectId === p.id}
+                        data-testid={`project-actions-${p.id}`}
+                        onClick={(e) => {
+                          toggleActionMenu(p.id, p.title, e.currentTarget);
+                        }}
+                      >
+                        <MoreHorizontal size={16} className="pointer-events-none" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -485,43 +546,55 @@ export function ProjectPicker(): JSX.Element {
         <AppSettingsModal onClose={() => setShowAppSettings(false)} />
       )}
 
-      {open && contextMenu && createPortal(
+      {open && actionMenu && createPortal(
         <div
-          data-project-context-menu
-          className="fixed z-[100] min-w-[120px] bg-editor-surface border border-editor-border shadow-lg rounded-md py-1"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
+          role="menu"
+          aria-label={t('projectSidebar.projectActions', { title: actionMenu.projectTitle })}
+          data-project-action-menu
+          data-testid="project-action-menu"
+          className="fixed z-[100] min-w-[144px] rounded-lg border border-editor-border bg-editor-surface py-1 shadow-lg"
+          style={{ top: actionMenu.top, left: actionMenu.left }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
-            className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
+            type="button"
+            role="menuitem"
+            data-testid="project-action-duplicate"
+            className="w-full px-3 py-1.5 text-left text-xs text-editor-text hover:bg-editor-border"
             onClick={() => {
-              const pid = contextMenu.projectId;
-              setContextMenu(null);
+              const pid = actionMenu.projectId;
+              setActionMenu(null);
               void handleDuplicate(pid);
             }}
           >
-            복제 (Duplicate)
+            {t('projectSidebar.duplicateProject')}
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-xs text-editor-text hover:bg-blue-500 hover:text-white"
+            type="button"
+            role="menuitem"
+            data-testid="project-action-rename"
+            className="w-full px-3 py-1.5 text-left text-xs text-editor-text hover:bg-editor-border"
             onClick={() => {
-              const pid = contextMenu.projectId;
-              setContextMenu(null);
+              const pid = actionMenu.projectId;
+              setActionMenu(null);
               startRename(pid);
             }}
           >
-            이름 변경 (Rename)
+            {t('projectSidebar.renameProject')}
           </button>
+          <div className="my-1 border-t border-editor-border" />
           <button
-            className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-500 hover:text-white"
+            type="button"
+            role="menuitem"
+            className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10"
             onClick={() => {
-              const pid = contextMenu.projectId;
-              setContextMenu(null);
+              const pid = actionMenu.projectId;
+              setActionMenu(null);
               void handleDelete(pid);
             }}
           >
-            삭제 (Delete)
+            {t('projectSidebar.deleteProject')}
           </button>
         </div>,
         document.body

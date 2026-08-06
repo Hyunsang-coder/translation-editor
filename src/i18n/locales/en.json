@@ -329,7 +329,11 @@
     "projects": "Projects",
     "appSettings": "App Settings",
     "newProject": "New Project",
-    "projectTitlePlaceholder": "Project title"
+    "projectTitlePlaceholder": "Project title",
+    "projectActions": "Project actions for {{title}}",
+    "duplicateProject": "Duplicate",
+    "renameProject": "Rename",
+    "deleteProject": "Delete"
   },
   "editor": {
     "viewMode": {
