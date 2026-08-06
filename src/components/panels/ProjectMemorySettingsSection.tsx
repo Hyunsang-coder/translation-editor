@@ -74,7 +74,7 @@ function RowMenu({
         <div className="absolute right-0 top-7 z-10 min-w-24 rounded-lg border border-editor-border bg-editor-surface py-1 shadow-lg">
           <button
             type="button"
-            className="block w-full px-3 py-1.5 text-left text-[11px] text-editor-text hover:bg-editor-border/60"
+            className="block w-full px-3 py-1.5 text-left text-xs text-editor-text hover:bg-editor-border/60"
             onClick={() => {
               setOpen(false);
               onEdit();
@@ -87,7 +87,7 @@ function RowMenu({
             type="button"
             data-testid="project-memory-delete"
             disabled={deleteDisabled}
-            className="block w-full px-3 py-1.5 text-left text-[11px] text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+            className="block w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10 disabled:opacity-50"
             onClick={() => {
               setOpen(false);
               onDelete();
@@ -139,10 +139,6 @@ export function ProjectMemorySettingsSection(): JSX.Element {
     [items, forbiddenTerms],
   );
   const injectedIds = useMemo(() => new Set(chatDigest.itemIds), [chatDigest]);
-  const activeCount = useMemo(
-    () => items.filter((item) => item.status === 'active').length,
-    [items],
-  );
 
   const reportError = (error: unknown): void => {
     addToast({
@@ -196,30 +192,13 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           <button
             type="button"
             data-testid="project-memory-import-open"
-            className="ml-auto text-[10px] text-editor-muted hover:text-primary-500"
+            className="ml-auto text-xs text-editor-muted hover:text-primary-500"
             onClick={() => setImportOpen(true)}
           >
             {t('memory.import.open', '가져오기')}
           </button>
-          {activeCount > 0 && (
-            <span
-              className={`text-[10px] ${
-                chatDigest.truncated ? 'text-primary-500' : 'text-editor-muted'
-              }`}
-              title={t('memory.chatInjectionHint', {
-                injected: chatDigest.itemIds.length,
-                defaultValue: '채팅에는 상위 {{injected}}개만 전달됩니다. 번역·검수·폴리싱에는 전체가 전달됩니다.',
-              })}
-            >
-              {t('memory.chatInjection', {
-                injected: chatDigest.itemIds.length,
-                total: activeCount,
-                defaultValue: '채팅 {{injected}}/{{total}}',
-              })}
-            </span>
-          )}
         </div>
-        <p className="text-[10px] leading-relaxed text-editor-muted">
+        <p className="text-[11px] leading-relaxed text-editor-muted">
           {t('memory.settingsDescription', '승인된 항목은 다음 채팅과 번역·검수·폴리싱에 사용됩니다.')}
         </p>
 
@@ -243,10 +222,10 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             </button>
           </div>
           {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
-          <label className="flex items-center gap-1 text-[10px] text-editor-muted">
+          <label className="flex items-center gap-1 text-[11px] text-editor-muted">
             {t('memory.categoryLabel', '카테고리')}
             <select
-              className="bg-transparent text-[10px] text-editor-muted outline-none"
+              className="bg-transparent text-[11px] text-editor-muted outline-none"
               value={category}
               onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
             >
@@ -292,7 +271,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     </div>
                   )}
                   {item.status !== 'active' && (
-                    <span className="text-[10px] text-editor-muted">
+                    <span className="text-[11px] text-editor-muted">
                       {t(`memory.status.${item.status}`)}
                     </span>
                   )}
@@ -302,7 +281,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
                     <button
                       type="button"
-                      className="text-[11px] text-primary-500"
+                      className="text-xs text-primary-500"
                       onClick={() => {
                         const next = editing.content.trim();
                         if (!next) return;
@@ -318,7 +297,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     </button>
                     <button
                       type="button"
-                      className="text-[11px] text-editor-muted"
+                      className="text-xs text-editor-muted"
                       onClick={() => setEditing(null)}
                     >
                       {t('common.cancel')}
@@ -342,7 +321,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           <h3 className="text-xs font-semibold text-editor-text">
             {t('memory.forbiddenTermsTitle', '금칙어')}
           </h3>
-          <p className="text-[10px] leading-relaxed text-editor-muted">
+          <p className="text-[11px] leading-relaxed text-editor-muted">
             {t(
               'memory.forbiddenTermsDescription',
               '모든 AI 요청에 항상 전달되는 지시입니다. 문서를 검사하지는 않습니다.',

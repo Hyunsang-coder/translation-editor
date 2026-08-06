@@ -57,7 +57,7 @@ export function CommentInputPopover({
         shadow-lg shadow-black/10 dark:shadow-black/30
       "
     >
-      <div className="mb-1.5 text-xs text-editor-muted truncate" title={excerpt}>
+      <div className="mb-1.5 text-[11px] text-editor-muted truncate" title={excerpt}>
         “{excerpt}”
       </div>
       <textarea
@@ -76,7 +76,7 @@ export function CommentInputPopover({
         rows={2}
         placeholder={t('comment.inputPlaceholder', '코멘트를 입력하세요…')}
         className="
-          w-full resize-none rounded-md px-2 py-1.5 text-sm
+          w-full resize-none rounded-md px-2 py-1.5 text-xs
           bg-editor-bg text-editor-text
           border border-editor-border
           focus:outline-none focus:ring-1 focus:ring-blue-500

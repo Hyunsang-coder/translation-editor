@@ -41,7 +41,7 @@ export function SettingsContent(): JSX.Element {
           <div className="flex items-center gap-1.5 group relative">
             <h3 className="text-xs font-semibold text-editor-text">{t('settings.translationRules')}</h3>
             <span className="cursor-help text-editor-muted text-[10px]">ⓘ</span>
-            <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-10 leading-relaxed">
+            <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[11px] text-editor-text z-10 leading-relaxed">
               {t('settings.translationRulesDescription')}
             </div>
           </div>

@@ -79,6 +79,20 @@ describe('ReviewResultsTable 수정 제안 표시', () => {
   });
 });
 
+describe('ReviewResultsTable 글자 크기 계층', () => {
+  it('완료 안내는 다른 패널의 빈 상태와 같은 크기를 사용한다', () => {
+    render(<ReviewResultsTable issues={[]} />);
+
+    expect(screen.getByText('오역이나 누락이 발견되지 않았습니다.')).toHaveClass('text-sm');
+  });
+
+  it('카드 순번은 다른 메타 정보와 같은 크기를 사용한다', () => {
+    renderTable(makeIssue({}));
+
+    expect(screen.getByText('1')).toHaveClass('text-[10px]');
+  });
+});
+
 describe('ReviewResultsTable 무시 동작', () => {
   it('확인이 아닌 무시로 표시한다', () => {
     renderTable(makeIssue({}));

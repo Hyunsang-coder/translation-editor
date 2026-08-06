@@ -83,7 +83,7 @@ export function CommentDetailPopover({
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="mb-1 truncate text-xs italic text-editor-muted" title={comment.excerpt}>
+          <div className="mb-1 truncate text-[11px] italic text-editor-muted" title={comment.excerpt}>
             “{comment.excerpt}”
           </div>
           {comment.resolved && !editing && (
@@ -122,7 +122,7 @@ export function CommentDetailPopover({
             }}
             rows={3}
             className="
-              w-full resize-none rounded-md px-2 py-1.5 text-sm
+              w-full resize-none rounded-md px-2 py-1.5 text-xs
               bg-editor-bg text-editor-text
               border border-editor-border
               focus:outline-none focus:ring-1 focus:ring-blue-500
@@ -154,7 +154,7 @@ export function CommentDetailPopover({
           </div>
         </>
       ) : (
-        <p className={`text-sm whitespace-pre-wrap break-words ${comment.resolved ? 'text-editor-muted line-through' : 'text-editor-text'}`}>
+        <p className={`text-xs whitespace-pre-wrap break-words ${comment.resolved ? 'text-editor-muted line-through' : 'text-editor-text'}`}>
           {comment.comment}
         </p>
       )}

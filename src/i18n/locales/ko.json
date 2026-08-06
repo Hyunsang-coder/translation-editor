@@ -659,8 +659,6 @@
       "result": "{{imported}}건 가져왔습니다.",
       "resultWithSkipped": "{{imported}}건 가져왔습니다. 이미 있는 {{skipped}}건은 건너뛰었습니다."
     },
-    "chatInjection": "채팅 {{injected}}/{{total}}",
-    "chatInjectionHint": "채팅에는 상위 {{injected}}개만 전달됩니다. 번역·검수·폴리싱에는 전체가 전달됩니다.",
     "notInChat": "채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.",
     "add": "추가",
     "deleteTitle": "메모리 삭제",

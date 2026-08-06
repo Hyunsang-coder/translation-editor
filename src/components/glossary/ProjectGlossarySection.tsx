@@ -88,16 +88,16 @@ export function ProjectGlossarySection({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-col gap-1">
             <h3 className="text-xs font-semibold text-editor-text">
-              3. {t('settings.glossary')}
+              {t('settings.glossary')}
             </h3>
-            <span className="text-[10px] text-editor-muted">
+            <span className="text-[11px] text-editor-muted">
               {t('settings.glossaryDescription')}
             </span>
           </div>
           <button
             type="button"
             onClick={() => setManagerOpen(true)}
-            className="flex shrink-0 items-center gap-1 rounded-md border border-editor-border bg-editor-surface px-2 py-1 text-[11px] font-medium text-editor-text hover:border-primary-500 hover:text-primary-500"
+            className="flex shrink-0 items-center gap-1 rounded-md border border-editor-border bg-editor-surface px-2 py-1 text-xs font-medium text-editor-text hover:border-primary-500 hover:text-primary-500"
           >
             <BookOpen size={12} />
             {t('glossaryManager.manage')}
@@ -105,7 +105,7 @@ export function ProjectGlossarySection({
         </div>
 
         {error && projectGlossaries.length === 0 ? (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[11px] text-red-500">
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-500">
             {error}
           </div>
         ) : loading ? (
@@ -119,13 +119,13 @@ export function ProjectGlossarySection({
                 key={glossary.id}
                 className="group flex items-center gap-2 rounded-md border border-editor-border bg-editor-surface px-2.5 py-2"
               >
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-[9px] font-semibold text-primary-500">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-[10px] font-semibold text-primary-500">
                   {index + 1}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-editor-text">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-editor-text">
                   {glossary.name}
                 </span>
-                <span className="text-[9px] tabular-nums text-editor-muted">
+                <span className="text-[10px] tabular-nums text-editor-muted">
                   {t('glossaryManager.termCount', { count: glossary.entryCount })}
                 </span>
                 <button
@@ -145,7 +145,7 @@ export function ProjectGlossarySection({
           <button
             type="button"
             onClick={() => setManagerOpen(true)}
-            className="w-full rounded-md border border-dashed border-editor-border p-3 text-left text-[11px] text-editor-muted hover:border-primary-500 hover:text-editor-text"
+            className="w-full rounded-md border border-dashed border-editor-border p-3 text-left text-xs text-editor-muted hover:border-primary-500 hover:text-editor-text"
           >
             {t('glossaryManager.noActiveGlossaries')}
           </button>
@@ -153,7 +153,7 @@ export function ProjectGlossarySection({
 
         {projectGlossaries.length > 0 && (
           <div className="rounded-lg border border-editor-border bg-editor-bg/55 p-2.5">
-            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-editor-muted">
+            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted">
               <Plus size={11} />
               {t('glossaryManager.quickAdd')}
             </div>
@@ -161,7 +161,7 @@ export function ProjectGlossarySection({
               <select
                 value={glossaryId}
                 onChange={(event) => setGlossaryId(event.target.value)}
-                className="mb-2 w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-[10px] text-editor-text outline-none focus:border-primary-500"
+                className="mb-2 w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
               >
                 {projectGlossaries.map((glossary) => (
                   <option key={glossary.id} value={glossary.id}>{glossary.name}</option>
@@ -174,7 +174,7 @@ export function ProjectGlossarySection({
                 onChange={(event) => setSource(event.target.value)}
                 placeholder={t('glossaryManager.sourcePlaceholder')}
                 aria-label={t('glossaryManager.source')}
-                className="w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-[11px] text-editor-text outline-none focus:border-primary-500"
+                className="w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
               />
               <div className="flex items-center gap-1.5">
                 <ArrowRight size={12} className="shrink-0 text-primary-500" />
@@ -186,13 +186,13 @@ export function ProjectGlossarySection({
                   }}
                   placeholder={t('glossaryManager.targetPlaceholder')}
                   aria-label={t('glossaryManager.target')}
-                  className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-[11px] text-editor-text outline-none focus:border-primary-500"
+                  className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
                 />
                 <button
                   type="button"
                   onClick={() => void handleQuickAdd()}
                   disabled={!source.trim() || !target.trim() || saving}
-                  className="rounded bg-primary-500 px-2 py-1.5 text-[10px] font-semibold text-white hover:bg-primary-600 disabled:opacity-40"
+                  className="rounded bg-primary-500 px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-40"
                 >
                   {t('glossaryManager.add')}
                 </button>

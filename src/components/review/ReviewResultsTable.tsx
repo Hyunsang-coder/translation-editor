@@ -130,7 +130,7 @@ export function ReviewResultsTable({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-green-600 dark:text-green-400 font-medium">
+        <p className="text-sm text-green-600 dark:text-green-400 font-medium">
           {message}
         </p>
       </div>
@@ -265,7 +265,7 @@ export function ReviewResultsTable({
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${getIssueTypeColor(issue.type)}`}>
                 {t(issueTypeLabelKeys[issue.type])}
               </span>
-              <span className="ml-auto text-[11px] text-editor-muted tabular-nums">{idx + 1}</span>
+              <span className="ml-auto text-[10px] text-editor-muted tabular-nums">{idx + 1}</span>
             </div>
 
             {issue.targetExcerpt && (
