@@ -1,5 +1,5 @@
 import * as Diff from 'diff';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import type {
@@ -26,6 +26,8 @@ interface SelectionEditPreviewModalProps {
   onGenerate: () => void;
   onApply: () => void;
   onClose: () => void;
+  /** 수정안을 손으로 고칠 수 있게 한다. 없으면 읽기 전용(채팅 제안 미리보기). */
+  onReplacementChange?: (value: string) => void;
 }
 
 const OPTION_KEYS: Array<{
@@ -55,8 +57,14 @@ export function SelectionEditPreviewModal({
   onGenerate,
   onApply,
   onClose,
+  onReplacementChange,
 }: SelectionEditPreviewModalProps): JSX.Element | null {
   const { t } = useTranslation();
+  const [editingProposal, setEditingProposal] = useState(false);
+  // 모달을 닫거나 재생성이 시작되면 편집 모드를 해제한다(스트리밍 중 편집 금지).
+  useEffect(() => {
+    if (!open || isLoading) setEditingProposal(false);
+  }, [open, isLoading]);
   const changes = useMemo(
     () => selection && replacementText
       ? Diff.diffWords(selection.text, replacementText)
@@ -64,6 +72,8 @@ export function SelectionEditPreviewModal({
     [selection, replacementText],
   );
   if (!open || !selection) return null;
+
+  const canEditProposal = Boolean(onReplacementChange && replacementText && !isLoading);
 
   const alignmentLabel = sourceAlignmentPrecision === 'selection'
     ? t('selection.alignment.selection', 'AI 구절 대응')
@@ -164,26 +174,50 @@ export function SelectionEditPreviewModal({
 
         {(replacementText || isLoading) && (
           <section className="mt-4 rounded-xl border border-primary-300/70 bg-primary-50/40 p-3 dark:bg-primary-950/20">
-            <div className="mb-2 text-xs font-semibold text-editor-text">
-              {t('selection.proposal', '수정안')}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-editor-text">
+                {t('selection.proposal', '수정안')}
+              </span>
+              {canEditProposal && (
+                <button
+                  type="button"
+                  data-testid="selection-edit-proposal-toggle"
+                  className="rounded px-2 py-0.5 text-[11px] font-medium text-primary-500 hover:bg-primary-100/60 dark:hover:bg-primary-900/40"
+                  onClick={() => setEditingProposal((value) => !value)}
+                >
+                  {editingProposal
+                    ? t('selection.previewChanges', '변경 미리보기')
+                    : t('selection.editProposal', '직접 수정')}
+                </button>
+              )}
             </div>
             {replacementText ? (
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {changes.map((change, index) => (
-                  <span
-                    key={`${index}-${change.value}`}
-                    className={
-                      change.added
-                        ? 'bg-emerald-200/70 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100'
-                        : change.removed
-                          ? 'bg-red-200/70 text-red-900 line-through dark:bg-red-900/50 dark:text-red-100'
-                          : 'text-editor-text'
-                    }
-                  >
-                    {change.value}
-                  </span>
-                ))}
-              </div>
+              editingProposal && canEditProposal ? (
+                <textarea
+                  data-testid="selection-edit-proposal-editor"
+                  className="min-h-24 w-full rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-sm leading-relaxed text-editor-text outline-none focus:ring-2 focus:ring-primary-500"
+                  value={replacementText}
+                  onChange={(event) => onReplacementChange?.(event.target.value)}
+                  autoFocus
+                />
+              ) : (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {changes.map((change, index) => (
+                    <span
+                      key={`${index}-${change.value}`}
+                      className={
+                        change.added
+                          ? 'bg-emerald-200/70 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100'
+                          : change.removed
+                            ? 'bg-red-200/70 text-red-900 line-through dark:bg-red-900/50 dark:text-red-100'
+                            : 'text-editor-text'
+                      }
+                    >
+                      {change.value}
+                    </span>
+                  ))}
+                </div>
+              )
             ) : (
               <div className="text-sm text-editor-muted">
                 {t('selection.generating', '수정안을 생성하는 중…')}
@@ -212,6 +246,16 @@ export function SelectionEditPreviewModal({
           >
             {t('common.cancel')}
           </button>
+          {!proposalOnly && replacementText && !isLoading && (
+            <button
+              type="button"
+              data-testid="selection-edit-regenerate-button"
+              className="rounded-lg border border-primary-300 px-3 py-2 text-sm font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+              onClick={onGenerate}
+            >
+              {t('selection.regenerate', '재번역')}
+            </button>
+          )}
           <button
             type="button"
             data-testid="selection-edit-primary-button"

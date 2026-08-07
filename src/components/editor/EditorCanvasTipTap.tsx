@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { useProjectStore } from '@/stores/projectStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -285,6 +286,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     replacementText: string;
     contextManifest: ContextManifest | undefined;
     forbiddenTermsUsed: ForbiddenTerm[];
+    /** 서식 혼합 선택에서 "일부 서식이 사라질 수 있음"에 동의했는지. 적용 시 평탄화. */
+    flattenFormatting: boolean;
     loading: boolean;
     error: string | null;
   }>(null);
@@ -575,9 +578,9 @@ export function EditorCanvasTipTap(): JSX.Element {
     openChatWithSelection(selection);
   }, [buildSelectionBubble, createChatSelection, openChatWithSelection]);
 
-  const openSelectionRetranslate = useCallback((
+  const openSelectionRetranslate = useCallback(async (
     bubble: SelectionBubble,
-  ): void => {
+  ): Promise<void> => {
     if (bubble.field !== 'target') return;
     const selection = createChatSelection(bubble);
     if (!selection) return;
@@ -592,16 +595,30 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
     const selectionAnchor = resolveSelectionAnchor(bubble.editor, selection.anchorId);
-    if (!selectionAnchor || !selectionHasUniformFormatting(bubble.editor, selectionAnchor)) {
+    if (!selectionAnchor) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
         type: 'error',
-        message: t(
-          'selection.mixedFormattingUnsupported',
-          '서로 다른 서식이 섞인 범위는 재번역할 수 없습니다. 같은 서식 안에서 다시 선택해주세요.',
-        ),
+        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
       });
       return;
+    }
+    // 서식이 섞인 범위는 공통 서식으로 평탄화되므로(부분 굵게 등 소실) 막지 않고
+    // 확인을 받은 뒤 진행한다. 동의는 이 요청의 적용 단계까지 유지된다.
+    let flattenFormatting = false;
+    if (!selectionHasUniformFormatting(bubble.editor, selectionAnchor)) {
+      const accepted = await confirm(
+        t(
+          'selection.mixedFormattingConfirm',
+          '선택 범위에 서로 다른 서식이 섞여 있습니다. 재번역을 적용하면 일부 서식이 사라질 수 있습니다. 계속할까요?',
+        ),
+        { title: t('selection.mixedFormattingConfirmTitle', '서식 안내'), kind: 'warning' },
+      );
+      if (!accepted) {
+        removeSelectionAnchor(bubble.editor, selection.anchorId);
+        return;
+      }
+      flattenFormatting = true;
     }
     const sourceDoc = sourceEditorRef.current?.getJSON() as TranslationUnitDocument | undefined;
     if (!sourceDoc) {
@@ -671,6 +688,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       replacementText: '',
       contextManifest: undefined,
       forbiddenTermsUsed: [],
+      flattenFormatting,
       loading: false,
       error: null,
     });
@@ -810,7 +828,9 @@ export function EditorCanvasTipTap(): JSX.Element {
     const affectedCommentIds = anchorRange
       ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
       : [];
-    const result = applySelectionEdit(editor, anchor, request.replacementText);
+    const result = applySelectionEdit(editor, anchor, request.replacementText, {
+      flattenFormatting: request.flattenFormatting,
+    });
     if (result !== 'applied') {
       setSelectionEdit((current) => current ? {
         ...current,
@@ -1944,7 +1964,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           {...(selectionToolbar.field === 'target'
             ? {
                 onRetranslateSelection: () => {
-                  openSelectionRetranslate(selectionToolbar);
+                  void openSelectionRetranslate(selectionToolbar);
                   setSelectionToolbar(null);
                 },
               }
@@ -1979,12 +1999,18 @@ export function EditorCanvasTipTap(): JSX.Element {
         isLoading={selectionEdit?.loading ?? false}
         error={selectionEdit?.error}
         onInstructionChange={(instruction) =>
+          // 결과(replacementText)는 지우지 않는다 — 수동 편집을 지시문 타이핑이
+          // 날려버리지 않도록. 재생성은 "다시 재번역" 버튼이 명시적으로 한다.
           setSelectionEdit((current) => current ? {
             ...current,
             instruction,
-            replacementText: '',
-            contextManifest: undefined,
             error: null,
+          } : null)
+        }
+        onReplacementChange={(replacementText) =>
+          setSelectionEdit((current) => current ? {
+            ...current,
+            replacementText,
           } : null)
         }
         onReferenceOptionsChange={(referenceOptions) => {

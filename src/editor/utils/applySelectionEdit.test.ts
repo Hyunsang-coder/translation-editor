@@ -116,6 +116,51 @@ describe('applySelectionEdit', () => {
     expect(editor.getJSON()).toEqual(before);
   });
 
+  it('flattenFormatting이면 섞인 서식을 공통 mark로 평탄화해 적용한다', () => {
+    // 전체가 기울임이고 일부만 굵은 선택: 공통인 기울임만 남고 굵게는 사라진다.
+    editor = new Editor({
+      extensions: [StarterKit, SelectionAnchor],
+      content: '<p><em>Plain <strong>bold</strong> tail</em></p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'Plain bold tail'.length }],
+    });
+
+    expect(
+      applySelectionEdit(
+        editor,
+        resolveSelectionAnchor(editor, anchorId)!,
+        'Replacement',
+        { flattenFormatting: true },
+      ),
+    ).toBe('applied');
+    expect(editor.getJSON().content?.[0]?.content).toEqual([
+      { type: 'text', text: 'Replacement', marks: [{ type: 'italic' }] },
+    ]);
+  });
+
+  it('flattenFormatting이라도 공통 mark가 없으면 평문으로 적용한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, SelectionAnchor],
+      content: '<p><strong>Bold</strong><em>Italic</em></p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'BoldItalic'.length }],
+    });
+
+    expect(
+      applySelectionEdit(
+        editor,
+        resolveSelectionAnchor(editor, anchorId)!,
+        'Replacement',
+        { flattenFormatting: true },
+      ),
+    ).toBe('applied');
+    expect(editor.getJSON().content?.[0]?.content).toEqual([
+      { type: 'text', text: 'Replacement' },
+    ]);
+  });
+
   it('균일한 코멘트 마크를 교체문에도 유지한다', () => {
     editor = new Editor({
       extensions: [StarterKit, CommentMark, SelectionAnchor],

@@ -14,15 +14,19 @@ export type ApplySelectionEditResult =
   | 'invalid'
   | 'formatting-conflict';
 
-/**
- * 선택 범위의 모든 텍스트 노드가 같은 mark 집합을 쓰는지 확인한다.
- * 서로 다른 mark를 가로지르는 교체를 시작점 mark 하나로 평탄화하면 서식과 코멘트
- * 범위가 조용히 바뀌므로, 직접 재번역에서는 안전하게 거부한다.
- */
-export function getUniformSelectionMarks(
+export interface ApplySelectionEditOptions {
+  /**
+   * 서식이 섞인 범위를 공통 mark(모든 텍스트 노드에 걸린 것만)로 평탄화해 적용한다.
+   * 부분 서식이 조용히 사라지므로, 사용자가 "서식이 사라질 수 있다" 확인을 거친
+   * 경로에서만 켤 것.
+   */
+  flattenFormatting?: boolean;
+}
+
+function collectSelectionMarkSets(
   editor: Editor,
   anchor: SelectionAnchorRecord,
-): readonly Mark[] | null {
+): Mark[][] | null {
   const range = getSingleAnchorRange(anchor);
   if (!range) return null;
 
@@ -33,9 +37,32 @@ export function getUniformSelectionMarks(
     if (nodeTo <= range.from || pos >= range.to) return;
     markSets.push([...node.marks]);
   });
-  if (markSets.length === 0) return null;
+  return markSets.length > 0 ? markSets : null;
+}
+
+/**
+ * 선택 범위의 모든 텍스트 노드가 같은 mark 집합을 쓰는지 확인한다.
+ * 서로 다른 mark를 가로지르는 교체를 시작점 mark 하나로 평탄화하면 서식과 코멘트
+ * 범위가 조용히 바뀌므로, 기본 경로에서는 거부한다.
+ */
+export function getUniformSelectionMarks(
+  editor: Editor,
+  anchor: SelectionAnchorRecord,
+): readonly Mark[] | null {
+  const markSets = collectSelectionMarkSets(editor, anchor);
+  if (!markSets) return null;
   const first = markSets[0]!;
   return markSets.every((marks) => Mark.sameSet(first, marks)) ? first : null;
+}
+
+/** 모든 텍스트 노드에 공통으로 걸린 mark만 남긴다 — 평탄화 적용 시 교체 텍스트의 서식. */
+function getCommonSelectionMarks(
+  editor: Editor,
+  anchor: SelectionAnchorRecord,
+): readonly Mark[] | null {
+  const markSets = collectSelectionMarkSets(editor, anchor);
+  if (!markSets) return null;
+  return markSets[0]!.filter((mark) => markSets.every((set) => mark.isInSet(set)));
 }
 
 export function selectionHasUniformFormatting(
@@ -49,6 +76,7 @@ export function applySelectionEdit(
   editor: Editor,
   anchor: SelectionAnchorRecord,
   replacementText: string,
+  options: ApplySelectionEditOptions = {},
 ): ApplySelectionEditResult {
   // 다중 범위(표 셀 선택)와 멀티블록 범위는 앵커로 만들 수 있지만(참조·하이라이트용)
   // 적용은 못 한다. 평문 하나로 교체하면 문단·리스트·셀이 한 블록으로 뭉개진다.
@@ -71,7 +99,9 @@ export function applySelectionEdit(
   const $to = editor.state.doc.resolve(range.to);
   if (!$from.sameParent($to) || !$from.parent.isTextblock) return 'invalid';
 
-  const marks = getUniformSelectionMarks(editor, anchor);
+  const marks = options.flattenFormatting
+    ? getCommonSelectionMarks(editor, anchor)
+    : getUniformSelectionMarks(editor, anchor);
   if (!marks) return 'formatting-conflict';
 
   const tr = editor.state.tr;

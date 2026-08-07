@@ -79,4 +79,37 @@ describe('SelectionEditPreviewModal', () => {
       '문장 단위 대응',
     );
   });
+
+  it('수정안이 있으면 "다시 재번역"으로 재생성할 수 있다', () => {
+    const { props } = renderModal({ replacementText: '개선된 번역' });
+
+    fireEvent.click(screen.getByTestId('selection-edit-regenerate-button'));
+
+    expect(props.onGenerate).toHaveBeenCalledTimes(1);
+    expect(props.onApply).not.toHaveBeenCalled();
+  });
+
+  it('생성 중에는 다시 재번역 버튼을 숨긴다', () => {
+    renderModal({ replacementText: '스트리밍 중', isLoading: true });
+
+    expect(screen.queryByTestId('selection-edit-regenerate-button')).toBeNull();
+  });
+
+  it('직접 수정 토글로 수정안을 편집하면 onReplacementChange로 전달된다', () => {
+    const onReplacementChange = vi.fn();
+    renderModal({ replacementText: '개선된 번역', onReplacementChange });
+
+    fireEvent.click(screen.getByTestId('selection-edit-proposal-toggle'));
+    const editorField = screen.getByTestId('selection-edit-proposal-editor');
+    fireEvent.change(editorField, { target: { value: '손으로 고친 번역' } });
+
+    expect(onReplacementChange).toHaveBeenCalledWith('손으로 고친 번역');
+  });
+
+  it('onReplacementChange가 없으면(채팅 제안 미리보기) 편집 토글을 숨긴다', () => {
+    renderModal({ replacementText: '개선된 번역', proposalOnly: true });
+
+    expect(screen.queryByTestId('selection-edit-proposal-toggle')).toBeNull();
+    expect(screen.queryByTestId('selection-edit-regenerate-button')).toBeNull();
+  });
 });
