@@ -59,10 +59,10 @@ import {
 } from '@/editor/extensions/SelectionAnchor';
 import { getTranslationUnitIdsAtRange } from '@/editor/extensions/TranslationUnitId';
 import {
-  collectAlignedSourceUnits,
   dropAncestorUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
 import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
 import {
   DEFAULT_SELECTION_REFERENCE_OPTIONS,
@@ -614,14 +614,13 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     // 표 셀 선택은 셀 유닛과 안쪽 문단 유닛이 함께 잡힌다. 조상(셀)을 버리지
     // 않으면 셀 전체가 원문으로 들어가고 선택 문단이 한 번 더 반복된다.
-    const sourceUnitText = dropAncestorUnits(collectAlignedSourceUnits(
+    // 전체 번역을 거치지 않은 문서는 Source/Target ID가 독립 발급이라 직접 매칭이
+    // 안 된다. 그때는 정렬 뷰와 같은 LCS 정렬로 짝짓고, 결과는 모달에서 원문으로
+    // 표시되어 사람이 확인한 뒤에 적용된다.
+    const sourceUnitText = dropAncestorUnits(findAlignedCounterpartUnits(
       sourceDoc,
       bubble.editor.getJSON() as TranslationUnitDocument,
       selection.translationUnitIds,
-      // 전체 번역을 거치지 않은 문서는 Source/Target ID가 독립 발급이라 직접 매칭이
-      // 안 된다. 정렬 검사와 같은 1:1 구조 기준을 만족할 때만 순번 대응을 쓰고,
-      // 결과는 모달에서 원문으로 표시되어 사람이 확인한 뒤에 적용된다.
-      { allowLegacyOrderFallback: true },
     ))
       .map((unit) => unit.text)
       .join('\n');

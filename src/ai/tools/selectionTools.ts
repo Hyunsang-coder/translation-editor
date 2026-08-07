@@ -3,11 +3,11 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import { z } from 'zod';
 import type { ChatSelectionSnapshot, SelectionPanel } from '@/types';
 import {
-  collectAlignedSourceUnits,
   collectTranslationUnits,
   type TranslationUnit,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
 import {
   flushPendingEditorSyncs,
   useProjectStore,
@@ -123,8 +123,8 @@ export function getSelectionSurroundings(
 /**
  * 선택이 있는 쪽(panel)을 기준으로 확장하고, 같은 translationUnitId로 연결된
  * 반대쪽을 함께 돌려준다. Source 선택에서도 번역문을 볼 수 있어야 하므로
- * 양방향으로 동작한다 — `collectAlignedSourceUnits`는 "id가 일치하는 유닛"을
- * 고르는 함수라 문서 인자를 바꾸면 그대로 반대 방향이 된다.
+ * 양방향으로 동작한다 — `findAlignedCounterpartUnits`는 방향 무관이라
+ * 문서 인자를 바꾸면 그대로 반대 방향이 된다.
  */
 export function getAlignedSelectionContext(
   sourceDoc: TranslationUnitDocument,
@@ -152,12 +152,11 @@ export function getAlignedSelectionContext(
     throw new Error(missingMessage);
   }
   const includedIds = new Set(primaryContext.unitIds);
-  const counterpartUnits = collectAlignedSourceUnits(
+  // legacy 문서(ID 독립 발급)는 LCS 정렬로 짝지어 반대쪽을 제공한다.
+  const counterpartUnits = findAlignedCounterpartUnits(
     counterpartDoc,
     primaryDoc,
     primaryContext.unitIds,
-    // legacy 문서(ID 독립 발급)에서도 1:1 구조가 맞으면 반대쪽을 제공한다.
-    { allowLegacyOrderFallback: true },
   );
   const primaryUnits = collectTranslationUnits(primaryDoc)
     .filter((unit) => unit.id && includedIds.has(unit.id));

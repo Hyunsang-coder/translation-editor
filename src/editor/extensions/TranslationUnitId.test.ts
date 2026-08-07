@@ -3,7 +3,6 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import {
   TranslationUnitId,
-  collectAlignedSourceUnits,
   collectTranslationUnits,
   dropAncestorUnits,
   ensureTranslationUnitIds,
@@ -59,8 +58,8 @@ describe('TranslationUnitId', () => {
 
   // 문단 끝 Enter(새 문단 추가)는 keepOnSplit: false로 ID 복제를 막는다.
   // 문단 중간 분할은 TipTap이 types 없이 ProseMirror split을 불러 attrs가 통째로
-  // 복사되므로 여기서 막을 수 없다 — 그 중복은 collectAlignedSourceUnits가
-  // 고유 ID 기준 판정으로 허용한다(아래 '같은 ID가 복제돼 있으면' 테스트).
+  // 복사되므로 여기서 막을 수 없다 — 그 중복은 findAlignedCounterpartUnits가
+  // 고유 ID 기준 판정으로 허용한다(alignedCounterpartUnits.test.ts).
   it('문단 끝에서 분할하면 새 블록에 ID를 복제하지 않고 새로 발급한다', () => {
     editor = new Editor({
       extensions: [StarterKit, TranslationUnitId],
@@ -150,172 +149,6 @@ describe('TranslationUnitId', () => {
 
     expect(collectTranslationUnits(result.doc).every((unit) => !unit.id)).toBe(true);
     expect(result.unalignedPaths.length).toBeGreaterThan(0);
-  });
-
-  describe('collectAlignedSourceUnits', () => {
-    const sourceDoc = ensureTranslationUnitIds({
-      type: 'doc',
-      content: [
-        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Title' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Body' }] },
-      ],
-    }, (() => {
-      let index = 0;
-      return () => `source-${++index}`;
-    })());
-
-    it('translationUnitId가 일치하면 ID로 원문 유닛을 찾는다', () => {
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'heading', attrs: { level: 1, translationUnitId: 'source-1' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'source-2' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-
-      const units = collectAlignedSourceUnits(sourceDoc, targetDoc, ['source-2']);
-
-      expect(units.map((unit) => unit.text)).toEqual(['Body']);
-    });
-
-    it('ID가 어긋나면 기본 경로에서는 같은 순번의 원문을 추측하지 않는다', () => {
-      // legacy 프로젝트: Target 에디터가 독립적으로 부여한 랜덤 ID
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'heading', attrs: { level: 1, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-
-      const units = collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b']);
-
-      expect(units).toEqual([]);
-    });
-
-    it('호출부가 명시적으로 허용한 legacy 문서만 같은 위치의 원문으로 fallback한다', () => {
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'heading', attrs: { level: 1, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-      const units = collectAlignedSourceUnits(
-        sourceDoc,
-        targetDoc,
-        ['random-b'],
-        { allowLegacyOrderFallback: true },
-      );
-
-      expect(units.map((unit) => unit.text)).toEqual(['Body']);
-    });
-
-    it('ID가 어긋나고 블록 구조도 다르면 빈 배열을 반환한다', () => {
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목과 본문' }] },
-        ],
-      };
-
-      expect(collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-a'])).toEqual([]);
-    });
-
-    it('빈 문단 개수가 달라도 내용 유닛 순서로 fallback 정렬한다', () => {
-      // 실제 번역 문서에서 관찰된 케이스: Target에만 빈 문단이 더 있음
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'random-0' } },
-          { type: 'heading', attrs: { level: 1, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-c' } },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-
-      const units = collectAlignedSourceUnits(
-        sourceDoc,
-        targetDoc,
-        ['random-b'],
-        { allowLegacyOrderFallback: true },
-      );
-
-      expect(units.map((unit) => unit.text)).toEqual(['Body']);
-    });
-
-    it('선택 ID 일부만 Source와 일치하면 부분 원문을 반환하지 않는다', () => {
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'heading', attrs: { level: 1, translationUnitId: 'source-1' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-
-      expect(
-        collectAlignedSourceUnits(sourceDoc, targetDoc, ['source-1', 'random-b']),
-      ).toEqual([]);
-    });
-
-    it('Source에 같은 ID가 복제돼 있으면(과거 분할 이력) 해당 유닛을 모두 반환한다', () => {
-      // keepOnSplit 수정 전에 저장된 문서: 분할된 두 반쪽이 같은 ID를 가진다
-      const splitSourceDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'First half.' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'Second half.' }] },
-        ],
-      };
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: '번역' }] },
-        ],
-      };
-
-      const units = collectAlignedSourceUnits(splitSourceDoc, targetDoc, ['dup']);
-
-      expect(units.map((unit) => unit.text)).toEqual(['First half.', 'Second half.']);
-    });
-
-    it('중복 ID가 있어도 선택 ID 일부가 Source에 없으면 빈 배열을 반환한다', () => {
-      const splitSourceDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'First half.' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'Second half.' }] },
-        ],
-      };
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: '번역' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '추가 문단' }] },
-        ],
-      };
-
-      expect(
-        collectAlignedSourceUnits(splitSourceDoc, targetDoc, ['dup', 'random-b']),
-      ).toEqual([]);
-    });
-
-    it('fallback은 heading 레벨이 다르면 순번 대응을 거부한다', () => {
-      // 정렬 검사(alignUnits)가 불일치로 표시하는 문서는 여기서도 실패해야 한다
-      const targetDoc = {
-        type: 'doc',
-        content: [
-          { type: 'heading', attrs: { level: 2, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
-          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
-        ],
-      };
-
-      expect(
-        collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b'], {
-          allowLegacyOrderFallback: true,
-        }),
-      ).toEqual([]);
-    });
   });
 
   describe('dropAncestorUnits', () => {

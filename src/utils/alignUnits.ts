@@ -38,8 +38,9 @@ const LCS_CELL_LIMIT = 250_000;
  * 매칭용 시그니처. **텍스트 내용은 쓰지 않는다** — 원문과 번역문은 언어가 달라
  * 내용 비교가 무의미하다. `path.length`로 리스트 항목·표 셀의 중첩 깊이를 구분하고,
  * heading은 레벨까지 넣어 h2↔h3 오매칭을 막는다.
+ * (alignedCounterpartUnits가 degraded 순번 폴백 검증에도 쓴다)
  */
-function signature(unit: TranslationUnit): string {
+export function signature(unit: TranslationUnit): string {
   return `${unit.type}:${unit.path.length}:${unit.level ?? ''}`;
 }
 

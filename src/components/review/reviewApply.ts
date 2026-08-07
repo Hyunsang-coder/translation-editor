@@ -18,11 +18,11 @@ import {
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { addAppliedChangeMarksToTransaction } from '@/editor/extensions/AppliedChangeHighlight';
 import {
-  collectAlignedSourceUnits,
   collectTranslationUnits,
   dropAncestorUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
 
 /** reviewStore가 새 적용 transaction을 redo로 오인하지 않도록 구분하는 meta. */
 export const REVIEW_SUGGESTION_APPLY_META = 'reviewSuggestionApply';
@@ -357,7 +357,7 @@ export interface ResolvedSuggestionRange {
 
 /**
  * sourceExcerpt로 Source 유닛을 특정하고, 유닛 정렬(translationUnitId 직접 매칭
- * 또는 legacy 순번 fallback)로 대응하는 Target 유닛의 문서 범위를 구한다.
+ * 또는 legacy LCS 정렬)로 대응하는 Target 유닛의 문서 범위를 구한다.
  *
  * 검수의 excerpt 탐색은 문서 전체 대상이라 반복 구절에서 다중 매치로 포기한다
  * (findExcerptRange/findBestSentenceMatch의 모호성 가드). 이 범위를 prior로 주면
@@ -394,11 +394,10 @@ export function resolveAlignedUnitRange(
   if (!matchedId) return null;
 
   // 2) Source 유닛 → Target 유닛 (selectionTools처럼 인자 방향을 뒤집으면 역방향)
-  const targetUnits = collectAlignedSourceUnits(
+  const targetUnits = findAlignedCounterpartUnits(
     targetDoc.toJSON() as TranslationUnitDocument,
     sourceDocJson,
     [matchedId],
-    { allowLegacyOrderFallback: true },
   );
   const targetIds = new Set(
     targetUnits.flatMap((unit) => unit.id ? [unit.id] : []),

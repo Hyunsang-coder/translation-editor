@@ -1,6 +1,12 @@
 # 원문↔번역문 유닛 대응을 LCS 정렬로 교체 (작업 계획)
 
-작성: 2026-08-07 / 상태: **미착수**
+작성: 2026-08-07 / 상태: **구현 완료** (2026-08-07)
+
+> 구현 결과: `src/editor/utils/alignedCounterpartUnits.ts`의 `findAlignedCounterpartUnits`가
+> 계획대로 ID 매칭 → LCS 짝짓기로 동작한다. 세 호출부 모두 교체했고
+> `collectAlignedSourceUnits`/`allowLegacyOrderFallback`은 제거했다. LCS 상한 초과
+> (degraded) 문서는 예전 fallback과 같은 "전체 1:1 + 시그니처 일치"일 때만 순번을
+> 신뢰한다. §5의 신규 테스트 4종 포함 전체 유닛 테스트 통과.
 
 > 증상: 번역 이력이 없는 문서에서 **원문에 문단을 하나 추가·분할하면 문서 전체의 선택 재번역이
 > "연결된 원문을 찾을 수 없습니다"로 죽는다.** 편집한 문단만이 아니라 전부.
