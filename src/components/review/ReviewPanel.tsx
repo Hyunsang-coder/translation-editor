@@ -24,9 +24,11 @@ import { resolveReviewIssueSegmentOrders } from '@/components/review/reviewIssue
 import {
   applySuggestionToEditor,
   deriveReplacementText,
+  resolveAlignedUnitRange,
   REVIEW_SUGGESTION_APPLY_META,
   resolveSuggestionRange,
 } from '@/components/review/reviewApply';
+import type { TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
 import { useEditorStore } from '@/stores/editorStore';
 import { hashContent, stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
@@ -52,6 +54,23 @@ function getTargetEditorSnapshot(): {
   } catch {
     return { doc: null, revision: null };
   }
+}
+
+/**
+ * 유닛 정렬 prior용 최신 Source 문서. 라이브 에디터가 있으면 그 상태(미저장
+ * 편집 포함), 없으면(원문 숨김 모드 등) 프로젝트 스토어 스냅샷을 쓴다.
+ * 어느 쪽도 없으면 null — prior 없이 기존 문서 전체 탐색으로 동작한다.
+ */
+function getSourceDocForAlignment(): TranslationUnitDocument | null {
+  const editor = useEditorStore.getState().sourceEditor;
+  if (editor && !editor.isDestroyed) {
+    try {
+      return editor.getJSON() as TranslationUnitDocument;
+    } catch {
+      // fall through to store snapshot
+    }
+  }
+  return (useProjectStore.getState().sourceDocJson as TranslationUnitDocument | null) ?? null;
 }
 
 /**
@@ -455,6 +474,11 @@ export function ReviewPanel(): JSX.Element {
       issue.targetExcerpt,
       issue.segmentGroupId,
       deriveReplacementText(issue.suggestedFix),
+      resolveAlignedUnitRange(
+        targetEditor.state.doc,
+        getSourceDocForAlignment(),
+        issue.sourceExcerpt,
+      ),
     );
     if (!range) {
       addToast({
@@ -575,7 +599,7 @@ export function ReviewPanel(): JSX.Element {
     const appliedProjectId = useProjectStore.getState().project?.id ?? null;
     let status: ReturnType<typeof applySuggestionToEditor>;
     try {
-      status = applySuggestionToEditor(targetEditor, issue);
+      status = applySuggestionToEditor(targetEditor, issue, getSourceDocForAlignment());
     } catch (error) {
       // 예상 실패(not-found/missing-data)는 반환값으로 신호되므로, 여기 도달하는 것은
       // dispatch 중 plugin/React 오류 등 예기치 못한 예외다. not-found로 오진단하지 않는다.

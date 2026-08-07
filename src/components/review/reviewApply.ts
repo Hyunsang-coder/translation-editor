@@ -17,6 +17,12 @@ import {
 } from '@/utils/normalizeForSearch';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { addAppliedChangeMarksToTransaction } from '@/editor/extensions/AppliedChangeHighlight';
+import {
+  collectAlignedSourceUnits,
+  collectTranslationUnits,
+  dropAncestorUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
 
 /** reviewStore가 새 적용 transaction을 redo로 오인하지 않도록 구분하는 meta. */
 export const REVIEW_SUGGESTION_APPLY_META = 'reviewSuggestionApply';
@@ -85,6 +91,7 @@ export function buildExcerptSearchContext(doc: ProseMirrorNode): ExcerptSearchCo
  * - 노드 경계를 넘는 텍스트도 검색 가능 (buildTextWithPositions)
  * - 양방향 정규화: 에디터 텍스트와 검색 텍스트 모두 정규화하여 비교
  * - segmentGroupId가 있으면 해당 세그먼트 범위 내 첫 매치만 반환
+ * - rangeOverride가 있으면 세그먼트 대신 그 범위로 제한 (유닛 정렬 prior)
  *
  * @returns { from, to } (to는 exclusive), 못 찾으면 null
  */
@@ -93,6 +100,7 @@ export function findExcerptRange(
   rawExcerpt: string | undefined,
   segmentGroupId: string | undefined,
   ctx?: ExcerptSearchContext,
+  rangeOverride?: { from: number; to: number } | null,
 ): { from: number; to: number } | null {
   if (!rawExcerpt || rawExcerpt.length === 0) return null;
 
@@ -100,10 +108,10 @@ export function findExcerptRange(
 
   const normalizedSegmentGroupId = normalizeSegmentGroupId(segmentGroupId);
   // 컨텍스트에 사전 계산된 세그먼트 범위 사용 (findSegmentRange와 동일 결과, 전체 스캔 제거)
-  const segmentRange = normalizedSegmentGroupId
+  const segmentRange = rangeOverride ?? (normalizedSegmentGroupId
     ? context.segmentRanges.get(normalizedSegmentGroupId) ?? null
-    : null;
-  if (segmentGroupId && context.hasSegmentGroups && !segmentRange) {
+    : null);
+  if (!rangeOverride && segmentGroupId && context.hasSegmentGroups && !segmentRange) {
     return null;
   }
 
@@ -348,20 +356,110 @@ export interface ResolvedSuggestionRange {
 }
 
 /**
- * 수정 제안을 적용할 문서 범위 결정:
- * 1. 정확 매치 (따옴표 관용 포함) → 해당 범위
- * 2. 실패 시 유사 문장 매치 → 문장 전체 범위 (fuzzy)
- *    단, 교체문이 문장 대비 지나치게 짧으면 유실 위험이 있어 포기
+ * sourceExcerpt로 Source 유닛을 특정하고, 유닛 정렬(translationUnitId 직접 매칭
+ * 또는 legacy 순번 fallback)로 대응하는 Target 유닛의 문서 범위를 구한다.
+ *
+ * 검수의 excerpt 탐색은 문서 전체 대상이라 반복 구절에서 다중 매치로 포기한다
+ * (findExcerptRange/findBestSentenceMatch의 모호성 가드). 이 범위를 prior로 주면
+ * 탐색이 해당 블록으로 좁혀져 모호성이 사라진다. 어느 단계든 특정에 실패하면
+ * null을 반환하고 호출부는 기존 문서 전체 탐색으로 폴백한다 — 순수 추가 정밀도.
+ */
+export function resolveAlignedUnitRange(
+  targetDoc: ProseMirrorNode,
+  sourceDocJson: TranslationUnitDocument | null | undefined,
+  sourceExcerpt: string | undefined,
+): { from: number; to: number } | null {
+  if (!sourceDocJson || !sourceExcerpt?.trim()) return null;
+
+  // 1) sourceExcerpt가 든 Source 유닛 특정 (excerpt 탐색과 같은 정규화·따옴표 관용)
+  const candidates = [normalizeForSearch(sourceExcerpt)];
+  const stripped = normalizeForSearch(stripWrappingQuotes(sourceExcerpt));
+  if (stripped.length > 0 && stripped !== candidates[0]) candidates.push(stripped);
+
+  const sourceUnits = collectTranslationUnits(sourceDocJson);
+  let matchedId: string | undefined;
+  for (const candidate of candidates) {
+    if (candidate.length === 0) continue;
+    // 표 셀은 셀과 안쪽 문단이 둘 다 잡히므로 가장 안쪽 유닛만 남긴다.
+    const matches = dropAncestorUnits(sourceUnits.filter(
+      (unit) => unit.id && normalizeForSearch(unit.text).includes(candidate),
+    ));
+    // 서로 다른 유닛 여럿에 있으면 위치 특정 불가. 같은 ID의 복제 유닛은 하나로 본다.
+    const ids = new Set(matches.map((unit) => unit.id));
+    if (ids.size === 1) {
+      matchedId = matches[0]!.id;
+      break;
+    }
+  }
+  if (!matchedId) return null;
+
+  // 2) Source 유닛 → Target 유닛 (selectionTools처럼 인자 방향을 뒤집으면 역방향)
+  const targetUnits = collectAlignedSourceUnits(
+    targetDoc.toJSON() as TranslationUnitDocument,
+    sourceDocJson,
+    [matchedId],
+    { allowLegacyOrderFallback: true },
+  );
+  const targetIds = new Set(
+    targetUnits.flatMap((unit) => unit.id ? [unit.id] : []),
+  );
+  if (targetIds.size === 0) return null;
+
+  // 3) Target PM 문서에서 해당 유닛 노드들의 범위 계산
+  let from = Number.POSITIVE_INFINITY;
+  let to = Number.NEGATIVE_INFINITY;
+  targetDoc.descendants((node, pos) => {
+    const id = node.attrs?.translationUnitId;
+    if (typeof id === 'string' && targetIds.has(id)) {
+      from = Math.min(from, pos);
+      to = Math.max(to, pos + node.nodeSize);
+    }
+    return undefined;
+  });
+  return Number.isFinite(from) && to > from ? { from, to } : null;
+}
+
+/**
+ * 수정 제안을 적용할 문서 범위 결정 (증거 강한 순):
+ * 1. 유닛 정렬 prior 범위 안 정확 매치 — 반복 구절의 다중 매치 모호성 제거
+ * 2. 문서 전체 정확 매치 (따옴표 관용 포함) — 정확한 텍스트 증거는 prior보다 우선
+ * 3. prior 범위 안 유사 문장 매치 — excerpt가 변형돼도 정렬된 블록 안이면 안전
+ * 4. 문서 전체 유사 문장 매치 (fuzzy)
+ * 유사 매치는 교체문이 문장 대비 지나치게 짧으면 유실 위험이 있어 포기.
+ * prior가 틀려도 2·4로 폴백하므로 기존 대비 순수 추가 정밀도다.
  */
 export function resolveSuggestionRange(
   doc: ProseMirrorNode,
   targetExcerpt: string,
   segmentGroupId: string | undefined,
   replacement: string,
+  alignedUnitRange?: { from: number; to: number } | null,
 ): ResolvedSuggestionRange | null {
+  if (alignedUnitRange) {
+    const scopedExact = findExcerptRange(
+      doc, targetExcerpt, undefined, undefined, alignedUnitRange,
+    );
+    if (scopedExact) {
+      return { from: scopedExact.from, to: scopedExact.to, fuzzy: false };
+    }
+  }
+
   const exact = findExcerptRange(doc, targetExcerpt, segmentGroupId);
   if (exact) {
     return { from: exact.from, to: exact.to, fuzzy: false };
+  }
+
+  // prior 범위 안 fuzzy는 문서 전체 정확 매치보다 뒤, 전체 fuzzy보다 앞이다.
+  // 잘못된 prior 안의 유사 문장(Dice ≥ 0.6은 흔히 넘는다)이 다른 곳의 정확
+  // 매치를 가리면 안 되기 때문이다.
+  if (alignedUnitRange) {
+    const scopedSentence = findBestSentenceMatch(doc, targetExcerpt, alignedUnitRange);
+    if (
+      scopedSentence &&
+      replacement.length >= scopedSentence.sentenceText.length * REPLACEMENT_MIN_LENGTH_RATIO
+    ) {
+      return { from: scopedSentence.from, to: scopedSentence.to, fuzzy: true };
+    }
   }
 
   // fuzzy 폴백도 exact 경로와 동일한 세그먼트 가드를 적용한다.
@@ -384,7 +482,11 @@ export type ApplySuggestionStatus = 'applied' | 'applied-fuzzy' | 'not-found' | 
  * 정확 매치 실패 시 유사 문장 전체 교체로 폴백 (applied-fuzzy).
  * plain text로 교체하며(marks 제거) history에 기록되어 Ctrl+Z 가능.
  */
-export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): ApplySuggestionStatus {
+export function applySuggestionToEditor(
+  editor: Editor,
+  issue: ReviewIssue,
+  sourceDocJson?: TranslationUnitDocument | null,
+): ApplySuggestionStatus {
   const baseReplacement = deriveReplacementText(issue.suggestedFix);
   if (!issue.targetExcerpt || !baseReplacement) return 'missing-data';
 
@@ -394,6 +496,7 @@ export function applySuggestionToEditor(editor: Editor, issue: ReviewIssue): App
     issue.targetExcerpt,
     issue.segmentGroupId,
     baseReplacement,
+    resolveAlignedUnitRange(state.doc, sourceDocJson, issue.sourceExcerpt),
   );
   if (!resolved) return 'not-found';
 

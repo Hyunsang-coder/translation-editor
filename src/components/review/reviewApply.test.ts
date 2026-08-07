@@ -8,6 +8,7 @@ import {
   deriveReplacementText,
   resolveReplacementText,
   findBestSentenceMatch,
+  resolveAlignedUnitRange,
   resolveSuggestionRange,
 } from './reviewApply';
 import { normalizeSegmentGroupId } from './reviewApply';
@@ -412,5 +413,131 @@ describe('findExcerptRange 블록 경계 (세그먼트 마크다운 excerpt 재�
     const doc = buildRichDoc();
     // 블록 경계를 공백 없이 이어붙인 텍스트는 매치되면 안 됨
     expect(findExcerptRange(doc, 'problems.Can distinguish', undefined)).toBeNull();
+  });
+});
+
+// ============================================
+// 유닛 정렬 prior (resolveAlignedUnitRange)
+// ============================================
+
+const unitSchema = new Schema({
+  nodes: {
+    doc: { content: 'block+' },
+    text: { group: 'inline' },
+    paragraph: {
+      group: 'block',
+      content: 'inline*',
+      attrs: {
+        segmentGroupId: { default: null },
+        translationUnitId: { default: null },
+      },
+    },
+  },
+});
+
+function unitParagraph(id: string, text: string) {
+  return unitSchema.node('paragraph', { translationUnitId: id }, unitSchema.text(text));
+}
+
+function unitRangeOf(doc: ReturnType<typeof unitSchema.node>, id: string) {
+  let range: { from: number; to: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (node.attrs?.translationUnitId === id) {
+      range = { from: pos, to: pos + node.nodeSize };
+    }
+    return undefined;
+  });
+  return range!;
+}
+
+const alignSourceJson = {
+  type: 'doc',
+  content: [
+    { type: 'paragraph', attrs: { translationUnitId: 's1' }, content: [{ type: 'text', text: 'First source sentence.' }] },
+    { type: 'paragraph', attrs: { translationUnitId: 's2' }, content: [{ type: 'text', text: 'Second source sentence.' }] },
+  ],
+};
+
+describe('resolveAlignedUnitRange', () => {
+  it('translationUnitId가 일치하면 대응 Target 유닛의 범위를 반환한다', () => {
+    const targetDoc = unitSchema.node('doc', null, [
+      unitParagraph('s1', '첫 번역 문장.'),
+      unitParagraph('s2', '둘째 번역 문장.'),
+    ]);
+
+    const range = resolveAlignedUnitRange(targetDoc, alignSourceJson, 'Second source sentence.');
+
+    expect(range).toEqual(unitRangeOf(targetDoc, 's2'));
+  });
+
+  it('ID가 독립 발급된 legacy 문서도 1:1 구조면 순번으로 대응한다', () => {
+    const targetDoc = unitSchema.node('doc', null, [
+      unitParagraph('t1', '첫 번역 문장.'),
+      unitParagraph('t2', '둘째 번역 문장.'),
+    ]);
+
+    const range = resolveAlignedUnitRange(targetDoc, alignSourceJson, 'Second source sentence.');
+
+    expect(range).toEqual(unitRangeOf(targetDoc, 't2'));
+  });
+
+  it('sourceExcerpt가 여러 Source 유닛에 있으면 특정하지 않는다', () => {
+    const targetDoc = unitSchema.node('doc', null, [
+      unitParagraph('s1', '첫 번역 문장.'),
+      unitParagraph('s2', '둘째 번역 문장.'),
+    ]);
+
+    expect(resolveAlignedUnitRange(targetDoc, alignSourceJson, 'source sentence.')).toBeNull();
+  });
+
+  it('Source 문서나 excerpt가 없으면 null (prior 없이 동작)', () => {
+    const targetDoc = unitSchema.node('doc', null, [unitParagraph('s1', '번역.')]);
+
+    expect(resolveAlignedUnitRange(targetDoc, null, 'First source sentence.')).toBeNull();
+    expect(resolveAlignedUnitRange(targetDoc, alignSourceJson, undefined)).toBeNull();
+    expect(resolveAlignedUnitRange(targetDoc, alignSourceJson, '  ')).toBeNull();
+  });
+});
+
+describe('resolveSuggestionRange + 유닛 정렬 prior', () => {
+  // 반복 구절: prior 없이는 문서 전체 다중 매치 → 모호성 가드로 포기하던 케이스
+  const repeatedDoc = unitSchema.node('doc', null, [
+    unitParagraph('s1', '공격력이 10 증가합니다.'),
+    unitParagraph('s2', '공격력이 10 증가합니다.'),
+  ]);
+
+  it('prior가 없으면 반복 구절은 모호성으로 포기한다 (기존 동작 유지)', () => {
+    expect(
+      resolveSuggestionRange(repeatedDoc, '공격력이 10 증가합니다.', undefined, '공격력이 10 상승합니다.'),
+    ).toBeNull();
+  });
+
+  it('prior가 있으면 해당 유닛으로 좁혀 반복 구절을 적용할 수 있다', () => {
+    const prior = resolveAlignedUnitRange(repeatedDoc, alignSourceJson, 'Second source sentence.');
+    expect(prior).not.toBeNull();
+
+    const resolved = resolveSuggestionRange(
+      repeatedDoc, '공격력이 10 증가합니다.', undefined, '공격력이 10 상승합니다.', prior,
+    );
+
+    const expected = unitRangeOf(repeatedDoc, 's2');
+    expect(resolved).not.toBeNull();
+    expect(resolved!.fuzzy).toBe(false);
+    expect(resolved!.from).toBeGreaterThanOrEqual(expected.from);
+    expect(resolved!.to).toBeLessThanOrEqual(expected.to);
+  });
+
+  it('prior 범위 안에 excerpt가 없으면 문서 전체 탐색으로 폴백한다', () => {
+    const doc = unitSchema.node('doc', null, [
+      unitParagraph('s1', '첫 번역 문장.'),
+      unitParagraph('s2', '둘째 번역 문장.'),
+    ]);
+    // 잘못된 prior(첫 유닛)를 줘도 둘째 유닛의 유일 매치를 찾아야 한다
+    const wrongPrior = unitRangeOf(doc, 's1');
+
+    const resolved = resolveSuggestionRange(doc, '둘째 번역 문장.', undefined, '둘째 번역 문구.', wrongPrior);
+
+    expect(resolved).not.toBeNull();
+    expect(resolved!.from).toBeGreaterThanOrEqual(unitRangeOf(doc, 's2').from);
   });
 });
