@@ -26,6 +26,8 @@ Critical implementation warnings learned from past issues.
 
 156. **앵커 텍스트는 블록 구분자를 포함해 읽을 것**: `doc.textBetween(from, to)`를 구분자 없이 쓰면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡는다. `readAnchorText`가 `'\n'`을 넣는다. 단일 블록에서는 두 값이 문자 단위로 동일하므로 무회귀이고, `SelectionContext.text`(`'\n'` + trim)와 값이 일치해 proposal 검증이 옳아진다.
 
+165. **반대쪽 유닛 조회는 `findAlignedCounterpartUnits` 하나로**: 재번역·채팅 선택 문맥·검수 위치 힌트가 모두 `editor/utils/alignedCounterpartUnits.ts`를 쓴다(ID 직접 매칭 → 실패 시 `alignUnits` LCS). `TranslationUnitId.ts`에 대응 로직을 다시 만들지 말 것 — `alignUnits`가 그 파일을 import하므로 역방향은 런타임 순환이고, 그래서 조합 모듈이 따로 있다. 옛 순번 fallback은 **문서 전체가 1:1**일 때만 동작해 legacy 문서에서 원문 문단 하나만 추가·분할해도 문서 전체의 재번역이 죽었다. 불변식: 정렬 뷰가 `pair`로 보여주는 유닛은 재번역도 되어야 하고, 짝을 못 찾은 유닛만 실패한다. 판정은 유닛 개수가 아니라 **고유 ID 수**로(문단 중간 분할이 attrs를 복사해 같은 ID가 복제된다), 선택 일부만 대응되면 부분 결과 대신 빈 배열.
+
 ## AI / Chat
 
 9. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.

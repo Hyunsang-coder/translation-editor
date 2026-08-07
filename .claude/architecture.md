@@ -9,7 +9,7 @@
 | State | Zustand with persistence |
 | AI | LangChain.js (OpenAI + Anthropic) |
 | UI Layout | Dual Sidebar (Left + Right, independently collapsible) |
-| Toast | Sonner (position: top-center) |
+| Toast | Sonner (position: bottom-right — top-center는 상단 스트립과 겹친다) |
 | Backend | Tauri 2 + Rust |
 | Storage | SQLite (`.ite` project files) |
 | i18n | i18next (Korean/English) |
