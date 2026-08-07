@@ -19,6 +19,7 @@ This file provides guidance to Claude Code when working with this repository.
 npm install              # Install dependencies
 npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
+npm run install:local    # 빌드 후 /Applications 설치본 교체 (CI 릴리스 대기 없이)
 npx tsc --noEmit         # TypeScript type check
 npm test                 # Vitest watch mode
 npm run test:run         # Single test run
