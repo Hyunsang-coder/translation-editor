@@ -97,12 +97,37 @@ describe('SelectionAnchor', () => {
     });
   });
 
-  it('선택 범위 내부가 수정되면 stale로 전환한다', () => {
+  it('선택 범위 내부를 수정하면 현재 텍스트로 재기준화하고 active를 유지한다', () => {
     const ed = createEditor();
     const range = targetRange(ed);
     const anchorId = createSelectionAnchor(ed, { ranges: [range] });
 
     ed.commands.insertContentAt(range.from + 2, 'X');
+
+    expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
+      status: 'active',
+      originalText: 'taXrget',
+    });
+  });
+
+  it('선택 범위를 통째로 지우면 죽은 앵커가 되고 하이라이트도 사라진다', () => {
+    const ed = createEditor();
+    const range = targetRange(ed);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
+
+    ed.view.dispatch(ed.state.tr.delete(range.from, range.to));
+
+    expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
+    expect(ed.view.dom.querySelectorAll('.selection-anchor')).toHaveLength(0);
+  });
+
+  it('죽은 앵커는 undo로 텍스트가 돌아와도 되살아나지 않는다', () => {
+    const ed = createEditor();
+    const range = targetRange(ed);
+    const anchorId = createSelectionAnchor(ed, { ranges: [range] });
+
+    ed.view.dispatch(ed.state.tr.delete(range.from, range.to));
+    ed.commands.undo();
 
     expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
   });
@@ -180,7 +205,7 @@ describe('SelectionAnchor', () => {
       expect(resolveSelectionAnchor(ed, anchorId)?.originalText).toBe('One\nTwo\nThree');
     });
 
-    it('문단 병합은 stale로 잡는다', () => {
+    it('문단 병합은 병합된 텍스트로 재기준화한다', () => {
       const ed = createEditor(multiDoc);
       const anchorId = createSelectionAnchor(ed, {
         ranges: [normalizeSelectionAnchorRange(ed, {
@@ -190,11 +215,14 @@ describe('SelectionAnchor', () => {
       });
 
       // 두 번째 문단의 시작 경계를 지워 첫 문단과 합친다.
-      // 구분자가 없으면 텍스트가 'OneTwoThree'로 동일해 변경을 놓친다.
+      // 구분자를 포함해 읽으므로 재기준화된 텍스트에 병합이 드러난다.
       const twoPos = findTextPos(ed, 'Two');
       ed.view.dispatch(ed.state.tr.delete(twoPos - 2, twoPos));
 
-      expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
+      expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
+        status: 'active',
+        originalText: 'OneTwo\nThree',
+      });
     });
 
     it('트림으로 앞 블록의 기여분이 사라지면 blockCount에서 제외한다', () => {
@@ -265,11 +293,25 @@ describe('SelectionAnchor', () => {
       expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('active');
     });
 
-    it('고른 범위 안을 고치면 stale이 된다', () => {
+    it('고른 범위 안을 고치면 그 범위의 현재 텍스트로 재기준화한다', () => {
       const ed = createEditor(cellsDoc);
       const anchorId = createSelectionAnchor(ed, { ranges: disjointRanges(ed) });
 
       ed.commands.insertContentAt(findTextPos(ed, 'Gamma') + 2, 'X');
+
+      expect(resolveSelectionAnchor(ed, anchorId)).toMatchObject({
+        status: 'active',
+        originalText: 'Alpha\nGaXmma',
+      });
+    });
+
+    it('다중 범위 중 하나를 통째로 지우면 죽은 앵커가 된다', () => {
+      const ed = createEditor(cellsDoc);
+      const ranges = disjointRanges(ed);
+      const anchorId = createSelectionAnchor(ed, { ranges });
+
+      const gamma = ranges[1]!;
+      ed.view.dispatch(ed.state.tr.delete(gamma.from, gamma.to));
 
       expect(resolveSelectionAnchor(ed, anchorId)?.status).toBe('stale');
     });

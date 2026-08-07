@@ -34,7 +34,8 @@ describe('applySelectionEdit', () => {
     const { editor: ed, anchorId } = setup();
     const anchor = resolveSelectionAnchor(ed, anchorId)!;
 
-    expect(applySelectionEdit(ed, anchor, 'replacement')).toBe('applied');
+    expect(applySelectionEdit(ed, anchor, 'replacement', { expectedText: 'target' }))
+      .toBe('applied');
     expect(ed.state.doc.textContent).toBe('First target and replacement.');
     expect(resolveSelectionAnchor(ed, anchorId)).toBeNull();
     expect(ed.state.selection.from).toBe(anchor.ranges[0]!.from);
@@ -51,19 +52,39 @@ describe('applySelectionEdit', () => {
     });
 
     expect(
-      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement', {
+        expectedText: 'Whole paragraph',
+      }),
     ).toBe('applied');
     expect(editor.state.doc.textContent).toBe('Replacement');
   });
 
-  it('선택 내부가 바뀐 stale anchor는 적용하지 않는다', () => {
+  it('선택 내부가 바뀌어 expectedText 스냅샷과 다르면 적용하지 않는다', () => {
+    // 앵커는 편집을 따라 재기준화되므로, 수정안이 만들어진 시점의 스냅샷은
+    // 호출부가 expectedText로 넘겨야 TOCTOU 가드가 성립한다.
     const { editor: ed, anchorId } = setup();
     const anchor = resolveSelectionAnchor(ed, anchorId)!;
     ed.commands.insertContentAt(anchor.ranges[0]!.from + 1, 'X');
 
-    expect(applySelectionEdit(ed, resolveSelectionAnchor(ed, anchorId)!, 'replacement'))
-      .toBe('stale');
+    expect(applySelectionEdit(ed, resolveSelectionAnchor(ed, anchorId)!, 'replacement', {
+      expectedText: 'target',
+    })).toBe('stale');
     expect(ed.state.doc.textContent).not.toContain('replacement');
+  });
+
+  it('편집 후 재기준화된 텍스트를 expectedText로 넘기면 적용한다', () => {
+    const { editor: ed, anchorId } = setup();
+    ed.commands.insertContentAt(
+      resolveSelectionAnchor(ed, anchorId)!.ranges[0]!.from + 2,
+      'X',
+    );
+
+    const anchor = resolveSelectionAnchor(ed, anchorId)!;
+    expect(anchor.originalText).toBe('taXrget');
+    expect(applySelectionEdit(ed, anchor, 'replacement', {
+      expectedText: anchor.originalText,
+    })).toBe('applied');
+    expect(ed.state.doc.textContent).toBe('First target and replacement.');
   });
 
   it('다른 textblock을 가로지르는 범위는 거부한다', () => {
@@ -80,7 +101,7 @@ describe('applySelectionEdit', () => {
       originalText: 'ne\nTw',
       status: 'active',
       createdAt: 1,
-    }, 'replacement')).toBe('invalid');
+    }, 'replacement', { expectedText: 'ne\nTw' })).toBe('invalid');
   });
 
   it('선택 전체에 공통인 굵게 서식을 교체문에도 보존한다', () => {
@@ -93,7 +114,9 @@ describe('applySelectionEdit', () => {
     });
 
     expect(
-      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement', {
+        expectedText: 'Target text',
+      }),
     ).toBe('applied');
     expect(editor.getJSON().content?.[0]?.content?.[0]?.marks).toEqual([
       { type: 'bold' },
@@ -111,7 +134,9 @@ describe('applySelectionEdit', () => {
     const before = editor.getJSON();
 
     expect(
-      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement', {
+        expectedText: 'BoldItalic',
+      }),
     ).toBe('formatting-conflict');
     expect(editor.getJSON()).toEqual(before);
   });
@@ -131,7 +156,7 @@ describe('applySelectionEdit', () => {
         editor,
         resolveSelectionAnchor(editor, anchorId)!,
         'Replacement',
-        { flattenFormatting: true },
+        { expectedText: 'Plain bold tail', flattenFormatting: true },
       ),
     ).toBe('applied');
     expect(editor.getJSON().content?.[0]?.content).toEqual([
@@ -153,7 +178,7 @@ describe('applySelectionEdit', () => {
         editor,
         resolveSelectionAnchor(editor, anchorId)!,
         'Replacement',
-        { flattenFormatting: true },
+        { expectedText: 'BoldItalic', flattenFormatting: true },
       ),
     ).toBe('applied');
     expect(editor.getJSON().content?.[0]?.content).toEqual([
@@ -171,7 +196,9 @@ describe('applySelectionEdit', () => {
     });
 
     expect(
-      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement'),
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'Replacement', {
+        expectedText: 'Target',
+      }),
     ).toBe('applied');
     expect(editor.getHTML()).toContain('data-comment-id="comment-1"');
     expect(editor.getHTML()).toContain('Replacement');

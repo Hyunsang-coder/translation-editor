@@ -308,16 +308,31 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage(messageId, { metadata }, sessionId);
   }, [updateMessage, sessionId]);
 
+  // 앵커가 종료되면 그 앵커를 참조하는 칩도 함께 정리한다. 남겨두면 onTransaction이
+  // 앵커 소실을 보고 detached("문서 연결 끊김") 배지를 붙인다 — 문서가 통째로
+  // 바뀐 게 아니라 수정안 흐름이 끝난 것이므로 배지가 아니라 제거가 맞다.
+  const clearComposerSelectionForAnchor = useCallback((anchorId: string): void => {
+    const chatState = useChatStore.getState();
+    const selection = chatState.composerSelection;
+    if (!selection || selection.anchorId !== anchorId) return;
+    const targetSessionId = Object.entries(
+      chatState.activeSelectionScopeIdBySession,
+    ).find(([, scopeId]) => scopeId === selection.selectionScopeId)?.[0];
+    chatState.clearComposerSelection(targetSessionId);
+  }, []);
+
   // 앵커(하이라이트)는 적용 성공 시 applySelectionEdit이 제거한다. 그 외 종료 경로
   // (칩 dismiss, proposal 폐기, stale 판정)에서도 제거해 하이라이트가 남지 않게 한다.
   const removePanelSelectionAnchor = useCallback((
     panel: 'source' | 'target',
     anchorId: string,
   ): void => {
+    // 칩을 먼저 비워야 앵커 제거 transaction에서 detached 배지가 스치지 않는다
+    clearComposerSelectionForAnchor(anchorId);
     const editors = useEditorStore.getState();
     const editor = panel === 'source' ? editors.sourceEditor : editors.targetEditor;
     if (editor && !editor.isDestroyed) removeSelectionAnchor(editor, anchorId);
-  }, []);
+  }, [clearComposerSelectionForAnchor]);
 
   const handlePreviewSelectionProposal = useCallback((
     messageId: string,
@@ -446,7 +461,11 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       });
       return;
     }
-    const result = applySelectionEdit(editor, anchor, proposal.replacementText);
+    const result = applySelectionEdit(editor, anchor, proposal.replacementText, {
+      // 앵커 텍스트는 편집을 따라 재기준화되므로, 수정안 생성 시점의 스냅샷을
+      // 기준으로 검증해야 사용자 편집을 덮어쓰지 않는다.
+      expectedText: proposal.originalText,
+    });
     if (result !== 'applied') {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {
@@ -461,6 +480,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       });
       return;
     }
+    // 적용 성공 — applySelectionEdit이 앵커를 제거했으므로 칩도 함께 정리한다
+    clearComposerSelectionForAnchor(proposal.anchorId);
     updateMessage(messageId, {
       metadata: {
         documentEditProposal: {
@@ -471,7 +492,15 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       },
     }, sessionId);
     setProposalPreview(null);
-  }, [proposalPreview, updateMessage, sessionId, addToast, t, removePanelSelectionAnchor]);
+  }, [
+    proposalPreview,
+    updateMessage,
+    sessionId,
+    addToast,
+    t,
+    removePanelSelectionAnchor,
+    clearComposerSelectionForAnchor,
+  ]);
 
   const markProposal = useCallback((
     messageId: string,

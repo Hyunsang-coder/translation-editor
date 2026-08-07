@@ -16,6 +16,12 @@ export type ApplySelectionEditResult =
 
 export interface ApplySelectionEditOptions {
   /**
+   * 적용 직전 앵커 텍스트가 이 스냅샷과 같아야 한다. 앵커의 originalText는
+   * 편집을 따라 재기준화되므로(SelectionAnchor.mapAnchor) TOCTOU 가드가 되지
+   * 못한다 — 수정안·재번역이 만들어진 시점의 텍스트를 호출부가 직접 넘긴다.
+   */
+  expectedText: string;
+  /**
    * 서식이 섞인 범위를 공통 mark(모든 텍스트 노드에 걸린 것만)로 평탄화해 적용한다.
    * 부분 서식이 조용히 사라지므로, 사용자가 "서식이 사라질 수 있다" 확인을 거친
    * 경로에서만 켤 것.
@@ -76,7 +82,7 @@ export function applySelectionEdit(
   editor: Editor,
   anchor: SelectionAnchorRecord,
   replacementText: string,
-  options: ApplySelectionEditOptions = {},
+  options: ApplySelectionEditOptions,
 ): ApplySelectionEditResult {
   // 다중 범위(표 셀 선택)와 멀티블록 범위는 앵커로 만들 수 있지만(참조·하이라이트용)
   // 적용은 못 한다. 평문 하나로 교체하면 문단·리스트·셀이 한 블록으로 뭉개진다.
@@ -93,7 +99,7 @@ export function applySelectionEdit(
   }
 
   const currentText = readAnchorText(editor.state.doc, range.from, range.to);
-  if (currentText !== anchor.originalText) return 'stale';
+  if (currentText !== options.expectedText) return 'stale';
 
   const $from = editor.state.doc.resolve(range.from);
   const $to = editor.state.doc.resolve(range.to);

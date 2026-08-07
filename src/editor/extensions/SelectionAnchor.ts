@@ -10,8 +10,9 @@ const DOCUMENT_REPLACE_META = 'selectionAnchorDocumentReplace';
 
 /**
  * 앵커 텍스트는 블록 구분자를 포함해 읽는다. 구분자가 없으면 문단 병합·분할이
- * 텍스트를 바꾸지 않아(`One`+`Two`가 병합돼도 `OneTwo`) 구조 변경을 stale로
- * 잡지 못한다. `SelectionContext.text`도 같은 기준이어야 proposal 검증이 맞는다.
+ * 텍스트를 바꾸지 않아(`One`+`Two`가 병합돼도 `OneTwo`) 구조 변경이 재기준화
+ * 텍스트에 드러나지 않는다. `SelectionContext.text`도 같은 기준이어야
+ * expectedText 스냅샷 비교(applySelectionEdit)가 맞는다.
  */
 const ANCHOR_BLOCK_SEPARATOR = '\n';
 
@@ -20,7 +21,7 @@ export interface SelectionRange {
   to: number;
 }
 
-/** 앵커 범위의 텍스트를 stale 비교와 같은 기준으로 읽는다 */
+/** 앵커 범위의 텍스트를 재기준화·적용 검증과 같은 기준으로 읽는다 */
 export function readAnchorText(
   doc: ProseMirrorNode,
   from: number,
@@ -131,14 +132,15 @@ function mapAnchor(
   );
   const currentText = rangesAreValid ? readAnchorRangesText(doc, ranges) : '';
 
-  return {
-    ...anchor,
-    ranges,
-    status:
-      anchor.status === 'active' && currentText === anchor.originalText
-        ? 'active'
-        : 'stale',
-  };
+  // 편집을 따라 originalText를 현재 텍스트로 재기준화한다 — 칩·하이라이트가
+  // "이 부분"을 계속 가리키게 하기 위함. 적용 경로의 TOCTOU 가드는 호출부가
+  // 넘기는 expectedText 스냅샷이 담당한다(applySelectionEdit 참고).
+  // 범위가 붕괴하거나(선택 전체 삭제) 텍스트가 비면 죽은 앵커(stale)로 전환하고
+  // undo로 텍스트가 돌아와도 되살리지 않는다.
+  if (anchor.status !== 'active' || !currentText) {
+    return { ...anchor, ranges, status: 'stale' };
+  }
+  return { ...anchor, ranges, originalText: currentText };
 }
 
 function applyMeta(

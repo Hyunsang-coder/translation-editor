@@ -442,13 +442,57 @@ export function EditorCanvasTipTap(): JSX.Element {
         return;
       }
       const anchor = resolveSelectionAnchor(editor, selection.anchorId);
-      const nextStatus = anchor?.status ?? 'detached';
-      if (selection.status !== nextStatus) {
-        const targetSessionId = Object.entries(
-          chatState.activeSelectionScopeIdBySession,
-        ).find(([, scopeId]) => scopeId === selection.selectionScopeId)?.[0];
+      const targetSessionId = Object.entries(
+        chatState.activeSelectionScopeIdBySession,
+      ).find(([, scopeId]) => scopeId === selection.selectionScopeId)?.[0];
+      // 앵커 소실(문서 통째 교체·프로젝트 전환)만 detached로 남긴다 — 사용자가
+      // 다시 선택해야 한다는 신호.
+      if (!anchor) {
+        if (selection.status !== 'detached') {
+          chatState.setComposerSelection(
+            { ...selection, status: 'detached' },
+            targetSessionId,
+          );
+        }
+        return;
+      }
+      // 선택 텍스트가 통째로 지워짐 — 가리킬 대상이 없으니 칩과 앵커를 함께 정리.
+      // (재진입 안전: 아래 dispatch로 이 핸들러가 다시 돌아도 칩이 비어 조기 반환)
+      if (anchor.status !== 'active') {
+        chatState.clearComposerSelection(targetSessionId);
+        removeSelectionAnchor(editor, anchor.anchorId);
+        return;
+      }
+      const text = anchor.originalText;
+      // 편집으로 멀티블록 선택이 상한을 넘으면 생성 때와 같은 기준으로 정리한다
+      if (
+        selection.spansMultipleBlocks &&
+        text.length > MAX_MULTI_BLOCK_SELECTION_CHARS
+      ) {
+        chatState.clearComposerSelection(targetSessionId);
+        removeSelectionAnchor(editor, anchor.anchorId);
+        addToast({
+          type: 'error',
+          message: t('selection.tooLong', {
+            length: text.length,
+            max: MAX_MULTI_BLOCK_SELECTION_CHARS,
+            defaultValue: `선택이 너무 깁니다(${text.length}자). ${MAX_MULTI_BLOCK_SELECTION_CHARS}자 이하로 선택해주세요.`,
+          }),
+        });
+        return;
+      }
+      // 앵커가 편집을 따라 재기준화되므로 칩 텍스트·범위도 함께 갱신한다.
+      // 칩이 항상 현재 문서와 같아 stale 배지가 필요 없다.
+      const first = anchor.ranges[0]!;
+      const last = anchor.ranges[anchor.ranges.length - 1]!;
+      if (
+        selection.text !== text ||
+        selection.from !== first.from ||
+        selection.to !== last.to ||
+        selection.status !== 'active'
+      ) {
         chatState.setComposerSelection(
-          { ...selection, status: nextStatus },
+          { ...selection, text, from: first.from, to: last.to, status: 'active' },
           targetSessionId,
         );
       }
@@ -464,7 +508,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       editor.off('blur', onBlur);
       editor.off('transaction', onTransaction);
     };
-  }, [openSelectionToolbar, project?.id]);
+  }, [openSelectionToolbar, project?.id, addToast, t]);
 
   const createChatSelection = useCallback((
     bubble: SelectionBubble,
@@ -829,6 +873,8 @@ export function EditorCanvasTipTap(): JSX.Element {
       ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
       : [];
     const result = applySelectionEdit(editor, anchor, request.replacementText, {
+      // 재번역이 만들어진 시점(모달 오픈)의 선택 텍스트를 기준으로 검증한다.
+      expectedText: request.selection.text,
       flattenFormatting: request.flattenFormatting,
     });
     if (result !== 'applied') {

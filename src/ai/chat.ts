@@ -266,6 +266,8 @@ function buildToolGuideMessage(params: {
   }
   if (has('propose_selection_edit')) {
     toolGuide.push('- propose_selection_edit: Target 선택 수정안을 구조화해 제안. 문서를 직접 변경하지 않음.');
+    // 저장 제안 도구와 같은 기준 — 요청·합의 없이 추측으로 제안하지 않는다.
+    toolGuide.push('  · 선택 영역의 번역·수정·다듬기를 요청받았거나 대화에서 합의된 경우에만 호출하세요. 단순 질문·평가에는 텍스트로만 답하세요.');
   }
   // 저장 제안 도구 — 도구별 설명을 늘어놓는 대신 "무엇을 어디에"를 한 곳에 모은다.
   // 잘못 고르면 비용이 여기서 끝나지 않는다: 용어집·금칙어는 구조화 저장이라 문서에
