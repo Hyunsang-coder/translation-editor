@@ -36,7 +36,9 @@ export interface TranslationUnitIdOptions {
 export interface CollectAlignedSourceUnitsOptions {
   /**
    * ID가 하나도 맞지 않는 legacy 문서에서만 문서 순번 fallback을 허용한다.
-   * 직접 재번역은 잘못된 원문을 쓰는 것보다 중단하는 편이 안전하므로 기본 false다.
+   * 정렬 검사(alignUnits)와 같은 1:1 구조 기준(개수·타입·깊이·heading 레벨)을
+   * 만족할 때만 동작하므로, 정렬 뷰가 "일치"로 보여주는 문서는 여기서도 같은
+   * 결론이 나온다. 새 호출부는 잘못된 원문 추측의 비용을 따져 명시적으로 켤 것.
    */
   allowLegacyOrderFallback?: boolean;
 }
@@ -161,7 +163,6 @@ export function reattachTranslationUnitIds(
  * 독립 생성되어 매칭되지 않는다. 빈 유닛(빈 문단 등)을 제외한 내용 유닛의
  * 개수·타입이 1:1로 일치할 때만 같은 순번의 Source 유닛으로 대응한다.
  * (번역 과정에서 생기는 빈 문단 개수 차이에 관대하게 동작)
- * 직접 재번역과 AI 선택 컨텍스트는 잘못된 원문 추측을 피하려고 기본 비활성화한다.
  */
 export function collectAlignedSourceUnits(
   sourceDoc: TranslationUnitDocument,
@@ -173,18 +174,29 @@ export function collectAlignedSourceUnits(
   if (selectedIds.size === 0) return [];
   const sourceUnits = collectTranslationUnits(sourceDoc);
   const byId = sourceUnits.filter((unit) => unit.id && selectedIds.has(unit.id));
-  if (byId.length === selectedIds.size) return byId;
+  // keepOnSplit 이력·붙여넣기로 같은 ID가 여러 유닛에 복제된 문서가 있으므로
+  // 유닛 개수가 아니라 매칭된 고유 ID 수로 판정한다. 중복 유닛은 문서 순서
+  // 그대로 모두 반환한다 — 분할된 반쪽들을 합치면 원래 유닛 전체가 된다.
+  const matchedIds = new Set(byId.map((unit) => unit.id));
+  if (matchedIds.size === selectedIds.size) return byId;
   // 일부만 맞는 혼합 상태에서 부분 원문을 반환하면 선택의 나머지가 조용히 빠진다.
-  if (byId.length > 0 || options.allowLegacyOrderFallback !== true) return [];
+  if (matchedIds.size > 0 || options.allowLegacyOrderFallback !== true) return [];
 
   const sourceContentUnits = sourceUnits.filter((unit) => unit.text.trim());
   const targetContentUnits = collectTranslationUnits(targetDoc)
     .filter((unit) => unit.text.trim());
+  // 정렬 검사(alignUnits.signature)와 같은 기준 — 타입에 더해 중첩 깊이와
+  // heading 레벨까지 맞아야 순번 대응을 신뢰한다.
   const aligned =
     sourceContentUnits.length === targetContentUnits.length &&
-    targetContentUnits.every(
-      (unit, index) => sourceContentUnits[index]?.type === unit.type,
-    );
+    targetContentUnits.every((unit, index) => {
+      const sourceUnit = sourceContentUnits[index];
+      return (
+        sourceUnit?.type === unit.type &&
+        sourceUnit.path.length === unit.path.length &&
+        (sourceUnit.level ?? null) === (unit.level ?? null)
+      );
+    });
   if (!aligned) return [];
 
   return targetContentUnits.flatMap((unit, index) => {
@@ -266,6 +278,12 @@ export const TranslationUnitId = Extension.create<TranslationUnitIdOptions>({
         attributes: {
           translationUnitId: {
             default: null,
+            // 문단 끝 Enter(새 블록 추가)에서 ID가 새 블록에 복제되지 않게 한다
+            // (TipTap 기본은 keepOnSplit: true). 새 블록은 아래 plugin이 새 ID를
+            // 발급한다. 단, 문단 중간 분할은 TipTap이 types 없이 ProseMirror
+            // split을 불러 attrs가 통째로 복사되므로 여기로는 못 막는다 — 그렇게
+            // 생긴 중복 ID는 collectAlignedSourceUnits가 고유 ID 기준으로 허용한다.
+            keepOnSplit: false,
             parseHTML: (element) => element.getAttribute('data-translation-unit-id'),
             renderHTML: (attributes) => {
               if (!attributes.translationUnitId) return {};

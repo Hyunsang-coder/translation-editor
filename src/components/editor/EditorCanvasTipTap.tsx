@@ -618,6 +618,10 @@ export function EditorCanvasTipTap(): JSX.Element {
       sourceDoc,
       bubble.editor.getJSON() as TranslationUnitDocument,
       selection.translationUnitIds,
+      // 전체 번역을 거치지 않은 문서는 Source/Target ID가 독립 발급이라 직접 매칭이
+      // 안 된다. 정렬 검사와 같은 1:1 구조 기준을 만족할 때만 순번 대응을 쓰고,
+      // 결과는 모달에서 원문으로 표시되어 사람이 확인한 뒤에 적용된다.
+      { allowLegacyOrderFallback: true },
     ))
       .map((unit) => unit.text)
       .join('\n');

@@ -57,6 +57,27 @@ describe('TranslationUnitId', () => {
     expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
   });
 
+  // 문단 끝 Enter(새 문단 추가)는 keepOnSplit: false로 ID 복제를 막는다.
+  // 문단 중간 분할은 TipTap이 types 없이 ProseMirror split을 불러 attrs가 통째로
+  // 복사되므로 여기서 막을 수 없다 — 그 중복은 collectAlignedSourceUnits가
+  // 고유 ID 기준 판정으로 허용한다(아래 '같은 ID가 복제돼 있으면' 테스트).
+  it('문단 끝에서 분할하면 새 블록에 ID를 복제하지 않고 새로 발급한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, TranslationUnitId],
+      content: '<p data-translation-unit-id="unit-a">Hello</p>',
+    });
+    editor.commands.setTextSelection(6);
+    editor.commands.splitBlock();
+
+    const ids = (editor.getJSON().content ?? []).map(
+      (node) => node.attrs?.translationUnitId,
+    );
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe('unit-a');
+    expect(typeof ids[1]).toBe('string');
+    expect(ids[1]).not.toBe('unit-a');
+  });
+
   it('assignMissingIds=false면 ID를 부여하지 않는다', () => {
     editor = new Editor({
       extensions: [StarterKit, TranslationUnitId.configure({ assignMissingIds: false })],
@@ -234,6 +255,65 @@ describe('TranslationUnitId', () => {
 
       expect(
         collectAlignedSourceUnits(sourceDoc, targetDoc, ['source-1', 'random-b']),
+      ).toEqual([]);
+    });
+
+    it('Source에 같은 ID가 복제돼 있으면(과거 분할 이력) 해당 유닛을 모두 반환한다', () => {
+      // keepOnSplit 수정 전에 저장된 문서: 분할된 두 반쪽이 같은 ID를 가진다
+      const splitSourceDoc = {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'First half.' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'Second half.' }] },
+        ],
+      };
+      const targetDoc = {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: '번역' }] },
+        ],
+      };
+
+      const units = collectAlignedSourceUnits(splitSourceDoc, targetDoc, ['dup']);
+
+      expect(units.map((unit) => unit.text)).toEqual(['First half.', 'Second half.']);
+    });
+
+    it('중복 ID가 있어도 선택 ID 일부가 Source에 없으면 빈 배열을 반환한다', () => {
+      const splitSourceDoc = {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'First half.' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'Second half.' }] },
+        ],
+      };
+      const targetDoc = {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: '번역' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '추가 문단' }] },
+        ],
+      };
+
+      expect(
+        collectAlignedSourceUnits(splitSourceDoc, targetDoc, ['dup', 'random-b']),
+      ).toEqual([]);
+    });
+
+    it('fallback은 heading 레벨이 다르면 순번 대응을 거부한다', () => {
+      // 정렬 검사(alignUnits)가 불일치로 표시하는 문서는 여기서도 실패해야 한다
+      const targetDoc = {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 2, translationUnitId: 'random-a' }, content: [{ type: 'text', text: '제목' }] },
+          { type: 'paragraph', attrs: { translationUnitId: 'random-b' }, content: [{ type: 'text', text: '본문' }] },
+        ],
+      };
+
+      expect(
+        collectAlignedSourceUnits(sourceDoc, targetDoc, ['random-b'], {
+          allowLegacyOrderFallback: true,
+        }),
       ).toEqual([]);
     });
   });

@@ -156,13 +156,25 @@ export function getAlignedSelectionContext(
     counterpartDoc,
     primaryDoc,
     primaryContext.unitIds,
+    // legacy 문서(ID 독립 발급)에서도 1:1 구조가 맞으면 반대쪽을 제공한다.
+    { allowLegacyOrderFallback: true },
   );
   const primaryUnits = collectTranslationUnits(primaryDoc)
     .filter((unit) => unit.id && includedIds.has(unit.id));
 
+  // 분할·붙여넣기로 같은 ID가 여러 유닛에 복제될 수 있어 유닛 개수 대신 고유 ID
+  // 수로 대응을 확인한다. 직접 ID 매칭이면 빈 유닛 포함 양쪽 ID가 그대로 대응하고,
+  // legacy 순번 fallback은 빈 유닛을 정렬에서 제외하므로 빈 유닛을 뺀 기준과도
+  // 비교한다 — 어느 쪽과도 맞지 않으면 대응이 어긋난 것이다.
+  const distinctIdCount = (units: TranslationUnit[]): number =>
+    new Set(units.map((unit) => unit.id ?? unit.path.join('.'))).size;
+  const counterpartCount = distinctIdCount(counterpartUnits);
   if (
     counterpartUnits.length === 0 ||
-    counterpartUnits.length !== primaryUnits.length
+    (counterpartCount !== distinctIdCount(primaryUnits) &&
+      counterpartCount !== distinctIdCount(
+        primaryUnits.filter((unit) => unit.text.trim()),
+      ))
   ) {
     throw new Error(missingMessage);
   }

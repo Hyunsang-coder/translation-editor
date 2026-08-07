@@ -96,6 +96,61 @@ describe('selection tools', () => {
     ).toThrow('연결된 번역문');
   });
 
+  // legacy 문서: Target ID가 독립 발급돼 Source와 하나도 겹치지 않지만,
+  // 내용 유닛 구조는 1:1로 정렬돼 있다(정렬 뷰가 "일치"로 표시하는 상태).
+  it('ID가 독립 발급된 legacy 문서도 구조가 1:1이면 순번으로 원문을 짝짓는다', () => {
+    const legacyTargetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'x1' }, content: [{ type: 'text', text: '이전' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'x2' }, content: [{ type: 'text', text: '선택 번역' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'x3' }, content: [{ type: 'text', text: '이후' }] },
+      ],
+    };
+
+    expect(getAlignedSelectionContext(sourceDoc, legacyTargetDoc, ['x2'], 0, 0))
+      .toMatchObject({
+        source: 'Selected source',
+        target: '선택 번역',
+      });
+  });
+
+  // 실제 legacy 번역 문서에서 흔한 상태: Target에만 빈 문단이 끼어 있다.
+  // 빈 문단이 앞뒤 문맥 창에 들어와도 순번 fallback이 실패하면 안 된다.
+  it('legacy 문서의 빈 문단이 문맥 창에 들어와도 원문 짝짓기가 실패하지 않는다', () => {
+    const legacyWithEmpty = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'x1' }, content: [{ type: 'text', text: '이전' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'x0' } },
+        { type: 'paragraph', attrs: { translationUnitId: 'x2' }, content: [{ type: 'text', text: '선택 번역' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'x3' }, content: [{ type: 'text', text: '이후' }] },
+      ],
+    };
+
+    expect(getAlignedSelectionContext(sourceDoc, legacyWithEmpty, ['x2'], 1, 0))
+      .toMatchObject({ source: 'Selected source' });
+  });
+
+  // 문단 분할(keepOnSplit 수정 전 이력)로 같은 ID가 두 유닛에 복제된 문서.
+  it('Target에 같은 ID가 복제돼 있어도 원문 짝짓기가 실패하지 않는다', () => {
+    const splitTargetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'u1' }, content: [{ type: 'text', text: '이전' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'u2' }, content: [{ type: 'text', text: '선택' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'u2' }, content: [{ type: 'text', text: '번역' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'u3' }, content: [{ type: 'text', text: '이후' }] },
+      ],
+    };
+
+    expect(getAlignedSelectionContext(sourceDoc, splitTargetDoc, ['u2'], 0, 0))
+      .toMatchObject({
+        source: 'Selected source',
+        target: '선택\n번역',
+      });
+  });
+
   it('앞뒤 개수를 생략하면 기본값만큼 가져온다', () => {
     const wide = {
       type: 'doc',
