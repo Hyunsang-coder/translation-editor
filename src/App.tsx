@@ -16,6 +16,7 @@ import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { UpdateModal } from '@/components/ui/UpdateModal';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
+import { message } from '@tauri-apps/plugin-dialog';
 import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { useChatStore } from '@/stores/chatStore';
 import { flushDebouncedFields } from '@/components/ui/DebouncedTextarea';
@@ -93,14 +94,16 @@ function App(): JSX.Element {
           break;
         case 'check-updates': {
           const { update: u, error: err, skipped } = await checkForUpdate();
+          // 사용자가 메뉴에서 명시적으로 요청한 확인의 결과라 놓치면 안 된다 — 팝업.
+          const updateTitle = t('update.checkForUpdate', '업데이트 확인');
           if (u) {
             setShowUpdateModal(true);
           } else if (err) {
-            addToast({ type: 'error', message: t('update.checkFailed', '업데이트 확인에 실패했습니다.') });
+            await message(t('update.checkFailed', '업데이트 확인에 실패했습니다.'), { title: updateTitle, kind: 'error' });
           } else if (skipped) {
-            addToast({ type: 'info', message: t('update.skipped', '이 버전은 건너뜀 처리되어 있습니다.') });
+            await message(t('update.skipped', '이 버전은 건너뜀 처리되어 있습니다.'), { title: updateTitle, kind: 'info' });
           } else {
-            addToast({ type: 'success', message: t('update.upToDate', '최신 버전입니다.') });
+            await message(t('update.upToDate', '최신 버전입니다.'), { title: updateTitle, kind: 'info' });
           }
           break;
         }

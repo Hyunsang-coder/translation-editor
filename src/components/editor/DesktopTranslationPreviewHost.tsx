@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { message } from '@tauri-apps/plugin-dialog';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import {
   applyDesktopTranslationPreview,
@@ -20,31 +21,32 @@ export function DesktopTranslationPreviewHost(): JSX.Element | null {
     return null;
   }
 
-  // L3: apply 가드(프로젝트/리비전 재검증) 실패를 토스트로 사용자에게 알린다.
+  // L3: apply 가드(프로젝트/리비전 재검증) 실패를 사용자에게 알린다.
+  // 적용 취소는 AI 결과가 통째로 버려지는 상황이라 토스트 대신 팝업으로 띄운다.
   // 외부 브리지 경로(oddeyes.applyTranslationPreview)는 동일 에러가 MCP 호출자에게 전달된다.
   const handleApply = async (): Promise<void> => {
     try {
       await applyDesktopTranslationPreview();
     } catch (e) {
-      const addToast = useUIStore.getState().addToast;
+      const cancelTitle = t('editor.applyCancelledTitle', '적용 취소');
       if (e instanceof DesktopPreviewApplyError) {
         if (e.code === 'project_mismatch') {
-          addToast({
-            type: 'warning',
-            message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
-          });
+          await message(
+            t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
+            { title: cancelTitle, kind: 'warning' },
+          );
           discardDesktopTranslationPreview();
           return;
         }
         if (e.code === 'revision_mismatch') {
-          addToast({
-            type: 'warning',
-            message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
-          });
+          await message(
+            t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
+            { title: cancelTitle, kind: 'warning' },
+          );
           return;
         }
       }
-      addToast({
+      useUIStore.getState().addToast({
         type: 'error',
         message: e instanceof Error ? e.message : String(e),
       });

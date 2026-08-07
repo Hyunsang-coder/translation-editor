@@ -3,7 +3,8 @@ import { Toaster } from 'sonner';
 export function ToastHost(): JSX.Element {
   return (
     <Toaster
-      position="top-center"
+      // top-center는 상단 버전 스트립·헤더와 겹쳐 토스트가 가려진다.
+      position="bottom-right"
       toastOptions={{
         className: 'bg-editor-surface border border-editor-border text-editor-text',
         style: {

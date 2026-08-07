@@ -1,5 +1,6 @@
 import { Editor, useEditorState } from '@tiptap/react';
-import { useCallback, useState } from 'react';
+import { message } from '@tauri-apps/plugin-dialog';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import {
@@ -32,6 +33,11 @@ interface TipTapMenuBarProps {
 }
 
 const ICON_SIZE = 13;
+
+// 지우개 버튼은 적용 표시가 있을 때만 나타나 처음 보는 사용자가 존재를 모르기 쉽다.
+// 적용 표시가 처음 생길 때 세션당 한 번만 팝업으로 알려준다.
+// (토스트는 상단 스트립과 겹쳐 가독성이 나빴다 — 네이티브 다이얼로그 사용)
+let appliedChangesHintShown = false;
 
 /**
  * 표 행/열 편집 항목. i18n 키는 `editor.menuBar.<key>`.
@@ -90,6 +96,19 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
       panelType === 'target' && e ? hasAppliedChangeHighlights(e.state.doc) : false
     ),
   }) ?? false;
+
+  useEffect(() => {
+    if (!hasAppliedChanges || appliedChangesHintShown) return;
+    appliedChangesHintShown = true;
+    // 웹 모드(브라우저 E2E)에는 네이티브 다이얼로그가 없다 — 힌트는 조용히 생략.
+    void message(
+      t(
+        'editor.menuBar.appliedChangesHint',
+        'AI가 적용한 부분이 강조 표시됩니다. 문장을 수정하면 자동으로 사라지고, 메뉴 바의 지우개 버튼으로 한꺼번에 지울 수 있어요.',
+      ),
+      { title: t('editor.menuBar.appliedChangesHintTitle', '적용 표시 안내') },
+    ).catch(() => {});
+  }, [hasAppliedChanges, t]);
 
   // 표 명령은 모두 같은 형태다(포커스 → 명령 → 메뉴 닫기).
   const runTableCommand = useCallback(

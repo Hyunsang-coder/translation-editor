@@ -390,6 +390,7 @@
     "previewTitle": "Translation Preview (Entire Source → Entire Target)",
     "polishPreviewTitle": "Polish Preview",
     "polishCancelled": "Polishing was cancelled.",
+    "applyCancelledTitle": "Apply cancelled",
     "applyCancelledProjectSwitched": "Apply was cancelled because the project was switched.",
     "applyCancelledDocChanged": "Apply was cancelled because the document was edited after the request. Please review the document and run again.",
     "applySelected": "Apply {{count}} selected",
@@ -498,7 +499,9 @@
       "lineHeightDecreaseTitle": "Line height -0.1",
       "lineHeightIncrease": "Increase line height",
       "lineHeightIncreaseTitle": "Line height +0.1",
-      "clearAppliedChanges": "Clear applied-change highlights"
+      "clearAppliedChanges": "Clear applied-change highlights",
+      "appliedChangesHint": "AI-applied changes are highlighted. Highlights clear automatically as you edit the sentence, or use the eraser button in the menu bar to clear them all.",
+      "appliedChangesHintTitle": "Applied-change highlights"
     },
     "search": {
       "placeholder": "Search...",
@@ -705,9 +708,14 @@
     "instructionPlaceholder": "For example: make it shorter and more natural",
     "optionalReferences": "Optional context",
     "generate": "Retranslate",
+    "regenerate": "Retranslate",
+    "editProposal": "Edit manually",
+    "previewChanges": "Preview changes",
     "generating": "Generating proposal…",
     "alignedSourceMissing": "Could not find the aligned source.",
     "mixedFormattingUnsupported": "Selections containing mixed formatting cannot be retranslated. Select text with the same formatting and try again.",
+    "mixedFormattingConfirm": "The selection contains mixed formatting. Applying the retranslation may remove some formatting. Continue?",
+    "mixedFormattingConfirmTitle": "Formatting notice",
     "reselectRequired": "The document changed. Please select the text again.",
     "projectChanged": "The project changed, so this proposal cannot be applied.",
     "forbiddenTermViolation": "The proposal contains the forbidden term “{{term}}”.",

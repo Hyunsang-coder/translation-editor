@@ -6,6 +6,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { translateWithStreaming } from '@/ai/translateDocument';
+import { message } from '@tauri-apps/plugin-dialog';
 import { ReviewPanel } from './ReviewPanel';
 import type { ITEProject } from '@/types';
 import type { ReviewIssue } from '@/stores/reviewStore';
@@ -36,6 +37,8 @@ vi.mock('@/ai/translateDocument', () => ({
 vi.mock('@/components/review/ReviewResultsTable', () => ({ ReviewResultsTable: () => null }));
 vi.mock('@/components/glossary/ProjectGlossarySection', () => ({ ProjectGlossarySection: () => null }));
 vi.mock('@/editor/utils/replaceDocContent', () => ({ replaceDocContent: vi.fn() }));
+// 적용 취소 안내는 토스트가 아니라 네이티브 팝업(plugin-dialog message)으로 나간다.
+vi.mock('@tauri-apps/plugin-dialog', () => ({ message: vi.fn(async () => undefined) }));
 
 const RETRANSLATED_DOC = {
   type: 'doc',
@@ -90,6 +93,7 @@ vi.mock('@/components/editor/TranslatePreviewModal', () => ({
 
 const mockReplaceDocContent = vi.mocked(replaceDocContent);
 const mockTranslateWithStreaming = vi.mocked(translateWithStreaming);
+const mockMessageDialog = vi.mocked(message);
 // 토스트는 store 배열이 아니라 sonner로 나가므로, 액션 자체를 스파이로 대체해 관찰한다.
 const addToastSpy = vi.fn();
 
@@ -233,7 +237,10 @@ describe('재번역 적용은 에디터 undo 스택을 거친다', () => {
     });
 
     expect(mockReplaceDocContent).not.toHaveBeenCalled();
-    expect(addToastSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }));
+    expect(mockMessageDialog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ kind: 'warning' }),
+    );
   });
 
   it('프리뷰 생성 후 Target 문서가 바뀌면 stale 결과를 적용하지 않는다', async () => {
@@ -249,7 +256,10 @@ describe('재번역 적용은 에디터 undo 스택을 거친다', () => {
     fireEvent.click(screen.getByText('apply-retranslation'));
 
     expect(mockReplaceDocContent).not.toHaveBeenCalled();
-    expect(addToastSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }));
+    expect(mockMessageDialog).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ kind: 'warning' }),
+    );
   });
 
   it('재번역 중 패널이 언마운트되면 AI 요청을 취소한다', async () => {

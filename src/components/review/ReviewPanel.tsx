@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { message } from '@tauri-apps/plugin-dialog';
 import type { Transaction } from '@tiptap/pm/state';
 import { useReviewStore, type ReviewIssue } from '@/stores/reviewStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -846,10 +847,11 @@ export function ReviewPanel(): JSX.Element {
 
     const requestMeta = retranslateRequestMetaRef.current;
     if (!requestMeta || requestMeta.projectId !== project.id) {
-      addToast({
-        type: 'warning',
-        message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
-      });
+      // AI 결과가 통째로 버려지는 취소라 토스트 대신 팝업으로 알린다.
+      void message(
+        t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
+        { title: t('editor.applyCancelledTitle', '적용 취소'), kind: 'warning' },
+      );
       handleRetranslateClose();
       return;
     }
@@ -860,10 +862,10 @@ export function ReviewPanel(): JSX.Element {
       currentTargetRevision === null ||
       requestMeta.targetRevision !== currentTargetRevision
     ) {
-      addToast({
-        type: 'warning',
-        message: t('editor.applyCancelledDocChanged', '재번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
-      });
+      void message(
+        t('editor.applyCancelledDocChanged', '재번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
+        { title: t('editor.applyCancelledTitle', '적용 취소'), kind: 'warning' },
+      );
       return;
     }
 
