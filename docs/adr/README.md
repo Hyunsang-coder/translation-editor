@@ -25,6 +25,7 @@
 | [0016](0016-no-changelog-in-agent-prompt.md) | CLAUDE.md에 변경 이력을 두지 않고, 내용의 종류로 문서를 나눈다 | Accepted | 2026-07-30 |
 | [0017](0017-model-override-for-evaluation.md) | 용도별 모델을 직접 지정할 수 있게 한다 (평가 목적, ADR-0012 부분 수정) | Accepted | 2026-07-31 |
 | [0018](0018-snapshot-kind-column.md) | 스냅샷 종류를 description이 아니라 kind 컬럼으로 판별한다 | Accepted | 2026-07-31 |
+| [0019](0019-remove-long-conversation-notice.md) | 대화 길이 알림을 제거하고, 새 세션은 컴포저 메뉴로 노출한다 | Accepted | 2026-08-07 |
 
 > **(소급)** = 결정 당시에는 ADR이 없었고, ADR 도입(0001) 시점에 기록을 복원한 항목입니다.
 > 결정일은 실제 결정 시점, 문서 작성일은 2026-07-29입니다.

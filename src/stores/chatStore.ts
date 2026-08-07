@@ -57,7 +57,6 @@ export const useChatStore = create<ChatStore>((set, get) => {
     lastInjectedGlossary: [],
     isHydrating: false,
     abortController: null,
-    summarySuggestionDismissedBySessionId: {},
     composerText: '',
     composerSelection: null,
     activeSelectionScopeIdBySession: {},
@@ -112,5 +111,4 @@ export {
   CHAT_PERSIST_DEBOUNCE_MS,
   MAX_CHAT_SESSIONS,
   MAX_MESSAGES_PER_SESSION,
-  CHAT_LENGTH_THRESHOLD,
 } from './chatStore.types';

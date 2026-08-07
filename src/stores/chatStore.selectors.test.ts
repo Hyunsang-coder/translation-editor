@@ -80,17 +80,6 @@ describe('ChatStore Selectors', () => {
     expect(result.current).toHaveProperty('updateMessage');
   });
 
-  it('useSummarySuggestionState가 요약 제안 상태를 반환해야 함', async () => {
-    const { useSummarySuggestionState } = await import('./chatStore.selectors');
-
-    const { result } = renderHook(() => useSummarySuggestionState());
-
-    expect(result.current).toHaveProperty('shouldShow');
-    expect(typeof result.current.shouldShow).toBe('boolean');
-    expect(result.current).toHaveProperty('dismiss');
-    expect(result.current).toHaveProperty('startNewSession');
-  });
-
   it('그룹화된 선택자가 관련 없는 상태 변경에 리렌더링하지 않아야 함', async () => {
     const { useChatComposerState, useChatStore } = await import('./chatStore.selectors');
 

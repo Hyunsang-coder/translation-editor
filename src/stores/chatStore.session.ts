@@ -18,7 +18,6 @@ import { listAttachments } from '@/tauri/attachments';
 import {
   MAX_CHAT_SESSIONS,
   MAX_MESSAGES_PER_SESSION,
-  CHAT_LENGTH_THRESHOLD,
 } from './chatStore.types';
 import type { ChatSet, ChatGet, ChatStore } from './chatStore.types';
 import { mergePersonaIntoRules } from './chatStore.helpers';
@@ -100,7 +99,6 @@ export function createSessionActions(
         currentSessionId: null,
         currentSession: null,
         lastInjectedGlossary: [],
-        summarySuggestionDismissedBySessionId: {},
         isHydrating: false,
         isFinalizingStreaming: false,
         loadedProjectId: null,
@@ -142,7 +140,6 @@ export function createSessionActions(
       composerAttachments: [],
       loadedProjectId: null,
       lastInjectedGlossary: [],
-      summarySuggestionDismissedBySessionId: {},
       composerFocusNonce: 0,
       pendingComposerFocus: null,
       pendingComposerAppend: null,
@@ -384,15 +381,10 @@ export function createSessionActions(
       newCurrentSession = firstSession ?? null;
     }
 
-    set((state) => {
-      const nextDismissMap = { ...state.summarySuggestionDismissedBySessionId };
-      delete nextDismissMap[sessionId];
-      return {
-        sessions: newSessions,
-        currentSessionId: newCurrentSessionId,
-        currentSession: newCurrentSession,
-        summarySuggestionDismissedBySessionId: nextDismissMap,
-      };
+    set({
+      sessions: newSessions,
+      currentSessionId: newCurrentSessionId,
+      currentSession: newCurrentSession,
     });
 
     // uiStore 동기화: 채팅 패널 제거
@@ -466,31 +458,6 @@ export function createSessionActions(
     schedulePersist();
   };
 
-  const shouldShowSummarySuggestion = (): boolean => {
-    const session = get().currentSession;
-    if (!session) return false;
-    if (get().summarySuggestionDismissedBySessionId[session.id]) return false;
-    return session.messages.length >= CHAT_LENGTH_THRESHOLD;
-  };
-
-  const dismissSummarySuggestion = (targetSessionId?: string): void => {
-    const resolvedSessionId = targetSessionId ?? get().currentSessionId;
-    const session = get().sessions.find((s) => s.id === resolvedSessionId);
-    if (!session) return;
-    set((state) => ({
-      summarySuggestionDismissedBySessionId: {
-        ...state.summarySuggestionDismissedBySessionId,
-        [session.id]: true,
-      },
-    }));
-  };
-
-  const startNewSessionFromSuggestion = (targetSessionId?: string): void => {
-    // 현재 세션 dismiss 후 새 세션 생성
-    get().dismissSummarySuggestion(targetSessionId);
-    get().createSession();
-  };
-
   const isSessionLimitReached = (): boolean => {
     return get().sessions.length >= MAX_CHAT_SESSIONS;
   };
@@ -509,9 +476,6 @@ export function createSessionActions(
     renameSession,
     setSessionModelPreset,
     updateSessionMemory,
-    shouldShowSummarySuggestion,
-    dismissSummarySuggestion,
-    startNewSessionFromSuggestion,
     isSessionLimitReached,
     getOldestSession,
   };

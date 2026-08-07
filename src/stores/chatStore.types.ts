@@ -14,7 +14,6 @@ import type { SelectableProvider } from '@/ai/config';
 export const CHAT_PERSIST_DEBOUNCE_MS = 800;
 export const MAX_CHAT_SESSIONS = 5;
 export const MAX_MESSAGES_PER_SESSION = 1000;
-export const CHAT_LENGTH_THRESHOLD = 30;
 
 export interface PendingComposerAppend {
   text: string;
@@ -46,8 +45,6 @@ export interface ChatState {
   statusMessage: string | null;
   /** 최근 요청에서 주입된 글로서리(디버깅/가시화) */
   lastInjectedGlossary: GlossaryEntry[];
-  /** 대화 길이 알림: 세션별 dismiss 상태 */
-  summarySuggestionDismissedBySessionId: Record<string, boolean>;
   /** Chat composer */
   composerText: string;
   /** 현재 채팅 입력에 첨부된 runtime 선택 영역. 문서 위치 자체는 TipTap plugin이 관리한다. */
@@ -133,11 +130,6 @@ export interface ChatActions {
   setContextBlocks: (blockIds: string[]) => void;
   addContextBlock: (blockId: string) => void;
   removeContextBlock: (blockId: string) => void;
-
-  // 대화 길이 알림
-  shouldShowSummarySuggestion: () => boolean;
-  dismissSummarySuggestion: (targetSessionId?: string) => void;
-  startNewSessionFromSuggestion: (targetSessionId?: string) => void;
 
   // 세션 제한 헬퍼
   isSessionLimitReached: () => boolean;

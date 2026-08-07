@@ -1,14 +1,13 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip } from 'lucide-react';
+import { Paperclip, MessageSquarePlus } from 'lucide-react';
 import { isTauriRuntime } from '@/tauri/invoke';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, MAX_CHAT_SESSIONS } from '@/stores/chatStore';
 import {
   useChatComposerState,
   useChatSessionState,
   useChatSearchState,
   useChatMessageActions,
-  useSummarySuggestionState,
   useSessionStreamingState,
 } from '@/stores/chatStore.selectors';
 import { useUIStore } from '@/stores/uiStore';
@@ -158,11 +157,6 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     updateMessage,
     appendToTranslationRules,
   } = useChatMessageActions();
-  const {
-    shouldShow: shouldShowSummarySuggestion,
-    dismiss: dismissSummarySuggestion,
-    startNewSession: startNewSessionFromSuggestion,
-  } = useSummarySuggestionState(effectiveSessionId);
 
   // 개별 선택자 (그룹에 포함되지 않는 것들)
   const createSession = useChatStore((s) => s.createSession);
@@ -756,33 +750,22 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     };
   }, [composerMenuOpen]);
 
+  // 새 세션은 사이드바 + 버튼에만 있어 라벨 없는 아이콘이라 찾기 어렵다.
+  // 사용자가 이미 여는 컴포저 메뉴에 같은 동작을 노출한다.
+  const handleNewSessionFromMenu = useCallback((): void => {
+    setComposerMenuOpen(false);
+    if (useChatStore.getState().isSessionLimitReached()) {
+      addToast({
+        type: 'warning',
+        message: t('chat.sessionLimitReached', { maxSessions: MAX_CHAT_SESSIONS }),
+      });
+      return;
+    }
+    createSession();
+  }, [addToast, createSession, t]);
+
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* 대화 길이 알림 */}
-      {shouldShowSummarySuggestion && (
-        <div className="border-b border-editor-border bg-editor-surface/60 px-4 py-2 flex items-start justify-between gap-2 shrink-0">
-          <div className="text-[11px] text-editor-muted leading-relaxed">
-            {t('chat.longConversationNotice')}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              className="px-2 py-1 rounded text-[11px] bg-primary-500 text-white hover:bg-primary-600"
-              onClick={() => startNewSessionFromSuggestion(effectiveSessionId)}
-            >
-              {t('chat.startNewSession')}
-            </button>
-            <button
-              type="button"
-              className="px-2 py-1 rounded text-[11px] bg-editor-bg text-editor-muted hover:bg-editor-border"
-              onClick={() => dismissSummarySuggestion(effectiveSessionId)}
-            >
-              {t('common.ignore')}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 장기 대화 요약 활성 알림 (Phase 3): 오래된 맥락이 요약으로 유지됨 */}
       {displaySession?.memory?.summary ? (
         <div
@@ -1039,6 +1022,18 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                       <span className="flex-1 text-left">{mcpStatus.isConnecting ? '연결 중...' : 'Atlassian 연결하기'}</span>
                     </button>
                   )}
+
+                  <div role="separator" className="h-px bg-editor-border" />
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 flex items-center gap-2 text-sm text-editor-text hover:bg-editor-border/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleNewSessionFromMenu}
+                    disabled={isLoading}
+                    data-testid="chat-new-session"
+                  >
+                    <MessageSquarePlus size={16} className="text-editor-muted" />
+                    <span className="flex-1 text-left">{t('chat.newChat')}</span>
+                  </button>
                 </div>
               )}
               </div>

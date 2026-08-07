@@ -92,33 +92,6 @@ export function useChatMessageActions() {
 }
 
 /**
- * 요약 제안 관련 상태 그룹
- * 파생 상태(shouldShow)를 포함하여 컴포넌트 로직 간소화
- */
-export function useSummarySuggestionState(sessionId?: string) {
-  return useBaseStore(
-    useShallow((s) => {
-      const targetSessionId = sessionId ?? s.currentSessionId;
-      const targetSession = targetSessionId
-        ? s.sessions.find((ses) => ses.id === targetSessionId)
-        : null;
-      const messageCount = targetSession?.messages.length ?? 0;
-      const dismissedMap = s.summarySuggestionDismissedBySessionId;
-      const shouldShow =
-        targetSessionId !== null &&
-        !dismissedMap[targetSessionId] &&
-        messageCount >= 30;
-
-      return {
-        shouldShow,
-        dismiss: s.dismissSummarySuggestion,
-        startNewSession: s.startNewSessionFromSuggestion,
-      };
-    })
-  );
-}
-
-/**
  * 핵심 채팅 상태 (기존 패턴 호환용)
  */
 export function useChatCoreState() {
