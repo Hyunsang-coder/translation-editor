@@ -1489,6 +1489,62 @@ export function EditorCanvasTipTap(): JSX.Element {
   const handleCopySource = useCallback(() => copyEditorContent(sourceEditorRef.current), [copyEditorContent]);
   const handleCopyTarget = useCallback(() => copyEditorContent(targetEditorRef.current), [copyEditorContent]);
 
+  // 상대 패널 위치 맞추기: 누른 패널 뷰포트 최상단 유닛의 대응 유닛을 찾아
+  // 반대쪽 패널을 같은 뷰포트 오프셋으로 스크롤한다. 최상단 유닛이 ID가 없거나
+  // 대응이 안 잡히면(legacy 문서·추가/삭제 문단) 아래쪽 유닛으로 넘어간다.
+  const alignCounterpartScroll = useCallback((primary: 'source' | 'target') => {
+    const primaryEditor = primary === 'source' ? sourceEditorRef.current : targetEditorRef.current;
+    const counterpartEditor = primary === 'source' ? targetEditorRef.current : sourceEditorRef.current;
+    if (!primaryEditor || !counterpartEditor) {
+      addToast({
+        type: 'error',
+        message: t('editor.alignScrollNotReady', '두 패널이 모두 준비되어야 위치를 맞출 수 있습니다.'),
+      });
+      return;
+    }
+    const primaryScroll = primaryEditor.view.dom as HTMLElement;
+    const counterpartScroll = counterpartEditor.view.dom as HTMLElement;
+    const primaryRect = primaryScroll.getBoundingClientRect();
+    // 후보를 화면에 실제로 보이는 범위로 끊는다. 문서 끝까지 후보로 두면 ID 매칭이
+    // 안 되는 legacy 문서에서 짝을 못 찾을 때마다 유닛 수만큼 LCS 정렬을 반복해
+    // UI가 멈춘다. 보이는 화면 안에 짝이 하나도 없으면 그냥 실패로 알린다.
+    const visibleUnitEls = Array.from(
+      primaryScroll.querySelectorAll<HTMLElement>('[data-translation-unit-id]'),
+    ).filter((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.bottom > primaryRect.top && rect.top < primaryRect.bottom;
+    });
+    const primaryDoc = primaryEditor.getJSON() as TranslationUnitDocument;
+    const counterpartDoc = counterpartEditor.getJSON() as TranslationUnitDocument;
+    for (const unitEl of visibleUnitEls) {
+      const unitId = unitEl.getAttribute('data-translation-unit-id');
+      if (!unitId) continue;
+      const counterpartId = findAlignedCounterpartUnits(counterpartDoc, primaryDoc, [unitId])
+        .find((unit) => unit.id)?.id;
+      if (!counterpartId) continue;
+      const counterpartEl = counterpartScroll.querySelector<HTMLElement>(
+        `[data-translation-unit-id="${CSS.escape(counterpartId)}"]`,
+      );
+      if (!counterpartEl) continue;
+      const viewportOffset = unitEl.getBoundingClientRect().top - primaryRect.top;
+      const counterpartRect = counterpartScroll.getBoundingClientRect();
+      const top =
+        counterpartEl.getBoundingClientRect().top -
+        counterpartRect.top +
+        counterpartScroll.scrollTop -
+        viewportOffset;
+      counterpartScroll.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      return;
+    }
+    addToast({
+      type: 'error',
+      message: t('editor.alignScrollNoCounterpart', '대응하는 유닛을 찾을 수 없습니다.'),
+    });
+  }, [addToast, t]);
+
+  const handleAlignFromSource = useCallback(() => alignCounterpartScroll('source'), [alignCounterpartScroll]);
+  const handleAlignFromTarget = useCallback(() => alignCounterpartScroll('target'), [alignCounterpartScroll]);
+
   const handleCopySelection = useCallback(async (bubble: SelectionBubble): Promise<void> => {
     if (!bubble.text.trim()) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
@@ -1655,18 +1711,33 @@ export function EditorCanvasTipTap(): JSX.Element {
                     onSelectionShortcut={handleSelectionShortcut}
                     onCommentClick={handleSourceCommentClick}
                   />
-                  {/* 호버 복사 버튼 */}
-                  <button
-                    type="button"
-                    onClick={() => void handleCopySource()}
-                    className="absolute top-2 right-2 opacity-0 group-hover/source:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
-                    title={t('common.copyToClipboard', '복사')}
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    {t('common.copy', '복사')}
-                  </button>
+                  {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    {showTarget && (
+                      <button
+                        type="button"
+                        onClick={handleAlignFromSource}
+                        className="opacity-0 group-hover/source:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
+                        title={t('editor.alignScrollTitle', '상대 패널을 이 위치에 맞춤')}
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                        {t('editor.alignScroll', '위치 맞춤')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCopySource()}
+                      className="opacity-0 group-hover/source:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
+                      title={t('common.copyToClipboard', '복사')}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      {t('common.copy', '복사')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </Panel>
@@ -1749,18 +1820,33 @@ export function EditorCanvasTipTap(): JSX.Element {
                 onSelectionShortcut={handleSelectionShortcut}
                 onCommentClick={handleTargetCommentClick}
               />
-              {/* 호버 복사 버튼 */}
-              <button
-                type="button"
-                onClick={() => void handleCopyTarget()}
-                className="absolute top-2 right-2 opacity-0 group-hover/target:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
-                title={t('common.copyToClipboard', '복사')}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                {t('common.copy', '복사')}
-              </button>
+              {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}
+              <div className="absolute top-2 right-2 flex items-center gap-1">
+                {showSource && (
+                  <button
+                    type="button"
+                    onClick={handleAlignFromTarget}
+                    className="opacity-0 group-hover/target:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
+                    title={t('editor.alignScrollTitle', '상대 패널을 이 위치에 맞춤')}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    {t('editor.alignScroll', '위치 맞춤')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleCopyTarget()}
+                  className="opacity-0 group-hover/target:opacity-50 hover:!opacity-100 transition-opacity p-1 rounded text-[10px] bg-editor-surface/60 border border-editor-border/40 flex items-center gap-1 text-editor-muted hover:text-editor-text"
+                  title={t('common.copyToClipboard', '복사')}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  {t('common.copy', '복사')}
+                </button>
+              </div>
             </div>
           </div>
         </Panel>

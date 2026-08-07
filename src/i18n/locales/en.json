@@ -456,6 +456,10 @@
     "showSource": "Show Source",
     "hideTarget": "Hide",
     "showTarget": "Show Translation",
+    "alignScroll": "Align",
+    "alignScrollTitle": "Scroll the other panel to this position",
+    "alignScrollNotReady": "Both panels must be ready to align positions.",
+    "alignScrollNoCounterpart": "No matching unit found.",
     "zoom": {
       "reset": "Reset Zoom",
       "resetTo100": "Click to reset to 100%"
