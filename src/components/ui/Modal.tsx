@@ -75,7 +75,11 @@ export function Modal({
       const previousFocus = previousFocusRef.current;
       previousFocusRef.current = null;
       if (previousFocus?.isConnected) {
-        previousFocus.focus();
+        // preventScroll 필수 — 복원 대상이 스크롤 컨테이너인 contenteditable(에디터)일 때,
+        // 모달 안에 있던 DOM selection은 이 시점에 이미 사라져 있다. 그러면 브라우저가
+        // selection을 요소 맨 앞으로 collapse하고 그 위치를 노출시켜(reveal) 문서 최상단으로
+        // 스크롤해 버린다(선택 영역 재번역 적용 후 스크롤 점프).
+        previousFocus.focus({ preventScroll: true });
       }
     };
   }, [open]);

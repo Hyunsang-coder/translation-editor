@@ -131,7 +131,13 @@ export function applySelectionEdit(
     type: 'remove',
     anchorId: anchor.anchorId,
   });
-  editor.view.dispatch(tr.scrollIntoView());
+  // scrollIntoView를 붙이지 않는다(앱 규칙 — AlignmentView.jumpToUnit 참고).
+  // 이 경로는 모달에서 호출되어 뷰에 포커스가 없다. 포커스가 없으면 ProseMirror는
+  // DOM selection을 갱신하지 않으므로(editorOwnsSelection) scrollIntoView는 낡은
+  // DOM 노드를 기준으로 스크롤을 계산하고, 동시에 뷰의 스크롤 안정화 경로("preserve")를
+  // 꺼버린다. 교체 텍스트는 길이가 달라 줄 수가 바뀌므로 안정화가 필요한 편집이다.
+  // 캐럿 복귀는 아래 focus()가 담당한다.
+  editor.view.dispatch(tr);
   editor.commands.focus();
   return 'applied';
 }
