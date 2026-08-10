@@ -126,7 +126,7 @@ bridge.js → DOM / Dialog / Tauri API
 button[data-testid='project-new-button']        # 새 프로젝트 생성
 input[data-testid='project-title-input']         # 프로젝트 제목 입력
 button[data-testid='project-create-button']      # 프로젝트 생성 확인
-button[data-testid='project-app-settings-button'] # 앱 설정 열기
+button[data-testid='toolbar-app-settings-button'] # 앱 설정 열기 (툴바 우측 기어)
 ```
 
 ### Editor
@@ -150,7 +150,7 @@ button[data-testid='translate-preview-apply-button']  # 번역 미리보기 적�
 button[data-testid='toolbar-tools-button']       # 도구 메뉴 열기
 button[data-testid='toolbar-menu-chat']          # 채팅 패널 열기
 button[data-testid='toolbar-menu-review']        # 리뷰 패널 열기
-button[data-testid='toolbar-menu-settings']      # 설정 패널 열기
+[data-panel-tab='settings']                      # 프로젝트 설정 탭 (좌측 사이드바)
 ```
 
 ### Chat
@@ -375,8 +375,8 @@ async function createProject(client, title) {
 
 ```javascript
 async function ensureAnthropicEnabled(client) {
-  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='project-app-settings-button']", timeout: 10000 });
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-app-settings-button']" });
+  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='toolbar-app-settings-button']", timeout: 10000 });
+  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-app-settings-button']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: '#anthropic-enabled', timeout: 10000 });
   const toggle = await callTool(client, 'tauri_dom_query_selector', { selector: '#anthropic-enabled' });
   if (!toggle.checked) await callTool(client, 'tauri_dom_click', { selector: '#anthropic-enabled' });
@@ -388,8 +388,7 @@ async function ensureAnthropicEnabled(client) {
 
 ```javascript
 async function fillProjectSettings(client, { rules, context }) {
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-tools-button']" });
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-menu-settings']" });
+  await callTool(client, 'tauri_dom_click', { selector: "[data-panel-tab='settings']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
 
   if (rules)   await callTool(client, 'tauri_dom_fill', { selector: "textarea[data-testid='settings-translation-rules']", value: rules });

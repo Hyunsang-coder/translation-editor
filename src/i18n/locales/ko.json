@@ -257,7 +257,6 @@
     "focusModeFocus": "포커스",
     "themeCurrent": "현재: {{theme}}",
     "settings": "설정",
-    "projectSettings": "설정",
     "review": "검수",
     "aiChat": "AI 채팅",
     "export": "내보내기"
@@ -325,7 +324,6 @@
   },
   "projectSidebar": {
     "projects": "프로젝트",
-    "appSettings": "앱 설정",
     "newProject": "새 프로젝트",
     "projectTitlePlaceholder": "프로젝트 제목",
     "projectActions": "{{title}} 프로젝트 작업",

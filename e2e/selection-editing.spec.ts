@@ -5,6 +5,16 @@ const sourceText = 'The workspace is designed for enterprise administrators.';
 const targetText = '이 작업 공간은 엔터프라이즈 관리자를 위해 설계되었습니다.';
 
 /**
+ * 프로젝트 설정은 좌측 사이드바의 '설정' 탭이다 — 툴바 우측 기어는 앱 설정으로 바뀌었다.
+ * 좁은 창에서는 좌측 바가 자동 숨김이라 되살림 버튼을 먼저 누른다.
+ */
+async function openProjectSettings(page: Page): Promise<void> {
+  const reveal = page.getByTestId('reveal-sidebar-left');
+  if (await reveal.isVisible()) await reveal.click();
+  await page.locator('[data-panel-tab="settings"]').click();
+}
+
+/**
  * 문서 본문은 segments를 타고 blocks에서 조립된다(`buildTargetDocument`) — segments가
  * 비면 에디터가 빈 문서로 뜬다. 키보드로 문단을 늘리면 캐럿 위치가 레이아웃에 따라
  * 달라져 두 문단이 하나로 합쳐지므로, 여러 블록이 필요한 테스트는 주입으로 만든다.
@@ -242,7 +252,7 @@ test.describe('Selection editing and scoped context', () => {
   });
 
   test('approved project memory is managed separately from the legacy context field', async ({ page }) => {
-    await page.getByTestId('toolbar-menu-settings').click();
+    await openProjectSettings(page);
     await expect(page.getByTestId('project-memory-settings')).toBeVisible();
 
     await page.getByTestId('project-memory-new-item').fill('Audience: enterprise administrators');

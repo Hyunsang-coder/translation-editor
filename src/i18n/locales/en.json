@@ -259,7 +259,6 @@
     "focusModeFocus": "Focus",
     "themeCurrent": "Current: {{theme}}",
     "settings": "Settings",
-    "projectSettings": "Settings",
     "review": "Review",
     "aiChat": "AI Chat",
     "export": "Export"
@@ -327,7 +326,6 @@
   },
   "projectSidebar": {
     "projects": "Projects",
-    "appSettings": "App Settings",
     "newProject": "New Project",
     "projectTitlePlaceholder": "Project title",
     "projectActions": "Project actions for {{title}}",

@@ -45,10 +45,8 @@ const TEXT = {
 // ── Helpers ──
 
 async function openAppSettings(page: Page): Promise<void> {
-  // 앱 설정 진입점은 툴바의 프로젝트 드롭다운 하단에 있다(user-story.spec.ts와 동일).
-  await page.getByTestId('project-picker-trigger').click();
-  await page.waitForTimeout(STEP_PAUSE);
-  await page.getByTestId('project-app-settings-button').click();
+  // 앱 설정 진입점은 툴바 우측 기어다(user-story.spec.ts와 동일).
+  await page.getByTestId('toolbar-app-settings-button').click();
   await page.waitForTimeout(STEP_PAUSE);
 }
 

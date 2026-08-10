@@ -11,6 +11,7 @@ import { ProjectPicker } from '@/components/layout/ProjectPicker';
 import { WorkflowActions } from '@/components/layout/WorkflowActions';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
+import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
 import { FOCUS_RING, PRESS, TOOLBAR_LEFT_WIDTH, TOOLBAR_RIGHT_WIDTH } from '@/constants/styles';
 
 /** 우측 도구 버튼 — 34px 정사각 아이콘 버튼 (라벨은 title/aria-label로 제공) */
@@ -24,9 +25,8 @@ const TOOL_BUTTON_CLASS =
  */
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation();
-  const { openPanel, openCommentsPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId } =
+  const { openCommentsPanel, toggleChatVisibility, leftSidebar, rightSidebar, floatingChatSessionId } =
     useUIStore(useShallow((s) => ({
-      openPanel: s.openPanel,
       openCommentsPanel: s.openCommentsPanel,
       toggleChatVisibility: s.toggleChatVisibility,
       leftSidebar: s.leftSidebar,
@@ -37,6 +37,7 @@ export function Toolbar(): JSX.Element {
   const commentCount = useCommentStore((s) => s.comments.length);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
 
   // File 메뉴에서 Export 열기 이벤트 수신
   useEffect(() => {
@@ -44,11 +45,6 @@ export function Toolbar(): JSX.Element {
     window.addEventListener('app:open-export-modal', handler);
     return () => window.removeEventListener('app:open-export-modal', handler);
   }, []);
-
-  const handleProjectSettings = () => {
-    if (!project) return;
-    openPanel('settings');
-  };
 
   const handleComments = () => {
     if (!project) return;
@@ -189,14 +185,15 @@ export function Toolbar(): JSX.Element {
 
         <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />
 
+        {/* 앱 설정 — API 키·모델처럼 프로젝트와 무관한 설정이라 프로젝트 없이도 열린다.
+            프로젝트 설정(번역 규칙·용어집·메모리)은 좌측 사이드바의 '설정' 탭이다. */}
         <button
           type="button"
-          onClick={handleProjectSettings}
-          disabled={!project}
+          onClick={() => setAppSettingsOpen(true)}
           className={TOOL_BUTTON_CLASS}
-          title={t('toolbar.projectSettings')}
-          aria-label={t('toolbar.projectSettings')}
-          data-testid="toolbar-menu-settings"
+          title={t('appSettings.title')}
+          aria-label={t('appSettings.title')}
+          data-testid="toolbar-app-settings-button"
         >
           <Settings size={17} />
         </button>
@@ -204,6 +201,7 @@ export function Toolbar(): JSX.Element {
 
       <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />
       <ExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
+      {appSettingsOpen && <AppSettingsModal onClose={() => setAppSettingsOpen(false)} />}
     </header>
   );
 }

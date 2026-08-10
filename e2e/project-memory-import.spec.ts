@@ -1,6 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { injectTauriMock } from './tauri-mock';
 import { mockProject } from './fixtures/mock-data';
+
+/**
+ * 프로젝트 설정은 좌측 사이드바의 '설정' 탭이다 — 툴바 우측 기어는 앱 설정으로 바뀌었다.
+ * 좁은 창에서는 좌측 바가 자동 숨김이라 되살림 버튼을 먼저 누른다.
+ */
+async function openProjectSettings(page: Page): Promise<void> {
+  const reveal = page.getByTestId('reveal-sidebar-left');
+  if (await reveal.isVisible()) await reveal.click();
+  await page.locator('[data-panel-tab="settings"]').click();
+}
 
 const SOURCE_ID = 'memory-source-project';
 const TARGET_ID = 'memory-target-project';
@@ -56,7 +66,7 @@ test.describe('Project memory import', () => {
   });
 
   test('copies selected memory from another project and skips duplicates', async ({ page }) => {
-    await page.getByTestId('toolbar-menu-settings').click();
+    await openProjectSettings(page);
     await expect(page.getByTestId('project-memory-settings')).toBeVisible();
 
     // 대상에 원본과 같은 내용을 미리 넣어 중복 건너뛰기를 검증한다.
@@ -86,7 +96,7 @@ test.describe('Project memory import', () => {
   });
 
   test('does not offer the active project as an import source', async ({ page }) => {
-    await page.getByTestId('toolbar-menu-settings').click();
+    await openProjectSettings(page);
     await page.getByTestId('project-memory-import-open').click();
 
     const options = page.getByTestId('project-memory-import-source').locator('option');

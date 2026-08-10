@@ -260,7 +260,8 @@ async function waitForAssistantReply(client, { selector, previousCount, userText
 async function runWorkflow() {
   const projectTitle = `Workflow E2E ${Date.now()}`;
   const chatMessage = '번역문 내용 간략히 요약해줘';
-  const toolbarSettingsSelector = "button[data-testid='toolbar-menu-settings']";
+  // 프로젝트 설정은 좌측 사이드바 '설정' 탭이다 (툴바 기어는 앱 설정으로 바뀌었다).
+  const projectSettingsTabSelector = "[data-panel-tab='settings']";
   const toolbarChatSelector = "button[data-testid='toolbar-menu-chat']";
   const chatSendButtonSelector = "button[data-testid='chat-send-button'], [data-testid='chat-composer-container'] ~ div button[type='submit']";
   const chatComposerEditableSelector = "[data-testid='chat-composer-container'] [contenteditable='true']";
@@ -305,10 +306,9 @@ async function runWorkflow() {
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: `[title='${projectTitle}']`, timeout: 10000 });
 
     // 2) App settings: Anthropic provider enabled 확인
-    // 앱 설정 진입점도 프로젝트 드롭다운 하단에 있다
-    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='project-app-settings-button']", timeout: 10000 });
-    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-app-settings-button']" });
+    // 앱 설정 진입점은 툴바 우측 기어 하나뿐이다
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='toolbar-app-settings-button']", timeout: 10000 });
+    await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-app-settings-button']" });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "#anthropic-enabled", timeout: 10000 });
     const anthropicToggle = await callTool(client, 'tauri_dom_query_selector', { selector: "#anthropic-enabled" });
     if (anthropicToggle.disabled) {
@@ -320,8 +320,8 @@ async function runWorkflow() {
     await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='app-settings-close-button']" });
 
     // 3) Open settings panel and fill rules/context
-    await callTool(client, 'tauri_dom_wait_for_selector', { selector: toolbarSettingsSelector, timeout: 10000 });
-    await callTool(client, 'tauri_dom_click', { selector: toolbarSettingsSelector });
+    await callTool(client, 'tauri_dom_wait_for_selector', { selector: projectSettingsTabSelector, timeout: 10000 });
+    await callTool(client, 'tauri_dom_click', { selector: projectSettingsTabSelector });
     await callTool(client, 'tauri_dom_wait_for_selector', { selector: "textarea[data-testid='settings-translation-rules']", timeout: 5000 });
     await callTool(client, 'tauri_dom_fill', {
       selector: "textarea[data-testid='settings-translation-rules']",

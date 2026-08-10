@@ -287,10 +287,9 @@ async function runScenario(client) {
 
   // ── Phase 2: Anthropic 활성화 ──
   log('\n═══ Phase 2: Ensure Anthropic Enabled ═══');
-  // 앱 설정 진입점도 프로젝트 드롭다운 하단에 있다
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-picker-trigger']" });
-  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='project-app-settings-button']", timeout: 10000 });
-  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='project-app-settings-button']" });
+  // 앱 설정 진입점은 툴바 우측 기어 하나뿐이다
+  await callTool(client, 'tauri_dom_wait_for_selector', { selector: "button[data-testid='toolbar-app-settings-button']", timeout: 10000 });
+  await callTool(client, 'tauri_dom_click', { selector: "button[data-testid='toolbar-app-settings-button']" });
   await callTool(client, 'tauri_dom_wait_for_selector', { selector: '#anthropic-enabled', timeout: 10000 });
   const anthropicToggle = await callTool(client, 'tauri_dom_query_selector', { selector: '#anthropic-enabled' });
   if (anthropicToggle.disabled) throw new Error('Anthropic toggle is disabled');

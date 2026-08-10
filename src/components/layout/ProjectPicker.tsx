@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Cog, MoreHorizontal, Plus } from 'lucide-react';
-import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import {
   createProject,
@@ -22,7 +21,8 @@ import { isTauriTestingBridgeActive } from '@/utils/tauri';
  * 에디터 좌우 공간을 잠식했고, 사이드바 토글 아이콘이 좌/우 패널 토글 아이콘과
  * 겹쳐 보였다. 프로젝트 전환은 자주 하는 동작이 아니므로 드롭다운이 맞다.
  *
- * 목록/생성/복제/이름변경/삭제와 앱 설정 진입점은 사이드바에서 그대로 옮겨왔다.
+ * 목록/생성/복제/이름변경/삭제는 사이드바에서 그대로 옮겨왔다. 앱 설정은 여기 있다가
+ * 툴바 우측 기어로 옮겼다 — 앱 전역 설정이 프로젝트 선택 하위에 있는 건 위계가 어긋난다.
  */
 export function ProjectPicker(): JSX.Element {
   const { t } = useTranslation();
@@ -45,7 +45,6 @@ export function ProjectPicker(): JSX.Element {
   const [renameTitle, setRenameTitle] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  const [showAppSettings, setShowAppSettings] = useState(false);
   const [actionMenu, setActionMenu] = useState<{
     top: number;
     left: number;
@@ -523,27 +522,8 @@ export function ProjectPicker(): JSX.Element {
                 );
               })}
           </div>
-
-          <div className="px-3 py-2 border-t border-editor-border shrink-0">
-            <button
-              type="button"
-              className="w-full px-2 py-1.5 rounded-md text-left text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors flex items-center gap-2"
-              onClick={() => {
-                closePicker();
-                setShowAppSettings(true);
-              }}
-              data-testid="project-app-settings-button"
-            >
-              <Cog size={14} />
-              <span>{t('projectSidebar.appSettings')}</span>
-            </button>
-          </div>
         </div>,
         document.body
-      )}
-
-      {showAppSettings && (
-        <AppSettingsModal onClose={() => setShowAppSettings(false)} />
       )}
 
       {open && actionMenu && createPortal(
