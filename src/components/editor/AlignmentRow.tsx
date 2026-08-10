@@ -75,7 +75,7 @@ export function AlignmentRow({
       }}
       className={`flex items-stretch ${
         isPair
-          ? `border-b border-editor-border/40 cursor-pointer ${
+          ? `border-b border-editor-hairline/40 cursor-pointer ${
             active ? 'bg-accent-tint border-l-[3px] border-l-primary-500' : 'hover:bg-editor-bg'
           }`
           : ''

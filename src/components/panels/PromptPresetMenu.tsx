@@ -286,7 +286,7 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
           </div>
 
           {/* 액션 영역 */}
-          <div className="border-t border-editor-border py-1">
+          <div className="border-t border-editor-hairline py-1">
             {naming ? (
               <div className="flex items-center gap-1 px-2 py-1">
                 <input

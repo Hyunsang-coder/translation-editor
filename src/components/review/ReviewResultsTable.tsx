@@ -198,7 +198,7 @@ export function ReviewResultsTable({
 
       {/* 이슈 카드 리스트 — 250px 사이드바에서 3열 table-fixed가 뭉개지던 것을 대체 */}
       <div className="flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
-        <label className="sticky top-0 z-10 flex items-center gap-2 px-3.5 py-2 bg-editor-surface border-b border-editor-border text-[11px] text-editor-muted cursor-pointer">
+        <label className="sticky top-0 z-10 flex items-center gap-2 px-3.5 py-2 bg-editor-surface border-b border-editor-hairline text-[11px] text-editor-muted cursor-pointer">
           <input
             type="checkbox"
             checked={allChecked}
@@ -214,7 +214,7 @@ export function ReviewResultsTable({
             key={issue.id}
             data-testid="review-issue-card"
             className={`
-              p-3.5 border-b border-editor-border border-l-[3px] transition-colors
+              p-3.5 border-b border-editor-hairline border-l-[3px] transition-colors
               ${issue.checked
                 ? 'bg-accent-tint border-l-primary-500'
                 : 'border-l-transparent hover:bg-editor-bg/50'}

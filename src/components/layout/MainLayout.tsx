@@ -194,7 +194,7 @@ export function MainLayout(): JSX.Element {
           closeOnOverlay={false}
         >
           <div className="bg-editor-surface rounded-lg shadow-xl w-[90vw] max-w-5xl h-[85vh] flex flex-col overflow-hidden">
-            <div className="px-4 py-3 border-b border-editor-border flex items-center justify-between bg-editor-surface">
+            <div className="px-4 py-3 border-b border-editor-hairline flex items-center justify-between bg-editor-surface">
               <h2 id="review-test-panel-title" className="font-semibold text-editor-text">검수 테스트 패널 (Dev)</h2>
               <button
                 type="button"

@@ -263,7 +263,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     <Modal open onClose={onClose} labelId="app-settings-title" className="bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-editor-surface border border-editor-border rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="h-12 px-5 flex items-center justify-between border-b border-editor-border bg-editor-bg shrink-0">
+        <div className="h-12 px-5 flex items-center justify-between border-b border-editor-hairline bg-editor-bg shrink-0">
           <h2 id="app-settings-title" className="text-lg font-bold text-editor-text">{t('appSettings.title')}</h2>
           <button 
             onClick={onClose}
@@ -280,7 +280,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             
             {/* 일반 — 언어·테마·붙여넣기. 컨트롤 4개짜리라 섹션을 셋으로 쪼개면 헤더가 내용보다 커진다. */}
             <section className="space-y-1">
-                <div className="flex items-center gap-2 pb-2 mb-2 border-b border-editor-border/50">
+                <div className="flex items-center gap-2 pb-2 mb-2 border-b border-editor-hairline/50">
                     <span className="text-lg">⚙️</span>
                     <h3 className="font-semibold text-editor-text">{t('appSettings.general')}</h3>
                 </div>
@@ -603,7 +603,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
             {/* Help & Info */}
             <section className="space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-editor-border/50">
+                <div className="flex items-center gap-2 pb-2 border-b border-editor-hairline/50">
                     <span className="text-lg">ℹ️</span>
                     <h3 className="font-semibold text-editor-text">{t('appSettings.helpInfo')}</h3>
                 </div>
@@ -657,7 +657,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
         </div>
         
         {/* Footer */}
-        <div className="h-12 px-5 flex items-center justify-end bg-editor-bg border-t border-editor-border shrink-0">
+        <div className="h-12 px-5 flex items-center justify-end bg-editor-bg border-t border-editor-hairline shrink-0">
              <span className="text-xs text-editor-muted mr-auto">{t('appSettings.footerAutoSave')}</span>
              <button 
                 onClick={onClose}

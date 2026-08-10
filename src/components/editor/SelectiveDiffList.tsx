@@ -35,7 +35,7 @@ export function SelectiveDiffList({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* 헤더: 전체 선택 + 카운트 + 컬럼 라벨 */}
-      <div className="shrink-0 border-b border-editor-border bg-editor-surface">
+      <div className="shrink-0 border-b border-editor-hairline bg-editor-surface">
         <div className="flex items-center gap-3 px-4 py-2.5">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -119,7 +119,7 @@ function SelectiveDiffRow({
       </span>
 
       {/* 기존 (좌) */}
-      <div className="min-w-0 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-editor-muted border-r border-editor-border/40 pr-3">
+      <div className="min-w-0 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-editor-muted border-r border-editor-hairline/40 pr-3">
         {isInsertion ? (
           <span className="text-[10px] text-editor-muted/70 italic">—</span>
         ) : wordParts ? (

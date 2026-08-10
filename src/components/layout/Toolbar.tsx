@@ -94,7 +94,7 @@ export function Toolbar(): JSX.Element {
   }, []);
 
   return (
-    <header className="h-[52px] border-b border-editor-border bg-editor-surface flex items-center shrink-0">
+    <header className="h-[52px] border-b border-editor-hairline bg-editor-surface flex items-center shrink-0">
       {/* 툴바 3분할 (296 / flex / 308) — 좌·우 슬롯 폭이 아래 컬럼 경계와 정렬된다 */}
       {/* 좌측 슬롯: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
       <div className="flex-none flex items-center min-w-0 px-2 box-border" style={{ width: TOOLBAR_LEFT_WIDTH }}>

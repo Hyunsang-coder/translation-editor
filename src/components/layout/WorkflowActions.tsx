@@ -200,7 +200,7 @@ export function WorkflowActions(): JSX.Element {
         closeOnOverlay={false}
       >
         <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
-          <div className="px-4 py-3 border-b border-editor-border">
+          <div className="px-4 py-3 border-b border-editor-hairline">
             <h3 id="review-instruction-title" className="text-sm font-semibold text-editor-text">
               {t('editor.reviewModal.title', '검수')}
             </h3>
@@ -229,7 +229,7 @@ export function WorkflowActions(): JSX.Element {
               />
             </div>
           </div>
-          <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+          <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setReviewModalOpen(false)}

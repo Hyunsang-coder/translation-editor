@@ -140,7 +140,7 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
         className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-editor-border bg-editor-surface"
         data-testid="project-memory-import-modal"
       >
-        <div className="border-b border-editor-border px-4 py-3">
+        <div className="border-b border-editor-hairline px-4 py-3">
           <h3 id="memory-import-title" className="text-sm font-semibold text-editor-text">
             {t('memory.import.title', '다른 프로젝트에서 가져오기')}
           </h3>
@@ -257,7 +257,7 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-editor-border px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-editor-hairline px-4 py-3">
           <button
             type="button"
             className="rounded border border-editor-border px-3 py-1.5 text-sm text-editor-text hover:bg-editor-bg disabled:opacity-60"

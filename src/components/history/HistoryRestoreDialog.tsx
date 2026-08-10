@@ -103,7 +103,7 @@ export function HistoryRestoreDialog({
   return (
     <Modal open={open} onClose={onClose} labelId="history-restore-title" className="bg-black/40 p-4">
       <div className="w-full max-w-md bg-editor-surface border border-editor-border rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-editor-border">
+        <div className="px-4 py-3 border-b border-editor-hairline">
           <h3 id="history-restore-title" className="text-sm font-semibold text-editor-text">
             {t('history.restoreConfirmTitle')}
           </h3>
@@ -111,7 +111,7 @@ export function HistoryRestoreDialog({
         <div className="p-4 text-sm text-editor-text">
           {t('history.restoreConfirmDescription')}
         </div>
-        <div className="px-4 py-3 border-t border-editor-border flex items-center justify-end gap-2">
+        <div className="px-4 py-3 border-t border-editor-hairline flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

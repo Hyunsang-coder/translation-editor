@@ -217,7 +217,7 @@ export function SearchBar({
   }
 
   return (
-    <div className="search-bar bg-editor-surface border-b border-editor-border px-3 py-2 flex flex-col gap-2">
+    <div className="search-bar bg-editor-surface border-b border-editor-hairline px-3 py-2 flex flex-col gap-2">
       {/* 검색 행 */}
       <div className="flex items-center gap-2">
         {/* 검색 입력 */}

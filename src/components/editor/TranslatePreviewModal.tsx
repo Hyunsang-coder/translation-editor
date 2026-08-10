@@ -343,7 +343,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
   return (
     <Modal open onClose={handleRequestClose} labelId="translate-preview-title" className="!z-[210] bg-black/40 p-3 sm:p-6" closeOnOverlay={false}>
       <div className="w-full max-w-6xl h-[85dvh] max-h-[calc(100dvh-1.5rem)] min-h-0 bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
-        <div className="h-12 shrink-0 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
+        <div className="h-12 shrink-0 px-4 border-b border-editor-hairline flex items-center justify-between bg-editor-surface">
           <div className="flex items-center gap-4">
             <div id="translate-preview-title" className="text-sm font-medium text-editor-text">
               {title ?? t('editor.previewDefaultTitle')}
@@ -412,8 +412,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
           {isLoading ? (
             <>
               <div className="flex-1 min-h-0 grid grid-cols-2 gap-0 overflow-hidden">
-                <div className="min-w-0 min-h-0 flex flex-col border-r border-editor-border overflow-hidden">
-                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+                <div className="min-w-0 min-h-0 flex flex-col border-r border-editor-hairline overflow-hidden">
+                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-hairline">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       {t('editor.source')}
                     </span>
@@ -433,7 +433,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                   </div>
                 </div>
                 <div className="min-w-0 min-h-0 flex flex-col overflow-hidden">
-                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-border">
+                  <div className="h-10 flex-shrink-0 px-4 flex items-center justify-between bg-editor-surface border-b border-editor-hairline">
                     <span className="text-[11px] font-bold text-editor-muted uppercase tracking-wider">
                       {t('editor.target')}
                     </span>
@@ -453,7 +453,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                   </div>
                 </div>
               </div>
-              <div className="flex-shrink-0 px-4 py-3 border-t border-editor-border bg-editor-bg">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-editor-hairline bg-editor-bg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="text-[11px] font-medium shimmer-text">
@@ -537,7 +537,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                   </div>
                 )}
               </div>
-              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-hairline bg-editor-bg flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-editor-muted">
                     {t('editor.sourceLabel')} {countTotalWords(originalText).toLocaleString()} {t('editor.words')}
@@ -572,7 +572,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                   </div>
                 )}
               </div>
-              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-border bg-editor-bg flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-2 border-t border-editor-hairline bg-editor-bg flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {finalElapsedSeconds !== null && (
                     <span className="text-[10px] text-primary-500 tabular-nums">

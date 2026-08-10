@@ -11,6 +11,10 @@
   --editor-raised-rgb: 250 250 252;
   --editor-surface-rgb: 245 245 247;
   --editor-border-rgb: 224 224 224;
+  /* 구분선 전용 — 밴드·패널 경계는 선을 거의 지우고 면 대비(surface vs bg)로 읽힌다.
+     컨트롤 윤곽선(버튼·입력·카드)은 --editor-border를 그대로 쓴다: 같은 값으로 내리면
+     #f5f5f7 헤더 위의 검수·폴리싱 버튼이 배경에 묻혀 사라진다. */
+  --editor-hairline-rgb: 245 245 247;
   --editor-muted-rgb: 122 122 122;
   --editor-text-rgb: 29 29 31;
   --primary-400-rgb: 0 113 227;
@@ -26,6 +30,7 @@
   --editor-raised: rgb(var(--editor-raised-rgb));
   --editor-surface: rgb(var(--editor-surface-rgb));
   --editor-border: rgb(var(--editor-border-rgb));
+  --editor-hairline: rgb(var(--editor-hairline-rgb));
   --editor-text: rgb(var(--editor-text-rgb));
   --editor-muted: rgb(var(--editor-muted-rgb));
 
@@ -66,6 +71,8 @@
   --editor-raised-rgb: 35 35 38;
   --editor-surface-rgb: 41 41 44;
   --editor-border-rgb: 58 58 60;
+  /* 다크도 같은 원리 — 구분선을 surface까지 내려 면 대비로 읽히게 한다 */
+  --editor-hairline-rgb: 41 41 44;
   --editor-muted-rgb: 152 152 157;
   --editor-text-rgb: 245 245 247;
   --primary-400-rgb: 100 181 255;
@@ -237,7 +244,7 @@
   /* Segment Group Container */
   .segment-group {
     @apply grid grid-cols-2 gap-4;
-    @apply border-b border-editor-border;
+    @apply border-b border-editor-hairline;
     @apply py-3;
   }
 

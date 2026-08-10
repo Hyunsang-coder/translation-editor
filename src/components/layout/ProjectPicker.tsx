@@ -391,7 +391,7 @@ export function ProjectPicker(): JSX.Element {
           onContextMenu={(e) => e.preventDefault()}
         >
           {showNew ? (
-            <div className="p-3 border-b border-editor-border space-y-2">
+            <div className="p-3 border-b border-editor-hairline space-y-2">
               <input
                 className="w-full text-sm px-2 py-1.5 rounded border border-editor-border bg-editor-bg text-editor-text"
                 value={newTitle}
@@ -421,7 +421,7 @@ export function ProjectPicker(): JSX.Element {
           ) : (
             <button
               type="button"
-              className="w-full px-3 py-2 flex items-center gap-2 text-editor-muted hover:text-primary-500 hover:bg-editor-bg transition-colors border-b border-editor-border"
+              className="w-full px-3 py-2 flex items-center gap-2 text-editor-muted hover:text-primary-500 hover:bg-editor-bg transition-colors border-b border-editor-hairline"
               onClick={() => {
                 setActionMenu(null);
                 setShowNew(true);
@@ -439,7 +439,7 @@ export function ProjectPicker(): JSX.Element {
             onScroll={() => setActionMenu(null)}
           >
             {!!error && (
-              <div className="px-3 py-2 text-[11px] text-severity-critical border-b border-editor-border">
+              <div className="px-3 py-2 text-[11px] text-severity-critical border-b border-editor-hairline">
                 {error}
               </div>
             )}
@@ -563,7 +563,7 @@ export function ProjectPicker(): JSX.Element {
           >
             {t('projectSidebar.renameProject')}
           </button>
-          <div className="my-1 border-t border-editor-border" />
+          <div className="my-1 border-t border-editor-hairline" />
           <button
             type="button"
             role="menuitem"

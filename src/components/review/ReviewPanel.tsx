@@ -1081,7 +1081,7 @@ export function ReviewPanel(): JSX.Element {
       </div>
 
       {/* 푸터 */}
-      <div className="px-3 py-2 border-t border-editor-border shrink-0 flex items-center justify-between gap-3">
+      <div className="px-3 py-2 border-t border-editor-hairline shrink-0 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="text-xs text-editor-muted">
             {checkedIssues.length > 0 && (
@@ -1174,7 +1174,7 @@ export function ReviewPanel(): JSX.Element {
           closeOnOverlay={false}
         >
           <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
-            <div className="px-4 py-3 border-b border-editor-border">
+            <div className="px-4 py-3 border-b border-editor-hairline">
               <h3 id="review-retranslate-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('review.retranslate.modal.title', '재번역 설정')}
               </h3>
@@ -1200,7 +1200,7 @@ export function ReviewPanel(): JSX.Element {
                 />
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+            <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRetranslateModalOpen(false)}

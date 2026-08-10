@@ -229,8 +229,8 @@ export function HistoryDrawer({ open, onClose }: HistoryDrawerProps): JSX.Elemen
     <>
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} aria-hidden="true" />
 
-      <aside className="fixed top-0 right-0 h-full w-96 z-50 bg-editor-surface border-l border-editor-border shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="h-14 px-4 border-b border-editor-border flex items-center justify-between">
+      <aside className="fixed top-0 right-0 h-full w-96 z-50 bg-editor-surface border-l border-editor-hairline shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="h-14 px-4 border-b border-editor-hairline flex items-center justify-between">
           <h2 className="text-sm font-semibold text-editor-text">{t('history.title')}</h2>
           <button
             type="button"

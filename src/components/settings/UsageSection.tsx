@@ -228,7 +228,7 @@ export function UsageSection(): JSX.Element | null {
             </button>
 
             {expandedDay === s.day && (
-              <div className="px-3 pb-2 space-y-1 border-t border-editor-border/30 pt-2">
+              <div className="px-3 pb-2 space-y-1 border-t border-editor-hairline/30 pt-2">
                 {s.rows.map((row) => {
                   const cost = estimateCost(row.model, row);
                   return (

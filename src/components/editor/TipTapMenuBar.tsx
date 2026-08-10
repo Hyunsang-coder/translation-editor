@@ -143,7 +143,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
   const btnActive = 'bg-editor-surface';
 
   return (
-    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-editor-border bg-editor-bg flex-wrap">
+    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-editor-hairline bg-editor-bg flex-wrap">
       {/* 헤딩 메뉴 */}
       <div className="relative">
         <button
@@ -339,7 +339,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
                   onClick={() => runTableCommand(run)}
                   className={`
                     flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left hover:bg-editor-bg transition-colors
-                    ${dividerBefore ? 'border-t border-editor-border' : ''}
+                    ${dividerBefore ? 'border-t border-editor-hairline' : ''}
                   `}
                 >
                   <Icon size={13} />

@@ -1639,7 +1639,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       {/* 상태 스트립 — 워크플로 액션이 Toolbar로 올라간 자리를 진행/저장/스냅샷/단어수가 대신한다.
           양 끝은 숨긴 사이드바 되살림 버튼(바 내부엔 UI가 없어 여기 노출). */}
       {/* 밴드 1 (36px) — UnifiedSidebar 탭 바, AlignmentView 헤더와 같은 선 */}
-      <div className={`${BAND_1} px-2 flex items-center gap-2 border-b border-editor-border shrink-0`}>
+      <div className={`${BAND_1} px-2 flex items-center gap-2 border-b border-editor-hairline shrink-0`}>
         {leftSidebarInvisible && (
           <button
             type="button"
@@ -1716,7 +1716,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 } as CSSProperties}
               >
                 {/* 밴드 2 (34px) — 섹션 캡션. 색상 대신 위계(캡션 타이포)로 구분한다 */}
-                <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg`}>
+                <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-hairline bg-editor-bg`}>
                   <div className="flex items-center gap-2">
                     <span className={CAPTION}>
                       {t('editor.source').toUpperCase()}
@@ -1807,7 +1807,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             } as CSSProperties}
           >
             {/* 밴드 2 (34px) — 섹션 캡션. 색상 대신 위계(캡션 타이포)로 구분한다 */}
-            <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg`}>
+            <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-hairline bg-editor-bg`}>
               <div className="flex items-center gap-3">
                 <span className={CAPTION}>
                   {t('editor.target').toUpperCase()}
@@ -1923,7 +1923,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           closeOnOverlay={false}
         >
           <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
-            <div className="px-4 py-3 border-b border-editor-border">
+            <div className="px-4 py-3 border-b border-editor-hairline">
               <h3 id="polish-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('editor.polishModal.title', '폴리싱')}
               </h3>
@@ -1954,7 +1954,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 />
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+            <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setPolishModalOpen(false)}
@@ -1987,7 +1987,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           closeOnOverlay={false}
         >
           <div className="bg-editor-surface border border-editor-border rounded-lg shadow-xl w-full max-w-md">
-            <div className="px-4 py-3 border-b border-editor-border">
+            <div className="px-4 py-3 border-b border-editor-hairline">
               <h3 id="retranslate-instruction-title" className="text-sm font-semibold text-editor-text">
                 {t('editor.retranslateModal.title', '재번역')}
               </h3>
@@ -2018,7 +2018,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 />
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-editor-border flex justify-end gap-2">
+            <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRetranslateModalOpen(false)}

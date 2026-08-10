@@ -334,7 +334,7 @@ export function GlossaryManagerModal({
       className="bg-black/55 backdrop-blur-sm p-4"
     >
       <div className="flex h-[min(760px,88vh)] w-[min(1080px,94vw)] flex-col overflow-hidden rounded-xl border border-editor-border bg-editor-surface shadow-2xl">
-        <header className="flex h-12 shrink-0 items-center justify-between border-b border-editor-border bg-editor-bg px-5">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-editor-hairline bg-editor-bg px-5">
           <div className="flex items-center gap-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/15 text-primary-500">
               <BookOpen size={17} />
@@ -359,7 +359,7 @@ export function GlossaryManagerModal({
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <aside className="flex w-64 shrink-0 flex-col border-r border-editor-border bg-editor-bg/70">
+          <aside className="flex w-64 shrink-0 flex-col border-r border-editor-hairline bg-editor-bg/70">
             <div className="flex items-center justify-between px-4 pb-2 pt-4">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-editor-muted">
                 {t('glossaryManager.myGlossaries')}
@@ -466,7 +466,7 @@ export function GlossaryManagerModal({
               </div>
             ) : (
               <>
-                <div className="shrink-0 border-b border-editor-border px-5 py-3">
+                <div className="shrink-0 border-b border-editor-hairline px-5 py-3">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       {renaming ? (
@@ -570,7 +570,7 @@ export function GlossaryManagerModal({
                   </div>
                 </div>
 
-                <div className="shrink-0 border-b border-editor-border px-5 py-3">
+                <div className="shrink-0 border-b border-editor-hairline px-5 py-3">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
@@ -615,7 +615,7 @@ export function GlossaryManagerModal({
                   </div>
                 </div>
 
-                <div className="shrink-0 border-b border-editor-border bg-editor-bg/45 px-5 py-3">
+                <div className="shrink-0 border-b border-editor-hairline bg-editor-bg/45 px-5 py-3">
                   <div className="grid grid-cols-[1fr_auto_1fr_auto] items-end gap-2">
                     <label className="min-w-0 text-[11px] font-medium text-editor-muted">
                       {t('glossaryManager.source')}
@@ -719,7 +719,7 @@ export function GlossaryManagerModal({
                     ) : visibleEntries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="group grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-editor-border px-3 py-2.5 last:border-b-0 hover:bg-editor-bg"
+                        className="group grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-editor-hairline px-3 py-2.5 last:border-b-0 hover:bg-editor-bg"
                       >
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium text-editor-text">{entry.source}</p>

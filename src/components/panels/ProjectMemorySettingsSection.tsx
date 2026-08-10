@@ -82,7 +82,7 @@ function RowMenu({
           >
             {t('common.edit', '편집')}
           </button>
-          <div className="my-1 border-t border-editor-border" />
+          <div className="my-1 border-t border-editor-hairline" />
           <button
             type="button"
             data-testid="project-memory-delete"

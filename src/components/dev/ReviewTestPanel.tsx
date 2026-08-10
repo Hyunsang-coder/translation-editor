@@ -252,7 +252,7 @@ export function ReviewTestPanel(): JSX.Element {
   return (
     <div className="h-full flex flex-col bg-editor-bg text-editor-text text-sm">
       {/* Header */}
-      <div className="p-3 border-b border-editor-border bg-editor-surface">
+      <div className="p-3 border-b border-editor-hairline bg-editor-surface">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold">검수 테스트 패널</h2>
           <div className="flex items-center gap-2">
@@ -293,7 +293,7 @@ export function ReviewTestPanel(): JSX.Element {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-editor-border bg-editor-surface">
+      <div className="flex border-b border-editor-hairline bg-editor-surface">
         {(['chunks', 'prompt', 'response', 'issues', 'search', 'editor'] as const).map((tab) => (
           <button
             key={tab}

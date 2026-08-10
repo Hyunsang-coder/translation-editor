@@ -160,7 +160,7 @@ export function CommentDetailPopover({
       )}
 
       {!editing && (
-        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-editor-border pt-2">
+        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-editor-hairline pt-2">
           <button
             type="button"
             onClick={onToggleResolve}

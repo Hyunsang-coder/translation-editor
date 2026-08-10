@@ -370,7 +370,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
               ({t('chat.edited')})
               <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/edited:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[10px] text-editor-text z-20 leading-relaxed overflow-hidden">
-                <div className="font-semibold mb-1 border-b border-editor-border pb-0.5">{t('chat.originalContent')}:</div>
+                <div className="font-semibold mb-1 border-b border-editor-hairline pb-0.5">{t('chat.originalContent')}:</div>
                 <div className="line-clamp-6 italic opacity-80">{message.metadata.originalContent}</div>
               </div>
             </span>

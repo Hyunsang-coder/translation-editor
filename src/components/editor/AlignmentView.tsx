@@ -226,7 +226,7 @@ export function AlignmentView(): JSX.Element {
   return (
     <div className="h-full flex flex-col bg-editor-surface" data-testid="alignment-view">
       {/* 이 뷰의 성격을 먼저 밝힌다 — 여기서는 고칠 수 없다 */}
-      <div className="h-9 shrink-0 px-[18px] flex items-center border-b border-editor-border">
+      <div className="h-9 shrink-0 px-[18px] flex items-center border-b border-editor-hairline">
         <span className="h-6 px-[9px] inline-flex items-center gap-1.5 bg-editor-surface border border-editor-border rounded text-[11px] font-semibold text-editor-muted">
           <Lock size={12} />
           {t('editor.alignment.readOnly')}
@@ -240,17 +240,17 @@ export function AlignmentView(): JSX.Element {
           본문만 좁아져 열 경계가 헤더와 어긋난다. 패딩도 행 셀과 같은 값이어야 한다.
         */}
         <div
-          className="sticky top-0 z-10 h-8 flex items-stretch border-b border-editor-border bg-editor-bg"
+          className="sticky top-0 z-10 h-8 flex items-stretch border-b border-editor-hairline bg-editor-bg"
           role="row"
         >
           <div className={`w-[52px] shrink-0 pl-[18px] ${HEADER_CELL_CLASS}`}>#</div>
-          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-hairline ${HEADER_CELL_CLASS}`}>
             {columnLabel(t('editor.alignment.sourceColumn'), sourceLanguage)}
           </div>
-          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+          <div className={`flex-1 min-w-0 pl-5 border-l border-editor-hairline ${HEADER_CELL_CLASS}`}>
             {columnLabel(t('editor.alignment.targetColumn'), targetLanguage)}
           </div>
-          <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-border ${HEADER_CELL_CLASS}`}>
+          <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-hairline ${HEADER_CELL_CLASS}`}>
             {t('editor.alignment.alignColumn')}
           </div>
         </div>
@@ -279,7 +279,7 @@ export function AlignmentView(): JSX.Element {
             return (
               <div
                 key={`mismatch-${block.items[0]?.number ?? 0}`}
-                className="bg-severity-major/[0.06] border-b border-editor-border/40"
+                className="bg-severity-major/[0.06] border-b border-editor-hairline/40"
                 data-testid="alignment-mismatch-band"
               >
                 <div className="flex items-center gap-2.5 px-[18px] py-2 border-b border-dashed border-severity-major/60">
@@ -335,7 +335,7 @@ export function AlignmentView(): JSX.Element {
       </div>
 
       {/* 하단 정렬 요약 */}
-      <div className="h-14 shrink-0 border-t border-editor-border bg-editor-surface flex items-center gap-[18px] px-[18px]">
+      <div className="h-14 shrink-0 border-t border-editor-hairline bg-editor-surface flex items-center gap-[18px] px-[18px]">
         <span className={`${CAPTION} shrink-0`}>
           {t('editor.alignment.summaryLabel')}
         </span>

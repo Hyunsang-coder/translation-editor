@@ -31,6 +31,7 @@ export default {
           raised: 'rgb(var(--editor-raised-rgb) / <alpha-value>)',
           surface: 'rgb(var(--editor-surface-rgb) / <alpha-value>)',
           border: 'rgb(var(--editor-border-rgb) / <alpha-value>)',
+          hairline: 'rgb(var(--editor-hairline-rgb) / <alpha-value>)',
           text: 'rgb(var(--editor-text-rgb) / <alpha-value>)',
           muted: 'rgb(var(--editor-muted-rgb) / <alpha-value>)',
         },

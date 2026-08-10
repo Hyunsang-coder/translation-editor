@@ -49,7 +49,7 @@ export function VisualDiffViewer({
     <div className={`flex flex-col h-full bg-editor-bg border border-editor-border rounded-lg overflow-hidden ${className}`}>
       
       {/* Header / Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-editor-border bg-editor-surface/50 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-editor-hairline bg-editor-surface/50 shrink-0">
         <div className="flex items-center gap-6 text-sm w-full">
           <div className="font-semibold text-editor-text min-w-[100px]">
             {stats.added + stats.deleted} changes:
@@ -82,7 +82,7 @@ export function VisualDiffViewer({
 
       {/* Footer / Actions */}
       {(onAccept || onReject) && (
-        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-editor-border bg-editor-surface shrink-0">
+        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-editor-hairline bg-editor-surface shrink-0">
            {onReject && (
               <button
                 onClick={onReject}
@@ -233,7 +233,7 @@ function LineCell({ side, num, content, type }: {
     <>
       {/* Line Number */}
       <td className={`
-        text-right px-3 py-1 select-none text-[11px] align-top border-r border-editor-border/50
+        text-right px-3 py-1 select-none text-[11px] align-top border-r border-editor-hairline/50
         ${numClass}
       `}>
         {num || ''}
@@ -264,10 +264,10 @@ function UnifiedLineRow({ numLeft, numRight, content, type }: {
 
   return (
     <tr className={bgClass}>
-      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-border/50 w-[40px]">
+      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-hairline/50 w-[40px]">
         {numLeft || ''}
       </td>
-      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-border/50 w-[40px]">
+      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-hairline/50 w-[40px]">
         {numRight || ''}
       </td>
       <td className="px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-relaxed">

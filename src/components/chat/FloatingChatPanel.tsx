@@ -214,7 +214,7 @@ export function FloatingChatPanel(): JSX.Element | null {
     >
       <div
         data-testid="floating-chat-drag-handle"
-        className="h-10 shrink-0 cursor-move select-none border-b border-editor-border bg-editor-surface flex items-center gap-2 px-3"
+        className="h-10 shrink-0 cursor-move select-none border-b border-editor-hairline bg-editor-surface flex items-center gap-2 px-3"
         onMouseDown={beginDrag}
         onDoubleClick={handleDock}
       >

@@ -48,7 +48,7 @@ export function CollapsibleSection({
           aria-expanded={open}
           aria-controls={bodyId}
           data-testid={testId}
-          className="group flex w-full items-center gap-2 border-b border-editor-border/50 pb-2 text-left"
+          className="group flex w-full items-center gap-2 border-b border-editor-hairline/50 pb-2 text-left"
         >
           <span className="inline-flex text-editor-muted">{icon}</span>
           <span className="font-semibold text-editor-text">{title}</span>

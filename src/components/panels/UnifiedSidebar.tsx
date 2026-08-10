@@ -149,11 +149,11 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
   return (
     <aside
       ref={sidebarRef}
-      className={`shrink-0 h-full min-h-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
+      className={`shrink-0 h-full min-h-0 ${borderClass} border-editor-hairline bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
       style={{ width }}
     >
       {/* Tab Header — 밴드 1 (36px) */}
-      <div className={`${SIDEBAR_BAND_1} border-b border-editor-border flex items-center bg-editor-raised select-none shrink-0`}>
+      <div className={`${SIDEBAR_BAND_1} border-b border-editor-hairline flex items-center bg-editor-raised select-none shrink-0`}>
         {/* Hide button (폭 0 완전 숨김) */}
         <button
           type="button"
@@ -177,7 +177,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
                   onMouseDown={(e) => handleTabMouseDown(panel, label, e)}
                   onClick={() => handleTabClick(panel)}
                   className={`
-                    group relative ${SIDEBAR_BAND_1} px-3 flex items-center gap-1.5 text-xs font-semibold cursor-pointer border-r border-editor-border min-w-[60px] max-w-[180px]
+                    group relative ${SIDEBAR_BAND_1} px-3 flex items-center gap-1.5 text-xs font-semibold cursor-pointer border-r border-editor-hairline min-w-[60px] max-w-[180px]
                     ${activePanel === panel
                       ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
                       : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
@@ -228,7 +228,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
             <button
               type="button"
               onClick={handleAddChatSession}
-              className={`${SIDEBAR_BAND_1} px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface active:scale-95 transition-colors border-r border-editor-border`}
+              className={`${SIDEBAR_BAND_1} px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface active:scale-95 transition-colors border-r border-editor-hairline`}
               title={t('chat.newChat')}
               aria-label={t('chat.newChat')}
             >

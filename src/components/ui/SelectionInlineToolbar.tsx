@@ -61,7 +61,7 @@ export function SelectionInlineToolbar({
       <button
         type="button"
         data-testid="selection-inline-add-chat"
-        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border first:border-l-0`}
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-hairline first:border-l-0`}
         title={t('editor.addToChat')}
         onClick={onAddToChat}
       >
@@ -73,7 +73,7 @@ export function SelectionInlineToolbar({
       <button
         type="button"
         data-testid="selection-inline-comment"
-        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border`}
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-hairline`}
         title={t('comment.addButton')}
         onClick={onAddComment}
       >
@@ -84,7 +84,7 @@ export function SelectionInlineToolbar({
       <button
         type="button"
         data-testid="selection-inline-copy"
-        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-border`}
+        className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-hairline`}
         title={t('editor.copySelection')}
         onClick={onCopy}
       >

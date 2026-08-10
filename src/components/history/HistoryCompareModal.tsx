@@ -130,7 +130,7 @@ export function HistoryCompareModal({
   return (
     <Modal open={open} onClose={onClose} labelId="history-compare-title" className="!z-[220] bg-black/45 p-4">
       <div className="w-full max-w-6xl h-[85vh] bg-editor-bg border border-editor-border rounded-lg overflow-hidden flex flex-col">
-        <div className="h-12 px-4 border-b border-editor-border flex items-center justify-between bg-editor-surface">
+        <div className="h-12 px-4 border-b border-editor-hairline flex items-center justify-between bg-editor-surface">
           <h3 id="history-compare-title" className="text-sm font-semibold text-editor-text">
             {t('history.compareTitle')}
           </h3>
@@ -143,7 +143,7 @@ export function HistoryCompareModal({
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-editor-border bg-editor-surface flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="px-4 py-3 border-b border-editor-hairline bg-editor-surface flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 min-w-0">
             <label htmlFor="history-compare-base" className="block text-xs text-editor-muted mb-1">
               {t('history.compareBaseSnapshot')}
