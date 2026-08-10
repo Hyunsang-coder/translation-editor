@@ -10,7 +10,7 @@ export function SkeletonLine(props: {
     <div
       aria-hidden="true"
       className={[
-        'rounded bg-gray-200 dark:bg-gray-700',
+        'rounded bg-editor-border/60',
         heightClassName ?? 'h-3',
         widthClassName ?? 'w-full',
         className ?? '',

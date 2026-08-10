@@ -369,7 +369,7 @@ export function ProjectPicker(): JSX.Element {
             openPicker();
           }
         }}
-        className="h-[34px] max-w-[280px] px-2 flex items-center gap-1.5 rounded-md hover:bg-editor-border transition-colors focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className="h-[34px] max-w-[280px] px-2 flex items-center gap-1.5 rounded-md hover:bg-editor-border transition-colors focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
         title={t('projectSidebar.projects')}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -440,7 +440,7 @@ export function ProjectPicker(): JSX.Element {
             onScroll={() => setActionMenu(null)}
           >
             {!!error && (
-              <div className="px-3 py-2 text-[11px] text-red-600 border-b border-editor-border">
+              <div className="px-3 py-2 text-[11px] text-severity-critical border-b border-editor-border">
                 {error}
               </div>
             )}
@@ -503,7 +503,7 @@ export function ProjectPicker(): JSX.Element {
                         type="button"
                         role="menuitem"
                         data-project-action-trigger
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-editor-muted transition-colors hover:bg-editor-border hover:text-editor-text focus-visible:outline-2 focus-visible:outline-primary-500 ${
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-editor-muted transition-colors hover:bg-editor-border hover:text-editor-text focus-visible:outline-2 focus-visible:outline-primary-focus ${
                           actionMenu?.projectId === p.id
                             ? 'bg-editor-border text-editor-text'
                             : 'opacity-70 group-hover:opacity-100 focus-visible:opacity-100'
@@ -587,7 +587,7 @@ export function ProjectPicker(): JSX.Element {
           <button
             type="button"
             role="menuitem"
-            className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10"
+            className="w-full px-3 py-1.5 text-left text-xs text-severity-critical hover:bg-severity-critical/10"
             onClick={() => {
               const pid = actionMenu.projectId;
               setActionMenu(null);

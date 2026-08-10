@@ -492,7 +492,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
           ) : error ? (
             <div className="h-full flex items-center justify-center p-6">
               <div className="max-w-xl w-full bg-editor-surface border border-editor-border rounded-lg p-4">
-                <div className="text-sm font-medium text-red-600 dark:text-red-400">
+                <div className="text-sm font-medium text-severity-critical">
                   {t('editor.previewError')}
                 </div>
                 <div className="mt-2 text-sm text-editor-muted whitespace-pre-wrap">

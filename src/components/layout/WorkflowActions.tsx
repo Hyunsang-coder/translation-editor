@@ -16,7 +16,7 @@ import { shortcutLabel } from '@/utils/platform';
 const SECONDARY_BUTTON_CLASS =
   'h-[34px] px-2.5 rounded-md border text-[13px] font-semibold flex items-center gap-1.5 transition-colors '
   + 'disabled:cursor-not-allowed '
-  + 'focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2';
+  + 'focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2';
 
 // 툴바 헤더가 bg-editor-surface라 hover도 surface면 아무 변화가 없다 (다른 툴바 버튼과 동일하게 border 색을 쓴다).
 // 흐리게 처리는 idle 쪽에만 둔다 — 실행 중에도 disabled지만 그때는 진행 표시라 또렷해야 한다.
@@ -106,7 +106,7 @@ export function WorkflowActions(): JSX.Element {
         type="button"
         onClick={triggerTranslate}
         disabled={translateLoading}
-        className="h-[34px] px-3 rounded-md bg-primary-500 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+        className="h-[34px] px-3 rounded-md bg-primary-500 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
         title={t('editor.translateTitle')}
         data-testid="editor-translate-button"
       >
@@ -220,7 +220,7 @@ export function WorkflowActions(): JSX.Element {
                 value={reviewInstruction}
                 onChange={(e) => setReviewInstruction(e.target.value)}
                 placeholder={t('editor.reviewModal.placeholder', '예: 용어 일관성 위주로 봐주세요.')}
-                className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 text-editor-text placeholder:text-editor-muted"
                 autoFocus
                 data-testid="review-instruction-input"
                 onKeyDown={(e) => {
@@ -233,14 +233,14 @@ export function WorkflowActions(): JSX.Element {
             <button
               type="button"
               onClick={() => setReviewModalOpen(false)}
-              className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+              className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg active:scale-95 transition-colors"
             >
               {t('common.cancel', '취소')}
             </button>
             <button
               type="button"
               onClick={startReview}
-              className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors"
               data-testid="review-modal-start"
             >
               {t('editor.reviewModal.execute', '검수 시작')}

@@ -11,14 +11,13 @@ import { ProjectPicker } from '@/components/layout/ProjectPicker';
 import { WorkflowActions } from '@/components/layout/WorkflowActions';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
+import { FOCUS_RING, PRESS, TOOLBAR_LEFT_WIDTH, TOOLBAR_RIGHT_WIDTH } from '@/constants/styles';
 
+/** 우측 도구 버튼 — 34px 정사각 아이콘 버튼 (라벨은 title/aria-label로 제공) */
 const TOOL_BUTTON_CLASS =
-  'h-[34px] px-[11px] shrink-0 flex items-center gap-[7px] rounded-md text-[13px] font-semibold text-editor-text '
-  + 'whitespace-nowrap hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed '
-  + 'focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2';
-
-/** 좁은 창에서는 라벨을 접어 아이콘만 남긴다 (title/aria-label로 접근성 유지) */
-const TOOL_LABEL_CLASS = 'hidden xl:inline';
+  'relative w-[34px] h-[34px] shrink-0 flex items-center justify-center rounded-md text-editor-muted '
+  + `hover:bg-editor-border hover:text-editor-text ${PRESS} disabled:opacity-50 disabled:cursor-not-allowed `
+  + FOCUS_RING;
 
 /**
  * 상단 툴바 컴포넌트
@@ -99,21 +98,20 @@ export function Toolbar(): JSX.Element {
   }, []);
 
   return (
-    <header className="h-[52px] border-b border-editor-border bg-editor-surface flex items-center justify-between gap-3 px-2 shrink-0">
-      {/* 좌측: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
-      <div className="flex items-center min-w-0 shrink">
+    <header className="h-[52px] border-b border-editor-border bg-editor-surface flex items-center shrink-0">
+      {/* 툴바 3분할 (296 / flex / 308) — 좌·우 슬롯 폭이 아래 컬럼 경계와 정렬된다 */}
+      {/* 좌측 슬롯: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
+      <div className="flex-none flex items-center min-w-0 px-2 box-border" style={{ width: TOOLBAR_LEFT_WIDTH }}>
         <ProjectPicker />
       </div>
 
-      {/* 중앙: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
-      {project && (
-        <div className="shrink-0">
-          <WorkflowActions />
-        </div>
-      )}
+      {/* 중앙 슬롯: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
+      <div className="flex-1 min-w-0 flex items-center justify-center">
+        {project && <WorkflowActions />}
+      </div>
 
-      {/* 우측: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
-      <div className="flex items-center gap-1 min-w-0 justify-end">
+      {/* 우측 슬롯: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
+      <div className="flex-none flex items-center gap-1 justify-end pr-2.5 box-border" style={{ minWidth: TOOLBAR_RIGHT_WIDTH }}>
         {/* 배율 인디케이터 — 100%가 아니면 계속 보인다(되돌릴 방법이 항상 있어야 한다).
             100%일 때는 방금 조작했을 때만 잠깐 보여주고 사라진다. */}
         {(zoomVisible || zoomPercent !== 100) && (
@@ -125,7 +123,7 @@ export function Toolbar(): JSX.Element {
             <button
               type="button"
               onClick={resetEditorZoom}
-              className="px-2 h-[26px] inline-flex items-center gap-1 rounded-md bg-editor-bg border border-primary-500 text-[11px] font-medium text-primary-600 dark:text-primary-400 hover:bg-editor-border transition-colors shrink-0 tabular-nums focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+              className={`px-2 h-[26px] inline-flex items-center gap-1 rounded-md bg-editor-bg border border-primary-500 text-[11px] text-primary-600 dark:text-primary-400 hover:bg-editor-border shrink-0 tabular-nums ${PRESS} ${FOCUS_RING}`}
               title={t('editor.zoom.resetTo100', '클릭하면 100%로 되돌립니다')}
               data-testid="toolbar-zoom-reset"
             >
@@ -141,12 +139,14 @@ export function Toolbar(): JSX.Element {
           disabled={!project}
           className={TOOL_BUTTON_CLASS}
           title={t('comment.title', '코멘트')}
+          aria-label={t('comment.title', '코멘트')}
           data-testid="editor-comments-button"
         >
-          <NotebookPen size={16} />
-          <span className={TOOL_LABEL_CLASS}>{t('comment.title', '코멘트')}</span>
+          <NotebookPen size={17} />
           {commentCount > 0 && (
-            <span className="tabular-nums text-editor-muted">{commentCount}</span>
+            <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-[3px] box-border rounded-full bg-primary-500 text-white text-[10px] font-semibold leading-[14px] text-center tabular-nums">
+              {commentCount}
+            </span>
           )}
         </button>
 
@@ -155,12 +155,12 @@ export function Toolbar(): JSX.Element {
           onClick={handleChat}
           disabled={!project}
           aria-pressed={isAnyChatVisible}
-          className={TOOL_BUTTON_CLASS}
+          className={`${TOOL_BUTTON_CLASS} ${isAnyChatVisible ? 'text-primary-500 bg-primary-500/10 hover:bg-primary-500/15 hover:text-primary-500' : ''}`}
           title={t('toolbar.aiChat')}
+          aria-label={t('toolbar.aiChat')}
           data-testid="toolbar-menu-chat"
         >
-          <MessageSquare size={16} />
-          <span className={TOOL_LABEL_CLASS}>{t('toolbar.aiChat')}</span>
+          <MessageSquare size={17} />
         </button>
 
         <button
@@ -169,10 +169,10 @@ export function Toolbar(): JSX.Element {
           disabled={!project}
           className={TOOL_BUTTON_CLASS}
           title={t('history.title')}
+          aria-label={t('history.title')}
           data-testid="toolbar-menu-history"
         >
-          <Clock3 size={16} />
-          <span className={TOOL_LABEL_CLASS}>{t('history.title')}</span>
+          <Clock3 size={17} />
         </button>
 
         <button
@@ -181,10 +181,10 @@ export function Toolbar(): JSX.Element {
           disabled={!project}
           className={TOOL_BUTTON_CLASS}
           title={t('export.title')}
+          aria-label={t('toolbar.export', '내보내기')}
           data-testid="toolbar-menu-export"
         >
-          <Download size={16} />
-          <span className={TOOL_LABEL_CLASS}>{t('toolbar.export', '내보내기')}</span>
+          <Download size={17} />
         </button>
 
         <div className="w-px h-[22px] bg-editor-border mx-1.5 shrink-0" />
@@ -193,7 +193,7 @@ export function Toolbar(): JSX.Element {
           type="button"
           onClick={handleProjectSettings}
           disabled={!project}
-          className="h-[34px] px-2 flex items-center rounded-md text-editor-text hover:bg-editor-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
+          className={TOOL_BUTTON_CLASS}
           title={t('toolbar.projectSettings')}
           aria-label={t('toolbar.projectSettings')}
           data-testid="toolbar-menu-settings"

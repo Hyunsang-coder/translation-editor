@@ -49,7 +49,7 @@ export function VisualDiffViewer({
     <div className={`flex flex-col h-full bg-editor-bg border border-editor-border rounded-lg overflow-hidden ${className}`}>
       
       {/* Header / Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-editor-border bg-gray-50 dark:bg-gray-800/50 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-editor-border bg-editor-surface/50 shrink-0">
         <div className="flex items-center gap-6 text-sm w-full">
           <div className="font-semibold text-editor-text min-w-[100px]">
             {stats.added + stats.deleted} changes:
@@ -64,7 +64,7 @@ export function VisualDiffViewer({
         <div className="flex items-center gap-2 ml-4">
           <button
             onClick={() => setViewMode(m => m === 'side-by-side' ? 'unified' : 'side-by-side')}
-            className="px-3 py-1.5 text-xs font-medium border border-editor-border rounded bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors whitespace-nowrap shadow-sm"
+            className="px-3 py-1.5 text-xs font-medium border border-editor-border rounded bg-editor-bg hover:bg-editor-surface transition-colors whitespace-nowrap shadow-sm"
           >
             {viewMode === 'side-by-side' ? t('editor.viewTogether') : t('editor.sideBySide')}
           </button>
@@ -218,15 +218,15 @@ function LineCell({ side, num, content, type }: {
   
   // 배경색 결정 (스크린샷 스타일 반영)
   let bgClass = '';
-  const numClass = 'text-editor-muted bg-gray-50 dark:bg-gray-800/30'; // 기본 줄번호 배경
+  const numClass = 'text-editor-muted bg-editor-surface/30'; // 기본 줄번호 배경
 
   if (type === 'delete') {
-    bgClass = 'bg-red-50/50 dark:bg-red-900/10'; // 연한 빨강
+    bgClass = 'bg-diff-deletion/5'; // 연한 빨강
   } else if (type === 'insert') {
-    bgClass = 'bg-green-50/50 dark:bg-green-900/10'; // 연한 초록
+    bgClass = 'bg-diff-insertion/5'; // 연한 초록
   } else if (type === 'modify') {
     // 스크린샷의 #eff6ff (아주 연한 파랑) 반영
-    bgClass = 'bg-[#eff6ff] dark:bg-blue-900/10'; 
+    bgClass = 'bg-accent-tint'; 
   }
 
   return (
@@ -259,15 +259,15 @@ function UnifiedLineRow({ numLeft, numRight, content, type }: {
   type: 'equal' | 'delete' | 'insert';
 }) {
   let bgClass = '';
-  if (type === 'delete') bgClass = 'bg-red-50/50 dark:bg-red-900/10';
-  if (type === 'insert') bgClass = 'bg-green-50/50 dark:bg-green-900/10';
+  if (type === 'delete') bgClass = 'bg-diff-deletion/5';
+  if (type === 'insert') bgClass = 'bg-diff-insertion/5';
 
   return (
     <tr className={bgClass}>
-      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-gray-50 dark:bg-gray-800/30 border-r border-editor-border/50 w-[40px]">
+      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-border/50 w-[40px]">
         {numLeft || ''}
       </td>
-      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-gray-50 dark:bg-gray-800/30 border-r border-editor-border/50 w-[40px]">
+      <td className="text-right px-2 py-1 select-none text-editor-muted text-[11px] align-top bg-editor-surface/30 border-r border-editor-border/50 w-[40px]">
         {numRight || ''}
       </td>
       <td className="px-3 py-1 align-top break-all whitespace-pre-wrap text-[13px] leading-relaxed">
@@ -296,7 +296,7 @@ function DiffContentRenderer({ content, side }: {
           // 원문: 삭제된 부분 하이라이트 (스크린샷: 진한 빨강 배경 + 취소선)
           if (part.type === 'delete') {
             return (
-              <span key={idx} className="bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-100 line-through decoration-red-400 decoration-1 rounded-[2px] px-0.5">
+              <span key={idx} className="bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion decoration-1 rounded-[2px] px-0.5">
                 {part.value}
               </span>
             );
@@ -306,7 +306,7 @@ function DiffContentRenderer({ content, side }: {
           // 변경문: 추가된 부분 하이라이트 (스크린샷: 진한 초록 배경)
           if (part.type === 'insert') {
             return (
-              <span key={idx} className="bg-green-200 dark:bg-green-900/50 text-green-900 dark:text-green-100 rounded-[2px] px-0.5">
+              <span key={idx} className="bg-diff-insertion-bg text-editor-text rounded-[2px] px-0.5">
                 {part.value}
               </span>
             );

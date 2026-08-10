@@ -11,6 +11,7 @@
  */
 
 import { useMemo } from 'react';
+import { Circle, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   EFFORT_CHOICES,
@@ -74,13 +75,13 @@ export function ModelOverridesSection(): JSX.Element {
 
   return (
     <CollapsibleSection
-      icon="🧪"
+      icon={<FlaskConical size={16} />}
       title={t('appSettings.modelOverrides')}
       // 접어 둬도 지정이 몇 건 살아 있는지는 헤더에 남는다.
       summary={
         activeCount > 0 ? (
-          <span className="text-yellow-600" data-testid="model-overrides-badge">
-            ● {t('appSettings.modelOverridesActive', { count: activeCount })}
+          <span className="inline-flex items-center gap-1 text-severity-major" data-testid="model-overrides-badge">
+            <Circle size={7} fill="currentColor" /> {t('appSettings.modelOverridesActive', { count: activeCount })}
           </span>
         ) : undefined
       }
@@ -176,7 +177,7 @@ export function ModelOverridesSection(): JSX.Element {
               </select>
 
               {(selectedModel || (effortAllowed && selectedEffort)) && (
-                <span className="text-yellow-600 text-[10px]">●</span>
+                <span className="text-severity-major"><Circle size={7} fill="currentColor" /></span>
               )}
             </div>
           );
@@ -184,7 +185,7 @@ export function ModelOverridesSection(): JSX.Element {
 
         {/* pl은 라벨 w-20(5rem) + gap-2(0.5rem) — Tailwind v3 스케일에 22가 없어 임의값을 쓴다 */}
         {(current.chat?.model || current.chat?.effort) && (
-          <p className="text-[10px] text-yellow-600 pl-[5.5rem]">
+          <p className="text-[10px] text-severity-major pl-[5.5rem]">
             {t('appSettings.modelOverridesChatNotice')}
           </p>
         )}

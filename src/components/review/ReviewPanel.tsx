@@ -1015,7 +1015,7 @@ export function ReviewPanel(): JSX.Element {
             {results.length > 0 && (
               <>
                 {hasErrors && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-500">
+                  <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical">
                     {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
                   </div>
                 )}
@@ -1039,7 +1039,7 @@ export function ReviewPanel(): JSX.Element {
           // 검수 결과 표시
           <div className="space-y-4">
             {hasErrors && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-500">
+              <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical">
                 {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
               </div>
             )}
@@ -1116,7 +1116,7 @@ export function ReviewPanel(): JSX.Element {
                   type="button"
                   onClick={handleRetranslateClick}
                   disabled={retranslateLoading}
-                  className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
                 >
                   {t('review.retranslate.button', '재번역')}
                 </button>
@@ -1134,7 +1134,7 @@ export function ReviewPanel(): JSX.Element {
                 type="button"
                 onClick={() => void handleRunReview()}
                 disabled={!project}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 active:scale-95 transition-colors"
                 data-testid="review-run-button"
               >
                 {results.length > 0
@@ -1196,7 +1196,7 @@ export function ReviewPanel(): JSX.Element {
                   value={retranslateMessage}
                   onChange={(e) => setRetranslateMessage(e.target.value)}
                   placeholder={t('review.retranslate.modal.placeholder', '예: 전체적으로 더 격식체로 번역해주세요.')}
-                  className="w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                  className="w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 text-editor-text placeholder:text-editor-muted"
                 />
               </div>
             </div>
@@ -1212,7 +1212,7 @@ export function ReviewPanel(): JSX.Element {
                 type="button"
                 onClick={handleRetranslateExecute}
                 disabled={retranslateLoading}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
               >
                 {t('review.retranslate.modal.execute', '재번역 실행')}
               </button>

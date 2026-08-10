@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
+import { Plug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConnectorStore } from '@/stores/connectorStore';
 import { BUILTIN_CONNECTORS, MCP_CONNECTORS } from '@/ai/connectors';
@@ -55,13 +56,13 @@ function ConnectorItem({
             : t('appSettings.connectors.notConnected');
 
   const statusColor = error
-    ? 'text-red-500'
+    ? 'text-severity-critical'
     : isConnecting
-      ? 'text-yellow-500'
+      ? 'text-severity-major'
       : isConnected
-        ? 'text-green-500'
+        ? 'text-diff-insertion'
         : hasToken
-          ? 'text-blue-500'
+          ? 'text-primary-500'
           : 'text-editor-muted';
 
   // 아이콘이 이미지 경로인지 확인 (확장자로 판단)
@@ -102,7 +103,7 @@ function ConnectorItem({
                 <button
                   onClick={onDisconnect}
                   disabled={isConnecting}
-                  className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-severity-critical/20 hover:text-severity-critical transition-colors disabled:opacity-50"
                 >
                   {t('appSettings.connectors.disconnect')}
                 </button>
@@ -111,7 +112,7 @@ function ConnectorItem({
                   <button
                     onClick={onConnect}
                     disabled={isConnecting}
-                    className="px-2 py-1 text-xs rounded bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+                    className="px-2 py-1 text-xs rounded bg-severity-major/20 text-severity-major hover:bg-severity-major/30 transition-colors disabled:opacity-50"
                   >
                     {isConnecting ? '...' : t('appSettings.connectors.retry')}
                   </button>
@@ -119,7 +120,7 @@ function ConnectorItem({
                     <button
                       onClick={onClearAll}
                       disabled={isConnecting}
-                      className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
                       title={t('appSettings.connectors.clearAllTooltip')}
                     >
                       {t('appSettings.connectors.clearAll')}
@@ -140,7 +141,7 @@ function ConnectorItem({
                 <button
                   onClick={onClearAll}
                   disabled={isConnecting}
-                  className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                  className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
                   title={t('appSettings.connectors.clearAllTooltip')}
                 >
                   {t('appSettings.connectors.clearAll')}
@@ -152,7 +153,7 @@ function ConnectorItem({
       </div>
       {/* 에러 메시지 표시 */}
       {error && (
-        <p className="mt-2 text-xs text-red-400 truncate" title={error}>
+        <p className="mt-2 text-xs text-severity-critical truncate" title={error}>
           {error}
         </p>
       )}
@@ -160,9 +161,9 @@ function ConnectorItem({
       {isConnecting && elapsedSeconds !== undefined && (
         <p className={`mt-2 text-xs ${
           elapsedSeconds >= 60
-            ? 'text-red-400'
+            ? 'text-severity-critical'
             : elapsedSeconds >= 30
-              ? 'text-yellow-400'
+              ? 'text-severity-major'
               : 'text-editor-muted'
         }`}>
           {elapsedSeconds >= 60
@@ -294,7 +295,7 @@ export function ConnectorsSection(): JSX.Element {
 
   return (
     <CollapsibleSection
-      icon="🔌"
+      icon={<Plug size={16} />}
       title={t('appSettings.connectors.title')}
       summary={
         mcpStatus.isConnected

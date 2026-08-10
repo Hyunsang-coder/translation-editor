@@ -163,7 +163,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
           <button
             type="button"
             onClick={onClose}
-            className="text-editor-muted hover:text-editor-text transition-colors text-lg leading-none"
+            className="text-editor-muted hover:text-editor-text active:scale-95 transition-colors text-lg leading-none"
             aria-label={t('common.close')}
           >
             &times;
@@ -184,7 +184,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
                   value={mode}
                   checked={contentMode === mode}
                   onChange={() => setContentMode(mode)}
-                  className="accent-blue-500"
+                  className="accent-primary-500"
                 />
                 {t(`export.${mode}`)}
               </label>
@@ -213,7 +213,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
                       checked={bilingualLayout === layout}
                       onChange={() => setBilingualLayout(layout)}
                       disabled={disabled}
-                      className="accent-blue-500"
+                      className="accent-primary-500"
                     />
                     {t(`export.${layout}`)}
                   </label>
@@ -245,7 +245,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
                       setBilingualLayout('interleaved');
                     }
                   }}
-                  className="accent-blue-500"
+                  className="accent-primary-500"
                 />
                 {t(`export.${fmt}`)}
               </label>
@@ -259,7 +259,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
             type="checkbox"
             checked={includeReview}
             onChange={(e) => setIncludeReview(e.target.checked)}
-            className="accent-blue-500"
+            className="accent-primary-500"
           />
           {t('export.includeReview')}
         </label>
@@ -271,7 +271,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
             onClick={handleCopy}
             disabled={busy || isBinaryFormat}
             title={isBinaryFormat ? t('export.binaryNoCopy') : undefined}
-            className="px-4 py-2 text-sm rounded-lg border border-editor-border text-editor-text hover:bg-editor-border/60 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-lg border border-editor-border text-editor-text hover:bg-editor-border/60 active:scale-95 transition-colors disabled:opacity-50"
           >
             {t('export.copyToClipboard')}
           </button>
@@ -279,7 +279,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
             type="button"
             onClick={handleSave}
             disabled={busy}
-            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50"
           >
             {t('export.saveToFile')}
           </button>

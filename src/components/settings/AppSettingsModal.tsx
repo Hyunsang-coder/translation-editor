@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Info, X, KeyRound, Lock, Bot, Copy } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 import { check } from '@tauri-apps/plugin-updater';
 import { getErrorMessage, useAiConfigStore } from '@/stores/aiConfigStore';
@@ -58,8 +59,8 @@ function SettingRow({ label, hint, htmlFor, children }: {
       <label htmlFor={htmlFor} className="shrink-0 text-sm text-editor-text">
         {label}
         {hint && (
-          <span className="ml-1.5 cursor-help text-editor-muted" title={hint} aria-label={hint}>
-            ⓘ
+          <span className="ml-1.5 inline-flex align-middle cursor-help text-editor-muted" title={hint} aria-label={hint}>
+            <Info size={12} />
           </span>
         )}
       </label>
@@ -95,7 +96,7 @@ function SegmentedControl<T extends string>({ value, options, onChange, label }:
           aria-label={option.title}
           title={option.title}
           onClick={() => onChange(option.value)}
-          className={`h-7 rounded-md px-2.5 text-xs font-medium transition-colors ${
+          className={`h-7 rounded-md px-2.5 text-xs font-medium active:scale-95 transition-colors ${
             value === option.value
               ? 'bg-primary-500 text-white shadow-sm'
               : 'text-editor-muted hover:bg-editor-border/60 hover:text-editor-text'
@@ -262,14 +263,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
     <Modal open onClose={onClose} labelId="app-settings-title" className="bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg max-h-[85vh] flex flex-col bg-editor-surface border border-editor-border rounded-xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="h-14 px-5 flex items-center justify-between border-b border-editor-border bg-editor-bg shrink-0">
+        <div className="h-12 px-5 flex items-center justify-between border-b border-editor-border bg-editor-bg shrink-0">
           <h2 id="app-settings-title" className="text-lg font-bold text-editor-text">{t('appSettings.title')}</h2>
           <button 
             onClick={onClose}
-            className="p-2 rounded-md hover:bg-editor-border text-editor-muted hover:text-editor-text transition-colors"
+            className="p-2 rounded-md hover:bg-editor-border text-editor-muted hover:text-editor-text active:scale-95 transition-colors"
             data-testid="app-settings-close-button"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
 
@@ -343,7 +344,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* API Keys & Provider Enable — 쓸 수 있는 provider가 없으면 펼친 채로 연다.
                 접힌 채로 두면 키를 넣을 곳을 못 찾는 것이 이 섹션의 유일한 실패 모드다. */}
             <CollapsibleSection
-                icon="🔑"
+                icon={<KeyRound size={16} />}
                 title={t('appSettings.apiKeys')}
                 summary={usableProviders.join(' · ') || t('appSettings.apiKeysNoneSet')}
                 defaultOpen={usableProviders.length === 0}
@@ -353,7 +354,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     {t('appSettings.apiKeysDescription')}
                 </p>
                 {secureKeyPersistError && (
-                    <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                    <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical/40">
                         <p>{t('appSettings.apiKeysSaveFailed')}</p>
                         <p className="mt-1 break-words opacity-80">
                             {t('appSettings.apiKeysSaveFailedDetail', { message: secureKeyPersistError })}
@@ -383,7 +384,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         {openaiApiKey && (
                             <button
                                 onClick={() => setOpenaiApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                                className="text-xs text-editor-muted hover:text-editor-text active:scale-95 transition-colors"
                             >
                                 {t('common.clear')}
                             </button>
@@ -391,7 +392,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                     <input
                         type="password"
-                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 placeholder-editor-muted"
                         placeholder={t('appSettings.openaiApiKeyPlaceholder')}
                         value={openaiApiKey || ''}
                         onChange={(e) => setOpenaiApiKey(e.target.value)}
@@ -423,7 +424,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         {anthropicApiKey && (
                             <button
                                 onClick={() => setAnthropicApiKey(undefined)}
-                                className="text-xs text-editor-muted hover:text-editor-text transition-colors"
+                                className="text-xs text-editor-muted hover:text-editor-text active:scale-95 transition-colors"
                             >
                                 {t('common.clear')}
                             </button>
@@ -431,7 +432,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     </div>
                     <input
                         type="password"
-                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-editor-muted"
+                        className="w-full h-9 px-3 text-sm rounded bg-editor-bg border border-editor-border text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 placeholder-editor-muted"
                         placeholder={t('appSettings.anthropicApiKeyPlaceholder')}
                         value={anthropicApiKey || ''}
                         onChange={(e) => setAnthropicApiKey(e.target.value)}
@@ -454,14 +455,14 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Security Recovery */}
             {isTauriRuntime() && (
             <CollapsibleSection
-                icon="🔒"
+                icon={<Lock size={16} />}
                 title={t('appSettings.security')}
                 testId="app-settings-security-toggle"
             >
                 <p className="text-xs text-editor-muted">
                     {t('appSettings.securityDescription')}
                 </p>
-                <div className="space-y-2 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+                <div className="space-y-2 p-3 rounded-lg border border-severity-major/30 bg-severity-major/5">
                     <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                             <h4 className="text-sm font-semibold text-editor-text">
@@ -475,7 +476,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             type="button"
                             onClick={() => setShowSecureStorageResetConfirm(true)}
                             disabled={isResettingSecureStorage}
-                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-yellow-500/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/10 transition-colors disabled:opacity-50"
+                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-severity-major/40 text-severity-major/40 hover:bg-severity-major/10 active:scale-95 transition-colors disabled:opacity-50"
                         >
                             {isResettingSecureStorage
                                 ? t('appSettings.secureStorageResetting')
@@ -483,12 +484,12 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         </button>
                     </div>
                     {secureStorageResetMessage && (
-                        <p className="text-[10px] text-green-600 dark:text-green-400 break-words">
+                        <p className="text-[10px] text-diff-insertion break-words">
                             {secureStorageResetMessage}
                         </p>
                     )}
                     {secureStorageResetError && (
-                        <p className="text-[10px] text-red-600 dark:text-red-300 break-words">
+                        <p className="text-[10px] text-severity-critical/40 break-words">
                             {t('appSettings.secureStorageResetFailed', { message: secureStorageResetError })}
                         </p>
                     )}
@@ -499,7 +500,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             {/* Claude Integration */}
             {isTauriRuntime() && (
             <CollapsibleSection
-                icon="🤖"
+                icon={<Bot size={16} />}
                 title={t('appSettings.claudeIntegration.title')}
                 summary={desktopReg?.status === 'registered' ? t('appSettings.claudeDesktop.registered') : undefined}
                 testId="app-settings-claude-toggle"
@@ -514,15 +515,15 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <div className="flex items-center gap-3 flex-wrap">
                         {desktopReg?.status === 'registered' ? (
                             <>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-diff-insertion/10 text-diff-insertion dark:bg-diff-insertion/30 dark:text-diff-insertion">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-diff-insertion" />
                                     {t('appSettings.claudeDesktop.registered')}
                                 </span>
                                 <button
                                     type="button"
                                     onClick={() => handleToggleRegistration('unregister_claude_desktop_mcp', setDesktopBusy, setDesktopReg)}
                                     disabled={desktopBusy}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50"
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-editor-border text-editor-muted hover:text-severity-critical hover:border-severity-critical/40 active:scale-95 transition-colors disabled:opacity-50"
                                 >
                                     {t('appSettings.claudeDesktop.unregister')}
                                 </button>
@@ -532,7 +533,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                                 type="button"
                                 onClick={() => handleToggleRegistration('register_claude_desktop_mcp', setDesktopBusy, setDesktopReg)}
                                 disabled={desktopBusy}
-                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50"
                             >
                                 {desktopBusy
                                     ? t('appSettings.claudeDesktop.registering')
@@ -545,7 +546,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                         ) : null}
 
                         {mcpStatus?.bridgePort && (
-                            <span className="text-xs text-green-600 dark:text-green-400">
+                            <span className="text-xs text-diff-insertion">
                                 {t('appSettings.claudeDesktop.bridgeActive', { port: mcpStatus.bridgePort })}
                             </span>
                         )}
@@ -558,7 +559,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
 
                     {/* Manual Setup */}
                     <details className="group">
-                        <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text transition-colors select-none">
+                        <summary className="text-xs text-editor-muted cursor-pointer hover:text-editor-text active:scale-95 transition-colors select-none">
                             {t('appSettings.claudeDesktop.manualSetup')}
                         </summary>
                         <div className="mt-2 space-y-1.5">
@@ -568,9 +569,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                                 <button
                                     type="button"
                                     onClick={() => handleCopySnippet(DESKTOP_SNIPPET, 'desktop')}
-                                    className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                                    className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text active:scale-95 transition-colors"
                                 >
-                                    {copiedId === 'desktop' ? t('appSettings.claudeDesktop.copied') : '📋'}
+                                    {copiedId === 'desktop' ? t('appSettings.claudeDesktop.copied') : <Copy size={11} />}
                                 </button>
                             </div>
                         </div>
@@ -580,7 +581,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                 {/* Sub-card: Claude Code — Desktop 쪽 수동 설정과 대칭으로 접는다. 내용이 스니펫
                     하나뿐이라 펼쳐 두면 이 카드가 섹션에서 가장 높은 칸이 된다. */}
                 <details className="p-3 rounded-lg border border-editor-border bg-editor-bg/50">
-                    <summary className="text-xs font-semibold text-editor-muted uppercase tracking-wider cursor-pointer hover:text-editor-text transition-colors select-none">
+                    <summary className="text-xs font-semibold text-editor-muted uppercase tracking-wider cursor-pointer hover:text-editor-text active:scale-95 transition-colors select-none">
                         {t('appSettings.claudeCode.title')}
                     </summary>
                     <div className="mt-2 space-y-1.5">
@@ -590,9 +591,9 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             <button
                                 type="button"
                                 onClick={() => handleCopySnippet(CODE_SNIPPET, 'code')}
-                                className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                                className="absolute top-1.5 right-1.5 px-2 py-0.5 text-[10px] font-medium rounded border border-editor-border bg-editor-surface text-editor-muted hover:text-editor-text active:scale-95 transition-colors"
                             >
-                                {copiedId === 'code' ? t('appSettings.claudeCode.copied') : '📋'}
+                                {copiedId === 'code' ? t('appSettings.claudeCode.copied') : <Copy size={11} />}
                             </button>
                         </div>
                     </div>
@@ -613,7 +614,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             <button
                                 type="button"
                                 onClick={handleCheckForUpdate}
-                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-editor-bg border border-editor-border hover:bg-editor-border hover:text-editor-text transition-colors"
+                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-editor-bg border border-editor-border hover:bg-editor-border hover:text-editor-text active:scale-95 transition-colors"
                             >
                                 {t('update.checkForUpdate')}
                             </button>
@@ -625,7 +626,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             <button
                                 type="button"
                                 onClick={() => setCheckState('idle')}
-                                className="text-xs text-green-600 dark:text-green-400 hover:underline cursor-pointer"
+                                className="text-xs text-diff-insertion hover:underline cursor-pointer"
                             >
                                 {t('update.upToDate')}
                             </button>
@@ -634,7 +635,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             <button
                                 type="button"
                                 onClick={() => setCheckState('idle')}
-                                className="text-xs text-red-500 hover:underline cursor-pointer"
+                                className="text-xs text-severity-critical hover:underline cursor-pointer"
                             >
                                 {t('update.checkFailed')}
                             </button>
@@ -660,7 +661,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
              <span className="text-xs text-editor-muted mr-auto">{t('appSettings.footerAutoSave')}</span>
              <button 
                 onClick={onClose}
-                className="px-4 py-1.5 rounded-md bg-editor-surface border border-editor-border hover:bg-editor-border text-sm font-medium transition-colors"
+                className="px-4 py-1.5 rounded-md bg-editor-surface border border-editor-border hover:bg-editor-border text-sm font-medium active:scale-95 transition-colors"
             >
                 {t('common.close')}
             </button>
@@ -687,7 +688,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
           </p>
         </div>
         {secureStorageResetError && (
-          <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300 break-words">
+          <p className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical/40 break-words">
             {t('appSettings.secureStorageResetFailed', { message: secureStorageResetError })}
           </p>
         )}
@@ -696,7 +697,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             type="button"
             onClick={() => setShowSecureStorageResetConfirm(false)}
             disabled={isResettingSecureStorage}
-            className="px-3 py-1.5 rounded-md border border-editor-border text-sm text-editor-muted hover:text-editor-text hover:bg-editor-bg transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md border border-editor-border text-sm text-editor-muted hover:text-editor-text hover:bg-editor-bg active:scale-95 transition-colors disabled:opacity-50"
           >
             {t('common.cancel')}
           </button>
@@ -704,7 +705,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             type="button"
             onClick={handleResetSecureStorage}
             disabled={isResettingSecureStorage}
-            className="px-3 py-1.5 rounded-md bg-red-600 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md bg-severity-critical text-sm font-medium text-white hover:bg-severity-critical/80 active:scale-95 transition-colors disabled:opacity-50"
           >
             {isResettingSecureStorage
               ? t('appSettings.secureStorageResetting')

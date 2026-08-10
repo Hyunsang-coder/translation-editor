@@ -6,6 +6,8 @@
 
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/react';
 import { Fragment } from 'react';
+import { Check } from 'lucide-react';
+import { FOCUS_RING } from '@/constants/styles';
 
 export interface SelectOption {
   value: string;
@@ -70,9 +72,10 @@ export function Select({
     return placeholder || '';
   };
 
+  // 높이 사다리: sm=30(패널 내부 컴팩트) / md=34(표준 인터랙티브 컨트롤)
   const sizeClasses = size === 'sm'
-    ? 'h-7 text-[11px] px-2'
-    : 'h-8 text-[11px] px-3';
+    ? 'h-[30px] text-xs px-2.5'
+    : 'h-[34px] text-sm px-3';
 
   // anchor prop 설정 (Headless UI가 자동으로 Portal과 위치 처리)
   const anchorConfig = anchorPosition === 'top'
@@ -85,9 +88,9 @@ export function Select({
         <ListboxButton
           className={`${sizeClasses} w-full rounded-lg border border-editor-border bg-editor-bg text-editor-text
                      flex items-center justify-between gap-2
-                     focus:outline-none focus:ring-2 focus:ring-primary-500
+                     focus:outline-none ${FOCUS_RING}
                      disabled:opacity-50 disabled:cursor-not-allowed
-                     hover:bg-editor-surface transition-colors`}
+                     hover:bg-editor-surface active:scale-95 transition-colors`}
           aria-label={ariaLabel}
           title={title}
           data-testid={dataTestId}
@@ -112,7 +115,7 @@ export function Select({
           {hasGroups(options) ? (
             options.map((group) => (
               <Fragment key={group.label}>
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-editor-muted uppercase tracking-wider bg-editor-surface">
+                <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-editor-muted bg-editor-surface">
                   {group.label}
                 </div>
                 {group.options.map((option) => (
@@ -120,14 +123,16 @@ export function Select({
                     key={option.value}
                     value={option.value}
                     disabled={option.disabled ?? false}
-                    className="group flex items-center gap-2 px-3 py-1.5 text-[11px] text-editor-text
+                    className="group flex items-center gap-2 px-3 py-1.5 text-sm text-editor-text
                                cursor-pointer select-none
                                data-[focus]:bg-primary-100 dark:data-[focus]:bg-primary-900
                                data-[selected]:text-primary-600 dark:data-[selected]:text-primary-400
                                data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
                   >
-                    <span className="w-3 shrink-0">
-                      <span className="hidden group-data-[selected]:inline text-primary-500">✓</span>
+                    <span className="w-3.5 shrink-0">
+                      <span className="hidden group-data-[selected]:inline text-primary-500">
+                        <Check size={13} />
+                      </span>
                     </span>
                     <span className="truncate">{option.label}</span>
                   </ListboxOption>
@@ -140,14 +145,16 @@ export function Select({
                 key={option.value}
                 value={option.value}
                 disabled={option.disabled ?? false}
-                className="group flex items-center gap-2 px-3 py-1.5 text-[11px] text-editor-text
+                className="group flex items-center gap-2 px-3 py-1.5 text-sm text-editor-text
                            cursor-pointer select-none
                            data-[focus]:bg-primary-100 dark:data-[focus]:bg-primary-900
                            data-[selected]:text-primary-600 dark:data-[selected]:text-primary-400
                            data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed"
               >
-                <span className="w-3 shrink-0">
-                  <span className="hidden group-data-[selected]:inline text-primary-500">✓</span>
+                <span className="w-3.5 shrink-0">
+                  <span className="hidden group-data-[selected]:inline text-primary-500">
+                    <Check size={13} />
+                  </span>
                 </span>
                 <span className="truncate">{option.label}</span>
               </ListboxOption>

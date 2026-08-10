@@ -15,6 +15,7 @@ import {
 } from '@/components/editor/useAlignmentAnnotations';
 import type { TranslationUnit, TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
 import type { IssueSeverity } from '@/stores/reviewStore';
+import { CAPTION } from '@/constants/styles';
 
 interface NumberedOp {
   op: AlignOp;
@@ -128,8 +129,7 @@ const EMPTY_DOC: TranslationUnitDocument = { type: 'doc', content: [] };
 /** 문서가 조용해진 뒤에만 정렬을 다시 계산한다 (스펙 §7 — onUpdate에 걸지 말 것). */
 const RECOMPUTE_DEBOUNCE_MS = 300;
 
-const HEADER_CELL_CLASS =
-  'text-[10px] font-extrabold tracking-[.12em] uppercase text-editor-muted flex items-center';
+const HEADER_CELL_CLASS = `${CAPTION} flex items-center`;
 
 function columnLabel(base: string, language: string | null): string {
   const code = languageShortCode(language);
@@ -279,15 +279,15 @@ export function AlignmentView(): JSX.Element {
             return (
               <div
                 key={`mismatch-${block.items[0]?.number ?? 0}`}
-                className="bg-amber-50 border-b border-editor-border/40"
+                className="bg-severity-major/[0.06] border-b border-editor-border/40"
                 data-testid="alignment-mismatch-band"
               >
-                <div className="flex items-center gap-2.5 px-[18px] py-2 border-b border-dashed border-amber-400">
-                  <TriangleAlert size={15} className="shrink-0 text-amber-700" />
-                  <span className="text-xs font-bold text-amber-700">
+                <div className="flex items-center gap-2.5 px-[18px] py-2 border-b border-dashed border-severity-major/60">
+                  <TriangleAlert size={15} className="shrink-0 text-severity-major" />
+                  <span className="text-xs font-bold text-severity-major">
                     {mismatchHeadline(t, block, totals)}
                   </span>
-                  <span className="text-[11px] text-amber-800">
+                  <span className="text-[11px] text-severity-major">
                     {t('editor.alignment.mismatch.note')}
                   </span>
                   {(() => {
@@ -297,7 +297,7 @@ export function AlignmentView(): JSX.Element {
                       <button
                         type="button"
                         onClick={() => jumpToUnit(entry.id, entry.field)}
-                        className="ml-auto h-6 px-2.5 shrink-0 border border-amber-700 bg-white rounded text-[11px] font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                        className="ml-auto h-6 px-2.5 shrink-0 border border-severity-major bg-editor-bg rounded text-[11px] font-bold text-severity-major hover:bg-severity-major/10 active:scale-95 transition-colors"
                         data-testid="alignment-band-open"
                       >
                         {t('editor.alignment.mismatch.openInDocument')}
@@ -336,7 +336,7 @@ export function AlignmentView(): JSX.Element {
 
       {/* 하단 정렬 요약 */}
       <div className="h-14 shrink-0 border-t border-editor-border bg-editor-surface flex items-center gap-[18px] px-[18px]">
-        <span className="text-[10px] font-extrabold tracking-[.1em] uppercase text-editor-muted shrink-0">
+        <span className={`${CAPTION} shrink-0`}>
           {t('editor.alignment.summaryLabel')}
         </span>
         <span className="text-sm font-bold shrink-0">
@@ -346,19 +346,19 @@ export function AlignmentView(): JSX.Element {
             {t('editor.alignment.summaryPaired', { count: alignResult.pairedCount })}
           </span>
           <span className="mx-1.5 text-editor-muted font-normal">·</span>
-          <span className="text-amber-700">
+          <span className="text-severity-major">
             {t('editor.alignment.summaryMismatched', { count: alignResult.mismatchCount })}
           </span>
         </span>
 
         <span className="flex-1 max-w-[420px] h-2 bg-editor-border rounded overflow-hidden flex" aria-hidden="true">
           <span className="h-full bg-primary-500" style={{ width: `${pairedPercent}%` }} />
-          <span className="h-full bg-amber-400" style={{ width: `${100 - pairedPercent}%` }} />
+          <span className="h-full bg-severity-major/70" style={{ width: `${100 - pairedPercent}%` }} />
         </span>
 
         {/* degraded를 조용히 넘기지 않는다 — 순번 폴백 결과를 정상으로 믿게 두면 안 된다 */}
         {alignResult.degraded && (
-          <span className="text-[11px] font-semibold text-amber-700 shrink-0" data-testid="alignment-degraded">
+          <span className="text-[11px] font-semibold text-severity-major shrink-0" data-testid="alignment-degraded">
             {t('editor.alignment.degraded')}
           </span>
         )}

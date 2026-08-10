@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { sortReviewIssuesByDocumentOrder } from './reviewIssueOrder';
+import { getIssueTypeColor, getSeverityColor, getSeverityChipColor } from './issueStyles';
 
 interface ReviewResultsTableProps {
   issues: ReviewIssue[];
@@ -28,43 +29,11 @@ const issueTypeLabelKeys: Record<IssueType, string> = {
   terminology: 'review.typeTerminology',
 };
 
-function getIssueTypeColor(type: IssueType): string {
-  switch (type) {
-    case 'mistranslation':
-      return 'bg-red-500/10 text-red-600 dark:text-red-400';
-    case 'omission':
-      return 'bg-orange-500/10 text-orange-600 dark:text-orange-400';
-    case 'addition':
-      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
-    case 'grammar':
-      return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400';
-    case 'awkward':
-      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-    case 'terminology':
-      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
-    default:
-      return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
-  }
-}
-
 const severityLabelKeys: Record<IssueSeverity, string> = {
   critical: 'review.severityCritical',
   major: 'review.severityMajor',
   minor: 'review.severityMinor',
 };
-
-function getSeverityColor(severity: IssueSeverity): string {
-  switch (severity) {
-    case 'critical':
-      return 'text-red-600 dark:text-red-400';
-    case 'major':
-      return 'text-orange-600 dark:text-orange-400';
-    case 'minor':
-      return 'text-blue-500 dark:text-blue-400';
-    default:
-      return 'text-gray-500';
-  }
-}
 
 export function ReviewResultsTable({
   issues,
@@ -125,12 +94,12 @@ export function ReviewResultsTable({
 
     return (
       <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-500/10 mb-3">
-          <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-diff-insertion/10 mb-3">
+          <svg className="w-6 h-6 text-diff-insertion" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+        <p className="text-sm text-diff-insertion font-semibold">
           {message}
         </p>
       </div>
@@ -155,10 +124,10 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('critical')}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded-full text-[10px] active:scale-95 transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.includes('critical')
-                    ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                    ? getSeverityChipColor('critical')
+                    : 'bg-editor-surface text-editor-muted/60'
                 }`}
               >
                 {t(severityLabelKeys.critical)} {severityCounts.critical}
@@ -168,10 +137,10 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('major')}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded-full text-[10px] active:scale-95 transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.includes('major')
-                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                    ? getSeverityChipColor('major')
+                    : 'bg-editor-surface text-editor-muted/60'
                 }`}
               >
                 {t(severityLabelKeys.major)} {severityCounts.major}
@@ -181,10 +150,10 @@ export function ReviewResultsTable({
               <button
                 type="button"
                 onClick={() => onToggleSeverity?.('minor')}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded-full text-[10px] active:scale-95 transition-colors cursor-pointer ${
                   !severityFilter || severityFilter.includes('minor')
-                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                    : 'bg-gray-500/5 text-gray-400 dark:text-gray-600'
+                    ? getSeverityChipColor('minor')
+                    : 'bg-editor-surface text-editor-muted/60'
                 }`}
               >
                 {t(severityLabelKeys.minor)} {severityCounts.minor}
@@ -195,32 +164,32 @@ export function ReviewResultsTable({
         {/* 유형별 요약 */}
         <div className="flex items-center gap-2 flex-wrap">
           {counts.mistranslation && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-600 dark:text-red-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeMistranslation', '오역')} {counts.mistranslation}
             </span>
           )}
           {counts.omission && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-orange-500/10 text-orange-600 dark:text-orange-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeOmission', '누락')} {counts.omission}
             </span>
           )}
           {counts.addition && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeAddition', '추가')} {counts.addition}
             </span>
           )}
           {counts.grammar && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeGrammar', '문법')} {counts.grammar}
             </span>
           )}
           {counts.awkward && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeAwkward', '직역투')} {counts.awkward}
             </span>
           )}
           {counts.terminology && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-editor-surface text-editor-muted">
               {t('review.typeTerminology', '용어')} {counts.terminology}
             </span>
           )}
@@ -234,7 +203,7 @@ export function ReviewResultsTable({
             type="checkbox"
             checked={allChecked}
             onChange={() => onToggleAll?.()}
-            className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+            className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 cursor-pointer"
             aria-label={t('review.selectAll', '전체 선택')}
           />
           <span>{t('review.selectAll', '전체 선택')}</span>
@@ -256,7 +225,7 @@ export function ReviewResultsTable({
                 type="checkbox"
                 checked={issue.checked}
                 onChange={() => onToggleCheck?.(issue.id)}
-                className="w-3.5 h-3.5 shrink-0 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+                className="w-3.5 h-3.5 shrink-0 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 cursor-pointer"
                 aria-label={t('review.selectIssue', '이슈 선택')}
               />
               <span className={`text-[10px] font-bold ${getSeverityColor(issue.severity)}`}>
@@ -293,7 +262,7 @@ export function ReviewResultsTable({
                 <button
                   type="button"
                   onClick={() => onApply(issue)}
-                  className="h-7 px-2 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                  className="h-[30px] px-2.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors"
                   title={t('review.apply', '적용')}
                 >
                   {t('review.apply', '적용')}
@@ -303,7 +272,7 @@ export function ReviewResultsTable({
                 <button
                   type="button"
                   onClick={() => onViewInDocument(issue)}
-                  className="h-7 px-2 text-xs rounded bg-editor-surface text-editor-text hover:bg-editor-border transition-colors"
+                  className="h-[30px] px-2.5 text-xs rounded bg-editor-surface text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
                   title={t('review.viewInDocument', '본문에서 보기')}
                 >
                   {t('review.viewInDocument', '본문에서 보기')}
@@ -313,7 +282,7 @@ export function ReviewResultsTable({
                 <button
                   type="button"
                   onClick={() => onCopy(issue)}
-                  className="h-7 px-2 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors"
+                  className="h-[30px] px-2.5 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 active:scale-95 transition-colors"
                   title={t('review.copy', '복사')}
                 >
                   {t('review.copy', '복사')}
@@ -323,7 +292,7 @@ export function ReviewResultsTable({
                 <button
                   type="button"
                   onClick={() => onIgnore(issue.id)}
-                  className="h-7 px-2 text-xs rounded bg-editor-surface text-editor-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                  className="h-[30px] px-2.5 text-xs rounded bg-editor-surface text-editor-muted hover:bg-editor-border hover:text-editor-text active:scale-95 transition-colors"
                   title={t('review.ignore', '무시')}
                 >
                   {t('review.ignore', '무시')}

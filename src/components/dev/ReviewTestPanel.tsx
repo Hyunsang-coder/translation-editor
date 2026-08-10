@@ -19,6 +19,7 @@ import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { normalizeForSearch, buildNormalizedTextWithMapping } from '@/utils/normalizeForSearch';
 import { extractTextFromTipTap } from '@/utils/tipTapText';
 import type { ReviewIssue } from '@/stores/reviewStore';
+import { getIssueTypeColor } from '@/components/review/issueStyles';
 
 /**
  * Source 텍스트의 언어를 감지 (간단한 휴리스틱)
@@ -315,7 +316,7 @@ export function ReviewTestPanel(): JSX.Element {
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-red-500/10 border-b border-red-500/30 text-red-500 text-xs">
+        <div className="p-3 bg-severity-critical/10 border-b border-severity-critical/30 text-severity-critical text-xs">
           {error}
         </div>
       )}
@@ -383,13 +384,7 @@ export function ReviewTestPanel(): JSX.Element {
                 <div key={issue.id} className="border border-editor-border rounded p-3 text-xs space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">#{idx + 1}</span>
-                    <span className={`px-1.5 py-0.5 rounded ${issue.type === 'mistranslation' ? 'bg-red-500/10 text-red-500' :
-                        issue.type === 'omission' ? 'bg-orange-500/10 text-orange-500' :
-                          issue.type === 'grammar' ? 'bg-yellow-500/10 text-yellow-500' :
-                            issue.type === 'awkward' ? 'bg-amber-500/10 text-amber-500' :
-                              issue.type === 'terminology' ? 'bg-blue-500/10 text-blue-500' :
-                                'bg-purple-500/10 text-purple-500'
-                      }`}>
+                    <span className={`px-1.5 py-0.5 rounded-full ${getIssueTypeColor(issue.type)}`}>
                       {issue.type}
                     </span>
                     <span className="text-editor-muted">세그먼트 #{issue.segmentOrder}</span>
@@ -406,7 +401,7 @@ export function ReviewTestPanel(): JSX.Element {
                   </div>
                   <div>
                     <div className="text-editor-muted mb-1">suggestedFix:</div>
-                    <div className="bg-green-500/10 p-2 rounded break-all">{issue.suggestedFix || '-'}</div>
+                    <div className="bg-diff-insertion/10 p-2 rounded break-all">{issue.suggestedFix || '-'}</div>
                   </div>
                   <div>
                     <div className="text-editor-muted mb-1">description:</div>
@@ -433,12 +428,12 @@ export function ReviewTestPanel(): JSX.Element {
                 <div
                   key={result.issueId}
                   className={`border rounded p-3 text-xs space-y-2 ${result.found
-                      ? 'border-green-500/30 bg-green-500/5'
-                      : 'border-red-500/30 bg-red-500/5'
+                      ? 'border-diff-insertion/30 bg-diff-insertion/5'
+                      : 'border-severity-critical/30 bg-severity-critical/5'
                     }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-white ${result.found ? 'bg-green-500' : 'bg-red-500'}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-white ${result.found ? 'bg-diff-insertion' : 'bg-severity-critical'}`}>
                       {result.found ? 'FOUND' : 'NOT FOUND'}
                     </span>
                     <span className="font-medium">#{resultIdx + 1}</span>
@@ -457,22 +452,22 @@ export function ReviewTestPanel(): JSX.Element {
                   </div>
                   {result.found && result.editorTextSnippet && (
                     <div>
-                      <div className="text-green-600 mb-1">에디터에서 발견:</div>
-                      <div className="bg-green-500/10 p-2 rounded break-all font-mono">
+                      <div className="text-diff-insertion mb-1">에디터에서 발견:</div>
+                      <div className="bg-diff-insertion/10 p-2 rounded break-all font-mono">
                         "{result.editorTextSnippet}..."
                       </div>
                     </div>
                   )}
                   {!result.found && result.reason && (
                     <div>
-                      <div className="text-red-500 mb-1">실패 원인:</div>
-                      <div className="text-red-400">{result.reason}</div>
+                      <div className="text-severity-critical mb-1">실패 원인:</div>
+                      <div className="text-severity-critical/80">{result.reason}</div>
                     </div>
                   )}
                   {!result.found && result.possibleMatch && (
                     <div>
-                      <div className="text-yellow-500 mb-1">유사 텍스트:</div>
-                      <div className="bg-yellow-500/10 p-2 rounded break-all font-mono">
+                      <div className="text-severity-major mb-1">유사 텍스트:</div>
+                      <div className="bg-severity-major/10 p-2 rounded break-all font-mono">
                         "{result.possibleMatch}"
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, PanelLeftClose, PanelRightClose } from 'lucide-react';
+import { ExternalLink, PanelLeftClose, PanelRightClose, Plus, X } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { MAX_CHAT_SESSIONS } from '@/stores/chatStore.types';
@@ -12,7 +12,11 @@ import { ChatContent } from '@/components/chat/ChatContent';
 import { useResizeHandle } from '@/hooks/useResizeHandle';
 import { usePanelDrag } from '@/hooks/usePanelDrag';
 import { LAYOUT } from '@/constants/layout';
+import { BAND_1 } from '@/constants/styles';
 import type { SidebarSide, PanelType } from '@/types';
+
+/** 밴드 1 (36px) — EditorCanvasTipTap의 보기 모드 줄, AlignmentView 헤더와 같은 선 */
+export const SIDEBAR_BAND_1 = BAND_1;
 import { chatPanelId, isChatPanel, getChatSessionId } from '@/types';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
@@ -148,8 +152,8 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
       className={`shrink-0 h-full min-h-0 ${borderClass} border-editor-border bg-editor-bg overflow-hidden relative flex flex-col ${isDragOverThis ? 'ring-2 ring-primary-500/30' : ''}`}
       style={{ width }}
     >
-      {/* Tab Header */}
-      <div className="h-10 border-b border-editor-border flex items-center bg-editor-bg select-none shrink-0">
+      {/* Tab Header — 밴드 1 (36px) */}
+      <div className={`${SIDEBAR_BAND_1} border-b border-editor-border flex items-center bg-editor-raised select-none shrink-0`}>
         {/* Hide button (폭 0 완전 숨김) */}
         <button
           type="button"
@@ -173,7 +177,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
                   onMouseDown={(e) => handleTabMouseDown(panel, label, e)}
                   onClick={() => handleTabClick(panel)}
                   className={`
-                    group relative h-10 px-3 flex items-center gap-1.5 text-xs font-medium cursor-pointer border-r border-editor-border min-w-[60px] max-w-[180px]
+                    group relative ${SIDEBAR_BAND_1} px-3 flex items-center gap-1.5 text-xs font-semibold cursor-pointer border-r border-editor-border min-w-[60px] max-w-[180px]
                     ${activePanel === panel
                       ? 'bg-editor-surface text-primary-500 border-b-2 border-b-primary-500'
                       : 'text-editor-muted hover:bg-editor-surface hover:text-editor-text'
@@ -202,12 +206,12 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
                       </button>
                       <button
                         type="button"
-                        className="p-0.5 rounded hover:bg-editor-border/50 text-[10px] leading-none"
+                        className="p-0.5 rounded hover:bg-editor-border/50 leading-none"
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => void handleCloseChatTab(panel, e)}
                         title={t('common.close')}
                       >
-                        ✕
+                        <X size={12} />
                       </button>
                     </div>
                   )}
@@ -224,10 +228,11 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
             <button
               type="button"
               onClick={handleAddChatSession}
-              className="h-10 px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface transition-colors border-r border-editor-border"
+              className={`${SIDEBAR_BAND_1} px-3 flex items-center justify-center text-editor-muted hover:text-primary-500 hover:bg-editor-surface active:scale-95 transition-colors border-r border-editor-border`}
               title={t('chat.newChat')}
+              aria-label={t('chat.newChat')}
             >
-              +
+              <Plus size={14} />
             </button>
           )}
         </div>

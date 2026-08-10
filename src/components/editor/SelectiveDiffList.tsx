@@ -43,7 +43,7 @@ export function SelectiveDiffList({
               type="checkbox"
               checked={allSelected}
               onChange={(event) => onToggleAll(event.currentTarget.checked)}
-              className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+              className="w-3.5 h-3.5 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 cursor-pointer"
               aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
             />
             <span className="text-xs text-editor-text">
@@ -57,10 +57,10 @@ export function SelectiveDiffList({
         <div className="grid grid-cols-[auto_auto_1fr_1fr] gap-3 px-4 pb-2">
           <span className="w-3.5" aria-hidden />
           <span className="w-8" aria-hidden />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-red-500/80">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-severity-critical/80">
             {t('editor.selectiveDiff.original', '기존')}
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-wide text-green-600/80">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-diff-insertion/80">
             {t('editor.selectiveDiff.suggested', '제안')}
           </span>
         </div>
@@ -111,7 +111,7 @@ function SelectiveDiffRow({
         type="checkbox"
         checked={selected}
         onChange={onToggle}
-        className="mt-0.5 w-3.5 h-3.5 shrink-0 rounded border-editor-border text-primary-500 focus:ring-primary-500 cursor-pointer"
+        className="mt-0.5 w-3.5 h-3.5 shrink-0 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 cursor-pointer"
         aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
       />
       <span className="mt-0.5 shrink-0 text-[10px] text-editor-muted font-medium tabular-nums w-8">
@@ -127,7 +127,7 @@ function SelectiveDiffRow({
             part.added ? null : part.removed ? (
               <span
                 key={i}
-                className="bg-red-200 dark:bg-red-900/50 text-red-900 dark:text-red-100 line-through decoration-red-400 decoration-1 rounded-[2px] px-0.5"
+                className="bg-severity-critical/20 dark:bg-severity-critical/50 text-severity-critical/10 line-through decoration-severity-critical decoration-1 rounded-[2px] px-0.5"
               >
                 {part.value}
               </span>
@@ -139,7 +139,7 @@ function SelectiveDiffRow({
           <>
             {unit.originalText}
             {isDeletion && (
-              <span className="ml-1 text-[10px] text-red-500/80">
+              <span className="ml-1 text-[10px] text-severity-critical/80">
                 {t('editor.selectiveDiff.removed', '(삭제)')}
               </span>
             )}
@@ -156,7 +156,7 @@ function SelectiveDiffRow({
             part.removed ? null : part.added ? (
               <span
                 key={i}
-                className="bg-green-200 dark:bg-green-900/50 text-green-900 dark:text-green-100 rounded-[2px] px-0.5"
+                className="bg-diff-insertion/20 dark:bg-diff-insertion/50 text-diff-insertion/10 rounded-[2px] px-0.5"
               >
                 {part.value}
               </span>
@@ -168,7 +168,7 @@ function SelectiveDiffRow({
           <>
             {unit.polishedText}
             {isInsertion && (
-              <span className="ml-1 text-[10px] text-green-600/80">
+              <span className="ml-1 text-[10px] text-diff-insertion/80">
                 {t('editor.selectiveDiff.added', '(추가)')}
               </span>
             )}

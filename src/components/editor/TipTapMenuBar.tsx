@@ -421,7 +421,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
           <button
             type="button"
             onClick={() => editor.chain().focus().clearAppliedChangeHighlights().run()}
-            className={`${btnBase} text-emerald-600 dark:text-emerald-400`}
+            className={`${btnBase} text-diff-insertion`}
             title={t('editor.menuBar.clearAppliedChanges')}
             aria-label={t('editor.menuBar.clearAppliedChanges')}
           >

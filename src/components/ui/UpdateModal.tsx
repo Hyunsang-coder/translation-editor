@@ -32,23 +32,23 @@ export function UpdateModal({
 
   return (
     <Modal open={isOpen} onClose={onDismiss} labelId="update-modal-title" className="bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[400px] p-6">
+      <div className="bg-editor-bg rounded-lg shadow-xl w-[400px] p-6">
         <h2 id="update-modal-title" className="text-lg font-semibold mb-4">
           {t('update.newVersionAvailable', '새로운 버전이 있습니다')}
         </h2>
 
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
+        <p className="text-editor-text mb-4">
           {t('update.versionInfo', 'OddEyes.ai {{version}} 버전을 사용할 수 있습니다.', { version })}
         </p>
 
         {releaseNotes && (
-          <div className="bg-gray-100 dark:bg-gray-700 rounded p-3 mb-4 max-h-32 overflow-y-auto text-sm prose prose-sm dark:prose-invert max-w-none">
+          <div className="bg-editor-surface rounded p-3 mb-4 max-h-32 overflow-y-auto text-sm prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{releaseNotes}</ReactMarkdown>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded p-3 mb-4 text-sm">
+          <div className="bg-severity-critical/10 dark:bg-severity-critical/30 text-severity-critical/40 rounded p-3 mb-4 text-sm">
             <p>{t('update.downloadFailed', '다운로드에 실패했습니다. 나중에 다시 시도해주세요.')}</p>
             <p className="mt-1 text-xs opacity-75 font-mono">{error}</p>
           </div>
@@ -60,16 +60,16 @@ export function UpdateModal({
               <span>{t('update.downloading', '다운로드 중...')}</span>
               <span>{progress}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+            <div className="w-full bg-editor-border rounded-full h-2 mb-3">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all"
+                className="bg-primary-500 h-2 rounded-full transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
             <div className="flex justify-end">
               <button
                 onClick={onCancel}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                className="px-4 py-2 text-editor-text hover:bg-editor-surface rounded"
               >
                 {t('update.cancel', '취소')}
               </button>
@@ -79,20 +79,20 @@ export function UpdateModal({
           <div className="flex justify-between">
             <button
               onClick={onSkipVersion}
-              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              className="px-3 py-2 text-sm text-editor-muted hover:text-editor-text "
             >
               {t('update.skipVersion', '이 버전 건너뛰기')}
             </button>
             <div className="flex gap-3">
               <button
                 onClick={onDismiss}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                className="px-4 py-2 text-editor-text hover:bg-editor-surface rounded"
               >
                 {t('update.later', '나중에')}
               </button>
               <button
                 onClick={onUpdate}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600"
               >
                 {t('update.updateNow', '지금 업데이트')}
               </button>

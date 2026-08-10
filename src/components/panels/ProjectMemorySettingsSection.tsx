@@ -87,7 +87,7 @@ function RowMenu({
             type="button"
             data-testid="project-memory-delete"
             disabled={deleteDisabled}
-            className="block w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+            className="block w-full px-3 py-1.5 text-left text-xs text-severity-critical hover:bg-severity-critical/10 disabled:opacity-50"
             onClick={() => {
               setOpen(false);
               onDelete();
@@ -387,7 +387,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
               {item.replacement && <span className="text-editor-muted">→ {item.replacement}</span>}
               <button
                 type="button"
-                className="ml-auto shrink-0 text-editor-muted opacity-50 transition-opacity hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100"
+                className="ml-auto shrink-0 text-editor-muted opacity-50 transition-opacity hover:text-severity-critical group-hover:opacity-100 focus-visible:opacity-100"
                 onClick={() => void removeForbiddenTerm(item.id).catch(reportError)}
               >
                 {t('common.delete', '삭제')}

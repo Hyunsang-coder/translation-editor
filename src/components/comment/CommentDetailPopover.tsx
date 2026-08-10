@@ -87,7 +87,7 @@ export function CommentDetailPopover({
             “{comment.excerpt}”
           </div>
           {comment.resolved && !editing && (
-            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 bg-emerald-500/10">
+            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium text-diff-insertion bg-diff-insertion/10">
               {t('comment.resolvedBadge', '해결됨')}
             </span>
           )}
@@ -125,7 +125,7 @@ export function CommentDetailPopover({
               w-full resize-none rounded-md px-2 py-1.5 text-xs
               bg-editor-bg text-editor-text
               border border-editor-border
-              focus:outline-none focus:ring-1 focus:ring-blue-500
+              focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2
             "
           />
           <div className="mt-2 flex justify-end gap-1.5">
@@ -145,8 +145,8 @@ export function CommentDetailPopover({
               disabled={!value.trim()}
               className="
                 px-2.5 py-1 text-xs rounded-md font-medium
-                bg-blue-600 text-white
-                hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed
+                bg-primary-500 text-white
+                hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed
               "
             >
               {t('common.save', '저장')}
@@ -167,7 +167,7 @@ export function CommentDetailPopover({
             className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
               comment.resolved
                 ? 'text-editor-muted hover:bg-editor-bg'
-                : 'text-emerald-600 hover:bg-emerald-500/10'
+                : 'text-diff-insertion hover:bg-diff-insertion/10'
             }`}
             title={
               comment.resolved
@@ -183,7 +183,7 @@ export function CommentDetailPopover({
           <button
             type="button"
             onClick={onDelete}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-500 hover:bg-red-500/10"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-severity-critical hover:bg-severity-critical/10"
             title={t('common.delete', '삭제')}
           >
             <Trash2 size={14} />

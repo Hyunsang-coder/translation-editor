@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, MessageSquarePlus } from 'lucide-react';
+import { Paperclip, MessageSquarePlus, X, FileText, FileChartColumn } from 'lucide-react';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { useChatStore, MAX_CHAT_SESSIONS } from '@/stores/chatStore';
 import {
@@ -923,13 +923,13 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                     <button
                       type="button"
                       className="absolute -left-2 -top-2 z-10 w-5 h-5 rounded-full bg-editor-bg border border-editor-border
-                                 text-editor-muted hover:text-red-600 hover:border-red-300
+                                 text-editor-muted hover:text-severity-critical hover:border-severity-critical/40
                                  flex items-center justify-center text-xs shadow-sm"
                       aria-label={t('chat.removeAttachment')}
                       onClick={() => removeComposerAttachment(a.id)}
                       disabled={isLoading}
                     >
-                      ✕
+                      <X size={12} />
                     </button>
 
                     {isImage && a.thumbnailDataUrl ? (
@@ -945,7 +945,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                         title={a.filename}
                       >
                         <span className="text-2xl">
-                          {a.fileType === 'pdf' ? '📄' : a.fileType === 'docx' ? '📝' : a.fileType === 'pptx' ? '📊' : '📎'}
+                          {a.fileType === 'pdf' ? <FileText size={16} /> : a.fileType === 'docx' ? <FileText size={16} /> : a.fileType === 'pptx' ? <FileChartColumn size={16} /> : <Paperclip size={16} />}
                         </span>
                         <span className="text-[10px] text-editor-muted truncate w-full text-center">
                           {a.filename}
@@ -1047,7 +1047,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                       }}
                       disabled={mcpStatus.isConnecting}
                     >
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-severity-critical animate-pulse" />
                       <span className="flex-1 text-left">{mcpStatus.isConnecting ? '연결 중...' : 'Atlassian 연결하기'}</span>
                     </button>
                   )}

@@ -136,7 +136,7 @@ export function SelectionEditPreviewModal({
           </span>
           <textarea
             data-testid="selection-edit-instruction"
-            className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus:ring-2 focus:ring-primary-500"
+            className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
             value={instruction}
             onChange={(event) => onInstructionChange(event.target.value)}
             placeholder={t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')}
@@ -195,7 +195,7 @@ export function SelectionEditPreviewModal({
               editingProposal && canEditProposal ? (
                 <textarea
                   data-testid="selection-edit-proposal-editor"
-                  className="min-h-24 w-full rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-sm leading-relaxed text-editor-text outline-none focus:ring-2 focus:ring-primary-500"
+                  className="min-h-24 w-full rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-sm leading-relaxed text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
                   value={replacementText}
                   onChange={(event) => onReplacementChange?.(event.target.value)}
                   autoFocus
@@ -207,9 +207,9 @@ export function SelectionEditPreviewModal({
                       key={`${index}-${change.value}`}
                       className={
                         change.added
-                          ? 'bg-emerald-200/70 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100'
+                          ? 'bg-diff-insertion-bg text-editor-text'
                           : change.removed
-                            ? 'bg-red-200/70 text-red-900 line-through dark:bg-red-900/50 dark:text-red-100'
+                            ? 'bg-severity-critical/70 text-severity-critical line-through dark:bg-severity-critical/50 dark:text-severity-critical/10'
                             : 'text-editor-text'
                       }
                     >
@@ -232,7 +232,7 @@ export function SelectionEditPreviewModal({
           </div>
         )}
         {error && (
-          <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-200">
+          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical dark:bg-severity-critical/30 dark:text-severity-critical/20">
             {error}
           </div>
         )}

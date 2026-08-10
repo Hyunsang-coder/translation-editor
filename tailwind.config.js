@@ -5,27 +5,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 브랜드 컬러 (모드별로 CSS 변수 사용)
+        // 브랜드 컬러 (모드별로 CSS 변수 사용) — 액센트는 파랑 하나뿐이다
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: 'var(--primary-400)', // 모드별로 다름
-          500: 'var(--primary-500)', // 모드별로 다름 (버튼/주요 액션)
-          600: 'var(--primary-600)', // 모드별로 다름 (호버 상태)
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
-          950: '#082f49',
+          50: '#f0f7ff',
+          100: 'var(--accent-highlight)',
+          200: '#b3d4f5',
+          300: '#66a3e0',
+          400: 'rgb(var(--primary-400-rgb) / <alpha-value>)', // 모드별로 다름 (아이콘/강조용)
+          500: 'rgb(var(--primary-500-rgb) / <alpha-value>)', // 모드별로 다름 (버튼/주요 액션)
+          600: 'rgb(var(--primary-600-rgb) / <alpha-value>)', // 모드별로 다름 (호버 상태)
+          700: '#004485',
+          800: '#003366',
+          900: 'var(--accent-tint)',
+          950: '#001a33',
+          focus: 'rgb(var(--primary-focus-rgb) / <alpha-value>)', // 포커스 링 전용 — 다른 용도 금지
+        },
+        // 심각도 의미색 — 검수 배지는 이 3단(critical/major/minor=primary)만 쓴다
+        severity: {
+          critical: 'rgb(var(--severity-critical-rgb) / <alpha-value>)',
+          major: 'rgb(var(--severity-major-rgb) / <alpha-value>)',
         },
         // 에디터 전용 컬러
         editor: {
-          bg: 'var(--editor-bg)',
-          surface: 'var(--editor-surface)',
-          border: 'var(--editor-border)',
-          text: 'var(--editor-text)',
-          muted: 'var(--editor-muted)',
+          bg: 'rgb(var(--editor-bg-rgb) / <alpha-value>)',
+          raised: 'rgb(var(--editor-raised-rgb) / <alpha-value>)',
+          surface: 'rgb(var(--editor-surface-rgb) / <alpha-value>)',
+          border: 'rgb(var(--editor-border-rgb) / <alpha-value>)',
+          text: 'rgb(var(--editor-text-rgb) / <alpha-value>)',
+          muted: 'rgb(var(--editor-muted-rgb) / <alpha-value>)',
         },
         // 세그먼트/이슈 상태 액센트
         accent: {
@@ -35,18 +42,21 @@ export default {
         },
         // Diff 시각화 컬러
         diff: {
-          insertion: 'var(--diff-insertion)',
-          deletion: 'var(--diff-deletion)',
+          insertion: 'rgb(var(--diff-insertion-rgb) / <alpha-value>)',
+          deletion: 'rgb(var(--diff-deletion-rgb) / <alpha-value>)',
           'insertion-bg': 'var(--diff-insertion-bg)',
           'deletion-bg': 'var(--diff-deletion-bg)',
         },
       },
+      // index.css --font-sans와 항상 동일해야 한다 (폰트 스택 단일화)
       fontFamily: {
         sans: [
-          'Pretendard',
-          '-apple-system',
-          'BlinkMacSystemFont',
           'system-ui',
+          '-apple-system',
+          'Pretendard Variable',
+          'Pretendard',
+          'Apple SD Gothic Neo',
+          'Inter',
           'sans-serif',
         ],
         mono: [
@@ -57,8 +67,39 @@ export default {
           'monospace',
         ],
       },
+      // 타이포 5단: 11(임의값) / 12 / 13 / 15 / 30(임의값). 크기가 곧 역할이다.
       fontSize: {
+        xs: ['12px', { lineHeight: '1.5' }],          // 상태·보조 텍스트
+        sm: ['13px', { lineHeight: '1.5', letterSpacing: '-0.01em' }], // 표준 컨트롤 라벨
+        base: ['15px', { lineHeight: '1.62', letterSpacing: '-0.006em' }], // 본문
         editor: ['1rem', { lineHeight: '1.75' }],
+      },
+      // 굵기 3종: 400 / 600 / 700 — 500은 쓰지 않는다 (medium 호출부를 600으로 접는다)
+      fontWeight: {
+        medium: '600',
+      },
+      // 라운드 3종: 8(컨트롤·카드) / 12(오버레이 전용) / pill(배지·칩)
+      borderRadius: {
+        none: '0',
+        sm: '8px',
+        DEFAULT: '8px',
+        md: '8px',
+        lg: '8px',
+        xl: '12px',
+        '2xl': '12px',
+        '3xl': '12px',
+        full: '9999px',
+      },
+      // 그림자 1종 — 모달·팝오버·드롭다운에만. 카드·버튼에는 절대 쓰지 않는다.
+      boxShadow: {
+        overlay: '0 8px 30px rgba(0, 0, 0, 0.10)',
+        sm: 'none',
+        DEFAULT: '0 8px 30px rgba(0, 0, 0, 0.10)',
+        md: '0 8px 30px rgba(0, 0, 0, 0.10)',
+        lg: '0 8px 30px rgba(0, 0, 0, 0.10)',
+        xl: '0 8px 30px rgba(0, 0, 0, 0.10)',
+        '2xl': '0 8px 30px rgba(0, 0, 0, 0.10)',
+        none: 'none',
       },
       spacing: {
         'editor-padding': '1.5rem',

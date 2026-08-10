@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Editor } from '@tiptap/react';
 import { getSearchState } from '@/editor/extensions/SearchHighlight';
+import { FOCUS_RING } from '@/constants/styles';
 
 // ============================================
 // Types
@@ -228,11 +229,11 @@ export function SearchBar({
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder={t('editor.search.placeholder', '검색어 입력...')}
-            className="w-full h-7 pl-7 pr-2 text-sm bg-editor-bg border border-editor-border rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+            className={`w-full h-[34px] pl-8 pr-2.5 text-sm bg-editor-bg border border-editor-border rounded focus:outline-none ${FOCUS_RING} text-editor-text placeholder:text-editor-muted`}
           />
           {/* 검색 아이콘 */}
           <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-editor-muted"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-editor-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -250,7 +251,7 @@ export function SearchBar({
         <button
           type="button"
           onClick={handleToggleCaseSensitive}
-          className={`w-7 h-7 flex items-center justify-center rounded text-xs font-bold border transition-colors ${
+          className={`w-[34px] h-[34px] flex items-center justify-center rounded text-xs font-bold border active:scale-95 transition-colors ${FOCUS_RING} ${
             caseSensitive
               ? 'bg-primary-500 text-white border-primary-500'
               : 'bg-editor-bg text-editor-muted border-editor-border hover:bg-editor-surface'
@@ -265,7 +266,7 @@ export function SearchBar({
           type="button"
           onClick={handlePrevMatch}
           disabled={matchCount === 0}
-          className="w-7 h-7 flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className={`w-[34px] h-[34px] flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-colors ${FOCUS_RING}`}
           title={t('editor.search.prevMatch', '이전 (Shift+Enter)')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -278,7 +279,7 @@ export function SearchBar({
           type="button"
           onClick={handleNextMatch}
           disabled={matchCount === 0}
-          className="w-7 h-7 flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className={`w-[34px] h-[34px] flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-colors ${FOCUS_RING}`}
           title={t('editor.search.nextMatch', '다음 (Enter)')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,7 +297,7 @@ export function SearchBar({
           <button
             type="button"
             onClick={handleToggleReplace}
-            className={`w-7 h-7 flex items-center justify-center rounded border transition-colors ${
+            className={`w-[34px] h-[34px] flex items-center justify-center rounded border active:scale-95 transition-colors ${FOCUS_RING} ${
               showReplace
                 ? 'bg-primary-500 text-white border-primary-500'
                 : 'bg-editor-bg text-editor-muted border-editor-border hover:bg-editor-surface'
@@ -318,7 +319,7 @@ export function SearchBar({
         <button
           type="button"
           onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-muted hover:text-editor-text hover:bg-editor-surface transition-colors"
+          className={`w-[34px] h-[34px] flex items-center justify-center rounded border border-editor-border bg-editor-bg text-editor-muted hover:text-editor-text hover:bg-editor-surface active:scale-95 transition-colors ${FOCUS_RING}`}
           title={t('editor.search.close', '닫기 (Esc)')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -339,7 +340,7 @@ export function SearchBar({
               onChange={(e) => setReplaceTerm(e.target.value)}
               onKeyDown={handleReplaceKeyDown}
               placeholder={t('editor.search.replacePlaceholder', '치환어 입력...')}
-              className="w-full h-7 px-2 text-sm bg-editor-bg border border-editor-border rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+              className={`w-full h-[34px] px-2.5 text-sm bg-editor-bg border border-editor-border rounded focus:outline-none ${FOCUS_RING} text-editor-text placeholder:text-editor-muted`}
             />
           </div>
 
@@ -348,7 +349,7 @@ export function SearchBar({
             type="button"
             onClick={handleReplace}
             disabled={matchCount === 0}
-            className="h-7 px-3 text-xs font-medium rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className={`h-[34px] px-3 text-sm font-semibold rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-colors ${FOCUS_RING}`}
             title={t('editor.search.replace', '치환')}
           >
             {t('editor.search.replace', '치환')}
@@ -359,7 +360,7 @@ export function SearchBar({
             type="button"
             onClick={handleReplaceAll}
             disabled={matchCount === 0}
-            className="h-7 px-3 text-xs font-medium rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className={`h-[34px] px-3 text-sm font-semibold rounded border border-editor-border bg-editor-bg text-editor-text hover:bg-editor-surface disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-colors ${FOCUS_RING}`}
             title={t('editor.search.replaceAll', '모두 치환')}
           >
             {t('editor.search.replaceAll', '모두 치환')}

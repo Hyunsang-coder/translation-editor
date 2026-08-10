@@ -243,7 +243,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           {isEditing ? (
             <div className="space-y-2">
               <textarea
-                className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full min-h-[88px] text-sm px-3 py-2 rounded-md border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
                 value={editDraft}
                 onChange={(e) => setEditDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -433,7 +433,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             <button
               type="button"
               onClick={() => void handleDelete()}
-              className="p-1 rounded text-editor-muted hover:text-red-600 hover:bg-editor-border/60 transition-colors"
+              className="p-1 rounded text-editor-muted hover:text-severity-critical hover:bg-editor-border/60 transition-colors"
               title={t('chat.deleteAfterEdit', '삭제')}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

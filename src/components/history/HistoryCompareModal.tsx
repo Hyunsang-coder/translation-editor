@@ -137,7 +137,7 @@ export function HistoryCompareModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+            className="px-3 py-1.5 text-sm rounded border border-editor-border text-editor-text hover:bg-editor-bg active:scale-95 transition-colors"
           >
             {t('common.close')}
           </button>
@@ -152,7 +152,7 @@ export function HistoryCompareModal({
               id="history-compare-base"
               value={baseSnapshotId}
               onChange={(e) => setBaseSnapshotId(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
             >
               {snapshots.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -169,7 +169,7 @@ export function HistoryCompareModal({
               id="history-compare-target"
               value={targetSnapshotId}
               onChange={(e) => setTargetSnapshotId(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
             >
               <option value="">{t('history.compareWithCurrent')}</option>
               {availableTargetSnapshots.map((item) => (
@@ -186,7 +186,7 @@ export function HistoryCompareModal({
             <div className="text-sm text-editor-muted">{t('history.loading')}</div>
           )}
           {!loading && error && (
-            <div className="text-sm text-red-500">{error}</div>
+            <div className="text-sm text-severity-critical">{error}</div>
           )}
           {!loading && !error && (
             <VisualDiffViewer original={baseSnapshotText} suggested={targetText} />

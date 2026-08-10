@@ -5,6 +5,7 @@
  * **추정치**이며, 실제 청구는 provider 콘솔이 진실이다(UI에도 그렇게 표기한다).
  */
 
+import { BarChart3, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
@@ -139,7 +140,7 @@ export function UsageSection(): JSX.Element | null {
   return (
     // 집계는 접혀 있어도 돌린다 — 요약(기간 추정 비용)이 이 섹션을 열 이유가 되어야 한다.
     <CollapsibleSection
-      icon="📊"
+      icon={<BarChart3 size={16} />}
       title={t('appSettings.usage')}
       summary={`${formatUsd(totals.cost)}${totals.unpriced ? '*' : ''} · ${t('appSettings.usageLastNDays', { count: rangeDays })}`}
       testId="app-settings-usage-toggle"
@@ -173,7 +174,7 @@ export function UsageSection(): JSX.Element | null {
       </div>
 
       {error && (
-        <p className="text-xs text-red-500" role="alert">
+        <p className="text-xs text-severity-critical" role="alert">
           {error}
         </p>
       )}
@@ -188,17 +189,17 @@ export function UsageSection(): JSX.Element | null {
           <div className="text-[10px] text-editor-muted">{t('appSettings.usageEstimatedCost')}</div>
           <div className="text-sm font-semibold text-editor-text">
             {formatUsd(totals.cost)}
-            {totals.unpriced && <span className="ml-1 text-[10px] text-yellow-500">*</span>}
+            {totals.unpriced && <span className="ml-1 text-[10px] text-severity-major">*</span>}
           </div>
         </div>
         <div className="p-3 rounded-lg border border-editor-border/50">
           <div className="text-[10px] text-editor-muted">{t('appSettings.usageCacheSavings')}</div>
-          <div className="text-sm font-semibold text-green-600">{formatUsd(totals.savings)}</div>
+          <div className="text-sm font-semibold text-diff-insertion">{formatUsd(totals.savings)}</div>
         </div>
       </div>
 
       {totals.unpriced && (
-        <p className="text-[10px] text-yellow-600">{t('appSettings.usageUnpricedNotice')}</p>
+        <p className="text-[10px] text-severity-major">{t('appSettings.usageUnpricedNotice')}</p>
       )}
 
       {loading && <p className="text-xs text-editor-muted">{t('appSettings.usageLoading')}</p>}
@@ -221,9 +222,9 @@ export function UsageSection(): JSX.Element | null {
               <span className="text-editor-muted">{formatTokens(s.totalTokens)}</span>
               <span className="ml-auto text-editor-text font-medium">
                 {formatUsd(s.costUsd)}
-                {s.hasUnpricedModel && <span className="ml-0.5 text-yellow-500">*</span>}
+                {s.hasUnpricedModel && <span className="ml-0.5 text-severity-major">*</span>}
               </span>
-              <span className="text-editor-muted">{expandedDay === s.day ? '▾' : '▸'}</span>
+              <span className="text-editor-muted">{expandedDay === s.day ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
             </button>
 
             {expandedDay === s.day && (
@@ -263,7 +264,7 @@ export function UsageSection(): JSX.Element | null {
       <button
         type="button"
         onClick={() => void handleClear()}
-        className="text-[11px] text-editor-muted hover:text-red-500 transition-colors"
+        className="text-[11px] text-editor-muted hover:text-severity-critical transition-colors"
       >
         {t('appSettings.usageClear')}
       </button>

@@ -33,7 +33,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="ml-2 px-2 py-0.5 text-xs bg-gray-600 hover:bg-gray-500 rounded"
+      className="ml-2 px-2 py-0.5 text-xs bg-editor-border hover:bg-editor-muted/40 rounded"
       title={`Copy ${label}`}
     >
       {copied ? 'Copied!' : 'Copy'}
@@ -60,7 +60,7 @@ function ResultSection({
         <CopyButton text={content} label={label} />
       </div>
       {children || (
-        <pre className="mt-1 bg-gray-900 p-2 rounded overflow-x-auto text-xs max-h-24 overflow-y-auto">
+        <pre className="mt-1 bg-editor-bg p-2 rounded overflow-x-auto text-xs max-h-24 overflow-y-auto">
           {content}
         </pre>
       )}
@@ -156,10 +156,10 @@ export function EditorTestHarness() {
   }, [editor]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
+    <div className="dark min-h-screen bg-editor-bg text-editor-text p-6">
       <header className="mb-6">
         <h1 className="text-2xl font-bold">Editor Paste Test Harness</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="text-editor-muted text-sm mt-1">
           붙여넣기 또는 HTML 직접 주입으로 normalizePastedHtml 동작 테스트
         </p>
       </header>
@@ -167,7 +167,7 @@ export function EditorTestHarness() {
       <div className="grid grid-cols-2 gap-6">
         {/* Left: Editor */}
         <div className="space-y-4">
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-editor-surface rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-3">Editor (붙여넣기 영역)</h2>
             <div
               className="tiptap-wrapper source-editor"
@@ -177,25 +177,25 @@ export function EditorTestHarness() {
             </div>
             <button
               onClick={clearEditor}
-              className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
+              className="mt-3 px-4 py-2 bg-severity-critical hover:bg-severity-critical/80 rounded text-sm"
             >
               Clear
             </button>
           </div>
 
           {/* Manual HTML injection */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-editor-surface rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-3">HTML 직접 주입</h2>
             <textarea
               value={rawHtmlInput}
               onChange={(e) => setRawHtmlInput(e.target.value)}
               placeholder="테스트할 HTML을 입력하세요..."
-              className="w-full h-32 bg-gray-700 text-gray-100 rounded p-3 font-mono text-sm"
+              className="w-full h-32 bg-editor-surface text-editor-text border border-editor-border rounded p-3 font-mono text-sm"
               data-testid="html-input"
             />
             <button
               onClick={injectHtml}
-              className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+              className="mt-3 px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded text-sm"
               data-testid="inject-button"
             >
               Inject HTML
@@ -204,46 +204,46 @@ export function EditorTestHarness() {
         </div>
 
         {/* Right: Results */}
-        <div className="bg-gray-800 rounded-lg p-4 max-h-[80vh] overflow-y-auto">
+        <div className="bg-editor-surface rounded-lg p-4 max-h-[80vh] overflow-y-auto">
           <h2 className="text-lg font-semibold mb-3">
             Results
-            <span className="text-gray-400 text-sm ml-2">({results.length})</span>
+            <span className="text-editor-muted text-sm ml-2">({results.length})</span>
           </h2>
 
           {results.length === 0 ? (
-            <p className="text-gray-500">붙여넣기하면 결과가 여기 표시됩니다</p>
+            <p className="text-editor-muted">붙여넣기하면 결과가 여기 표시됩니다</p>
           ) : (
             <div className="space-y-4">
               {results.map((result, idx) => (
                 <div
                   key={result.timestamp}
-                  className="bg-gray-700 rounded p-3 text-sm"
+                  className="bg-editor-raised border border-editor-border rounded p-3 text-sm"
                   data-testid={`result-${idx}`}
                 >
                   <ResultSection
                     label="Input HTML"
                     content={result.inputHtml}
-                    colorClass="text-gray-400"
+                    colorClass="text-editor-muted"
                   />
                   <ResultSection
                     label="Normalized HTML"
                     content={result.normalizedHtml}
-                    colorClass="text-green-400"
+                    colorClass="text-diff-insertion"
                   />
                   <ResultSection
                     label="Editor HTML"
                     content={result.editorHtml}
-                    colorClass="text-blue-400"
+                    colorClass="text-primary-400"
                   />
                   <details>
-                    <summary className="text-yellow-400 cursor-pointer flex items-center">
+                    <summary className="text-severity-major cursor-pointer flex items-center">
                       Editor JSON
                       <CopyButton
                         text={JSON.stringify(result.editorJson, null, 2)}
                         label="JSON"
                       />
                     </summary>
-                    <pre className="mt-1 bg-gray-900 p-2 rounded overflow-x-auto text-xs max-h-48 overflow-y-auto">
+                    <pre className="mt-1 bg-editor-bg p-2 rounded overflow-x-auto text-xs max-h-48 overflow-y-auto">
                       {JSON.stringify(result.editorJson, null, 2)}
                     </pre>
                   </details>
@@ -255,7 +255,7 @@ export function EditorTestHarness() {
       </div>
 
       {/* Test fixtures (for Playwright) */}
-      <div className="mt-6 bg-gray-800 rounded-lg p-4">
+      <div className="mt-6 bg-editor-surface rounded-lg p-4">
         <h2 className="text-lg font-semibold mb-3">Quick Test Cases</h2>
         <div className="flex flex-wrap gap-2">
           {TEST_FIXTURES.map((fixture) => (
@@ -264,7 +264,7 @@ export function EditorTestHarness() {
               onClick={() => {
                 setRawHtmlInput(fixture.html);
               }}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              className="px-3 py-1 bg-editor-border hover:bg-editor-muted/40 rounded text-sm"
               data-testid={`fixture-${fixture.name}`}
             >
               {fixture.name}

@@ -101,7 +101,7 @@ export function HistoryTimeline({
             checked={isCurrentSelected}
             disabled={!isCurrentSelected && isMaxSelected}
             onChange={() => onToggleSelect(CURRENT_STATE_ID)}
-            className="w-4 h-4 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500 cursor-pointer"
+            className="w-4 h-4 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 accent-primary-500 cursor-pointer"
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -109,7 +109,7 @@ export function HistoryTimeline({
                 {t('history.currentState')}
               </span>
               {isCurrentModified && (
-                <span className="text-xs text-amber-500">
+                <span className="text-xs text-severity-major">
                   {t('history.modified')}
                 </span>
               )}
@@ -169,7 +169,7 @@ export function HistoryTimeline({
                 checked={isSelected}
                 disabled={!isSelected && isMaxSelected}
                 onChange={() => onToggleSelect(snapshot.id)}
-                className="w-4 h-4 mt-0.5 rounded border-editor-border text-primary-500 focus:ring-primary-500 accent-primary-500 cursor-pointer"
+                className="w-4 h-4 mt-0.5 rounded border-editor-border text-primary-500 focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 accent-primary-500 cursor-pointer"
               />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-editor-text break-words">
@@ -198,7 +198,7 @@ export function HistoryTimeline({
               <button
                 type="button"
                 onClick={() => onDelete(snapshot.id)}
-                className="px-2 py-1 text-xs rounded border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-colors"
+                className="px-2 py-1 text-xs rounded border border-severity-critical/40 text-severity-critical hover:bg-severity-critical/10 transition-colors"
               >
                 {t('history.delete')}
               </button>

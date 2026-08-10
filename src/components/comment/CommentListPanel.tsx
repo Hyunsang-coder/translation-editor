@@ -81,7 +81,7 @@ export function CommentListPanel(): JSX.Element {
                 type="button"
                 onClick={() => handleToggleResolve(comment)}
                 className={`rounded p-1 hover:bg-editor-bg ${
-                  comment.resolved ? 'text-emerald-500' : 'text-editor-muted hover:text-emerald-500'
+                  comment.resolved ? 'text-diff-insertion' : 'text-editor-muted hover:text-diff-insertion'
                 }`}
                 title={comment.resolved ? t('comment.unresolve', '미해결로 표시') : t('comment.resolve', '해결로 표시')}
               >
@@ -90,7 +90,7 @@ export function CommentListPanel(): JSX.Element {
               <button
                 type="button"
                 onClick={() => handleDelete(comment)}
-                className="rounded p-1 text-editor-muted hover:bg-editor-bg hover:text-red-500"
+                className="rounded p-1 text-editor-muted hover:bg-editor-bg hover:text-severity-critical"
                 title={t('common.delete', '삭제')}
               >
                 <Trash2 size={14} />

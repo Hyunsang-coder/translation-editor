@@ -47,14 +47,14 @@ export function HistoryRenameDialog({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('history.renamePlaceholder')}
-            className="w-full h-28 px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text placeholder:text-editor-muted resize-none focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full h-28 px-3 py-2 text-sm rounded border border-editor-border bg-editor-bg text-editor-text placeholder:text-editor-muted resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
           />
         </div>
         <div className="px-4 py-3 border-t border-editor-border flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
+            className="px-3 py-1.5 text-sm rounded border border-editor-border text-editor-text hover:bg-editor-bg active:scale-95 transition-colors"
           >
             {t('common.cancel')}
           </button>
@@ -62,7 +62,7 @@ export function HistoryRenameDialog({
             type="button"
             onClick={() => void onRename(description.trim())}
             disabled={isSaving || description.trim().length === 0}
-            className="px-3 py-1.5 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors"
+            className="px-3 py-1.5 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 active:scale-95 transition-colors"
           >
             {isSaving ? t('common.loading') : t('history.rename')}
           </button>

@@ -149,7 +149,7 @@ export function MainLayout(): JSX.Element {
                 {/* Empty State Content */}
                 <div className="max-w-md text-center space-y-8">
                   <div className="space-y-4">
-                    <h2 className="text-3xl font-bold tracking-tight">새로운 번역 프로젝트를 시작하세요</h2>
+                    <h2 className="text-[30px] font-semibold tracking-[-0.022em] text-editor-text">새로운 번역 프로젝트를 시작하세요</h2>
                     <p className="text-editor-muted leading-relaxed">
                       문서를 번역하고 관리할 수 있는 새로운 공간을 만들어보세요.<br />
                       기존 프로젝트가 있다면 상단의 프로젝트 메뉴에서 선택할 수 있습니다.
@@ -159,7 +159,7 @@ export function MainLayout(): JSX.Element {
                     type="button"
                     onClick={handleCreateProject}
                     disabled={isCreating}
-                    className="px-8 py-4 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all shadow-lg hover:shadow-primary-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-[44px] px-6 bg-primary-500 text-white rounded-md text-sm font-semibold hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? '생성 중...' : '새 프로젝트 시작하기'}
                   </button>

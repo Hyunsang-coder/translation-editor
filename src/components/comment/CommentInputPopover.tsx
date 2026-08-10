@@ -79,7 +79,7 @@ export function CommentInputPopover({
           w-full resize-none rounded-md px-2 py-1.5 text-xs
           bg-editor-bg text-editor-text
           border border-editor-border
-          focus:outline-none focus:ring-1 focus:ring-blue-500
+          focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2
         "
       />
       <div className="mt-1.5 flex justify-end gap-1.5">
@@ -96,8 +96,8 @@ export function CommentInputPopover({
           disabled={!value.trim()}
           className="
             px-2.5 py-1 text-xs rounded-md font-medium
-            bg-blue-600 text-white
-            hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed
+            bg-primary-500 text-white
+            hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed
           "
         >
           {t('common.save', '저장')}

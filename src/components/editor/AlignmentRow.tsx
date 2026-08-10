@@ -9,11 +9,11 @@ import type { IssueSeverity } from '@/stores/reviewStore';
 function severityBadgeClass(severity: IssueSeverity | null): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-500/10 text-red-600';
+      return 'bg-severity-critical/10 text-severity-critical';
     case 'major':
-      return 'bg-orange-500/10 text-orange-600';
+      return 'bg-severity-major/10 text-severity-major';
     default:
-      return 'bg-blue-500/10 text-blue-600';
+      return 'bg-primary-500/10 text-primary-500';
   }
 }
 
@@ -56,11 +56,11 @@ export function AlignmentRow({
   const isPair = op.kind === 'pair';
   const source = op.kind === 'target-only' ? null : op.source;
   const target = op.kind === 'source-only' ? null : op.target;
-  const cellBorder = isPair ? 'border-editor-border/40' : 'border-amber-200';
+  const cellBorder = isPair ? 'border-editor-border/40' : 'border-severity-major/20';
 
   const placeholderClass =
-    'block w-full px-3 py-2.5 border border-dashed border-amber-400 rounded '
-    + 'text-xs text-amber-700 bg-white/50';
+    'block w-full px-3 py-2.5 border border-dashed border-severity-major rounded '
+    + 'text-xs text-severity-major bg-white/50';
 
   return (
     <div
@@ -88,7 +88,7 @@ export function AlignmentRow({
       <div
         className={`shrink-0 pt-3.5 text-xs font-bold tabular-nums ${
           active ? 'w-[49px] pl-[15px]' : 'w-[52px] pl-[18px]'
-        } ${active ? 'text-primary-500' : isPair ? 'text-slate-400' : 'text-amber-600'}`}
+        } ${active ? 'text-primary-500' : isPair ? 'text-editor-muted/70' : 'text-severity-major'}`}
       >
         {String(index).padStart(2, '0')}
       </div>
@@ -133,7 +133,7 @@ export function AlignmentRow({
             1:1
           </span>
         ) : (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-700">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-severity-major/20 text-severity-major">
             {op.kind === 'source-only' ? '1:0' : '0:1'}
           </span>
         )}
@@ -147,7 +147,7 @@ export function AlignmentRow({
         )}
         {annotations && annotations.commentCount > 0 && (
           <span
-            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-500/10 text-slate-600"
+            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-editor-surface text-editor-muted"
             data-testid="alignment-comment-badge"
           >
             {t('editor.alignment.commentBadge', { count: annotations.commentCount })}

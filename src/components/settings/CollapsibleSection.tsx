@@ -2,7 +2,7 @@
  * 앱 설정의 접히는 섹션 헤더.
  *
  * 설정 모달이 세로로 길어져 스크롤 없이는 무엇이 있는지조차 안 보이던 것을 고치기 위한 장치다.
- * 헤더 모양(이모지 + 제목 + 아래 구분선)은 기존 섹션과 같게 두고 여닫는 기능만 얹는다.
+ * 헤더 모양(아이콘 + 제목 + 아래 구분선)은 기존 섹션과 같게 두고 여닫는 기능만 얹는다.
  *
  * `summary`가 접힌 상태에서 이 섹션을 열어볼 이유를 준다 — 접어 두면 상태를 알 수 없어
  * 결국 전부 열어보게 되므로, 접기와 요약은 한 쌍이다.
@@ -11,10 +11,11 @@
  * phrasing content만 담을 수 있어서 `<h3>`를 버튼 안에 넣을 수 없다 — 순서가 반대다.
  */
 
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 
 interface CollapsibleSectionProps {
-  icon: string;
+  icon: ReactNode;
   title: string;
   /** 접힌 상태에서도 보이는 현재 상태 한 줄. */
   summary?: ReactNode;
@@ -49,13 +50,13 @@ export function CollapsibleSection({
           data-testid={testId}
           className="group flex w-full items-center gap-2 border-b border-editor-border/50 pb-2 text-left"
         >
-          <span className="text-lg">{icon}</span>
+          <span className="inline-flex text-editor-muted">{icon}</span>
           <span className="font-semibold text-editor-text">{title}</span>
           {summary && (
             <span className="truncate text-xs text-editor-muted">{summary}</span>
           )}
           <span className="ml-auto shrink-0 text-editor-muted group-hover:text-editor-text">
-            {open ? '▾' : '▸'}
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
         </button>
       </h3>

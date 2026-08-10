@@ -34,6 +34,7 @@ import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { AlignmentView } from '@/components/editor/AlignmentView';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { BAND_1, BAND_2, CAPTION } from '@/constants/styles';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
 import { CommentInputPopover } from '@/components/comment/CommentInputPopover';
 import { CommentDetailPopover } from '@/components/comment/CommentDetailPopover';
@@ -1637,7 +1638,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
       {/* 상태 스트립 — 워크플로 액션이 Toolbar로 올라간 자리를 진행/저장/스냅샷/단어수가 대신한다.
           양 끝은 숨긴 사이드바 되살림 버튼(바 내부엔 UI가 없어 여기 노출). */}
-      <div className="h-[30px] px-2 flex items-center gap-2 border-b border-editor-border shrink-0">
+      {/* 밴드 1 (36px) — UnifiedSidebar 탭 바, AlignmentView 헤더와 같은 선 */}
+      <div className={`${BAND_1} px-2 flex items-center gap-2 border-b border-editor-border shrink-0`}>
         {leftSidebarInvisible && (
           <button
             type="button"
@@ -1665,9 +1667,9 @@ export function EditorCanvasTipTap(): JSX.Element {
               type="button"
               onClick={() => setEditorViewMode(mode)}
               aria-pressed={editorViewMode === mode}
-              className={`h-[26px] px-3 text-[11px] transition-colors ${
+              className={`h-[26px] px-3 text-xs active:scale-95 transition-colors ${
                 editorViewMode === mode
-                  ? 'bg-primary-500 text-white font-extrabold'
+                  ? 'bg-primary-500 text-white font-semibold'
                   : 'font-semibold text-editor-muted hover:bg-editor-border'
               }`}
               data-testid={`editor-view-mode-${mode}`}
@@ -1713,16 +1715,17 @@ export function EditorCanvasTipTap(): JSX.Element {
                   '--editor-line-height': sourceLineHeight,
                 } as CSSProperties}
               >
-                <div className="h-8 px-4 flex items-center justify-between border-b border-sky-500/20 bg-sky-500/[0.05] dark:bg-sky-400/[0.07]">
+                {/* 밴드 2 (34px) — 섹션 캡션. 색상 대신 위계(캡션 타이포)로 구분한다 */}
+                <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg`}>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-sky-800/80 dark:text-sky-200/90">
+                    <span className={CAPTION}>
                       {t('editor.source').toUpperCase()}
                     </span>
                     {sourceOnlyMode ? (
                       <button
                         type="button"
                         onClick={toggleSourceOnlyMode}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-sky-700 hover:bg-sky-500/10 dark:hover:text-sky-300 transition-colors"
+                        className="px-1.5 py-0.5 rounded text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
                         title={t('editor.showTarget')}
                       >
                         {t('editor.showTarget')}
@@ -1731,7 +1734,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                       <button
                         type="button"
                         onClick={toggleFocusMode}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-sky-700 hover:bg-sky-500/10 dark:hover:text-sky-300 transition-colors"
+                        className="px-1.5 py-0.5 rounded text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
                         title={t('editor.hideSource')}
                       >
                         {t('editor.hideSource')}
@@ -1803,16 +1806,17 @@ export function EditorCanvasTipTap(): JSX.Element {
               '--editor-line-height': targetLineHeight,
             } as CSSProperties}
           >
-            <div className="h-8 px-4 flex items-center justify-between border-b border-emerald-500/20 bg-emerald-500/[0.05] dark:bg-emerald-400/[0.07]">
+            {/* 밴드 2 (34px) — 섹션 캡션. 색상 대신 위계(캡션 타이포)로 구분한다 */}
+            <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-border bg-editor-bg`}>
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800/80 dark:text-emerald-200/90">
+                <span className={CAPTION}>
                   {t('editor.target').toUpperCase()}
                 </span>
                 {focusMode ? (
                   <button
                     type="button"
                     onClick={toggleFocusMode}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-emerald-700 hover:bg-emerald-500/10 dark:hover:text-emerald-300 transition-colors"
+                    className="px-1.5 py-0.5 rounded text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
                     title={t('editor.showSource')}
                   >
                     {t('editor.showSource')}
@@ -1821,7 +1825,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   <button
                     type="button"
                     onClick={toggleSourceOnlyMode}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-medium text-editor-muted hover:text-emerald-700 hover:bg-emerald-500/10 dark:hover:text-emerald-300 transition-colors"
+                    className="px-1.5 py-0.5 rounded text-xs text-editor-muted hover:text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
                     title={t('editor.hideTarget')}
                   >
                     {t('editor.hideTarget')}
@@ -1854,7 +1858,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               initialReplaceMode={targetSearchReplaceMode}
             />
             {/* 여기에 transition 효과 추가 */}
-            <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 relative group/target ${targetFlash ? 'bg-green-500/10' : ''}`}>
+            <div className={`min-h-0 flex-1 overflow-hidden transition-colors duration-500 relative group/target ${targetFlash ? 'bg-diff-insertion/10' : ''}`}>
               <TargetTipTapEditor
                 content={targetDocument || ''}
                 onChange={setTargetDocument}
@@ -1939,7 +1943,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   value={polishMessage}
                   onChange={(e) => setPolishMessage(e.target.value)}
                   placeholder={t('editor.polishModal.placeholder', '예: 더 격식체로 다듬고 제품 용어는 유지해주세요.')}
-                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 text-editor-text placeholder:text-editor-muted"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -1964,7 +1968,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   setPolishModalOpen(false);
                   void openPolishPreview(polishMessage);
                 }}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
               >
                 {t('editor.polishModal.execute', '폴리싱 실행')}
               </button>
@@ -2003,7 +2007,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   value={retranslateMessage}
                   onChange={(e) => setRetranslateMessage(e.target.value)}
                   placeholder={t('review.retranslate.modal.placeholder', '추가로 반영할 내용을 입력하세요...')}
-                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 text-editor-text placeholder:text-editor-muted"
+                  className="mt-1.5 w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 text-editor-text placeholder:text-editor-muted"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Circle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -161,10 +162,11 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
     setNaming(true);
   };
 
-  // ── 헤더 칩 라벨 ──
-  const chipLabel = appliedPreset
-    ? `${isDirty ? '○' : '●'} ${appliedPreset.name}`
-    : t('settings.presetMenu');
+  // ── 헤더 칩 라벨 ── (점: 적용됨=채움, 수정됨=외곽선)
+  const chipLabel = appliedPreset ? appliedPreset.name : t('settings.presetMenu');
+  const chipDot = appliedPreset
+    ? <Circle size={7} className="shrink-0" fill={isDirty ? 'none' : 'currentColor'} />
+    : null;
 
   return (
     <div ref={containerRef} className="relative">
@@ -183,8 +185,8 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
         data-testid={`preset-menu-toggle-${kind}`}
         title={appliedPreset?.content}
       >
-        <span className="truncate">{chipLabel}</span>
-        <span className="shrink-0 text-[9px]">▾</span>
+        {chipDot}<span className="truncate">{chipLabel}</span>
+        <ChevronDown size={12} className="shrink-0" />
       </button>
 
       {open && (
@@ -207,7 +209,7 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
                         <input
                           ref={editInputRef}
                           type="text"
-                          className="flex-1 min-w-0 text-xs px-2 py-1 rounded border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          className="flex-1 min-w-0 text-xs px-2 py-1 rounded border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           onKeyDown={(e) => {
@@ -261,8 +263,8 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
                             type="button"
                             className={
                               pendingDeleteId === p.id
-                                ? 'text-[11px] text-red-500 font-semibold'
-                                : 'text-[11px] text-editor-muted hover:text-red-500'
+                                ? 'text-[11px] text-severity-critical font-semibold'
+                                : 'text-[11px] text-editor-muted hover:text-severity-critical'
                             }
                             onClick={() => handleDelete(p.id)}
                             title={
@@ -290,7 +292,7 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
                 <input
                   ref={nameInputRef}
                   type="text"
-                  className="flex-1 min-w-0 text-xs px-2 py-1 rounded border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="flex-1 min-w-0 text-xs px-2 py-1 rounded border border-editor-border bg-editor-surface text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -337,7 +339,7 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
                 </button>
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left text-xs text-editor-muted hover:bg-editor-bg hover:text-red-500"
+                  className="block w-full px-3 py-1.5 text-left text-xs text-editor-muted hover:bg-editor-bg hover:text-severity-critical"
                   onClick={() => {
                     onClear();
                     setAppliedId(null);
