@@ -3,8 +3,8 @@ import { Toaster } from 'sonner';
 export function ToastHost(): JSX.Element {
   return (
     <Toaster
-      // top-center는 상단 버전 스트립·헤더와 겹쳐 토스트가 가려진다.
-      position="bottom-right"
+      // bottom-right는 우측에 도킹된 채팅 패널의 입력창을 가린다.
+      position="bottom-center"
       toastOptions={{
         className: 'bg-editor-surface border border-editor-border text-editor-text',
         style: {
