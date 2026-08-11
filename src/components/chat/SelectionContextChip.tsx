@@ -27,7 +27,7 @@ export function SelectionContextChip({
     <div
       className={`rounded-xl border px-3 py-2 ${
         statusNeedsAttention
-          ? 'border-severity-major/70 bg-severity-major/60 dark:bg-severity-major/20'
+          ? 'border-severity-major/70 bg-severity-major/10 dark:bg-severity-major/20'
           : 'border-primary-300/70 bg-primary-50/50 dark:bg-primary-950/20'
       }`}
       data-testid="selection-context-chip"
