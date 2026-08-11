@@ -74,7 +74,11 @@ import {
 } from '@/types';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
-import { retranslateSelection } from '@/ai/retranslateSelection';
+import {
+  retranslateSelection,
+  type RetranslateSurroundings,
+} from '@/ai/retranslateSelection';
+import { getSelectionSurroundings } from '@/ai/tools/selectionTools';
 import {
   applySelectionEdit,
   selectionHasUniformFormatting,
@@ -282,6 +286,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     sourceText: string;
     sourceAlignmentPrecision: SourceAlignmentPrecision;
     currentTargetUnitText: string;
+    /** 선택 유닛 앞뒤 문맥 (모달 열 때 계산, 정렬 검증된 쪽만). 없으면 미주입. */
+    surroundings?: RetranslateSurroundings;
     instruction: string;
     referenceOptions: ContextReferenceOptions;
     replacementText: string;
@@ -681,9 +687,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 전체 번역을 거치지 않은 문서는 Source/Target ID가 독립 발급이라 직접 매칭이
     // 안 된다. 그때는 정렬 뷰와 같은 LCS 정렬로 짝짓고, 결과는 모달에서 원문으로
     // 표시되어 사람이 확인한 뒤에 적용된다.
+    const targetDoc = bubble.editor.getJSON() as TranslationUnitDocument;
     const sourceUnitText = dropAncestorUnits(findAlignedCounterpartUnits(
       sourceDoc,
-      bubble.editor.getJSON() as TranslationUnitDocument,
+      targetDoc,
       selection.translationUnitIds,
     ))
       .map((unit) => unit.text)
@@ -715,6 +722,27 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       return;
     }
+    // 채팅의 get_aligned_selection_context가 도구로 가져오는 앞뒤 문맥을 단발 호출에도
+    // 고정 주입한다. Target 주변은 같은 문서라 ID로 확정. Source 주변은 같은 ID가 원문에
+    // 있을 때(전체 번역을 거친 문서)만 — LCS 짝의 이웃은 검증할 방법이 없어 주입하지 않는다.
+    let surroundings: RetranslateSurroundings | undefined;
+    try {
+      const targetCtx = getSelectionSurroundings(targetDoc, selection.translationUnitIds);
+      let sourceCtx: { before: string[]; after: string[] } | null = null;
+      try {
+        sourceCtx = getSelectionSurroundings(sourceDoc, selection.translationUnitIds);
+      } catch {
+        sourceCtx = null;
+      }
+      surroundings = {
+        sourceBefore: sourceCtx?.before ?? [],
+        sourceAfter: sourceCtx?.after ?? [],
+        targetBefore: targetCtx.before,
+        targetAfter: targetCtx.after,
+      };
+    } catch {
+      surroundings = undefined;
+    }
     const currentTargetUnitText = $from.parent.textContent;
     const initialAlignment = resolveInitialAlignedSourceRange({
       sourceUnitText,
@@ -728,6 +756,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       sourceText: initialAlignment.text,
       sourceAlignmentPrecision: initialAlignment.precision,
       currentTargetUnitText,
+      ...(surroundings ? { surroundings } : {}),
       instruction: selectionInstructionRef.current,
       // 번역사는 한 문서에서 같은 참조 범위로 여러 문장을 고친다. 선택마다 초기화하면
       // 매번 같은 선택을 반복해야 하므로 프로젝트 안에서는 직전 설정을 유지한다.
@@ -794,6 +823,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
         targetLanguage: project.metadata.targetLanguage ?? 'Target',
+        ...(request.surroundings ? { surroundings: request.surroundings } : {}),
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
         referenceOptions: request.referenceOptions,
         contextSnapshot,

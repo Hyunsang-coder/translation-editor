@@ -112,6 +112,81 @@ describe('retranslateSelection', () => {
     expect(result.contextManifest.glossaryEntryIds).toEqual([]);
   });
 
+  it('주변 문맥을 delimited 블록으로 보내고 manifest에 기록한다', async () => {
+    const result = await retranslateSelection({
+      projectId: 'project-1',
+      sourceText: 'Selected source',
+      currentTargetText: '현재 번역',
+      targetLanguage: 'Korean',
+      surroundings: {
+        sourceBefore: ['Previous source unit'],
+        sourceAfter: [],
+        targetBefore: ['이전 번역 유닛'],
+        targetAfter: ['다음 번역 유닛'],
+      },
+      referenceOptions: {
+        translationRules: false,
+        forbiddenTerms: false,
+        glossary: false,
+        projectContext: false,
+      },
+      contextSnapshot: {
+        revision: 1,
+        projectMemoryItems: [],
+        translationRules: '',
+        forbiddenTerms: [],
+        glossaryEntries: [],
+        createdAt: 1,
+      },
+    });
+
+    const messages = streamMock.mock.calls[0]?.[0] as Array<{ content: string }>;
+    const user = messages[1]!.content;
+    expect(user).toContain('---SURROUNDING_CONTEXT_START---');
+    expect(user).toContain('[Source, preceding units]\nPrevious source unit');
+    expect(user).toContain('[Target, following units]\n다음 번역 유닛');
+    // 내용 없는 방향의 라벨은 넣지 않는다
+    expect(user).not.toContain('[Source, following units]');
+    expect(result.contextManifest.included).toEqual([
+      'selection',
+      'aligned-source',
+      'surroundings',
+    ]);
+  });
+
+  it('주변 문맥이 전부 비어 있으면 블록도 manifest 항목도 만들지 않는다', async () => {
+    const result = await retranslateSelection({
+      projectId: 'project-1',
+      sourceText: 'Selected source',
+      currentTargetText: '현재 번역',
+      targetLanguage: 'Korean',
+      surroundings: {
+        sourceBefore: [],
+        sourceAfter: [],
+        targetBefore: ['   '],
+        targetAfter: [],
+      },
+      referenceOptions: {
+        translationRules: false,
+        forbiddenTerms: false,
+        glossary: false,
+        projectContext: false,
+      },
+      contextSnapshot: {
+        revision: 1,
+        projectMemoryItems: [],
+        translationRules: '',
+        forbiddenTerms: [],
+        glossaryEntries: [],
+        createdAt: 1,
+      },
+    });
+
+    const messages = streamMock.mock.calls[0]?.[0] as Array<{ content: string }>;
+    expect(messages[1]!.content).not.toContain('SURROUNDING_CONTEXT');
+    expect(result.contextManifest.included).toEqual(['selection', 'aligned-source']);
+  });
+
   it('백엔드 경로에서 cacheSystem을 켠다 (지시사항만 바꿔 재호출해도 system은 캐시)', async () => {
     isTauriRuntimeMock.mockReturnValue(true);
     backendStreamMock.mockResolvedValue(

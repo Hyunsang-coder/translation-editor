@@ -336,6 +336,7 @@ export interface ContextSnapshot {
 export type ContextManifestInclude =
   | 'selection'
   | 'aligned-source'
+  | 'surroundings'
   | 'translation-rules'
   | 'forbidden-terms'
   | 'glossary'
