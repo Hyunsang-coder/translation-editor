@@ -127,7 +127,7 @@ function SelectiveDiffRow({
             part.added ? null : part.removed ? (
               <span
                 key={i}
-                className="bg-severity-critical/20 dark:bg-severity-critical/50 text-severity-critical/10 line-through decoration-severity-critical decoration-1 rounded-[2px] px-0.5"
+                className="bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion decoration-1 rounded-[2px] px-0.5"
               >
                 {part.value}
               </span>
@@ -156,7 +156,7 @@ function SelectiveDiffRow({
             part.removed ? null : part.added ? (
               <span
                 key={i}
-                className="bg-diff-insertion/20 dark:bg-diff-insertion/50 text-diff-insertion/10 rounded-[2px] px-0.5"
+                className="bg-diff-insertion-bg text-editor-text rounded-[2px] px-0.5"
               >
                 {part.value}
               </span>

@@ -209,7 +209,7 @@ export function SelectionEditPreviewModal({
                         change.added
                           ? 'bg-diff-insertion-bg text-editor-text'
                           : change.removed
-                            ? 'bg-severity-critical/70 text-severity-critical line-through dark:bg-severity-critical/50 dark:text-severity-critical/10'
+                            ? 'bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion'
                             : 'text-editor-text'
                       }
                     >
@@ -232,7 +232,7 @@ export function SelectionEditPreviewModal({
           </div>
         )}
         {error && (
-          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical dark:bg-severity-critical/30 dark:text-severity-critical/20">
+          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical">
             {error}
           </div>
         )}
