@@ -19,6 +19,9 @@ export default {
           900: 'var(--accent-tint)',
           950: '#001a33',
           focus: 'rgb(var(--primary-focus-rgb) / <alpha-value>)', // 포커스 링 전용 — 다른 용도 금지
+          // 채움 버튼 배경 전용(흰 글자 전제) — 글자색으로 쓰지 않는다
+          fill: 'rgb(var(--primary-fill-rgb) / <alpha-value>)',
+          'fill-hover': 'rgb(var(--primary-fill-hover-rgb) / <alpha-value>)',
         },
         // 심각도 의미색 — 검수 배지는 이 3단(critical/major/minor=primary)만 쓴다
         severity: {

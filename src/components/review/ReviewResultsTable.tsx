@@ -262,7 +262,7 @@ export function ReviewResultsTable({
                 <button
                   type="button"
                   onClick={() => onApply(issue)}
-                  className="h-[30px] px-2.5 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors"
+                  className="h-[30px] px-2.5 text-xs rounded bg-primary-fill text-white hover:bg-primary-fill-hover active:scale-95 transition-colors"
                   title={t('review.apply', '적용')}
                 >
                   {t('review.apply', '적용')}

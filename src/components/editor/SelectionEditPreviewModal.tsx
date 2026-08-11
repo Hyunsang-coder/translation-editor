@@ -259,7 +259,7 @@ export function SelectionEditPreviewModal({
           <button
             type="button"
             data-testid="selection-edit-primary-button"
-            className="rounded-lg bg-primary-500 px-3 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+            className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
             onClick={replacementText && !isLoading ? onApply : onGenerate}
             disabled={isLoading || (!replacementText && !sourceText.trim())}
           >

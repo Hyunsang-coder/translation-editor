@@ -159,7 +159,7 @@ export function MainLayout(): JSX.Element {
                     type="button"
                     onClick={handleCreateProject}
                     disabled={isCreating}
-                    className="h-[44px] px-6 bg-primary-500 text-white rounded-md text-sm font-semibold hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-[44px] px-6 bg-primary-fill text-white rounded-md text-sm font-semibold hover:bg-primary-fill-hover active:scale-95 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? '생성 중...' : '새 프로젝트 시작하기'}
                   </button>

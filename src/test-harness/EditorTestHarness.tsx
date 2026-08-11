@@ -195,7 +195,7 @@ export function EditorTestHarness() {
             />
             <button
               onClick={injectHtml}
-              className="mt-3 px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded text-sm"
+              className="mt-3 px-4 py-2 bg-primary-fill hover:bg-primary-fill-hover rounded text-sm"
               data-testid="inject-button"
             >
               Inject HTML

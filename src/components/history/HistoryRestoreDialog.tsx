@@ -124,7 +124,7 @@ export function HistoryRestoreDialog({
             type="button"
             onClick={() => void handleRestore()}
             disabled={isRestoring}
-            className="px-3 py-1.5 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors"
+            className="px-3 py-1.5 text-sm rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-60 transition-colors"
           >
             {isRestoring ? t('common.loading') : t('history.restore')}
           </button>

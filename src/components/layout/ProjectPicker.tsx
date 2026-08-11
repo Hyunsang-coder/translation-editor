@@ -403,7 +403,7 @@ export function ProjectPicker(): JSX.Element {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="flex-1 px-3 py-1.5 rounded bg-primary-500 text-white text-xs hover:bg-primary-600"
+                  className="flex-1 px-3 py-1.5 rounded bg-primary-fill text-white text-xs hover:bg-primary-fill-hover"
                   onClick={() => void handleNewProject()}
                   data-testid="project-create-button"
                 >

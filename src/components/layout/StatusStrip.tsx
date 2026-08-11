@@ -95,7 +95,7 @@ export function StatusStrip(): JSX.Element {
           <span className="font-semibold text-editor-text">{t('status.reviewing')}</span>
           <span className="w-24 h-[5px] bg-editor-border rounded-sm overflow-hidden" aria-hidden="true">
             <span
-              className="block h-full bg-primary-500 transition-[width] duration-150"
+              className="block h-full bg-primary-fill transition-[width] duration-150"
               style={{ width: `${reviewPercent}%` }}
             />
           </span>

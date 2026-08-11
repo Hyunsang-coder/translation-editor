@@ -214,7 +214,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             <button
               type="button"
               data-testid="project-memory-add"
-              className="rounded-lg bg-primary-500 px-3 py-2 text-xs text-white disabled:opacity-50"
+              className="rounded-lg bg-primary-fill px-3 py-2 text-xs text-white disabled:opacity-50"
               disabled={saving || !content.trim()}
               onClick={() => void handleAdd()}
             >
@@ -346,7 +346,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           <button
             type="button"
             data-testid="forbidden-term-add"
-            className="rounded-lg bg-primary-500 px-3 py-2 text-xs text-white disabled:opacity-50"
+            className="rounded-lg bg-primary-fill px-3 py-2 text-xs text-white disabled:opacity-50"
             disabled={saving || !term.trim()}
             onClick={() => {
               void saveForbiddenTerm({

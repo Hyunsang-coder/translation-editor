@@ -30,7 +30,7 @@ export function SelectionEditProposalCard({
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            className="rounded-lg bg-primary-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
+            className="rounded-lg bg-primary-fill px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-fill-hover"
             onClick={onPreview}
           >
             {t('selection.preview')}

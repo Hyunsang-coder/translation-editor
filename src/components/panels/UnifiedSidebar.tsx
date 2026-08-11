@@ -143,7 +143,7 @@ export function UnifiedSidebar({ side }: UnifiedSidebarProps): JSX.Element | nul
   // --- Insertion indicator helper ---
   const renderInsertionIndicator = (index: number) => {
     if (!dropIndicator || dropIndicator.side !== side || dropIndicator.index !== index) return null;
-    return <div className="w-0.5 h-6 bg-primary-500 rounded-full shrink-0 self-center" />;
+    return <div className="w-0.5 h-6 bg-primary-fill rounded-full shrink-0 self-center" />;
   };
 
   return (

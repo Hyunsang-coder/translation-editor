@@ -991,7 +991,7 @@ export function ReviewPanel(): JSX.Element {
                   </div>
                   <div className="w-full h-2 bg-editor-border rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary-500 transition-all duration-300"
+                      className="h-full bg-primary-fill transition-all duration-300"
                       style={{ width: `${(progress.completed / progress.total) * 100}%` }}
                     />
                   </div>
@@ -1116,7 +1116,7 @@ export function ReviewPanel(): JSX.Element {
                   type="button"
                   onClick={handleRetranslateClick}
                   disabled={retranslateLoading}
-                  className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                  className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-50 transition-colors"
                 >
                   {t('review.retranslate.button', '재번역')}
                 </button>
@@ -1134,7 +1134,7 @@ export function ReviewPanel(): JSX.Element {
                 type="button"
                 onClick={() => void handleRunReview()}
                 disabled={!project}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 active:scale-95 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-50 active:scale-95 transition-colors"
                 data-testid="review-run-button"
               >
                 {results.length > 0
@@ -1212,7 +1212,7 @@ export function ReviewPanel(): JSX.Element {
                 type="button"
                 onClick={handleRetranslateExecute}
                 disabled={retranslateLoading}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-50 transition-colors"
               >
                 {t('review.retranslate.modal.execute', '재번역 실행')}
               </button>

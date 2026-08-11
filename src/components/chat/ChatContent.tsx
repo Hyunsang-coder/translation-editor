@@ -1093,8 +1093,8 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
               <button
                 type="submit"
                 disabled={globalIsLoading || !localComposerText.trim()}
-                className="shrink-0 w-7 h-7 rounded-full bg-primary-500 text-white
-                           hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed
+                className="shrink-0 w-7 h-7 rounded-full bg-primary-fill text-white
+                           hover:bg-primary-fill-hover disabled:opacity-50 disabled:cursor-not-allowed
                            transition-colors flex items-center justify-center"
                 title={t('chat.send')}
                 aria-label={t('chat.sendAriaLabel')}

@@ -269,7 +269,7 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
           <button
             type="button"
             data-testid="project-memory-import-submit"
-            className="rounded bg-primary-500 px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-60"
+            className="rounded bg-primary-fill px-3 py-1.5 text-sm text-white hover:bg-primary-fill-hover disabled:opacity-60"
             disabled={saving || selectedCount === 0}
             onClick={() => void handleImport()}
           >

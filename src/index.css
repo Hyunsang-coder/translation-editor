@@ -21,6 +21,11 @@
   --primary-500-rgb: 0 102 204;
   --primary-600-rgb: 0 85 171;
   --primary-focus-rgb: 0 113 227;
+  /* 채움 버튼(흰 글자) 전용 — 테마 불변이다. --primary-500을 그대로 쓰면 다크에서
+     흰 글자와 3.65:1이라 미달인데, 토큰 자체를 어둡게 하면 text-primary-500으로
+     쓰이는 링크·아이콘 49곳이 다크 배경에서 3.02:1로 무너진다. 그래서 분리한다. */
+  --primary-fill-rgb: 0 102 204;
+  --primary-fill-hover-rgb: 0 85 171;
   --severity-critical-rgb: 215 0 21;
   --severity-major-rgb: 192 76 0;
   --diff-insertion-rgb: 26 127 55;

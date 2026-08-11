@@ -106,7 +106,7 @@ export function WorkflowActions(): JSX.Element {
         type="button"
         onClick={triggerTranslate}
         disabled={translateLoading}
-        className="h-[34px] px-3 rounded-md bg-primary-500 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+        className="h-[34px] px-3 rounded-md bg-primary-fill text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-fill-hover active:scale-95 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
         title={t('editor.translateTitle')}
         data-testid="editor-translate-button"
       >
@@ -143,7 +143,7 @@ export function WorkflowActions(): JSX.Element {
             <ClipboardCheck size={15} />
             <span>{t('editor.review', '검수')}</span>
             {issueCount > 0 && (
-              <span className="min-w-[17px] h-[17px] px-1 bg-primary-500 text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
+              <span className="min-w-[17px] h-[17px] px-1 bg-primary-fill text-white text-[11px] font-bold rounded-sm inline-flex items-center justify-center tabular-nums">
                 {issueCount}
               </span>
             )}
@@ -240,7 +240,7 @@ export function WorkflowActions(): JSX.Element {
             <button
               type="button"
               onClick={startReview}
-              className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors"
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover active:scale-95 transition-colors"
               data-testid="review-modal-start"
             >
               {t('editor.reviewModal.execute', '검수 시작')}

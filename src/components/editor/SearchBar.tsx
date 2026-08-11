@@ -253,7 +253,7 @@ export function SearchBar({
           onClick={handleToggleCaseSensitive}
           className={`w-[34px] h-[34px] flex items-center justify-center rounded text-xs font-bold border active:scale-95 transition-colors ${FOCUS_RING} ${
             caseSensitive
-              ? 'bg-primary-500 text-white border-primary-500'
+              ? 'bg-primary-fill text-white border-primary-500'
               : 'bg-editor-bg text-editor-muted border-editor-border hover:bg-editor-surface'
           }`}
           title={t('editor.search.caseSensitive', '대소문자 구분')}
@@ -299,7 +299,7 @@ export function SearchBar({
             onClick={handleToggleReplace}
             className={`w-[34px] h-[34px] flex items-center justify-center rounded border active:scale-95 transition-colors ${FOCUS_RING} ${
               showReplace
-                ? 'bg-primary-500 text-white border-primary-500'
+                ? 'bg-primary-fill text-white border-primary-500'
                 : 'bg-editor-bg text-editor-muted border-editor-border hover:bg-editor-surface'
             }`}
             title={t('editor.search.toggleReplace', '치환 모드')}

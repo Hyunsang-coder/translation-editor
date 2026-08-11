@@ -192,7 +192,7 @@ export function ProjectGlossarySection({
                   type="button"
                   onClick={() => void handleQuickAdd()}
                   disabled={!source.trim() || !target.trim() || saving}
-                  className="rounded bg-primary-500 px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-600 disabled:opacity-40"
+                  className="rounded bg-primary-fill px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-fill-hover disabled:opacity-40"
                 >
                   {t('glossaryManager.add')}
                 </button>

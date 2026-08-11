@@ -267,7 +267,7 @@ export function ReviewTestPanel(): JSX.Element {
               type="button"
               onClick={runSingleChunkReview}
               disabled={isRunning || !currentChunk}
-              className="px-3 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-50"
+              className="px-3 py-1 text-xs rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-50"
             >
               {isRunning ? '실행 중...' : '청크 검수 실행'}
             </button>
@@ -485,7 +485,7 @@ export function ReviewTestPanel(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setEditorRawText(getEditorText())}
-                className="px-3 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600"
+                className="px-3 py-1 text-xs rounded bg-primary-fill text-white hover:bg-primary-fill-hover"
               >
                 에디터 텍스트 가져오기
               </button>

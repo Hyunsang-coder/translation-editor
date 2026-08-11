@@ -140,7 +140,7 @@ export function Toolbar(): JSX.Element {
         >
           <NotebookPen size={17} />
           {commentCount > 0 && (
-            <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-[3px] box-border rounded-full bg-primary-500 text-white text-[10px] font-semibold leading-[14px] text-center tabular-nums">
+            <span className="absolute top-1 right-0.5 min-w-[14px] h-[14px] px-[3px] box-border rounded-full bg-primary-fill text-white text-[10px] font-semibold leading-[14px] text-center tabular-nums">
               {commentCount}
             </span>
           )}

@@ -128,7 +128,7 @@ export function HistoryTimeline({
         <button
           type="button"
           onClick={onSave}
-          className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+          className="px-2 py-1 text-xs rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
         >
           {t('history.save')}
         </button>
@@ -184,7 +184,7 @@ export function HistoryTimeline({
               <button
                 type="button"
                 onClick={() => onRestore(snapshot.id)}
-                className="px-2 py-1 text-xs rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                className="px-2 py-1 text-xs rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
               >
                 {t('history.restore')}
               </button>

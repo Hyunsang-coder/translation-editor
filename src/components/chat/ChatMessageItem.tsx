@@ -187,7 +187,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
     return (
       <div className="mt-2">
         <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-editor-border bg-editor-bg text-[11px] text-editor-muted max-w-full">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-500" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary-fill" />
           <span className="truncate">{t('chat.toolUsed', { label })}</span>
         </div>
       </div>
@@ -264,7 +264,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1.5 rounded-md text-xs bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60"
+                  className="px-3 py-1.5 rounded-md text-xs bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-60"
                   disabled={!editDraft.trim()}
                   onClick={handleSaveEdit}
                   title={t('chat.saveAfterEdit')}
@@ -487,7 +487,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             <div className="mt-2">
               <div className="mb-2 p-2.5 rounded bg-editor-bg border border-editor-border">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-1 h-3 bg-primary-500 rounded-full" />
+                  <div className="w-1 h-3 bg-primary-fill rounded-full" />
                   <span className="text-[10px] font-bold text-editor-muted uppercase tracking-wider">
                     {t('chat.suggestedRule')}
                   </span>

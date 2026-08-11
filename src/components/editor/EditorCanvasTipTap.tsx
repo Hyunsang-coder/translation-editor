@@ -1669,7 +1669,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               aria-pressed={editorViewMode === mode}
               className={`h-[26px] px-3 text-xs active:scale-95 transition-colors ${
                 editorViewMode === mode
-                  ? 'bg-primary-500 text-white font-semibold'
+                  ? 'bg-primary-fill text-white font-semibold'
                   : 'font-semibold text-editor-muted hover:bg-editor-border'
               }`}
               data-testid={`editor-view-mode-${mode}`}
@@ -1968,7 +1968,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   setPolishModalOpen(false);
                   void openPolishPreview(polishMessage);
                 }}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
               >
                 {t('editor.polishModal.execute', '폴리싱 실행')}
               </button>
@@ -2032,7 +2032,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   setRetranslateModalOpen(false);
                   void openTranslatePreview(retranslateMessage);
                 }}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
               >
                 {t('review.retranslate.modal.execute', '재번역 실행')}
               </button>

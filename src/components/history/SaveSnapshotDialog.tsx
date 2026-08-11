@@ -58,7 +58,7 @@ export function SaveSnapshotDialog({
             type="button"
             onClick={() => void onSave(description.trim())}
             disabled={isSaving}
-            className="px-3 py-1.5 text-sm rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 active:scale-95 transition-colors"
+            className="px-3 py-1.5 text-sm rounded bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-60 active:scale-95 transition-colors"
           >
             {isSaving ? t('common.loading') : t('common.save')}
           </button>

@@ -352,7 +352,7 @@ export function AlignmentView(): JSX.Element {
         </span>
 
         <span className="flex-1 max-w-[420px] h-2 bg-editor-border rounded overflow-hidden flex" aria-hidden="true">
-          <span className="h-full bg-primary-500" style={{ width: `${pairedPercent}%` }} />
+          <span className="h-full bg-primary-fill" style={{ width: `${pairedPercent}%` }} />
           <span className="h-full bg-severity-major/70" style={{ width: `${100 - pairedPercent}%` }} />
         </span>
 

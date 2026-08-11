@@ -49,7 +49,7 @@ export function SelectionInlineToolbar({
         <button
           type="button"
           data-testid="selection-inline-retranslate"
-          className={`${itemClassName} bg-primary-500 text-white hover:bg-primary-600`}
+          className={`${itemClassName} bg-primary-fill text-white hover:bg-primary-fill-hover`}
           title={t('editor.retranslateSelection')}
           onClick={onRetranslateSelection}
         >

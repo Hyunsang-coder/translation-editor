@@ -98,7 +98,7 @@ function SegmentedControl<T extends string>({ value, options, onChange, label }:
           onClick={() => onChange(option.value)}
           className={`h-7 rounded-md px-2.5 text-xs font-medium active:scale-95 transition-colors ${
             value === option.value
-              ? 'bg-primary-500 text-white shadow-sm'
+              ? 'bg-primary-fill text-white shadow-sm'
               : 'text-editor-muted hover:bg-editor-border/60 hover:text-editor-text'
           }`}
         >
@@ -533,7 +533,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                                 type="button"
                                 onClick={() => handleToggleRegistration('register_claude_desktop_mcp', setDesktopBusy, setDesktopReg)}
                                 disabled={desktopBusy}
-                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary-fill text-white hover:bg-primary-fill-hover active:scale-95 transition-colors disabled:opacity-50"
                             >
                                 {desktopBusy
                                     ? t('appSettings.claudeDesktop.registering')

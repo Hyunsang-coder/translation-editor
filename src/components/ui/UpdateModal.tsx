@@ -62,7 +62,7 @@ export function UpdateModal({
             </div>
             <div className="w-full bg-editor-border rounded-full h-2 mb-3">
               <div
-                className="bg-primary-500 h-2 rounded-full transition-all"
+                className="bg-primary-fill h-2 rounded-full transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -92,7 +92,7 @@ export function UpdateModal({
               </button>
               <button
                 onClick={onUpdate}
-                className="px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600"
+                className="px-4 py-2 bg-primary-fill text-white rounded hover:bg-primary-fill-hover"
               >
                 {t('update.updateNow', '지금 업데이트')}
               </button>

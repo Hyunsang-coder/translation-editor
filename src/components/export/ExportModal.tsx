@@ -279,7 +279,7 @@ export function ExportModal({ open, onClose }: ExportModalProps): JSX.Element | 
             type="button"
             onClick={handleSave}
             disabled={busy}
-            className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 active:scale-95 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm rounded-lg bg-primary-fill text-white hover:bg-primary-fill-hover active:scale-95 transition-colors disabled:opacity-50"
           >
             {t('export.saveToFile')}
           </button>

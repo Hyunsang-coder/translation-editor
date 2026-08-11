@@ -94,7 +94,7 @@ export function VisualDiffViewer({
             {onAccept && (
               <button
                 onClick={onAccept}
-                className="px-4 py-2 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm"
+                className="px-4 py-2 rounded-md text-sm font-medium bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors shadow-sm"
               >
                 {acceptLabel}
               </button>

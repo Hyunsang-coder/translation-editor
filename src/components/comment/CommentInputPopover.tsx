@@ -96,8 +96,8 @@ export function CommentInputPopover({
           disabled={!value.trim()}
           className="
             px-2.5 py-1 text-xs rounded-md font-medium
-            bg-primary-500 text-white
-            hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed
+            bg-primary-fill text-white
+            hover:bg-primary-fill-hover disabled:opacity-40 disabled:cursor-not-allowed
           "
         >
           {t('common.save', '저장')}

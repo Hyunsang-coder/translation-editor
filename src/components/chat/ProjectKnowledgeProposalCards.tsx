@@ -35,7 +35,7 @@ function ActionButton({
       disabled={disabled}
       className={`rounded-lg px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
         primary
-          ? 'bg-primary-500 font-medium text-white hover:bg-primary-600'
+          ? 'bg-primary-fill font-medium text-white hover:bg-primary-fill-hover'
           : 'border border-editor-border text-editor-muted hover:bg-editor-border/60'
       }`}
       onClick={onClick}

@@ -380,7 +380,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
             )}
             <button
               type="button"
-              className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-60 transition-colors flex items-center gap-1.5"
               onClick={handleApply}
               disabled={isLoading || !docJson || isApplying || (selectiveActive && selectedCount === 0)}
               title={t('common.apply')}
@@ -445,7 +445,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                     {streamingText ? (
                       <div className="whitespace-pre-wrap font-mono text-sm text-editor-text leading-relaxed">
                         {streamingText}
-                        <span className="inline-block w-2 h-4 bg-primary-500 animate-pulse ml-0.5 align-middle" />
+                        <span className="inline-block w-2 h-4 bg-primary-fill animate-pulse ml-0.5 align-middle" />
                       </div>
                     ) : (
                       <SkeletonParagraph seed={1} lines={9} />
@@ -477,7 +477,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                     <div className="flex items-center gap-2">
                       <div className="w-32 h-1.5 bg-editor-border rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                          className="h-full bg-primary-fill transition-all duration-300 ease-out"
                           style={{ width: `${Math.round((progress.completed / progress.total) * 100)}%` }}
                         />
                       </div>
@@ -503,7 +503,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
                     <button
                       type="button"
                       onClick={onRetry}
-                      className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
+                      className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
                     >
                       {t('common.retry')}
                     </button>
