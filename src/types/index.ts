@@ -252,15 +252,19 @@ export interface ContextReferenceOptions {
 /**
  * 부분 수정의 기본 참조 범위.
  *
- * 번역 규칙과 금칙어는 모든 문장에 적용되는 전역 제약이고 크기도 작아 기본으로 켠다.
- * 이 둘이 빠진 채 생성된 수정안은 문장으로는 멀쩡해 보여서 문서 내 불일치를 조용히
- * 만들어낸다. 반면 용어집과 프로젝트 메모리는 크고 질의에 따라 필요한 것이 달라지므로
- * 사용자가 필요할 때 켜도록 둔다.
+ * 번역 규칙·금칙어·용어집은 모두 문서 전체에 적용되는 확정 사항이라 기본으로 켠다.
+ * 이것들이 빠진 채 생성된 수정안은 문장으로는 멀쩡해 보여서 문서 내 불일치를 조용히
+ * 만들어낸다 — 재번역은 이미 번역된 문장을 고치는 자리이므로 주변과 어긋나는 용어를
+ * 넣는 것이 가장 나쁜 결과다.
+ *
+ * 용어집이 처음에 꺼져 있던 이유는 "크다"였는데, 실제로는 선택한 원문으로 검색해
+ * 상위 12개만 주입한다(`resolveGlossaryEntries`). 크기 근거가 성립하지 않는다.
+ * 반면 프로젝트 메모리는 질의와 무관하게 최대 20개가 통째로 들어가므로 그대로 둔다.
  */
 export const DEFAULT_SELECTION_REFERENCE_OPTIONS: ContextReferenceOptions = {
   translationRules: true,
   forbiddenTerms: true,
-  glossary: false,
+  glossary: true,
   projectContext: false,
 };
 

@@ -52,11 +52,11 @@ function renderModal(overrides: Partial<Parameters<typeof SelectionEditPreviewMo
 }
 
 describe('SelectionEditPreviewModal', () => {
-  it('전역 제약(번역 규칙·금칙어)은 켜고, 질의 의존 컨텍스트는 끈 채로 시작한다', () => {
+  it('문서 전체에 걸린 확정 사항(규칙·금칙어·용어집)은 켜고, 프로젝트 메모리는 끈 채로 시작한다', () => {
     renderModal();
     expect(screen.getByTestId('selection-reference-translationRules')).toBeChecked();
     expect(screen.getByTestId('selection-reference-forbiddenTerms')).toBeChecked();
-    expect(screen.getByTestId('selection-reference-glossary')).not.toBeChecked();
+    expect(screen.getByTestId('selection-reference-glossary')).toBeChecked();
     expect(screen.getByTestId('selection-reference-projectContext')).not.toBeChecked();
   });
 
