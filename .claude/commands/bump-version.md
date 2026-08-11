@@ -101,16 +101,19 @@ git push && git push origin v1.1.0
    ✓ Tagged: v1.1.0
    ✓ Pushed to origin
 
-   🚀 GitHub Actions가 자동으로:
-      1. Draft release 생성
-      2. macOS/Windows 빌드
+   🚀 GitHub Actions가 자동으로 (수동 단계 없음):
+      1. Draft release 생성 (create-release)
+      2. 검증 + macOS/Windows 빌드 (verify, build)
       3. 아티팩트 업로드
+      4. Draft → 공개 전환 (publish-release: draft=false)
 
       확인: https://github.com/<owner>/<repo>/actions
-
-   📝 빌드 완료 후 Draft release publish:
-      https://github.com/<owner>/<repo>/releases
+      결과: https://github.com/<owner>/<repo>/releases
 ```
+
+publish까지 워크플로가 처리한다(`build.yml`의 `publish-release` 잡이
+`needs: [create-release, verify, build]`로 게이트된 뒤 `draft: false`로 뒤집는다).
+사용자에게 "빌드 후 직접 publish하라"고 안내하지 않는다.
 
 ## Usage Examples
 
