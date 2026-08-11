@@ -151,7 +151,7 @@ export function Toolbar(): JSX.Element {
           onClick={handleChat}
           disabled={!project}
           aria-pressed={isAnyChatVisible}
-          className={`${TOOL_BUTTON_CLASS} ${isAnyChatVisible ? 'text-primary-500 bg-primary-500/10 hover:bg-primary-500/15 hover:text-primary-500' : ''}`}
+          className={`${TOOL_BUTTON_CLASS} ${isAnyChatVisible ? 'text-accent-deep bg-primary-500/10 hover:bg-primary-500/15 hover:text-accent-deep' : ''}`}
           title={t('toolbar.aiChat')}
           aria-label={t('toolbar.aiChat')}
           data-testid="toolbar-menu-chat"

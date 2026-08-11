@@ -198,7 +198,7 @@ export function HistoryTimeline({
               <button
                 type="button"
                 onClick={() => onDelete(snapshot.id)}
-                className="px-2 py-1 text-xs rounded border border-severity-critical/40 text-severity-critical hover:bg-severity-critical/10 transition-colors"
+                className="px-2 py-1 text-xs rounded border border-severity-critical/40 text-severity-critical-deep hover:bg-severity-critical/10 transition-colors"
               >
                 {t('history.delete')}
               </button>

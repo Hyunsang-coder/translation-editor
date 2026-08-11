@@ -47,6 +47,13 @@
   --severity-critical: rgb(var(--severity-critical-rgb));
   --severity-major: rgb(var(--severity-major-rgb));
 
+  /* 같은 색 틴트 위에 얹는 글자 전용 (--accent-deep과 같은 성격, 새 의미색이 아니다).
+     원본 의미색은 흰 배경에서도 4.9~5.4:1이라 같은 색 틴트를 깔면 4.5 아래로 떨어진다.
+     다크에서는 밝은 원본이 어두운 틴트 위에서 이미 충분해 그대로 가리킨다. */
+  --severity-critical-deep: #a3000f;
+  --severity-major-deep: #8f3800;
+  --diff-insertion-deep: #14682c;
+
   /* 세그먼트/이슈 상태 — primary 파생 틴트 */
   --accent-tint: rgba(0, 102, 204, 0.08);
   /* 선택된 행/카드 바탕 */
@@ -87,6 +94,12 @@
   --accent-tint: rgba(10, 132, 255, 0.12);
   --accent-highlight: rgba(10, 132, 255, 0.24);
   --accent-deep: #a8d0ff;
+
+  /* 다크에서는 반대로 밝혀야 한다 — --accent-deep이 #a8d0ff인 것과 같은 이유.
+     원본 #ff453a는 어두운 틴트 위에서 3.3~4.4:1에 그친다. hover 틴트(/30)까지 통과하는 값. */
+  --severity-critical-deep: #ff8a83;
+  --severity-major-deep: #ffb340;
+  --diff-insertion-deep: #5ce074;
 
   --diff-insertion-bg: rgba(50, 215, 75, 0.26);
   --diff-deletion-bg: rgba(255, 69, 58, 0.24);

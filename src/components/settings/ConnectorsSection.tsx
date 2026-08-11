@@ -103,7 +103,7 @@ function ConnectorItem({
                 <button
                   onClick={onDisconnect}
                   disabled={isConnecting}
-                  className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-severity-critical/20 hover:text-severity-critical transition-colors disabled:opacity-50"
+                  className="px-2 py-1 text-xs rounded bg-editor-border hover:bg-severity-critical/20 hover:text-severity-critical-deep transition-colors disabled:opacity-50"
                 >
                   {t('appSettings.connectors.disconnect')}
                 </button>
@@ -112,7 +112,7 @@ function ConnectorItem({
                   <button
                     onClick={onConnect}
                     disabled={isConnecting}
-                    className="px-2 py-1 text-xs rounded bg-severity-major/20 text-severity-major hover:bg-severity-major/30 transition-colors disabled:opacity-50"
+                    className="px-2 py-1 text-xs rounded bg-severity-major/10 text-severity-major-deep hover:bg-severity-major/20 transition-colors disabled:opacity-50"
                   >
                     {isConnecting ? '...' : t('appSettings.connectors.retry')}
                   </button>
@@ -120,7 +120,7 @@ function ConnectorItem({
                     <button
                       onClick={onClearAll}
                       disabled={isConnecting}
-                      className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
+                      className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical-deep hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
                       title={t('appSettings.connectors.clearAllTooltip')}
                     >
                       {t('appSettings.connectors.clearAll')}
@@ -141,7 +141,7 @@ function ConnectorItem({
                 <button
                   onClick={onClearAll}
                   disabled={isConnecting}
-                  className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
+                  className="px-2 py-1 text-xs rounded bg-severity-critical/10 text-severity-critical-deep hover:bg-severity-critical/20 transition-colors disabled:opacity-50"
                   title={t('appSettings.connectors.clearAllTooltip')}
                 >
                   {t('appSettings.connectors.clearAll')}

@@ -232,7 +232,7 @@ export function SelectionEditPreviewModal({
           </div>
         )}
         {error && (
-          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical">
+          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep">
             {error}
           </div>
         )}

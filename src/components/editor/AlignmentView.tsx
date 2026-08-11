@@ -297,7 +297,7 @@ export function AlignmentView(): JSX.Element {
                       <button
                         type="button"
                         onClick={() => jumpToUnit(entry.id, entry.field)}
-                        className="ml-auto h-6 px-2.5 shrink-0 border border-severity-major bg-editor-bg rounded text-[11px] font-bold text-severity-major hover:bg-severity-major/10 active:scale-95 transition-colors"
+                        className="ml-auto h-6 px-2.5 shrink-0 border border-severity-major bg-editor-bg rounded text-[11px] font-bold text-severity-major-deep hover:bg-severity-major/10 active:scale-95 transition-colors"
                         data-testid="alignment-band-open"
                       >
                         {t('editor.alignment.mismatch.openInDocument')}

@@ -336,7 +336,7 @@ export function GlossaryManagerModal({
       <div className="flex h-[min(760px,88vh)] w-[min(1080px,94vw)] flex-col overflow-hidden rounded-xl border border-editor-border bg-editor-surface shadow-2xl">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-editor-hairline bg-editor-bg px-5">
           <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/15 text-primary-500">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/15 text-accent-deep">
               <BookOpen size={17} />
             </span>
             <div>
@@ -368,7 +368,7 @@ export function GlossaryManagerModal({
                 type="button"
                 onClick={() => setShowNewGlossary(true)}
                 disabled={loading}
-                className="rounded p-1 text-primary-500 hover:bg-primary-500/10 disabled:opacity-40"
+                className="rounded p-1 text-accent-deep hover:bg-primary-500/10 disabled:opacity-40"
                 aria-label={t('glossaryManager.newGlossary')}
               >
                 <Plus size={16} />
@@ -523,7 +523,7 @@ export function GlossaryManagerModal({
                       type="button"
                       onClick={() => void handleDeleteGlossary()}
                       disabled={loading || saving}
-                      className="rounded p-2 text-editor-muted hover:bg-severity-critical/10 hover:text-severity-critical"
+                      className="rounded p-2 text-editor-muted hover:bg-severity-critical/10 hover:text-severity-critical-deep"
                       aria-label={t('glossaryManager.deleteGlossary')}
                     >
                       <Trash2 size={15} />
@@ -700,7 +700,7 @@ export function GlossaryManagerModal({
                   </div>
 
                   {error && (
-                    <div className="mb-2 rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical">
+                    <div className="mb-2 rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep">
                       {error}
                     </div>
                   )}
@@ -750,7 +750,7 @@ export function GlossaryManagerModal({
                             type="button"
                             onClick={() => void handleDeleteEntry(entry)}
                             disabled={loading || saving}
-                            className="rounded p-1.5 text-editor-muted hover:bg-severity-critical/10 hover:text-severity-critical"
+                            className="rounded p-1.5 text-editor-muted hover:bg-severity-critical/10 hover:text-severity-critical-deep"
                             aria-label={t('glossaryManager.deleteTerm')}
                           >
                             <Trash2 size={13} />

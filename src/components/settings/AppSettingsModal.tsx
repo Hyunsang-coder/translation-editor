@@ -354,7 +354,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     {t('appSettings.apiKeysDescription')}
                 </p>
                 {secureKeyPersistError && (
-                    <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical">
+                    <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep">
                         <p>{t('appSettings.apiKeysSaveFailed')}</p>
                         <p className="mt-1 break-words opacity-80">
                             {t('appSettings.apiKeysSaveFailedDetail', { message: secureKeyPersistError })}
@@ -476,7 +476,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                             type="button"
                             onClick={() => setShowSecureStorageResetConfirm(true)}
                             disabled={isResettingSecureStorage}
-                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-severity-major/40 text-severity-major hover:bg-severity-major/10 active:scale-95 transition-colors disabled:opacity-50"
+                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-severity-major/40 text-severity-major-deep hover:bg-severity-major/10 active:scale-95 transition-colors disabled:opacity-50"
                         >
                             {isResettingSecureStorage
                                 ? t('appSettings.secureStorageResetting')
@@ -515,7 +515,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
                     <div className="flex items-center gap-3 flex-wrap">
                         {desktopReg?.status === 'registered' ? (
                             <>
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-diff-insertion/10 text-diff-insertion dark:bg-diff-insertion/30 dark:text-diff-insertion">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-diff-insertion/10 text-diff-insertion-deep dark:bg-diff-insertion/30 dark:text-diff-insertion-deep">
                                     <span className="w-1.5 h-1.5 rounded-full bg-diff-insertion" />
                                     {t('appSettings.claudeDesktop.registered')}
                                 </span>
@@ -688,7 +688,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
           </p>
         </div>
         {secureStorageResetError && (
-          <p className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical break-words">
+          <p className="rounded-md border border-severity-critical/30 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep break-words">
             {t('appSettings.secureStorageResetFailed', { message: secureStorageResetError })}
           </p>
         )}

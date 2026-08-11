@@ -9,11 +9,11 @@ import type { IssueSeverity } from '@/stores/reviewStore';
 function severityBadgeClass(severity: IssueSeverity | null): string {
   switch (severity) {
     case 'critical':
-      return 'bg-severity-critical/10 text-severity-critical';
+      return 'bg-severity-critical/10 text-severity-critical-deep';
     case 'major':
-      return 'bg-severity-major/10 text-severity-major';
+      return 'bg-severity-major/10 text-severity-major-deep';
     default:
-      return 'bg-primary-500/10 text-primary-500';
+      return 'bg-primary-500/10 text-accent-deep';
   }
 }
 
@@ -133,7 +133,7 @@ export function AlignmentRow({
             1:1
           </span>
         ) : (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-severity-major/20 text-severity-major">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-severity-major/20 text-severity-major-deep">
             {op.kind === 'source-only' ? '1:0' : '0:1'}
           </span>
         )}

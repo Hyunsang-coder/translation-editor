@@ -105,7 +105,7 @@ export function ProjectGlossarySection({
         </div>
 
         {error && projectGlossaries.length === 0 ? (
-          <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 p-2.5 text-xs text-severity-critical">
+          <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 p-2.5 text-xs text-severity-critical-deep">
             {error}
           </div>
         ) : loading ? (
@@ -119,7 +119,7 @@ export function ProjectGlossarySection({
                 key={glossary.id}
                 className="group flex items-center gap-2 rounded-md border border-editor-border bg-editor-surface px-2.5 py-2"
               >
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-[10px] font-semibold text-primary-500">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-[10px] font-semibold text-accent-deep">
                   {index + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-editor-text">
@@ -132,7 +132,7 @@ export function ProjectGlossarySection({
                   type="button"
                   onClick={() => void handleUnlink(glossary.id)}
                   disabled={saving}
-                  className="rounded p-0.5 text-editor-muted opacity-0 transition-opacity hover:bg-severity-critical/10 hover:text-severity-critical group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
+                  className="rounded p-0.5 text-editor-muted opacity-0 transition-opacity hover:bg-severity-critical/10 hover:text-severity-critical-deep group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40"
                   aria-label={t('glossaryManager.unlinkFromProject', { name: glossary.name })}
                   title={t('glossaryManager.unlinkFromProject', { name: glossary.name })}
                 >

@@ -24,6 +24,9 @@ export default {
         severity: {
           critical: 'rgb(var(--severity-critical-rgb) / <alpha-value>)',
           major: 'rgb(var(--severity-major-rgb) / <alpha-value>)',
+          // 같은 색 틴트 위 글자 전용 (accent.deep과 같은 성격) — 배경으로 쓰지 않는다
+          'critical-deep': 'var(--severity-critical-deep)',
+          'major-deep': 'var(--severity-major-deep)',
         },
         // 에디터 전용 컬러
         editor: {
@@ -47,6 +50,7 @@ export default {
           deletion: 'rgb(var(--diff-deletion-rgb) / <alpha-value>)',
           'insertion-bg': 'var(--diff-insertion-bg)',
           'deletion-bg': 'var(--diff-deletion-bg)',
+          'insertion-deep': 'var(--diff-insertion-deep)',
         },
       },
       // index.css --font-sans와 항상 동일해야 한다 (폰트 스택 단일화)

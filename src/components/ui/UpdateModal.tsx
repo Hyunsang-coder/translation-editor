@@ -48,7 +48,7 @@ export function UpdateModal({
         )}
 
         {error && (
-          <div className="bg-severity-critical/10 text-severity-critical rounded p-3 mb-4 text-sm">
+          <div className="bg-severity-critical/10 text-severity-critical-deep rounded p-3 mb-4 text-sm">
             <p>{t('update.downloadFailed', '다운로드에 실패했습니다. 나중에 다시 시도해주세요.')}</p>
             <p className="mt-1 text-xs opacity-75 font-mono">{error}</p>
           </div>

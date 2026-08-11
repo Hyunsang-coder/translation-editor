@@ -316,7 +316,7 @@ export function ReviewTestPanel(): JSX.Element {
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-severity-critical/10 border-b border-severity-critical/30 text-severity-critical text-xs">
+        <div className="p-3 bg-severity-critical/10 border-b border-severity-critical/30 text-severity-critical-deep text-xs">
           {error}
         </div>
       )}

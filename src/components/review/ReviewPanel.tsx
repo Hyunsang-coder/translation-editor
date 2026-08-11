@@ -1015,7 +1015,7 @@ export function ReviewPanel(): JSX.Element {
             {results.length > 0 && (
               <>
                 {hasErrors && (
-                  <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical">
+                  <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical-deep">
                     {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
                   </div>
                 )}
@@ -1039,7 +1039,7 @@ export function ReviewPanel(): JSX.Element {
           // 검수 결과 표시
           <div className="space-y-4">
             {hasErrors && (
-              <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical">
+              <div className="p-3 bg-severity-critical/10 border border-severity-critical/30 rounded text-sm text-severity-critical-deep">
                 {t('review.hasErrors', '일부 청크에서 오류가 발생했습니다.')}
               </div>
             )}
