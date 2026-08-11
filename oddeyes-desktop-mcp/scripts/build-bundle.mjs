@@ -22,7 +22,9 @@ const manifestTemplate = JSON.parse(await fs.readFile(manifestTemplatePath, 'utf
 
 manifestTemplate.version = packageJson.version;
 
-await fs.rm(buildDir, { recursive: true, force: true });
+// maxRetries가 없으면 macOS에서 ENOTEMPTY로 죽는다. fs.rm은 "목록 조회 → 항목 삭제
+// → rmdir" 순서라, 그 사이에 Finder가 .DS_Store를 다시 쓰면 마지막 rmdir이 실패한다.
+await fs.rm(buildDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 await fs.mkdir(extensionServerDir, { recursive: true });
 await fs.mkdir(extensionNodeModulesDir, { recursive: true });
 

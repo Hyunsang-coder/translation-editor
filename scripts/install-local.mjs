@@ -5,13 +5,15 @@
  * 사용: npm run install:local [-- --skip-build]
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, renameSync, cpSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, renameSync, cpSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const productName = JSON.parse(
+const tauriConf = JSON.parse(
   readFileSync(path.join(root, 'src-tauri', 'tauri.conf.json'), 'utf8'),
-).productName;
+);
+const productName = tauriConf.productName;
+const expectedVersion = tauriConf.version;
 const appName = `${productName}.app`;
 const builtApp = path.join(
   root, 'src-tauri', 'target', 'release', 'bundle', 'macos', appName,
@@ -48,6 +50,7 @@ if (running.status === 0) {
 
 if (!skipBuild) {
   console.log('🔨 릴리스 빌드 중...');
+  const buildStartedAt = Date.now();
   const build = spawnSync('npm', ['run', 'tauri:build'], {
     stdio: 'inherit',
     cwd: root,
@@ -61,11 +64,21 @@ if (!skipBuild) {
   });
   // 종료 코드만 보고 판단하지 않는다. 업데이터 서명 키(TAURI_SIGNING_PRIVATE_KEY)가
   // 없으면 tauri가 마지막에 에러로 끝나지만, .app/.dmg는 그 전에 이미 만들어진다.
-  // 로컬 설치에는 서명된 업데이터 아티팩트가 필요 없으므로 산출물 존재로 판정한다.
-  if (build.status !== 0 && !existsSync(builtApp)) {
-    fail('빌드에 실패했습니다.');
-  }
+  // 로컬 설치에는 서명된 업데이터 아티팩트가 필요 없으므로 산출물로 판정한다.
+  //
+  // 다만 "있다"만으로는 부족하다. 빌드가 번들링 **전에** 죽으면 지난 실행의 산출물이
+  // 그대로 남아 있어 낡은 앱이 조용히 설치된다 — 실제로 3.5.2 설치본이 어제 만든
+  // 3.5.1로 downgrade된 적이 있다. 이번 빌드가 만든 것인지 mtime으로 가른다.
   if (build.status !== 0) {
+    if (!existsSync(builtApp)) {
+      fail('빌드에 실패했습니다.');
+    }
+    if (statSync(builtApp).mtimeMs < buildStartedAt) {
+      fail(
+        '빌드에 실패했고 산출물은 이전 실행의 것입니다. '
+        + '낡은 앱을 설치하지 않고 중단합니다.',
+      );
+    }
     console.log('⚠️  업데이터 서명은 건너뛰었습니다(로컬 설치에는 불필요).');
   }
 }
@@ -75,6 +88,14 @@ if (!existsSync(builtApp)) {
 }
 
 const newVersion = appVersion(builtApp);
+// --skip-build는 산출물을 그대로 믿는 경로라 낡음이 가장 잘 숨는다. 설정 버전과
+// 대조해, 버전을 올린 뒤 빌드 없이 설치하는 실수를 여기서 잡는다.
+if (newVersion !== expectedVersion) {
+  fail(
+    `빌드 산출물이 설정 버전과 다릅니다 (tauri.conf.json ${expectedVersion}, `
+    + `산출물 ${newVersion ?? '읽기 실패'}). 낡은 산출물일 수 있어 중단합니다.`,
+  );
+}
 const oldVersion = existsSync(installedApp) ? appVersion(installedApp) : null;
 
 rmSync(backupApp, { recursive: true, force: true });
