@@ -297,6 +297,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   const selectionReferenceOptionsRef = useRef<ContextReferenceOptions>({
     ...DEFAULT_SELECTION_REFERENCE_OPTIONS,
   });
+  // 추가 지시사항도 같은 이유로 프로젝트 단위로 유지한다. 지우려면 입력칸을 비우면 된다.
+  const selectionInstructionRef = useRef<string>('');
 
   // 코멘트 입력 popover 상태
   const [commentPopover, setCommentPopover] = useState<null | {
@@ -726,7 +728,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       sourceText: initialAlignment.text,
       sourceAlignmentPrecision: initialAlignment.precision,
       currentTargetUnitText,
-      instruction: '',
+      instruction: selectionInstructionRef.current,
       // 번역사는 한 문서에서 같은 참조 범위로 여러 문장을 고친다. 선택마다 초기화하면
       // 매번 같은 선택을 반복해야 하므로 프로젝트 안에서는 직전 설정을 유지한다.
       referenceOptions: { ...selectionReferenceOptionsRef.current },
@@ -1480,6 +1482,13 @@ export function EditorCanvasTipTap(): JSX.Element {
     setSelectionEdit(null);
     setSelectionToolbar(null);
     selectionReferenceOptionsRef.current = { ...DEFAULT_SELECTION_REFERENCE_OPTIONS };
+    selectionInstructionRef.current = '';
+    // 지시사항은 프로젝트의 스타일·용어 결정이라 다른 프로젝트로 넘기지 않는다.
+    // 입력칸을 열어보기 전에는 눈치챌 수 없어 조용히 결과에 섞이기 때문.
+    setRetranslateModalOpen(false);
+    setRetranslateMessage('');
+    setPolishModalOpen(false);
+    setPolishMessage('');
     setTranslatePreviewOpen(false);
     setTranslatePreviewDoc(null);
     setTranslatePreviewError(null);
@@ -2134,15 +2143,16 @@ export function EditorCanvasTipTap(): JSX.Element {
         contextManifest={selectionEdit?.contextManifest}
         isLoading={selectionEdit?.loading ?? false}
         error={selectionEdit?.error}
-        onInstructionChange={(instruction) =>
+        onInstructionChange={(instruction) => {
+          selectionInstructionRef.current = instruction;
           // 결과(replacementText)는 지우지 않는다 — 수동 편집을 지시문 타이핑이
           // 날려버리지 않도록. 재생성은 "다시 재번역" 버튼이 명시적으로 한다.
           setSelectionEdit((current) => current ? {
             ...current,
             instruction,
             error: null,
-          } : null)
-        }
+          } : null);
+        }}
         onReplacementChange={(replacementText) =>
           setSelectionEdit((current) => current ? {
             ...current,
