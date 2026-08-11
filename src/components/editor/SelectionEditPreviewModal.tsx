@@ -201,21 +201,47 @@ export function SelectionEditPreviewModal({
                   autoFocus
                 />
               ) : (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {changes.map((change, index) => (
-                    <span
-                      key={`${index}-${change.value}`}
-                      className={
-                        change.added
-                          ? 'bg-diff-insertion-bg text-editor-text'
-                          : change.removed
-                            ? 'bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion'
-                            : 'text-editor-text'
-                      }
-                    >
-                      {change.value}
-                    </span>
-                  ))}
+                // SelectiveDiffList(폴리싱)와 같은 좌우 비교 — 삽입·삭제를 한 줄에
+                // 섞으면 취소선 사이로 문장이 끊겨 읽기 어렵다.
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 sm:border-r sm:border-editor-hairline/40 sm:pr-3">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-severity-critical/80">
+                      {t('editor.selectiveDiff.original', '기존')}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-muted">
+                      {changes.map((change, index) =>
+                        change.added ? null : change.removed ? (
+                          <span
+                            key={`${index}-${change.value}`}
+                            className="bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion decoration-1 rounded-[2px] px-0.5"
+                          >
+                            {change.value}
+                          </span>
+                        ) : (
+                          <span key={`${index}-${change.value}`}>{change.value}</span>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-diff-insertion/80">
+                      {t('editor.selectiveDiff.suggested', '제안')}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-text">
+                      {changes.map((change, index) =>
+                        change.removed ? null : change.added ? (
+                          <span
+                            key={`${index}-${change.value}`}
+                            className="bg-diff-insertion-bg text-editor-text rounded-[2px] px-0.5"
+                          >
+                            {change.value}
+                          </span>
+                        ) : (
+                          <span key={`${index}-${change.value}`}>{change.value}</span>
+                        ),
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             ) : (
