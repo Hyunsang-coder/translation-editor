@@ -131,7 +131,7 @@ function ConnectorItem({
                 <button
                   onClick={onConnect}
                   disabled={isConnecting}
-                  className="px-2 py-1 text-xs rounded bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
+                  className="px-2 py-1 text-xs rounded bg-primary-500/10 text-primary-600 dark:text-primary-400 hover:bg-primary-500/20 transition-colors disabled:opacity-50"
                 >
                   {isConnecting ? '...' : t('appSettings.connectors.connect')}
                 </button>
