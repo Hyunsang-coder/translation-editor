@@ -14,6 +14,9 @@ export function registerDocumentTools(
     {
       description:
         "Get the current OddEyes project/document status and revisions. " +
+        "`targetLanguage` is the *resolved* direction: when the project is set to Auto it is derived " +
+        "from the source document (Korean source → English target, and vice versa), and it is null " +
+        "only when neither the setting nor the source settles it. " +
         "`projectMemoryRevision` bumps whenever project memory or forbidden terms change — " +
         "re-read oddeyes_get_translation_context when it moves. Memory counts are null until the " +
         "app has loaded project knowledge (not the same as zero).",

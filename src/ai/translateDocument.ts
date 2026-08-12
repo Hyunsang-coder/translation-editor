@@ -26,6 +26,7 @@ import {
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
 import { stripImages } from '@/utils/imagePlaceholder';
+import { resolveTargetLanguage } from '@/utils/detectLanguage';
 import {
   completeWithTauriAiBackend,
   shouldRetryWithTauriAiBackend,
@@ -185,7 +186,10 @@ function buildTranslationSetup(params: {
   }
 
   const srcLang = 'Source';
-  const tgtLang = params.project.metadata.targetLanguage ?? 'Target';
+  // 타겟이 '자동'(또는 미설정)이면 원문을 감지해 반대 언어로 푼다.
+  // 여기를 거치지 않으면 센티널 문자열이 그대로 프롬프트에 박힌다.
+  const tgtLang =
+    resolveTargetLanguage(params.project.metadata.targetLanguage, sourceMarkdown).language ?? 'Target';
 
   const systemLines: string[] = [
     '당신은 경험많은 전문 번역가입니다.',

@@ -7,7 +7,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
-import { detectSourceLanguage, languageShortCode } from '@/utils/detectLanguage';
+import { detectSourceLanguage, languageShortCode, resolveTargetLanguage } from '@/utils/detectLanguage';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
 import {
   useAlignmentAnnotations,
@@ -215,13 +215,25 @@ export function AlignmentView(): JSX.Element {
     ? 100
     : Math.round((alignResult.pairedCount / alignResult.totalUnits) * 100);
 
-  const sourceLanguage = useMemo(() => {
-    const sample = alignResult.ops
-      .flatMap((op) => (op.kind === 'target-only' ? [] : [op.source.text]))
-      .slice(0, 3)
-      .join(' ');
-    return sample.trim() ? detectSourceLanguage(sample) : null;
-  }, [alignResult]);
+  const sourceSample = useMemo(
+    () =>
+      alignResult.ops
+        .flatMap((op) => (op.kind === 'target-only' ? [] : [op.source.text]))
+        .slice(0, 3)
+        .join(' '),
+    [alignResult],
+  );
+
+  const sourceLanguage = useMemo(
+    () => (sourceSample.trim() ? detectSourceLanguage(sourceSample) : null),
+    [sourceSample],
+  );
+
+  // 설정이 '자동'이면 헤더에도 실제로 풀린 언어를 보여준다 (센티널 'auto'가 그대로 뜨지 않게)
+  const resolvedTargetLanguage = useMemo(
+    () => resolveTargetLanguage(targetLanguage, sourceSample).language,
+    [targetLanguage, sourceSample],
+  );
 
   return (
     <div className="h-full flex flex-col bg-editor-surface" data-testid="alignment-view">
@@ -248,7 +260,7 @@ export function AlignmentView(): JSX.Element {
             {columnLabel(t('editor.alignment.sourceColumn'), sourceLanguage)}
           </div>
           <div className={`flex-1 min-w-0 pl-5 border-l border-editor-hairline ${HEADER_CELL_CLASS}`}>
-            {columnLabel(t('editor.alignment.targetColumn'), targetLanguage)}
+            {columnLabel(t('editor.alignment.targetColumn'), resolvedTargetLanguage)}
           </div>
           <div className={`w-[120px] shrink-0 pl-[14px] border-l border-editor-hairline ${HEADER_CELL_CLASS}`}>
             {t('editor.alignment.alignColumn')}

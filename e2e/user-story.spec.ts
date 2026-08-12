@@ -19,7 +19,7 @@ const TEXT = {
   delete: /^(삭제|Delete)$/,
   webSearch: /^(웹 검색|Web Search)$/,
   confluenceSearch: /^(Confluence 검색|Confluence Search)$/,
-  targetLanguageWarning: /타겟 언어를 선택하세요|Select target language/i,
+  sameLanguageWarning: /타겟 언어도|target language is also/i,
 };
 
 async function openAppSettings(page: Page): Promise<void> {
@@ -99,16 +99,22 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await expect(page.getByTestId('editor-review-button')).toBeVisible();
 
     await sourceEditor.click();
-    await page.keyboard.type('Guía de Integración de API\nEsta guía proporciona instrucciones.', { delay: 5 });
-    await expect(sourceEditor).toContainText('Guía');
+    await page.keyboard.type('API 연동 가이드\n인증과 오류 처리를 다룹니다.', { delay: 5 });
+    await expect(sourceEditor).toContainText('API 연동 가이드');
 
+    // 기본값은 '자동' — 국문 원문이면 타겟이 영어로 풀린 것이 라벨에 드러난다
+    const targetLanguageSelect = page.getByTestId('target-language-select');
+    await expect(targetLanguageSelect).toHaveText(/자동 \(영어\)|Auto \(English\)/);
+
+    // 원문과 같은 언어를 명시로 고르면 번역을 막는다 (모델이 원문을 되받아쓰는 것 방지)
+    await targetLanguageSelect.click();
+    await page.getByRole('option', { name: /^(한국어|Korean)$/ }).click();
     await page.getByTestId('editor-translate-button').click();
-    await expect(page.getByText(TEXT.targetLanguageWarning)).toBeVisible();
+    await expect(page.getByText(TEXT.sameLanguageWarning)).toBeVisible();
 
-    const targetLanguageSelect = page.getByRole('button', { name: /^(언어 선택|Select Language)$/ }).first();
     await targetLanguageSelect.click();
     await page.getByRole('option', { name: /^(영어|English)$/ }).click();
-    await expect(page.getByRole('button', { name: /^(영어|English)$/ }).first()).toBeVisible();
+    await expect(targetLanguageSelect).toHaveText(/^(영어|English)$/);
   });
 
   test('Phase 6~7: Review/AI Chat 패널 진입', async ({ page }) => {

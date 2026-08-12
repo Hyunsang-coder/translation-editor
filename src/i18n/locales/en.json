@@ -432,6 +432,8 @@
     "sourcePlaceholder": "Enter source text...",
     "targetPlaceholder": "Enter translated text...",
     "selectLanguage": "Select Language",
+    "autoTargetLanguageFailed": "Couldn't detect the source language. Please pick a target language manually.",
+    "targetLanguageSameAsSource": "The source is {{language}} and the target language is also {{language}}. Please check the target language.",
     "previewDefaultTitle": "Translation Preview",
     "previewTitleFull": "Translation Preview (Entire Source → Entire Target)",
     "generatingTranslation": "Generating translation... Please wait.",
@@ -441,6 +443,8 @@
     "viewTogether": "View Together",
     "sideBySide": "Side by Side",
     "languages": {
+      "auto": "Auto",
+      "autoResolved": "Auto ({{language}})",
       "korean": "Korean",
       "english": "English",
       "japanese": "Japanese",

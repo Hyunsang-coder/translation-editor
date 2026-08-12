@@ -25,6 +25,13 @@ import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { hashContent, stripHtml } from '@/utils/hash';
+import {
+  AUTO_TARGET_LANGUAGE,
+  detectSourceLanguage,
+  isSameLanguage,
+  normalizeLang,
+  resolveTargetLanguage,
+} from '@/utils/detectLanguage';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import {
   SelectionInlineToolbar,
@@ -134,6 +141,29 @@ const SELECTION_TOOLBAR_DELAY_MS = 150;
  */
 const MAX_MULTI_BLOCK_SELECTION_CHARS = 4_000;
 
+/** 자동 판정 결과를 UI 언어로 보여주기 위한 매핑. 모르는 언어면 받은 문자열을 그대로 쓴다. */
+const LANGUAGE_LABEL_KEYS: Record<string, string> = {
+  ko: 'editor.languages.korean',
+  en: 'editor.languages.english',
+  ja: 'editor.languages.japanese',
+  zh: 'editor.languages.chinese',
+  es: 'editor.languages.spanish',
+  ru: 'editor.languages.russian',
+};
+
+function localizeLanguage(t: (key: string) => string, language: string): string {
+  const key = LANGUAGE_LABEL_KEYS[normalizeLang(language) ?? ''];
+  return key ? t(key) : language;
+}
+
+/**
+ * 자동 판정에 쓸 원문 표본. HTML 태그가 부풀리는 몫을 감안해 넉넉히 자른 뒤 태그를 벗긴다
+ * (`detectSourceLangCode`가 다시 4,000자로 자른다).
+ */
+function sourceSampleFromHtml(html: string | null | undefined): string {
+  return stripHtml((html || '').slice(0, 12_000));
+}
+
 export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
@@ -195,6 +225,24 @@ export function EditorCanvasTipTap(): JSX.Element {
   const targetEditorRef = useRef<Editor | null>(null);
   const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
   const [targetEditor, setTargetEditor] = useState<Editor | null>(null);
+
+  /**
+   * '자동'을 골랐을 때 실제로 어느 언어로 번역되는지 — Select 라벨이 밝힌다.
+   * 저장값은 센티널로 두고 표시할 때만 푼다(자동이 사용자 선택을 덮지 않는다).
+   */
+  const autoResolvedLanguage = useMemo(
+    () => resolveTargetLanguage(AUTO_TARGET_LANGUAGE, sourceSampleFromHtml(sourceDocument)).language,
+    [sourceDocument],
+  );
+
+  /**
+   * 실행 시점의 타겟 언어. 스토어의 HTML 캐시는 에디터 onChange 디바운스로 뒤처질 수 있어
+   * 살아있는 에디터 텍스트를 먼저 본다 — 방금 붙여넣은 원문으로 방향이 잡혀야 한다.
+   */
+  const resolveTargetLanguageNow = useCallback((): string | null => {
+    const sourceText = sourceEditorRef.current?.getText() || sourceSampleFromHtml(sourceDocument);
+    return resolveTargetLanguage(project?.metadata.targetLanguage, sourceText).language;
+  }, [project?.metadata.targetLanguage, sourceDocument]);
 
   // 추가: Flash 효과 상태
   const [targetFlash, setTargetFlash] = useState(false);
@@ -822,7 +870,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         suggestedAlignmentPrecision: request.sourceAlignmentPrecision,
         currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
-        targetLanguage: project.metadata.targetLanguage ?? 'Target',
+        targetLanguage: resolveTargetLanguageNow() ?? 'Target',
         ...(request.surroundings ? { surroundings: request.surroundings } : {}),
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
         referenceOptions: request.referenceOptions,
@@ -1024,14 +1072,30 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
 
-    if (!project.metadata.targetLanguage) {
-      addToast({ type: 'warning', message: t('editor.selectTargetLanguage', '타겟 언어를 선택하세요.') });
+    // 빈 문서 검증: 텍스트 콘텐츠가 없으면 번역 불필요
+    // (자동 방향 판정이 원문을 재료로 쓰므로 언어 검증보다 먼저 본다)
+    if (sourceEditorRef.current.isEmpty) {
+      addToast({ type: 'warning', message: t('editor.emptySource', '번역할 원문이 없습니다. 원문을 먼저 입력해주세요.') });
       return;
     }
 
-    // 빈 문서 검증: 텍스트 콘텐츠가 없으면 번역 불필요
-    if (sourceEditorRef.current.isEmpty) {
-      addToast({ type: 'warning', message: t('editor.emptySource', '번역할 원문이 없습니다. 원문을 먼저 입력해주세요.') });
+    // 방향 확정: '자동'이면 원문 감지로 풀고, 못 풀면 명시 선택을 요구한다.
+    const sourceText = sourceEditorRef.current.getText();
+    const resolvedTargetLanguage = resolveTargetLanguage(project.metadata.targetLanguage, sourceText).language;
+    if (!resolvedTargetLanguage) {
+      addToast({ type: 'warning', message: t('editor.autoTargetLanguageFailed') });
+      return;
+    }
+
+    // 원문과 같은 언어로 번역시키면 모델이 원문을 되받아쓴다 — 명시 선택일 때만 걸린다
+    // (자동으로 푼 값은 정의상 원문의 반대 언어라 여기 걸릴 수 없다).
+    if (isSameLanguage(detectSourceLanguage(sourceText), resolvedTargetLanguage)) {
+      addToast({
+        type: 'warning',
+        message: t('editor.targetLanguageSameAsSource', {
+          language: localizeLanguage(t, resolvedTargetLanguage),
+        }),
+      });
       return;
     }
 
@@ -1235,7 +1299,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson,
-        targetLanguage: project.metadata.targetLanguage,
+        targetLanguage: resolveTargetLanguageNow() ?? undefined,
         resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
@@ -1871,9 +1935,18 @@ export function EditorCanvasTipTap(): JSX.Element {
                   </button>
                 ) : null}
                 <Select
-                  value={project.metadata.targetLanguage || ''}
+                  value={project.metadata.targetLanguage || AUTO_TARGET_LANGUAGE}
                   onChange={setTargetLanguage}
                   options={[
+                    {
+                      value: AUTO_TARGET_LANGUAGE,
+                      // 자동이 지금 무엇으로 풀렸는지 라벨에 드러낸다 — 깜깜이 자동은 오설정만큼 위험하다
+                      label: autoResolvedLanguage
+                        ? t('editor.languages.autoResolved', {
+                            language: localizeLanguage(t, autoResolvedLanguage),
+                          })
+                        : t('editor.languages.auto'),
+                    },
                     { value: '한국어', label: t('editor.languages.korean') },
                     { value: '영어', label: t('editor.languages.english') },
                     { value: '일본어', label: t('editor.languages.japanese') },

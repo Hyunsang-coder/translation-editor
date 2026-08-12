@@ -18,6 +18,7 @@ import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { normalizeForSearch, buildNormalizedTextWithMapping } from '@/utils/normalizeForSearch';
 import { extractTextFromTipTap } from '@/utils/tipTapText';
+import { resolveTargetLanguage } from '@/utils/detectLanguage';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { getIssueTypeColor } from '@/components/review/issueStyles';
 
@@ -110,7 +111,12 @@ export function ReviewTestPanel(): JSX.Element {
         segments: currentChunk.segments,
         translationRules,
         sourceLanguage: detectSourceLanguage(currentChunk.segments),
-        targetLanguage: project.metadata.targetLanguage,
+        // 설정이 '자동'이면 원문에서 푼다 (앱 검수 경로와 같은 규칙)
+        targetLanguage:
+          resolveTargetLanguage(
+            project.metadata.targetLanguage,
+            currentChunk.segments.slice(0, 3).map((s) => s.sourceText).join(' '),
+          ).language ?? undefined,
         onToken: (text) => setAiResponse(text),
       });
 

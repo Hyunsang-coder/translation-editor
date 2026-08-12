@@ -6,6 +6,7 @@ import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
+import { resolveTargetLanguage } from '@/utils/detectLanguage';
 import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import { hashContent } from '@/utils/hash';
 import {
@@ -124,7 +125,7 @@ async function getTranslationContext(): Promise<unknown> {
   return {
     projectId: project.id,
     projectTitle: project.metadata.title,
-    targetLanguage: project.metadata.targetLanguage ?? null,
+    targetLanguage: resolveTargetLanguage(project.metadata.targetLanguage, sourceMarkdown).language,
     translationRules: chatStore.translationRules || '',
     projectMemory: memory.items
       .filter((item) => item.status === 'active')
@@ -766,7 +767,12 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
       ready: project !== null,
       projectId: project?.id ?? null,
       projectTitle: project?.metadata.title ?? null,
-      targetLanguage: project?.metadata.targetLanguage ?? null,
+      // 저장값이 아니라 **해석된** 언어를 내보낸다 — 센티널 'auto'를 그대로 주면
+      // 외부 에이전트의 방향 교차검증(expectedDir)이 통째로 꺼진다.
+      targetLanguage: resolveTargetLanguage(
+        project?.metadata.targetLanguage,
+        typeof source.content === 'string' ? source.content : '',
+      ).language,
       sourceRevision: source.revision,
       targetRevision: target.revision,
       sourceEmpty: source.empty,

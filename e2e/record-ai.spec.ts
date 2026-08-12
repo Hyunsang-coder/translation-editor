@@ -87,9 +87,7 @@ test.describe.serial('AI Demo Recording', () => {
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 4. 타겟 언어 선택 (영어)
-    const langSelect = page
-      .getByRole('button', { name: /^(언어 선택|Select Language)$/ })
-      .first();
+    const langSelect = page.getByTestId('target-language-select');
     await langSelect.click();
     await page.waitForTimeout(STEP_PAUSE);
 

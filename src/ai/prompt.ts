@@ -8,6 +8,7 @@ import type {
   ITEProject,
 } from '@/types';
 import { stripHtml } from '@/utils/hash';
+import { resolveTargetLanguage } from '@/utils/detectLanguage';
 
 // ============================================
 // 요청 유형 정의
@@ -140,10 +141,11 @@ export interface PromptOptions {
 // 시스템 프롬프트 빌더
 // ============================================
 
-function buildBaseSystemPrompt(project: ITEProject | null): string {
+function buildBaseSystemPrompt(project: ITEProject | null, sourceSample?: string): string {
   const domain = project?.metadata.domain ?? 'general';
   const src = 'Source';
-  const tgt = project?.metadata.targetLanguage ?? 'Target';
+  // 타겟이 '자동'(또는 미설정)이면 원문으로 방향을 푼다. 원문이 없는 호출부는 종전대로 'Target'.
+  const tgt = resolveTargetLanguage(project?.metadata.targetLanguage, sourceSample ?? '').language ?? 'Target';
 
   return [
     '당신은 경험많은 전문 번역가입니다.',
@@ -159,8 +161,8 @@ function buildBaseSystemPrompt(project: ITEProject | null): string {
   ].join('\n');
 }
 
-function buildTranslateSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
-  const base = buildBaseSystemPrompt(project);
+function buildTranslateSystemPrompt(project: ITEProject | null, _opts?: PromptOptions, sourceSample?: string): string {
+  const base = buildBaseSystemPrompt(project, sourceSample);
 
   return [
     base,
@@ -173,8 +175,8 @@ function buildTranslateSystemPrompt(project: ITEProject | null, _opts?: PromptOp
   ].join('\n');
 }
 
-function buildQuestionSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
-  const base = buildBaseSystemPrompt(project);
+function buildQuestionSystemPrompt(project: ITEProject | null, _opts?: PromptOptions, sourceSample?: string): string {
+  const base = buildBaseSystemPrompt(project, sourceSample);
 
   return [
     base,
@@ -206,9 +208,9 @@ function buildQuestionSystemPrompt(project: ITEProject | null, _opts?: PromptOpt
   ].join('\n');
 }
 
-function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOptions): string {
+function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOptions, sourceSample?: string): string {
   // 일반 모드도 질문 모드와 동일하게 처리
-  const base = buildBaseSystemPrompt(project);
+  const base = buildBaseSystemPrompt(project, sourceSample);
   return base;
 }
 
@@ -383,16 +385,18 @@ export async function buildLangChainMessages(
   const requestType = opts?.requestType ?? detectRequestType(ctx.userMessage);
 
   // 요청 유형에 따른 시스템 프롬프트 선택
+  // 원문을 같이 넘기는 이유: 타겟 언어가 '자동'이면 이 표본으로 방향을 푼다.
+  const sourceSample = ctx.sourceDocument ?? '';
   let systemPrompt: string;
   switch (requestType) {
     case 'translate':
-      systemPrompt = buildTranslateSystemPrompt(ctx.project, opts);
+      systemPrompt = buildTranslateSystemPrompt(ctx.project, opts, sourceSample);
       break;
     case 'question':
-      systemPrompt = buildQuestionSystemPrompt(ctx.project, opts);
+      systemPrompt = buildQuestionSystemPrompt(ctx.project, opts, sourceSample);
       break;
     default:
-      systemPrompt = buildGeneralSystemPrompt(ctx.project, opts);
+      systemPrompt = buildGeneralSystemPrompt(ctx.project, opts, sourceSample);
   }
 
   // 컨텍스트 조립

@@ -36,7 +36,7 @@ import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { Modal } from '@/components/ui/Modal';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { detectSourceLanguage } from '@/utils/detectLanguage';
+import { detectSourceLanguage, resolveTargetLanguage } from '@/utils/detectLanguage';
 
 interface RetranslateRequestMeta {
   projectId: string;
@@ -322,14 +322,15 @@ export function ReviewPanel(): JSX.Element {
           );
 
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
-          // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정에서 가져옴
+          // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정 —
+          // 설정이 '자동'이면 번역 때와 같은 규칙으로 원문에서 푼다(센티널이 프롬프트로 새지 않게).
+          const chunkSourceSample = chunk.segments.slice(0, 3).map((s) => s.sourceText).join(' ');
           const response = await runReview({
             segments: chunk.segments,
             resolvedContext,
-            sourceLanguage: detectSourceLanguage(
-              chunk.segments.slice(0, 3).map((s) => s.sourceText).join(' '),
-            ),
-            targetLanguage: project.metadata.targetLanguage,
+            sourceLanguage: detectSourceLanguage(chunkSourceSample),
+            targetLanguage:
+              resolveTargetLanguage(project.metadata.targetLanguage, chunkSourceSample).language ?? undefined,
             ...(serializedComments ? { userComments: serializedComments } : {}),
             ...(extraInstruction?.trim() ? { userInstruction: extraInstruction } : {}),
             abortSignal: controller.signal,

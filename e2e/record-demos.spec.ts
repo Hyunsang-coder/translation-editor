@@ -104,9 +104,7 @@ test.describe.serial('Demo Recordings', () => {
     await page.waitForTimeout(EMPHASIS_PAUSE);
 
     // 타겟 언어 선택
-    const targetLanguageSelect = page
-      .getByRole('button', { name: /^(언어 선택|Select Language)$/ })
-      .first();
+    const targetLanguageSelect = page.getByTestId('target-language-select');
     await targetLanguageSelect.click();
     await page.waitForTimeout(STEP_PAUSE);
 
