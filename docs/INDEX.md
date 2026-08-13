@@ -16,6 +16,7 @@
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
+| **표 특정 구간 부분 AI** | `/docs/table-range-scoped-ai-plan.md` | 부분 리뷰/폴리싱/재번역이 표의 일부 셀만 대상으로 동작하게 — Phase 0–4 구현 완료 (E2E 제외) |
 | **유닛 대응 LCS 교체** | `/docs/aligned-unit-lookup-lcs-plan.md` | 원문 문단 추가 시 재번역이 문서 전체에서 죽는 문제 — 미착수 |
 | **동적 프로젝트 지식 수정 계획** | `/docs/dynamic-project-knowledge-fix-plan.md` | 채팅 ↔ Project Memory/금칙어/용어집 갱신 루프 결함 D1–D7 ✅ (D8-4 E2E 잔여) |
 | **AI Chat 장기 대화·세션 모델 개선** | `/docs/ai-chat-context-model-plan.md` | 토큰 기반 요약, 세션별 모델, 모델 변경 안전성 구현 계획 |

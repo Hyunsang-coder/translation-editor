@@ -8,10 +8,16 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { createReviewDecorations } from '@/editor/extensions/ReviewHighlight';
 import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
+import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { applySuggestionToEditor } from '@/components/review/reviewApply';
+import type { ReviewIssue } from '@/stores/reviewStore';
 
 // 스크린샷과 동일한 구조: 문단 + 불릿리스트 (실제 에디터 스키마에는 segmentGroupId attr 없음)
 const TARGET_HTML = [
@@ -120,5 +126,114 @@ describe('검수 통합: 파싱 → 하이라이트 → 적용', () => {
 
     expect(status).toBe('applied-fuzzy');
     expect(realEditor.getText()).toContain('at the time of performing the task');
+  });
+});
+
+describe('검수 적용: 표 셀', () => {
+  let editor: Editor | null = null;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = null;
+  });
+
+  async function createTableEditor(html: string): Promise<Editor> {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        TranslationUnitId,
+        AppliedChangeHighlight,
+      ],
+      content: html,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return editor;
+  }
+
+  function issue(overrides: Partial<ReviewIssue>): ReviewIssue {
+    return {
+      id: 'issue-1',
+      segmentOrder: 0,
+      segmentGroupId: undefined,
+      sourceExcerpt: 'Alpha source.',
+      targetExcerpt: '알파 번역.',
+      suggestedFix: '알파 수정.',
+      type: 'awkward',
+      severity: 'minor',
+      description: 'test',
+      checked: false,
+      ...overrides,
+    };
+  }
+
+  it('표 셀의 유일한 excerpt는 그 셀만 교체하고 옆 셀은 그대로 둔다', async () => {
+    const ed = await createTableEditor(
+      '<table><tbody><tr>' +
+        '<td><p>알파 번역.</p></td>' +
+        '<td><p>베타 번역.</p></td>' +
+        '</tr></tbody></table>',
+    );
+
+    expect(applySuggestionToEditor(ed, issue({}))).toBe('applied');
+    const json = JSON.stringify(ed.getJSON());
+    expect(json).toContain('알파 수정.');
+    expect(json).toContain('베타 번역.');
+    expect(json).not.toContain('알파 번역.');
+  });
+
+  it('같은 번역이 여러 셀에 있으면 원문 정렬 prior로 해당 셀만 고친다', async () => {
+    const ed = await createTableEditor(
+      '<table><tbody><tr>' +
+        '<td><p>같은 번역.</p></td>' +
+        '<td><p>같은 번역.</p></td>' +
+        '</tr></tbody></table>',
+    );
+    const sourceDoc = {
+      type: 'doc',
+      content: [{
+        type: 'table',
+        content: [{
+          type: 'tableRow',
+          content: [
+            {
+              type: 'tableCell',
+              attrs: { translationUnitId: 's1' },
+              content: [{
+                type: 'paragraph',
+                attrs: { translationUnitId: 's1p' },
+                content: [{ type: 'text', text: 'First source.' }],
+              }],
+            },
+            {
+              type: 'tableCell',
+              attrs: { translationUnitId: 's2' },
+              content: [{
+                type: 'paragraph',
+                attrs: { translationUnitId: 's2p' },
+                content: [{ type: 'text', text: 'Second source.' }],
+              }],
+            },
+          ],
+        }],
+      }],
+    };
+
+    expect(
+      applySuggestionToEditor(ed, issue({
+        sourceExcerpt: 'Second source.',
+        targetExcerpt: '같은 번역.',
+        suggestedFix: '둘째 셀 수정.',
+      }), sourceDoc),
+    ).toBe('applied');
+
+    const cells: string[] = [];
+    ed.state.doc.descendants((node) => {
+      if (node.type.name === 'tableCell') cells.push(node.textContent);
+    });
+    expect(cells).toEqual(['같은 번역.', '둘째 셀 수정.']);
   });
 });

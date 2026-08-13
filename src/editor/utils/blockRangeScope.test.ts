@@ -79,6 +79,22 @@ describe('resolveTopLevelBlockRange', () => {
     expect(resolveTopLevelBlockRange(ed)).toBeNull();
   });
 
+  /** 텍스트가 일치하는 첫 셀(또는 헤더) 노드의 문서 위치. setCellSelection용. */
+  function cellPosOf(ed: Editor, text: string): number {
+    let pos = -1;
+    ed.state.doc.descendants((node, nodePos) => {
+      if (
+        pos === -1 &&
+        (node.type.name === 'tableCell' || node.type.name === 'tableHeader') &&
+        node.textContent === text
+      ) {
+        pos = nodePos;
+      }
+    });
+    if (pos === -1) throw new Error(`cell not found: ${text}`);
+    return pos;
+  }
+
   it('표 셀 안 선택은 표 블록 전체가 구간이 된다 (셀 단위로 자르지 않는다)', async () => {
     const ed = await setup(
       '<p>Intro</p>' +
@@ -90,6 +106,40 @@ describe('resolveTopLevelBlockRange', () => {
     const range = resolveTopLevelBlockRange(ed);
 
     // 표는 최상위 인덱스 1 — 구간은 표 하나다
+    expect(range?.fromIndex).toBe(1);
+    expect(range?.toIndex).toBe(1);
+  });
+
+  it('표에서 여러 셀을 드래그한 CellSelection도 표 블록 전체가 구간이 된다', async () => {
+    const ed = await setup(
+      '<p>Intro</p>' +
+        '<table><tbody><tr><td><p>Cell A</p></td><td><p>Cell B</p></td><td><p>Cell C</p></td></tr></tbody></table>' +
+        '<p>Outro</p>',
+    );
+    ed.commands.setCellSelection({
+      anchorCell: cellPosOf(ed, 'Cell A'),
+      headCell: cellPosOf(ed, 'Cell C'),
+    });
+
+    const range = resolveTopLevelBlockRange(ed);
+
+    expect(range?.fromIndex).toBe(1);
+    expect(range?.toIndex).toBe(1);
+  });
+
+  it('빈 셀이 head여도 다른 선택 셀이 있으면 표 구간을 잡는다', async () => {
+    const ed = await setup(
+      '<p>Intro</p>' +
+        '<table><tbody><tr><td><p></p></td><td><p>Cell B</p></td></tr></tbody></table>' +
+        '<p>Outro</p>',
+    );
+    ed.commands.setCellSelection({
+      anchorCell: cellPosOf(ed, 'Cell B'),
+      headCell: cellPosOf(ed, ''),
+    });
+
+    // head가 빈 셀이어도 ranges로 다른 셀을 읽으면 표 구간이 살아야 한다
+    const range = resolveTopLevelBlockRange(ed);
     expect(range?.fromIndex).toBe(1);
     expect(range?.toIndex).toBe(1);
   });

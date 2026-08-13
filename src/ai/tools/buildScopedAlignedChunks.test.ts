@@ -98,6 +98,35 @@ describe('buildScopedAlignedChunks', () => {
     ).toBeNull();
   });
 
+  it('표에서 고른 셀만 세그먼트로 남기고 사이 셀은 빼지 않는다', () => {
+    const source = doc(
+      table(cell('Alpha source.'), cell('Skip source.'), cell('Gamma source.')),
+    );
+    const target = doc(
+      table(
+        cell('알파 번역.', 'c1', 'c1p'),
+        cell('건너뛸 번역.', 'c2', 'c2p'),
+        cell('감마 번역.', 'c3', 'c3p'),
+      ),
+    );
+
+    const chunks = buildScopedAlignedChunks({
+      sourceDocJson: source,
+      targetDocJson: target,
+      // 1열과 3열만 고른 선택 — 2열 유닛은 요청에 없다
+      targetUnitIds: ['c1', 'c1p', 'c3', 'c3p'],
+    });
+
+    expect(chunks?.[0]?.segments.map((s) => s.sourceText)).toEqual([
+      'Alpha source.',
+      'Gamma source.',
+    ]);
+    expect(chunks?.[0]?.segments.map((s) => s.targetText)).toEqual([
+      '알파 번역.',
+      '감마 번역.',
+    ]);
+  });
+
   it('표 셀 선택은 셀과 내부 문단이 중복 세그먼트가 되지 않는다', () => {
     const source = doc(p('Intro.'), table(cell('Cell source.')));
     const target = doc(p('도입.', 't1'), table(cell('셀 번역.', 'c1', 'c1p')));

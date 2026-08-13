@@ -9,12 +9,26 @@ import type {
 } from '@/types';
 import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
 
+/**
+ * 표에서 고른 셀 하나. 여러 셀 재번역은 셀 경계가 무너지면 안 되므로 한 덩어리
+ * 텍스트로 합쳐 보여주지 않는다 (D5 — 1차에서는 손편집도 막는다).
+ */
+export interface SelectionEditCell {
+  sourceText: string;
+  currentText: string;
+  replacementText: string;
+  /** 이 셀이 속한 열의 헤더 — 모델에 문맥으로 들어간 것을 사용자에게도 보여준다. */
+  columnHeader?: { source?: string; target: string } | undefined;
+}
+
 interface SelectionEditPreviewModalProps {
   open: boolean;
   selection: SelectionContext | null;
   sourceText: string;
   sourceAlignmentPrecision?: SourceAlignmentPrecision | undefined;
   replacementText: string;
+  /** 있으면 셀마다 원문/현재/제안을 나눠 보여준다. 없으면 기존 단일 선택 화면. */
+  cells?: SelectionEditCell[] | undefined;
   instruction: string;
   referenceOptions: ContextReferenceOptions;
   contextManifest: ContextManifest | undefined;
@@ -28,6 +42,61 @@ interface SelectionEditPreviewModalProps {
   onClose: () => void;
   /** 수정안을 손으로 고칠 수 있게 한다. 없으면 읽기 전용(채팅 제안 미리보기). */
   onReplacementChange?: (value: string) => void;
+}
+
+/** 좌우 비교 diff. 삽입·삭제를 한 줄에 섞으면 취소선 사이로 문장이 끊겨 읽기 어렵다. */
+function ProposalDiff({
+  original,
+  suggested,
+}: {
+  original: string;
+  suggested: string;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const changes = useMemo(() => Diff.diffWords(original, suggested), [original, suggested]);
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="min-w-0 sm:border-r sm:border-editor-hairline/40 sm:pr-3">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-severity-critical/80">
+          {t('editor.selectiveDiff.original', '기존')}
+        </div>
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-muted">
+          {changes.map((change, index) =>
+            change.added ? null : change.removed ? (
+              <span
+                key={`${index}-${change.value}`}
+                className="bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion decoration-1 rounded-[2px] px-0.5"
+              >
+                {change.value}
+              </span>
+            ) : (
+              <span key={`${index}-${change.value}`}>{change.value}</span>
+            ),
+          )}
+        </div>
+      </div>
+      <div className="min-w-0">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-diff-insertion/80">
+          {t('editor.selectiveDiff.suggested', '제안')}
+        </div>
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-text">
+          {changes.map((change, index) =>
+            change.removed ? null : change.added ? (
+              <span
+                key={`${index}-${change.value}`}
+                className="bg-diff-insertion-bg text-editor-text rounded-[2px] px-0.5"
+              >
+                {change.value}
+              </span>
+            ) : (
+              <span key={`${index}-${change.value}`}>{change.value}</span>
+            ),
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const OPTION_KEYS: Array<{
@@ -46,6 +115,7 @@ export function SelectionEditPreviewModal({
   sourceText,
   sourceAlignmentPrecision,
   replacementText,
+  cells,
   instruction,
   referenceOptions,
   contextManifest,
@@ -65,15 +135,16 @@ export function SelectionEditPreviewModal({
   useEffect(() => {
     if (!open || isLoading) setEditingProposal(false);
   }, [open, isLoading]);
-  const changes = useMemo(
-    () => selection && replacementText
-      ? Diff.diffWords(selection.text, replacementText)
-      : [],
-    [selection, replacementText],
-  );
   if (!open || !selection) return null;
 
-  const canEditProposal = Boolean(onReplacementChange && replacementText && !isLoading);
+  // 여러 셀일 때는 제안이 셀마다 따로 있다. 하나라도 오면 "적용" 단계로 넘어간다.
+  const hasProposal = cells
+    ? cells.some((cell) => Boolean(cell.replacementText))
+    : Boolean(replacementText);
+  // 손편집은 셀 경계를 무너뜨릴 수 있어 여러 셀에서는 막는다 (D5).
+  const canEditProposal = Boolean(
+    !cells && onReplacementChange && replacementText && !isLoading,
+  );
 
   const alignmentLabel = sourceAlignmentPrecision === 'selection'
     ? t('selection.alignment.selection', 'AI 구절 대응')
@@ -93,10 +164,14 @@ export function SelectionEditPreviewModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="selection-edit-title" className="text-base font-semibold text-editor-text">
-              {t('selection.retranslateTitle', '선택 영역 재번역')}
+              {cells
+                ? t('selection.tableCellsRetranslateTitle', { count: cells.length })
+                : t('selection.retranslateTitle', '선택 영역 재번역')}
             </h2>
             <p className="mt-1 text-xs text-editor-muted">
-              {t('selection.retranslateDescription', '연결된 원문을 기준으로 선택한 번역문만 바꿉니다.')}
+              {cells
+                ? t('selection.tableCellsRetranslateDescription')
+                : t('selection.retranslateDescription', '연결된 원문을 기준으로 선택한 번역문만 바꿉니다.')}
             </p>
           </div>
           <button
@@ -109,26 +184,63 @@ export function SelectionEditPreviewModal({
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-            <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-              <span>Source</span>
-              {alignmentLabel && (
-                <span
-                  data-testid="selection-source-alignment-precision"
-                  className="normal-case font-medium text-primary-500"
-                >
-                  {alignmentLabel}
-                </span>
-              )}
-            </div>
-            <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
-          </section>
-          <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Target</div>
-            <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
-          </section>
-        </div>
+        {cells ? (
+          // 셀마다 원문·현재·제안을 따로 보여준다. 이어 붙여 보여주면 어느 제안이 어느
+          // 셀로 가는지가 흐려지고, 손편집이 열리면 셀 경계가 무너진다.
+          <div className="mt-4 space-y-3">
+            {cells.map((cell, index) => (
+              <section
+                key={index}
+                data-testid="selection-edit-cell"
+                className="rounded-xl border border-editor-border bg-editor-bg p-3"
+              >
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                  <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
+                  {cell.columnHeader && (
+                    <span className="normal-case font-medium text-primary-500">
+                      {t('selection.tableColumnHeaderLabel', {
+                        header: [cell.columnHeader.source, cell.columnHeader.target]
+                          .filter(Boolean)
+                          .join(' / '),
+                      })}
+                    </span>
+                  )}
+                </div>
+                <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
+                  {cell.sourceText}
+                </div>
+                {cell.replacementText ? (
+                  <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
+                ) : (
+                  <div className="whitespace-pre-wrap text-sm text-editor-text">
+                    {cell.currentText}
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+              <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                <span>Source</span>
+                {alignmentLabel && (
+                  <span
+                    data-testid="selection-source-alignment-precision"
+                    className="normal-case font-medium text-primary-500"
+                  >
+                    {alignmentLabel}
+                  </span>
+                )}
+              </div>
+              <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
+            </section>
+            <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+              <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Target</div>
+              <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
+            </section>
+          </div>
+        )}
 
         {!proposalOnly && <label className="mt-4 block">
           <span className="text-xs font-medium text-editor-text">
@@ -172,7 +284,7 @@ export function SelectionEditPreviewModal({
           </div>
         </fieldset>}
 
-        {(replacementText || isLoading) && (
+        {!cells && (replacementText || isLoading) && (
           <section className="mt-4 rounded-xl border border-primary-300/70 bg-primary-50/40 p-3 dark:bg-primary-950/20">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-editor-text">
@@ -201,48 +313,8 @@ export function SelectionEditPreviewModal({
                   autoFocus
                 />
               ) : (
-                // SelectiveDiffList(폴리싱)와 같은 좌우 비교 — 삽입·삭제를 한 줄에
-                // 섞으면 취소선 사이로 문장이 끊겨 읽기 어렵다.
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="min-w-0 sm:border-r sm:border-editor-hairline/40 sm:pr-3">
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-severity-critical/80">
-                      {t('editor.selectiveDiff.original', '기존')}
-                    </div>
-                    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-muted">
-                      {changes.map((change, index) =>
-                        change.added ? null : change.removed ? (
-                          <span
-                            key={`${index}-${change.value}`}
-                            className="bg-diff-deletion-bg text-editor-text line-through decoration-diff-deletion decoration-1 rounded-[2px] px-0.5"
-                          >
-                            {change.value}
-                          </span>
-                        ) : (
-                          <span key={`${index}-${change.value}`}>{change.value}</span>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-diff-insertion/80">
-                      {t('editor.selectiveDiff.suggested', '제안')}
-                    </div>
-                    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-editor-text">
-                      {changes.map((change, index) =>
-                        change.removed ? null : change.added ? (
-                          <span
-                            key={`${index}-${change.value}`}
-                            className="bg-diff-insertion-bg text-editor-text rounded-[2px] px-0.5"
-                          >
-                            {change.value}
-                          </span>
-                        ) : (
-                          <span key={`${index}-${change.value}`}>{change.value}</span>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                </div>
+                // SelectiveDiffList(폴리싱)와 같은 좌우 비교
+                <ProposalDiff original={selection.text} suggested={replacementText} />
               )
             ) : (
               <div className="text-sm text-editor-muted">
@@ -272,7 +344,7 @@ export function SelectionEditPreviewModal({
           >
             {t('common.cancel')}
           </button>
-          {!proposalOnly && replacementText && !isLoading && (
+          {!proposalOnly && hasProposal && !isLoading && (
             <button
               type="button"
               data-testid="selection-edit-regenerate-button"
@@ -286,10 +358,10 @@ export function SelectionEditPreviewModal({
             type="button"
             data-testid="selection-edit-primary-button"
             className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
-            onClick={replacementText && !isLoading ? onApply : onGenerate}
-            disabled={isLoading || (!replacementText && !sourceText.trim())}
+            onClick={hasProposal && !isLoading ? onApply : onGenerate}
+            disabled={isLoading || (!hasProposal && !sourceText.trim())}
           >
-            {replacementText
+            {hasProposal
               ? t('common.apply', '적용')
               : isLoading
                 ? t('editor.translating')

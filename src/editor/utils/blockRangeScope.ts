@@ -27,10 +27,20 @@ export interface TopLevelBlockRange {
 export function resolveTopLevelBlockRange(editor: Editor): TopLevelBlockRange | null {
   if (editor.isDestroyed) return null;
 
-  const { from, to, empty } = editor.state.selection;
-  if (empty) return null;
+  // 표에서 여러 셀을 드래그하면 CellSelection이고, `selection.from/to`는 head 셀만
+  // 가리킨다(문서 순서도 아님). head가 빈 셀이면 from===to라 `empty`가 true가 되어
+  // 나머지 셀이 있어도 구간이 사라진다. 셀마다 하나씩 있는 ranges를 쓴다.
+  const ranges = editor.state.selection.ranges
+    .map((range) => ({ from: range.$from.pos, to: range.$to.pos }))
+    .filter((range) => range.to > range.from);
+  if (ranges.length === 0) return null;
 
-  const selectedIds = new Set(getTranslationUnitIdsAtRange(editor.state.doc, from, to));
+  const selectedIds = new Set<string>();
+  for (const range of ranges) {
+    for (const id of getTranslationUnitIdsAtRange(editor.state.doc, range.from, range.to)) {
+      selectedIds.add(id);
+    }
+  }
   if (selectedIds.size === 0) return null;
 
   const units = collectTranslationUnits(editor.getJSON() as TranslationUnitDocument).filter(

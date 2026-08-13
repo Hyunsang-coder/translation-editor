@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retranslateSelection } from './retranslateSelection';
+import { retranslateSelection, retranslateTableCells } from './retranslateSelection';
 
 const streamMock = vi.fn();
 const backendStreamMock = vi.fn();
@@ -280,5 +280,213 @@ describe('retranslateSelection', () => {
 
     expect(result.alignedSourceText).toBe('Exact aligned phrase.');
     expect(result.alignmentPrecision).toBe('sentence');
+  });
+});
+
+describe('retranslateTableCells', () => {
+  const BASE = {
+    projectId: 'project-1',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  const TWO_CELLS = [
+    { sourceText: 'Alpha source', currentTargetText: '알파 번역' },
+    { sourceText: 'Beta source', currentTargetText: '베타 번역' },
+  ];
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+  });
+
+  it('셀 마커를 셀마다 잘라 한 번의 호출로 돌려준다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n' };
+      yield { content: '---CELL_1_START---\n베타 개선\n---CELL_1_END---' };
+    })());
+
+    const result = await retranslateTableCells({ ...BASE, cells: TWO_CELLS });
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(result.replacements).toEqual(['알파 개선', '베타 개선']);
+    const payload = JSON.stringify(streamMock.mock.calls[0]?.[0]);
+    expect(payload).toContain('Alpha source');
+    expect(payload).toContain('베타 번역');
+  });
+
+  it('셀 하나라도 마커가 없으면 던진다 (부분 적용 금지)', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---' };
+    })());
+
+    await expect(retranslateTableCells({ ...BASE, cells: TWO_CELLS }))
+      .rejects.toThrow(/2번째 셀 누락/);
+  });
+
+  it('END 마커가 잘린 응답도 던진다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n---CELL_1_START---\n베타' };
+    })());
+
+    await expect(retranslateTableCells({ ...BASE, cells: TWO_CELLS }))
+      .rejects.toThrow(/올바르지 않습니다/);
+  });
+
+  it('체크되지 않은 컨텍스트는 페이로드에 넣지 않는다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\nX\n---CELL_0_END---\n---CELL_1_START---\nY\n---CELL_1_END---' };
+    })());
+
+    await retranslateTableCells({
+      ...BASE,
+      cells: TWO_CELLS,
+      contextSnapshot: {
+        ...BASE.contextSnapshot,
+        translationRules: 'SECRET RULE',
+        glossaryEntries: [{ id: 'g1', source: 'SECRET', target: '비밀' }],
+      },
+    });
+
+    const payload = JSON.stringify(streamMock.mock.calls[0]?.[0]);
+    expect(payload).not.toContain('SECRET RULE');
+    expect(payload).not.toContain('비밀');
+  });
+
+  it('원문이 빈 셀이 있으면 호출 전에 던진다', async () => {
+    await expect(retranslateTableCells({
+      ...BASE,
+      cells: [{ sourceText: '  ', currentTargetText: '번역' }],
+    })).rejects.toThrow(/연결된 원문/);
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it('스트리밍 중에는 아직 안 온 셀을 빈 문자열로 알린다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n' };
+      yield { content: '---CELL_1_START---\n베타 개선\n---CELL_1_END---' };
+    })());
+    const snapshots: string[][] = [];
+
+    await retranslateTableCells({
+      ...BASE,
+      cells: TWO_CELLS,
+      onToken: (replacements) => snapshots.push(replacements),
+    });
+
+    expect(snapshots[0]).toEqual(['알파 개선', '']);
+    expect(snapshots[1]).toEqual(['알파 개선', '베타 개선']);
+  });
+});
+
+describe('표 열 헤더 문맥', () => {
+  const BASE = {
+    projectId: 'project-1',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+  });
+
+  it('단일 선택 재번역 페이로드에 열 헤더가 들어간다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n피해량\n---SELECTION_EDIT_END---' };
+    })());
+
+    await retranslateSelection({
+      ...BASE,
+      sourceText: 'Damage',
+      currentTargetText: '손상',
+      columnHeader: { source: 'Stat', target: '스탯' },
+    });
+
+    const payload = JSON.stringify(streamMock.mock.calls[0]?.[0]);
+    expect(payload).toContain('Table column header');
+    expect(payload).toContain('Stat / 스탯');
+  });
+
+  it('열 헤더가 없으면 user 블록에 넣지 않는다 (system 지시문은 캐시를 위해 상시 유지)', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n피해량\n---SELECTION_EDIT_END---' };
+    })());
+
+    await retranslateSelection({ ...BASE, sourceText: 'Damage', currentTargetText: '손상' });
+
+    const messages = streamMock.mock.calls[0]?.[0] as Array<{ content: string }>;
+    expect(messages[1]!.content).not.toContain('Table column header');
+    // system은 호출마다 같아야 Anthropic 프롬프트 캐시(cacheSystem)가 산다
+    expect(messages[0]!.content).toContain('A table column header, when provided');
+  });
+
+  it('여러 셀은 셀마다 자기 열 헤더를 받는다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\nA\n---CELL_0_END---\n---CELL_1_START---\nB\n---CELL_1_END---' };
+    })());
+
+    await retranslateTableCells({
+      ...BASE,
+      cells: [
+        {
+          sourceText: 'Damage',
+          currentTargetText: '손상',
+          columnHeader: { source: 'Stat', target: '스탯' },
+        },
+        {
+          sourceText: 'Reduces incoming hits',
+          currentTargetText: '들어오는 타격 감소',
+          columnHeader: { source: 'Description', target: '설명' },
+        },
+      ],
+    });
+
+    const payload = JSON.stringify(streamMock.mock.calls[0]?.[0]);
+    expect(payload).toContain('Stat / 스탯');
+    expect(payload).toContain('Description / 설명');
+    // 헤더는 셀 입력 블록 안에 붙는다
+    expect(payload).toMatch(/CELL_0_INPUT_START---\\n\[Column header\] Stat/);
+  });
+
+  it('원문 짝을 못 찾은 헤더는 번역문만 보낸다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---CELL_0_START---\nA\n---CELL_0_END---' };
+    })());
+
+    await retranslateTableCells({
+      ...BASE,
+      cells: [
+        { sourceText: 'Damage', currentTargetText: '손상', columnHeader: { target: '스탯' } },
+      ],
+    });
+
+    expect(JSON.stringify(streamMock.mock.calls[0]?.[0])).toContain('[Column header] 스탯');
   });
 });

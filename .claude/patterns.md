@@ -839,9 +839,9 @@ TipTap selection (selection.ranges — one per table cell)
 → one replace transaction (one-step Undo)
 ```
 
-**Reference vs apply** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)) — any selection can be a chat reference; only a **single-range, single-block** selection can be edited.
+**Reference vs apply** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)) — any selection can be a chat reference; only a **single-range, single-block** selection can be edited, plus one narrow exception: ranges that each sit in a **distinct cell of one table** apply cell-by-cell in a single transaction (`applySelectionEdits`, gated by `canApplySelectionEdits`).
 
-- Read `selection.ranges`, never `selection.from/to`. A multi-cell table drag is a `CellSelection` whose `from/to` point at the head cell only, and not in document order. Merging ranges into one min/max span is wrong too — selecting columns 1 and 3 of a 3-column table would swallow column 2.
+- Read `selection.ranges`, never `selection.from/to`. A multi-cell table drag is a `CellSelection` whose `from/to` point at the head cell only, and not in document order. Merging ranges into one min/max span is wrong too — selecting columns 1 and 3 of a 3-column table would swallow column 2. Scoped polish sends the selected **rectangle as a valid sub-table** (`resolveAiSelectionScope` → `extractTableRectDoc`); never send a broken partial `<table>`. Merged cells anywhere in the table fall back to whole-table scope.
 - `SelectionAnchorRecord.ranges[]` holds them; `anchorId` stays singular so the 22 `removeSelectionAnchor`/`resolveSelectionAnchor` call sites need no guards.
 - Apply paths must go through `getSingleAnchorRange` — using `anchor.ranges[0]` directly overwrites one cell of a multi-cell selection. `applySelectionEdit` replaces the range with plain text, so multi-block/multi-range would flatten paragraphs, list items, and cells into one block.
 - `SelectionContext.spansMultipleBlocks` gates the two entry points: retranslation is refused **before** generating (otherwise the API call is wasted and only apply fails), and `propose_selection_edit` is dropped from the tool list (`chatStore.ai.ts`).

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import {
   SelectionAnchor,
   clearSelectionAnchors,
@@ -326,5 +330,89 @@ describe('SelectionAnchor', () => {
       expect(getSingleAnchorRange(resolveSelectionAnchor(ed, multi)!)).toBeNull();
       expect(getSingleAnchorRange(resolveSelectionAnchor(ed, single)!)).not.toBeNull();
     });
+  });
+
+  it('표 한 셀 CellSelection은 단일 블록이라 재번역 적용 경로에 넘길 수 있다', async () => {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        SelectionAnchor,
+      ],
+      content:
+        '<table><tbody><tr><td><p>Cell A</p></td><td><p>Cell B</p></td></tr></tbody></table>',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let cellPos = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (cellPos === -1 && node.type.name === 'tableCell' && node.textContent === 'Cell A') {
+        cellPos = pos;
+      }
+    });
+    editor.commands.setCellSelection({ anchorCell: cellPos, headCell: cellPos });
+
+    const ranges = editor.state.selection.ranges.map((range) => ({
+      from: range.$from.pos,
+      to: range.$to.pos,
+    }));
+    const normalized = normalizeSelectionAnchorRanges(editor, ranges)!;
+
+    expect(normalized.blockCount).toBe(1);
+    expect(getSingleAnchorRange({
+      anchorId: 'x',
+      ranges: normalized.ranges,
+      originalText: 'Cell A',
+      status: 'active',
+      createdAt: 1,
+    })).not.toBeNull();
+  });
+
+  it('표에서 여러 셀 CellSelection은 멀티블록이라 재번역 적용을 거부한다', async () => {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        SelectionAnchor,
+      ],
+      content:
+        '<table><tbody><tr><td><p>Cell A</p></td><td><p>Cell B</p></td></tr></tbody></table>',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const cellPos = (text: string): number => {
+      let pos = -1;
+      editor!.state.doc.descendants((node, nodePos) => {
+        if (pos === -1 && node.type.name === 'tableCell' && node.textContent === text) {
+          pos = nodePos;
+        }
+      });
+      return pos;
+    };
+    editor.commands.setCellSelection({
+      anchorCell: cellPos('Cell A'),
+      headCell: cellPos('Cell B'),
+    });
+
+    const ranges = editor.state.selection.ranges.map((range) => ({
+      from: range.$from.pos,
+      to: range.$to.pos,
+    }));
+    const normalized = normalizeSelectionAnchorRanges(editor, ranges)!;
+
+    expect(normalized.blockCount).toBe(2);
+    expect(getSingleAnchorRange({
+      anchorId: 'x',
+      ranges: normalized.ranges,
+      originalText: 'Cell A\nCell B',
+      status: 'active',
+      createdAt: 1,
+    })).toBeNull();
   });
 });

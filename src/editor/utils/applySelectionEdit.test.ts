@@ -1,13 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import {
   SelectionAnchor,
   createSelectionAnchor,
   resolveSelectionAnchor,
 } from '@/editor/extensions/SelectionAnchor';
 import { CommentMark } from '@/editor/extensions/CommentMark';
-import { applySelectionEdit } from './applySelectionEdit';
+import {
+  applySelectionEdit,
+  applySelectionEdits,
+  canApplySelectionEdits,
+  selectionHasUniformFormatting,
+} from './applySelectionEdit';
 
 describe('applySelectionEdit', () => {
   let editor: Editor | null = null;
@@ -202,5 +211,215 @@ describe('applySelectionEdit', () => {
     ).toBe('applied');
     expect(editor.getHTML()).toContain('data-comment-id="comment-1"');
     expect(editor.getHTML()).toContain('Replacement');
+  });
+
+  it('표 셀 안 한 문단의 선택만 교체하고 표 구조와 옆 셀은 그대로 둔다', () => {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        SelectionAnchor,
+      ],
+      content:
+        '<table><tbody><tr><td><p>Alpha target</p></td><td><p>Keep this</p></td></tr></tbody></table>',
+    });
+    let from = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (from === -1 && node.isText && node.text === 'Alpha target') from = pos;
+    });
+    const targetFrom = from + 'Alpha '.length;
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: targetFrom, to: targetFrom + 'target'.length }],
+    });
+
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, 'replacement', {
+        expectedText: 'target',
+      }),
+    ).toBe('applied');
+
+    const json = JSON.stringify(editor.getJSON());
+    expect(json).toContain('Alpha replacement');
+    expect(json).toContain('Keep this');
+    expect(json).toContain('"type":"table"');
+    expect(json).not.toContain('Alpha target');
+  });
+});
+
+describe('applySelectionEdits (표 여러 셀)', () => {
+  let editor: Editor | null = null;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = null;
+  });
+
+  const TABLE_EXTENSIONS = [
+    StarterKit,
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    SelectionAnchor,
+  ];
+
+  function cellPosOf(ed: Editor, text: string): number {
+    let pos = -1;
+    ed.state.doc.descendants((node, nodePos) => {
+      if (
+        pos === -1 &&
+        (node.type.name === 'tableCell' || node.type.name === 'tableHeader') &&
+        node.textContent === text
+      ) {
+        pos = nodePos;
+      }
+    });
+    if (pos === -1) throw new Error(`cell not found: ${text}`);
+    return pos;
+  }
+
+  /** 실제 제스처와 같은 경로: CellSelection → selection.ranges → 앵커 */
+  function setupCells(anchorText: string, headText: string): { editor: Editor; anchorId: string } {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr>' +
+        '<td><p>Alpha cell</p></td><td><p>Beta cell</p></td><td><p>Gamma cell</p></td>' +
+        '</tr></tbody></table>',
+    });
+    editor.commands.setCellSelection({
+      anchorCell: cellPosOf(editor, anchorText),
+      headCell: cellPosOf(editor, headText),
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: editor.state.selection.ranges.map((range) => ({
+        from: range.$from.pos,
+        to: range.$to.pos,
+      })),
+    });
+    return { editor, anchorId };
+  }
+
+  it('두 셀을 한 트랜잭션으로 교체하고 고르지 않은 셀·표 구조는 그대로 둔다', () => {
+    const { editor: ed, anchorId } = setupCells('Alpha cell', 'Beta cell');
+    const before = ed.state.doc.textContent;
+
+    expect(
+      applySelectionEdits(
+        ed,
+        resolveSelectionAnchor(ed, anchorId)!,
+        ['알파 셀 재번역', '베타'],
+        { expectedTexts: ['Alpha cell', 'Beta cell'] },
+      ),
+    ).toBe('applied');
+
+    const json = JSON.stringify(ed.getJSON());
+    expect(json).toContain('알파 셀 재번역');
+    expect(json).toContain('베타');
+    expect(json).toContain('Gamma cell');
+    expect(json).not.toContain('Alpha cell');
+    expect(json).not.toContain('Beta cell');
+    expect(json).toContain('"type":"table"');
+    expect(resolveSelectionAnchor(ed, anchorId)).toBeNull();
+
+    // 한 트랜잭션 = Undo 한 단계로 원복
+    ed.commands.undo();
+    expect(ed.state.doc.textContent).toBe(before);
+  });
+
+  it('한쪽 expectedText만 어긋나도 전체를 적용하지 않는다', () => {
+    const { editor: ed, anchorId } = setupCells('Alpha cell', 'Beta cell');
+    const before = JSON.stringify(ed.getJSON());
+
+    expect(
+      applySelectionEdits(
+        ed,
+        resolveSelectionAnchor(ed, anchorId)!,
+        ['알파', '베타'],
+        { expectedTexts: ['Alpha cell', 'CHANGED'] },
+      ),
+    ).toBe('stale');
+    expect(JSON.stringify(ed.getJSON())).toBe(before);
+  });
+
+  it('교체 수가 범위 수와 다르면 적용하지 않는다', () => {
+    const { editor: ed, anchorId } = setupCells('Alpha cell', 'Beta cell');
+    const before = JSON.stringify(ed.getJSON());
+
+    expect(
+      applySelectionEdits(ed, resolveSelectionAnchor(ed, anchorId)!, ['알파'], {
+        expectedTexts: ['Alpha cell'],
+      }),
+    ).toBe('invalid');
+    expect(JSON.stringify(ed.getJSON())).toBe(before);
+  });
+
+  it('문단 두 개를 가로지르는 TextSelection은 거부한다 (표 셀 전용 가드)', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content: '<p>First para</p><p>Second para</p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: editor.state.doc.content.size - 1 }],
+    });
+    const anchor = resolveSelectionAnchor(editor, anchorId)!;
+    const before = JSON.stringify(editor.getJSON());
+
+    expect(canApplySelectionEdits(editor, anchor)).toBe(false);
+    expect(
+      applySelectionEdits(editor, anchor, ['bogus'], {
+        expectedTexts: [anchor.originalText],
+      }),
+    ).toBe('invalid');
+    expect(JSON.stringify(editor.getJSON())).toBe(before);
+  });
+
+  it('표 밖 문단 하나짜리 선택은 다중 적용 경로를 쓰지 않는다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content: '<p>Plain paragraph</p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: 1, to: 1 + 'Plain'.length }],
+    });
+
+    expect(canApplySelectionEdits(editor, resolveSelectionAnchor(editor, anchorId)!)).toBe(false);
+  });
+
+  it('셀마다 서식이 달라도 각 셀의 서식을 지킨다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr>' +
+        '<td><p><strong>Bold cell</strong></p></td><td><p>Plain cell</p></td>' +
+        '</tr></tbody></table>',
+    });
+    editor.commands.setCellSelection({
+      anchorCell: cellPosOf(editor, 'Bold cell'),
+      headCell: cellPosOf(editor, 'Plain cell'),
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: editor.state.selection.ranges.map((range) => ({
+        from: range.$from.pos,
+        to: range.$to.pos,
+      })),
+    });
+    const anchor = resolveSelectionAnchor(editor, anchorId)!;
+
+    // 셀마다 내부는 균일하므로 평탄화 확인이 필요 없다
+    expect(selectionHasUniformFormatting(editor, anchor)).toBe(true);
+    expect(
+      applySelectionEdits(editor, anchor, ['굵은 셀', '평범한 셀'], {
+        expectedTexts: ['Bold cell', 'Plain cell'],
+      }),
+    ).toBe('applied');
+
+    const html = editor.getHTML();
+    expect(html).toContain('<strong>굵은 셀</strong>');
+    expect(html).toContain('평범한 셀');
+    expect(html).not.toContain('<strong>평범한 셀</strong>');
   });
 });

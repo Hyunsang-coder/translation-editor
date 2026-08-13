@@ -20,7 +20,11 @@ Critical implementation warnings learned from past issues.
 
 8. **ProseMirror Base Style Override**: `.ProseMirror` base styles (`px-6 py-4`, `min-h-[200px]`) apply to all TipTap editors. For chat composer, explicitly override with `.chat-composer-tiptap` using `@apply px-0 py-0 min-h-0`. Check full CSS inheritance chain when modifying UI.
 
-154. **선택 범위는 `selection.ranges`로 읽을 것 (`from/to` 금지)**: 표에서 여러 셀을 드래그하면 `CellSelection`이고 `selection.from/to`는 **head 셀 하나**만 가리킨다(문서 순서도 아님 — 실측 시 `[[23,27],[3,7],[9,13],[17,21]]`). `from/to`를 쓰면 조용히 한 셀만 처리된다(코멘트·복사가 실제로 그랬다). `ranges`의 min/max span으로 합치는 것도 틀렸다 — 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다. 범위마다 따로 처리하고 `from` 기준으로 정렬할 것(`buildSelectionBubble`). 코멘트 마크도 한 chain에서 범위마다 적용한다.
+154. **선택 범위는 `selection.ranges`로 읽을 것 (`from/to` 금지)**: 표에서 여러 셀을 드래그하면 `CellSelection`이고 `selection.from/to`는 **head 셀 하나**만 가리킨다(문서 순서도 아님 — 실측 시 `[[23,27],[3,7],[9,13],[17,21]]`). `from/to`를 쓰면 조용히 한 셀만 처리된다(코멘트·복사가 실제로 그랬다). `ranges`의 min/max span으로 합치는 것도 틀렸다 — 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다. 범위마다 따로 처리하고 `from` 기준으로 정렬할 것(`buildSelectionBubble`, `resolveTopLevelBlockRange`). head가 빈 셀이면 `selection.empty === true`여도 다른 셀 range는 내용이 있다 — `empty`로 먼저 return하지 말 것. 코멘트 마크도 한 chain에서 범위마다 적용한다. 표 셀 단위 폴리싱/재번역은 `docs/table-range-scoped-ai-plan.md`.
+
+154-b. **표 사각형을 잘라 붙일 땐 격자 좌표 ≠ JSON 인덱스임을 먼저 막을 것**: `TableMap`의 row/col은 격자 좌표라 `colspan`/`rowspan`이 있으면 `row.content[col]`과 어긋난다 — 사각형 **안**만 병합을 검사하면 rect 왼쪽/위쪽의 병합이 인덱스를 밀어 **엉뚱한 셀에 결과가 들어간다**. 표 전체가 평평한 격자일 때만 `table-rect`로 분류한다(`isPlainGrid`). 병합 결과를 되돌릴 때는 셀 자체(타입·`translationUnitId`·`colwidth`)를 원본에서 재사용하고 **내용만** 갈아끼운다 — 모델은 셀 ID를 자주 버리므로 병합 키는 ID가 아니라 기하다. 차원이 어긋나면 `TableStructureMismatchError`로 적용을 막는다(`tableRectSplice.ts`).
+
+154-c. **다중 범위를 한 트랜잭션에 치환할 땐 문서 뒤쪽부터**: 앞 범위를 먼저 바꾸면 길이 차이만큼 뒤 범위의 pos가 밀려 옆 셀을 덮는다. 서식(mark)도 **범위마다** 판정할 것 — 굵은 셀과 평문 셀을 함께 골랐을 때 전체를 "서식 혼합"으로 보면 평탄화에서 굵기가 사라진다(`applySelectionEdits`).
 
 155. **Cmd+A는 `sameParent`가 아니라 클램핑으로 처리**: 전체 선택은 `AllSelection`이고 `from=0`이 doc 노드를 가리켜 `isTextblock`이 false다. 동일 문단 검사를 풀어도 여전히 거부되므로, 범위가 덮는 첫/마지막 textblock **내부로 좁혀야** 한다(`textblockSpan`). 가장자리 공백 트림 뒤에는 블록 수를 다시 세야 한다 — 트림으로 앞 블록의 기여분이 공백뿐이었으면 사라진다.
 

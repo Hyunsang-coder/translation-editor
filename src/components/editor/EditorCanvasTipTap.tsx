@@ -47,9 +47,18 @@ import {
   replaceTopLevelBlockRange,
 } from '@/editor/utils/topLevelBlockSplice';
 import {
-  resolveTopLevelBlockRange,
-  type TopLevelBlockRange,
-} from '@/editor/utils/blockRangeScope';
+  countScopedCells,
+  resolveAiSelectionScope,
+  resolveTableColumnHeader,
+  type AiSelectionScope,
+} from '@/editor/utils/tableRangeScope';
+import {
+  TableStructureMismatchError,
+  extractBlockDoc,
+  extractTableRectDoc,
+  replaceBlockAtPath,
+  replaceTableRect,
+} from '@/editor/utils/tableRectSplice';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { AlignmentView } from '@/components/editor/AlignmentView';
@@ -75,6 +84,7 @@ import {
   getSingleAnchorRange,
   normalizeSelectionAnchorRanges,
   readAnchorRangesText,
+  readAnchorText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
   type SelectionRange,
@@ -87,7 +97,10 @@ import {
 } from '@/editor/extensions/TranslationUnitId';
 import { useReviewStore } from '@/stores/reviewStore';
 import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
-import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
+import {
+  SelectionEditPreviewModal,
+  type SelectionEditCell,
+} from './SelectionEditPreviewModal';
 import {
   DEFAULT_SELECTION_REFERENCE_OPTIONS,
   type ContextManifest,
@@ -98,11 +111,15 @@ import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import {
   retranslateSelection,
+  retranslateTableCells,
   type RetranslateSurroundings,
+  type TableColumnHeaderContext,
 } from '@/ai/retranslateSelection';
 import { getSelectionSurroundings } from '@/ai/tools/selectionTools';
 import {
   applySelectionEdit,
+  applySelectionEdits,
+  canApplySelectionEdits,
   selectionHasUniformFormatting,
 } from '@/editor/utils/applySelectionEdit';
 import { syncCommentExcerpts } from '@/editor/utils/syncCommentExcerpts';
@@ -290,7 +307,7 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [polishMessage, setPolishMessage] = useState('');
   // 폴리싱 범위 실행: 모달을 열 때의 target 선택을 최상위 블록 구간으로 해석해 둔다.
   // null이면 스코프 UI를 노출하지 않는다(선택이 없거나 번역 유닛이 없는 선택).
-  const [polishScope, setPolishScope] = useState<TopLevelBlockRange | null>(null);
+  const [polishScope, setPolishScope] = useState<AiSelectionScope | null>(null);
   const [polishScopeEnabled, setPolishScopeEnabled] = useState(true);
 
   // P4: 번역/폴리싱 스트리밍 텍스트는 캔버스 state가 아니라 translationPreviewStore 채널에
@@ -352,6 +369,11 @@ export function EditorCanvasTipTap(): JSX.Element {
   const selectionToolbarRef = useRef<HTMLDivElement>(null);
   const [selectionEdit, setSelectionEdit] = useState<null | {
     selection: SelectionContext;
+    /**
+     * 표 여러 셀 재번역일 때만 채워진다 (ADR-0010의 좁은 예외). 앵커 범위와 순서·개수가
+     * 1:1이어야 한다 — 적용이 이 순서로 `applySelectionEdits`에 넘어간다.
+     */
+    cells?: SelectionEditCell[];
     /** ID로 검증된 Source 번역 유닛 전체. AI 구절 판별의 진실 공급원. */
     sourceUnitText: string;
     /** UI에 표시할 현재 최선의 대응 범위(유닛 → 문장 → AI 검증 구절). */
@@ -360,6 +382,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     currentTargetUnitText: string;
     /** 선택 유닛 앞뒤 문맥 (모달 열 때 계산, 정렬 검증된 쪽만). 없으면 미주입. */
     surroundings?: RetranslateSurroundings;
+    /** 표 셀 선택일 때 그 열의 헤더. 표 밖이거나 헤더 행이 없으면 미주입. */
+    columnHeader?: TableColumnHeaderContext;
     instruction: string;
     referenceOptions: ContextReferenceOptions;
     replacementText: string;
@@ -751,22 +775,29 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (bubble.field !== 'target') return;
     const selection = createChatSelection(bubble);
     if (!selection) return;
-    // 적용 경로(applySelectionEdit)가 멀티블록을 거부하므로 생성 전에 막는다.
-    // 여기서 통과시키면 재번역을 다 받아놓고 적용 단계에서만 실패한다.
-    if (selection.spansMultipleBlocks) {
-      removeSelectionAnchor(bubble.editor, selection.anchorId);
-      addToast({
-        type: 'error',
-        message: t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
-      });
-      return;
-    }
     const selectionAnchor = resolveSelectionAnchor(bubble.editor, selection.anchorId);
     if (!selectionAnchor) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
         type: 'error',
         message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
+      });
+      return;
+    }
+    // 적용 경로가 못 다루는 선택은 생성 전에 막는다. 여기서 통과시키면 재번역을 다
+    // 받아놓고 적용 단계에서만 실패한다.
+    //
+    // 예외는 표 셀뿐이다 — 서로 다른 셀의 단일 textblock 범위들은 셀마다 독립적으로
+    // 교체할 수 있다(ADR-0010의 좁은 예외). 생성 게이트와 적용 게이트가 같은 술어를
+    // 쓰도록 `canApplySelectionEdits`를 그대로 쓴다.
+    const multiCell =
+      selectionAnchor.ranges.length > 1 &&
+      canApplySelectionEdits(bubble.editor, selectionAnchor);
+    if (selection.spansMultipleBlocks && !multiCell) {
+      removeSelectionAnchor(bubble.editor, selection.anchorId);
+      addToast({
+        type: 'error',
+        message: t('selection.sameBlockRequired', '한 문단 안의 텍스트만 선택해주세요.'),
       });
       return;
     }
@@ -802,13 +833,67 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 안 된다. 그때는 정렬 뷰와 같은 LCS 정렬로 짝짓고, 결과는 모달에서 원문으로
     // 표시되어 사람이 확인한 뒤에 적용된다.
     const targetDoc = bubble.editor.getJSON() as TranslationUnitDocument;
-    const sourceUnitText = dropAncestorUnits(findAlignedCounterpartUnits(
-      sourceDoc,
-      targetDoc,
-      selection.translationUnitIds,
-    ))
-      .map((unit) => unit.text)
-      .join('\n');
+    const alignedSourceText = (unitIds: string[]): string =>
+      dropAncestorUnits(findAlignedCounterpartUnits(sourceDoc, targetDoc, unitIds))
+        .map((unit) => unit.text)
+        .join('\n');
+
+    // 표 셀은 짧은 명사구가 많아 어의가 열 제목에 달려 있다. 앞뒤 유닛 문맥은 행 우선
+    // 순서라 대체로 무관하므로, 표 안에서는 열 헤더를 문맥으로 준다.
+    const columnHeaderAt = (pos: number): TableColumnHeaderContext | undefined => {
+      const header = resolveTableColumnHeader(
+        bubble.editor.state.doc,
+        bubble.editor.state.doc.resolve(pos),
+      );
+      if (!header) return undefined;
+      const source = alignedSourceText(header.unitIds).trim();
+      return { target: header.text, ...(source ? { source } : {}) };
+    };
+
+    if (multiCell) {
+      // 셀마다 따로 원문을 짝짓는다 — 전체를 한 번에 짝지으면 어느 원문이 어느 셀
+      // 것인지 잃는다. 한 셀이라도 원문이 없으면 부분 생성 없이 전체 실패다.
+      const cells = selectionAnchor.ranges.map((range) => {
+        const columnHeader = columnHeaderAt(range.from);
+        return {
+          sourceText: alignedSourceText(
+            getTranslationUnitIdsAtRange(bubble.editor.state.doc, range.from, range.to),
+          ),
+          currentText: readAnchorText(bubble.editor.state.doc, range.from, range.to),
+          replacementText: '',
+          ...(columnHeader ? { columnHeader } : {}),
+        };
+      });
+      if (cells.some((cell) => !cell.sourceText.trim() || !cell.currentText.trim())) {
+        removeSelectionAnchor(bubble.editor, selection.anchorId);
+        addToast({
+          type: 'error',
+          message: t('selection.alignedSourceMissing', '연결된 원문을 찾을 수 없습니다.'),
+        });
+        return;
+      }
+      setSelectionEdit({
+        selection,
+        cells,
+        // 셀별 대응은 셀 카드가 보여준다. 단일 선택용 필드는 생성 입력(용어 검색)과
+        // 버튼 활성 판정에만 쓰이므로 셀 원문을 이어 붙인 값을 넣는다.
+        sourceUnitText: cells.map((cell) => cell.sourceText).join('\n'),
+        sourceText: cells.map((cell) => cell.sourceText).join('\n'),
+        sourceAlignmentPrecision: 'unit',
+        currentTargetUnitText: selection.text,
+        instruction: selectionInstructionRef.current,
+        referenceOptions: { ...selectionReferenceOptionsRef.current },
+        replacementText: '',
+        contextManifest: undefined,
+        forbiddenTermsUsed: [],
+        flattenFormatting,
+        loading: false,
+        error: null,
+      });
+      return;
+    }
+
+    const sourceUnitText = alignedSourceText(selection.translationUnitIds);
     if (!sourceUnitText.trim()) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
@@ -857,6 +942,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     } catch {
       surroundings = undefined;
     }
+    const columnHeader = columnHeaderAt(anchorRange.from);
     const currentTargetUnitText = $from.parent.textContent;
     const initialAlignment = resolveInitialAlignedSourceRange({
       sourceUnitText,
@@ -871,6 +957,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       sourceAlignmentPrecision: initialAlignment.precision,
       currentTargetUnitText,
       ...(surroundings ? { surroundings } : {}),
+      ...(columnHeader ? { columnHeader } : {}),
       instruction: selectionInstructionRef.current,
       // 번역사는 한 문서에서 같은 참조 범위로 여러 문장을 고친다. 선택마다 초기화하면
       // 매번 같은 선택을 반복해야 하므로 프로젝트 안에서는 직전 설정을 유지한다.
@@ -929,6 +1016,57 @@ export function EditorCanvasTipTap(): JSX.Element {
         forbiddenTerms: memory.forbiddenTerms,
         glossaryEntries,
       });
+      if (request.cells) {
+        const requestCells = request.cells;
+        const cellResult = await retranslateTableCells({
+          projectId: requestProjectId,
+          cells: requestCells.map((cell) => ({
+            sourceText: cell.sourceText,
+            currentTargetText: cell.currentText,
+            ...(cell.columnHeader ? { columnHeader: cell.columnHeader } : {}),
+          })),
+          targetLanguage: resolveTargetLanguageNow() ?? 'Target',
+          ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
+          referenceOptions: request.referenceOptions,
+          contextSnapshot,
+          abortSignal: controller.signal,
+          onToken: (replacements) => {
+            setSelectionEdit((current) =>
+              current?.selection.selectionId === request.selection.selectionId && current.cells
+                ? {
+                    ...current,
+                    cells: current.cells.map((cell, index) => ({
+                      ...cell,
+                      replacementText: replacements[index] ?? '',
+                    })),
+                  }
+                : current,
+            );
+          },
+        });
+        if (
+          controller.signal.aborted ||
+          useProjectStore.getState().project?.id !== requestProjectId
+        ) return;
+        setSelectionEdit((current) =>
+          current?.selection.selectionId === request.selection.selectionId && current.cells
+            ? {
+                ...current,
+                cells: current.cells.map((cell, index) => ({
+                  ...cell,
+                  replacementText: cellResult.replacements[index] ?? '',
+                })),
+                contextManifest: cellResult.contextManifest,
+                forbiddenTermsUsed: request.referenceOptions.forbiddenTerms
+                  ? enabledForbiddenTerms
+                  : [],
+                loading: false,
+                error: null,
+              }
+            : current,
+        );
+        return;
+      }
       const result = await retranslateSelection({
         projectId: requestProjectId,
         sourceText: request.sourceUnitText,
@@ -938,6 +1076,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         currentTargetText: request.selection.text,
         targetLanguage: resolveTargetLanguageNow() ?? 'Target',
         ...(request.surroundings ? { surroundings: request.surroundings } : {}),
+        ...(request.columnHeader ? { columnHeader: request.columnHeader } : {}),
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
         referenceOptions: request.referenceOptions,
         contextSnapshot,
@@ -994,8 +1133,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       } : null);
       return;
     }
+    const proposedTexts = request.cells
+      ? request.cells.map((cell) => cell.replacementText)
+      : [request.replacementText];
     const violatedTerm = request.forbiddenTermsUsed.find((term) =>
-      request.replacementText.toLocaleLowerCase().includes(term.term.toLocaleLowerCase()),
+      proposedTexts.some((text) =>
+        text.toLocaleLowerCase().includes(term.term.toLocaleLowerCase()),
+      ),
     );
     if (violatedTerm) {
       setSelectionEdit((current) => current ? {
@@ -1016,14 +1160,31 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
     const anchorRange = getSingleAnchorRange(anchor);
-    const affectedCommentIds = anchorRange
-      ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
-      : [];
-    const result = applySelectionEdit(editor, anchor, request.replacementText, {
-      // 재번역이 만들어진 시점(모달 오픈)의 선택 텍스트를 기준으로 검증한다.
-      expectedText: request.selection.text,
-      flattenFormatting: request.flattenFormatting,
-    });
+    // 여러 셀은 범위마다 코멘트를 모은다 — 사이에 낀, 고르지 않은 셀의 코멘트가 섞이면
+    // 안 되므로 span 하나로 훑지 않는다.
+    const affectedCommentIds = request.cells
+      ? [...new Set(anchor.ranges.flatMap((range) =>
+          collectCommentIdsInRange(editor.state.doc, range.from, range.to),
+        ))]
+      : anchorRange
+        ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
+        : [];
+    const result = request.cells
+      ? applySelectionEdits(
+          editor,
+          anchor,
+          request.cells.map((cell) => cell.replacementText),
+          {
+            // 재번역이 만들어진 시점(모달 오픈)의 셀별 텍스트를 기준으로 검증한다.
+            expectedTexts: request.cells.map((cell) => cell.currentText),
+            flattenFormatting: request.flattenFormatting,
+          },
+        )
+      : applySelectionEdit(editor, anchor, request.replacementText, {
+          // 재번역이 만들어진 시점(모달 오픈)의 선택 텍스트를 기준으로 검증한다.
+          expectedText: request.selection.text,
+          flattenFormatting: request.flattenFormatting,
+        });
     if (result !== 'applied') {
       setSelectionEdit((current) => current ? {
         ...current,
@@ -1336,7 +1497,7 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const openPolishPreview = useCallback(async (
     extraMessage?: string,
-    options?: { scope?: TopLevelBlockRange },
+    options?: { scope?: AiSelectionScope },
   ): Promise<void> => {
     if (!project) return;
 
@@ -1376,16 +1537,31 @@ export function EditorCanvasTipTap(): JSX.Element {
       // diff 기준은 언제나 **전체** target이다 — 범위 실행이어도 프리뷰는 완성본을 보여준다.
       setPolishOriginalDocJson(targetDocJson);
 
-      // 범위 실행: 선택 구간의 최상위 블록만 모델에 보내고, 결과를 그 자리에 치환한다.
+      // 범위 실행: 고른 구간만 모델에 보내고, 결과를 그 자리에 되돌려 놓는다.
+      // 표 안 선택은 최상위 블록(=표 전체)이 아니라 유효한 작은 표 / 셀 안 문단을 보낸다 —
+      // 깨진 표를 보내지 않으면서도 표의 나머지 칸은 불변이다.
       const scope = options?.scope;
       const targetContent = Array.isArray(targetDocJson.content) ? targetDocJson.content : [];
-      if (scope && scope.toIndex >= targetContent.length) {
+      if (scope?.kind === 'top-level-blocks' && scope.toIndex >= targetContent.length) {
         // 모달을 여는 사이 문서가 줄었다 — 잘못된 구간에 결과를 넣지 않는다.
         throw new Error(t('editor.polishScopeStale'));
       }
-      const polishInputDocJson: TipTapDocJson = scope
-        ? { ...targetDocJson, content: targetContent.slice(scope.fromIndex, scope.toIndex + 1) }
-        : targetDocJson;
+      let polishInputDocJson: TipTapDocJson = targetDocJson;
+      if (scope?.kind === 'top-level-blocks') {
+        polishInputDocJson = {
+          ...targetDocJson,
+          content: targetContent.slice(scope.fromIndex, scope.toIndex + 1),
+        };
+      } else if (scope) {
+        try {
+          polishInputDocJson = scope.kind === 'table-rect'
+            ? extractTableRectDoc(targetDocJson, scope.tableIndex, scope.rect)
+            : extractBlockDoc(targetDocJson, scope.blockPath);
+        } catch {
+          // 모달을 여는 사이 표가 바뀌었다 — 다시 선택하게 한다.
+          throw new Error(t('editor.polishScopeStale'));
+        }
+      }
       // 폴리싱은 target 문서만 다루므로 target field 코멘트만 주입
       const serializedComments = serializeUserComments(
         useCommentStore.getState().comments,
@@ -1442,10 +1618,16 @@ export function EditorCanvasTipTap(): JSX.Element {
       if (useProjectStore.getState().project?.id !== requestMeta.projectId) return;
       // 병합-후-전체-교체: 구간 결과를 요청 시점 스냅샷에 끼워 완성본으로 프리뷰한다.
       // 스냅샷의 유효성은 적용 시점 L2 리비전 가드가 보장한다.
+      // 표 병합의 키는 translationUnitId가 아니라 표 기하(rect·경로)다 — 모델이 셀 ID를
+      // 버려도 칸 위치로는 되돌려 놓을 수 있다.
       setPolishPreviewDoc(
-        scope
-          ? replaceTopLevelBlockRange(targetDocJson, scope.fromIndex, scope.toIndex, doc)
-          : doc,
+        !scope
+          ? doc
+          : scope.kind === 'top-level-blocks'
+            ? replaceTopLevelBlockRange(targetDocJson, scope.fromIndex, scope.toIndex, doc)
+            : scope.kind === 'table-rect'
+              ? replaceTableRect(targetDocJson, scope.tableIndex, scope.rect, doc)
+              : replaceBlockAtPath(targetDocJson, scope.blockPath, doc),
       );
       setStreamingChannelText('polish', null);
     } catch (error) {
@@ -1453,6 +1635,9 @@ export function EditorCanvasTipTap(): JSX.Element {
       if (polishAbortController.current !== abortController) return;
       if (abortController.signal.aborted) {
         setPolishPreviewError(t('editor.polishCancelled', '폴리싱이 취소되었습니다.'));
+      } else if (error instanceof TableStructureMismatchError) {
+        // 모델이 행·열을 바꿔 고른 칸에 되돌려 놓을 수 없다 — 적용 없이 안내만.
+        setPolishPreviewError(t('editor.polishScopeStructureChanged'));
       } else {
         setPolishPreviewError(formatTranslationError(error));
       }
@@ -1479,7 +1664,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     // 모달을 여는 시점의 선택을 구간으로 굳힌다 — 모달로 포커스가 옮겨가면
     // 에디터 선택이 흐려지므로 실행 시점에 다시 읽을 수 없다.
-    setPolishScope(resolveTopLevelBlockRange(targetEditorRef.current));
+    setPolishScope(resolveAiSelectionScope(targetEditorRef.current));
     setPolishScopeEnabled(true);
     setPolishMessage('');
     setPolishModalOpen(true);
@@ -2221,7 +2406,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 />
               </div>
               {/* 범위 실행: 해제하면 문서 전체를 다듬는다 */}
-              {polishScope && (
+              {polishScope && countScopedCells(polishScope) > 0 && (
                 <label className="flex items-start gap-2 text-xs text-editor-text cursor-pointer">
                   <input
                     type="checkbox"
@@ -2229,10 +2414,13 @@ export function EditorCanvasTipTap(): JSX.Element {
                     onChange={(e) => setPolishScopeEnabled(e.target.checked)}
                     className="mt-0.5"
                   />
-                  <span>
-                    {t('editor.polishModal.scopeLabel', {
-                      count: polishScope.toIndex - polishScope.fromIndex + 1,
-                    })}
+                  <span data-testid="polish-scope-label">
+                    {t(
+                      polishScope.kind === 'top-level-blocks'
+                        ? 'editor.polishModal.scopeLabel'
+                        : 'editor.polishModal.scopeLabelCells',
+                      { count: countScopedCells(polishScope) },
+                    )}
                   </span>
                 </label>
               )}
@@ -2468,6 +2656,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         sourceText={selectionEdit?.sourceText ?? ''}
         sourceAlignmentPrecision={selectionEdit?.sourceAlignmentPrecision}
         replacementText={selectionEdit?.replacementText ?? ''}
+        cells={selectionEdit?.cells}
         instruction={selectionEdit?.instruction ?? ''}
         referenceOptions={
           selectionEdit?.referenceOptions ?? DEFAULT_SELECTION_REFERENCE_OPTIONS
@@ -2497,6 +2686,9 @@ export function EditorCanvasTipTap(): JSX.Element {
             ...current,
             referenceOptions,
             replacementText: '',
+            ...(current.cells
+              ? { cells: current.cells.map((cell) => ({ ...cell, replacementText: '' })) }
+              : {}),
             contextManifest: undefined,
             error: null,
           } : null);

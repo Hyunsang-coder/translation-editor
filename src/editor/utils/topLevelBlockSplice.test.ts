@@ -94,6 +94,35 @@ describe('replaceTopLevelBlockRange', () => {
     expect(base).toEqual(snapshot);
   });
 
+  it('표 블록 하나를 표로 치환하고 앞뒤 문단은 그대로 둔다', () => {
+    const table = (cellText: string) => ({
+      type: 'table',
+      content: [{
+        type: 'tableRow',
+        content: [{
+          type: 'tableCell',
+          content: [paragraph(cellText)],
+        }],
+      }],
+    });
+    const withTable = {
+      type: 'doc',
+      content: [paragraph('Intro', 'u0'), table('Old cell'), paragraph('Outro', 'u2')],
+    };
+
+    const merged = replaceTopLevelBlockRange(withTable, 1, 1, {
+      type: 'doc',
+      content: [table('New cell')],
+    });
+    const blocks = merged.content as Array<{ type: string }>;
+
+    expect(blocks.map((block) => block.type)).toEqual(['paragraph', 'table', 'paragraph']);
+    expect(JSON.stringify(blocks[0])).toContain('Intro');
+    expect(JSON.stringify(blocks[1])).toContain('New cell');
+    expect(JSON.stringify(blocks[1])).not.toContain('Old cell');
+    expect(JSON.stringify(blocks[2])).toContain('Outro');
+  });
+
   it('문서 밖 범위는 조용히 자르지 않고 던진다', () => {
     const replacement = { type: 'doc', content: [paragraph('X')] };
 

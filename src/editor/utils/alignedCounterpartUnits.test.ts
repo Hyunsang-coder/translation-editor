@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ensureTranslationUnitIds } from '@/editor/extensions/TranslationUnitId';
+import {
+  dropAncestorUnits,
+  ensureTranslationUnitIds,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
 import { findAlignedCounterpartUnits } from './alignedCounterpartUnits';
 
 describe('findAlignedCounterpartUnits', () => {
@@ -248,5 +252,35 @@ describe('findAlignedCounterpartUnits', () => {
         findAlignedCounterpartUnits(bigDoc('s', 502), bigDoc('t', 501), ['t-250']),
       ).toEqual([]);
     });
+  });
+
+  it('표 셀과 안쪽 문단 ID가 함께 잡혀도 안쪽 원문만 짝짓는다', () => {
+    const cell = (text: string, id?: string, innerId?: string) => ({
+      type: 'tableCell',
+      ...(id ? { attrs: { translationUnitId: id } } : {}),
+      content: [{
+        type: 'paragraph',
+        ...(innerId ? { attrs: { translationUnitId: innerId } } : {}),
+        content: [{ type: 'text', text }],
+      }],
+    });
+    const table = (...cells: TranslationUnitDocument[]) => ({
+      type: 'table',
+      content: [{ type: 'tableRow', content: cells }],
+    });
+    const sourceDoc = {
+      type: 'doc',
+      content: [table(cell('Alpha source.', 's1', 's1p'), cell('Beta source.', 's2', 's2p'))],
+    };
+    const targetDoc = {
+      type: 'doc',
+      content: [table(cell('알파 번역.', 't1', 't1p'), cell('베타 번역.', 't2', 't2p'))],
+    };
+
+    const units = dropAncestorUnits(
+      findAlignedCounterpartUnits(sourceDoc, targetDoc, ['t1', 't1p']),
+    );
+
+    expect(units.map((unit) => unit.text)).toEqual(['Alpha source.']);
   });
 });
