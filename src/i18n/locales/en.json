@@ -385,6 +385,17 @@
       "title": "Retranslate",
       "description": "Target already has content. This will retranslate from scratch."
     },
+    "continueTranslate": "Continue translation",
+    "continueTranslateRemaining": "Continue translation ({{count}} paragraphs left)",
+    "continueTranslateRemaining_one": "Continue translation ({{count}} paragraph left)",
+    "continueTranslateHint": "Keeps the existing translation and appends a translation of the remaining source.",
+    "continueTranslateMiddleGap": "{{count}} paragraphs without a counterpart in the boundary block are excluded — check the alignment view.",
+    "continueTranslateMiddleGap_one": "{{count}} paragraph without a counterpart in the boundary block is excluded — check the alignment view.",
+    "continueTranslateUnavailable": {
+      "misalignedPrefix": "The target does not correspond to the beginning of the source, so continuing is unavailable. Use a full retranslation instead."
+    },
+    "continueTranslateNoBase": "Could not read the existing translation to append to. Use a full retranslation instead.",
+    "polishScopeStale": "The selected range is outside the current document. Select it again and rerun.",
     "previewTitle": "Translation Preview (Entire Source → Entire Target)",
     "polishPreviewTitle": "Polish Preview",
     "polishCancelled": "Polishing was cancelled.",
@@ -415,12 +426,15 @@
       "messageLabel": "Additional Instructions",
       "optional": "(Optional)",
       "placeholder": "Example: Make it more formal and keep product terminology unchanged.",
-      "execute": "Polish"
+      "execute": "Polish",
+      "scopeLabel": "Polish only the selected range ({{count}} blocks)",
+      "scopeLabel_one": "Polish only the selected range ({{count}} block)"
     },
     "addToChat": "Add selected text to chat input",
     "addToChatLabel": "Add to chat",
     "copySelection": "Copy",
     "retranslateSelection": "Retranslate",
+    "reviewSelection": "Review this range",
     "loadingProject": "Loading project...",
     "source": "Source",
     "target": "Target",
@@ -533,6 +547,14 @@
     "unresolve": "Mark as unresolved"
   },
   "review": {
+    "scope": {
+      "label": "{{count}} paragraphs",
+      "label_one": "{{count}} paragraph",
+      "chip": "Scoped review: {{label}}",
+      "clear": "Clear scope",
+      "noUnits": "No translation units to review were found in the selection.",
+      "alignFailed": "Could not match the source text, so a scoped review is unavailable. Use a full review instead."
+    },
     "title": "Review",
     "progress": "Reviewing...",
     "completed": "Review Complete",

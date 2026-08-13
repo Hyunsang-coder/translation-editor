@@ -12,7 +12,12 @@ import { runReview } from '@/ai/review/runReview';
 import { serializeUserComments } from '@/ai/commentContext';
 import { useCommentStore } from '@/stores/commentStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
-import { buildAlignedChunksAsync, type AlignedChunk } from '@/ai/tools/reviewTool';
+import {
+  buildAlignedChunksAsync,
+  buildScopedAlignedChunks,
+  type AlignedChunk,
+} from '@/ai/tools/reviewTool';
+import type { ReviewRunScope } from '@/stores/reviewStore';
 import { translateWithStreaming, type TipTapDocJson, formatTranslationError } from '@/ai/translateDocument';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
@@ -114,6 +119,8 @@ export function ReviewPanel(): JSX.Element {
   // 검수 루프 중단 컨트롤러 (프로젝트 전환 effect에서도 abort할 수 있도록 ref로 보관)
   const reviewAbortRef = useRef<AbortController | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // 이번 런이 범위 검수였음을 알리는 헤더 칩 라벨 (표시 전용, 다음 실행에 영향 없음)
+  const [activeScopeLabel, setActiveScopeLabel] = useState<string | null>(null);
 
   // 재번역 중간 모달 (지시사항 입력)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
@@ -212,9 +219,14 @@ export function ReviewPanel(): JSX.Element {
   }, [registeredTargetEditor, project?.id]);
 
   // 외부에서 검수 트리거 시 handleRunReview 실행을 위한 ref
-  const handleRunReviewRef = useRef<((instruction?: string) => Promise<void>) | null>(null);
+  const handleRunReviewRef = useRef<
+    ((instruction?: string, scope?: ReviewRunScope) => Promise<void>) | null
+  >(null);
 
-  const handleRunReview = useCallback(async (extraInstruction?: string) => {
+  const handleRunReview = useCallback(async (
+    extraInstruction?: string,
+    scope?: ReviewRunScope,
+  ) => {
     // Snapshot: deps에 project?.id만 사용하므로 콜백 내에서 최신 project 참조
     const project = useProjectStore.getState().project;
     if (!project) return;
@@ -251,8 +263,36 @@ export function ReviewPanel(): JSX.Element {
     setElapsedSeconds(0);
 
     // 검수 시작 시 최신 문서로 chunks 재생성 (캐시된 chunks 대신)
-    // 비동기로 처리하여 UI 블로킹 방지
-    const freshChunks = await buildAlignedChunksAsync(project);
+    // 비동기로 처리하여 UI 블로킹 방지.
+    // 범위 검수는 project.segments(죽은 모델)를 우회하고 살아있는 두 에디터를 직접
+    // 정렬한다 — 선택 유닛 ID가 그 문서 기준으로 발급된 값이기 때문이다.
+    let freshChunks: AlignedChunk[];
+    if (scope) {
+      const sourceEditor = useEditorStore.getState().sourceEditor;
+      const targetEditor = useEditorStore.getState().targetEditor;
+      const scopedChunks = sourceEditor && targetEditor && !sourceEditor.isDestroyed
+        && !targetEditor.isDestroyed
+        ? buildScopedAlignedChunks({
+            sourceDocJson: sourceEditor.getJSON() as TipTapDocJson,
+            targetDocJson: targetEditor.getJSON() as TipTapDocJson,
+            targetUnitIds: scope.targetUnitIds,
+          })
+        : null;
+      if (!scopedChunks) {
+        // fail-closed: 원문 대응이 불확실하면 없는 오역을 무더기로 만들지 않는다.
+        useReviewStore.getState().releaseReviewRun();
+        useUIStore.getState().addToast({
+          type: 'warning',
+          message: t('review.scope.alignFailed'),
+        });
+        return;
+      }
+      freshChunks = scopedChunks;
+      setActiveScopeLabel(scope.label);
+    } else {
+      freshChunks = await buildAlignedChunksAsync(project);
+      setActiveScopeLabel(null);
+    }
 
     // chunk 빌드 동안 프로젝트가 전환됐으면 중단.
     // 획득한 실행 슬롯을 반드시 반납한다: 새 프로젝트의 initializeReview가 상태를
@@ -312,11 +352,13 @@ export function ReviewPanel(): JSX.Element {
         try {
           // 인라인 코멘트 → 이 청크의 세그먼트 범위로 한정해 직렬화 후 주입
           // (대조 검수는 source/target 양쪽 코멘트 모두 맥락으로 사용)
+          // 범위 검수의 groupId는 이 런에서만 쓰는 합성 ID라 코멘트의 segmentGroupId와
+          // 겹치지 않는다 — 화이트리스트를 걸면 코멘트가 전부 빠지므로 범위 한정을 생략한다.
           const chunkGroupIds = new Set(chunk.segments.map((s) => s.groupId));
           const serializedComments = serializeUserComments(
             useCommentStore.getState().comments,
             {
-              segmentGroupIds: chunkGroupIds,
+              ...(scope ? {} : { segmentGroupIds: chunkGroupIds }),
               leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 검수 시 맥락으로 반드시 고려하세요:',
             },
           );
@@ -411,7 +453,7 @@ export function ReviewPanel(): JSX.Element {
   useEffect(() => {
     if (!pendingReviewRun) return;
     const request = useReviewStore.getState().consumePendingReviewRun();
-    if (request) void handleRunReviewRef.current?.(request.instruction);
+    if (request) void handleRunReviewRef.current?.(request.instruction, request.scope);
   }, [pendingReviewRun]);
 
   const handleCancel = useCallback(() => {
@@ -950,6 +992,28 @@ export function ReviewPanel(): JSX.Element {
 
   return (
     <div className="h-full flex min-h-0 flex-col bg-editor-bg" data-testid="review-panel">
+      {/* 범위 검수 칩 — 이번 결과가 문서 전체가 아님을 밝힌다. 해제는 칩만 지운다
+          (다음 실행은 어차피 새 요청이 범위를 다시 정한다). */}
+      {activeScopeLabel && (
+        <div className="shrink-0 px-4 pt-3">
+          <span
+            data-testid="review-scope-chip"
+            className="inline-flex items-center gap-1.5 rounded-full border border-editor-border bg-editor-surface px-2.5 py-1 text-xs text-editor-text"
+          >
+            {t('review.scope.chip', { label: activeScopeLabel })}
+            <button
+              type="button"
+              onClick={() => setActiveScopeLabel(null)}
+              title={t('review.scope.clear')}
+              aria-label={t('review.scope.clear')}
+              className="text-editor-muted hover:text-editor-text"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
         {results.length === 0 && !isReviewing ? (

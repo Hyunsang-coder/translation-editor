@@ -311,6 +311,8 @@ export async function polishTargetDocumentWithStreaming(
       cancelMessage: '폴리싱이 취소되었습니다.',
       abortSignal: params.abortSignal,
       usageFeature: 'polish',
+      // 지시사항만 바꿔 재실행할 때 긴 system(규칙/용어집/메모리)을 캐시로 읽는다.
+      cacheSystem: true,
     });
 
     if (!raw.trim()) {
@@ -363,6 +365,7 @@ export async function polishTargetDocumentWithStreaming(
       cancelMessage: '폴리싱이 취소되었습니다.',
       abortSignal: params.abortSignal,
       usageFeature: 'polish',
+      cacheSystem: true,
     });
     const polishedMarkdown = extractPolishedMarkdown(raw);
     if (polishedMarkdown.trim()) {

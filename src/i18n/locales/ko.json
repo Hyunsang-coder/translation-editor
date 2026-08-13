@@ -372,6 +372,15 @@
       "title": "재번역",
       "description": "번역문이 이미 있습니다. 처음부터 다시 번역합니다."
     },
+    "continueTranslate": "이어서 번역",
+    "continueTranslateRemaining": "이어서 번역 (남은 문단 {{count}}개)",
+    "continueTranslateHint": "기존 번역은 그대로 두고 남은 원문만 번역해 뒤에 이어 붙입니다.",
+    "continueTranslateMiddleGap": "경계 블록에서 대응을 찾지 못한 문단 {{count}}개는 포함되지 않습니다 — 정렬 뷰에서 확인하세요.",
+    "continueTranslateUnavailable": {
+      "misalignedPrefix": "번역문이 원문 앞부분과 대응하지 않아 이어서 번역을 쓸 수 없습니다. 전체 재번역을 사용해주세요."
+    },
+    "continueTranslateNoBase": "이어 붙일 기존 번역문을 읽지 못했습니다. 전체 재번역을 사용해주세요.",
+    "polishScopeStale": "선택한 구간이 문서 범위를 벗어났습니다. 다시 선택한 뒤 실행해주세요.",
     "previewTitle": "번역 미리보기 (원문 전체 → 번역문 전체)",
     "polishPreviewTitle": "폴리싱 미리보기",
     "polishCancelled": "폴리싱이 취소되었습니다.",
@@ -402,12 +411,14 @@
       "messageLabel": "추가 지시사항",
       "optional": "(선택)",
       "placeholder": "예: 더 격식체로 다듬고 제품 용어는 유지해주세요.",
-      "execute": "폴리싱 실행"
+      "execute": "폴리싱 실행",
+      "scopeLabel": "선택 구간만 다듬기 (블록 {{count}}개)"
     },
     "addToChat": "선택한 텍스트를 채팅 입력창에 추가",
     "addToChatLabel": "채팅에 추가",
     "copySelection": "복사",
     "retranslateSelection": "재번역",
+    "reviewSelection": "이 구간만 검수",
     "loadingProject": "프로젝트를 불러오는 중...",
     "source": "원문",
     "target": "번역문",
@@ -520,6 +531,13 @@
     "unresolve": "미해결로 표시"
   },
   "review": {
+    "scope": {
+      "label": "문단 {{count}}개",
+      "chip": "범위 검수: {{label}}",
+      "clear": "범위 해제",
+      "noUnits": "선택 구간에서 검수할 번역 단위를 찾지 못했습니다.",
+      "alignFailed": "원문 대응을 찾지 못해 범위 검수를 할 수 없습니다. 전체 검수를 사용해주세요."
+    },
     "title": "검수",
     "progress": "검수 진행 중...",
     "completed": "검수 완료",

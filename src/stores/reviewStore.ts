@@ -121,7 +121,22 @@ interface ReviewState {
    * (마운트 시점의 값이 그대로 "이전 값"이 됨). 요청이 상태로 남아 있으면
    * 새로 마운트된 패널도 첫 effect에서 집어갈 수 있다.
    */
-  pendingReviewRun: { instruction: string } | null;
+  pendingReviewRun: PendingReviewRun | null;
+}
+
+/**
+ * 범위 검수: 선택 구간의 target 번역 유닛만 검수한다. 요청 단위 휘발성이며
+ * 영속하지 않는다 — 유닛 ID는 요청 시점 문서 기준이다.
+ */
+export interface ReviewRunScope {
+  targetUnitIds: string[];
+  /** 패널 헤더 칩에 띄울 사람용 라벨 (예: "문단 3개") */
+  label: string;
+}
+
+export interface PendingReviewRun {
+  instruction: string;
+  scope?: ReviewRunScope;
 }
 
 interface ReviewActions {
@@ -172,14 +187,15 @@ interface ReviewActions {
   /**
    * 외부에서 검수 시작 요청 (ReviewPanel이 감지하여 실행)
    * @param instruction 이번 실행에만 적용할 추가 지시사항 (빈 문자열이면 없음)
+   * @param scope 지정 시 해당 target 유닛만 검수 (생략하면 전체 검수)
    */
-  requestReviewRun: (instruction?: string) => void;
+  requestReviewRun: (instruction?: string, scope?: ReviewRunScope) => void;
 
   /**
    * 대기 중인 검수 시작 요청을 가져가면서 비운다 (ReviewPanel 전용).
    * 요청이 없으면 null.
    */
-  consumePendingReviewRun: () => { instruction: string } | null;
+  consumePendingReviewRun: () => PendingReviewRun | null;
 
   /**
    * 특정 청크 가져오기
@@ -505,10 +521,15 @@ export const useReviewStore = create<ReviewStore>((set, get) => ({
     });
   },
 
-  requestReviewRun: (instruction?: string) => {
+  requestReviewRun: (instruction?: string, scope?: ReviewRunScope) => {
     // 이미 검수 중이면 무시
     if (get().isReviewing) return;
-    set({ pendingReviewRun: { instruction: instruction?.trim() ?? '' } });
+    set({
+      pendingReviewRun: {
+        instruction: instruction?.trim() ?? '',
+        ...(scope ? { scope } : {}),
+      },
+    });
   },
 
   consumePendingReviewRun: () => {
