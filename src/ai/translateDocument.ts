@@ -147,6 +147,15 @@ export function formatTranslationError(error: unknown): string {
 // ============================================================
 
 /**
+ * "이어서 번역" 문맥. INPUT_DOCUMENT가 문서 전체가 아니라 뒷부분 sub-doc일 때,
+ * 앞부분에서 쓰인 용어·문체를 이어가도록 직전 번역 쌍 몇 개를 참고로 넘긴다.
+ * (경계 판정과 쌍 선별은 `editor/utils/continueTranslation.ts`가 한다)
+ */
+export interface ContinuationPromptContext {
+  contextPairs: Array<{ source: string; target: string }>;
+}
+
+/**
  * 번역 공통 setup: 검증, 프롬프트 구성, 토큰 계산, 모델/메시지 생성
  */
 function buildTranslationSetup(params: {
@@ -159,6 +168,7 @@ function buildTranslationSetup(params: {
   reviewIssues?: ReviewIssue[] | undefined;
   retranslateMessage?: string | undefined;
   userComments?: string | undefined;
+  continuation?: ContinuationPromptContext | undefined;
 }) {
   const cfg = getAiConfig({ useFor: 'translation' });
 
@@ -280,6 +290,27 @@ function buildTranslationSetup(params: {
       '[사용자 추가 지시사항]',
       params.retranslateMessage.trim(),
       ''
+    );
+  }
+
+  // 이어서 번역: 입력이 문서 뒷부분 sub-doc임을 알리고 직전 번역을 참고로 준다.
+  // 참고 쌍을 다시 번역해 출력에 섞는 것이 이 모드의 유일한 오작동 경로라 명시 금지한다.
+  const continuationPairs = params.continuation?.contextPairs.filter(
+    (pair) => pair.source.trim() || pair.target.trim(),
+  );
+  if (continuationPairs && continuationPairs.length > 0) {
+    systemLines.push(
+      '[이어서 번역]',
+      'INPUT_DOCUMENT는 긴 문서의 뒷부분입니다. 앞부분은 이미 번역이 완료되었습니다.',
+      "아래 '직전 번역 참고'의 용어 선택과 문체를 그대로 이어가세요.",
+      "'직전 번역 참고'를 다시 번역하거나 출력에 포함하지 마세요. INPUT_DOCUMENT만 번역하세요.",
+      '',
+      '[직전 번역 참고]',
+      ...continuationPairs.flatMap((pair) => [
+        `(원문) ${pair.source}`,
+        `(번역) ${pair.target}`,
+      ]),
+      '',
     );
   }
 
@@ -490,6 +521,11 @@ export interface StreamingTranslationParams {
   retranslateMessage?: string;
   /** 사용자 인라인 코멘트 (직렬화된 문자열, buildTranslationSetup에 전달) */
   userComments?: string;
+  /**
+   * 이어서 번역: sourceDocJson이 문서 뒷부분 sub-doc일 때 직전 번역 참고를 넘긴다.
+   * 출력 마커·파서·ID 재이식 경로는 그대로다 — 입력 문서만 sub-doc이 된다.
+   */
+  continuation?: ContinuationPromptContext;
   /** 실시간 텍스트 콜백 (누적된 전체 텍스트) */
   onToken?: (accumulatedText: string) => void;
   /** 취소 신호 */
@@ -534,6 +570,9 @@ export async function translateWithStreaming(
       onAccumulated: emitFiltered,
       abortSignal: params.abortSignal,
       usageFeature: 'translate',
+      // 같은 문서를 지시사항만 바꿔 재실행하는 흐름(재번역·이어서 번역)에서
+      // system(규칙/용어집/메모리)이 매번 정가 재과금되는 것을 막는다.
+      cacheSystem: true,
     });
 
     if (!raw || raw.trim().length === 0) {
@@ -597,6 +636,7 @@ export async function translateWithStreaming(
       maxTokens,
       abortSignal: params.abortSignal,
       usageFeature: 'translate',
+      cacheSystem: true,
     });
     const translatedMarkdown = extractTranslationMarkdown(raw);
     if (translatedMarkdown.trim()) {

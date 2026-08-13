@@ -6,6 +6,13 @@ import { htmlToTipTapJson, tipTapJsonToMarkdownForTranslation } from '@/utils/ma
 import { stripImages } from '@/utils/imagePlaceholder';
 import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import type { ITEProject } from '@/types';
+import type { TipTapDocJson } from '@/utils/markdownConverter';
+import {
+  collectTranslationUnits,
+  dropAncestorUnits,
+  type TranslationUnitDocument,
+} from '@/editor/extensions/TranslationUnitId';
+import { alignUnits } from '@/utils/alignUnits';
 
 // ============================================
 // 세그먼트 기반 청킹 (Phase 2)
@@ -167,6 +174,92 @@ export async function buildAlignedChunksAsync(
 
   if (currentChunk.segments.length > 0) chunks.push(currentChunk);
   return chunks;
+}
+
+/** 세그먼트 목록을 문자 수 상한으로 청크 분할한다 (buildAlignedChunks와 같은 규칙). */
+function chunkAlignedSegments(
+  segments: AlignedSegment[],
+  maxCharsPerChunk: number,
+): AlignedChunk[] {
+  const chunks: AlignedChunk[] = [];
+  let currentChunk: AlignedChunk = { chunkIndex: 0, segments: [], totalChars: 0 };
+
+  for (const segment of segments) {
+    const segmentSize = segment.sourceText.length + segment.targetText.length;
+    if (currentChunk.totalChars + segmentSize > maxCharsPerChunk && currentChunk.segments.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = { chunkIndex: chunks.length, segments: [], totalChars: 0 };
+    }
+    currentChunk.segments.push(segment);
+    currentChunk.totalChars += segmentSize;
+  }
+
+  if (currentChunk.segments.length > 0) chunks.push(currentChunk);
+  return chunks;
+}
+
+/**
+ * 선택 구간만 검수하기 위한 청크 빌더.
+ *
+ * `project.segments`(죽은 모델)를 우회하고 두 에디터 문서를 직접 정렬해, 선택한
+ * target 유닛과 짝이 맞는 원문만 세그먼트로 만든다. 짝을 하나라도 못 찾으면 부분
+ * 결과를 내놓지 않고 `null`을 돌려준다(fail-closed) — 원문이 어긋난 채 검수하면
+ * 없는 오역이 무더기로 보고된다.
+ *
+ * groupId는 이 런에서만 쓰는 합성 ID다. 안전한 이유: 응답의 SegmentGroupId는
+ * `reviewIssueOrder`가 **이 런의 세그먼트**로만 역인덱싱하고, 이슈 적용·하이라이트
+ * (`reviewApply`/`ReviewHighlight`)는 excerpt 텍스트로 위치를 찾는다. 문서 노드에
+ * `segmentGroupId` 속성을 다는 프로덕션 확장이 없어 세그먼트 범위 제한 경로는
+ * 애초에 비활성이다.
+ */
+export function buildScopedAlignedChunks(params: {
+  sourceDocJson: TipTapDocJson;
+  targetDocJson: TipTapDocJson;
+  targetUnitIds: string[];
+  maxCharsPerChunk?: number;
+}): AlignedChunk[] | null {
+  const maxCharsPerChunk = params.maxCharsPerChunk ?? DEFAULT_REVIEW_CHUNK_SIZE;
+  const selectedIds = new Set(params.targetUnitIds);
+  if (selectedIds.size === 0) return null;
+
+  const sourceDoc = params.sourceDocJson as TranslationUnitDocument;
+  const targetDoc = params.targetDocJson as TranslationUnitDocument;
+
+  // 표 셀은 tableCell과 그 안의 paragraph가 둘 다 번역 단위라 선택 시 함께 잡힌다.
+  // 조상을 버리지 않으면 셀 전체 텍스트와 문단 텍스트가 중복 세그먼트로 들어간다.
+  const required = new Set(
+    dropAncestorUnits(
+      collectTranslationUnits(targetDoc).filter((unit) => unit.id && selectedIds.has(unit.id)),
+    )
+      // 빈 유닛은 정렬 대상이 아니고 검수할 내용도 없다
+      .filter((unit) => unit.text.trim().length > 0)
+      .map((unit) => unit.id as string),
+  );
+  if (required.size === 0) return null;
+
+  const { ops, degraded } = alignUnits(sourceDoc, targetDoc);
+  // LCS 상한 초과 폴백은 시그니처 검증 없는 순번 매칭이다 — 믿고 원문을 짝지을 수 없다.
+  if (degraded) return null;
+
+  const segments: AlignedSegment[] = [];
+  const matched = new Set<string>();
+  for (const op of ops) {
+    if (op.kind !== 'pair') continue;
+    const targetId = op.target.id;
+    if (!targetId || !required.has(targetId)) continue;
+    matched.add(targetId);
+    segments.push({
+      groupId: `scoped-${segments.length}`,
+      order: segments.length,
+      sourceText: op.source.text,
+      targetText: op.target.text,
+    });
+  }
+
+  // 선택 중 하나라도 원문 대응을 못 찾으면 부분 검수를 하지 않는다.
+  if (matched.size !== required.size || segments.length === 0) return null;
+
+  return chunkAlignedSegments(segments, maxCharsPerChunk);
 }
 
 // Note: resolveSourceDocumentText, resolveTargetDocumentText, autoSliceLargeDocument

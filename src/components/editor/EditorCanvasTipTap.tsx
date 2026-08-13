@@ -37,6 +37,19 @@ import {
   SelectionInlineToolbar,
   SELECTION_INLINE_TOOLBAR_HEIGHT,
 } from '@/components/ui/SelectionInlineToolbar';
+import {
+  buildContinuationPlan,
+  type ContinuationPlan,
+  type ContinuationPlanResult,
+} from '@/editor/utils/continueTranslation';
+import {
+  appendTopLevelBlocks,
+  replaceTopLevelBlockRange,
+} from '@/editor/utils/topLevelBlockSplice';
+import {
+  resolveTopLevelBlockRange,
+  type TopLevelBlockRange,
+} from '@/editor/utils/blockRangeScope';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { AlignmentView } from '@/components/editor/AlignmentView';
@@ -68,9 +81,11 @@ import {
 } from '@/editor/extensions/SelectionAnchor';
 import { getTranslationUnitIdsAtRange } from '@/editor/extensions/TranslationUnitId';
 import {
+  collectTranslationUnits,
   dropAncestorUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
+import { useReviewStore } from '@/stores/reviewStore';
 import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
 import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
 import {
@@ -254,6 +269,9 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const [translatePreviewOpen, setTranslatePreviewOpen] = useState(false);
   const [translatePreviewDoc, setTranslatePreviewDoc] = useState<Record<string, unknown> | null>(null);
+  // 선택 적용 diff 기준: 재번역 시작 시점의 Target 문서 스냅샷 (폴리싱의 polishOriginalDocJson 대칭).
+  // 첫 번역(빈 target)은 null — 비교할 원본이 없으므로 변경사항 탭 없이 기존 동작 그대로.
+  const [translateOriginalDocJson, setTranslateOriginalDocJson] = useState<TipTapDocJson | null>(null);
   const [translatePreviewError, setTranslatePreviewError] = useState<string | null>(null);
   // 진행 상태는 uiStore에 둔다 — 상단 툴바(WorkflowActions)와 프리뷰 모달이 함께 읽는다.
   const translateLoading = useUIStore((s) => s.translateLoading);
@@ -270,6 +288,10 @@ export function EditorCanvasTipTap(): JSX.Element {
   const polishAbortController = useRef<AbortController | null>(null);
   const [polishModalOpen, setPolishModalOpen] = useState(false);
   const [polishMessage, setPolishMessage] = useState('');
+  // 폴리싱 범위 실행: 모달을 열 때의 target 선택을 최상위 블록 구간으로 해석해 둔다.
+  // null이면 스코프 UI를 노출하지 않는다(선택이 없거나 번역 유닛이 없는 선택).
+  const [polishScope, setPolishScope] = useState<TopLevelBlockRange | null>(null);
+  const [polishScopeEnabled, setPolishScopeEnabled] = useState(true);
 
   // P4: 번역/폴리싱 스트리밍 텍스트는 캔버스 state가 아니라 translationPreviewStore 채널에
   // 기록한다(표시는 TranslatePreviewModal이 채널을 직접 구독). 델타마다 두 TipTap 에디터를
@@ -303,6 +325,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   // 재번역 지시사항 모달 (타겟에 내용이 이미 있을 때)
   const [retranslateModalOpen, setRetranslateModalOpen] = useState(false);
   const [retranslateMessage, setRetranslateMessage] = useState('');
+  // 모달을 열 때 계산한 "이어서 번역" 가능 여부 (요청 단위 휘발성 — 영속하지 않는다)
+  const [continuationPlanResult, setContinuationPlanResult] = useState<ContinuationPlanResult | null>(null);
 
   // 검수 모달 상태는 더 이상 사용하지 않음 (Review 탭으로 대체)
 
@@ -678,6 +702,48 @@ export function EditorCanvasTipTap(): JSX.Element {
     if (!selection) return;
     openChatWithSelection(selection);
   }, [buildSelectionBubble, createChatSelection, openChatWithSelection]);
+
+  /**
+   * 선택 구간만 검수. 유닛 ID를 요청에 실어 보내고 패널을 연다 — 실제 정렬/청크
+   * 구성은 ReviewPanel이 `buildScopedAlignedChunks`로 하고, 실패하면 거기서 막는다.
+   */
+  const openScopedReview = useCallback((bubble: SelectionBubble): void => {
+    if (bubble.field !== 'target') return;
+
+    const doc = bubble.editor.state.doc;
+    const unitIds = new Set<string>();
+    for (const range of bubble.ranges) {
+      for (const id of getTranslationUnitIdsAtRange(doc, range.from, range.to)) {
+        unitIds.add(id);
+      }
+    }
+    if (unitIds.size === 0) {
+      addToast({
+        type: 'warning',
+        message: t('review.scope.noUnits'),
+      });
+      return;
+    }
+
+    // 라벨의 개수는 실제로 검수될 단위 수 — 표 셀은 셀과 내부 문단이 함께 잡히므로
+    // 조상을 버린 뒤 센다 (buildScopedAlignedChunks와 같은 기준).
+    const selectedUnits = dropAncestorUnits(
+      collectTranslationUnits(bubble.editor.getJSON() as TranslationUnitDocument).filter(
+        (unit) => unit.id && unitIds.has(unit.id),
+      ),
+    ).filter((unit) => unit.text.trim().length > 0);
+
+    if (selectedUnits.length === 0) {
+      addToast({ type: 'warning', message: t('review.scope.noUnits') });
+      return;
+    }
+
+    useUIStore.getState().openReviewPanel();
+    useReviewStore.getState().requestReviewRun('', {
+      targetUnitIds: [...unitIds],
+      label: t('review.scope.label', { count: selectedUnits.length }),
+    });
+  }, [addToast, t]);
 
   const openSelectionRetranslate = useCallback(async (
     bubble: SelectionBubble,
@@ -1065,7 +1131,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     [],
   );
 
-  const openTranslatePreview = useCallback(async (extraMessage?: string): Promise<void> => {
+  const openTranslatePreview = useCallback(async (
+    extraMessage?: string,
+    options?: { continuationPlan?: ContinuationPlan },
+  ): Promise<void> => {
     if (!project) return;
     if (!sourceEditorRef.current) {
       addToast({ type: 'error', message: t('editor.sourceEditorNotReady', 'Source 에디터가 아직 준비되지 않았습니다.') });
@@ -1118,13 +1187,37 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     try {
       const sourceDocJson = sourceEditorRef.current.getJSON() as Record<string, unknown>;
+      // 재번역 diff의 기준 스냅샷. 요청 시점 target을 캡처해 두면 변경사항 탭에서
+      // 문단 단위 선택 적용이 가능해진다(첫 번역은 비교 대상이 없으므로 null).
+      // requestMeta.targetRevision과 같은 시점의 문서다 — 적용 시 L2 가드가
+      // 이 스냅샷이 여전히 유효한지 보장한다.
+      const targetEditor = targetEditorRef.current;
+      const targetDocJsonAtStart =
+        targetEditor && !targetEditor.isDestroyed && !targetEditor.isEmpty
+          ? (targetEditor.getJSON() as TipTapDocJson)
+          : null;
+      setTranslateOriginalDocJson(targetDocJsonAtStart);
+
+      // 이어서 번역: 모델에 보내는 건 남은 뒷부분 sub-doc뿐이고, 결과는 기준
+      // 스냅샷 뒤에 이어 붙여 완성본으로 프리뷰한다(부분 적용을 만들지 않는다).
+      const continuationPlan = options?.continuationPlan;
+      if (continuationPlan && !targetDocJsonAtStart) {
+        // 이어 붙일 기준이 없으면 병합할 수 없다 — 조용히 전체 번역으로 흘리지 않는다.
+        throw new Error(t('editor.continueTranslateNoBase'));
+      }
+      const translationSourceDocJson = continuationPlan
+        ? continuationPlan.remainingSourceDoc
+        : sourceDocJson;
+
       const memoryAtStart = useProjectMemoryStore.getState();
       const legacyProjectContextAtStart = useChatStore.getState().projectContext;
 
-      // 용어집 검색 (앞부분만이 아니라 문서 전역 윈도우)
+      // 용어집 검색 (앞부분만이 아니라 문서 전역 윈도우).
+      // 이어서 번역은 실제로 번역할 구간에서만 찾는다 — 앞부분 용어는 이미 확정됐고
+      // 참고 쌍으로 문체가 전달된다.
       let glossaryEntries: Awaited<ReturnType<typeof resolveGlossaryEntries>> = [];
       try {
-        const sourceMarkdown = tipTapJsonToMarkdown(sourceDocJson);
+        const sourceMarkdown = tipTapJsonToMarkdown(translationSourceDocJson);
         if (sourceMarkdown.trim().length > 0) {
           glossaryEntries = await resolveGlossaryEntries({
             projectId: project.id,
@@ -1159,10 +1252,15 @@ export function EditorCanvasTipTap(): JSX.Element {
       );
       const { doc } = await translateWithStreaming({
         project,
-        sourceDocJson,
+        sourceDocJson: translationSourceDocJson,
         resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
+        ...(continuationPlan
+          ? { continuation: { contextPairs: continuationPlan.contextPairs } }
+          : {}),
+        // 스트리밍 탭에는 신규 번역분만 흐른다(병합 전) — 의도된 동작.
+        // 완성본은 아래에서 병합해 프리뷰/변경사항 탭으로 넘긴다.
         onToken: (text) => {
           setStreamingChannelText('translate', text);
         },
@@ -1173,7 +1271,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       if (abortController.signal.aborted) return;
       if (translateAbortController.current !== abortController) return;
       if (useProjectStore.getState().project?.id !== requestMeta.projectId) return;
-      setTranslatePreviewDoc(doc);
+      // 병합-후-전체-교체: 이어서 번역은 기준 스냅샷 + 신규 번역분의 완성본을 프리뷰한다.
+      // 이 스냅샷의 유효성은 적용 시점 L2 리비전 가드가 보장한다.
+      setTranslatePreviewDoc(
+        continuationPlan && targetDocJsonAtStart
+          ? appendTopLevelBlocks(targetDocJsonAtStart, doc)
+          : doc,
+      );
       setStreamingChannelText('translate', null); // 완료 후 스트리밍 텍스트 초기화
     } catch (e) {
       // stale 요청(그 사이 새 요청 시작)이 새 요청의 상태를 덮지 않도록 가드
@@ -1204,9 +1308,20 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   // 번역 버튼 클릭 핸들러: 타겟에 내용이 있으면 재번역 모달 먼저 표시
   const handleTranslateClick = useCallback(() => {
-    if (!sourceEditorRef.current) return;
+    const sourceEd = sourceEditorRef.current;
+    if (!sourceEd) return;
     const hasTarget = stripHtml(targetDocument || '').trim().length > 0;
     if (hasTarget) {
+      // 모달을 여는 시점의 두 문서로 경계를 판정한다. 실패해도 재번역은 그대로 가능하다.
+      const targetEd = targetEditorRef.current;
+      setContinuationPlanResult(
+        !sourceEd.isDestroyed && targetEd && !targetEd.isDestroyed
+          ? buildContinuationPlan(
+              sourceEd.getJSON() as TipTapDocJson,
+              targetEd.getJSON() as TipTapDocJson,
+            )
+          : null,
+      );
       setRetranslateMessage('');
       setRetranslateModalOpen(true);
     } else {
@@ -1219,7 +1334,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     [targetDocument],
   );
 
-  const openPolishPreview = useCallback(async (extraMessage?: string): Promise<void> => {
+  const openPolishPreview = useCallback(async (
+    extraMessage?: string,
+    options?: { scope?: TopLevelBlockRange },
+  ): Promise<void> => {
     if (!project) return;
 
     if (!hasTargetContent) {
@@ -1255,7 +1373,19 @@ export function EditorCanvasTipTap(): JSX.Element {
       const targetDocJson = targetEditorRef.current.getJSON() as TipTapDocJson;
       const memoryAtStart = useProjectMemoryStore.getState();
       const legacyProjectContextAtStart = useChatStore.getState().projectContext;
+      // diff 기준은 언제나 **전체** target이다 — 범위 실행이어도 프리뷰는 완성본을 보여준다.
       setPolishOriginalDocJson(targetDocJson);
+
+      // 범위 실행: 선택 구간의 최상위 블록만 모델에 보내고, 결과를 그 자리에 치환한다.
+      const scope = options?.scope;
+      const targetContent = Array.isArray(targetDocJson.content) ? targetDocJson.content : [];
+      if (scope && scope.toIndex >= targetContent.length) {
+        // 모달을 여는 사이 문서가 줄었다 — 잘못된 구간에 결과를 넣지 않는다.
+        throw new Error(t('editor.polishScopeStale'));
+      }
+      const polishInputDocJson: TipTapDocJson = scope
+        ? { ...targetDocJson, content: targetContent.slice(scope.fromIndex, scope.toIndex + 1) }
+        : targetDocJson;
       // 폴리싱은 target 문서만 다루므로 target field 코멘트만 주입
       const serializedComments = serializeUserComments(
         useCommentStore.getState().comments,
@@ -1298,7 +1428,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
 
       const { doc } = await polishTargetDocumentWithStreaming({
-        targetDocJson,
+        targetDocJson: polishInputDocJson,
         targetLanguage: resolveTargetLanguageNow() ?? undefined,
         resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
@@ -1310,7 +1440,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       if (abortController.signal.aborted) return;
       if (polishAbortController.current !== abortController) return;
       if (useProjectStore.getState().project?.id !== requestMeta.projectId) return;
-      setPolishPreviewDoc(doc);
+      // 병합-후-전체-교체: 구간 결과를 요청 시점 스냅샷에 끼워 완성본으로 프리뷰한다.
+      // 스냅샷의 유효성은 적용 시점 L2 리비전 가드가 보장한다.
+      setPolishPreviewDoc(
+        scope
+          ? replaceTopLevelBlockRange(targetDocJson, scope.fromIndex, scope.toIndex, doc)
+          : doc,
+      );
       setStreamingChannelText('polish', null);
     } catch (error) {
       // stale 요청이 새 요청의 상태를 덮지 않도록 가드
@@ -1341,6 +1477,10 @@ export function EditorCanvasTipTap(): JSX.Element {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
       return;
     }
+    // 모달을 여는 시점의 선택을 구간으로 굳힌다 — 모달로 포커스가 옮겨가면
+    // 에디터 선택이 흐려지므로 실행 시점에 다시 읽을 수 없다.
+    setPolishScope(resolveTopLevelBlockRange(targetEditorRef.current));
+    setPolishScopeEnabled(true);
     setPolishMessage('');
     setPolishModalOpen(true);
   }, [addToast, hasTargetContent, project, t]);
@@ -1374,11 +1514,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
     setTranslateLoading(false);
     setTranslatePreviewOpen(false);
+    setTranslateOriginalDocJson(null);
     setStreamingChannelText('translate', null);
   }, [setStreamingChannelText, setTranslateLoading]);
 
-  const applyTranslatePreview = useCallback((): void => {
-    if (!translatePreviewDoc) return;
+  const applyTranslateDoc = useCallback((doc: TipTapDocJson): void => {
     if (!targetEditorRef.current) {
       addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
       return;
@@ -1395,6 +1535,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       setTranslatePreviewOpen(false);
       setTranslatePreviewDoc(null);
+      setTranslateOriginalDocJson(null);
       return;
     }
 
@@ -1416,8 +1557,9 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     // replaceDocContent는 onUpdate를 발동시키므로 store 자동 동기화됨
     // addToHistory: true → Ctrl+Z로 번역 취소 가능
-    replaceDocContent(targetEditorRef.current, translatePreviewDoc, { addToHistory: true });
+    replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
     setTranslatePreviewOpen(false);
+    setTranslateOriginalDocJson(null);
 
     // Flash 효과 트리거 (1초 동안 지속)
     setTargetFlash(true);
@@ -1439,7 +1581,12 @@ export function EditorCanvasTipTap(): JSX.Element {
         });
       }
     }
-  }, [translatePreviewDoc, addToast, t, createSnapshotIfChanged, computeTargetRevision]);
+  }, [addToast, t, createSnapshotIfChanged, computeTargetRevision]);
+
+  const applyTranslatePreview = useCallback((): void => {
+    if (!translatePreviewDoc) return;
+    applyTranslateDoc(translatePreviewDoc);
+  }, [translatePreviewDoc, applyTranslateDoc]);
 
   const handlePolishCancel = useCallback((): void => {
     if (polishAbortController.current) {
@@ -1457,6 +1604,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     setPolishPreviewDoc(null);
     setPolishOriginalDocJson(null);
     setPolishPreviewError(null);
+    setPolishScope(null);
     setStreamingChannelText('polish', null);
   }, [setStreamingChannelText]);
 
@@ -1524,9 +1672,16 @@ export function EditorCanvasTipTap(): JSX.Element {
     void openTranslatePreview(retranslateMessage);
   }, [openTranslatePreview, retranslateMessage]);
 
+  /** 모달 실행 경로 — 체크박스 상태를 스코프 옵션으로 옮긴다 (재시도도 같은 범위를 쓴다). */
+  const activePolishScope = polishScopeEnabled ? polishScope : null;
+
+  const runPolishFromModal = useCallback((): void => {
+    void openPolishPreview(polishMessage, activePolishScope ? { scope: activePolishScope } : {});
+  }, [openPolishPreview, polishMessage, activePolishScope]);
+
   const handlePolishRetry = useCallback((): void => {
-    void openPolishPreview(polishMessage);
-  }, [openPolishPreview, polishMessage]);
+    void openPolishPreview(polishMessage, activePolishScope ? { scope: activePolishScope } : {});
+  }, [openPolishPreview, polishMessage, activePolishScope]);
 
   // Source 에디터 준비 완료 콜백
   const handleSourceEditorReady = useCallback((editor: Editor) => {
@@ -2060,11 +2215,27 @@ export function EditorCanvasTipTap(): JSX.Element {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       setPolishModalOpen(false);
-                      void openPolishPreview(polishMessage);
+                      void runPolishFromModal();
                     }
                   }}
                 />
               </div>
+              {/* 범위 실행: 해제하면 문서 전체를 다듬는다 */}
+              {polishScope && (
+                <label className="flex items-start gap-2 text-xs text-editor-text cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={polishScopeEnabled}
+                    onChange={(e) => setPolishScopeEnabled(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    {t('editor.polishModal.scopeLabel', {
+                      count: polishScope.toIndex - polishScope.fromIndex + 1,
+                    })}
+                  </span>
+                </label>
+              )}
             </div>
             <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
               <button
@@ -2078,7 +2249,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 type="button"
                 onClick={() => {
                   setPolishModalOpen(false);
-                  void openPolishPreview(polishMessage);
+                  void runPolishFromModal();
                 }}
                 className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
               >
@@ -2093,7 +2264,10 @@ export function EditorCanvasTipTap(): JSX.Element {
       {retranslateModalOpen && (
         <Modal
           open
-          onClose={() => setRetranslateModalOpen(false)}
+          onClose={() => {
+            setRetranslateModalOpen(false);
+            setContinuationPlanResult(null);
+          }}
           labelId="retranslate-instruction-title"
           className="bg-black/50 p-4"
           closeOnOverlay={false}
@@ -2124,24 +2298,72 @@ export function EditorCanvasTipTap(): JSX.Element {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       setRetranslateModalOpen(false);
+                      setContinuationPlanResult(null);
                       void openTranslatePreview(retranslateMessage);
                     }
                   }}
                 />
               </div>
+              {continuationPlanResult?.ok && (
+                <div className="space-y-1">
+                  <p className="text-xs text-editor-muted">
+                    {t('editor.continueTranslateHint')}
+                  </p>
+                  {continuationPlanResult.plan.middleGapUnitCount > 0 && (
+                    <p className="text-xs text-editor-muted">
+                      {t('editor.continueTranslateMiddleGap', {
+                        count: continuationPlanResult.plan.middleGapUnitCount,
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="px-4 py-3 border-t border-editor-hairline flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setRetranslateModalOpen(false)}
+                onClick={() => {
+                  setRetranslateModalOpen(false);
+                  setContinuationPlanResult(null);
+                }}
                 className="px-3 py-1.5 text-xs rounded border border-editor-border text-editor-text hover:bg-editor-bg transition-colors"
               >
                 {t('common.cancel', '취소')}
               </button>
+              {/* 이어서 번역: 남은 원문 suffix만 번역해 기존 번역 뒤에 이어 붙인다.
+                  판정이 애매한 사유(misaligned-prefix)는 숨기지 않고 비활성 + 사유를 밝힌다. */}
+              {continuationPlanResult?.ok === true && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const plan = continuationPlanResult.plan;
+                    setRetranslateModalOpen(false);
+                    setContinuationPlanResult(null);
+                    void openTranslatePreview(retranslateMessage, { continuationPlan: plan });
+                  }}
+                  className="px-3 py-1.5 text-xs font-semibold rounded border border-primary-fill text-primary-fill hover:bg-editor-bg transition-colors"
+                >
+                  {t('editor.continueTranslateRemaining', {
+                    count: continuationPlanResult.plan.remainingUnitCount,
+                  })}
+                </button>
+              )}
+              {continuationPlanResult?.ok === false
+                && continuationPlanResult.reason === 'misaligned-prefix' && (
+                <button
+                  type="button"
+                  disabled
+                  title={t('editor.continueTranslateUnavailable.misalignedPrefix')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded border border-editor-border text-editor-muted cursor-not-allowed"
+                >
+                  {t('editor.continueTranslate')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setRetranslateModalOpen(false);
+                  setContinuationPlanResult(null);
                   void openTranslatePreview(retranslateMessage);
                 }}
                 className="px-3 py-1.5 text-xs font-semibold rounded bg-primary-fill text-white hover:bg-primary-fill-hover transition-colors"
@@ -2162,8 +2384,11 @@ export function EditorCanvasTipTap(): JSX.Element {
         isLoading={translateLoading}
         error={translatePreviewError}
         streamingChannel="translate"
+        originalDocJson={translateOriginalDocJson}
+        onApplySelective={applyTranslateDoc}
         onClose={() => {
           setTranslatePreviewOpen(false);
+          setTranslateOriginalDocJson(null);
         }}
         onApply={applyTranslatePreview}
         onCancel={handleTranslateCancel}
@@ -2213,6 +2438,10 @@ export function EditorCanvasTipTap(): JSX.Element {
             ? {
                 onRetranslateSelection: () => {
                   void openSelectionRetranslate(selectionToolbar);
+                  setSelectionToolbar(null);
+                },
+                onReviewSelection: () => {
+                  openScopedReview(selectionToolbar);
                   setSelectionToolbar(null);
                 },
               }

@@ -447,4 +447,72 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(systemPrompt).toContain('검수 이슈를 반영해 다시 번역해줘');
     });
   });
+
+  describe('이어서 번역 (continuation)', () => {
+    const remainingSourceDoc: TipTapDocJson = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Remaining tail paragraph.' }] },
+      ],
+    };
+
+    it('직전 번역 참고를 system에 넣고, user에는 남은 sub-doc만 넣는다', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson: remainingSourceDoc,
+        continuation: {
+          contextPairs: [
+            { source: 'Already translated head.', target: 'Ya traducido.' },
+            { source: 'Second head.', target: 'Segundo.' },
+          ],
+        },
+      });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content ?? '');
+      const userPrompt = String(messages[1]?.content ?? '');
+
+      expect(systemPrompt).toContain('[이어서 번역]');
+      expect(systemPrompt).toContain('[직전 번역 참고]');
+      expect(systemPrompt).toContain('(원문) Already translated head.');
+      expect(systemPrompt).toContain('(번역) Ya traducido.');
+      expect(systemPrompt).toContain('(원문) Second head.');
+      // 참고 문맥 재번역 금지 지시가 빠지면 모델이 앞부분을 되받아쓴다
+      expect(systemPrompt).toContain('INPUT_DOCUMENT만 번역하세요.');
+
+      // INPUT_DOCUMENT에는 남은 부분만 — 참고 문맥이 입력으로 새면 중복 번역된다
+      expect(userPrompt).toContain('Remaining tail paragraph.');
+      expect(userPrompt).not.toContain('Already translated head.');
+      expect(userPrompt).not.toContain('Ya traducido.');
+    });
+
+    it('continuation이 없으면 이어서 번역 섹션을 넣지 않는다', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await translateWithStreaming({ project: mockProject, sourceDocJson });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content ?? '');
+      expect(systemPrompt).not.toContain('[이어서 번역]');
+      expect(systemPrompt).not.toContain('[직전 번역 참고]');
+    });
+
+    it('참고 쌍이 비어 있으면 섹션을 넣지 않는다', async () => {
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      vi.mocked(createChatModel).mockReturnValue(model as never);
+
+      await translateWithStreaming({
+        project: mockProject,
+        sourceDocJson: remainingSourceDoc,
+        continuation: { contextPairs: [] },
+      });
+
+      const [messages] = model.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      expect(String(messages[0]?.content ?? '')).not.toContain('[이어서 번역]');
+    });
+  });
 });

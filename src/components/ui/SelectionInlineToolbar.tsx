@@ -1,4 +1,4 @@
-import { Clipboard, Languages, MessagesSquare, NotebookPen } from 'lucide-react';
+import { Clipboard, Languages, MessagesSquare, NotebookPen, ScanSearch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { SelectionPanel } from '@/types';
 import { shortcutLabel } from '@/utils/platform';
@@ -11,6 +11,8 @@ interface SelectionInlineToolbarProps {
   onCopy: () => void;
   onAddToChat: () => void;
   onRetranslateSelection?: () => void;
+  /** target 패널 전용 — 선택 구간만 검수 */
+  onReviewSelection?: () => void;
   onAddComment: () => void;
   style?: React.CSSProperties;
   /** 렌더 후 실제 폭을 재서 화면 안으로 밀어 넣기 위한 ref */
@@ -29,6 +31,7 @@ export function SelectionInlineToolbar({
   onCopy,
   onAddToChat,
   onRetranslateSelection,
+  onReviewSelection,
   onAddComment,
   style,
   containerRef,
@@ -55,6 +58,19 @@ export function SelectionInlineToolbar({
         >
           <Languages className="w-3.5 h-3.5 shrink-0" />
           <span>{t('editor.retranslateSelection')}</span>
+        </button>
+      )}
+
+      {panel === 'target' && onReviewSelection && (
+        <button
+          type="button"
+          data-testid="selection-inline-review"
+          className={`${itemClassName} text-editor-text hover:bg-editor-border/60 border-l border-editor-hairline first:border-l-0`}
+          title={t('editor.reviewSelection')}
+          onClick={onReviewSelection}
+        >
+          <ScanSearch className="w-3.5 h-3.5 shrink-0" />
+          <span>{t('editor.reviewSelection')}</span>
         </button>
       )}
 

@@ -126,6 +126,24 @@ describe('reviewStore requestReviewRun / consumePendingReviewRun', () => {
     useReviewStore.getState().requestReviewRun('무시되어야 함');
     expect(useReviewStore.getState().pendingReviewRun).toBeNull();
   });
+
+  it('범위를 함께 실어 보내면 소비 시 그대로 나온다', () => {
+    const scope = { targetUnitIds: ['u1', 'u2'], label: '문단 2개' };
+    useReviewStore.getState().requestReviewRun('', scope);
+
+    expect(useReviewStore.getState().consumePendingReviewRun()).toEqual({
+      instruction: '',
+      scope,
+    });
+  });
+
+  it('범위 없이 요청하면 scope 키가 붙지 않는다 (기존 호출부 호환)', () => {
+    useReviewStore.getState().requestReviewRun('전체 검수');
+
+    expect(useReviewStore.getState().consumePendingReviewRun()).toEqual({
+      instruction: '전체 검수',
+    });
+  });
 });
 
 describe('reviewStore acquireReviewRun / releaseReviewRun (L4 이중 실행 가드)', () => {
