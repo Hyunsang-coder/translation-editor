@@ -734,7 +734,7 @@
       "translationRules": "Translation rules",
       "forbiddenTerms": "Forbidden terms",
       "glossary": "Glossary",
-      "projectContext": "Project context"
+      "projectMemory": "Project memory"
     },
     "status": {
       "active": "Linked",

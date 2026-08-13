@@ -48,7 +48,7 @@ describe('retranslateSelection', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: false,
-        projectContext: false,
+        projectMemory: false,
       },
       contextSnapshot: {
         revision: 3,
@@ -83,7 +83,7 @@ describe('retranslateSelection', () => {
         translationRules: true,
         forbiddenTerms: true,
         glossary: false,
-        projectContext: true,
+        projectMemory: true,
       },
       contextSnapshot: {
         revision: 4,
@@ -128,7 +128,7 @@ describe('retranslateSelection', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: false,
-        projectContext: false,
+        projectMemory: false,
       },
       contextSnapshot: {
         revision: 1,
@@ -170,7 +170,7 @@ describe('retranslateSelection', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: false,
-        projectContext: false,
+        projectMemory: false,
       },
       contextSnapshot: {
         revision: 1,
@@ -202,7 +202,7 @@ describe('retranslateSelection', () => {
         translationRules: true,
         forbiddenTerms: true,
         glossary: false,
-        projectContext: true,
+        projectMemory: true,
       },
       contextSnapshot: {
         revision: 4,
@@ -230,7 +230,7 @@ describe('retranslateSelection', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: false,
-        projectContext: false,
+        projectMemory: false,
       },
       contextSnapshot: {
         revision: 1,
@@ -266,7 +266,7 @@ describe('retranslateSelection', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: false,
-        projectContext: false,
+        projectMemory: false,
       },
       contextSnapshot: {
         revision: 1,

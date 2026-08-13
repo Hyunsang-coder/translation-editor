@@ -61,7 +61,7 @@ export function resolveWorkflowContextFromSnapshot(
   const useGlossary =
     all || (mode === 'selection-retranslate' && options?.glossary === true);
   const useProjectMemory =
-    all || (mode === 'selection-retranslate' && options?.projectContext === true);
+    all || (mode === 'selection-retranslate' && options?.projectMemory === true);
 
   const rendered: ResolvedWorkflowContext['rendered'] = {};
   const included: ContextManifest['included'] = [];

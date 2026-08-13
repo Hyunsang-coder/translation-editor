@@ -246,7 +246,7 @@ export interface ContextReferenceOptions {
   translationRules: boolean;
   forbiddenTerms: boolean;
   glossary: boolean;
-  projectContext: boolean;
+  projectMemory: boolean;
 }
 
 /**
@@ -265,7 +265,7 @@ export const DEFAULT_SELECTION_REFERENCE_OPTIONS: ContextReferenceOptions = {
   translationRules: true,
   forbiddenTerms: true,
   glossary: true,
-  projectContext: false,
+  projectMemory: false,
 };
 
 export type ProjectMemoryCategory =

@@ -37,7 +37,7 @@ const OPTION_KEYS: Array<{
   { key: 'translationRules', label: 'selection.reference.translationRules' },
   { key: 'forbiddenTerms', label: 'selection.reference.forbiddenTerms' },
   { key: 'glossary', label: 'selection.reference.glossary' },
-  { key: 'projectContext', label: 'selection.reference.projectContext' },
+  { key: 'projectMemory', label: 'selection.reference.projectMemory' },
 ];
 
 export function SelectionEditPreviewModal({

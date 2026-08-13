@@ -721,7 +721,7 @@
       "translationRules": "번역 규칙 참조",
       "forbiddenTerms": "금칙어 참조",
       "glossary": "용어집 참조",
-      "projectContext": "프로젝트 컨텍스트 참조"
+      "projectMemory": "프로젝트 메모리 참조"
     },
     "status": {
       "active": "연결됨",

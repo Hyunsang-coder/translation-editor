@@ -57,7 +57,7 @@ describe('SelectionEditPreviewModal', () => {
     expect(screen.getByTestId('selection-reference-translationRules')).toBeChecked();
     expect(screen.getByTestId('selection-reference-forbiddenTerms')).toBeChecked();
     expect(screen.getByTestId('selection-reference-glossary')).toBeChecked();
-    expect(screen.getByTestId('selection-reference-projectContext')).not.toBeChecked();
+    expect(screen.getByTestId('selection-reference-projectMemory')).not.toBeChecked();
   });
 
   it('수정안이 없으면 재번역을 실행하고, 수정안이 있으면 적용한다', () => {

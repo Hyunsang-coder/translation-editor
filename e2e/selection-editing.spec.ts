@@ -208,7 +208,7 @@ test.describe('Selection editing and scoped context', () => {
     for (const option of ['translationRules', 'forbiddenTerms']) {
       await expect(page.getByTestId(`selection-reference-${option}`)).toBeChecked();
     }
-    for (const option of ['glossary', 'projectContext']) {
+    for (const option of ['glossary', 'projectMemory']) {
       await expect(page.getByTestId(`selection-reference-${option}`)).not.toBeChecked();
     }
   });

@@ -99,7 +99,7 @@ describe('workflow context snapshot', () => {
         translationRules: false,
         forbiddenTerms: false,
         glossary: true,
-        projectContext: false,
+        projectMemory: false,
       },
     });
 
