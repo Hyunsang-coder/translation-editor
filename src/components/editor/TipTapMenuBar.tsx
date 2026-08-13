@@ -35,9 +35,15 @@ interface TipTapMenuBarProps {
 const ICON_SIZE = 13;
 
 // 지우개 버튼은 적용 표시가 있을 때만 나타나 처음 보는 사용자가 존재를 모르기 쉽다.
-// 적용 표시가 처음 생길 때 세션당 한 번만 팝업으로 알려준다.
+// 적용 표시가 처음 생길 때 **딱 한 번** 팝업으로 알려준다.
 // (토스트는 상단 스트립과 겹쳐 가독성이 나빴다 — 네이티브 다이얼로그 사용)
-let appliedChangesHintShown = false;
+//
+// "본 적 있음"은 uiStore에 영속한다. 모듈 변수로 두면 JS 컨텍스트가 새로 뜰 때마다
+// 초기화되어 앱 재시작마다(데브에서는 Vite full reload마다) 다시 뜬다.
+// 같은 팝업이 두 메뉴바(Source/Target)에서 겹쳐 뜨지 않도록, 스토어에 쓰기 전까지의
+// 짧은 틈은 모듈 변수로 막는다 — set은 비동기가 아니지만 두 인스턴스의 effect가
+// 같은 렌더 커밋에서 연달아 도는 경우를 방어한다.
+let appliedChangesHintDispatched = false;
 
 /**
  * 표 행/열 편집 항목. i18n 키는 `editor.menuBar.<key>`.
@@ -83,6 +89,9 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
 
+  const hintSeen = useUIStore((s) => s.appliedChangesHintSeen);
+  const markAppliedChangesHintSeen = useUIStore((s) => s.markAppliedChangesHintSeen);
+
   // 표 메뉴는 커서가 표 안에 있을 때만 쓸 수 있다. isActive는 렌더 시점 값이라
   // 선택이 바뀌어도 갱신되지 않으므로, 이 값만 구독해 다시 그린다.
   const inTable = useEditorState({
@@ -98,8 +107,9 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
   }) ?? false;
 
   useEffect(() => {
-    if (!hasAppliedChanges || appliedChangesHintShown) return;
-    appliedChangesHintShown = true;
+    if (!hasAppliedChanges || hintSeen || appliedChangesHintDispatched) return;
+    appliedChangesHintDispatched = true;
+    markAppliedChangesHintSeen();
     // 웹 모드(브라우저 E2E)에는 네이티브 다이얼로그가 없다 — 힌트는 조용히 생략.
     void message(
       t(
@@ -108,7 +118,7 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
       ),
       { title: t('editor.menuBar.appliedChangesHintTitle', '적용 표시 안내') },
     ).catch(() => {});
-  }, [hasAppliedChanges, t]);
+  }, [hasAppliedChanges, hintSeen, markAppliedChangesHintSeen, t]);
 
   // 표 명령은 모두 같은 형태다(포커스 → 명령 → 메뉴 닫기).
   const runTableCommand = useCallback(

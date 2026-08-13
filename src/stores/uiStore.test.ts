@@ -275,3 +275,27 @@ describe('uiStore 좌측 바 되살림 (empty-left 복구)', () => {
     expect(state.leftSidebar.hidden).toBe(false);
   });
 });
+
+describe('uiStore 적용 표시 안내 플래그', () => {
+  beforeEach(() => {
+    useUIStore.setState({ appliedChangesHintSeen: false });
+  });
+
+  it('기본값은 안 본 상태이고, 표시하면 켜진다', () => {
+    expect(useUIStore.getState().appliedChangesHintSeen).toBe(false);
+
+    useUIStore.getState().markAppliedChangesHintSeen();
+
+    expect(useUIStore.getState().appliedChangesHintSeen).toBe(true);
+  });
+
+  it('영속 대상에 포함된다 — 빠지면 앱 재시작마다 안내가 다시 뜬다', () => {
+    useUIStore.getState().markAppliedChangesHintSeen();
+
+    const persisted = JSON.parse(
+      localStorage.getItem('ite-ui-storage') ?? '{}',
+    ) as { state?: Record<string, unknown> };
+
+    expect(persisted.state?.appliedChangesHintSeen).toBe(true);
+  });
+});

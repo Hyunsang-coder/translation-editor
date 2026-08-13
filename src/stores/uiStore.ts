@@ -42,6 +42,12 @@ interface UIState extends EditorUIState {
   // Editor zoom (CSS zoom, 0.5~2.0)
   editorZoom: number;
 
+  /**
+   * 적용 표시(하이라이트) 안내 팝업을 이미 봤는지. 한 번 배우면 끝인 안내라
+   * 앱을 켤 때마다 다시 띄우지 않으려고 영속한다.
+   */
+  appliedChangesHintSeen: boolean;
+
   // Focus Mode (원문/번역 단일 패널 보기)
   focusMode: boolean;
   sourceOnlyMode: boolean;
@@ -147,6 +153,7 @@ interface UIActions {
   // Paste settings
   setPasteImageMode: (mode: 'placeholder' | 'original' | 'ignore') => void;
   setPasteLinkPreserve: (preserve: boolean) => void;
+  markAppliedChangesHintSeen: () => void;
 
   // Editor zoom
   setEditorZoom: (zoom: number) => void;
@@ -215,6 +222,8 @@ export const useUIStore = create<UIStore>()(
 
       // Editor zoom default
       editorZoom: 1.0,
+
+      appliedChangesHintSeen: false,
 
       // AI 워크플로 defaults
       translateLoading: false,
@@ -827,6 +836,10 @@ export const useUIStore = create<UIStore>()(
         set({ pasteLinkPreserve: preserve });
       },
 
+      markAppliedChangesHintSeen: (): void => {
+        set({ appliedChangesHintSeen: true });
+      },
+
       // Editor zoom
       setEditorZoom: (zoom: number): void => {
         set({ editorZoom: Math.max(0.5, Math.min(2.0, Math.round(zoom * 10) / 10)) });
@@ -1024,6 +1037,8 @@ export const useUIStore = create<UIStore>()(
         pasteLinkPreserve: state.pasteLinkPreserve,
         // Editor zoom
         editorZoom: state.editorZoom,
+        // 일회성 안내
+        appliedChangesHintSeen: state.appliedChangesHintSeen,
       }),
     }
   )
