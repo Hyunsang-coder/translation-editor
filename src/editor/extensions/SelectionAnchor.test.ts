@@ -14,6 +14,7 @@ import {
   normalizeSelectionAnchorRanges,
   readAnchorRangesText,
   resolveSelectionAnchor,
+  splitSelectionAnchorRanges,
 } from './SelectionAnchor';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -414,5 +415,99 @@ describe('SelectionAnchor', () => {
       status: 'active',
       createdAt: 1,
     })).toBeNull();
+  });
+});
+
+describe('splitSelectionAnchorRanges', () => {
+  let editor: Editor | null = null;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = null;
+  });
+
+  function setup(content: string): Editor {
+    editor = new Editor({
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        SelectionAnchor,
+      ],
+      content,
+    });
+    return editor;
+  }
+
+  it('한 range가 두 문단에 걸치면 블록마다 하나씩 쪼갠다', () => {
+    const ed = setup('<p>First para here</p><p>Second para here</p>');
+
+    const split = splitSelectionAnchorRanges(ed, [{ from: 7, to: 26 }]);
+
+    expect(split?.ranges).toEqual([{ from: 7, to: 16 }, { from: 18, to: 26 }]);
+    expect(split?.blockCount).toBe(2);
+  });
+
+  it('블록 경계로 반올림하지 않는다 (드래그 지점을 유지)', () => {
+    const ed = setup('<p>First para here</p><p>Second para here</p>');
+
+    const split = splitSelectionAnchorRanges(ed, [{ from: 7, to: 26 }])!;
+
+    expect(ed.state.doc.textBetween(split.ranges[0]!.from, split.ranges[0]!.to)).toBe('para here');
+    expect(ed.state.doc.textBetween(split.ranges[1]!.from, split.ranges[1]!.to)).toBe('Second p');
+  });
+
+  it('한 문단 안의 선택은 그대로 하나다', () => {
+    const ed = setup('<p>Only one paragraph</p>');
+
+    const split = splitSelectionAnchorRanges(ed, [{ from: 1, to: 5 }]);
+
+    expect(split?.ranges).toEqual([{ from: 1, to: 5 }]);
+    expect(split?.blockCount).toBe(1);
+  });
+
+  it('이미 셀마다 쪼개진 표 range는 그대로 유지한다', () => {
+    const ed = setup(
+      '<table><tbody><tr><td><p>Alpha</p></td><td><p>Beta</p></td></tr></tbody></table>',
+    );
+    // 셀 두 개를 각각 range로 넘긴다 (CellSelection과 같은 모양)
+    const split = splitSelectionAnchorRanges(ed, [
+      { from: 4, to: 9 },
+      { from: 13, to: 17 },
+    ]);
+
+    expect(split?.ranges).toHaveLength(2);
+    expect(ed.state.doc.textBetween(split!.ranges[0]!.from, split!.ranges[0]!.to)).toBe('Alpha');
+    expect(ed.state.doc.textBetween(split!.ranges[1]!.from, split!.ranges[1]!.to)).toBe('Beta');
+  });
+
+  it('가운데 빈 문단은 범위에서 빠진다', () => {
+    const ed = setup('<p>First</p><p></p><p>Third</p>');
+
+    const split = splitSelectionAnchorRanges(ed, [
+      { from: 1, to: ed.state.doc.content.size - 1 },
+    ]);
+
+    expect(split?.ranges).toHaveLength(2);
+    expect(split?.blockCount).toBe(2);
+  });
+
+  it('가장자리 공백은 블록마다 따로 트림한다', () => {
+    const ed = setup('<p>  padded  </p><p>  other  </p>');
+
+    const split = splitSelectionAnchorRanges(ed, [
+      { from: 1, to: ed.state.doc.content.size - 1 },
+    ])!;
+
+    expect(ed.state.doc.textBetween(split.ranges[0]!.from, split.ranges[0]!.to)).toBe('padded');
+    expect(ed.state.doc.textBetween(split.ranges[1]!.from, split.ranges[1]!.to)).toBe('other');
+  });
+
+  it('텍스트가 없으면 null', () => {
+    const ed = setup('<p></p>');
+
+    expect(splitSelectionAnchorRanges(ed, [{ from: 1, to: 1 }])).toBeNull();
   });
 });

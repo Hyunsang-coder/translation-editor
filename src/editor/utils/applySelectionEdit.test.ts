@@ -9,6 +9,7 @@ import {
   SelectionAnchor,
   createSelectionAnchor,
   resolveSelectionAnchor,
+  splitSelectionAnchorRanges,
 } from '@/editor/extensions/SelectionAnchor';
 import { CommentMark } from '@/editor/extensions/CommentMark';
 import {
@@ -357,7 +358,7 @@ describe('applySelectionEdits (표 여러 셀)', () => {
     expect(JSON.stringify(ed.getJSON())).toBe(before);
   });
 
-  it('문단 두 개를 가로지르는 TextSelection은 거부한다 (표 셀 전용 가드)', () => {
+  it('쪼개지 않은 멀티블록 범위 하나는 거부한다 (한 덩어리로 뭉개지므로)', () => {
     editor = new Editor({
       extensions: TABLE_EXTENSIONS,
       content: '<p>First para</p><p>Second para</p>',
@@ -377,7 +378,7 @@ describe('applySelectionEdits (표 여러 셀)', () => {
     expect(JSON.stringify(editor.getJSON())).toBe(before);
   });
 
-  it('표 밖 문단 하나짜리 선택은 다중 적용 경로를 쓰지 않는다', () => {
+  it('표 밖 문단 하나짜리 선택도 유효한 모양이다 (N=1)', () => {
     editor = new Editor({
       extensions: TABLE_EXTENSIONS,
       content: '<p>Plain paragraph</p>',
@@ -386,7 +387,44 @@ describe('applySelectionEdits (표 여러 셀)', () => {
       ranges: [{ from: 1, to: 1 + 'Plain'.length }],
     });
 
+    expect(canApplySelectionEdits(editor, resolveSelectionAnchor(editor, anchorId)!)).toBe(true);
+  });
+
+  it('같은 블록 안의 두 범위는 거부한다 (앞 치환이 뒤 범위를 민다)', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content: '<p>alpha beta gamma</p>',
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [
+        { from: 1, to: 1 + 'alpha'.length },
+        { from: 1 + 'alpha beta '.length, to: 1 + 'alpha beta gamma'.length },
+      ],
+    });
+
     expect(canApplySelectionEdits(editor, resolveSelectionAnchor(editor, anchorId)!)).toBe(false);
+  });
+
+  it('문단 두 개를 textblock 단위로 쪼개면 각각 독립 교체된다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content: '<p>First para here</p><p>Second para here</p><p>Third</p>',
+    });
+    // 1문단 중간 ~ 2문단 중간을 가로지르는 드래그
+    const split = splitSelectionAnchorRanges(editor, [{ from: 7, to: 26 }])!;
+    expect(split.ranges).toHaveLength(2);
+    const anchorId = createSelectionAnchor(editor, { ranges: split.ranges });
+    const anchor = resolveSelectionAnchor(editor, anchorId)!;
+
+    expect(canApplySelectionEdits(editor, anchor)).toBe(true);
+    expect(
+      applySelectionEdits(editor, anchor, ['조각하나', '두번째조'], {
+        expectedTexts: ['para here', 'Second p'],
+      }),
+    ).toBe('applied');
+
+    // 블록 경계로 반올림하지 않는다 — 문단 앞뒤의 안 고른 부분은 그대로다
+    expect(editor.state.doc.textContent).toBe('First 조각하나두번째조ara hereThird');
   });
 
   it('셀마다 서식이 달라도 각 셀의 서식을 지킨다', () => {

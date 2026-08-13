@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retranslateSelection, retranslateTableCells } from './retranslateSelection';
+import { retranslateSelection, retranslateSegments } from './retranslateSelection';
 
 const streamMock = vi.fn();
 const backendStreamMock = vi.fn();
@@ -283,7 +283,7 @@ describe('retranslateSelection', () => {
   });
 });
 
-describe('retranslateTableCells', () => {
+describe('retranslateSegments', () => {
   const BASE = {
     projectId: 'project-1',
     targetLanguage: 'Korean',
@@ -313,13 +313,13 @@ describe('retranslateTableCells', () => {
     isTauriRuntimeMock.mockReturnValue(false);
   });
 
-  it('셀 마커를 셀마다 잘라 한 번의 호출로 돌려준다', async () => {
+  it('블록 마커를 블록마다 잘라 한 번의 호출로 돌려준다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n' };
-      yield { content: '---CELL_1_START---\n베타 개선\n---CELL_1_END---' };
+      yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---\n' };
+      yield { content: '---SEGMENT_1_START---\n베타 개선\n---SEGMENT_1_END---' };
     })());
 
-    const result = await retranslateTableCells({ ...BASE, cells: TWO_CELLS });
+    const result = await retranslateSegments({ ...BASE, segments: TWO_CELLS });
 
     expect(streamMock).toHaveBeenCalledTimes(1);
     expect(result.replacements).toEqual(['알파 개선', '베타 개선']);
@@ -328,32 +328,32 @@ describe('retranslateTableCells', () => {
     expect(payload).toContain('베타 번역');
   });
 
-  it('셀 하나라도 마커가 없으면 던진다 (부분 적용 금지)', async () => {
+  it('블록 하나라도 마커가 없으면 던진다 (부분 적용 금지)', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---' };
+      yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---' };
     })());
 
-    await expect(retranslateTableCells({ ...BASE, cells: TWO_CELLS }))
-      .rejects.toThrow(/2번째 셀 누락/);
+    await expect(retranslateSegments({ ...BASE, segments: TWO_CELLS }))
+      .rejects.toThrow(/2번째 블록 누락/);
   });
 
   it('END 마커가 잘린 응답도 던진다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n---CELL_1_START---\n베타' };
+      yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n베타' };
     })());
 
-    await expect(retranslateTableCells({ ...BASE, cells: TWO_CELLS }))
+    await expect(retranslateSegments({ ...BASE, segments: TWO_CELLS }))
       .rejects.toThrow(/올바르지 않습니다/);
   });
 
   it('체크되지 않은 컨텍스트는 페이로드에 넣지 않는다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\nX\n---CELL_0_END---\n---CELL_1_START---\nY\n---CELL_1_END---' };
+      yield { content: '---SEGMENT_0_START---\nX\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nY\n---SEGMENT_1_END---' };
     })());
 
-    await retranslateTableCells({
+    await retranslateSegments({
       ...BASE,
-      cells: TWO_CELLS,
+      segments: TWO_CELLS,
       contextSnapshot: {
         ...BASE.contextSnapshot,
         translationRules: 'SECRET RULE',
@@ -366,25 +366,25 @@ describe('retranslateTableCells', () => {
     expect(payload).not.toContain('비밀');
   });
 
-  it('원문이 빈 셀이 있으면 호출 전에 던진다', async () => {
-    await expect(retranslateTableCells({
+  it('현재 번역문이 빈 블록이 있으면 호출 전에 던진다', async () => {
+    await expect(retranslateSegments({
       ...BASE,
-      cells: [{ sourceText: '  ', currentTargetText: '번역' }],
-    })).rejects.toThrow(/연결된 원문/);
+      segments: [{ sourceText: '  ', currentTargetText: '' }],
+    })).rejects.toThrow(/현재 번역문/);
     expect(streamMock).not.toHaveBeenCalled();
   });
 
-  it('스트리밍 중에는 아직 안 온 셀을 빈 문자열로 알린다', async () => {
+  it('스트리밍 중에는 아직 안 온 블록을 빈 문자열로 알린다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\n알파 개선\n---CELL_0_END---\n' };
-      yield { content: '---CELL_1_START---\n베타 개선\n---CELL_1_END---' };
+      yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---\n' };
+      yield { content: '---SEGMENT_1_START---\n베타 개선\n---SEGMENT_1_END---' };
     })());
     const snapshots: string[][] = [];
 
-    await retranslateTableCells({
+    await retranslateSegments({
       ...BASE,
-      cells: TWO_CELLS,
-      onToken: (replacements) => snapshots.push(replacements),
+      segments: TWO_CELLS,
+      onToken: (replacements: string[]) => snapshots.push(replacements),
     });
 
     expect(snapshots[0]).toEqual(['알파 개선', '']);
@@ -447,14 +447,14 @@ describe('표 열 헤더 문맥', () => {
     expect(messages[0]!.content).toContain('A table column header, when provided');
   });
 
-  it('여러 셀은 셀마다 자기 열 헤더를 받는다', async () => {
+  it('여러 블록은 블록마다 자기 열 헤더를 받는다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\nA\n---CELL_0_END---\n---CELL_1_START---\nB\n---CELL_1_END---' };
+      yield { content: '---SEGMENT_0_START---\nA\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nB\n---SEGMENT_1_END---' };
     })());
 
-    await retranslateTableCells({
+    await retranslateSegments({
       ...BASE,
-      cells: [
+      segments: [
         {
           sourceText: 'Damage',
           currentTargetText: '손상',
@@ -472,21 +472,82 @@ describe('표 열 헤더 문맥', () => {
     expect(payload).toContain('Stat / 스탯');
     expect(payload).toContain('Description / 설명');
     // 헤더는 셀 입력 블록 안에 붙는다
-    expect(payload).toMatch(/CELL_0_INPUT_START---\\n\[Column header\] Stat/);
+    expect(payload).toMatch(/SEGMENT_0_INPUT_START---\\n\[Column header\] Stat/);
   });
 
   it('원문 짝을 못 찾은 헤더는 번역문만 보낸다', async () => {
     streamMock.mockResolvedValue((async function* () {
-      yield { content: '---CELL_0_START---\nA\n---CELL_0_END---' };
+      yield { content: '---SEGMENT_0_START---\nA\n---SEGMENT_0_END---' };
     })());
 
-    await retranslateTableCells({
+    await retranslateSegments({
       ...BASE,
-      cells: [
+      segments: [
         { sourceText: 'Damage', currentTargetText: '손상', columnHeader: { target: '스탯' } },
       ],
     });
 
     expect(JSON.stringify(streamMock.mock.calls[0]?.[0])).toContain('[Column header] 스탯');
+  });
+});
+
+describe('원문 짝 없는 블록', () => {
+  const BASE = {
+    projectId: 'project-1',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\nA\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nB\n---SEGMENT_1_END---' };
+    })());
+  });
+
+  it('원문 없는 블록은 [No source]로 표시하고 원문 블록은 넣지 않는다', async () => {
+    await retranslateSegments({
+      ...BASE,
+      segments: [
+        { sourceText: 'Aligned source', currentTargetText: '기존 번역 1' },
+        { currentTargetText: '기존 번역 2' },
+      ],
+    });
+
+    const messages = streamMock.mock.calls[0]?.[0] as Array<{ content: string }>;
+    const user = messages[1]!.content;
+    expect(user).toContain('[Source]\nAligned source');
+    expect(user).toContain('[No source] Improve the existing target only.');
+    // 원문 없는 블록에는 [Source] 라벨이 붙지 않는다
+    expect(user.split('---SEGMENT_1_INPUT_START---')[1]).not.toContain('[Source]');
+    // system에 그 모드의 규칙이 있다
+    expect(messages[0]!.content).toContain('A block marked [No source]');
+  });
+
+  it('공백뿐인 sourceText도 원문 없음으로 다룬다', async () => {
+    await retranslateSegments({
+      ...BASE,
+      segments: [
+        { sourceText: '   ', currentTargetText: '기존 1' },
+        { sourceText: 'Real', currentTargetText: '기존 2' },
+      ],
+    });
+
+    const user = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[1]!.content;
+    expect(user.split('---SEGMENT_1_INPUT_START---')[0]).toContain('[No source]');
   });
 });

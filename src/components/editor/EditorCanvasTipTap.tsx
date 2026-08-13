@@ -84,6 +84,7 @@ import {
   getSingleAnchorRange,
   normalizeSelectionAnchorRanges,
   readAnchorRangesText,
+  splitSelectionAnchorRanges,
   readAnchorText,
   removeSelectionAnchor,
   resolveSelectionAnchor,
@@ -111,7 +112,7 @@ import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import {
   retranslateSelection,
-  retranslateTableCells,
+  retranslateSegments,
   type RetranslateSurroundings,
   type TableColumnHeaderContext,
 } from '@/ai/retranslateSelection';
@@ -617,10 +618,16 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const createChatSelection = useCallback((
     bubble: SelectionBubble,
+    // 재번역만 켠다. 앵커 범위를 textblock 단위로 쪼개야 블록마다 독립 교체가 되는데
+    // (멀티문단 TextSelection은 range가 하나로 온다), 채팅 참조·코멘트는 쪼갤 이유가
+    // 없으므로 기존 정규화를 그대로 둔다.
+    options?: { splitByBlock?: boolean },
   ): SelectionContext | null => {
     if (!project) return null;
     try {
-      const normalized = normalizeSelectionAnchorRanges(bubble.editor, bubble.ranges);
+      const normalized = options?.splitByBlock
+        ? splitSelectionAnchorRanges(bubble.editor, bubble.ranges)
+        : normalizeSelectionAnchorRanges(bubble.editor, bubble.ranges);
       if (!normalized) {
         throw new Error(
           t('selection.textRequired', '선택 영역에서 텍스트를 찾을 수 없습니다.'),
@@ -773,7 +780,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     bubble: SelectionBubble,
   ): Promise<void> => {
     if (bubble.field !== 'target') return;
-    const selection = createChatSelection(bubble);
+    const selection = createChatSelection(bubble, { splitByBlock: true });
     if (!selection) return;
     const selectionAnchor = resolveSelectionAnchor(bubble.editor, selection.anchorId);
     if (!selectionAnchor) {
@@ -790,10 +797,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 예외는 표 셀뿐이다 — 서로 다른 셀의 단일 textblock 범위들은 셀마다 독립적으로
     // 교체할 수 있다(ADR-0010의 좁은 예외). 생성 게이트와 적용 게이트가 같은 술어를
     // 쓰도록 `canApplySelectionEdits`를 그대로 쓴다.
-    const multiCell =
+    const multiSegment =
       selectionAnchor.ranges.length > 1 &&
       canApplySelectionEdits(bubble.editor, selectionAnchor);
-    if (selection.spansMultipleBlocks && !multiCell) {
+    if (selection.spansMultipleBlocks && !multiSegment) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
         type: 'error',
@@ -850,21 +857,24 @@ export function EditorCanvasTipTap(): JSX.Element {
       return { target: header.text, ...(source ? { source } : {}) };
     };
 
-    if (multiCell) {
-      // 셀마다 따로 원문을 짝짓는다 — 전체를 한 번에 짝지으면 어느 원문이 어느 셀
-      // 것인지 잃는다. 한 셀이라도 원문이 없으면 부분 생성 없이 전체 실패다.
-      const cells = selectionAnchor.ranges.map((range) => {
+    if (multiSegment) {
+      // 블록마다 따로 원문을 짝짓는다 — 전체를 한 번에 짝지으면 어느 원문이 어느
+      // 블록 것인지 잃는다. 짝을 못 찾은 블록은 원문 없이 기존 번역문만 다듬는다
+      // (모달과 프롬프트 양쪽에 "원문 미확인"으로 드러낸다).
+      const segments = selectionAnchor.ranges.map((range) => {
         const columnHeader = columnHeaderAt(range.from);
+        const sourceText = alignedSourceText(
+          getTranslationUnitIdsAtRange(bubble.editor.state.doc, range.from, range.to),
+        ).trim();
         return {
-          sourceText: alignedSourceText(
-            getTranslationUnitIdsAtRange(bubble.editor.state.doc, range.from, range.to),
-          ),
+          sourceText,
           currentText: readAnchorText(bubble.editor.state.doc, range.from, range.to),
           replacementText: '',
           ...(columnHeader ? { columnHeader } : {}),
         };
       });
-      if (cells.some((cell) => !cell.sourceText.trim() || !cell.currentText.trim())) {
+      // 전부 짝이 없으면 재번역이 아니라 순수 폴리싱이 된다 — 단일 경로와 같은 기준으로 막는다.
+      if (segments.every((segment) => !segment.sourceText)) {
         removeSelectionAnchor(bubble.editor, selection.anchorId);
         addToast({
           type: 'error',
@@ -874,11 +884,11 @@ export function EditorCanvasTipTap(): JSX.Element {
       }
       setSelectionEdit({
         selection,
-        cells,
-        // 셀별 대응은 셀 카드가 보여준다. 단일 선택용 필드는 생성 입력(용어 검색)과
-        // 버튼 활성 판정에만 쓰이므로 셀 원문을 이어 붙인 값을 넣는다.
-        sourceUnitText: cells.map((cell) => cell.sourceText).join('\n'),
-        sourceText: cells.map((cell) => cell.sourceText).join('\n'),
+        cells: segments,
+        // 블록별 대응은 카드가 보여준다. 단일 선택용 필드는 생성 입력(용어 검색)과
+        // 버튼 활성 판정에만 쓰이므로 블록 원문을 이어 붙인 값을 넣는다.
+        sourceUnitText: segments.map((segment) => segment.sourceText).filter(Boolean).join('\n'),
+        sourceText: segments.map((segment) => segment.sourceText).filter(Boolean).join('\n'),
         sourceAlignmentPrecision: 'unit',
         currentTargetUnitText: selection.text,
         instruction: selectionInstructionRef.current,
@@ -1018,10 +1028,10 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       if (request.cells) {
         const requestCells = request.cells;
-        const cellResult = await retranslateTableCells({
+        const cellResult = await retranslateSegments({
           projectId: requestProjectId,
-          cells: requestCells.map((cell) => ({
-            sourceText: cell.sourceText,
+          segments: requestCells.map((cell) => ({
+            ...(cell.sourceText ? { sourceText: cell.sourceText } : {}),
             currentTargetText: cell.currentText,
             ...(cell.columnHeader ? { columnHeader: cell.columnHeader } : {}),
           })),

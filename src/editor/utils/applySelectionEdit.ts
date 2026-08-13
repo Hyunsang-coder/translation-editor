@@ -8,7 +8,6 @@ import {
   type SelectionRange,
 } from '@/editor/extensions/SelectionAnchor';
 import { pluginKeys } from '@/editor/plugins/pluginKeys';
-import { resolveTableCellLocation } from '@/editor/utils/tableRangeScope';
 
 export type ApplySelectionEditResult =
   | 'applied'
@@ -152,8 +151,12 @@ export function applySelectionEdit(
 }
 
 /**
- * 다중 범위 적용이 가능한 모양인지 — **표 한 곳의 서로 다른 셀마다 단일 textblock
- * 범위 하나씩**일 때만 참이다 (ADR-0010의 좁은 예외).
+ * 다중 범위 적용이 가능한 모양인지 — **범위마다 textblock 하나씩, 서로 다른
+ * textblock**일 때 참이다 (ADR-0010의 예외).
+ *
+ * 이것이 정확성이 실제로 요구하는 조건이다. 범위마다 독립적으로 `replaceWith`를
+ * 하므로 블록끼리 뭉개질 일이 없고, 같은 블록에 두 범위가 있으면 앞 치환이 뒤
+ * 범위를 밀어 깨진다. 표 셀은 이 조건의 한 사례일 뿐이다.
  *
  * 생성 전 게이트와 적용 게이트가 같은 술어를 쓴다. 어긋나면 재번역을 다 받아 놓고
  * 적용 단계에서만 실패한다.
@@ -166,19 +169,15 @@ export function canApplySelectionEdits(
     return false;
   }
   const { doc } = editor.state;
-  const cellPositions = new Set<number>();
-  const tablePositions = new Set<number>();
+  const blockPositions = new Set<number>();
   for (const range of anchor.ranges) {
     if (range.from < 0 || range.to <= range.from || range.to > doc.content.size) return false;
     const $from = doc.resolve(range.from);
     const $to = doc.resolve(range.to);
     if (!$from.sameParent($to) || !$from.parent.isTextblock) return false;
-    const location = resolveTableCellLocation($from);
-    if (!location) return false;
-    cellPositions.add(location.cellPos);
-    tablePositions.add(location.tablePos);
+    blockPositions.add($from.before($from.depth));
   }
-  return cellPositions.size === anchor.ranges.length && tablePositions.size === 1;
+  return blockPositions.size === anchor.ranges.length;
 }
 
 export interface ApplySelectionEditsOptions {
@@ -188,15 +187,14 @@ export interface ApplySelectionEditsOptions {
 }
 
 /**
- * 표에서 고른 여러 셀을 **한 트랜잭션**으로 교체한다 (Undo 한 단계).
+ * 여러 블록(표 셀 / 문단)을 **한 트랜잭션**으로 교체한다 (Undo 한 단계).
  *
  * `applySelectionEdit`이 다중 범위를 거부하는 이유는 평문 하나로 여러 블록을 덮으면
  * 문단·셀이 한 덩어리로 뭉개지기 때문이다. 여기서는 범위마다 **독립적인** replaceWith를
- * 쓰므로 그 문제가 없다. 대신 `canApplySelectionEdits`로 모양을 좁혀 일반 멀티문단
- * TextSelection이 이 경로로 새지 않게 한다.
+ * 쓰므로 그 문제가 없다. 모양 검증은 `canApplySelectionEdits`가 한다.
  *
  * `getSingleAnchorRange` 우회는 이 함수 안에서만 유효하다 — 다른 호출부가 `ranges[0]`을
- * 쓰기 시작하면 한 셀만 덮어쓰는 버그가 된다.
+ * 쓰기 시작하면 첫 블록만 덮어쓰는 버그가 된다.
  */
 export function applySelectionEdits(
   editor: Editor,

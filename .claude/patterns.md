@@ -839,7 +839,7 @@ TipTap selection (selection.ranges — one per table cell)
 → one replace transaction (one-step Undo)
 ```
 
-**Reference vs apply** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)) — any selection can be a chat reference; only a **single-range, single-block** selection can be edited, plus one narrow exception: ranges that each sit in a **distinct cell of one table** apply cell-by-cell in a single transaction (`applySelectionEdits`, gated by `canApplySelectionEdits`).
+**Reference vs apply** ([ADR-0010](../docs/adr/0010-selection-apply-single-range-only.md)) — any selection can be a chat reference. Apply requires **one textblock per range, each range in a distinct textblock** (`canApplySelectionEdits`); `applySelectionEdits` then replaces them block-by-block in one transaction. Table cells satisfy this natively; a multi-paragraph `TextSelection` arrives as a *single* range and must be split first (`splitSelectionAnchorRanges`, retranslate path only).
 
 - Read `selection.ranges`, never `selection.from/to`. A multi-cell table drag is a `CellSelection` whose `from/to` point at the head cell only, and not in document order. Merging ranges into one min/max span is wrong too — selecting columns 1 and 3 of a 3-column table would swallow column 2. Scoped polish sends the selected **rectangle as a valid sub-table** (`resolveAiSelectionScope` → `extractTableRectDoc`); never send a broken partial `<table>`. Merged cells anywhere in the table fall back to whole-table scope.
 - `SelectionAnchorRecord.ranges[]` holds them; `anchorId` stays singular so the 22 `removeSelectionAnchor`/`resolveSelectionAnchor` call sites need no guards.

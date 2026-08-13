@@ -250,6 +250,31 @@ function textblockSpan(
   return { from: start, to: end, blockCount };
 }
 
+/** 범위가 덮는 textblock마다 하나씩, 그 블록 안쪽 구간을 잘라 낸다. */
+function textblockPieces(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): SelectionRange[] {
+  const pieces: SelectionRange[] = [];
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isTextblock) return;
+    const blockFrom = Math.max(from, pos + 1);
+    const blockTo = Math.min(to, pos + 1 + node.content.size);
+    if (blockTo <= blockFrom) return;
+    pieces.push({ from: blockFrom, to: blockTo });
+  });
+  return pieces;
+}
+
+/** 가장자리 공백을 범위에서 뺀다. 남는 것이 없으면 null. */
+function trimRange(doc: ProseMirrorNode, range: SelectionRange): SelectionRange | null {
+  let { from, to } = range;
+  while (from < to && /^\s$/.test(doc.textBetween(from, from + 1))) from += 1;
+  while (to > from && /^\s$/.test(doc.textBetween(to - 1, to))) to -= 1;
+  return to > from ? { from, to } : null;
+}
+
 export function normalizeSelectionAnchorRange(
   editor: Editor,
   input: SelectionRange,
@@ -266,13 +291,11 @@ export function normalizeSelectionAnchorRange(
   // anchor.originalText(readAnchorText 원본)가 어긋나면 proposal 적용 검증이
   // 항상 stale로 판정되므로, 앵커 자체를 트림된 범위로 만든다.
   // (블록 경계에서 textBetween은 ''을 반환하므로 루프는 경계를 넘지 않는다.)
-  let { from, to } = clamped;
-  while (from < to && /^\s$/.test(doc.textBetween(from, from + 1))) from += 1;
-  while (to > from && /^\s$/.test(doc.textBetween(to - 1, to))) to -= 1;
-  if (to <= from) return null;
+  const trimmed = trimRange(doc, clamped);
+  if (!trimmed) return null;
 
   // 트림으로 앞뒤 블록의 기여분이 공백뿐이었다면 사라지므로 blockCount를 다시 센다.
-  return textblockSpan(doc, from, to);
+  return textblockSpan(doc, trimmed.from, trimmed.to);
 }
 
 /**
@@ -294,6 +317,37 @@ export function normalizeSelectionAnchorRanges(
     ranges: normalized.map(({ from, to }) => ({ from, to })),
     blockCount: normalized.reduce((sum, range) => sum + range.blockCount, 0),
   };
+}
+
+/**
+ * 범위를 **textblock 단위로 쪼개** 정규화한다.
+ *
+ * 표 `CellSelection`은 셀마다 range가 하나씩 오지만, 문단을 가로지르는
+ * `TextSelection`은 **range가 하나**로 온다(`ranges.length === 1`, `blockCount === 2`).
+ * 블록마다 독립적으로 교체하려면(`applySelectionEdits`) 먼저 쪼개야 한다.
+ *
+ * 블록 경계로 **반올림하지 않는다** — 문단 중간에서 시작·끝나는 드래그는 그 지점이
+ * 그대로 남는다. 하이라이트와 실제 수정 범위가 어긋나지 않아야 하기 때문이다.
+ * 트림은 블록마다 따로 한다.
+ */
+export function splitSelectionAnchorRanges(
+  editor: Editor,
+  inputs: readonly SelectionRange[],
+): NormalizedSelectionRanges | null {
+  const { doc } = editor.state;
+  const ranges: SelectionRange[] = [];
+  for (const input of inputs) {
+    if (input.from < 0 || input.to <= input.from || input.to > doc.content.size) continue;
+    for (const piece of textblockPieces(doc, input.from, input.to)) {
+      const trimmed = trimRange(doc, piece);
+      if (trimmed) ranges.push(trimmed);
+    }
+  }
+  if (ranges.length === 0) return null;
+
+  ranges.sort((a, b) => a.from - b.from);
+  // 쪼갠 뒤에는 범위 하나가 곧 블록 하나다.
+  return { ranges, blockCount: ranges.length };
 }
 
 export function createSelectionAnchor(

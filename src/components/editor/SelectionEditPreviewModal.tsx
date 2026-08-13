@@ -10,10 +10,11 @@ import type {
 import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
 
 /**
- * 표에서 고른 셀 하나. 여러 셀 재번역은 셀 경계가 무너지면 안 되므로 한 덩어리
- * 텍스트로 합쳐 보여주지 않는다 (D5 — 1차에서는 손편집도 막는다).
+ * 부분 재번역에서 고른 블록 하나(표 셀 또는 문단). 여러 블록 재번역은 경계가
+ * 무너지면 안 되므로 한 덩어리 텍스트로 합쳐 보여주지 않는다 (손편집도 막는다).
  */
 export interface SelectionEditCell {
+  /** 짝을 못 찾으면 빈 문자열 — 그 블록은 원문 없이 기존 번역문만 다듬는다. */
   sourceText: string;
   currentText: string;
   replacementText: string;
@@ -206,9 +207,16 @@ export function SelectionEditPreviewModal({
                     </span>
                   )}
                 </div>
-                <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
-                  {cell.sourceText}
-                </div>
+                {cell.sourceText ? (
+                  <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
+                    {cell.sourceText}
+                  </div>
+                ) : (
+                  // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
+                  <div className="mb-2 text-xs font-medium text-severity-major-deep">
+                    {t('selection.segmentSourceMissing')}
+                  </div>
+                )}
                 {cell.replacementText ? (
                   <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
                 ) : (

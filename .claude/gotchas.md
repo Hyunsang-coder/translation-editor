@@ -26,6 +26,8 @@ Critical implementation warnings learned from past issues.
 
 154-c. **다중 범위를 한 트랜잭션에 치환할 땐 문서 뒤쪽부터**: 앞 범위를 먼저 바꾸면 길이 차이만큼 뒤 범위의 pos가 밀려 옆 셀을 덮는다. 서식(mark)도 **범위마다** 판정할 것 — 굵은 셀과 평문 셀을 함께 골랐을 때 전체를 "서식 혼합"으로 보면 평탄화에서 굵기가 사라진다(`applySelectionEdits`).
 
+154-d. **표 `CellSelection`은 셀마다 range가 오지만, 멀티문단 `TextSelection`은 range가 하나다**: 문단을 가로지르는 드래그는 `selection.ranges.length === 1`이고 정규화해도 `{ranges:[한 개], blockCount:2}`다(실측). 블록마다 독립 교체하려면 `splitSelectionAnchorRanges`로 **먼저 쪼개야** 한다 — 안 쪼개고 `applySelectionEdits`에 넣으면 `sameParent` 가드에서 `invalid`다. 쪼갤 때 **블록 경계로 반올림하지 말 것**(문단 중간에서 시작한 드래그는 그 지점이 유지되어야 하이라이트와 수정 범위가 맞는다). 쪼개기는 재번역 경로에서만 켠다 — 채팅 참조·코멘트까지 바꾸면 앵커 의미가 22개 호출부에서 함께 바뀐다.
+
 155. **Cmd+A는 `sameParent`가 아니라 클램핑으로 처리**: 전체 선택은 `AllSelection`이고 `from=0`이 doc 노드를 가리켜 `isTextblock`이 false다. 동일 문단 검사를 풀어도 여전히 거부되므로, 범위가 덮는 첫/마지막 textblock **내부로 좁혀야** 한다(`textblockSpan`). 가장자리 공백 트림 뒤에는 블록 수를 다시 세야 한다 — 트림으로 앞 블록의 기여분이 공백뿐이었으면 사라진다.
 
 156. **앵커 텍스트는 블록 구분자를 포함해 읽을 것**: `doc.textBetween(from, to)`를 구분자 없이 쓰면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡는다. `readAnchorText`가 `'\n'`을 넣는다. 단일 블록에서는 두 값이 문자 단위로 동일하므로 무회귀이고, `SelectionContext.text`(`'\n'` + trim)와 값이 일치해 proposal 검증이 옳아진다.

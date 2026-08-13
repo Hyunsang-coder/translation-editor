@@ -66,7 +66,7 @@ Target 에디터에서 표의 일부만 드래그한 뒤:
 ## 비목표 (이번에 하지 않는 것 — 제안 금지)
 
 - **`TRANSLATION_UNIT_TYPES`에서 `tableCell` 제거** — 정렬 뷰와 `collectTranslationUnits`가 공유. ADR-0010이 버린 이유 그대로.
-- **일반 멀티문단 `TextSelection`의 재번역 적용** — ADR-0010 본문. 이번 예외는 **표 `CellSelection` + 각 range가 단일 textblock**일 때만.
+- ~~**일반 멀티문단 `TextSelection`의 재번역 적용**~~ — **2026-08-13 뒤집힘.** 표 경로를 만들고 나니 남은 것이 range 분할뿐이었고, ADR-0010이 걸어둔 두 블로커(개수 일치율·블록 스냅 반올림)가 마커 고정과 정확 분할로 사라졌다. [ADR-0010 개정 2](adr/0010-selection-apply-single-range-only.md) 참고. 조건은 "표 셀"이 아니라 **범위마다 서로 다른 단일 textblock**이다.
 - **비연속 셀**(1·3열만, 2열 제외)을 CellSelection으로 만들기 — `prosemirror-tables`의 `CellSelection`은 **항상 사각형**. 1·3열만 고르는 입력은 이 라이브러리에 없다. 검수 청크 테스트의 `targetUnitIds: [c1, c3]`는 툴/정렬 계약용이지 UI 제스처가 아니다.
 - **부분 표를 깨진 HTML로 보내기** — `<table>`에서 셀 몇 개만 잘라 보내면 열 수가 안 맞아 모델이 표를 붕괴한다. scoped-ai-runs 원칙 3의 원래 동기. 이번에도 **유효한 표(사각형 서브테이블) 또는 셀 안 문단 sub-doc**만 보낸다.
 - **폴리싱/번역 마커 계약 변경** — `---POLISH_START/END---` 파서는 그대로. 입력이 sub-doc(문단 또는 작은 표)이 될 뿐이다.
