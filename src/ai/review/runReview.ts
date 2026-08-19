@@ -13,7 +13,11 @@ import {
   streamWithTauriAiBackend,
   type AiPromptMessage,
 } from '@/ai/backendCompletion';
-import { buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
+import {
+  buildReviewPrompt,
+  PARTIAL_CONTEXT_DIRECTIVE,
+  type AlignedSegment,
+} from '@/ai/tools/reviewTool';
 import { extractChunkContent } from '@/ai/extractChunkContent';
 import { useUIStore } from '@/stores/uiStore';
 import { isTauriRuntime } from '@/tauri/invoke';
@@ -37,6 +41,12 @@ export interface RunReviewParams {
   userComments?: string | undefined;
   /** 이번 검수 실행에만 적용할 사용자 지시사항 (툴바 검수 모달 입력). */
   userInstruction?: string | undefined;
+  /**
+   * 이번 입력이 문서의 일부일 때 true (범위 검수, 청크가 여러 개인 문서).
+   * 문서 전체가 한 번에 들어가는 검수에는 붙이지 않는다 — 진짜 누락을 억누른다.
+   * 런 내내 값이 고정이라 system에 둬도 프롬프트 캐시가 깨지지 않는다.
+   */
+  partialContext?: boolean | undefined;
   abortSignal?: AbortSignal;
   onToken?: (accumulated: string) => void;
 }
@@ -52,6 +62,10 @@ function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   // 청크별로 달라지는 것들(번역 방향: sourceLanguage 청크별 감지, 사용자 코멘트:
   // 청크 범위 한정 직렬화, 검수 대상)은 user 메시지에 남긴다.
   const systemParts: string[] = [buildReviewPrompt()];
+
+  if (params.partialContext) {
+    systemParts.push(PARTIAL_CONTEXT_DIRECTIVE);
+  }
 
   const glossary = (
     params.resolvedContext

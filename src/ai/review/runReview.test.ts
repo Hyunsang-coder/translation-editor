@@ -205,6 +205,48 @@ describe('runReview - 리뷰 실행 (Phase 6.1)', () => {
       expect(String(messages[0]?.content)).toContain('문장 구조');
     });
 
+    it('제안문은 결함만 고치고 의미를 바꾸지 않도록 지시한다', async () => {
+      await runReview({
+        segments: mockSegments,
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
+
+      const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const systemPrompt = String(messages[0]?.content);
+      // 단위 전체가 교체되므로 결함과 무관한 부분을 다시 쓰면 검수 안 된 변경이 함께 적용된다.
+      expect(systemPrompt).toContain('같은 단위의 나머지 부분은 원래 Target의 어휘·어순·톤을 그대로 유지');
+      expect(systemPrompt).toContain('Suggestion은 Source의 의미를 바꾸지 않습니다');
+      // Awkward 문턱은 태도 진술이 아니라 판정 가능한 테스트여야 한다.
+      expect(systemPrompt).toContain('Target 언어로 처음부터 쓰인 같은 종류의 글에 그대로 등장할 수 있는가');
+    });
+
+    it('문서 일부만 검수할 때만 문맥 한계 지시를 붙인다', async () => {
+      await runReview({
+        segments: mockSegments,
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+        partialContext: true,
+      });
+
+      const [partialMessages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      const partialSystemPrompt = String(partialMessages[0]?.content);
+      expect(partialSystemPrompt).toContain('## 검수 범위');
+      expect(partialSystemPrompt).toContain('이번 입력은 문서의 일부입니다');
+      expect(partialSystemPrompt).toContain('입력에 없는 문장을 가정해 누락이나 추가를 만들어내지 마세요');
+
+      mocks.stream.mockClear();
+      await runReview({
+        segments: mockSegments,
+        sourceLanguage: 'English',
+        targetLanguage: 'Spanish',
+      });
+
+      const [fullMessages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
+      // 문서 전체가 한 번에 들어가는 검수에 붙이면 진짜 누락을 억누른다.
+      expect(String(fullMessages[0]?.content)).not.toContain('## 검수 범위');
+    });
+
     it('검수 지시와 참고 데이터의 우선순위 및 경계를 명시한다', async () => {
       await runReview({
         segments: mockSegments,

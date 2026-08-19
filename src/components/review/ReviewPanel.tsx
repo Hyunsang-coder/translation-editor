@@ -375,6 +375,9 @@ export function ReviewPanel(): JSX.Element {
               resolveTargetLanguage(project.metadata.targetLanguage, chunkSourceSample).language ?? undefined,
             ...(serializedComments ? { userComments: serializedComments } : {}),
             ...(extraInstruction?.trim() ? { userInstruction: extraInstruction } : {}),
+            // 범위 검수는 선택 구간만, 다중 청크는 청크 하나만 입력이라 앞뒤 문맥이 없다.
+            // 문서 전체가 한 청크로 들어가는 검수에는 붙이지 않는다(진짜 누락을 억누른다).
+            ...(scope || freshChunks.length > 1 ? { partialContext: true } : {}),
             abortSignal: controller.signal,
             onToken: (text) => setStreamingText(text),
           });
