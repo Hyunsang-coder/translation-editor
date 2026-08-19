@@ -763,6 +763,12 @@ describe('재번역/폴리싱이 현재 번역문을 대하는 태도', () => {
     const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
     expect(system).toContain('Preserve the existing meaning exactly');
     expect(system).not.toContain('Translate the Source afresh');
+    // 폴리싱의 주 목표는 어휘 치환이 아니라 문장 구조 교정이다
+    expect(system).toContain('Sentence structure is the main job');
+    expect(system).toContain('split or combine sentences');
+    // 원문이 들어가 있어도 오역 교정은 재번역·검수의 몫이다
+    expect(system).toContain('Even when the Source plainly contradicts the current Target');
+    expect(system).toContain('never use it to correct the Target');
   });
 
   it('여러 블록 재번역도 같은 기준을 쓰되 [No source] 블록만 예외로 둔다', async () => {
