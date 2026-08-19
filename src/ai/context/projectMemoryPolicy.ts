@@ -31,6 +31,7 @@ export const MEMORY_ITEM_LIMITS: Record<WorkflowContextMode, number> = {
   'selection-chat': 12,
   'full-translate': 40,
   'selection-retranslate': 20,
+  'selection-polish': 20,
   review: 40,
   polish: 40,
 };

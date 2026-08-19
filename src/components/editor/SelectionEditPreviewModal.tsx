@@ -8,6 +8,7 @@ import type {
   SelectionContext,
 } from '@/types';
 import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
+import type { SelectionEditMode } from '@/ai/retranslateSelection';
 
 /**
  * 부분 재번역에서 고른 블록 하나(표 셀 또는 문단). 여러 블록 재번역은 경계가
@@ -25,6 +26,8 @@ export interface SelectionEditCell {
 interface SelectionEditPreviewModalProps {
   open: boolean;
   selection: SelectionContext | null;
+  /** 재번역은 원문을 기준으로 다시 옮기고, 폴리싱은 의미를 둔 채 표현만 다듬는다. */
+  mode?: SelectionEditMode;
   sourceText: string;
   sourceAlignmentPrecision?: SourceAlignmentPrecision | undefined;
   replacementText: string;
@@ -113,6 +116,7 @@ const OPTION_KEYS: Array<{
 export function SelectionEditPreviewModal({
   open,
   selection,
+  mode = 'retranslate',
   sourceText,
   sourceAlignmentPrecision,
   replacementText,
@@ -147,6 +151,13 @@ export function SelectionEditPreviewModal({
     !cells && onReplacementChange && replacementText && !isLoading,
   );
 
+  const isPolish = mode === 'polish';
+  // 폴리싱은 원문 없이도 진행한다 — 그 경우 Source 카드를 비워 두지 않고 아예 뺀다.
+  const showSourceCard = Boolean(sourceText.trim());
+  const actionLabel = isPolish
+    ? t('selection.polishAction', '폴리싱')
+    : t('selection.generate', '재번역');
+
   const alignmentLabel = sourceAlignmentPrecision === 'selection'
     ? t('selection.alignment.selection', 'AI 구절 대응')
     : sourceAlignmentPrecision === 'sentence'
@@ -166,13 +177,21 @@ export function SelectionEditPreviewModal({
           <div>
             <h2 id="selection-edit-title" className="text-base font-semibold text-editor-text">
               {cells
-                ? t('selection.tableCellsRetranslateTitle', { count: cells.length })
-                : t('selection.retranslateTitle', '선택 영역 재번역')}
+                ? isPolish
+                  ? t('selection.tableCellsPolishTitle', { count: cells.length })
+                  : t('selection.tableCellsRetranslateTitle', { count: cells.length })
+                : isPolish
+                  ? t('selection.polishTitle', '선택 영역 폴리싱')
+                  : t('selection.retranslateTitle', '선택 영역 재번역')}
             </h2>
             <p className="mt-1 text-xs text-editor-muted">
               {cells
-                ? t('selection.tableCellsRetranslateDescription')
-                : t('selection.retranslateDescription', '연결된 원문을 기준으로 선택한 번역문만 바꿉니다.')}
+                ? isPolish
+                  ? t('selection.tableCellsPolishDescription')
+                  : t('selection.tableCellsRetranslateDescription')
+                : isPolish
+                  ? t('selection.polishDescription', '현재 번역문의 의미는 그대로 두고 표현만 자연스럽게 다듬습니다.')
+                  : t('selection.retranslateDescription', '연결된 원문을 기준으로 선택한 번역문만 바꿉니다.')}
             </p>
           </div>
           <button
@@ -211,6 +230,11 @@ export function SelectionEditPreviewModal({
                   <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
                     {cell.sourceText}
                   </div>
+                ) : isPolish ? (
+                  // 폴리싱은 원문이 없어도 정상 경로다 — 경고가 아니라 사실만 적는다
+                  <div className="mb-2 text-xs text-editor-muted">
+                    {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
+                  </div>
                 ) : (
                   // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
                   <div className="mb-2 text-xs font-medium text-severity-major-deep">
@@ -228,7 +252,8 @@ export function SelectionEditPreviewModal({
             ))}
           </div>
         ) : (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className={`mt-4 grid gap-3 ${showSourceCard ? 'sm:grid-cols-2' : ''}`}>
+            {showSourceCard && (
             <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
               <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
                 <span>Source</span>
@@ -243,8 +268,17 @@ export function SelectionEditPreviewModal({
               </div>
               <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
             </section>
+            )}
             <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-              <div className="mb-1 text-[10px] font-semibold uppercase text-editor-muted">Target</div>
+              <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                <span>Target</span>
+                {/* 원문 카드가 빠진 이유를 카드 안에서 밝힌다 — 폴리싱에서만 생기는 상태 */}
+                {isPolish && !showSourceCard && (
+                  <span className="normal-case font-medium text-editor-muted">
+                    {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
+                  </span>
+                )}
+              </div>
               <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
             </section>
           </div>
@@ -259,7 +293,11 @@ export function SelectionEditPreviewModal({
             className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
             value={instruction}
             onChange={(event) => onInstructionChange(event.target.value)}
-            placeholder={t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')}
+            placeholder={
+              isPolish
+                ? t('selection.polishInstructionPlaceholder', '예: 더 간결하게, 문어체로')
+                : t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')
+            }
             disabled={isLoading}
           />
         </label>}
@@ -359,7 +397,7 @@ export function SelectionEditPreviewModal({
               className="rounded-lg border border-primary-300 px-3 py-2 text-sm font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/40"
               onClick={onGenerate}
             >
-              {t('selection.regenerate', '재번역')}
+              {actionLabel}
             </button>
           )}
           <button
@@ -367,13 +405,19 @@ export function SelectionEditPreviewModal({
             data-testid="selection-edit-primary-button"
             className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
             onClick={hasProposal && !isLoading ? onApply : onGenerate}
-            disabled={isLoading || (!hasProposal && !sourceText.trim())}
+            // 폴리싱은 원문이 없어도 실행된다 — 있어야 하는 건 다듬을 번역문뿐이다.
+            disabled={
+              isLoading ||
+              (!hasProposal && !(isPolish ? selection.text.trim() : sourceText.trim()))
+            }
           >
             {hasProposal
               ? t('common.apply', '적용')
               : isLoading
-                ? t('editor.translating')
-                : t('selection.generate', '재번역')}
+                ? isPolish
+                  ? t('editor.polishing')
+                  : t('editor.translating')
+                : actionLabel}
           </button>
         </div>
       </div>

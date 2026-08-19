@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retranslateSelection, retranslateSegments } from './retranslateSelection';
+import {
+  polishSegments,
+  polishSelection,
+  retranslateSelection,
+  retranslateSegments,
+} from './retranslateSelection';
 
 const streamMock = vi.fn();
+const createChatModelMock = vi.fn();
 const backendStreamMock = vi.fn();
 const isTauriRuntimeMock = vi.fn(() => false);
 
@@ -22,9 +28,10 @@ vi.mock('@/ai/config', () => ({
 }));
 
 vi.mock('@/ai/client', () => ({
-  createChatModel: () => ({
-    stream: streamMock,
-  }),
+  createChatModel: (...args: unknown[]) => {
+    createChatModelMock(...args);
+    return { stream: streamMock };
+  },
 }));
 
 describe('retranslateSelection', () => {
@@ -549,5 +556,227 @@ describe('원문 짝 없는 블록', () => {
 
     const user = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[1]!.content;
     expect(user.split('---SEGMENT_1_INPUT_START---')[0]).toContain('[No source]');
+  });
+});
+
+describe('polishSelection', () => {
+  const BASE = {
+    projectId: 'project-1',
+    currentTargetText: '현재 번역',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    createChatModelMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n다듬은 번역\n---SELECTION_EDIT_END---' };
+    })());
+  });
+
+  it('원문 없이도 실행하고 manifest에 aligned-source를 넣지 않는다', async () => {
+    const result = await polishSelection({ ...BASE });
+
+    const messages = streamMock.mock.calls[0]?.[0] as Array<{ content: string }>;
+    expect(messages[0]!.content).toContain('Polish only the selected Target text');
+    expect(messages[1]!.content).toContain('[No source] Improve the existing target only.');
+    expect(result.replacementText).toBe('다듬은 번역');
+    expect(result.contextManifest.included).toEqual(['selection']);
+    expect(result.contextManifest.mode).toBe('selection-polish');
+  });
+
+  it('원문이 있으면 참조로 넣고 aligned-source를 기록한다', async () => {
+    const result = await polishSelection({ ...BASE, sourceText: 'Aligned source' });
+
+    const user = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[1]!.content;
+    expect(user).toContain('Aligned source');
+    expect(result.contextManifest.included).toEqual(['selection', 'aligned-source']);
+  });
+
+  it('재번역과 달리 정렬 원문 마커를 요구하지 않는다', async () => {
+    await polishSelection({ ...BASE });
+
+    const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+    expect(system).not.toContain('ALIGNED_SOURCE_SELECTION_START');
+  });
+
+  it('문서 전체 폴리싱과 같은 용도(polish)의 모델을 쓴다', async () => {
+    await polishSelection({ ...BASE });
+
+    expect(createChatModelMock.mock.calls[0]?.[1]).toMatchObject({ useFor: 'polish' });
+  });
+
+  it('체크된 컨텍스트만 프롬프트에 넣는다 (재번역과 같은 기준)', async () => {
+    const result = await polishSelection({
+      ...BASE,
+      referenceOptions: {
+        translationRules: true,
+        forbiddenTerms: false,
+        glossary: false,
+        projectMemory: false,
+      },
+      contextSnapshot: {
+        ...BASE.contextSnapshot,
+        translationRules: 'RULE ONE',
+        glossaryEntries: [{ id: 'glossary-1', source: 'SECRET', target: '비밀' }],
+      },
+    });
+
+    const payload = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)
+      .map((message) => message.content)
+      .join('\n');
+    expect(payload).toContain('RULE ONE');
+    expect(payload).not.toContain('SECRET');
+    expect(result.contextManifest.included).toContain('translation-rules');
+  });
+
+  it('마커가 없으면 폴리싱 형식 오류로 던진다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '그냥 텍스트' };
+    })());
+
+    await expect(polishSelection({ ...BASE })).rejects.toThrow('선택 영역 폴리싱');
+  });
+});
+
+describe('polishSegments', () => {
+  const BASE = {
+    projectId: 'project-1',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    createChatModelMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n다듬음 2\n---SEGMENT_1_END---' };
+    })());
+  });
+
+  it('블록마다 결과를 잘라 내고 폴리싱 지시를 쓴다', async () => {
+    const result = await polishSegments({
+      ...BASE,
+      segments: [
+        { sourceText: 'Aligned', currentTargetText: '기존 1' },
+        { currentTargetText: '기존 2' },
+      ],
+    });
+
+    expect(result.replacements).toEqual(['다듬음 1', '다듬음 2']);
+    const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+    expect(system).toContain('Polish each selected block');
+    expect(system).not.toContain('Retranslate each selected block');
+  });
+
+  it('블록이 하나라도 비면 전부 버린다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---' };
+    })());
+
+    await expect(polishSegments({
+      ...BASE,
+      segments: [
+        { currentTargetText: '기존 1' },
+        { currentTargetText: '기존 2' },
+      ],
+    })).rejects.toThrow('부분 폴리싱');
+  });
+});
+
+describe('재번역/폴리싱이 현재 번역문을 대하는 태도', () => {
+  const BASE = {
+    projectId: 'project-1',
+    currentTargetText: '현재 번역',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+  });
+
+  it('재번역은 기존 번역문을 초안으로 삼지 말라고 지시한다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n새 번역\n---SELECTION_EDIT_END---' };
+    })());
+
+    await retranslateSelection({ ...BASE, sourceText: 'Source sentence' });
+
+    const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+    expect(system).toContain('Translate the Source afresh');
+    expect(system).toContain('not a draft to edit');
+    // 기존의 "editing reference" 표현은 최소 수정을 유도해서 걷어냈다
+    expect(system).not.toContain('editing reference');
+  });
+
+  it('폴리싱은 반대로 기존 의미를 그대로 지키라고 지시한다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n다듬은 번역\n---SELECTION_EDIT_END---' };
+    })());
+
+    await polishSelection({ ...BASE });
+
+    const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+    expect(system).toContain('Preserve the existing meaning exactly');
+    expect(system).not.toContain('Translate the Source afresh');
+  });
+
+  it('여러 블록 재번역도 같은 기준을 쓰되 [No source] 블록만 예외로 둔다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\nA\n---SEGMENT_0_END---' };
+    })());
+
+    await retranslateSegments({
+      ...BASE,
+      segments: [{ sourceText: 'Source', currentTargetText: '기존' }],
+    });
+
+    const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+    expect(system).toContain('Translate each [Source] afresh');
+    expect(system).toContain('[No source] is the one exception');
   });
 });

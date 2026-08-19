@@ -106,14 +106,16 @@ import {
   DEFAULT_SELECTION_REFERENCE_OPTIONS,
   type ContextManifest,
   type ContextReferenceOptions,
-  type ForbiddenTerm,
 } from '@/types';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
 import {
+  polishSegments,
+  polishSelection,
   retranslateSelection,
   retranslateSegments,
   type RetranslateSurroundings,
+  type SelectionEditMode,
   type TableColumnHeaderContext,
 } from '@/ai/retranslateSelection';
 import { getSelectionSurroundings } from '@/ai/tools/selectionTools';
@@ -370,6 +372,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   const selectionToolbarRef = useRef<HTMLDivElement>(null);
   const [selectionEdit, setSelectionEdit] = useState<null | {
     selection: SelectionContext;
+    /** 재번역인지 폴리싱인지. 생성 호출·모달 문구·원문 필수 여부가 갈린다. */
+    mode: SelectionEditMode;
     /**
      * 표 여러 셀 재번역일 때만 채워진다 (ADR-0010의 좁은 예외). 앵커 범위와 순서·개수가
      * 1:1이어야 한다 — 적용이 이 순서로 `applySelectionEdits`에 넘어간다.
@@ -389,7 +393,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     referenceOptions: ContextReferenceOptions;
     replacementText: string;
     contextManifest: ContextManifest | undefined;
-    forbiddenTermsUsed: ForbiddenTerm[];
     /** 서식 혼합 선택에서 "일부 서식이 사라질 수 있음"에 동의했는지. 적용 시 평탄화. */
     flattenFormatting: boolean;
     loading: boolean;
@@ -776,8 +779,13 @@ export function EditorCanvasTipTap(): JSX.Element {
     });
   }, [addToast, t]);
 
-  const openSelectionRetranslate = useCallback(async (
+  /**
+   * 인라인 툴바의 선택 영역 AI. 재번역과 폴리싱은 앵커·적용·검증 경로를 전부 공유하고
+   * 생성 호출과 "원문이 필수인가"만 다르다 — 그 둘만 mode로 가른다.
+   */
+  const openSelectionEdit = useCallback(async (
     bubble: SelectionBubble,
+    mode: SelectionEditMode,
   ): Promise<void> => {
     if (bubble.field !== 'target') return;
     const selection = createChatSelection(bubble, { splitByBlock: true });
@@ -813,10 +821,15 @@ export function EditorCanvasTipTap(): JSX.Element {
     let flattenFormatting = false;
     if (!selectionHasUniformFormatting(bubble.editor, selectionAnchor)) {
       const accepted = await confirm(
-        t(
-          'selection.mixedFormattingConfirm',
-          '선택 범위에 서로 다른 서식이 섞여 있습니다. 재번역을 적용하면 일부 서식이 사라질 수 있습니다. 계속할까요?',
-        ),
+        mode === 'polish'
+          ? t(
+              'selection.mixedFormattingConfirmPolish',
+              '선택 범위에 서로 다른 서식이 섞여 있습니다. 폴리싱을 적용하면 일부 서식이 사라질 수 있습니다. 계속할까요?',
+            )
+          : t(
+              'selection.mixedFormattingConfirm',
+              '선택 범위에 서로 다른 서식이 섞여 있습니다. 재번역을 적용하면 일부 서식이 사라질 수 있습니다. 계속할까요?',
+            ),
         { title: t('selection.mixedFormattingConfirmTitle', '서식 안내'), kind: 'warning' },
       );
       if (!accepted) {
@@ -874,7 +887,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         };
       });
       // 전부 짝이 없으면 재번역이 아니라 순수 폴리싱이 된다 — 단일 경로와 같은 기준으로 막는다.
-      if (segments.every((segment) => !segment.sourceText)) {
+      // (폴리싱은 애초에 원문 없이 다듬는 것이 정상 경로라 막지 않는다.)
+      if (mode !== 'polish' && segments.every((segment) => !segment.sourceText)) {
         removeSelectionAnchor(bubble.editor, selection.anchorId);
         addToast({
           type: 'error',
@@ -884,6 +898,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       }
       setSelectionEdit({
         selection,
+        mode,
         cells: segments,
         // 블록별 대응은 카드가 보여준다. 단일 선택용 필드는 생성 입력(용어 검색)과
         // 버튼 활성 판정에만 쓰이므로 블록 원문을 이어 붙인 값을 넣는다.
@@ -895,7 +910,6 @@ export function EditorCanvasTipTap(): JSX.Element {
         referenceOptions: { ...selectionReferenceOptionsRef.current },
         replacementText: '',
         contextManifest: undefined,
-        forbiddenTermsUsed: [],
         flattenFormatting,
         loading: false,
         error: null,
@@ -904,7 +918,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
 
     const sourceUnitText = alignedSourceText(selection.translationUnitIds);
-    if (!sourceUnitText.trim()) {
+    if (mode !== 'polish' && !sourceUnitText.trim()) {
       removeSelectionAnchor(bubble.editor, selection.anchorId);
       addToast({
         type: 'error',
@@ -962,6 +976,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     });
     setSelectionEdit({
       selection,
+      mode,
       sourceUnitText,
       sourceText: initialAlignment.text,
       sourceAlignmentPrecision: initialAlignment.precision,
@@ -974,7 +989,6 @@ export function EditorCanvasTipTap(): JSX.Element {
       referenceOptions: { ...selectionReferenceOptionsRef.current },
       replacementText: '',
       contextManifest: undefined,
-      forbiddenTermsUsed: [],
       flattenFormatting,
       loading: false,
       error: null,
@@ -1009,7 +1023,6 @@ export function EditorCanvasTipTap(): JSX.Element {
     try {
       const memory = useProjectMemoryStore.getState();
       const legacyProjectContextAtStart = useChatStore.getState().projectContext;
-      const enabledForbiddenTerms = memory.forbiddenTerms.filter((term) => term.enabled);
       const glossaryEntries = request.referenceOptions.glossary
         ? await resolveGlossaryEntries({
             projectId: requestProjectId,
@@ -1028,7 +1041,8 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
       if (request.cells) {
         const requestCells = request.cells;
-        const cellResult = await retranslateSegments({
+        const runSegments = request.mode === 'polish' ? polishSegments : retranslateSegments;
+        const cellResult = await runSegments({
           projectId: requestProjectId,
           segments: requestCells.map((cell) => ({
             ...(cell.sourceText ? { sourceText: cell.sourceText } : {}),
@@ -1067,9 +1081,6 @@ export function EditorCanvasTipTap(): JSX.Element {
                   replacementText: cellResult.replacements[index] ?? '',
                 })),
                 contextManifest: cellResult.contextManifest,
-                forbiddenTermsUsed: request.referenceOptions.forbiddenTerms
-                  ? enabledForbiddenTerms
-                  : [],
                 loading: false,
                 error: null,
               }
@@ -1077,11 +1088,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         );
         return;
       }
-      const result = await retranslateSelection({
+      const commonInput = {
         projectId: requestProjectId,
-        sourceText: request.sourceUnitText,
-        suggestedSourceText: request.sourceText,
-        suggestedAlignmentPrecision: request.sourceAlignmentPrecision,
         currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
         targetLanguage: resolveTargetLanguageNow() ?? 'Target',
@@ -1091,14 +1099,44 @@ export function EditorCanvasTipTap(): JSX.Element {
         referenceOptions: request.referenceOptions,
         contextSnapshot,
         abortSignal: controller.signal,
-        onToken: (text) => {
+        onToken: (text: string) => {
           setSelectionEdit((current) =>
             current?.selection.selectionId === request.selection.selectionId
               ? { ...current, replacementText: text }
               : current,
           );
         },
-      });
+      };
+      // 폴리싱은 원문 구절을 다시 좁히지 않는다 — 원문은 의미를 고정하는 참조일 뿐이고,
+      // 짝을 못 찾았으면 없이 간다. 그래서 대응(alignment)은 재번역에서만 채워진다.
+      type SourceAlignmentUpdate = {
+        sourceText: string;
+        sourceAlignmentPrecision: SourceAlignmentPrecision;
+      };
+      const result = request.mode === 'polish'
+        ? await polishSelection({
+            ...commonInput,
+            ...(request.sourceUnitText.trim()
+              ? { sourceText: request.sourceUnitText }
+              : {}),
+          }).then((polished) => ({
+            replacementText: polished.replacementText,
+            contextManifest: polished.contextManifest,
+            alignment: null as SourceAlignmentUpdate | null,
+          }))
+        : await retranslateSelection({
+            ...commonInput,
+            sourceText: request.sourceUnitText,
+            suggestedSourceText: request.sourceText,
+            suggestedAlignmentPrecision: request.sourceAlignmentPrecision,
+          }).then((retranslated) => ({
+            replacementText: retranslated.replacementText,
+            contextManifest: retranslated.contextManifest,
+            alignment: {
+              sourceText: retranslated.alignedSourceText,
+              sourceAlignmentPrecision: retranslated.alignmentPrecision,
+            } as SourceAlignmentUpdate | null,
+          }));
       if (
         controller.signal.aborted ||
         useProjectStore.getState().project?.id !== requestProjectId
@@ -1107,13 +1145,9 @@ export function EditorCanvasTipTap(): JSX.Element {
         current?.selection.selectionId === request.selection.selectionId
           ? {
               ...current,
-              sourceText: result.alignedSourceText,
-              sourceAlignmentPrecision: result.alignmentPrecision,
+              ...(result.alignment ?? {}),
               replacementText: result.replacementText,
               contextManifest: result.contextManifest,
-              forbiddenTermsUsed: request.referenceOptions.forbiddenTerms
-                ? enabledForbiddenTerms
-                : [],
               loading: false,
               error: null,
             }
@@ -1146,7 +1180,12 @@ export function EditorCanvasTipTap(): JSX.Element {
     const proposedTexts = request.cells
       ? request.cells.map((cell) => cell.replacementText)
       : [request.replacementText];
-    const violatedTerm = request.forbiddenTermsUsed.find((term) =>
+    // 참조 옵션을 바꿔도 결과가 유지되므로(생성 뒤에 체크박스를 켤 수 있다), 금칙어
+    // 검사는 생성 시점 스냅샷이 아니라 **지금 켜둔 설정과 현재 금칙어 목록**을 따른다.
+    const forbiddenTerms = request.referenceOptions.forbiddenTerms
+      ? useProjectMemoryStore.getState().forbiddenTerms.filter((term) => term.enabled)
+      : [];
+    const violatedTerm = forbiddenTerms.find((term) =>
       proposedTexts.some((text) =>
         text.toLocaleLowerCase().includes(term.term.toLocaleLowerCase()),
       ),
@@ -2635,7 +2674,11 @@ export function EditorCanvasTipTap(): JSX.Element {
           {...(selectionToolbar.field === 'target'
             ? {
                 onRetranslateSelection: () => {
-                  void openSelectionRetranslate(selectionToolbar);
+                  void openSelectionEdit(selectionToolbar, 'retranslate');
+                  setSelectionToolbar(null);
+                },
+                onPolishSelection: () => {
+                  void openSelectionEdit(selectionToolbar, 'polish');
                   setSelectionToolbar(null);
                 },
                 onReviewSelection: () => {
@@ -2663,6 +2706,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       <SelectionEditPreviewModal
         open={selectionEdit !== null}
         selection={selectionEdit?.selection ?? null}
+        mode={selectionEdit?.mode ?? 'retranslate'}
         sourceText={selectionEdit?.sourceText ?? ''}
         sourceAlignmentPrecision={selectionEdit?.sourceAlignmentPrecision}
         replacementText={selectionEdit?.replacementText ?? ''}
@@ -2692,14 +2736,12 @@ export function EditorCanvasTipTap(): JSX.Element {
         }
         onReferenceOptionsChange={(referenceOptions) => {
           selectionReferenceOptionsRef.current = referenceOptions;
+          // 지시사항 입력과 같은 규칙 — 참조 범위를 바꿔도 이미 받은 결과와 손편집은
+          // 지우지 않는다. 재생성은 "다시 실행" 버튼이 명시적으로 한다. 남아 있는
+          // contextManifest는 지금 보이는 결과가 무엇을 참조했는지를 계속 가리킨다.
           setSelectionEdit((current) => current ? {
             ...current,
             referenceOptions,
-            replacementText: '',
-            ...(current.cells
-              ? { cells: current.cells.map((cell) => ({ ...cell, replacementText: '' })) }
-              : {}),
-            contextManifest: undefined,
             error: null,
           } : null);
         }}

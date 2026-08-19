@@ -54,14 +54,17 @@ export function resolveWorkflowContextFromSnapshot(
   const { mode, snapshot } = input;
   const all = includeAll(mode);
   const options = input.referenceOptions;
+  // 선택 영역 워크플로우(재번역·폴리싱)만 참조 범위를 사용자가 고른다. 문서 전체를
+  // 다루는 mode는 includeAll이라 여기에 걸리지 않는다.
+  const optionDriven = mode === 'selection-retranslate' || mode === 'selection-polish';
   const useTranslationRules =
-    all || (mode === 'selection-retranslate' && options?.translationRules === true);
+    all || (optionDriven && options?.translationRules === true);
   const useForbiddenTerms =
-    all || (mode === 'selection-retranslate' && options?.forbiddenTerms === true);
+    all || (optionDriven && options?.forbiddenTerms === true);
   const useGlossary =
-    all || (mode === 'selection-retranslate' && options?.glossary === true);
+    all || (optionDriven && options?.glossary === true);
   const useProjectMemory =
-    all || (mode === 'selection-retranslate' && options?.projectMemory === true);
+    all || (optionDriven && options?.projectMemory === true);
 
   const rendered: ResolvedWorkflowContext['rendered'] = {};
   const included: ContextManifest['included'] = [];

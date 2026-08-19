@@ -312,6 +312,7 @@ export type WorkflowContextMode =
   | 'selection-chat'
   | 'full-translate'
   | 'selection-retranslate'
+  | 'selection-polish'
   | 'review'
   | 'polish';
 
