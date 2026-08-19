@@ -8,9 +8,12 @@
  *
  * 그 조건을 `CollapsibleSection`의 두 장치로 지킨다: 지정이 있으면 모달을 열 때 펼쳐지고
  * (`defaultOpen`), 접어 두더라도 헤더의 `summary`에 개수가 남는다.
+ *
+ * 툴바 provider 드롭다운의 '상세 설정'으로 들어오면 `focused`가 켜진다 — 지정이 아직 0건이라
+ * 접혀 있을 때도 이 섹션을 보러 온 것이므로, 그때는 펼친 채 열고 화면으로 스크롤한다.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Circle, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,7 +50,12 @@ function withPrice(model: string): string {
   return `${model} — $${price.inputPerMTok}/$${price.outputPerMTok}`;
 }
 
-export function ModelOverridesSection(): JSX.Element {
+interface ModelOverridesSectionProps {
+  /** 이 섹션을 보러 모달을 열었는지. 켜지면 펼친 채로 열고 스크롤해서 보여준다. */
+  focused?: boolean;
+}
+
+export function ModelOverridesSection({ focused = false }: ModelOverridesSectionProps): JSX.Element {
   const { t } = useTranslation();
   const provider = useAiConfigStore((s) => s.provider);
   const modelOverrides = useAiConfigStore((s) => s.modelOverrides);
@@ -73,7 +81,15 @@ export function ModelOverridesSection(): JSX.Element {
 
   const current = modelOverrides[provider] ?? {};
 
+  // 모달 본문이 스크롤 컨테이너라 아래쪽 섹션은 열어도 화면 밖에 있다.
+  // (jsdom에는 scrollIntoView가 없어 선택 호출한다.)
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focused) rootRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [focused]);
+
   return (
+    <div ref={rootRef}>
     <CollapsibleSection
       icon={<FlaskConical size={16} />}
       title={t('appSettings.modelOverrides')}
@@ -85,8 +101,9 @@ export function ModelOverridesSection(): JSX.Element {
           </span>
         ) : undefined
       }
-      // 지정이 있으면 모달을 열 때 펼쳐진다(마운트 시점 판정 — 모달은 열 때마다 새로 마운트된다).
-      defaultOpen={activeCount > 0}
+      // 지정이 있거나 이 섹션을 보러 왔으면 모달을 열 때 펼쳐진다
+      // (마운트 시점 판정 — 모달은 열 때마다 새로 마운트된다).
+      defaultOpen={focused || activeCount > 0}
       testId="app-settings-model-overrides-toggle"
     >
       <p className="text-xs text-editor-muted">{t('appSettings.modelOverridesDescription')}</p>
@@ -191,5 +208,6 @@ export function ModelOverridesSection(): JSX.Element {
         )}
       </div>
     </CollapsibleSection>
+    </div>
   );
 }

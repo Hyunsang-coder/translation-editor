@@ -364,6 +364,7 @@
     },
     "provider": "AI Provider",
     "providerAriaLabel": "AI provider",
+    "providerAdvanced": "상세 설정…",
     "translate": "번역",
     "translating": "번역 중…",
     "polishing": "폴리싱 중…",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, ClipboardCheck, Highlighter } from 'lucide-react';
+import { Sparkles, ClipboardCheck, Highlighter, SlidersHorizontal } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useShallow } from 'zustand/shallow';
 import { useProjectStore } from '@/stores/projectStore';
@@ -36,8 +36,15 @@ const SHORTCUT_CHIP_CLASS = 'text-[11px] px-1 py-0.5 bg-editor-border/60 text-ed
  * 검수 모달만 여기 있는 이유: `ReviewPanel`은 사이드바가 닫혀 있으면 언마운트라
  * 모달을 열 수 없다. 실행 요청은 `reviewStore.requestReviewRun`이 상태로 들고
  * 있다가 패널이 마운트되면 소비한다.
+ *
+ * 앱 설정 모달은 부모(`Toolbar`)가 이미 갖고 있어서 여는 것만 콜백으로 받는다.
  */
-export function WorkflowActions(): JSX.Element {
+interface WorkflowActionsProps {
+  /** provider 드롭다운의 '상세 설정' 항목 — 앱 설정의 용도별 모델 지정으로 보낸다. */
+  onOpenModelSettings: () => void;
+}
+
+export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): JSX.Element {
   const { t } = useTranslation();
 
   const { translateLoading, polishLoading, reviewTrigger, triggerTranslate, triggerPolish, triggerReview, openReviewPanel } = useUIStore(
@@ -178,7 +185,9 @@ export function WorkflowActions(): JSX.Element {
       <div className="w-px h-[20px] bg-editor-border mx-1 shrink-0" />
 
       {/* AI Provider — 워크플로 버튼보다 낮은 위계라 기존 md 사이즈를 그대로 쓴다.
-          용도별 모델·effort는 앱이 고정하므로 사용자가 고르는 값은 이것 하나다(ADR-0012). */}
+          여기서 고르는 값은 provider 하나뿐이고(ADR-0012), 용도별 모델·effort를 직접
+          지정하는 평가용 손잡이(ADR-0017)는 목록 맨 아래 '상세 설정'으로 보낸다 —
+          드물게 쓰는 기능이라 상시 노출 대신 이 드롭다운 안에 둔다. */}
       <Select
         value={provider}
         onChange={(v) => setProvider(v as SelectableProvider)}
@@ -187,6 +196,12 @@ export function WorkflowActions(): JSX.Element {
         title={t('editor.provider')}
         size="md"
         className="min-w-[118px]"
+        data-testid="editor-provider-select"
+        footerAction={{
+          label: t('editor.providerAdvanced'),
+          onSelect: onOpenModelSettings,
+          icon: <SlidersHorizontal size={13} />,
+        }}
       />
     </div>
 

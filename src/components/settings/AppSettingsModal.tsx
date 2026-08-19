@@ -109,11 +109,16 @@ function SegmentedControl<T extends string>({ value, options, onChange, label }:
   );
 }
 
+/** 모달을 열면서 곧장 보여줄 섹션. 호출부가 "무엇을 하러 왔는지"를 전달하는 값이다. */
+export type AppSettingsSection = 'modelOverrides';
+
 interface AppSettingsModalProps {
   onClose: () => void;
+  /** 지정하면 그 섹션을 펼친 채로 열고 화면에 보이도록 스크롤한다. */
+  focusSection?: AppSettingsSection | undefined;
 }
 
-export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Element {
+export function AppSettingsModal({ onClose, focusSection }: AppSettingsModalProps): JSX.Element {
   const { t } = useTranslation();
   const {
     language, setLanguage,
@@ -447,7 +452,7 @@ export function AppSettingsModal({ onClose }: AppSettingsModalProps): JSX.Elemen
             <ConnectorsSection />
 
             {/* 용도별 모델 직접 지정 (실험) — 사용량 섹션 바로 위에 둬서 비교 대상과 결과를 붙여 놓는다 */}
-            <ModelOverridesSection />
+            <ModelOverridesSection focused={focusSection === 'modelOverrides'} />
 
             {/* AI 사용량 · 추정 비용 */}
             <UsageSection />

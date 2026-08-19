@@ -5,9 +5,23 @@
  */
 
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/react';
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { FOCUS_RING } from '@/constants/styles';
+
+/**
+ * 목록 맨 아래 동작 항목이 쓰는 내부 전용 value.
+ *
+ * 값이 아니라 동작이지만 `ListboxOption`으로 만든다 — 그래야 키보드 이동·클릭 시 닫기를
+ * Listbox가 그대로 처리한다. 이 value는 래퍼가 가로채므로 호출부의 값 공간에 새지 않는다.
+ */
+const FOOTER_ACTION_VALUE = '\u0000select-footer-action';
+
+export interface SelectFooterAction {
+  label: string;
+  onSelect: () => void;
+  icon?: ReactNode;
+}
 
 export interface SelectOption {
   value: string;
@@ -32,6 +46,8 @@ export interface SelectProps {
   size?: 'sm' | 'md';
   /** 드롭다운 열림 방향: 'bottom' (기본) 또는 'top' */
   anchor?: 'bottom' | 'top';
+  /** 목록 맨 아래에 구분선과 함께 붙는 동작 항목 (선택을 바꾸지 않고 `onSelect`만 부른다). */
+  footerAction?: SelectFooterAction;
   'data-testid'?: string;
 }
 
@@ -56,8 +72,17 @@ export function Select({
   title,
   size = 'md',
   anchor: anchorPosition = 'bottom',
+  footerAction,
   'data-testid': dataTestId,
 }: SelectProps): JSX.Element {
+  const handleChange = (next: string): void => {
+    if (next === FOOTER_ACTION_VALUE) {
+      footerAction?.onSelect();
+      return;
+    }
+    onChange(next);
+  };
+
   // 현재 선택된 옵션의 label 찾기
   const getSelectedLabel = (): string => {
     if (hasGroups(options)) {
@@ -83,7 +108,7 @@ export function Select({
     : { to: 'bottom start' as const, gap: '4px' };
 
   return (
-    <Listbox value={value} onChange={onChange} disabled={disabled}>
+    <Listbox value={value} onChange={handleChange} disabled={disabled}>
       <div className={`relative ${className}`}>
         <ListboxButton
           className={`${sizeClasses} w-full rounded-lg border border-editor-border bg-editor-bg text-editor-text
@@ -159,6 +184,23 @@ export function Select({
                 <span className="truncate">{option.label}</span>
               </ListboxOption>
             ))
+          )}
+
+          {footerAction && (
+            <>
+              <div role="separator" className="my-1 h-px bg-editor-border" />
+              <ListboxOption
+                value={FOOTER_ACTION_VALUE}
+                className="group flex items-center gap-2 px-3 py-1.5 text-sm text-editor-muted
+                           cursor-pointer select-none
+                           data-[focus]:bg-primary-100 dark:data-[focus]:bg-primary-900
+                           data-[focus]:text-editor-text"
+                data-testid={dataTestId ? `${dataTestId}-footer-action` : undefined}
+              >
+                <span className="w-3.5 shrink-0">{footerAction.icon}</span>
+                <span className="truncate">{footerAction.label}</span>
+              </ListboxOption>
+            </>
           )}
         </ListboxOptions>
       </div>

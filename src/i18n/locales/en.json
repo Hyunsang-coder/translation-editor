@@ -377,6 +377,7 @@
     },
     "provider": "AI Provider",
     "providerAriaLabel": "AI provider",
+    "providerAdvanced": "Advanced settings…",
     "translate": "Translate",
     "translating": "Translating...",
     "polishing": "Polishing...",

@@ -11,7 +11,7 @@ import { ProjectPicker } from '@/components/layout/ProjectPicker';
 import { WorkflowActions } from '@/components/layout/WorkflowActions';
 import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
-import { AppSettingsModal } from '@/components/settings/AppSettingsModal';
+import { AppSettingsModal, type AppSettingsSection } from '@/components/settings/AppSettingsModal';
 import { FOCUS_RING, PRESS, TOOLBAR_LEFT_WIDTH, TOOLBAR_RIGHT_WIDTH } from '@/constants/styles';
 
 /** 우측 도구 버튼 — 34px 정사각 아이콘 버튼 (라벨은 title/aria-label로 제공) */
@@ -37,7 +37,8 @@ export function Toolbar(): JSX.Element {
   const commentCount = useCommentStore((s) => s.comments.length);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  // 앱 설정 모달: 열림 여부와 "열자마자 어느 섹션을 보여줄지"를 한 상태로 든다.
+  const [appSettings, setAppSettings] = useState<{ focus?: AppSettingsSection } | null>(null);
 
   // File 메뉴에서 Export 열기 이벤트 수신
   useEffect(() => {
@@ -103,7 +104,7 @@ export function Toolbar(): JSX.Element {
 
       {/* 중앙 슬롯: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
       <div className="flex-1 min-w-0 flex items-center justify-center">
-        {project && <WorkflowActions />}
+        {project && <WorkflowActions onOpenModelSettings={() => setAppSettings({ focus: 'modelOverrides' })} />}
       </div>
 
       {/* 우측 슬롯: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
@@ -189,7 +190,7 @@ export function Toolbar(): JSX.Element {
             프로젝트 설정(번역 규칙·용어집·메모리)은 좌측 사이드바의 '설정' 탭이다. */}
         <button
           type="button"
-          onClick={() => setAppSettingsOpen(true)}
+          onClick={() => setAppSettings({})}
           className={TOOL_BUTTON_CLASS}
           title={t('appSettings.title')}
           aria-label={t('appSettings.title')}
@@ -201,7 +202,9 @@ export function Toolbar(): JSX.Element {
 
       <HistoryDrawer open={historyDrawerOpen} onClose={() => setHistoryDrawerOpen(false)} />
       <ExportModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
-      {appSettingsOpen && <AppSettingsModal onClose={() => setAppSettingsOpen(false)} />}
+      {appSettings && (
+        <AppSettingsModal focusSection={appSettings.focus} onClose={() => setAppSettings(null)} />
+      )}
     </header>
   );
 }
