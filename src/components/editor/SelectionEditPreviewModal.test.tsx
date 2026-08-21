@@ -8,8 +8,16 @@ import {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string | Record<string, unknown>) =>
-      typeof fallback === 'string' ? fallback : key,
+    // defaultValue + 보간까지 흉내 낸다 — 개수 표시가 실제로 무엇을 렌더하는지 봐야 한다.
+    t: (key: string, fallback?: string | Record<string, unknown>) => {
+      if (typeof fallback === 'string') return fallback;
+      if (!fallback) return key;
+      const template = fallback['defaultValue'];
+      if (typeof template !== 'string') return key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+        String(fallback[name] ?? ''),
+      );
+    },
   }),
 }));
 
@@ -111,5 +119,56 @@ describe('SelectionEditPreviewModal', () => {
 
     expect(screen.queryByTestId('selection-edit-proposal-toggle')).toBeNull();
     expect(screen.queryByTestId('selection-edit-regenerate-button')).toBeNull();
+  });
+
+  describe('여러 블록 부분 적용', () => {
+    const cells = [
+      { sourceText: 'One', currentText: '하나', replacementText: '하나 다듬음' },
+      { sourceText: 'Two', currentText: '둘', replacementText: '둘 다듬음' },
+      { sourceText: 'Three', currentText: '셋', replacementText: '셋 다듬음' },
+    ];
+
+    it('제안이 도착하면 전부 선택된 상태로 시작하고, 적용은 고른 인덱스를 넘긴다', () => {
+      const { props } = renderModal({ mode: 'polish', cells });
+
+      const boxes = screen.getAllByTestId('selection-edit-cell-checkbox');
+      expect(boxes).toHaveLength(3);
+      boxes.forEach((box) => expect(box).toBeChecked());
+
+      fireEvent.click(screen.getByRole('button', { name: '적용' }));
+      expect(props.onApply).toHaveBeenCalledWith(new Set([0, 1, 2]));
+    });
+
+    it('일부를 해제하면 그 블록만 빼고 적용한다', () => {
+      const { props } = renderModal({ mode: 'polish', cells });
+
+      fireEvent.click(screen.getAllByTestId('selection-edit-cell-checkbox')[1]!);
+
+      expect(screen.getByTestId('selection-edit-primary-button')).toHaveTextContent('2개 적용');
+      fireEvent.click(screen.getByTestId('selection-edit-primary-button'));
+      expect(props.onApply).toHaveBeenCalledWith(new Set([0, 2]));
+    });
+
+    it('전부 해제하면 적용 버튼을 막는다 (빈 트랜잭션 방지)', () => {
+      renderModal({ mode: 'polish', cells });
+
+      fireEvent.click(screen.getByTestId('selection-edit-cell-select-all'));
+
+      screen
+        .getAllByTestId('selection-edit-cell-checkbox')
+        .forEach((box) => expect(box).not.toBeChecked());
+      expect(screen.getByTestId('selection-edit-primary-button')).toBeDisabled();
+    });
+
+    it('생성 중에는 블록 선택을 열지 않고 진행률을 보여준다', () => {
+      renderModal({
+        mode: 'polish',
+        isLoading: true,
+        cells: [cells[0]!, { ...cells[1]!, replacementText: '' }, { ...cells[2]!, replacementText: '' }],
+      });
+
+      expect(screen.queryByTestId('selection-edit-cell-checkbox')).toBeNull();
+      expect(screen.getByTestId('selection-edit-progress')).toHaveTextContent('1/3');
+    });
   });
 });

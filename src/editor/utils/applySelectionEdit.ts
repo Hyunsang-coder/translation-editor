@@ -187,6 +187,14 @@ export interface ApplySelectionEditsOptions {
 }
 
 /**
+ * 범위별 교체 텍스트. `null`은 **그 범위를 건드리지 않는다**(사용자가 고르지 않은 블록).
+ *
+ * 빈 문자열은 삭제이므로 건너뛰기를 `''`로 표현하면 그 블록이 지워진다 — 그래서 세 번째
+ * 상태가 필요하다. 범위와 1:1은 유지된다(인덱스가 곧 범위).
+ */
+export type SelectionEditReplacement = string | null;
+
+/**
  * 여러 블록(표 셀 / 문단)을 **한 트랜잭션**으로 교체한다 (Undo 한 단계).
  *
  * `applySelectionEdit`이 다중 범위를 거부하는 이유는 평문 하나로 여러 블록을 덮으면
@@ -195,11 +203,14 @@ export interface ApplySelectionEditsOptions {
  *
  * `getSingleAnchorRange` 우회는 이 함수 안에서만 유효하다 — 다른 호출부가 `ranges[0]`을
  * 쓰기 시작하면 첫 블록만 덮어쓰는 버그가 된다.
+ *
+ * `null`인 범위는 건너뛴다(부분 적용). 검증(stale·서식)도 실제로 교체하는 범위만 본다 —
+ * 고르지 않은 블록의 서식이 섞였다고 고른 블록의 적용까지 막을 이유가 없다.
  */
 export function applySelectionEdits(
   editor: Editor,
   anchor: SelectionAnchorRecord,
-  replacements: string[],
+  replacements: readonly SelectionEditReplacement[],
   options: ApplySelectionEditsOptions,
 ): ApplySelectionEditResult {
   if (
@@ -213,17 +224,22 @@ export function applySelectionEdits(
   const { doc } = editor.state;
   const ranges = anchor.ranges;
   for (const [index, range] of ranges.entries()) {
+    if (replacements[index] === null) continue;
     if (readAnchorText(doc, range.from, range.to) !== options.expectedTexts[index]) {
       return 'stale';
     }
   }
 
-  const marksByRange = ranges.map((range) =>
-    options.flattenFormatting
-      ? getCommonRangeMarks(editor, range)
-      : getUniformRangeMarks(editor, range),
+  const marksByRange = ranges.map((range, index) =>
+    replacements[index] === null
+      ? null
+      : options.flattenFormatting
+        ? getCommonRangeMarks(editor, range)
+        : getUniformRangeMarks(editor, range),
   );
-  if (marksByRange.some((marks) => marks === null)) return 'formatting-conflict';
+  if (marksByRange.some((marks, index) => replacements[index] !== null && marks === null)) {
+    return 'formatting-conflict';
+  }
 
   const tr = editor.state.tr;
   // 문서 **뒤쪽 범위부터** 치환한다 — 앞을 먼저 바꾸면 길이 차이만큼 뒤 범위의 위치가
@@ -234,6 +250,7 @@ export function applySelectionEdits(
   for (const index of orderedIndexes) {
     const range = ranges[index]!;
     const replacement = replacements[index]!;
+    if (replacement === null) continue;
     if (replacement) {
       tr.replaceWith(
         range.from,

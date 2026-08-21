@@ -1016,6 +1016,10 @@ export function EditorCanvasTipTap(): JSX.Element {
     setSelectionEdit((current) => current ? {
       ...current,
       replacementText: '',
+      // 재생성에서 이전 제안을 남겨두면 새 결과가 도착할 때까지 낡은 것이 새 것처럼 보인다.
+      ...(current.cells
+        ? { cells: current.cells.map((cell) => ({ ...cell, replacementText: '' })) }
+        : {}),
       loading: true,
       error: null,
     } : null);
@@ -1167,7 +1171,9 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
   }, [selectionEdit, project, translationRules]);
 
-  const applyCurrentSelectionEdit = useCallback((): void => {
+  const applyCurrentSelectionEdit = useCallback((
+    selectedCellIndexes?: ReadonlySet<number>,
+  ): void => {
     const request = selectionEdit;
     const editor = targetEditorRef.current;
     if (!request || !editor || project?.id !== request.selection.projectId) {
@@ -1177,8 +1183,15 @@ export function EditorCanvasTipTap(): JSX.Element {
       } : null);
       return;
     }
-    const proposedTexts = request.cells
-      ? request.cells.map((cell) => cell.replacementText)
+    // 고르지 않은 블록은 `null` — 빈 문자열로 넘기면 그 블록이 지워진다.
+    const cellReplacements = request.cells
+      ? request.cells.map((cell, index) =>
+          !selectedCellIndexes || selectedCellIndexes.has(index) ? cell.replacementText : null,
+        )
+      : null;
+    // 검사 대상은 실제로 들어갈 텍스트뿐이다 — 뺀 블록의 금칙어까지 적용을 막지 않는다.
+    const proposedTexts = cellReplacements
+      ? cellReplacements.filter((text): text is string => text !== null)
       : [request.replacementText];
     // 참조 옵션을 바꿔도 결과가 유지되므로(생성 뒤에 체크박스를 켤 수 있다), 금칙어
     // 검사는 생성 시점 스냅샷이 아니라 **지금 켜둔 설정과 현재 금칙어 목록**을 따른다.
@@ -1211,18 +1224,20 @@ export function EditorCanvasTipTap(): JSX.Element {
     const anchorRange = getSingleAnchorRange(anchor);
     // 여러 셀은 범위마다 코멘트를 모은다 — 사이에 낀, 고르지 않은 셀의 코멘트가 섞이면
     // 안 되므로 span 하나로 훑지 않는다.
-    const affectedCommentIds = request.cells
-      ? [...new Set(anchor.ranges.flatMap((range) =>
-          collectCommentIdsInRange(editor.state.doc, range.from, range.to),
+    const affectedCommentIds = cellReplacements
+      ? [...new Set(anchor.ranges.flatMap((range, index) =>
+          cellReplacements[index] === null
+            ? []
+            : collectCommentIdsInRange(editor.state.doc, range.from, range.to),
         ))]
       : anchorRange
         ? collectCommentIdsInRange(editor.state.doc, anchorRange.from, anchorRange.to)
         : [];
-    const result = request.cells
+    const result = request.cells && cellReplacements
       ? applySelectionEdits(
           editor,
           anchor,
-          request.cells.map((cell) => cell.replacementText),
+          cellReplacements,
           {
             // 재번역이 만들어진 시점(모달 오픈)의 셀별 텍스트를 기준으로 검증한다.
             expectedTexts: request.cells.map((cell) => cell.currentText),

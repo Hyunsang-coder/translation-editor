@@ -427,6 +427,76 @@ describe('applySelectionEdits (표 여러 셀)', () => {
     expect(editor.state.doc.textContent).toBe('First 조각하나두번째조ara hereThird');
   });
 
+  it('null인 범위는 건드리지 않는다 (부분 적용) — 빈 문자열처럼 지우지 않는다', () => {
+    const { editor: ed, anchorId } = setupCells('Alpha cell', 'Beta cell');
+
+    expect(
+      applySelectionEdits(
+        ed,
+        resolveSelectionAnchor(ed, anchorId)!,
+        ['알파 셀 재번역', null],
+        { expectedTexts: ['Alpha cell', 'Beta cell'] },
+      ),
+    ).toBe('applied');
+
+    const json = JSON.stringify(ed.getJSON());
+    expect(json).toContain('알파 셀 재번역');
+    // 고르지 않은 셀은 원문 그대로 — 빈 문자열이었다면 셀이 비었을 것이다
+    expect(json).toContain('Beta cell');
+    expect(json).toContain('Gamma cell');
+    expect(resolveSelectionAnchor(ed, anchorId)).toBeNull();
+  });
+
+  it('고르지 않은 범위의 텍스트가 바뀌어도 고른 범위 적용은 막지 않는다', () => {
+    const { editor: ed, anchorId } = setupCells('Alpha cell', 'Beta cell');
+
+    expect(
+      applySelectionEdits(
+        ed,
+        resolveSelectionAnchor(ed, anchorId)!,
+        ['알파', null],
+        // 2번 블록은 스냅샷과 다르지만 건드리지 않으므로 stale이 아니다
+        { expectedTexts: ['Alpha cell', 'CHANGED'] },
+      ),
+    ).toBe('applied');
+    expect(ed.state.doc.textContent).toContain('알파');
+  });
+
+  it('고르지 않은 범위의 서식이 섞여 있어도 고른 범위는 적용된다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr>' +
+        '<td><p>Plain cell</p></td><td><p><strong>Mixed</strong> cell</p></td>' +
+        '</tr></tbody></table>',
+    });
+    editor.commands.setCellSelection({
+      anchorCell: cellPosOf(editor, 'Plain cell'),
+      headCell: cellPosOf(editor, 'Mixed cell'),
+    });
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: editor.state.selection.ranges.map((range) => ({
+        from: range.$from.pos,
+        to: range.$to.pos,
+      })),
+    });
+
+    // 둘 다 고르면 서식 충돌
+    expect(
+      applySelectionEdits(editor, resolveSelectionAnchor(editor, anchorId)!, ['평문', '혼합'], {
+        expectedTexts: ['Plain cell', 'Mixed cell'],
+      }),
+    ).toBe('formatting-conflict');
+
+    // 혼합 서식 셀을 빼면 통과한다
+    expect(
+      applySelectionEdits(editor, resolveSelectionAnchor(editor, anchorId)!, ['평문', null], {
+        expectedTexts: ['Plain cell', 'Mixed cell'],
+      }),
+    ).toBe('applied');
+    expect(editor.getHTML()).toContain('<strong>Mixed</strong>');
+  });
+
   it('셀마다 서식이 달라도 각 셀의 서식을 지킨다', () => {
     editor = new Editor({
       extensions: TABLE_EXTENSIONS,

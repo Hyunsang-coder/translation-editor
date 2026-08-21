@@ -42,7 +42,8 @@ interface SelectionEditPreviewModalProps {
   onInstructionChange: (value: string) => void;
   onReferenceOptionsChange: (value: ContextReferenceOptions) => void;
   onGenerate: () => void;
-  onApply: () => void;
+  /** 여러 블록일 때는 사용자가 고른 블록 인덱스만 넘어온다. 단일 선택이면 인자 없음. */
+  onApply: (selectedCellIndexes?: ReadonlySet<number>) => void;
   onClose: () => void;
   /** 수정안을 손으로 고칠 수 있게 한다. 없으면 읽기 전용(채팅 제안 미리보기). */
   onReplacementChange?: (value: string) => void;
@@ -136,9 +137,19 @@ export function SelectionEditPreviewModal({
 }: SelectionEditPreviewModalProps): JSX.Element | null {
   const { t } = useTranslation();
   const [editingProposal, setEditingProposal] = useState(false);
+  /**
+   * 적용에서 **뺀** 블록. 고른 쪽이 아니라 뺀 쪽을 담는 이유는 스트리밍이 `cells` 배열을
+   * 매 토큰 새로 만들기 때문이다 — 고른 쪽을 담으면 그때마다 초기화해야 해서 사용자
+   * 선택이 지워진다. 비어 있음 = 전부 적용(기존 동작).
+   */
+  const [deselectedCells, setDeselectedCells] = useState<ReadonlySet<number>>(new Set());
   // 모달을 닫거나 재생성이 시작되면 편집 모드를 해제한다(스트리밍 중 편집 금지).
+  // 선택도 함께 되돌린다 — 새 제안은 새로 고르는 것이 맞다.
   useEffect(() => {
-    if (!open || isLoading) setEditingProposal(false);
+    if (!open || isLoading) {
+      setEditingProposal(false);
+      setDeselectedCells(new Set());
+    }
   }, [open, isLoading]);
   if (!open || !selection) return null;
 
@@ -150,6 +161,23 @@ export function SelectionEditPreviewModal({
   const canEditProposal = Boolean(
     !cells && onReplacementChange && replacementText && !isLoading,
   );
+
+  // 블록별 선택은 제안이 다 온 뒤에만 연다. 스트리밍 중에는 아직 안 온 블록이 "제안 없음"과
+  // 구분되지 않아, 그때 고르면 무엇을 고른 것인지가 흐려진다.
+  const selectableCells = Boolean(cells && cells.length > 1 && hasProposal && !isLoading);
+  const selectedCellIndexes = new Set(
+    (cells ?? []).map((_cell, index) => index).filter((index) => !deselectedCells.has(index)),
+  );
+  const toggleCell = (index: number): void => {
+    setDeselectedCells((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+  // 생성이 끝난 블록 수 — 스트리밍 진행률을 셀 수 있는 유일한 근거다.
+  const completedCells = (cells ?? []).filter((cell) => Boolean(cell.replacementText)).length;
 
   const isPolish = mode === 'polish';
   // 폴리싱은 원문 없이도 진행한다 — 그 경우 Source 카드를 비워 두지 않고 아예 뺀다.
@@ -204,18 +232,81 @@ export function SelectionEditPreviewModal({
           </button>
         </div>
 
+        {/* 생성 중이라는 사실은 모달 위쪽에서 바로 보여야 한다 — 버튼 라벨만으로는 스크롤
+            아래에 묻히고, 재생성에서는 이전 결과가 그대로 떠 있어 멈춘 것처럼 보인다. */}
+        {isLoading && (
+          <div
+            role="status"
+            data-testid="selection-edit-progress"
+            className="mt-3 flex items-center gap-2 rounded-lg border border-primary-300/60 bg-primary-50/40 px-3 py-2 text-xs text-editor-text dark:bg-primary-950/20"
+          >
+            <span
+              className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-primary-500/30 border-t-primary-500"
+              aria-hidden
+            />
+            <span>
+              {cells
+                ? t('selection.segmentProgress', {
+                    done: completedCells,
+                    total: cells.length,
+                    defaultValue: '{{done}}/{{total}} 블록 완료',
+                  })
+                : isPolish
+                  ? t('editor.polishing')
+                  : t('editor.translating')}
+            </span>
+          </div>
+        )}
+
         {cells ? (
           // 셀마다 원문·현재·제안을 따로 보여준다. 이어 붙여 보여주면 어느 제안이 어느
           // 셀로 가는지가 흐려지고, 손편집이 열리면 셀 경계가 무너진다.
           <div className="mt-4 space-y-3">
+            {selectableCells && (
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  data-testid="selection-edit-cell-select-all"
+                  type="checkbox"
+                  checked={deselectedCells.size === 0}
+                  onChange={(event) =>
+                    setDeselectedCells(
+                      event.currentTarget.checked
+                        ? new Set()
+                        : new Set(cells.map((_cell, index) => index)),
+                    )
+                  }
+                  aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
+                />
+                <span className="text-xs text-editor-muted">
+                  {t('selection.selectedBlockCount', {
+                    total: cells.length,
+                    selected: selectedCellIndexes.size,
+                    defaultValue: '블록 {{total}}개 중 {{selected}}개 적용',
+                  })}
+                </span>
+              </div>
+            )}
             {cells.map((cell, index) => (
               <section
                 key={index}
                 data-testid="selection-edit-cell"
-                className="rounded-xl border border-editor-border bg-editor-bg p-3"
+                className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
+                  selectableCells && deselectedCells.has(index) ? 'opacity-50' : ''
+                }`}
               >
                 <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-                  <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
+                  <label className="flex items-center gap-2">
+                    {selectableCells && (
+                      <input
+                        data-testid="selection-edit-cell-checkbox"
+                        type="checkbox"
+                        checked={!deselectedCells.has(index)}
+                        onChange={() => toggleCell(index)}
+                        aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
+                      />
+                    )}
+                    <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
+                  </label>
                   {cell.columnHeader && (
                     <span className="normal-case font-medium text-primary-500">
                       {t('selection.tableColumnHeaderLabel', {
@@ -404,15 +495,26 @@ export function SelectionEditPreviewModal({
             type="button"
             data-testid="selection-edit-primary-button"
             className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
-            onClick={hasProposal && !isLoading ? onApply : onGenerate}
+            onClick={
+              hasProposal && !isLoading
+                ? () => onApply(cells ? selectedCellIndexes : undefined)
+                : onGenerate
+            }
             // 폴리싱은 원문이 없어도 실행된다 — 있어야 하는 건 다듬을 번역문뿐이다.
             disabled={
               isLoading ||
-              (!hasProposal && !(isPolish ? selection.text.trim() : sourceText.trim()))
+              (!hasProposal && !(isPolish ? selection.text.trim() : sourceText.trim())) ||
+              // 전부 해제하면 적용할 것이 없다 — 빈 트랜잭션으로 앵커만 날리지 않는다.
+              (selectableCells && selectedCellIndexes.size === 0)
             }
           >
             {hasProposal
-              ? t('common.apply', '적용')
+              ? selectableCells && selectedCellIndexes.size < (cells?.length ?? 0)
+                ? t('selection.applySelectedCount', {
+                    count: selectedCellIndexes.size,
+                    defaultValue: '{{count}}개 적용',
+                  })
+                : t('common.apply', '적용')
               : isLoading
                 ? isPolish
                   ? t('editor.polishing')
