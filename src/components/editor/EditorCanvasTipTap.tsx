@@ -898,10 +898,40 @@ export function EditorCanvasTipTap(): JSX.Element {
         });
         return;
       }
+      // 표 밖(문단 여러 개)일 때만 앞뒤 문맥을 준다. 표는 행 우선 순서라 "앞 2칸"이
+      // 이전 행의 꼬리가 되어 무관하고, 그 자리는 열 헤더가 이미 맡고 있다.
+      // 문단이면 고른 블록들끼리 서로 문맥이 되지만 그것만으로는 부족하다 — 용어와
+      // 어체를 정해 둔 블록이 선택 밖에 있으면 영영 못 본다.
+      const isTableSelection = segments.some((segment) => segment.columnHeader);
+      let segmentSurroundings: RetranslateSurroundings | undefined;
+      if (!isTableSelection) {
+        const selectedUnitIds = selectionAnchor.ranges.flatMap((range) =>
+          getTranslationUnitIdsAtRange(bubble.editor.state.doc, range.from, range.to),
+        );
+        try {
+          // 고른 블록 전체를 하나의 구간으로 보고 그 바깥을 가져온다.
+          const targetCtx = getSelectionSurroundings(targetDoc, selectedUnitIds);
+          let sourceCtx: { before: string[]; after: string[] } | null = null;
+          try {
+            sourceCtx = getSelectionSurroundings(sourceDoc, selectedUnitIds);
+          } catch {
+            sourceCtx = null;
+          }
+          segmentSurroundings = {
+            sourceBefore: sourceCtx?.before ?? [],
+            sourceAfter: sourceCtx?.after ?? [],
+            targetBefore: targetCtx.before,
+            targetAfter: targetCtx.after,
+          };
+        } catch {
+          segmentSurroundings = undefined;
+        }
+      }
       setSelectionEdit({
         selection,
         mode,
         cells: segments,
+        ...(segmentSurroundings ? { surroundings: segmentSurroundings } : {}),
         // 블록별 대응은 카드가 보여준다. 단일 선택용 필드는 생성 입력(용어 검색)과
         // 버튼 활성 판정에만 쓰이므로 블록 원문을 이어 붙인 값을 넣는다.
         sourceUnitText: segments.map((segment) => segment.sourceText).filter(Boolean).join('\n'),
@@ -1063,6 +1093,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           })),
           targetLanguage: resolveTargetLanguageNow() ?? 'Target',
           ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
+          ...(request.surroundings ? { surroundings: request.surroundings } : {}),
           referenceOptions: request.referenceOptions,
           contextSnapshot,
           abortSignal: controller.signal,

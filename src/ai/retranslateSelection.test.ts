@@ -373,6 +373,37 @@ describe('retranslateSegments', () => {
     expect(payload).not.toContain('비밀');
   });
 
+  it('앞뒤 문맥을 주면 페이로드에 넣고, 안 주면 문맥 블록 자체가 없다', async () => {
+    // 고른 블록 바깥에서 용어·어체가 정해지는 문서가 있다. 이 주입이 빠지면 그 결정을
+    // 볼 방법이 없어 부분 번역만 문서와 따로 논다(측정: arm A -3 → arm B +3).
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\nX\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nY\n---SEGMENT_1_END---' };
+    })());
+
+    await retranslateSegments({
+      ...BASE,
+      segments: TWO_CELLS,
+      surroundings: {
+        sourceBefore: ['Modifiers are optional rule tweaks.'],
+        sourceAfter: [],
+        targetBefore: ['모디파이어는 선택적 규칙 변형이다.'],
+        targetAfter: [],
+      },
+    });
+
+    const withContext = JSON.stringify(streamMock.mock.calls[0]?.[0]);
+    expect(withContext).toContain('SURROUNDING_CONTEXT_START');
+    expect(withContext).toContain('모디파이어는 선택적 규칙 변형이다.');
+    expect(withContext).toContain('read-only reference for tone, terminology, and flow');
+
+    streamMock.mockClear();
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SEGMENT_0_START---\nX\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nY\n---SEGMENT_1_END---' };
+    })());
+    await retranslateSegments({ ...BASE, segments: TWO_CELLS });
+    expect(JSON.stringify(streamMock.mock.calls[0]?.[0])).not.toContain('SURROUNDING_CONTEXT_START');
+  });
+
   it('현재 번역문이 빈 블록이 있으면 호출 전에 던진다', async () => {
     await expect(retranslateSegments({
       ...BASE,
