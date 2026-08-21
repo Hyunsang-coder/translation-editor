@@ -34,6 +34,12 @@ interface InstructionHistoryState {
     kind: InstructionKind,
     instruction: string,
   ) => void;
+  /** 목록에서 한 항목을 지운다. 오타·일회성 지시문이 자리를 계속 차지하지 않게. */
+  removeInstruction: (
+    projectId: string | undefined,
+    kind: InstructionKind,
+    instruction: string,
+  ) => void;
   /** 프로젝트를 지울 때 함께 정리 (localStorage에 유령 항목이 남지 않게). */
   forgetProject: (projectId: string) => void;
 }
@@ -53,6 +59,23 @@ export const useInstructionHistoryStore = create<InstructionHistoryState>()(
             trimmed,
             ...(forProject[kind] ?? []).filter((item) => item !== trimmed),
           ].slice(0, MAX_RECENT_INSTRUCTIONS);
+          return {
+            byProject: {
+              ...state.byProject,
+              [projectId]: { ...forProject, [kind]: next },
+            },
+          };
+        });
+      },
+
+      removeInstruction: (projectId, kind, instruction) => {
+        if (!projectId) return;
+        set((state) => {
+          const forProject = state.byProject[projectId];
+          const current = forProject?.[kind];
+          if (!forProject || !current) return state;
+          const next = current.filter((item) => item !== instruction);
+          if (next.length === current.length) return state;
           return {
             byProject: {
               ...state.byProject,

@@ -74,6 +74,45 @@ describe('RecentInstructions', () => {
     expect(chips[1]).not.toBeDisabled();
   });
 
+  it('×를 누르면 그 항목만 목록에서 사라진다', () => {
+    seed(['더 간결하게', '존댓말 유지']);
+    render(
+      <RecentInstructions projectId="p1" kind="documentPolish" value="" onPick={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getAllByTestId('recent-instruction-remove')[0]!);
+
+    expect(
+      screen.getAllByTestId('recent-instruction-chip').map((chip) => chip.textContent),
+    ).toEqual(['존댓말 유지']);
+  });
+
+  it('마지막 항목을 지우면 줄 전체가 사라진다', () => {
+    seed(['더 간결하게']);
+    render(
+      <RecentInstructions projectId="p1" kind="documentPolish" value="" onPick={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByTestId('recent-instruction-remove'));
+
+    expect(screen.queryByTestId('recent-instructions')).toBeNull();
+  });
+
+  it('이미 입력칸에 들어간 항목도 지울 수는 있다', () => {
+    seed(['더 간결하게']);
+    render(
+      <RecentInstructions
+        projectId="p1"
+        kind="documentPolish"
+        value="더 간결하게"
+        onPick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('recent-instruction-chip')).toBeDisabled();
+    expect(screen.getByTestId('recent-instruction-remove')).not.toBeDisabled();
+  });
+
   it('다른 프로젝트의 기록은 보이지 않는다', () => {
     seed(['더 간결하게']);
     render(

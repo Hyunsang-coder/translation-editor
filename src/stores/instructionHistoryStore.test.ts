@@ -68,6 +68,25 @@ describe('instructionHistoryStore', () => {
     expect(recent(undefined)).toEqual([]);
   });
 
+  it('한 항목만 지우면 나머지는 순서를 지킨다', () => {
+    record('p1', '첫째');
+    record('p1', '둘째');
+    record('p1', '셋째');
+
+    useInstructionHistoryStore.getState().removeInstruction('p1', 'documentPolish', '둘째');
+
+    expect(recent('p1')).toEqual(['셋째', '첫째']);
+  });
+
+  it('없는 항목을 지워도 상태 참조가 바뀌지 않는다 (불필요한 리렌더 방지)', () => {
+    record('p1', '첫째');
+    const before = useInstructionHistoryStore.getState().byProject;
+
+    useInstructionHistoryStore.getState().removeInstruction('p1', 'documentPolish', '없는 것');
+
+    expect(useInstructionHistoryStore.getState().byProject).toBe(before);
+  });
+
   it('프로젝트를 지우면 그 프로젝트 기록만 사라진다', () => {
     record('p1', '지울 것');
     record('p2', '남을 것');

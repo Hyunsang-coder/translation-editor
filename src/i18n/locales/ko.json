@@ -13,6 +13,7 @@
     "untitledProject": "제목 없음 프로젝트",
     "recentInstructions": "최근",
     "recentInstructionApply": "지시사항 넣기: {{text}}",
+    "recentInstructionRemove": "최근 지시사항에서 지우기: {{text}}",
     "retry": "다시 시도",
     "ignore": "무시",
     "copy": "복사",

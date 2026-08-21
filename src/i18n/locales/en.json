@@ -13,6 +13,7 @@
     "untitledProject": "Untitled Project",
     "recentInstructions": "Recent",
     "recentInstructionApply": "Insert instruction: {{text}}",
+    "recentInstructionRemove": "Remove from recent: {{text}}",
     "retry": "Retry",
     "ignore": "Ignore",
     "copy": "Copy",

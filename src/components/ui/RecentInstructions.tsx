@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import {
   selectRecentInstructions,
   useInstructionHistoryStore,
@@ -35,6 +36,7 @@ export function RecentInstructions({
   const recent = useInstructionHistoryStore((state) =>
     selectRecentInstructions(state, projectId, kind),
   );
+  const removeInstruction = useInstructionHistoryStore((state) => state.removeInstruction);
 
   if (recent.length === 0) return null;
 
@@ -46,30 +48,51 @@ export function RecentInstructions({
       {recent.map((instruction) => {
         const alreadyIn = containsLine(value, instruction);
         return (
-          <button
+          // 칩 안에 버튼이 둘이라 바깥은 span이다 — button 안의 button은 유효하지 않다.
+          <span
             key={instruction}
-            type="button"
-            data-testid="recent-instruction-chip"
-            title={instruction}
-            disabled={disabled || alreadyIn}
-            // 이미 들어간 문장은 눌러도 할 일이 없다. 조용히 무시하는 대신 눌리지 않게 한다.
-            aria-label={t('common.recentInstructionApply', {
-              text: instruction,
-              defaultValue: '지시사항 넣기: {{text}}',
-            })}
-            onClick={() =>
-              // 비어 있으면 채우고, 쓰던 내용이 있으면 줄바꿈으로 덧붙인다. 덮어쓰면
-              // 타이핑하던 것이 날아가는데 controlled textarea라 되돌릴 수 없다.
-              onPick(value.trim() ? `${value.trimEnd()}\n${instruction}` : instruction)
-            }
-            className={`max-w-[12rem] truncate rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+            className={`group inline-flex max-w-[13rem] items-center rounded-full border text-[11px] transition-colors ${
               alreadyIn
-                ? 'cursor-default border-primary-300 bg-primary-500/10 text-editor-muted'
-                : 'border-editor-border text-editor-text hover:bg-editor-border/50 disabled:opacity-50'
+                ? 'border-primary-300 bg-primary-500/10 text-editor-muted'
+                : 'border-editor-border text-editor-text'
             }`}
           >
-            {instruction}
-          </button>
+            <button
+              type="button"
+              data-testid="recent-instruction-chip"
+              title={instruction}
+              disabled={disabled || alreadyIn}
+              // 이미 들어간 문장은 눌러도 할 일이 없다. 조용히 무시하는 대신 눌리지 않게 한다.
+              aria-label={t('common.recentInstructionApply', {
+                text: instruction,
+                defaultValue: '지시사항 넣기: {{text}}',
+              })}
+              onClick={() =>
+                // 비어 있으면 채우고, 쓰던 내용이 있으면 줄바꿈으로 덧붙인다. 덮어쓰면
+                // 타이핑하던 것이 날아가는데 controlled textarea라 되돌릴 수 없다.
+                onPick(value.trim() ? `${value.trimEnd()}\n${instruction}` : instruction)
+              }
+              className={`min-w-0 truncate rounded-l-full py-0.5 pl-2 pr-1 transition-colors ${
+                alreadyIn ? 'cursor-default' : 'hover:bg-editor-border/50 disabled:opacity-50'
+              }`}
+            >
+              {instruction}
+            </button>
+            <button
+              type="button"
+              data-testid="recent-instruction-remove"
+              disabled={disabled}
+              aria-label={t('common.recentInstructionRemove', {
+                text: instruction,
+                defaultValue: '최근 지시사항에서 지우기: {{text}}',
+              })}
+              onClick={() => removeInstruction(projectId, kind, instruction)}
+              // 평소엔 투명하지만 자리는 차지한다 — hover마다 칩 폭이 바뀌면 줄이 출렁인다.
+              className="shrink-0 rounded-r-full py-0.5 pl-0.5 pr-1.5 text-editor-muted opacity-0 transition-opacity hover:text-editor-text focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <X size={11} aria-hidden />
+            </button>
+          </span>
         );
       })}
     </div>
