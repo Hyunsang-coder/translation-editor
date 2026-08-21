@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
+import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import {
   createProject,
   duplicateProject,
@@ -244,6 +245,7 @@ export function ProjectPicker(): JSX.Element {
     }
 
     await deleteProject(projectId);
+    useInstructionHistoryStore.getState().forgetProject(projectId);
 
     if (isCurrent && !nextProjectId) {
       await initializeProject();

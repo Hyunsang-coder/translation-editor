@@ -2,6 +2,7 @@ import * as Diff from 'diff';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
+import { RecentInstructions } from '@/components/ui/RecentInstructions';
 import type {
   ContextManifest,
   ContextReferenceOptions,
@@ -375,23 +376,33 @@ export function SelectionEditPreviewModal({
           </div>
         )}
 
-        {!proposalOnly && <label className="mt-4 block">
-          <span className="text-xs font-medium text-editor-text">
-            {t('selection.instruction', '추가 지시사항')}
-          </span>
-          <textarea
-            data-testid="selection-edit-instruction"
-            className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+        {!proposalOnly && <div className="mt-4">
+          <label className="block">
+            <span className="text-xs font-medium text-editor-text">
+              {t('selection.instruction', '추가 지시사항')}
+            </span>
+            <textarea
+              data-testid="selection-edit-instruction"
+              className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+              value={instruction}
+              onChange={(event) => onInstructionChange(event.target.value)}
+              placeholder={
+                isPolish
+                  ? t('selection.polishInstructionPlaceholder', '예: 더 간결하게, 문어체로')
+                  : t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')
+              }
+              disabled={isLoading}
+            />
+          </label>
+          {/* 칩은 label 밖에 둔다 — label 안의 button은 클릭이 textarea 포커스로 새어 간다. */}
+          <RecentInstructions
+            projectId={selection.projectId}
+            kind={isPolish ? 'selectionPolish' : 'selectionRetranslate'}
             value={instruction}
-            onChange={(event) => onInstructionChange(event.target.value)}
-            placeholder={
-              isPolish
-                ? t('selection.polishInstructionPlaceholder', '예: 더 간결하게, 문어체로')
-                : t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')
-            }
+            onPick={onInstructionChange}
             disabled={isLoading}
           />
-        </label>}
+        </div>}
 
         {!proposalOnly && <fieldset className="mt-3">
           <legend className="text-xs font-medium text-editor-text">

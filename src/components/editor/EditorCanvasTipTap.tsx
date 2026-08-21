@@ -125,6 +125,8 @@ import {
   canApplySelectionEdits,
   selectionHasUniformFormatting,
 } from '@/editor/utils/applySelectionEdit';
+import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
+import { RecentInstructions } from '@/components/ui/RecentInstructions';
 import { syncCommentExcerpts } from '@/editor/utils/syncCommentExcerpts';
 import {
   resolveInitialAlignedSourceRange,
@@ -1023,6 +1025,12 @@ export function EditorCanvasTipTap(): JSX.Element {
       loading: true,
       error: null,
     } : null);
+    // 실제로 실행한 지시문만 최근 목록에 남긴다 (입력만 하고 닫은 것은 제외).
+    useInstructionHistoryStore.getState().recordInstruction(
+      requestProjectId,
+      request.mode === 'polish' ? 'selectionPolish' : 'selectionRetranslate',
+      request.instruction,
+    );
 
     try {
       const memory = useProjectMemoryStore.getState();
@@ -1471,6 +1479,11 @@ export function EditorCanvasTipTap(): JSX.Element {
       });
 
       const trimmedMessage = extraMessage?.trim();
+      useInstructionHistoryStore.getState().recordInstruction(
+        project.id,
+        'documentRetranslate',
+        trimmedMessage ?? '',
+      );
       // 인라인 코멘트 → excerpt 직렬화 후 주입 (source/target 양쪽 모두 번역 맥락으로 전달)
       const serializedComments = serializeUserComments(
         useCommentStore.getState().comments,
@@ -1667,6 +1680,11 @@ export function EditorCanvasTipTap(): JSX.Element {
         }),
       });
 
+      useInstructionHistoryStore.getState().recordInstruction(
+        project.id,
+        'documentPolish',
+        trimmedMessage ?? '',
+      );
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson: polishInputDocJson,
         targetLanguage: resolveTargetLanguageNow() ?? undefined,
@@ -2468,6 +2486,12 @@ export function EditorCanvasTipTap(): JSX.Element {
                     }
                   }}
                 />
+                <RecentInstructions
+                  projectId={project?.id}
+                  kind="documentPolish"
+                  value={polishMessage}
+                  onPick={setPolishMessage}
+                />
               </div>
               {/* 범위 실행: 해제하면 문서 전체를 다듬는다 */}
               {polishScope && countScopedCells(polishScope) > 0 && (
@@ -2554,6 +2578,12 @@ export function EditorCanvasTipTap(): JSX.Element {
                       void openTranslatePreview(retranslateMessage);
                     }
                   }}
+                />
+                <RecentInstructions
+                  projectId={project?.id}
+                  kind="documentRetranslate"
+                  value={retranslateMessage}
+                  onPick={setRetranslateMessage}
                 />
               </div>
               {continuationPlanResult?.ok && (

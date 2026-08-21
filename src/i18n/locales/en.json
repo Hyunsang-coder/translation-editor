@@ -11,6 +11,8 @@
     "confirm": "Confirm",
     "loading": "Loading...",
     "untitledProject": "Untitled Project",
+    "recentInstructions": "Recent",
+    "recentInstructionApply": "Insert instruction: {{text}}",
     "retry": "Retry",
     "ignore": "Ignore",
     "copy": "Copy",

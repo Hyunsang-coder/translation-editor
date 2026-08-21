@@ -8,6 +8,8 @@ import { useReviewStore } from '@/stores/reviewStore';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
+import { RecentInstructions } from '@/components/ui/RecentInstructions';
+import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import { PROVIDER_LABELS, type SelectableProvider } from '@/ai/config';
 import { stripHtml } from '@/utils/hash';
 import { shortcutLabel } from '@/utils/platform';
@@ -59,6 +61,7 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
     }))
   );
 
+  const projectId = useProjectStore((s) => s.project?.id);
   const targetDocument = useProjectStore((s) => s.targetDocument);
   const hasTargetContent = useMemo(
     () => stripHtml(targetDocument || '').trim().length > 0,
@@ -87,6 +90,11 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
   const startReview = useCallback(() => {
     setReviewModalOpen(false);
     openReviewPanel();
+    useInstructionHistoryStore.getState().recordInstruction(
+      useProjectStore.getState().project?.id,
+      'review',
+      reviewInstruction,
+    );
     useReviewStore.getState().requestReviewRun(reviewInstruction);
   }, [openReviewPanel, reviewInstruction]);
 
@@ -241,6 +249,12 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startReview();
                 }}
+              />
+              <RecentInstructions
+                projectId={projectId}
+                kind="review"
+                value={reviewInstruction}
+                onPick={setReviewInstruction}
               />
             </div>
           </div>

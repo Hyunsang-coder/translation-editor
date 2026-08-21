@@ -40,6 +40,8 @@ import { hashContent, stripHtml } from '@/utils/hash';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal';
 import { Modal } from '@/components/ui/Modal';
+import { RecentInstructions } from '@/components/ui/RecentInstructions';
+import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { detectSourceLanguage, resolveTargetLanguage } from '@/utils/detectLanguage';
 
@@ -808,6 +810,11 @@ export function ReviewPanel(): JSX.Element {
 
       // 기존 번역 함수 사용 (검수 이슈 + 사용자 메시지 컨텍스트 포함)
       const trimmedMessage = retranslateMessage.trim();
+      useInstructionHistoryStore.getState().recordInstruction(
+        currentProject.id,
+        'issueRetranslate',
+        trimmedMessage,
+      );
       const serializedComments = serializeUserComments(
         useCommentStore.getState().comments,
         {
@@ -1265,6 +1272,12 @@ export function ReviewPanel(): JSX.Element {
                   onChange={(e) => setRetranslateMessage(e.target.value)}
                   placeholder={t('review.retranslate.modal.placeholder', '예: 전체적으로 더 격식체로 번역해주세요.')}
                   className="w-full h-24 px-3 py-2 text-sm bg-editor-bg border border-editor-border rounded-md resize-none focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2 text-editor-text placeholder:text-editor-muted"
+                />
+                <RecentInstructions
+                  projectId={project?.id}
+                  kind="issueRetranslate"
+                  value={retranslateMessage}
+                  onPick={setRetranslateMessage}
                 />
               </div>
             </div>
