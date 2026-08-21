@@ -166,8 +166,16 @@ export function SelectionEditPreviewModal({
   // 블록별 선택은 제안이 다 온 뒤에만 연다. 스트리밍 중에는 아직 안 온 블록이 "제안 없음"과
   // 구분되지 않아, 그때 고르면 무엇을 고른 것인지가 흐려진다.
   const selectableCells = Boolean(cells && cells.length > 1 && hasProposal && !isLoading);
+  /**
+   * 제안이 **도착한** 블록만 고를 수 있다. 빈 제안을 적용하면 그 블록이 지워지기 때문에
+   * (빈 문자열 = 삭제), 기본 선택에도 들어가면 안 된다. `isLoading`만으로는 부족하다 —
+   * 스트리밍이 중간에 끊기면 일부만 채워진 채로 로딩이 풀린다(`generateSelectionEdit`의 catch).
+   */
+  const applicableCellIndexes = (cells ?? []).flatMap((cell, index) =>
+    cell.replacementText ? [index] : [],
+  );
   const selectedCellIndexes = new Set(
-    (cells ?? []).map((_cell, index) => index).filter((index) => !deselectedCells.has(index)),
+    applicableCellIndexes.filter((index) => !deselectedCells.has(index)),
   );
   const toggleCell = (index: number): void => {
     setDeselectedCells((prev) => {
@@ -268,12 +276,10 @@ export function SelectionEditPreviewModal({
                 <input
                   data-testid="selection-edit-cell-select-all"
                   type="checkbox"
-                  checked={deselectedCells.size === 0}
+                  checked={selectedCellIndexes.size === applicableCellIndexes.length}
                   onChange={(event) =>
                     setDeselectedCells(
-                      event.currentTarget.checked
-                        ? new Set()
-                        : new Set(cells.map((_cell, index) => index)),
+                      event.currentTarget.checked ? new Set() : new Set(applicableCellIndexes),
                     )
                   }
                   aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
@@ -292,16 +298,17 @@ export function SelectionEditPreviewModal({
                 key={index}
                 data-testid="selection-edit-cell"
                 className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
-                  selectableCells && deselectedCells.has(index) ? 'opacity-50' : ''
+                  selectableCells && !selectedCellIndexes.has(index) ? 'opacity-50' : ''
                 }`}
               >
                 <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
                   <label className="flex items-center gap-2">
-                    {selectableCells && (
+                    {/* 제안이 안 온 블록은 체크박스를 주지 않는다 — 고를 것이 없다. */}
+                    {selectableCells && Boolean(cell.replacementText) && (
                       <input
                         data-testid="selection-edit-cell-checkbox"
                         type="checkbox"
-                        checked={!deselectedCells.has(index)}
+                        checked={selectedCellIndexes.has(index)}
                         onChange={() => toggleCell(index)}
                         aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
                       />

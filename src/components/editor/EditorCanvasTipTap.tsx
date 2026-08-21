@@ -1191,10 +1191,14 @@ export function EditorCanvasTipTap(): JSX.Element {
       } : null);
       return;
     }
-    // 고르지 않은 블록은 `null` — 빈 문자열로 넘기면 그 블록이 지워진다.
+    // 고르지 않은 블록과 **제안이 안 온 블록**은 `null`. 빈 문자열로 넘기면 그 블록이
+    // 지워진다 — 스트리밍이 끊겨 일부만 채워진 결과를 그대로 적용하면 멀쩡한 번역문이
+    // 사라진다. 모달도 같은 기준으로 고르지 못하게 하지만, 지우는 쪽에서 한 번 더 막는다.
     const cellReplacements = request.cells
       ? request.cells.map((cell, index) =>
-          !selectedCellIndexes || selectedCellIndexes.has(index) ? cell.replacementText : null,
+          cell.replacementText && (!selectedCellIndexes || selectedCellIndexes.has(index))
+            ? cell.replacementText
+            : null,
         )
       : null;
     // 검사 대상은 실제로 들어갈 텍스트뿐이다 — 뺀 블록의 금칙어까지 적용을 막지 않는다.

@@ -160,6 +160,22 @@ describe('SelectionEditPreviewModal', () => {
       expect(screen.getByTestId('selection-edit-primary-button')).toBeDisabled();
     });
 
+    it('스트리밍이 끊겨 일부만 도착하면 안 온 블록은 고를 수 없고 적용에서도 빠진다', () => {
+      // 생성 중 에러: loading은 풀리지만 cells에는 부분 결과가 남는다.
+      const { props } = renderModal({
+        mode: 'polish',
+        error: '부분 폴리싱 응답 형식이 올바르지 않습니다',
+        cells: [cells[0]!, { ...cells[1]!, replacementText: '' }, { ...cells[2]!, replacementText: '' }],
+      });
+
+      // 제안이 온 블록에만 체크박스가 있다
+      expect(screen.getAllByTestId('selection-edit-cell-checkbox')).toHaveLength(1);
+
+      fireEvent.click(screen.getByTestId('selection-edit-primary-button'));
+      // 빈 제안이 섞여 들어가면 그 블록이 지워진다 — 0번만 넘어가야 한다
+      expect(props.onApply).toHaveBeenCalledWith(new Set([0]));
+    });
+
     it('생성 중에는 블록 선택을 열지 않고 진행률을 보여준다', () => {
       renderModal({
         mode: 'polish',
