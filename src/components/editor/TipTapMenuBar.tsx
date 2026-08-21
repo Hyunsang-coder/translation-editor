@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import {
   Heading,
+  Pilcrow,
   Bold,
   Italic,
   Underline,
@@ -139,6 +140,12 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
     [editor],
   );
 
+  const setParagraph = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().setParagraph().run();
+    setHeadingMenuOpen(false);
+  }, [editor]);
+
   const isActive = useCallback(
     (name: string, options?: Record<string, unknown>) => {
       if (!editor) return false;
@@ -174,10 +181,24 @@ export function TipTapMenuBar({ editor, panelType }: TipTapMenuBarProps): JSX.El
               onClick={() => setHeadingMenuOpen(false)}
             />
             <div
-              className="absolute top-full left-0 mt-1 bg-editor-surface border border-editor-border rounded shadow-lg z-50 min-w-[48px]"
+              className="absolute top-full left-0 mt-1 bg-editor-surface border border-editor-border rounded shadow-lg z-50 min-w-[112px]"
               role="menu"
               aria-label={t('editor.menuBar.heading')}
             >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={setParagraph}
+                className={`
+                  flex items-center gap-1 w-full px-3 py-1.5 text-sm hover:bg-editor-bg transition-colors
+                  ${isActive('paragraph') ? 'bg-editor-bg font-medium' : ''}
+                `}
+                aria-label={t('editor.menuBar.paragraph')}
+              >
+                <Pilcrow size={13} />
+                <span>{t('editor.menuBar.paragraph')}</span>
+              </button>
+              <div className="h-px bg-editor-border" />
               {[1, 2, 3, 4, 5, 6].map((level) => (
                 <button
                   key={level}

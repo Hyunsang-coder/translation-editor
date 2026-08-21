@@ -494,6 +494,7 @@
     "menuBar": {
       "heading": "Heading",
       "headingLevel": "Heading {{level}}",
+      "paragraph": "Body text",
       "bold": "Bold",
       "boldTitle": "Bold (Cmd+B)",
       "italic": "Italic",

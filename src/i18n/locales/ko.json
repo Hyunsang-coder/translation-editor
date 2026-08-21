@@ -477,6 +477,7 @@
     "menuBar": {
       "heading": "헤딩",
       "headingLevel": "헤딩 {{level}}",
+      "paragraph": "본문",
       "bold": "볼드",
       "boldTitle": "볼드 (Cmd+B)",
       "italic": "이탤릭",
