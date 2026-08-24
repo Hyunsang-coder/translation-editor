@@ -690,13 +690,6 @@
       "active": "Active",
       "archived": "Archived"
     },
-    "source": {
-      "user": "Manual",
-      "chat": "Chat",
-      "review": "Review",
-      "import": "Import",
-      "legacy": "Legacy"
-    },
     "newItemPlaceholder": "Project information to keep across conversations",
     "categoryLabel": "Category",
     "import": {

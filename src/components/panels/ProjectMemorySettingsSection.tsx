@@ -197,6 +197,19 @@ export function ProjectMemorySettingsSection(): JSX.Element {
         </p>
 
         <div className="space-y-1.5">
+          {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
+          <label className="flex items-center gap-1 text-[11px] text-editor-muted">
+            {t('memory.categoryLabel', '카테고리')}
+            <select
+              className="bg-transparent text-[11px] text-editor-muted outline-none"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
+            >
+              {CATEGORIES.map((value) => (
+                <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
+              ))}
+            </select>
+          </label>
           <div className="flex gap-2">
             <input
               data-testid="project-memory-new-item"
@@ -215,19 +228,6 @@ export function ProjectMemorySettingsSection(): JSX.Element {
               {t('memory.add', '추가')}
             </button>
           </div>
-          {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
-          <label className="flex items-center gap-1 text-[11px] text-editor-muted">
-            {t('memory.categoryLabel', '카테고리')}
-            <select
-              className="bg-transparent text-[11px] text-editor-muted outline-none"
-              value={category}
-              onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
-            >
-              {CATEGORIES.map((value) => (
-                <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <div className="space-y-0.5">
@@ -248,20 +248,29 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                       onChange={(event) => setEditing({ id: item.id, content: event.target.value })}
                     />
                   ) : (
-                    <div
-                      className={`whitespace-pre-wrap break-words text-xs ${
-                        injected ? 'text-editor-text' : 'text-editor-muted'
-                      }`}
-                      /* 본문이 카테고리의 유일한 hover 대상이다. 기존 주입 경고를 덮지 말고 이어붙인다. */
-                      title={[
-                        `${t(`memory.category.${item.category}`)} · ${t(`memory.source.${item.source}`)}`,
-                        injected ? null : t(
-                          'memory.notInChat',
-                          '채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.',
-                        ),
-                      ].filter(Boolean).join('\n')}
-                    >
-                      {item.content}
+                    /* 본문이 카테고리의 유일한 hover 대상이다. 네이티브 title은 뜨기까지
+                       1초 넘게 걸려 카테고리를 확인하려면 매번 기다려야 했다 —
+                       설정 패널의 다른 도움말과 같은 group-hover 툴팁으로 바꿔 즉시 뜬다. */
+                    <div className="group/tip relative">
+                      <div
+                        className={`whitespace-pre-wrap break-words text-xs ${
+                          injected ? 'text-editor-text' : 'text-editor-muted'
+                        }`}
+                      >
+                        {item.content}
+                      </div>
+                      <div className="absolute left-0 top-full z-10 mt-1 hidden w-max max-w-[13rem] rounded border border-editor-border bg-editor-surface px-2 py-1 text-[11px] leading-relaxed text-editor-text shadow-lg group-hover/tip:block">
+                        {t(`memory.category.${item.category}`)}
+                        {!injected && (
+                          <>
+                            <br />
+                            {t(
+                              'memory.notInChat',
+                              '채팅에는 전달되지 않습니다. 번역·검수·폴리싱에는 포함됩니다.',
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                   {item.status !== 'active' && (

@@ -672,13 +672,6 @@
       "active": "사용 중",
       "archived": "보관됨"
     },
-    "source": {
-      "user": "직접 입력",
-      "chat": "채팅",
-      "review": "검수",
-      "import": "외부 연동",
-      "legacy": "이전 설정"
-    },
     "newItemPlaceholder": "대화가 바뀌어도 유지할 프로젝트 정보",
     "categoryLabel": "카테고리",
     "import": {
