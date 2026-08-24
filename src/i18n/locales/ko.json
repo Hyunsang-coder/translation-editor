@@ -701,7 +701,7 @@
     "deleteTitle": "메모리 삭제",
     "deleteConfirm": "이 메모리를 삭제할까요? 되돌릴 수 없습니다.",
     "forbiddenTermsTitle": "금칙어",
-    "forbiddenTermsDescription": "모든 AI 요청에 항상 전달되는 지시입니다. 문서를 검사하지는 않습니다.",
+    "forbiddenTermsDescription": "AI가 번역문에 쓰지 않을 표현입니다.",
     "forbiddenTerm": "금칙어",
     "replacement": "권장 표현",
     "proposalTitle": "프로젝트 메모리 제안",

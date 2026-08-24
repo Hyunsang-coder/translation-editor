@@ -111,8 +111,6 @@ export function ProjectMemorySettingsSection(): JSX.Element {
     addItem,
     replaceItem,
     deleteItem,
-    saveForbiddenTerm,
-    removeForbiddenTerm,
   } = useProjectMemoryStore(useShallow((state) => ({
     items: state.items,
     forbiddenTerms: state.forbiddenTerms,
@@ -120,14 +118,10 @@ export function ProjectMemorySettingsSection(): JSX.Element {
     addItem: state.addItem,
     replaceItem: state.replaceItem,
     deleteItem: state.deleteItem,
-    saveForbiddenTerm: state.saveForbiddenTerm,
-    removeForbiddenTerm: state.removeForbiddenTerm,
   })));
   const [category, setCategory] = useState<ProjectMemoryCategory>('general');
   const [content, setContent] = useState('');
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
-  const [term, setTerm] = useState('');
-  const [replacement, setReplacement] = useState('');
   const [importOpen, setImportOpen] = useState(false);
 
   /**
@@ -313,87 +307,6 @@ export function ProjectMemorySettingsSection(): JSX.Element {
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="space-y-3" data-testid="forbidden-terms-settings">
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-editor-text">
-            {t('memory.forbiddenTermsTitle', '금칙어')}
-          </h3>
-          <p className="text-[11px] leading-relaxed text-editor-muted">
-            {t(
-              'memory.forbiddenTermsDescription',
-              '모든 AI 요청에 항상 전달되는 지시입니다. 문서를 검사하지는 않습니다.',
-            )}
-          </p>
-        </div>
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-          <input
-            data-testid="forbidden-term-input"
-            className="min-w-0 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder={t('memory.forbiddenTerm', '금칙어')}
-          />
-          <input
-            data-testid="forbidden-term-replacement"
-            className="min-w-0 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
-            value={replacement}
-            onChange={(event) => setReplacement(event.target.value)}
-            placeholder={t('memory.replacement', '권장 표현')}
-          />
-          <button
-            type="button"
-            data-testid="forbidden-term-add"
-            className="rounded-lg bg-primary-fill px-3 py-2 text-xs text-white disabled:opacity-50"
-            disabled={saving || !term.trim()}
-            onClick={() => {
-              void saveForbiddenTerm({
-                term: term.trim(),
-                ...(replacement.trim() ? { replacement: replacement.trim() } : {}),
-                enabled: true,
-              }).then(() => {
-                setTerm('');
-                setReplacement('');
-              }).catch(reportError);
-            }}
-          >
-            {t('memory.add', '추가')}
-          </button>
-        </div>
-        <div className="space-y-0.5">
-          {forbiddenTerms.map((item) => (
-            <div
-              key={item.id}
-              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-editor-surface"
-            >
-              <input
-                type="checkbox"
-                checked={item.enabled}
-                onChange={(event) =>
-                  void saveForbiddenTerm({
-                    id: item.id,
-                    term: item.term,
-                    ...(item.replacement ? { replacement: item.replacement } : {}),
-                    ...(item.note ? { note: item.note } : {}),
-                    enabled: event.target.checked,
-                  }).catch(reportError)
-                }
-              />
-              <span className={item.enabled ? 'text-editor-text' : 'text-editor-muted'}>
-                {item.term}
-              </span>
-              {item.replacement && <span className="text-editor-muted">→ {item.replacement}</span>}
-              <button
-                type="button"
-                className="ml-auto shrink-0 text-editor-muted opacity-50 transition-opacity hover:text-severity-critical group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => void removeForbiddenTerm(item.id).catch(reportError)}
-              >
-                {t('common.delete', '삭제')}
-              </button>
-            </div>
-          ))}
         </div>
       </section>
 

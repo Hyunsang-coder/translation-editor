@@ -719,7 +719,7 @@
     "deleteTitle": "Delete memory",
     "deleteConfirm": "Delete this memory item? This cannot be undone.",
     "forbiddenTermsTitle": "Forbidden terms",
-    "forbiddenTermsDescription": "Always sent with every AI request as an instruction. It does not scan the document.",
+    "forbiddenTermsDescription": "Wording the AI won't use in translations.",
     "forbiddenTerm": "Forbidden term",
     "replacement": "Preferred replacement",
     "proposalTitle": "Project memory proposal",

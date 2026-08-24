@@ -57,7 +57,6 @@ describe('ProjectMemorySettingsSection', () => {
     render(<ProjectMemorySettingsSection />);
 
     expect(screen.getByText('memory.settingsDescription')).toHaveClass('text-[11px]');
-    expect(screen.getByText('memory.forbiddenTermsDescription')).toHaveClass('text-[11px]');
     expect(screen.getByRole('button', { name: 'memory.import.open' })).toHaveClass('text-xs');
   });
 });

@@ -8,6 +8,7 @@ import { DebouncedTextarea } from '@/components/ui/DebouncedTextarea';
 import { PromptPresetMenu } from '@/components/panels/PromptPresetMenu';
 import { ProjectGlossarySection } from '@/components/glossary/ProjectGlossarySection';
 import { ProjectMemorySettingsSection } from './ProjectMemorySettingsSection';
+import { ProjectForbiddenTermsSection } from './ProjectForbiddenTermsSection';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -72,6 +73,9 @@ export function SettingsContent(): JSX.Element {
 
       {/* Glossary */}
       {project && <ProjectGlossarySection projectId={project.id} />}
+
+      {/* 금칙어 — 등록 없이 쓰는 프로젝트가 대부분이라 최하단에 둔다 */}
+      {project && <ProjectForbiddenTermsSection />}
     </div>
   );
 }
