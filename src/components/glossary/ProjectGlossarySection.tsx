@@ -168,35 +168,36 @@ export function ProjectGlossarySection({
                 ))}
               </select>
             )}
-            <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
               <input
                 value={source}
                 onChange={(event) => setSource(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void handleQuickAdd();
+                }}
                 placeholder={t('glossaryManager.sourcePlaceholder')}
                 aria-label={t('glossaryManager.source')}
-                className="w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
+                className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
               />
-              <div className="flex items-center gap-1.5">
-                <ArrowRight size={12} className="shrink-0 text-primary-500" />
-                <input
-                  value={target}
-                  onChange={(event) => setTarget(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void handleQuickAdd();
-                  }}
-                  placeholder={t('glossaryManager.targetPlaceholder')}
-                  aria-label={t('glossaryManager.target')}
-                  className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleQuickAdd()}
-                  disabled={!source.trim() || !target.trim() || saving}
-                  className="rounded bg-primary-fill px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-fill-hover disabled:opacity-40"
-                >
-                  {t('glossaryManager.add')}
-                </button>
-              </div>
+              <ArrowRight size={12} className="shrink-0 text-primary-500" />
+              <input
+                value={target}
+                onChange={(event) => setTarget(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void handleQuickAdd();
+                }}
+                placeholder={t('glossaryManager.targetPlaceholder')}
+                aria-label={t('glossaryManager.target')}
+                className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
+              />
+              <button
+                type="button"
+                onClick={() => void handleQuickAdd()}
+                disabled={!source.trim() || !target.trim() || saving}
+                className="shrink-0 rounded bg-primary-fill px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-fill-hover disabled:opacity-40"
+              >
+                {t('glossaryManager.add')}
+              </button>
             </div>
           </div>
         )}

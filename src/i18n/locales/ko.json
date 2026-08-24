@@ -30,7 +30,7 @@
     "translationRulesDescription": "포맷, 서식, 문체 등 번역에 적용되는 규칙입니다. (예: \"해요체 사용\", \"따옴표 유지\", \"고유명사는 음차\")",
     "translationRulesPlaceholder": "번역 규칙을 입력하세요...",
     "glossary": "용어집",
-    "glossaryDescription": "관리에서 용어집을 만든 뒤, 이 프로젝트에 연결할 항목만 선택합니다. 목록에서 ✕로 연결을 해제할 수 있습니다.",
+    "glossaryDescription": "이 프로젝트에서 쓸 용어집을 연결합니다.",
     "glossaryColumns": "열: [Source] [Target] (헤더 필수, 대소문자 구분 없음)",
     "glossaryImportCsv": "CSV 가져오기",
     "glossaryImportExcel": "Excel 가져오기",
