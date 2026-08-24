@@ -189,8 +189,10 @@ export function PromptPresetMenu({ kind, currentValue, onApply, onClear }: Promp
         <ChevronDown size={12} className="shrink-0" />
       </button>
 
+      {/* 메뉴 폭은 설정 패널 최소 너비에 맞춘다 — SIDEBAR_MIN(280) - p-4 양쪽(32) - 스크롤바 여유.
+          이보다 넓으면 패널의 overflow-y-auto가 가로로도 잘라 메뉴 왼쪽이 잘린다. */}
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-72 overflow-hidden rounded-md border border-editor-border bg-editor-surface shadow-lg">
+        <div className="absolute right-0 top-full mt-1 z-20 w-56 overflow-hidden rounded-md border border-editor-border bg-editor-surface shadow-lg">
           {/* 프리셋 목록 */}
           <div className="max-h-56 overflow-y-auto scrollbar-thin py-1">
             {presets.length === 0 ? (
