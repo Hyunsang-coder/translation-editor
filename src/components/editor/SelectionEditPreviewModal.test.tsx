@@ -121,6 +121,69 @@ describe('SelectionEditPreviewModal', () => {
     expect(screen.queryByTestId('selection-edit-regenerate-button')).toBeNull();
   });
 
+  describe('재번역 ↔ 폴리싱 탭', () => {
+    it('onModeChange가 있으면 탭을 보여주고, 다른 탭을 누르면 그 모드를 넘긴다', () => {
+      const onModeChange = vi.fn();
+      renderModal({ mode: 'retranslate', onModeChange });
+
+      expect(screen.getByTestId('selection-edit-mode-retranslate')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      fireEvent.click(screen.getByTestId('selection-edit-mode-polish'));
+
+      expect(onModeChange).toHaveBeenCalledWith('polish');
+    });
+
+    it('현재 탭을 다시 눌러도 모드 변경을 알리지 않는다 (제안이 헛되이 갈리지 않게)', () => {
+      const onModeChange = vi.fn();
+      renderModal({ mode: 'polish', onModeChange });
+
+      fireEvent.click(screen.getByTestId('selection-edit-mode-polish'));
+
+      expect(onModeChange).not.toHaveBeenCalled();
+    });
+
+    it('연결된 원문이 없으면 재번역 탭을 막는다', () => {
+      const onModeChange = vi.fn();
+      renderModal({ mode: 'polish', sourceText: '', onModeChange });
+
+      expect(screen.getByTestId('selection-edit-mode-retranslate')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('selection-edit-mode-retranslate'));
+      expect(onModeChange).not.toHaveBeenCalled();
+    });
+
+    it('생성 중에는 탭을 잠근다', () => {
+      renderModal({ mode: 'retranslate', isLoading: true, onModeChange: vi.fn() });
+
+      expect(screen.getByTestId('selection-edit-mode-polish')).toBeDisabled();
+    });
+
+    it('onModeChange가 없으면(채팅 제안 미리보기) 탭을 숨긴다', () => {
+      renderModal({ replacementText: '개선된 번역', proposalOnly: true });
+
+      expect(screen.queryByTestId('selection-edit-mode-polish')).toBeNull();
+    });
+
+    it('탭이 바뀌면 직접 수정 화면을 닫는다 — 편집 중이던 제안이 다른 것으로 갈리기 때문', () => {
+      const { rerender, props } = renderModal({
+        mode: 'retranslate',
+        replacementText: '재번역 결과',
+        onReplacementChange: vi.fn(),
+        onModeChange: vi.fn(),
+      });
+
+      fireEvent.click(screen.getByTestId('selection-edit-proposal-toggle'));
+      expect(screen.getByTestId('selection-edit-proposal-editor')).toBeInTheDocument();
+
+      rerender(
+        <SelectionEditPreviewModal {...props} mode="polish" replacementText="폴리싱 결과" />,
+      );
+
+      expect(screen.queryByTestId('selection-edit-proposal-editor')).toBeNull();
+    });
+  });
+
   describe('여러 블록 부분 적용', () => {
     const cells = [
       { sourceText: 'One', currentText: '하나', replacementText: '하나 다듬음' },

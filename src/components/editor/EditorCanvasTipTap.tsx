@@ -399,6 +399,16 @@ export function EditorCanvasTipTap(): JSX.Element {
     flattenFormatting: boolean;
     loading: boolean;
     error: string | null;
+    /**
+     * 지금 보고 있지 **않은** 모드에서 이미 받아둔 제안. 탭을 오가도 결과와 손편집이
+     * 사라지지 않게 한다 — 적용은 언제나 현재 모드의 제안으로만 한다.
+     * 셀은 제안 문자열만 담는다. 나머지 필드(원문·현재 텍스트)는 모드와 무관하다.
+     */
+    stashed?: Partial<Record<SelectionEditMode, {
+      replacementText: string;
+      cellReplacements?: string[];
+      contextManifest: ContextManifest | undefined;
+    }>>;
   }>(null);
   const selectionEditAbortRef = useRef<AbortController | null>(null);
   // 부분 수정의 참조 범위. 선택마다 초기화하지 않고 프로젝트 단위로 유지한다.
@@ -2824,6 +2834,38 @@ export function EditorCanvasTipTap(): JSX.Element {
             referenceOptions,
             error: null,
           } : null);
+        }}
+        onModeChange={(mode) => {
+          // 모드만 갈아 끼운다 — 선택·앵커·원문 대응은 두 모드가 그대로 공유하는 값이다.
+          // 지금 화면의 제안은 stash에 넣고, 그 모드에서 전에 받아둔 것이 있으면 되살린다.
+          setSelectionEdit((current) => {
+            if (!current || current.mode === mode) return current;
+            const stashed = { ...current.stashed };
+            stashed[current.mode] = {
+              replacementText: current.replacementText,
+              ...(current.cells
+                ? { cellReplacements: current.cells.map((cell) => cell.replacementText) }
+                : {}),
+              contextManifest: current.contextManifest,
+            };
+            const restored = stashed[mode];
+            return {
+              ...current,
+              mode,
+              stashed,
+              replacementText: restored?.replacementText ?? '',
+              ...(current.cells
+                ? {
+                    cells: current.cells.map((cell, index) => ({
+                      ...cell,
+                      replacementText: restored?.cellReplacements?.[index] ?? '',
+                    })),
+                  }
+                : {}),
+              contextManifest: restored?.contextManifest,
+              error: null,
+            };
+          });
         }}
         onGenerate={() => void generateSelectionEdit()}
         onApply={applyCurrentSelectionEdit}

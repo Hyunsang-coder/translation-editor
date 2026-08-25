@@ -48,6 +48,11 @@ interface SelectionEditPreviewModalProps {
   onClose: () => void;
   /** 수정안을 손으로 고칠 수 있게 한다. 없으면 읽기 전용(채팅 제안 미리보기). */
   onReplacementChange?: (value: string) => void;
+  /**
+   * 재번역↔폴리싱 탭. 넘기면 모달 안에서 모드를 바꿀 수 있다 — 없으면 탭을 감춘다
+   * (채팅 제안 미리보기는 이미 받은 제안 하나만 보여주므로 바꿀 모드가 없다).
+   */
+  onModeChange?: (value: SelectionEditMode) => void;
 }
 
 /** 좌우 비교 diff. 삽입·삭제를 한 줄에 섞으면 취소선 사이로 문장이 끊겨 읽기 어렵다. */
@@ -135,6 +140,7 @@ export function SelectionEditPreviewModal({
   onApply,
   onClose,
   onReplacementChange,
+  onModeChange,
 }: SelectionEditPreviewModalProps): JSX.Element | null {
   const { t } = useTranslation();
   const [editingProposal, setEditingProposal] = useState(false);
@@ -152,6 +158,12 @@ export function SelectionEditPreviewModal({
       setDeselectedCells(new Set());
     }
   }, [open, isLoading]);
+  // 탭을 바꾸면 화면에 뜨는 제안 자체가 다른 것으로 갈린다. 손편집 화면과 블록 선택은
+  // 그 제안에 매인 상태라, 모드가 바뀌면 원래대로 되돌린다.
+  useEffect(() => {
+    setEditingProposal(false);
+    setDeselectedCells(new Set());
+  }, [mode]);
   if (!open || !selection) return null;
 
   // 여러 셀일 때는 제안이 셀마다 따로 있다. 하나라도 오면 "적용" 단계로 넘어간다.
@@ -191,9 +203,14 @@ export function SelectionEditPreviewModal({
   const isPolish = mode === 'polish';
   // 폴리싱은 원문 없이도 진행한다 — 그 경우 Source 카드를 비워 두지 않고 아예 뺀다.
   const showSourceCard = Boolean(sourceText.trim());
-  const actionLabel = isPolish
-    ? t('selection.polishAction', '폴리싱')
-    : t('selection.generate', '재번역');
+  const retranslateLabel = t('selection.generate', '재번역');
+  const polishLabel = t('selection.polishAction', '폴리싱');
+  const actionLabel = isPolish ? polishLabel : retranslateLabel;
+
+  const showModeTabs = Boolean(onModeChange);
+  // 재번역은 원문이 있어야 성립한다. 폴리싱으로 연 선택은 원문 짝이 없을 수 있으므로
+  // 그때는 탭을 눌러도 들어갈 수 없다는 것을 사유와 함께 드러낸다.
+  const canRetranslate = Boolean(sourceText.trim());
 
   const alignmentLabel = sourceAlignmentPrecision === 'selection'
     ? t('selection.alignment.selection', 'AI 구절 대응')
@@ -213,13 +230,18 @@ export function SelectionEditPreviewModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="selection-edit-title" className="text-base font-semibold text-editor-text">
-              {cells
-                ? isPolish
-                  ? t('selection.tableCellsPolishTitle', { count: cells.length })
-                  : t('selection.tableCellsRetranslateTitle', { count: cells.length })
-                : isPolish
-                  ? t('selection.polishTitle', '선택 영역 폴리싱')
-                  : t('selection.retranslateTitle', '선택 영역 재번역')}
+              {/* 탭이 모드를 말하고 있으면 제목까지 모드를 반복하지 않는다 */}
+              {showModeTabs
+                ? cells
+                  ? t('selection.tableCellsEditTitle', { count: cells.length })
+                  : t('selection.editTitle', '선택 영역 AI 수정')
+                : cells
+                  ? isPolish
+                    ? t('selection.tableCellsPolishTitle', { count: cells.length })
+                    : t('selection.tableCellsRetranslateTitle', { count: cells.length })
+                  : isPolish
+                    ? t('selection.polishTitle', '선택 영역 폴리싱')
+                    : t('selection.retranslateTitle', '선택 영역 재번역')}
             </h2>
             <p className="mt-1 text-xs text-editor-muted">
               {cells
@@ -240,6 +262,57 @@ export function SelectionEditPreviewModal({
             ✕
           </button>
         </div>
+
+        {/* 재번역↔폴리싱. 둘은 앵커·적용 경로가 같아서 창을 닫고 다시 고를 이유가 없다. */}
+        {showModeTabs && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div
+              className="flex items-center overflow-hidden rounded-md border border-editor-border"
+              role="group"
+              aria-label={t('selection.modeLabel', '수정 방식')}
+            >
+              {([
+                { value: 'retranslate' as const, label: retranslateLabel },
+                { value: 'polish' as const, label: polishLabel },
+              ]).map(({ value, label }) => {
+                const active = mode === value;
+                // 생성 중에는 넘어갈 탭만 잠근다 — 지시사항·참조 옵션과 같은 규칙이다.
+                // 지금 탭까지 잠그면 보고 있는 탭에 not-allowed 커서가 뜨고 포커스도 빠진다.
+                const disabled =
+                  (isLoading && !active) || (value === 'retranslate' && !canRetranslate);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    data-testid={`selection-edit-mode-${value}`}
+                    aria-pressed={active}
+                    disabled={disabled}
+                    title={
+                      value === 'retranslate' && !canRetranslate
+                        ? t('selection.alignedSourceMissing')
+                        : label
+                    }
+                    className={`h-[26px] px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed ${
+                      active
+                        ? 'bg-primary-fill text-white'
+                        : 'text-editor-muted hover:bg-editor-border disabled:opacity-50 disabled:hover:bg-transparent'
+                    }`}
+                    onClick={() => {
+                      if (!active) onModeChange?.(value);
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {!canRetranslate && (
+              <span className="text-[11px] text-editor-muted">
+                {t('selection.alignedSourceMissing')}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 생성 중이라는 사실은 모달 위쪽에서 바로 보여야 한다 — 버튼 라벨만으로는 스크롤
             아래에 묻히고, 재생성에서는 이전 결과가 그대로 떠 있어 멈춘 것처럼 보인다. */}
