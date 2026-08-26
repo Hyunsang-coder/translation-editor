@@ -767,6 +767,7 @@
     "mixedFormattingConfirm": "The selection contains mixed formatting. Applying the retranslation may remove some formatting. Continue?",
     "mixedFormattingConfirmPolish": "The selection contains mixed formatting. Applying the polish may remove some formatting. Continue?",
     "mixedFormattingConfirmTitle": "Formatting notice",
+    "formattingFlattened": "The selection contained mixed formatting, so some formatting was removed.",
     "reselectRequired": "The document changed. Please select the text again.",
     "projectChanged": "The project changed, so this proposal cannot be applied.",
     "forbiddenTermViolation": "The proposal contains the forbidden term “{{term}}”.",

@@ -41,7 +41,8 @@ import {
   removeSelectionAnchor,
   resolveSelectionAnchor,
 } from '@/editor/extensions/SelectionAnchor';
-import { applySelectionEdit } from '@/editor/utils/applySelectionEdit';
+import { syncCommentExcerpts } from '@/editor/utils/syncCommentExcerpts';
+import { applySelectionProposal } from '@/components/chat/applySelectionProposal';
 import {
   collectTranslationUnits,
   type TranslationUnitDocument,
@@ -437,17 +438,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     const { messageId, proposal } = proposalPreview;
     const activeProject = useProjectStore.getState().project;
     const editor = useEditorStore.getState().targetEditor;
-    const anchor = editor ? resolveSelectionAnchor(editor, proposal.anchorId) : null;
-    const anchorRange = anchor ? getSingleAnchorRange(anchor) : null;
-    if (
-      !editor ||
-      activeProject?.id !== proposal.projectId ||
-      !anchor ||
-      !anchorRange ||
-      anchor.status !== 'active' ||
-      readAnchorText(editor.state.doc, anchorRange.from, anchorRange.to)
-        !== proposal.originalText
-    ) {
+    const markStale = (): void => {
       removePanelSelectionAnchor('target', proposal.anchorId);
       updateMessage(messageId, {
         metadata: {
@@ -459,26 +450,30 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
         type: 'error',
         message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
       });
+    };
+    if (!editor || activeProject?.id !== proposal.projectId) {
+      markStale();
       return;
     }
-    const result = applySelectionEdit(editor, anchor, proposal.replacementText, {
-      // 앵커 텍스트는 편집을 따라 재기준화되므로, 수정안 생성 시점의 스냅샷을
-      // 기준으로 검증해야 사용자 편집을 덮어쓰지 않는다.
-      expectedText: proposal.originalText,
-    });
-    if (result !== 'applied') {
-      removePanelSelectionAnchor('target', proposal.anchorId);
-      updateMessage(messageId, {
-        metadata: {
-          documentEditProposal: { ...proposal, status: 'stale' },
-        },
-      }, sessionId);
-      setProposalPreview(null);
-      addToast({
-        type: 'error',
-        message: t('selection.reselectRequired', '문서가 변경되었습니다. 영역을 다시 선택해주세요.'),
-      });
+    const outcome = applySelectionProposal(editor, proposal);
+    if (outcome.status !== 'applied') {
+      markStale();
       return;
+    }
+    // 교체된 텍스트에 맞춰 코멘트 발췌를 갱신한다. 평탄화로 마크가 사라진 코멘트는
+    // syncCommentExcerpts가 정리한다(에디터 재번역 경로와 같은 처리).
+    if (outcome.affectedCommentIds.length > 0) {
+      syncCommentExcerpts(editor, outcome.affectedCommentIds);
+      void useProjectStore.getState().saveProject();
+    }
+    if (outcome.flattened) {
+      addToast({
+        type: 'info',
+        message: t(
+          'selection.formattingFlattened',
+          '선택 범위에 서로 다른 서식이 섞여 있어 일부 서식이 사라졌습니다.',
+        ),
+      });
     }
     // 적용 성공 — applySelectionEdit이 앵커를 제거했으므로 칩도 함께 정리한다
     clearComposerSelectionForAnchor(proposal.anchorId);
