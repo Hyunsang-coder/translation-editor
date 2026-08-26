@@ -96,6 +96,7 @@ pub async fn create_project(
             title: args.title,
             description: None,
             domain: args.domain,
+            source_language: None,
             target_language: None,
             created_at: now,
             updated_at: now,
@@ -217,6 +218,9 @@ pub async fn duplicate_project(
                 title: format!("{} (copy)", original.metadata.title),
                 description: original.metadata.description.clone(),
                 domain: original.metadata.domain.clone(),
+                // 언어 설정은 원본 그대로 옮긴다. 복사본은 보통 같은 문서이고, 원문을 갈아끼워
+                // 어긋나면 이제 헤더 Select에 드러나고 `checkDirection`이 잡는다 (ADR-0021).
+                source_language: original.metadata.source_language.clone(),
                 target_language: original.metadata.target_language.clone(),
                 created_at: now,
                 updated_at: now,

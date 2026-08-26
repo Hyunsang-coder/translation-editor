@@ -8,7 +8,7 @@ import type {
   ITEProject,
 } from '@/types';
 import { stripHtml } from '@/utils/hash';
-import { resolveTargetLanguage } from '@/utils/detectLanguage';
+import { resolveDirection } from '@/utils/detectLanguage';
 
 // ============================================
 // 요청 유형 정의
@@ -113,8 +113,15 @@ export interface PromptContext {
   projectMemoryDigest?: string;
   /** 활성 금칙어 목록 (`renderChatMemoryDigest`) */
   forbiddenTermsDigest?: string;
-  /** 원문 문서 */
+  /** 원문 문서 — **프롬프트에 통째로 인라인된다**(`formatDocument`). 토큰 최적화로 채팅 초기
+   * 호출에서는 비워 두고 모델이 tool_call로 가져간다. */
   sourceDocument?: string;
+  /**
+   * 방향 판정 전용 원문 표본. **`sourceDocument`와 별개다** — 문서를 인라인하지 않고도
+   * `언어: 한국어 → 영어`를 프롬프트에 실으려면 이 필드를 채운다. 여기에 문서를 통째로 넣으면
+   * 토큰만 늘 뿐 인라인은 되지 않으니, 앞부분만 잘라 넘길 것.
+   */
+  sourceSample?: string;
   /** 번역문 문서 */
   targetDocument?: string;
   /** 첨부 파일 (추출된 텍스트 목록) */
@@ -143,9 +150,14 @@ export interface PromptOptions {
 
 function buildBaseSystemPrompt(project: ITEProject | null, sourceSample?: string): string {
   const domain = project?.metadata.domain ?? 'general';
-  const src = 'Source';
-  // 타겟이 '자동'(또는 미설정)이면 원문으로 방향을 푼다. 원문이 없는 호출부는 종전대로 'Target'.
-  const tgt = resolveTargetLanguage(project?.metadata.targetLanguage, sourceSample ?? '').language ?? 'Target';
+  // 원문·타겟 모두 '자동'(또는 미설정)이면 원문 표본으로 푼다.
+  // 표본을 못 받은 호출부는 종전대로 'Source'/'Target' 자리표시자로 떨어진다.
+  const direction = resolveDirection(
+    { source: project?.metadata.sourceLanguage, target: project?.metadata.targetLanguage },
+    sourceSample ?? '',
+  );
+  const src = direction.source.language ?? 'Source';
+  const tgt = direction.target.language ?? 'Target';
 
   return [
     '당신은 경험많은 전문 번역가입니다.',
@@ -385,8 +397,9 @@ export async function buildLangChainMessages(
   const requestType = opts?.requestType ?? detectRequestType(ctx.userMessage);
 
   // 요청 유형에 따른 시스템 프롬프트 선택
-  // 원문을 같이 넘기는 이유: 타겟 언어가 '자동'이면 이 표본으로 방향을 푼다.
-  const sourceSample = ctx.sourceDocument ?? '';
+  // 원문 표본을 같이 넘기는 이유: 원문·타겟 언어가 '자동'이면 이걸로 방향을 푼다.
+  // 채팅은 문서를 인라인하지 않아(`sourceDocument`가 비어 있다) 전용 표본을 받는다.
+  const sourceSample = ctx.sourceSample ?? ctx.sourceDocument ?? '';
   let systemPrompt: string;
   switch (requestType) {
     case 'translate':

@@ -6,11 +6,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  AUTO_TARGET_LANGUAGE,
+  AUTO_LANGUAGE,
+  checkDirection,
+  detectDominantLangCode,
   detectSourceLangCode,
   isSameLanguage,
   normalizeLang,
-  resolveTargetLanguage,
+  resolveDirection,
 } from './detectLanguage';
 
 describe('normalizeLang', () => {
@@ -48,7 +50,7 @@ describe('detectSourceLangCode', () => {
   });
 
   it('영어 용어가 범벅인 국문 문서도 ko — 비율이 아니라 한글 존재를 본다', () => {
-    // detectSourceLanguage(한글 30% 임계)로는 '원문'이 나오는 구간
+    // 보수 판정(한글 30% 임계)으로는 답이 안 나오는 구간
     const text =
       'Skeletal Gear Master Material 전환은 MS2에서 진행하고, ' +
       'Nudebody 2.0 body rework outsourcing scope는 Certain Affinity(CA)와 확정. ' +
@@ -68,37 +70,106 @@ describe('detectSourceLangCode', () => {
   });
 });
 
-describe('resolveTargetLanguage', () => {
-  it('자동이면 원문의 반대 언어로 푼다', () => {
-    expect(resolveTargetLanguage(AUTO_TARGET_LANGUAGE, '보급 상자 스폰 규칙')).toEqual({
-      language: '영어',
-      auto: true,
+describe('detectDominantLangCode', () => {
+  it('문서를 지배하는 문자 체계를 고른다', () => {
+    expect(detectDominantLangCode('이번 업데이트에서 보급 상자 스폰 규칙을 변경합니다.')).toBe('ko');
+    expect(detectDominantLangCode('This update changes the care package spawn rules.')).toBe('en');
+    expect(detectDominantLangCode('このアップデートで補給箱の仕様を変更します。')).toBe('ja');
+    expect(detectDominantLangCode('本次更新调整了补给箱的生成规则。')).toBe('zh');
+  });
+
+  it('한국어 용어가 조금 섞인 영문 문서는 en — 방향 판정기와 답이 갈리고, 그게 의도다', () => {
+    const text =
+      'The care package spawn table was rebalanced this patch. ' +
+      'Glossary: care package = 보급 상자, blue zone = 자기장, scope = 조준경. ' +
+      'Weapon damage falloff was adjusted for all assault rifles.';
+    expect(detectDominantLangCode(text)).toBe('en');
+    // 같은 문서를 방향 판정기는 ko로 본다 (한글 5% 임계). 차단 가드에 쓰면 안 되는 이유.
+    expect(detectSourceLangCode(text)).toBe('ko');
+  });
+
+  it('판단 재료가 없으면 null', () => {
+    expect(detectDominantLangCode('')).toBeNull();
+    expect(detectDominantLangCode('123 456 / 789')).toBeNull();
+  });
+});
+
+describe('resolveDirection', () => {
+  it('둘 다 자동이면 원문을 감지하고 타겟은 그 반대로 푼다', () => {
+    expect(resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙')).toEqual({
+      source: { language: '한국어', auto: true },
+      target: { language: '영어', auto: true },
     });
-    expect(resolveTargetLanguage(AUTO_TARGET_LANGUAGE, 'Care package spawn rules')).toEqual({
-      language: '한국어',
-      auto: true,
+    expect(resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, 'Care package spawn rules')).toEqual({
+      source: { language: '영어', auto: true },
+      target: { language: '한국어', auto: true },
     });
   });
 
-  it('미설정(빈 값)도 자동으로 취급한다', () => {
-    expect(resolveTargetLanguage(undefined, '보급 상자 스폰 규칙').language).toBe('영어');
-    expect(resolveTargetLanguage('', 'Care package spawn rules').language).toBe('한국어');
+  it('미설정(빈 값·null·undefined)도 자동으로 취급한다', () => {
+    expect(resolveDirection(undefined, '보급 상자 스폰 규칙').target.language).toBe('영어');
+    expect(resolveDirection(null, 'Care package spawn rules').target.language).toBe('한국어');
+    expect(resolveDirection({ source: '', target: '' }, '보급 상자 스폰 규칙').target.language).toBe('영어');
   });
 
   it('명시 선택은 그대로 통과시킨다 (자동이 사용자 선택을 덮지 않는다)', () => {
-    expect(resolveTargetLanguage('일본어', '보급 상자 스폰 규칙')).toEqual({
-      language: '일본어',
-      auto: false,
-    });
-    // 원문과 같은 언어를 골라도 여기서 바꾸지 않는다 — 차단은 호출부 가드의 몫
-    expect(resolveTargetLanguage('한국어', '보급 상자 스폰 규칙')).toEqual({
+    const d = resolveDirection({ source: AUTO_LANGUAGE, target: '일본어' }, '보급 상자 스폰 규칙');
+    expect(d.target).toEqual({ language: '일본어', auto: false });
+    // 원문과 같은 언어를 골라도 여기서 바꾸지 않는다 — 차단은 checkDirection의 몫
+    expect(resolveDirection({ source: AUTO_LANGUAGE, target: '한국어' }, '보급 상자 스폰 규칙').target).toEqual({
       language: '한국어',
       auto: false,
     });
   });
 
-  it('자동인데 KO/EN이 아니면 null — 호출부가 명시 선택을 요구한다', () => {
-    expect(resolveTargetLanguage(AUTO_TARGET_LANGUAGE, 'このアップデート').language).toBeNull();
-    expect(resolveTargetLanguage(AUTO_TARGET_LANGUAGE, '').language).toBeNull();
+  it('명시 원문이 자동 타겟의 근거가 된다 — 텍스트를 다시 감지하지 않는다', () => {
+    // 문서는 국문이지만 원문을 '영어'로 명시했다면 타겟은 그 반대인 '한국어'다.
+    const d = resolveDirection({ source: '영어', target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙');
+    expect(d.source).toEqual({ language: '영어', auto: false });
+    expect(d.target).toEqual({ language: '한국어', auto: true });
+  });
+
+  it('자동인데 원문이 KO/EN이 아니면 타겟은 null — 호출부가 명시 선택을 요구한다', () => {
+    const ja = resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, 'このアップデートで補給箱の仕様を変更します。');
+    // 표시·프롬프트용 원문 라벨은 보수 판정으로 채우되, 방향은 뒤집지 않는다
+    expect(ja.source.language).toBe('일본어');
+    expect(ja.target.language).toBeNull();
+
+    expect(resolveDirection({ source: '일본어', target: AUTO_LANGUAGE }, '아무 텍스트').target.language).toBeNull();
+    expect(resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '').target.language).toBeNull();
+  });
+});
+
+describe('checkDirection', () => {
+  const check = (stored: Parameters<typeof resolveDirection>[0], text: string) =>
+    checkDirection(resolveDirection(stored, text), text);
+
+  it('정상 방향은 통과', () => {
+    expect(check({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toBeNull();
+    expect(check({ source: '한국어', target: '영어' }, '보급 상자 스폰 규칙을 변경합니다')).toBeNull();
+  });
+
+  it('타겟을 못 정하면 target-undecided', () => {
+    expect(check({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, 'このアップデート')).toBe('target-undecided');
+  });
+
+  it('원문과 타겟이 같은 언어면 same-language — 복사본에 굳은 스테일 타겟이 여기서 잡힌다', () => {
+    expect(check({ source: AUTO_LANGUAGE, target: '한국어' }, '보급 상자 스폰 규칙을 변경합니다')).toBe('same-language');
+  });
+
+  it('명시 원문이 문서와 어긋나면 source-mismatch', () => {
+    expect(check({ source: '영어', target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toBe('source-mismatch');
+  });
+
+  it('한국어 용어가 섞인 영문 원문 + 명시 타겟 한국어를 막지 않는다 (보수 판정을 쓰는 이유)', () => {
+    const text =
+      'The care package spawn table was rebalanced this patch. ' +
+      'Glossary: care package = 보급 상자, blue zone = 자기장, scope = 조준경. ' +
+      'Weapon damage falloff was adjusted for all assault rifles.';
+    expect(check({ source: AUTO_LANGUAGE, target: '한국어' }, text)).toBeNull();
+  });
+
+  it('보수 판정이 표현할 수 없는 언어(스페인어)를 명시하면 대조하지 않는다', () => {
+    expect(check({ source: '스페인어', target: '한국어' }, 'Ajustamos las reglas de generacion')).toBeNull();
   });
 });

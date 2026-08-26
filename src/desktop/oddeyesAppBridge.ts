@@ -6,7 +6,7 @@ import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore, type IssueType, type IssueSeverity } from '@/stores/reviewStore';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
-import { resolveTargetLanguage } from '@/utils/detectLanguage';
+import { resolveDirection } from '@/utils/detectLanguage';
 import { resolveGlossaryForPrompt } from '@/utils/glossaryInject';
 import { hashContent } from '@/utils/hash';
 import {
@@ -125,7 +125,7 @@ async function getTranslationContext(): Promise<unknown> {
   return {
     projectId: project.id,
     projectTitle: project.metadata.title,
-    targetLanguage: resolveTargetLanguage(project.metadata.targetLanguage, sourceMarkdown).language,
+    ...directionWire(project.metadata, sourceMarkdown),
     translationRules: chatStore.translationRules || '',
     projectMemory: memory.items
       .filter((item) => item.status === 'active')
@@ -769,10 +769,10 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
       projectTitle: project?.metadata.title ?? null,
       // 저장값이 아니라 **해석된** 언어를 내보낸다 — 센티널 'auto'를 그대로 주면
       // 외부 에이전트의 방향 교차검증(expectedDir)이 통째로 꺼진다.
-      targetLanguage: resolveTargetLanguage(
-        project?.metadata.targetLanguage,
+      ...directionWire(
+        project?.metadata,
         typeof source.content === 'string' ? source.content : '',
-      ).language,
+      ),
       sourceRevision: source.revision,
       targetRevision: target.revision,
       sourceEmpty: source.empty,
@@ -830,6 +830,21 @@ const methods: Record<string, (params?: BridgeParams) => Promise<unknown>> = {
   'oddeyes.unlinkProjectGlossary': async (params) => await unlinkProjectGlossaryBridge(params ?? {}),
 
 };
+
+/**
+ * 외부 에이전트에 나가는 방향 두 필드. 저장 센티널이 아니라 해석값을 내보낸다 —
+ * null은 "설정으로도 원문으로도 결정 못 함"을 뜻한다.
+ */
+function directionWire(
+  metadata: { sourceLanguage?: string | undefined; targetLanguage?: string | undefined } | undefined,
+  sourceText: string,
+): { sourceLanguage: string | null; targetLanguage: string | null } {
+  const direction = resolveDirection(
+    { source: metadata?.sourceLanguage, target: metadata?.targetLanguage },
+    sourceText,
+  );
+  return { sourceLanguage: direction.source.language, targetLanguage: direction.target.language };
+}
 
 export function initializeOddEyesAppBridge(): void {
   window.__ODDEYES_APP_BRIDGE__ = {

@@ -43,7 +43,7 @@ import { Modal } from '@/components/ui/Modal';
 import { RecentInstructions } from '@/components/ui/RecentInstructions';
 import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
-import { detectSourceLanguage, resolveTargetLanguage } from '@/utils/detectLanguage';
+import { resolveDirection } from '@/utils/detectLanguage';
 
 interface RetranslateRequestMeta {
   projectId: string;
@@ -321,6 +321,18 @@ export function ReviewPanel(): JSX.Element {
     reviewAbortRef.current = controller;
     startReview(freshChunks);
 
+    // 방향은 **실행당 한 번** 푼다. 청크마다 앞 3개 세그먼트로 다시 감지하던 종전 방식은
+    // 영문 문서 중간의 국문 인용 하나로 청크별 답이 갈려, 같은 검수 안에서 모순된 방향이
+    // 프롬프트에 실렸다.
+    const direction = resolveDirection(
+      { source: project.metadata.sourceLanguage, target: project.metadata.targetLanguage },
+      freshChunks
+        .flatMap((chunk) => chunk.segments)
+        .slice(0, 50)
+        .map((segment) => segment.sourceText)
+        .join(' '),
+    );
+
     try {
       const reviewText = freshChunks
         .flatMap((chunk) => chunk.segments)
@@ -366,15 +378,12 @@ export function ReviewPanel(): JSX.Element {
           );
 
           // 검수 전용 함수 호출 (도구 없이 단순 API 호출)
-          // 언어 정보: sourceLanguage는 자동 감지, targetLanguage는 프로젝트 설정 —
-          // 설정이 '자동'이면 번역 때와 같은 규칙으로 원문에서 푼다(센티널이 프롬프트로 새지 않게).
-          const chunkSourceSample = chunk.segments.slice(0, 3).map((s) => s.sourceText).join(' ');
+          // 언어 정보: 실행 시작 때 푼 방향을 모든 청크가 공유한다(위 `direction` 참고).
           const response = await runReview({
             segments: chunk.segments,
             resolvedContext,
-            sourceLanguage: detectSourceLanguage(chunkSourceSample),
-            targetLanguage:
-              resolveTargetLanguage(project.metadata.targetLanguage, chunkSourceSample).language ?? undefined,
+            ...(direction.source.language ? { sourceLanguage: direction.source.language } : {}),
+            ...(direction.target.language ? { targetLanguage: direction.target.language } : {}),
             ...(serializedComments ? { userComments: serializedComments } : {}),
             ...(extraInstruction?.trim() ? { userInstruction: extraInstruction } : {}),
             // 범위 검수는 선택 구간만, 다중 청크는 청크 하나만 입력이라 앞뒤 문맥이 없다.

@@ -133,6 +133,7 @@ interface ProjectActions {
   setTargetDocJson: (json: TipTapDocJson | null) => void;
   setSourceDocJson: (json: TipTapDocJson | null) => void;
   materializeBlocksForSnapshot: () => Record<string, EditorBlock> | null;
+  setSourceLanguage: (lang: string) => void;
   setTargetLanguage: (lang: string) => void;
   rebuildTargetDocument: () => void;
   rebuildSourceDocument: () => void;
@@ -921,6 +922,24 @@ export const useProjectStore = create<ProjectStore>()(
 
       setSourceDocJson: (json: TipTapDocJson | null): void => {
         set({ sourceDocJson: json });
+      },
+
+      setSourceLanguage: (lang: string): void => {
+        const { project } = get();
+        if (!project) return;
+        set({
+          project: {
+            ...project,
+            metadata: {
+              ...project.metadata,
+              sourceLanguage: lang,
+              updatedAt: Date.now(),
+            },
+          },
+          isDirty: true,
+          lastChangeAt: Date.now(),
+        });
+        scheduleWriteThroughSave(set, get);
       },
 
       setTargetLanguage: (lang: string): void => {

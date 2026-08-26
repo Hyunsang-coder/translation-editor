@@ -1,6 +1,6 @@
 # ADR-0020: 타겟 언어 기본값을 '자동'으로 두고, 방향은 원문에서 해석한다
 
-- **Status**: Accepted
+- **Status**: Accepted ([ADR-0021](0021-explicit-source-language.md)이 개정 — 원문 언어도 명시 선택 가능해졌고, `resolveTargetLanguage`는 `resolveDirection`으로 대체됐습니다)
 - **Date**: 2026-08-12
 - **관련**: `src/utils/detectLanguage.ts`, `src/components/editor/EditorCanvasTipTap.tsx`, `src/desktop/oddeyesAppBridge.ts`, `src/ai/translateDocument.ts`
 

@@ -3449,6 +3449,7 @@ mod tests {
                 title: "Test Project".to_string(),
                 description: None,
                 domain: "general".to_string(),
+                source_language: None,
                 target_language: Some("ko".to_string()),
                 created_at: now,
                 updated_at: now,

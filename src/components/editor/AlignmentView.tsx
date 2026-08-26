@@ -7,7 +7,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
-import { detectSourceLanguage, languageShortCode, resolveTargetLanguage } from '@/utils/detectLanguage';
+import { languageShortCode, resolveDirection } from '@/utils/detectLanguage';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
 import {
   useAlignmentAnnotations,
@@ -146,10 +146,11 @@ function columnLabel(base: string, language: string | null): string {
 export function AlignmentView(): JSX.Element {
   const { t } = useTranslation();
 
-  const { sourceDocJson, targetDocJson, targetLanguage } = useProjectStore(
+  const { sourceDocJson, targetDocJson, sourceLanguage: storedSourceLanguage, targetLanguage } = useProjectStore(
     useShallow((s) => ({
       sourceDocJson: s.sourceDocJson,
       targetDocJson: s.targetDocJson,
+      sourceLanguage: s.project?.metadata.sourceLanguage ?? null,
       targetLanguage: s.project?.metadata.targetLanguage ?? null,
     }))
   );
@@ -219,21 +220,18 @@ export function AlignmentView(): JSX.Element {
     () =>
       alignResult.ops
         .flatMap((op) => (op.kind === 'target-only' ? [] : [op.source.text]))
-        .slice(0, 3)
+        .slice(0, 20)
         .join(' '),
     [alignResult],
   );
 
-  const sourceLanguage = useMemo(
-    () => (sourceSample.trim() ? detectSourceLanguage(sourceSample) : null),
-    [sourceSample],
-  );
-
   // 설정이 '자동'이면 헤더에도 실제로 풀린 언어를 보여준다 (센티널 'auto'가 그대로 뜨지 않게)
-  const resolvedTargetLanguage = useMemo(
-    () => resolveTargetLanguage(targetLanguage, sourceSample).language,
-    [targetLanguage, sourceSample],
+  const direction = useMemo(
+    () => resolveDirection({ source: storedSourceLanguage, target: targetLanguage }, sourceSample),
+    [storedSourceLanguage, targetLanguage, sourceSample],
   );
+  const sourceLanguage = direction.source.language;
+  const resolvedTargetLanguage = direction.target.language;
 
   return (
     <div className="h-full flex flex-col bg-editor-surface" data-testid="alignment-view">

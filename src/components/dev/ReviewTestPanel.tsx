@@ -13,42 +13,14 @@ import { useState, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useChatStore } from '@/stores/chatStore';
-import { buildAlignedChunks, buildReviewPrompt, type AlignedSegment } from '@/ai/tools/reviewTool';
+import { buildAlignedChunks, buildReviewPrompt } from '@/ai/tools/reviewTool';
 import { runReview } from '@/ai/review/runReview';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { normalizeForSearch, buildNormalizedTextWithMapping } from '@/utils/normalizeForSearch';
 import { extractTextFromTipTap } from '@/utils/tipTapText';
-import { resolveTargetLanguage } from '@/utils/detectLanguage';
+import { resolveDirection } from '@/utils/detectLanguage';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import { getIssueTypeColor } from '@/components/review/issueStyles';
-
-/**
- * Source 텍스트의 언어를 감지 (간단한 휴리스틱)
- */
-function detectSourceLanguage(segments: AlignedSegment[]): string {
-  const sampleText = segments
-    .slice(0, 3)
-    .map((s) => s.sourceText)
-    .join(' ')
-    .slice(0, 500);
-
-  if (!sampleText.trim()) return '원문';
-
-  const koreanChars = (sampleText.match(/[\uAC00-\uD7AF\u1100-\u11FF]/g) || []).length;
-  const japaneseChars = (sampleText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
-  const chineseChars = (sampleText.match(/[\u4E00-\u9FFF]/g) || []).length;
-  const latinChars = (sampleText.match(/[a-zA-Z]/g) || []).length;
-
-  const total = koreanChars + japaneseChars + chineseChars + latinChars;
-  if (total === 0) return '원문';
-
-  if (koreanChars / total > 0.3) return 'Korean';
-  if (japaneseChars / total > 0.3) return 'Japanese';
-  if (chineseChars / total > 0.3) return 'Chinese';
-  if (latinChars / total > 0.5) return 'English';
-
-  return '원문';
-}
 
 interface SearchTestResult {
   issueId: string;
@@ -107,16 +79,16 @@ export function ReviewTestPanel(): JSX.Element {
     setSearchResults([]);
 
     try {
+      // 설정이 '자동'이면 원문에서 푼다 (앱 검수 경로와 같은 규칙)
+      const direction = resolveDirection(
+        { source: project.metadata.sourceLanguage, target: project.metadata.targetLanguage },
+        currentChunk.segments.slice(0, 50).map((s) => s.sourceText).join(' '),
+      );
       const response = await runReview({
         segments: currentChunk.segments,
         translationRules,
-        sourceLanguage: detectSourceLanguage(currentChunk.segments),
-        // 설정이 '자동'이면 원문에서 푼다 (앱 검수 경로와 같은 규칙)
-        targetLanguage:
-          resolveTargetLanguage(
-            project.metadata.targetLanguage,
-            currentChunk.segments.slice(0, 3).map((s) => s.sourceText).join(' '),
-          ).language ?? undefined,
+        ...(direction.source.language ? { sourceLanguage: direction.source.language } : {}),
+        ...(direction.target.language ? { targetLanguage: direction.target.language } : {}),
         onToken: (text) => setAiResponse(text),
       });
 

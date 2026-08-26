@@ -26,11 +26,14 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { hashContent, stripHtml } from '@/utils/hash';
 import {
-  AUTO_TARGET_LANGUAGE,
-  detectSourceLanguage,
-  isSameLanguage,
+  AUTO_LANGUAGE,
+  LANGUAGE_VALUES,
+  checkDirection,
   normalizeLang,
-  resolveTargetLanguage,
+  resolveAutoDirection,
+  resolveDirection,
+  sourceSampleFromHtml,
+  type ResolvedDirection,
 } from '@/utils/detectLanguage';
 import { tipTapJsonToMarkdown, tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import {
@@ -193,14 +196,6 @@ function localizeLanguage(t: (key: string) => string, language: string): string 
   return key ? t(key) : language;
 }
 
-/**
- * 자동 판정에 쓸 원문 표본. HTML 태그가 부풀리는 몫을 감안해 넉넉히 자른 뒤 태그를 벗긴다
- * (`detectSourceLangCode`가 다시 4,000자로 자른다).
- */
-function sourceSampleFromHtml(html: string | null | undefined): string {
-  return stripHtml((html || '').slice(0, 12_000));
-}
-
 export function EditorCanvasTipTap(): JSX.Element {
   const { t } = useTranslation();
   const project = useProjectStore((s) => s.project);
@@ -210,6 +205,7 @@ export function EditorCanvasTipTap(): JSX.Element {
   const setTargetDocument = useProjectStore((s) => s.setTargetDocument);
   const setSourceDocJson = useProjectStore((s) => s.setSourceDocJson);
   const setTargetDocJson = useProjectStore((s) => s.setTargetDocJson);
+  const setSourceLanguage = useProjectStore((s) => s.setSourceLanguage);
   const setTargetLanguage = useProjectStore((s) => s.setTargetLanguage);
 
   const setComposerSelection = useChatStore((s) => s.setComposerSelection);
@@ -264,22 +260,40 @@ export function EditorCanvasTipTap(): JSX.Element {
   const [targetEditor, setTargetEditor] = useState<Editor | null>(null);
 
   /**
-   * '자동'을 골랐을 때 실제로 어느 언어로 번역되는지 — Select 라벨이 밝힌다.
-   * 저장값은 센티널로 두고 표시할 때만 푼다(자동이 사용자 선택을 덮지 않는다).
+   * 두 Select의 '자동' 항목 라벨용 — **저장값과 무관하게** "자동이면 무엇이 될지"를 보여준다.
+   * 사용자가 명시 선택을 해 둔 상태에서도 드롭다운은 자동의 결과를 밝혀야 한다.
    */
-  const autoResolvedLanguage = useMemo(
-    () => resolveTargetLanguage(AUTO_TARGET_LANGUAGE, sourceSampleFromHtml(sourceDocument)).language,
+  const autoDirection = useMemo(
+    () => resolveAutoDirection(sourceSampleFromHtml(sourceDocument)),
     [sourceDocument],
   );
 
+  /** 두 Select가 공유하는 명시 선택지. '자동' 항목만 각자 자기 쪽 해석을 라벨에 단다. */
+  const languageOptions = useCallback(
+    (autoResolved: string | null) => [
+      {
+        value: AUTO_LANGUAGE,
+        // 자동이 지금 무엇으로 풀렸는지 라벨에 드러낸다 — 깜깜이 자동은 오설정만큼 위험하다
+        label: autoResolved
+          ? t('editor.languages.autoResolved', { language: localizeLanguage(t, autoResolved) })
+          : t('editor.languages.auto'),
+      },
+      ...LANGUAGE_VALUES.map((value) => ({ value, label: localizeLanguage(t, value) })),
+    ],
+    [t],
+  );
+
   /**
-   * 실행 시점의 타겟 언어. 스토어의 HTML 캐시는 에디터 onChange 디바운스로 뒤처질 수 있어
+   * 실행 시점의 번역 방향. 스토어의 HTML 캐시는 에디터 onChange 디바운스로 뒤처질 수 있어
    * 살아있는 에디터 텍스트를 먼저 본다 — 방금 붙여넣은 원문으로 방향이 잡혀야 한다.
    */
-  const resolveTargetLanguageNow = useCallback((): string | null => {
+  const resolveDirectionNow = useCallback((): ResolvedDirection => {
     const sourceText = sourceEditorRef.current?.getText() || sourceSampleFromHtml(sourceDocument);
-    return resolveTargetLanguage(project?.metadata.targetLanguage, sourceText).language;
-  }, [project?.metadata.targetLanguage, sourceDocument]);
+    return resolveDirection(
+      { source: project?.metadata.sourceLanguage, target: project?.metadata.targetLanguage },
+      sourceText,
+    );
+  }, [project?.metadata.sourceLanguage, project?.metadata.targetLanguage, sourceDocument]);
 
   // 추가: Flash 효과 상태
   const [targetFlash, setTargetFlash] = useState(false);
@@ -1101,7 +1115,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             currentTargetText: cell.currentText,
             ...(cell.columnHeader ? { columnHeader: cell.columnHeader } : {}),
           })),
-          targetLanguage: resolveTargetLanguageNow() ?? 'Target',
+          targetLanguage: resolveDirectionNow().target.language ?? 'Target',
           ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
           ...(request.surroundings ? { surroundings: request.surroundings } : {}),
           referenceOptions: request.referenceOptions,
@@ -1145,7 +1159,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         projectId: requestProjectId,
         currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
-        targetLanguage: resolveTargetLanguageNow() ?? 'Target',
+        targetLanguage: resolveDirectionNow().target.language ?? 'Target',
         ...(request.surroundings ? { surroundings: request.surroundings } : {}),
         ...(request.columnHeader ? { columnHeader: request.columnHeader } : {}),
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
@@ -1428,19 +1442,32 @@ export function EditorCanvasTipTap(): JSX.Element {
 
     // 방향 확정: '자동'이면 원문 감지로 풀고, 못 풀면 명시 선택을 요구한다.
     const sourceText = sourceEditorRef.current.getText();
-    const resolvedTargetLanguage = resolveTargetLanguage(project.metadata.targetLanguage, sourceText).language;
-    if (!resolvedTargetLanguage) {
+    const direction = resolveDirection(
+      { source: project.metadata.sourceLanguage, target: project.metadata.targetLanguage },
+      sourceText,
+    );
+    const issue = checkDirection(direction, sourceText);
+    if (issue === 'target-undecided') {
       addToast({ type: 'warning', message: t('editor.autoTargetLanguageFailed') });
       return;
     }
-
-    // 원문과 같은 언어로 번역시키면 모델이 원문을 되받아쓴다 — 명시 선택일 때만 걸린다
-    // (자동으로 푼 값은 정의상 원문의 반대 언어라 여기 걸릴 수 없다).
-    if (isSameLanguage(detectSourceLanguage(sourceText), resolvedTargetLanguage)) {
+    if (issue === 'source-mismatch') {
+      addToast({
+        type: 'warning',
+        message: t('editor.sourceLanguageMismatch', {
+          declared: localizeLanguage(t, direction.source.language ?? ''),
+          // 감지 라벨은 **가드가 실제로 본 텍스트**에서 다시 뽑는다 —
+          // autoDirection은 디바운스된 스토어 HTML 기준이라 방금 붙여넣은 원문과 어긋날 수 있다.
+          detected: localizeLanguage(t, resolveAutoDirection(sourceText).source.language ?? ''),
+        }),
+      });
+      return;
+    }
+    if (issue === 'same-language') {
       addToast({
         type: 'warning',
         message: t('editor.targetLanguageSameAsSource', {
-          language: localizeLanguage(t, resolvedTargetLanguage),
+          language: localizeLanguage(t, direction.target.language ?? ''),
         }),
       });
       return;
@@ -1732,7 +1759,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       );
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson: polishInputDocJson,
-        targetLanguage: resolveTargetLanguageNow() ?? undefined,
+        targetLanguage: resolveDirectionNow().target.language ?? undefined,
         resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),
@@ -2287,10 +2314,19 @@ export function EditorCanvasTipTap(): JSX.Element {
               >
                 {/* 밴드 2 (34px) — 섹션 캡션. 색상 대신 위계(캡션 타이포)로 구분한다 */}
                 <div className={`${BAND_2} px-4 flex items-center justify-between border-b border-editor-hairline bg-editor-bg`}>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className={CAPTION}>
                       {t('editor.source').toUpperCase()}
                     </span>
+                    <Select
+                      value={project.metadata.sourceLanguage || AUTO_LANGUAGE}
+                      onChange={setSourceLanguage}
+                      options={languageOptions(autoDirection.source.language)}
+                      placeholder={t('editor.selectLanguage')}
+                      size="sm"
+                      className="min-w-[80px]"
+                      data-testid="source-language-select"
+                    />
                     {sourceOnlyMode ? (
                       <button
                         type="button"
@@ -2402,25 +2438,9 @@ export function EditorCanvasTipTap(): JSX.Element {
                   </button>
                 ) : null}
                 <Select
-                  value={project.metadata.targetLanguage || AUTO_TARGET_LANGUAGE}
+                  value={project.metadata.targetLanguage || AUTO_LANGUAGE}
                   onChange={setTargetLanguage}
-                  options={[
-                    {
-                      value: AUTO_TARGET_LANGUAGE,
-                      // 자동이 지금 무엇으로 풀렸는지 라벨에 드러낸다 — 깜깜이 자동은 오설정만큼 위험하다
-                      label: autoResolvedLanguage
-                        ? t('editor.languages.autoResolved', {
-                            language: localizeLanguage(t, autoResolvedLanguage),
-                          })
-                        : t('editor.languages.auto'),
-                    },
-                    { value: '한국어', label: t('editor.languages.korean') },
-                    { value: '영어', label: t('editor.languages.english') },
-                    { value: '일본어', label: t('editor.languages.japanese') },
-                    { value: '중국어', label: t('editor.languages.chinese') },
-                    { value: '스페인어', label: t('editor.languages.spanish') },
-                    { value: '러시아어', label: t('editor.languages.russian') },
-                  ]}
+                  options={languageOptions(autoDirection.target.language)}
                   placeholder={t('editor.selectLanguage')}
                   size="sm"
                   className="min-w-[80px]"

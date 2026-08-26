@@ -27,7 +27,8 @@ export interface ProjectMetadata {
   title: string;
   description?: string;
   domain: ProjectDomain;
-  targetLanguage?: string; // 타겟 언어 (선택 사항)
+  sourceLanguage?: string; // 원문 언어. 센티널 'auto'면 원문에서 판별 (ADR-0021)
+  targetLanguage?: string; // 타겟 언어. 센티널 'auto'면 원문의 반대로 판별 (ADR-0020)
   createdAt: number;
   updatedAt: number;
   author?: string;

@@ -21,7 +21,9 @@ pub struct ProjectMetadata {
     pub title: String,
     pub description: Option<String>,
     pub domain: String,
-    #[serde(rename = "targetLanguage")]
+    #[serde(rename = "sourceLanguage", default)]
+    pub source_language: Option<String>,
+    #[serde(rename = "targetLanguage", default)]
     pub target_language: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,

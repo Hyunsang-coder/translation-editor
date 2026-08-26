@@ -7,6 +7,8 @@ import type {
 } from '@/types';
 import type { ModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { useProjectStore } from '@/stores/projectStore';
+import { sourceSampleFromHtml } from '@/utils/detectLanguage';
 import { buildLangChainMessages, detectRequestType, type RequestType } from '@/ai/prompt';
 import { getSourceDocumentTool, getTargetDocumentTool, getReviewResultsTool } from '@/ai/tools/documentTools';
 import { suggestTranslationRule } from '@/ai/tools/suggestionTools';
@@ -488,9 +490,15 @@ export async function streamAssistantReply(
   const sourceDocument = undefined;
   const targetDocument = undefined;
 
+  // 문서는 인라인하지 않지만 **방향 판정 표본은 따로 넘긴다** — 이게 없으면 원문·타겟이
+  // '자동'인 프로젝트의 채팅 시스템 프롬프트가 그대로 `언어: Source → Target`이 된다.
+  // `sourceDocument`에 넣으면 안 된다: 그쪽은 프롬프트에 문서를 통째로 인라인한다.
+  const sourceSample = sourceSampleFromHtml(useProjectStore.getState().sourceDocument);
+
   const messages = await buildLangChainMessages(
     {
       project: input.project,
+      ...(sourceSample ? { sourceSample } : {}),
       contextBlocks: input.contextBlocks,
       recentMessages: input.recentMessages,
       userMessage: input.userMessage,
