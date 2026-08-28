@@ -25,17 +25,40 @@ export function findAlignedCounterpartUnits(
   primaryDoc: TranslationUnitDocument,
   selectedUnitIds: string[],
 ): TranslationUnit[] {
+  const byUnitId = findAlignedCounterpartUnitMap(counterpartDoc, primaryDoc, selectedUnitIds);
+  if (!byUnitId) return [];
+  return [...byUnitId.values()].flat();
+}
+
+/**
+ * 위와 같은 규칙으로 짝짓되, **선택 유닛 ID별로 나눠서** 돌려준다. 짝이 없다고
+ * 판정되면 `null`(fail-closed). primary 문서에 아예 없는 ID는 키가 빠진 채
+ * 돌아오므로 호출부가 유닛별로 확인해야 한다.
+ *
+ * 어느 원문이 어느 선택 유닛의 것인지 알아야 하는 호출부(범위 검수의 세그먼트
+ * 구성)를 위한 형태다. `findAlignedCounterpartUnits`는 이걸 평탄화한 것이다.
+ */
+export function findAlignedCounterpartUnitMap(
+  counterpartDoc: TranslationUnitDocument,
+  primaryDoc: TranslationUnitDocument,
+  selectedUnitIds: string[],
+): Map<string, TranslationUnit[]> | null {
   const selectedIds = new Set(selectedUnitIds);
-  if (selectedIds.size === 0) return [];
-  const counterpartUnits = collectTranslationUnits(counterpartDoc);
-  const byId = counterpartUnits.filter((unit) => unit.id && selectedIds.has(unit.id));
+  const byId = new Map<string, TranslationUnit[]>();
+  if (selectedIds.size === 0) return byId;
+
   // keepOnSplit 이력·붙여넣기로 같은 ID가 여러 유닛에 복제된 문서가 있으므로
   // 유닛 개수가 아니라 매칭된 고유 ID 수로 판정한다. 중복 유닛은 문서 순서
-  // 그대로 모두 반환한다 — 분할된 반쪽들을 합치면 원래 유닛 전체가 된다.
-  const matchedIds = new Set(byId.map((unit) => unit.id));
-  if (matchedIds.size === selectedIds.size) return byId;
+  // 그대로 모두 담는다 — 분할된 반쪽들을 합치면 원래 유닛 전체가 된다.
+  for (const unit of collectTranslationUnits(counterpartDoc)) {
+    if (!unit.id || !selectedIds.has(unit.id)) continue;
+    const bucket = byId.get(unit.id);
+    if (bucket) bucket.push(unit);
+    else byId.set(unit.id, [unit]);
+  }
+  if (byId.size === selectedIds.size) return byId;
   // 일부만 맞는 혼합 상태에서 부분 원문을 반환하면 선택의 나머지가 조용히 빠진다.
-  if (matchedIds.size > 0) return [];
+  if (byId.size > 0) return null;
 
   const { ops, degraded } = alignUnits(counterpartDoc, primaryDoc);
   // LCS 상한 초과 시 alignUnits는 시그니처 검증 없는 순번 매칭으로 내려간다.
@@ -44,19 +67,22 @@ export function findAlignedCounterpartUnits(
     degraded &&
     !ops.every((op) => op.kind === 'pair' && signature(op.source) === signature(op.target))
   ) {
-    return [];
+    return null;
   }
 
   // alignUnits(counterpartDoc, primaryDoc) 인자 순서상 op.source가 반대쪽,
   // op.target이 선택이 있는 쪽이다. 빈 유닛은 정렬 대상에서 제외돼 ops에 없다.
-  const counterparts: TranslationUnit[] = [];
+  const aligned = new Map<string, TranslationUnit[]>();
   for (const op of ops) {
     if (op.kind === 'pair') {
-      if (op.target.id && selectedIds.has(op.target.id)) counterparts.push(op.source);
+      if (!op.target.id || !selectedIds.has(op.target.id)) continue;
+      const bucket = aligned.get(op.target.id);
+      if (bucket) bucket.push(op.source);
+      else aligned.set(op.target.id, [op.source]);
     } else if (op.kind === 'target-only') {
       // 선택 유닛에 짝이 없으면 추측하지 않는다 — 부분 결과 대신 실패.
-      if (op.target.id && selectedIds.has(op.target.id)) return [];
+      if (op.target.id && selectedIds.has(op.target.id)) return null;
     }
   }
-  return counterparts;
+  return aligned;
 }

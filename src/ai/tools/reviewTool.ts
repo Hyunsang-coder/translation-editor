@@ -12,7 +12,7 @@ import {
   dropAncestorUnits,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
-import { alignUnits } from '@/utils/alignUnits';
+import { findAlignedCounterpartUnitMap } from '@/editor/utils/alignedCounterpartUnits';
 
 // ============================================
 // 세그먼트 기반 청킹 (Phase 2)
@@ -201,10 +201,15 @@ function chunkAlignedSegments(
 /**
  * 선택 구간만 검수하기 위한 청크 빌더.
  *
- * `project.segments`(죽은 모델)를 우회하고 두 에디터 문서를 직접 정렬해, 선택한
+ * `project.segments`(죽은 모델)를 우회하고 두 에디터 문서에서 직접 짝을 찾아, 선택한
  * target 유닛과 짝이 맞는 원문만 세그먼트로 만든다. 짝을 하나라도 못 찾으면 부분
  * 결과를 내놓지 않고 `null`을 돌려준다(fail-closed) — 원문이 어긋난 채 검수하면
  * 없는 오역이 무더기로 보고된다.
+ *
+ * 짝짓기는 선택 재번역과 **같은** `findAlignedCounterpartUnitMap`을 쓴다. 자체 LCS를
+ * 돌리던 종전 구현은 ID 직매칭 단계가 없어 구조가 어긋난 문서에서 거부했고, LCS 상한을
+ * 넘긴 큰 문서는 전부 1:1이어도(정렬 검사에는 불일치 0) 무조건 거부했다 — 같은 문서에서
+ * 선택 재번역만 되고 범위 검수는 안 되는 비대칭이 여기서 나왔다.
  *
  * groupId는 이 런에서만 쓰는 합성 ID다. 안전한 이유: 응답의 SegmentGroupId는
  * `reviewIssueOrder`가 **이 런의 세그먼트**로만 역인덱싱하고, 이슈 적용·하이라이트
@@ -227,37 +232,34 @@ export function buildScopedAlignedChunks(params: {
 
   // 표 셀은 tableCell과 그 안의 paragraph가 둘 다 번역 단위라 선택 시 함께 잡힌다.
   // 조상을 버리지 않으면 셀 전체 텍스트와 문단 텍스트가 중복 세그먼트로 들어간다.
-  const required = new Set(
-    dropAncestorUnits(
-      collectTranslationUnits(targetDoc).filter((unit) => unit.id && selectedIds.has(unit.id)),
-    )
-      // 빈 유닛은 정렬 대상이 아니고 검수할 내용도 없다
-      .filter((unit) => unit.text.trim().length > 0)
-      .map((unit) => unit.id as string),
-  );
-  if (required.size === 0) return null;
+  const requiredUnits = dropAncestorUnits(
+    collectTranslationUnits(targetDoc).filter((unit) => unit.id && selectedIds.has(unit.id)),
+  )
+    // 빈 유닛은 짝짓기 대상이 아니고 검수할 내용도 없다
+    .filter((unit) => unit.text.trim().length > 0);
+  if (requiredUnits.length === 0) return null;
 
-  const { ops, degraded } = alignUnits(sourceDoc, targetDoc);
-  // LCS 상한 초과 폴백은 시그니처 검증 없는 순번 매칭이다 — 믿고 원문을 짝지을 수 없다.
-  if (degraded) return null;
+  const counterparts = findAlignedCounterpartUnitMap(
+    sourceDoc,
+    targetDoc,
+    requiredUnits.map((unit) => unit.id as string),
+  );
+  if (!counterparts) return null;
 
   const segments: AlignedSegment[] = [];
-  const matched = new Set<string>();
-  for (const op of ops) {
-    if (op.kind !== 'pair') continue;
-    const targetId = op.target.id;
-    if (!targetId || !required.has(targetId)) continue;
-    matched.add(targetId);
+  for (const unit of requiredUnits) {
+    // 원문이 비어 있으면(ID는 이어져 있는데 그 유닛이 빈 문단) 검수할 대조가 없다.
+    const sourceText = (counterparts.get(unit.id as string) ?? [])
+      .map((source) => source.text)
+      .join('\n');
+    if (!sourceText.trim()) return null;
     segments.push({
       groupId: `scoped-${segments.length}`,
       order: segments.length,
-      sourceText: op.source.text,
-      targetText: op.target.text,
+      sourceText,
+      targetText: unit.text,
     });
   }
-
-  // 선택 중 하나라도 원문 대응을 못 찾으면 부분 검수를 하지 않는다.
-  if (matched.size !== required.size || segments.length === 0) return null;
 
   return chunkAlignedSegments(segments, maxCharsPerChunk);
 }

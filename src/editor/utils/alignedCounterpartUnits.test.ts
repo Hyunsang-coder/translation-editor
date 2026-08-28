@@ -4,7 +4,10 @@ import {
   ensureTranslationUnitIds,
   type TranslationUnitDocument,
 } from '@/editor/extensions/TranslationUnitId';
-import { findAlignedCounterpartUnits } from './alignedCounterpartUnits';
+import {
+  findAlignedCounterpartUnitMap,
+  findAlignedCounterpartUnits,
+} from './alignedCounterpartUnits';
 
 describe('findAlignedCounterpartUnits', () => {
   const sourceDoc = ensureTranslationUnitIds({
@@ -282,5 +285,100 @@ describe('findAlignedCounterpartUnits', () => {
     );
 
     expect(units.map((unit) => unit.text)).toEqual(['Alpha source.']);
+  });
+});
+
+describe('findAlignedCounterpartUnitMap', () => {
+  const textsOf = (map: Map<string, { text: string }[]> | null) =>
+    map === null
+      ? null
+      : Object.fromEntries(
+          [...map].map(([id, units]) => [id, units.map((unit) => unit.text)]),
+        );
+
+  it('ID 직매칭이면 선택 유닛별로 원문을 나눠 담는다', () => {
+    const sourceDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'u1' }, content: [{ type: 'text', text: 'One' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'u2' }, content: [{ type: 'text', text: 'Two' }] },
+      ],
+    };
+    const targetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'u1' }, content: [{ type: 'text', text: '하나' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'u2' }, content: [{ type: 'text', text: '둘' }] },
+      ],
+    };
+
+    expect(textsOf(findAlignedCounterpartUnitMap(sourceDoc, targetDoc, ['u2', 'u1']))).toEqual({
+      u1: ['One'],
+      u2: ['Two'],
+    });
+  });
+
+  it('LCS 경로에서도 선택 유닛별로 나눠 담는다', () => {
+    const sourceDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 's1' }, content: [{ type: 'text', text: 'One' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 's2' }, content: [{ type: 'text', text: 'Two' }] },
+      ],
+    };
+    const targetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 't1' }, content: [{ type: 'text', text: '하나' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 't2' }, content: [{ type: 'text', text: '둘' }] },
+      ],
+    };
+
+    expect(textsOf(findAlignedCounterpartUnitMap(sourceDoc, targetDoc, ['t1', 't2']))).toEqual({
+      t1: ['One'],
+      t2: ['Two'],
+    });
+  });
+
+  it('짝을 못 찾은 유닛이 있으면 null (fail-closed)', () => {
+    const sourceDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 's1' }, content: [{ type: 'text', text: 'One' }] },
+      ],
+    };
+    const targetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 't1' }, content: [{ type: 'text', text: '하나' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 't2' }, content: [{ type: 'text', text: '둘' }] },
+      ],
+    };
+
+    expect(findAlignedCounterpartUnitMap(sourceDoc, targetDoc, ['t1', 't2'])).toBeNull();
+  });
+
+  it('중복 ID는 한 키에 모아 담는다', () => {
+    const sourceDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'First half.' }] },
+        { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: 'Second half.' }] },
+      ],
+    };
+    const targetDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { translationUnitId: 'dup' }, content: [{ type: 'text', text: '번역' }] },
+      ],
+    };
+
+    expect(textsOf(findAlignedCounterpartUnitMap(sourceDoc, targetDoc, ['dup']))).toEqual({
+      dup: ['First half.', 'Second half.'],
+    });
+  });
+
+  it('빈 선택은 빈 Map', () => {
+    expect(findAlignedCounterpartUnitMap({ type: 'doc' }, { type: 'doc' }, [])?.size).toBe(0);
   });
 });

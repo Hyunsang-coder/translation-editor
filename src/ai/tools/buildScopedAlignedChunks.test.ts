@@ -181,4 +181,74 @@ describe('buildScopedAlignedChunks', () => {
     // groupId는 청크를 가로질러 유일해야 한다 (역인덱싱이 런 전체 세그먼트 기준)
     expect(chunks?.[1]?.segments[0]?.groupId).toBe('scoped-2');
   });
+
+  describe('부분 번역과 같은 짝짓기 규칙을 쓴다', () => {
+    const pid = (text: string, id: string) => p(text, id);
+
+    it('ID가 공유된 문서는 구조가 어긋나도 ID로 짝짓는다', () => {
+      // 번역가가 번역문 heading 레벨을 바꾼 문서. 시그니처(h1↔h2)가 달라 LCS는
+      // 짝을 잃지만, 전체 번역으로 ID가 이어져 있으면 대응은 확실하다.
+      const source = doc(
+        { type: 'heading', attrs: { level: 1, translationUnitId: 'u1' }, content: [{ type: 'text', text: 'Title' }] },
+        pid('Body.', 'u2'),
+      );
+      const target = doc(
+        { type: 'heading', attrs: { level: 2, translationUnitId: 'u1' }, content: [{ type: 'text', text: '제목' }] },
+        pid('본문.', 'u2'),
+      );
+
+      const chunks = buildScopedAlignedChunks({
+        sourceDocJson: source,
+        targetDocJson: target,
+        targetUnitIds: ['u1'],
+      });
+
+      expect(chunks?.[0]?.segments).toEqual([
+        { groupId: 'scoped-0', order: 0, sourceText: 'Title', targetText: '제목' },
+      ]);
+    });
+
+    it('LCS 상한을 넘어도 전체 1:1이면 순번 짝짓기를 신뢰한다', () => {
+      // 501 × 501 = 251,001 > LCS_CELL_LIMIT(250,000).
+      // 정렬 검사에는 불일치 0으로 보이는데 범위 검수만 거부하던 케이스.
+      const big = (prefix: string, count: number) =>
+        doc(...Array.from({ length: count }, (_, i) => pid(`${prefix} ${i}`, `${prefix}-${i}`)));
+
+      const chunks = buildScopedAlignedChunks({
+        sourceDocJson: big('s', 501),
+        targetDocJson: big('t', 501),
+        targetUnitIds: ['t-250'],
+      });
+
+      expect(chunks?.[0]?.segments).toEqual([
+        { groupId: 'scoped-0', order: 0, sourceText: 's 250', targetText: 't 250' },
+      ]);
+    });
+
+    it('ID는 이어져 있어도 원문 유닛이 비어 있으면 null', () => {
+      const source = doc(pid('Intro.', 'u1'), { type: 'paragraph', attrs: { translationUnitId: 'u2' } });
+      const target = doc(pid('도입.', 'u1'), pid('원문에 없는 문단.', 'u2'));
+
+      expect(
+        buildScopedAlignedChunks({
+          sourceDocJson: source,
+          targetDocJson: target,
+          targetUnitIds: ['u2'],
+        }),
+      ).toBeNull();
+    });
+
+    it('LCS 상한을 넘고 1:1도 아니면 여전히 null', () => {
+      const big = (prefix: string, count: number) =>
+        doc(...Array.from({ length: count }, (_, i) => pid(`${prefix} ${i}`, `${prefix}-${i}`)));
+
+      expect(
+        buildScopedAlignedChunks({
+          sourceDocJson: big('s', 502),
+          targetDocJson: big('t', 501),
+          targetUnitIds: ['t-250'],
+        }),
+      ).toBeNull();
+    });
+  });
 });
