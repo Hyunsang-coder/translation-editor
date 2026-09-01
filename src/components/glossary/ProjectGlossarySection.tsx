@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Plus, X } from 'lucide-react';
 import { GlossaryManagerModal } from './GlossaryManagerModal';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { useUIStore } from '@/stores/uiStore';
+import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 
 interface ProjectGlossarySectionProps {
   projectId: string;
@@ -84,16 +85,13 @@ export function ProjectGlossarySection({
 
   return (
     <>
-      <section className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-col gap-1">
-            <h3 className="text-xs font-semibold text-editor-text">
-              {t('settings.glossary')}
-            </h3>
-            <span className="text-[11px] text-editor-muted">
-              {t('settings.glossaryDescription')}
-            </span>
-          </div>
+      <CollapsibleSection
+        dense
+        persistId="glossary"
+        title={t('settings.glossary')}
+        description={t('settings.glossaryDescription')}
+        testId="settings-section-glossary"
+        action={(
           <button
             type="button"
             onClick={() => setManagerOpen(true)}
@@ -102,7 +100,8 @@ export function ProjectGlossarySection({
             <BookOpen size={12} />
             {t('glossaryManager.manage')}
           </button>
-        </div>
+        )}
+      >
 
         {error && projectGlossaries.length === 0 ? (
           <div className="rounded-md border border-severity-critical/30 bg-severity-critical/10 p-2.5 text-xs text-severity-critical-deep">
@@ -201,7 +200,7 @@ export function ProjectGlossarySection({
             </div>
           </div>
         )}
-      </section>
+      </CollapsibleSection>
 
       <GlossaryManagerModal
         open={managerOpen}

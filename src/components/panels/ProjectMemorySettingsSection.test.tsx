@@ -53,10 +53,11 @@ describe('ProjectMemorySettingsSection', () => {
     expect(screen.queryByText('memory.chatInjection')).not.toBeInTheDocument();
   });
 
-  it('설명과 컨트롤에 설정 패널의 공통 글자 크기를 사용한다', () => {
+  it('컨트롤에 설정 패널의 공통 글자 크기를 사용한다', () => {
     render(<ProjectMemorySettingsSection />);
 
-    expect(screen.getByText('memory.settingsDescription')).toHaveClass('text-[11px]');
+    // 섹션 설명은 제거됐다 — 제목만으로 충분하고, 승인 절차가 없어 문구가 사실과 달랐다.
+    expect(screen.queryByText('memory.settingsDescription')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'memory.import.open' })).toHaveClass('text-xs');
   });
 });

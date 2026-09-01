@@ -171,8 +171,8 @@ export function ProjectPicker(): JSX.Element {
   const handleNewProject = async (): Promise<void> => {
     const ok = isTauriTestingBridgeActive()
       ? true
-      : await confirm('새 프로젝트를 생성할까요?', {
-        title: 'New Project',
+      : await confirm(t('projectSidebar.newProjectConfirm'), {
+        title: t('projectSidebar.newProjectConfirmTitle'),
         kind: 'info',
       });
     if (!ok) return;
@@ -214,8 +214,8 @@ export function ProjectPicker(): JSX.Element {
   const handleDelete = async (projectId: string): Promise<void> => {
     const ok = isTauriTestingBridgeActive()
       ? true
-      : await confirm('이 프로젝트를 삭제할까요?\n(DB에서 삭제되며 복구할 수 없습니다)', {
-        title: '프로젝트 삭제',
+      : await confirm(t('projectSidebar.deleteProjectConfirm'), {
+        title: t('projectSidebar.deleteProjectConfirmTitle'),
         kind: 'warning',
       });
     if (!ok) return;

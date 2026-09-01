@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
+import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 import { useShallow } from 'zustand/shallow';
 import { MoreHorizontal } from 'lucide-react';
 import type { ProjectMemoryCategory } from '@/types';
@@ -178,23 +179,22 @@ export function ProjectMemorySettingsSection(): JSX.Element {
 
   return (
     <>
-      <section className="space-y-3" data-testid="project-memory-settings">
-        <div className="flex items-baseline gap-2">
-          <h3 className="text-xs font-semibold text-editor-text">
-            {t('memory.settingsTitle', '프로젝트 메모리')}
-          </h3>
+      <CollapsibleSection
+        dense
+        persistId="projectMemory"
+        title={t('memory.settingsTitle', '프로젝트 메모리')}
+        testId="project-memory-settings"
+        action={(
           <button
             type="button"
             data-testid="project-memory-import-open"
-            className="ml-auto text-xs text-editor-muted hover:text-primary-500"
+            className="text-xs text-editor-muted hover:text-primary-500"
             onClick={() => setImportOpen(true)}
           >
             {t('memory.import.open', '가져오기')}
           </button>
-        </div>
-        <p className="text-[11px] leading-relaxed text-editor-muted">
-          {t('memory.settingsDescription', '승인된 항목은 다음 채팅과 번역·검수·폴리싱에 사용됩니다.')}
-        </p>
+        )}
+      >
 
         <div className="space-y-1.5">
           {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
@@ -317,7 +317,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             );
           })}
         </div>
-      </section>
+      </CollapsibleSection>
 
       <ProjectMemoryImportModal open={importOpen} onClose={() => setImportOpen(false)} />
     </>

@@ -15,6 +15,8 @@ export type EditorViewMode = 'document' | 'alignment';
 
 interface UIState extends EditorUIState {
   theme: 'light' | 'dark' | 'system';
+  /** 접어 둔 설정 섹션 id 목록. 기본은 펼침이라 '접은 것'만 기록한다. */
+  collapsedSettingsSections: string[];
   language: 'ko' | 'en';
   reviewPanelOpen: boolean; // Review 탭 활성화 요청
   devTestPanelOpen: boolean; // 개발자 테스트 패널 (검수 디버그용)
@@ -104,6 +106,7 @@ interface UIActions {
 
   // Theme
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  toggleSettingsSection: (id: string) => void;
 
   // Language
   setLanguage: (language: 'ko' | 'en') => void;
@@ -212,6 +215,7 @@ export const useUIStore = create<UIStore>()(
       sidebarCollapsed: false,
       theme: 'system',
       language: 'ko',
+      collapsedSettingsSections: [],
       isPanelsSwapped: false,
       reviewPanelOpen: false,
       devTestPanelOpen: false,
@@ -321,6 +325,14 @@ export const useUIStore = create<UIStore>()(
       },
 
       // Theme
+      toggleSettingsSection: (id: string): void => {
+        set((state) => ({
+          collapsedSettingsSections: state.collapsedSettingsSections.includes(id)
+            ? state.collapsedSettingsSections.filter((v) => v !== id)
+            : [...state.collapsedSettingsSections, id],
+        }));
+      },
+
       setTheme: (theme: 'light' | 'dark' | 'system'): void => {
         set({ theme });
       },
@@ -1048,6 +1060,7 @@ export const useUIStore = create<UIStore>()(
       partialize: (state) => ({
         theme: state.theme,
         language: state.language,
+        collapsedSettingsSections: state.collapsedSettingsSections,
         focusMode: state.focusMode,
         sourceOnlyMode: state.sourceOnlyMode,
         // 사용자가 고른 보기 모드는 유지한다 (activeAlignmentUnitId는 persist 안함)

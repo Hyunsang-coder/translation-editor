@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useShallow } from 'zustand/shallow';
@@ -9,6 +8,7 @@ import { PromptPresetMenu } from '@/components/panels/PromptPresetMenu';
 import { ProjectGlossarySection } from '@/components/glossary/ProjectGlossarySection';
 import { ProjectMemorySettingsSection } from './ProjectMemorySettingsSection';
 import { ProjectForbiddenTermsSection } from './ProjectForbiddenTermsSection';
+import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 
 /**
  * Settings 탭 콘텐츠 (UnifiedSidebar에서 렌더링)
@@ -38,15 +38,12 @@ export function SettingsContent(): JSX.Element {
   return (
     <div className="h-full min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-6 bg-editor-bg">
       {/* Section 1: Translation Rules */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 group relative">
-            <h3 className="text-xs font-semibold text-editor-text">{t('settings.translationRules')}</h3>
-            <span className="cursor-help text-editor-muted"><Info size={12} /></span>
-            <div className="absolute left-0 top-full mt-2 hidden group-hover:block w-48 p-2 bg-editor-surface border border-editor-border rounded shadow-lg text-[11px] text-editor-text z-10 leading-relaxed">
-              {t('settings.translationRulesDescription')}
-            </div>
-          </div>
+      <CollapsibleSection
+        dense
+        persistId="translationRules"
+        title={t('settings.translationRules')}
+        testId="settings-section-translation-rules"
+        action={(
           <PromptPresetMenu
             key={`preset-rules-${settingsKey}`}
             kind="rules"
@@ -54,7 +51,8 @@ export function SettingsContent(): JSX.Element {
             onApply={setTranslationRules}
             onClear={() => setTranslationRules('')}
           />
-        </div>
+        )}
+      >
         <DebouncedTextarea
           key={`translation-rules-${settingsKey}`}
           data-testid="settings-translation-rules"
@@ -62,9 +60,9 @@ export function SettingsContent(): JSX.Element {
           value={translationRules}
           onDebouncedChange={setTranslationRules}
           onLiveChange={(v) => setLiveValues((prev) => ({ ...prev, rules: v }))}
-          placeholder={t('settings.translationRulesPlaceholder')}
+          placeholder={t('settings.translationRulesDescription')}
         />
-      </section>
+      </CollapsibleSection>
 
       {/* 프로젝트 컨텍스트(legacy)는 승인 기반 Project Memory로 대체됨.
           기존 값은 hydrate 시 1회 Project Memory로 migration되며, 저장 필드와

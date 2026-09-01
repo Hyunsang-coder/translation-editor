@@ -176,7 +176,9 @@ describe('GlossaryManagerModal', () => {
     );
 
     await screen.findAllByText('PUBG 공통');
-    await user.click(screen.getByRole('button', { name: 'settings.glossaryImportCsv' }));
+    // 형식은 가져오기 메뉴 안에 있다
+    await user.click(screen.getByTestId('glossary-import-menu'));
+    await user.click(screen.getByRole('menuitem', { name: 'settings.glossaryImportCsv' }));
 
     await waitFor(() => {
       expect(importGlossaryCsv).toHaveBeenCalledWith({
@@ -205,7 +207,9 @@ describe('GlossaryManagerModal', () => {
     );
 
     await screen.findAllByText('PUBG 공통');
-    await user.click(screen.getByRole('button', { name: label }));
+    // 형식은 내보내기 메뉴 안에 있다
+    await user.click(screen.getByTestId('glossary-export-menu'));
+    await user.click(screen.getByRole('menuitem', { name: label }));
 
     await waitFor(() => {
       expect(pickGlossaryExportPath).toHaveBeenCalledWith(format, 'PUBG 공통');

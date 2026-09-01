@@ -8,6 +8,7 @@
 import { BarChart3, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { invoke, isTauriRuntime } from '@/tauri/invoke';
 import { estimateCost, formatUsd } from '@/ai/pricing';
 import { CollapsibleSection } from './CollapsibleSection';
@@ -125,7 +126,12 @@ export function UsageSection(): JSX.Element | null {
   );
 
   const handleClear = useCallback(async () => {
-    if (!window.confirm(t('appSettings.usageClearConfirm'))) return;
+    // 앱의 다른 확인 창은 전부 네이티브 다이얼로그다 — WebView confirm은 버튼 순서·모양이 다르다
+    const ok = await confirm(t('appSettings.usageClearConfirm'), {
+      title: t('appSettings.usageClear'),
+      kind: 'warning',
+    });
+    if (!ok) return;
     try {
       await invoke('clear_ai_usage', {});
       await load(rangeDays);

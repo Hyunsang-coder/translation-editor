@@ -1,6 +1,7 @@
 {
   "common": {
     "clear": "Clear",
+    "done": "Done",
     "close": "Close",
     "hide": "Hide",
     "save": "Save",
@@ -69,6 +70,8 @@
     "presetDeleteConfirm": "Delete this preset?"
   },
   "glossaryManager": {
+    "importAction": "Import",
+    "exportAction": "Export",
     "title": "Glossary Manager",
     "description": "Create reusable glossaries and connect the ones each project needs.",
     "myGlossaries": "My glossaries",
@@ -109,6 +112,7 @@
     "notesPlaceholder": "Add a note (optional)",
     "caseSensitive": "Case-sensitive",
     "searchTerms": "Search source, target, or notes",
+    "notesColumn": "Notes",
     "noSearchResults": "No matching terms.",
     "emptyTerms": "No terms in this glossary yet.",
     "editTerm": "Edit term",
@@ -334,7 +338,11 @@
     "projectActions": "Project actions for {{title}}",
     "duplicateProject": "Duplicate",
     "renameProject": "Rename",
-    "deleteProject": "Delete"
+    "deleteProject": "Delete",
+    "newProjectConfirm": "Create a new project?",
+    "newProjectConfirmTitle": "New Project",
+    "deleteProjectConfirm": "Delete this project?\nIt will be removed from the database and cannot be recovered.",
+    "deleteProjectConfirmTitle": "Delete Project"
   },
   "editor": {
     "viewMode": {
@@ -387,6 +395,7 @@
     "translate": "Translate",
     "translating": "Translating...",
     "polishing": "Polishing...",
+    "polishDisabledNoTarget": "Add a translation first to run polish",
     "translateTitle": "Translate entire Source → Preview",
     "retranslateModal": {
       "title": "Retranslate",
@@ -517,6 +526,9 @@
       "bulletList": "Bullet List",
       "orderedList": "Ordered List",
       "blockquote": "Blockquote",
+    "more": "More",
+    "fontSize": "Font Size",
+    "lineHeight": "Line Height",
       "table": "Edit table rows/columns",
       "tableDisabledTitle": "Place the cursor inside a table to use this",
       "tableAddRowBefore": "Insert row above",
@@ -677,7 +689,6 @@
   },
   "memory": {
     "settingsTitle": "Project memory",
-    "settingsDescription": "Approved items are reused in new chats, translation, review, and polishing.",
     "category": {
       "domain": "Domain",
       "audience": "Audience",
@@ -856,7 +867,9 @@
       "getTargetDocument": "Analyzing Target",
       "suggestTranslationRule": "Checking Rules"
     },
-    "composerPlaceholder": "Ask anything :)",
+    "composerPlaceholder": "Ask anything",
+    "emptyTitle": "Ask anything about this translation",
+    "emptyHint": "Select text in the editor and press {{shortcut}} to bring that passage into the conversation.",
     "composerAttach": "Attach/Options",
     "composerAttachAriaLabel": "Attach/Options",
     "composerOptions": "Search Options",

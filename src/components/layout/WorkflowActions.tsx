@@ -167,13 +167,15 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
         )}
       </button>
 
-      {/* 폴리싱 */}
+      {/* 폴리싱 — 비활성 상태에 이유가 없으면 왜 안 눌리는지 알 길이 없다 */}
       <button
         type="button"
         onClick={triggerPolish}
         disabled={!hasTargetContent || polishLoading}
         className={`${SECONDARY_BUTTON_CLASS} ${polishLoading ? SECONDARY_RUNNING_CLASS : SECONDARY_IDLE_CLASS}`}
-        title={t('review.polish', '폴리싱')}
+        title={!hasTargetContent && !polishLoading
+          ? t('editor.polishDisabledNoTarget')
+          : t('review.polish', '폴리싱')}
         data-testid="editor-polish-button"
       >
         {polishLoading ? (

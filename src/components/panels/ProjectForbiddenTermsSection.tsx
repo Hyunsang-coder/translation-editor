@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
 import { useShallow } from 'zustand/shallow';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -35,18 +36,16 @@ export function ProjectForbiddenTermsSection(): JSX.Element {
   };
 
   return (
-    <section className="space-y-3" data-testid="forbidden-terms-settings">
-      <div className="space-y-1">
-        <h3 className="text-xs font-semibold text-editor-text">
-          {t('memory.forbiddenTermsTitle', '금칙어')}
-        </h3>
-        <p className="text-[11px] leading-relaxed text-editor-muted">
-          {t(
-            'memory.forbiddenTermsDescription',
-            'AI가 번역문에 쓰지 않을 표현입니다.',
-          )}
-        </p>
-      </div>
+    <CollapsibleSection
+      dense
+      persistId="forbiddenTerms"
+      title={t('memory.forbiddenTermsTitle', '금칙어')}
+      description={t(
+        'memory.forbiddenTermsDescription',
+        'AI가 번역문에 쓰지 않을 표현입니다.',
+      )}
+      testId="forbidden-terms-settings"
+    >
       <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
         <input
           data-testid="forbidden-term-input"
@@ -114,6 +113,6 @@ export function ProjectForbiddenTermsSection(): JSX.Element {
           </div>
         ))}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

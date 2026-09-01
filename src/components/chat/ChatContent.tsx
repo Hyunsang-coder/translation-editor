@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, MessageSquarePlus, X, FileText, FileChartColumn } from 'lucide-react';
+import { Paperclip, MessageSquarePlus, X, FileText, FileChartColumn, MessagesSquare } from 'lucide-react';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { useChatStore, MAX_CHAT_SESSIONS } from '@/stores/chatStore';
 import {
@@ -23,6 +23,7 @@ import { mcpClientManager, type McpConnectionStatus } from '@/ai/mcp/McpClientMa
 import { useChatDragDrop } from '@/components/chat/useChatDragDrop';
 import { useChatScroll } from '@/components/chat/useChatScroll';
 import { useChatComposerHandlers } from '@/components/chat/useChatComposerHandlers';
+import { shortcutLabel } from '@/utils/platform';
 import type {
   ChatMessageMetadata,
   ForbiddenTermProposal,
@@ -856,6 +857,21 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
             높이는 useChatScroll이 직접 조절한다(스트리밍 중 리렌더를 피하려 명령형). */}
         <div ref={bottomSpacerRef} aria-hidden="true" className="shrink-0" style={{ height: 0 }} />
         </div>
+
+        {/* 빈 상태 — 패널 전체가 흰 면으로만 남아 무엇을 할 수 있는지 알 길이 없었다.
+            messagesContentRef(ResizeObserver 대상) 밖에 절대배치해 스크롤 계산과 무관하게 둔다. */}
+        {(displaySession?.messages.length ?? 0) === 0 && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-10 text-center pointer-events-none"
+            data-testid="chat-empty-state"
+          >
+            <MessagesSquare size={26} className="text-editor-border" strokeWidth={1.4} aria-hidden="true" />
+            <p className="text-[13px] font-semibold text-editor-text">{t('chat.emptyTitle')}</p>
+            <p className="text-xs leading-relaxed text-editor-muted">
+              {t('chat.emptyHint', { shortcut: shortcutLabel('L') })}
+            </p>
+          </div>
+        )}
 
         {/* 최신 메시지로 스크롤 버튼 */}
         {showScrollToBottom && (

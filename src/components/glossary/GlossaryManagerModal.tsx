@@ -7,6 +7,7 @@ import {
   ArrowUp,
   BookOpen,
   Check,
+  ChevronDown,
   Download,
   FileSpreadsheet,
   FileText,
@@ -14,6 +15,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -48,6 +50,79 @@ const EMPTY_ENTRY: EntryDraft = {
   domain: null,
   caseSensitive: false,
 };
+
+/**
+ * 가져오기·내보내기처럼 "동작 하나 + 파일 형식 여러 개"인 컨트롤.
+ * 형식마다 버튼을 두면 툴바가 형식 수만큼 길어진다.
+ */
+/** 용어 목록 격자 — 헤더와 행이 공유한다.
+ *  원문·번역문을 1fr씩 주면 1080px 폭 양 끝으로 벌어져 짝을 눈으로 잇기 어렵다.
+ *  둘은 고정폭으로 붙여 두고, 남는 폭은 메모가 가져간다. */
+const ENTRY_GRID = 'grid grid-cols-[minmax(0,220px)_auto_minmax(0,220px)_minmax(0,1fr)_auto] items-center gap-3';
+
+function FileActionMenu({
+  label,
+  Icon,
+  items,
+  disabled,
+  footnote,
+  testId,
+}: {
+  label: string;
+  Icon: typeof Download;
+  items: ReadonlyArray<{ key: string; Icon: typeof Download; label: string; run: () => void }>;
+  disabled?: boolean;
+  footnote?: string;
+  testId?: string;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid={testId}
+        className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
+      >
+        <Icon size={11} />
+        {label}
+        <ChevronDown size={10} className="text-editor-muted" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-md border border-editor-border bg-editor-surface py-1 shadow-overlay"
+            role="menu"
+            aria-label={label}
+          >
+            {items.map(({ key, Icon: ItemIcon, label: itemLabel, run }) => (
+              <button
+                key={key}
+                type="button"
+                role="menuitem"
+                onClick={() => { setOpen(false); run(); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-editor-text hover:bg-editor-bg"
+              >
+                <ItemIcon size={12} />
+                {itemLabel}
+              </button>
+            ))}
+            {footnote && (
+              <p className="mt-1 border-t border-editor-hairline px-3 pt-1.5 text-[10px] leading-relaxed text-editor-muted">
+                {footnote}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function GlossaryManagerModal({
   open,
@@ -519,15 +594,6 @@ export function GlossaryManagerModal({
                         {selectedGlossary.description || t('glossaryManager.noDescription')}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteGlossary()}
-                      disabled={loading || saving}
-                      className="rounded p-2 text-editor-muted hover:bg-severity-critical/10 hover:text-severity-critical-deep"
-                      aria-label={t('glossaryManager.deleteGlossary')}
-                    >
-                      <Trash2 size={15} />
-                    </button>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between rounded-lg border border-editor-border bg-editor-bg px-3 py-2">
@@ -572,46 +638,29 @@ export function GlossaryManagerModal({
 
                 <div className="shrink-0 border-b border-editor-hairline px-5 py-3">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => void handleImport('csv')}
+                    {/* 4개가 같은 무게로 늘어서던 것을 동작 2개로 접었다.
+                        형식(CSV/Excel)은 선택지이지 별개 명령이 아니다. */}
+                    <FileActionMenu
+                      label={t('glossaryManager.importAction')}
+                      Icon={Upload}
                       disabled={importing || exporting || loading || saving}
-                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
-                    >
-                      <FileText size={11} />
-                      {t('settings.glossaryImportCsv')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleImport('excel')}
+                      testId="glossary-import-menu"
+                      items={[
+                        { key: 'csv', Icon: FileText, label: t('settings.glossaryImportCsv'), run: () => void handleImport('csv') },
+                        { key: 'excel', Icon: FileSpreadsheet, label: t('settings.glossaryImportExcel'), run: () => void handleImport('excel') },
+                      ]}
+                      footnote={t('settings.glossaryColumns')}
+                    />
+                    <FileActionMenu
+                      label={t('glossaryManager.exportAction')}
+                      Icon={Download}
                       disabled={importing || exporting || loading || saving}
-                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
-                    >
-                      <FileSpreadsheet size={11} />
-                      {t('settings.glossaryImportExcel')}
-                    </button>
-                    <span className="mx-0.5 h-4 w-px bg-editor-border" aria-hidden="true" />
-                    <button
-                      type="button"
-                      onClick={() => void handleExport('csv')}
-                      disabled={importing || exporting || loading || saving}
-                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
-                    >
-                      <Download size={11} />
-                      {t('glossaryManager.exportCsv')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleExport('excel')}
-                      disabled={importing || exporting || loading || saving}
-                      className="flex items-center gap-1 rounded-md border border-editor-border bg-editor-bg px-2 py-1 text-[10px] text-editor-text hover:border-primary-500 disabled:opacity-40"
-                    >
-                      <FileSpreadsheet size={11} />
-                      {t('glossaryManager.exportExcel')}
-                    </button>
-                    <span className="text-[10px] text-editor-muted">
-                      {t('settings.glossaryColumns')}
-                    </span>
+                      testId="glossary-export-menu"
+                      items={[
+                        { key: 'csv', Icon: FileText, label: t('glossaryManager.exportCsv'), run: () => void handleExport('csv') },
+                        { key: 'excel', Icon: FileSpreadsheet, label: t('glossaryManager.exportExcel'), run: () => void handleExport('excel') },
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -705,7 +754,17 @@ export function GlossaryManagerModal({
                     </div>
                   )}
 
-                  <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-editor-border">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-editor-border">
+                    {!entriesLoading && visibleEntries.length > 0 && (
+                      <div className={`${ENTRY_GRID} shrink-0 border-b border-editor-hairline bg-editor-raised px-3 py-1.5`}>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-editor-muted">{t('glossaryManager.source')}</span>
+                        <span aria-hidden="true" className="w-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-editor-muted">{t('glossaryManager.target')}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-editor-muted">{t('glossaryManager.notesColumn')}</span>
+                        <span aria-hidden="true" className="w-[58px]" />
+                      </div>
+                    )}
+                    <div className="min-h-0 flex-1 overflow-y-auto">
                     {entriesLoading ? (
                       <p className="p-6 text-center text-xs text-editor-muted">
                         {t('common.loading')}
@@ -719,7 +778,7 @@ export function GlossaryManagerModal({
                     ) : visibleEntries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="group grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-editor-hairline px-3 py-2.5 last:border-b-0 hover:bg-editor-bg"
+                        className={`group ${ENTRY_GRID} border-b border-editor-hairline px-3 py-2.5 last:border-b-0 hover:bg-editor-bg`}
                       >
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium text-editor-text">{entry.source}</p>
@@ -732,10 +791,10 @@ export function GlossaryManagerModal({
                         <ArrowRight size={14} className="text-primary-500/70" />
                         <div className="min-w-0">
                           <p className="truncate text-xs text-editor-text">{entry.target}</p>
-                          {entry.notes && (
-                            <p className="truncate text-[10px] text-editor-muted">{entry.notes}</p>
-                          )}
                         </div>
+                        <p className="min-w-0 truncate text-[11px] text-editor-muted" title={entry.notes || undefined}>
+                          {entry.notes}
+                        </p>
                         <div className="flex opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                           <button
                             type="button"
@@ -758,12 +817,39 @@ export function GlossaryManagerModal({
                         </div>
                       </div>
                     ))}
+                    </div>
                   </div>
                 </div>
               </>
             )}
           </main>
         </div>
+
+        {/* 푸터 — 이전에는 우상단 X가 유일한 닫기였다.
+            파괴적 액션은 라벨을 달아 확인 버튼 반대쪽 끝에 둔다. */}
+        <footer className="flex h-12 shrink-0 items-center gap-2 border-t border-editor-hairline bg-editor-bg px-5">
+          {selectedGlossary && (
+            <button
+              type="button"
+              onClick={() => void handleDeleteGlossary()}
+              disabled={loading || saving}
+              className="flex items-center gap-1.5 rounded-md border border-severity-critical/30 px-2.5 py-1.5 text-xs font-semibold text-severity-critical-deep hover:bg-severity-critical/10 disabled:opacity-40"
+              data-testid="glossary-delete-glossary"
+            >
+              <Trash2 size={13} />
+              {t('glossaryManager.deleteGlossary')}
+            </button>
+          )}
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-primary-fill px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-fill-hover active:scale-95 transition-colors"
+            data-testid="glossary-done"
+          >
+            {t('common.done')}
+          </button>
+        </footer>
       </div>
     </Modal>
   );

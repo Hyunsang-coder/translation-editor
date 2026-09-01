@@ -1,6 +1,7 @@
 {
   "common": {
     "clear": "지우기",
+    "done": "완료",
     "close": "닫기",
     "hide": "숨기기",
     "save": "저장",
@@ -69,6 +70,8 @@
     "presetDeleteConfirm": "이 프리셋을 삭제할까요?"
   },
   "glossaryManager": {
+    "importAction": "가져오기",
+    "exportAction": "내보내기",
     "title": "용어집 관리",
     "description": "용어집을 만들고 프로젝트마다 필요한 항목을 연결합니다.",
     "myGlossaries": "내 용어집",
@@ -107,6 +110,7 @@
     "notesPlaceholder": "메모 추가 (선택)",
     "caseSensitive": "대소문자 구분",
     "searchTerms": "원문, 번역문 또는 메모 검색",
+    "notesColumn": "메모",
     "noSearchResults": "검색 결과가 없습니다.",
     "emptyTerms": "아직 등록된 용어가 없습니다.",
     "editTerm": "용어 편집",
@@ -332,7 +336,11 @@
     "projectActions": "{{title}} 프로젝트 작업",
     "duplicateProject": "복사",
     "renameProject": "이름 변경",
-    "deleteProject": "삭제"
+    "deleteProject": "삭제",
+    "newProjectConfirm": "새 프로젝트를 생성할까요?",
+    "newProjectConfirmTitle": "새 프로젝트",
+    "deleteProjectConfirm": "이 프로젝트를 삭제할까요?\n(DB에서 삭제되며 복구할 수 없습니다)",
+    "deleteProjectConfirmTitle": "프로젝트 삭제"
   },
   "editor": {
     "viewMode": {
@@ -372,6 +380,7 @@
     "translate": "번역",
     "translating": "번역 중…",
     "polishing": "폴리싱 중…",
+    "polishDisabledNoTarget": "번역문이 있어야 실행할 수 있습니다",
     "translateTitle": "원문 전체 번역 → 미리보기",
     "retranslateModal": {
       "title": "재번역",
@@ -498,6 +507,9 @@
       "bulletList": "불릿 리스트",
       "orderedList": "번호 리스트",
       "blockquote": "인용 블록",
+    "more": "더 보기",
+    "fontSize": "글자 크기",
+    "lineHeight": "줄 간격",
       "table": "표 행/열 편집",
       "tableDisabledTitle": "표 안에 커서를 두면 사용할 수 있습니다",
       "tableAddRowBefore": "위에 행 추가",
@@ -657,7 +669,6 @@
   },
   "memory": {
     "settingsTitle": "프로젝트 메모리",
-    "settingsDescription": "승인된 항목은 새 채팅과 번역·검수·폴리싱에 사용됩니다.",
     "category": {
       "domain": "도메인",
       "audience": "대상 독자",
@@ -835,7 +846,9 @@
       "getTargetDocument": "번역문 분석",
       "suggestTranslationRule": "번역 규칙 확인"
     },
-    "composerPlaceholder": "무엇이든 물어보세요 :)",
+    "composerPlaceholder": "무엇이든 물어보세요",
+    "emptyTitle": "번역에 대해 무엇이든 물어보세요",
+    "emptyHint": "에디터에서 문장을 선택하고 {{shortcut}} 을 누르면 그 구간을 대화로 가져옵니다.",
     "composerAttach": "첨부/옵션",
     "composerAttachAriaLabel": "첨부/옵션",
     "composerOptions": "검색 옵션",

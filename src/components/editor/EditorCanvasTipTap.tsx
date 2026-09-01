@@ -2266,7 +2266,9 @@ export function EditorCanvasTipTap(): JSX.Element {
               aria-pressed={editorViewMode === mode}
               className={`h-[26px] px-3 text-xs active:scale-95 transition-colors ${
                 editorViewMode === mode
-                  ? 'bg-primary-fill text-white font-semibold'
+                  // 채움 파랑은 주 액션(번역 버튼) 하나만 갖는다. 선택 표시는 Toolbar의
+                  // 활성 채팅 버튼과 같은 틴트 패턴으로 낮춘다.
+                  ? 'bg-primary-500/10 text-accent-deep font-semibold'
                   : 'font-semibold text-editor-muted hover:bg-editor-border'
               }`}
               data-testid={`editor-view-mode-${mode}`}
