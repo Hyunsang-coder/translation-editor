@@ -13,6 +13,7 @@ import { HistoryDrawer } from '@/components/history/HistoryDrawer';
 import { ExportModal } from '@/components/export/ExportModal';
 import { AppSettingsModal, type AppSettingsSection } from '@/components/settings/AppSettingsModal';
 import { FOCUS_RING, PRESS, TOOLBAR_LEFT_WIDTH, TOOLBAR_RIGHT_WIDTH } from '@/constants/styles';
+import { useTrafficLightInset } from '@/hooks/useTrafficLightInset';
 
 /** 우측 도구 버튼 — 34px 정사각 아이콘 버튼 (라벨은 title/aria-label로 제공) */
 const TOOL_BUTTON_CLASS =
@@ -35,6 +36,8 @@ export function Toolbar(): JSX.Element {
     })));
   const project = useProjectStore((s) => s.project);
   const commentCount = useCommentStore((s) => s.comments.length);
+  // 타이틀바를 툴바에 통합했다(titleBarStyle: Overlay) — 신호등이 이 안으로 들어온다.
+  const trafficLightInset = useTrafficLightInset();
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   // 앱 설정 모달: 열림 여부와 "열자마자 어느 섹션을 보여줄지"를 한 상태로 든다.
@@ -95,20 +98,27 @@ export function Toolbar(): JSX.Element {
   }, []);
 
   return (
-    <header className="h-[52px] border-b border-editor-hairline bg-editor-surface flex items-center shrink-0">
+    <header
+      data-tauri-drag-region
+      className="h-[52px] border-b border-editor-hairline bg-editor-surface flex items-center shrink-0"
+    >
       {/* 툴바 3분할 (296 / flex / 308) — 좌·우 슬롯 폭이 아래 컬럼 경계와 정렬된다 */}
       {/* 좌측 슬롯: 프로젝트 선택 (드롭다운) — 아래 영역이 이 프로젝트 소속임을 나타낸다 */}
-      <div className="flex-none flex items-center min-w-0 px-2 box-border" style={{ width: TOOLBAR_LEFT_WIDTH }}>
+      <div
+        data-tauri-drag-region
+        className="flex-none flex items-center min-w-0 px-2 box-border"
+        style={{ width: TOOLBAR_LEFT_WIDTH, paddingLeft: trafficLightInset || undefined }}
+      >
         <ProjectPicker />
       </div>
 
       {/* 중앙 슬롯: AI 워크플로 (번역 → 검수 → 폴리싱) + 모델. 프로젝트가 있을 때만 */}
-      <div className="flex-1 min-w-0 flex items-center justify-center">
+      <div data-tauri-drag-region className="flex-1 min-w-0 flex items-center justify-center">
         {project && <WorkflowActions onOpenModelSettings={() => setAppSettings({ focus: 'modelOverrides' })} />}
       </div>
 
       {/* 우측 슬롯: 줌 인디케이터 + 도구 (드롭다운 없이 1클릭 접근) */}
-      <div className="flex-none flex items-center gap-1 justify-end pr-2.5 box-border" style={{ minWidth: TOOLBAR_RIGHT_WIDTH }}>
+      <div data-tauri-drag-region className="flex-none flex items-center gap-1 justify-end pr-2.5 box-border" style={{ minWidth: TOOLBAR_RIGHT_WIDTH }}>
         {/* 배율 인디케이터 — 100%가 아니면 계속 보인다(되돌릴 방법이 항상 있어야 한다).
             100%일 때는 방금 조작했을 때만 잠깐 보여주고 사라진다. */}
         {(zoomVisible || zoomPercent !== 100) && (

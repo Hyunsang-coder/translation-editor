@@ -42,6 +42,7 @@ function App(): JSX.Element {
     useShallow((s) => ({ startAutoSnapshotWatch: s.startAutoSnapshotWatch, stopAutoSnapshotWatch: s.stopAutoSnapshotWatch, loadHistory: s.loadHistory }))
   );
   const projectId = useProjectStore((s) => s.project?.id ?? null);
+  const projectTitle = useProjectStore((s) => s.project?.metadata.title ?? null);
 
   // 자동 업데이트
   const {
@@ -270,6 +271,16 @@ function App(): JSX.Element {
   useEffect(() => {
     void loadHistory(projectId ?? '');
   }, [projectId, loadHistory]);
+
+  // 창 제목 = 현재 문서. 타이틀바를 숨겨(hiddenTitle) 화면에는 안 보이지만
+  // Mission Control·⌘` 전환·Window 메뉴에서는 이 제목으로 창을 구분한다.
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const name = projectTitle?.trim();
+    void getCurrentWindow()
+      .setTitle(name ? `${name} — OddEyes.ai` : 'OddEyes.ai')
+      .catch((error) => console.warn('[App] Failed to set window title:', error));
+  }, [projectTitle]);
 
   // Safe Exit: 저장되지 않은 변경사항이 있으면 저장하고 종료
   useEffect(() => {
