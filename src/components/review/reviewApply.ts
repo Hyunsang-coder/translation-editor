@@ -356,6 +356,35 @@ export interface ResolvedSuggestionRange {
 }
 
 /**
+ * 발췌문이 들어 있는 유닛의 ID를 문서 JSON에서 특정한다.
+ * 서로 다른 유닛 여럿에 걸리면 위치를 특정할 수 없으므로 null (fail-closed).
+ */
+export function findUnitIdContainingExcerpt(
+  docJson: TranslationUnitDocument | null | undefined,
+  excerpt: string | undefined,
+): string | null {
+  if (!docJson || !excerpt?.trim()) return null;
+
+  // excerpt 탐색과 같은 정규화·따옴표 관용
+  const candidates = [normalizeForSearch(excerpt)];
+  const stripped = normalizeForSearch(stripWrappingQuotes(excerpt));
+  if (stripped.length > 0 && stripped !== candidates[0]) candidates.push(stripped);
+
+  const units = collectTranslationUnits(docJson);
+  for (const candidate of candidates) {
+    if (candidate.length === 0) continue;
+    // 표 셀은 셀과 안쪽 문단이 둘 다 잡히므로 가장 안쪽 유닛만 남긴다.
+    const matches = dropAncestorUnits(units.filter(
+      (unit) => unit.id && normalizeForSearch(unit.text).includes(candidate),
+    ));
+    // 서로 다른 유닛 여럿에 있으면 위치 특정 불가. 같은 ID의 복제 유닛은 하나로 본다.
+    const ids = new Set(matches.map((unit) => unit.id));
+    if (ids.size === 1) return matches[0]!.id ?? null;
+  }
+  return null;
+}
+
+/**
  * sourceExcerpt로 Source 유닛을 특정하고, 유닛 정렬(translationUnitId 직접 매칭
  * 또는 legacy LCS 정렬)로 대응하는 Target 유닛의 문서 범위를 구한다.
  *
@@ -371,26 +400,8 @@ export function resolveAlignedUnitRange(
 ): { from: number; to: number } | null {
   if (!sourceDocJson || !sourceExcerpt?.trim()) return null;
 
-  // 1) sourceExcerpt가 든 Source 유닛 특정 (excerpt 탐색과 같은 정규화·따옴표 관용)
-  const candidates = [normalizeForSearch(sourceExcerpt)];
-  const stripped = normalizeForSearch(stripWrappingQuotes(sourceExcerpt));
-  if (stripped.length > 0 && stripped !== candidates[0]) candidates.push(stripped);
-
-  const sourceUnits = collectTranslationUnits(sourceDocJson);
-  let matchedId: string | undefined;
-  for (const candidate of candidates) {
-    if (candidate.length === 0) continue;
-    // 표 셀은 셀과 안쪽 문단이 둘 다 잡히므로 가장 안쪽 유닛만 남긴다.
-    const matches = dropAncestorUnits(sourceUnits.filter(
-      (unit) => unit.id && normalizeForSearch(unit.text).includes(candidate),
-    ));
-    // 서로 다른 유닛 여럿에 있으면 위치 특정 불가. 같은 ID의 복제 유닛은 하나로 본다.
-    const ids = new Set(matches.map((unit) => unit.id));
-    if (ids.size === 1) {
-      matchedId = matches[0]!.id;
-      break;
-    }
-  }
+  // 1) sourceExcerpt가 든 Source 유닛 특정
+  const matchedId = findUnitIdContainingExcerpt(sourceDocJson, sourceExcerpt);
   if (!matchedId) return null;
 
   // 2) Source 유닛 → Target 유닛 (selectionTools처럼 인자 방향을 뒤집으면 역방향)

@@ -9,12 +9,13 @@ import { useUIStore } from '@/stores/uiStore';
 import { alignUnits, type AlignOp } from '@/utils/alignUnits';
 import { languageShortCode, resolveDirection } from '@/utils/detectLanguage';
 import { AlignmentRow } from '@/components/editor/AlignmentRow';
+import { navigateToReviewIssue } from '@/components/review/navigateToReviewIssue';
 import {
+  mergeUnitAnnotations,
   useAlignmentAnnotations,
   type UnitAnnotations,
 } from '@/components/editor/useAlignmentAnnotations';
 import type { TranslationUnit, TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
-import type { IssueSeverity } from '@/stores/reviewStore';
 import { CAPTION } from '@/constants/styles';
 
 interface NumberedOp {
@@ -79,14 +80,6 @@ function jumpToUnit(unitId: string, field: 'source' | 'target'): void {
   requestAnimationFrame(() => {
     editor.chain().focus().setTextSelection(pos!).run();
   });
-}
-
-const SEVERITY_RANK: Record<IssueSeverity, number> = { critical: 3, major: 2, minor: 1 };
-
-function pickTopSeverity(a: IssueSeverity | null, b: IssueSeverity | null): IssueSeverity | null {
-  if (!a) return b;
-  if (!b) return a;
-  return SEVERITY_RANK[a]! >= SEVERITY_RANK[b]! ? a : b;
 }
 
 /** 구간의 첫 유닛 — 배너의 "문서 보기로 열기"가 향할 곳. */
@@ -192,25 +185,19 @@ export function AlignmentView(): JSX.Element {
 
   const annotations = useAlignmentAnnotations(alignResult.ops);
 
+  /** 배지 클릭 → 문서 보기로 전환하고 검수 패널을 열어 그 이슈 위치로 이동한다 */
+  const handleNavigateIssue = (issueId: string): void => {
+    navigateToReviewIssue(issueId, 'alignment-row');
+  };
+
   /** 한 행의 배지 — 원문 쪽 코멘트와 번역문 쪽 이슈·코멘트를 합친다 */
-  const annotationsFor = (op: AlignOp): UnitAnnotations | null => {
-    const ids = [
+  const annotationsFor = (op: AlignOp): UnitAnnotations | null => mergeUnitAnnotations(
+    annotations.byUnitId,
+    [
       op.kind === 'target-only' ? null : op.source.id,
       op.kind === 'source-only' ? null : op.target.id,
-    ].filter((id): id is string => Boolean(id));
-
-    const entries = ids
-      .map((id) => annotations.byUnitId.get(id))
-      .filter((entry): entry is UnitAnnotations => entry !== undefined);
-    if (entries.length === 0) return null;
-    if (entries.length === 1) return entries[0]!;
-
-    return entries.reduce((merged, entry) => ({
-      issueCount: merged.issueCount + entry.issueCount,
-      commentCount: merged.commentCount + entry.commentCount,
-      topSeverity: pickTopSeverity(merged.topSeverity, entry.topSeverity),
-    }));
-  };
+    ],
+  );
 
   const pairedPercent = alignResult.totalUnits === 0
     ? 100
@@ -282,6 +269,7 @@ export function AlignmentView(): JSX.Element {
                   onSelect={() => setActiveAlignmentUnitId(unitId)}
                   onEdit={unitId === null ? null : () => jumpToUnit(unitId, 'target')}
                   annotations={annotationsFor(block.op)}
+                  onNavigateIssue={handleNavigateIssue}
                 />
               );
             }
@@ -324,6 +312,7 @@ export function AlignmentView(): JSX.Element {
                     onSelect={null}
                     onEdit={null}
                     annotations={annotationsFor(op)}
+                    onNavigateIssue={handleNavigateIssue}
                   />
                 ))}
               </div>

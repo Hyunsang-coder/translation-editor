@@ -27,7 +27,6 @@ function renderTable(issue: ReviewIssue, onIgnore = () => undefined): void {
       onApply={() => undefined}
       onCopy={() => undefined}
       onIgnore={onIgnore}
-      onViewInDocument={() => undefined}
     />,
   );
 }
@@ -52,18 +51,6 @@ describe('ReviewResultsTable 적용 버튼 노출', () => {
   it('수정 제안이 없으면 적용 버튼이 없다', () => {
     renderTable(makeIssue({ suggestedFix: '' }));
     expect(screen.queryByTitle('적용')).toBeNull();
-  });
-});
-
-describe('ReviewResultsTable 본문에서 보기', () => {
-  it('targetExcerpt가 있으면 본문에서 보기가 보인다', () => {
-    renderTable(makeIssue({}));
-    expect(screen.getByTitle('본문에서 보기')).toBeTruthy();
-  });
-
-  it('targetExcerpt가 없으면 탐색 앵커가 없어 숨긴다', () => {
-    renderTable(makeIssue({ targetExcerpt: '' }));
-    expect(screen.queryByTitle('본문에서 보기')).toBeNull();
   });
 });
 
@@ -168,5 +155,145 @@ describe('ReviewResultsTable 문서 순서', () => {
       expect.stringContaining('첫 번째 이슈'),
       expect.stringContaining('두 번째 이슈'),
     ]);
+  });
+});
+
+describe('ReviewResultsTable 이슈 위치 이동', () => {
+  function renderNavigable(overrides: {
+    onNavigate?: (issueId: string) => void;
+    issues?: ReviewIssue[];
+    severityFilter?: ReviewIssue['severity'][];
+  } = {}) {
+    return render(
+      <ReviewResultsTable
+        issues={overrides.issues ?? [makeIssue({})]}
+        onApply={() => undefined}
+        onCopy={() => undefined}
+        onIgnore={() => undefined}
+        onToggleCheck={() => undefined}
+        onNavigate={overrides.onNavigate ?? (() => undefined)}
+        {...(overrides.severityFilter ? { severityFilter: overrides.severityFilter } : {})}
+      />,
+    );
+  }
+
+  it('카드에 data-issue-id가 있다', () => {
+    renderNavigable();
+
+    expect(screen.getByTestId('review-issue-card').getAttribute('data-issue-id'))
+      .toBe('issue-1');
+  });
+
+  it('카드를 클릭하면 해당 이슈 ID로 이동을 요청한다', () => {
+    const onNavigate = vi.fn();
+    renderNavigable({ onNavigate });
+
+    fireEvent.click(screen.getByTestId('review-issue-card'));
+
+    expect(onNavigate).toHaveBeenCalledWith('issue-1');
+  });
+
+  it('키보드 Enter/Space도 같은 이동을 실행한다', () => {
+    const onNavigate = vi.fn();
+    renderNavigable({ onNavigate });
+    const card = screen.getByTestId('review-issue-card');
+
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+
+    expect(onNavigate).toHaveBeenCalledTimes(2);
+  });
+
+  it('카드 안 구절을 드래그 선택하는 중에는 이동하지 않는다', () => {
+    const onNavigate = vi.fn();
+    renderNavigable({ onNavigate });
+    const card = screen.getByTestId('review-issue-card');
+
+    const range = document.createRange();
+    range.selectNodeContents(card);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    fireEvent.click(card);
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    selection.removeAllRanges();
+  });
+
+  it('적용·복사·무시·체크박스 조작은 카드 이동을 함께 실행하지 않는다', () => {
+    const onNavigate = vi.fn();
+    renderNavigable({ onNavigate });
+
+    fireEvent.click(screen.getByTitle('적용'));
+    fireEvent.click(screen.getByTitle('복사'));
+    fireEvent.click(screen.getByTitle('무시'));
+    fireEvent.click(screen.getByLabelText('이슈 선택'));
+
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReviewResultsTable 카드 목록 이동 요청', () => {
+  function stubRect(el: Element, top: number): void {
+    el.getBoundingClientRect = (): DOMRect => ({ top } as DOMRect);
+  }
+
+  function renderWithPending(issues: ReviewIssue[], onHandled: (id: number) => void) {
+    return render(
+      <ReviewResultsTable
+        issues={issues}
+        onNavigate={() => undefined}
+        pendingScrollIssue={null}
+        onPendingScrollHandled={onHandled}
+      />,
+    );
+  }
+
+  it('목록 컨테이너만 스크롤해 대상 카드를 보이게 하고 요청을 소비한다', () => {
+    const onHandled = vi.fn();
+    const { container, rerender } = renderWithPending([makeIssue({})], onHandled);
+
+    const list = container.querySelector('.overflow-y-auto') as HTMLElement;
+    const card = screen.getByTestId('review-issue-card');
+    const header = container.querySelector('[data-review-list-header]') as HTMLElement;
+    stubRect(list, 100);
+    stubRect(card, 500);
+    // sticky "전체 선택" 헤더가 목록 최상단을 가리므로 그 높이만큼 더 내려야 한다
+    Object.defineProperty(header, 'offsetHeight', { value: 34, configurable: true });
+    Object.defineProperty(list, 'scrollHeight', { value: 4000, configurable: true });
+    Object.defineProperty(list, 'clientHeight', { value: 400, configurable: true });
+    const scrollTo = vi.fn();
+    list.scrollTo = scrollTo;
+
+    rerender(
+      <ReviewResultsTable
+        issues={[makeIssue({})]}
+        onNavigate={() => undefined}
+        pendingScrollIssue={{ issueId: 'issue-1', requestId: 7 }}
+        onPendingScrollHandled={onHandled}
+      />,
+    );
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 500 - 100 - (34 + 8), behavior: 'smooth' });
+    expect(onHandled).toHaveBeenCalledWith(7);
+  });
+
+  it('필터로 숨겨진 카드는 이동하지 않지만 요청은 소비한다 (stale 방지)', () => {
+    const onHandled = vi.fn();
+    const hidden = makeIssue({ id: 'issue-hidden', severity: 'minor' });
+
+    render(
+      <ReviewResultsTable
+        issues={[makeIssue({}), hidden]}
+        severityFilter={['major']}
+        onNavigate={() => undefined}
+        pendingScrollIssue={{ issueId: 'issue-hidden', requestId: 9 }}
+        onPendingScrollHandled={onHandled}
+      />,
+    );
+
+    expect(screen.queryByText(/issue-hidden/)).toBeNull();
+    expect(onHandled).toHaveBeenCalledWith(9);
   });
 });

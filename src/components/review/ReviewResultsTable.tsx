@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReviewIssue, IssueType, IssueSeverity } from '@/stores/reviewStore';
+import { useUIStore } from '@/stores/uiStore';
+import { scrollContainerToElement } from '@/editor/utils/reviewIssueNavigation';
 import { stripRichTextMarkup } from '@/utils/normalizeForSearch';
 import { sortReviewIssuesByDocumentOrder } from './reviewIssueOrder';
 import { getIssueTypeColor, getSeverityColor, getSeverityChipColor } from './issueStyles';
@@ -12,8 +14,11 @@ interface ReviewResultsTableProps {
   onIgnore?: (issueId: string) => void;
   onCopy?: (issue: ReviewIssue) => void;
   onApply?: (issue: ReviewIssue) => void;
-  /** 이슈가 가리키는 번역문 구절을 에디터에서 선택·포커스한다 */
-  onViewInDocument?: (issue: ReviewIssue) => void;
+  /** 카드 클릭 → 원문·번역문 패널을 그 이슈 위치로 이동 */
+  onNavigate?: (issueId: string) => void;
+  /** 목록 안에서 해당 카드가 보이도록 이동해 달라는 일회성 요청 */
+  pendingScrollIssue?: { issueId: string; requestId: number } | null;
+  onPendingScrollHandled?: (requestId: number) => void;
   allChecked?: boolean;
   totalIssuesFound?: number;  // 검수 완료 시점의 총 이슈 수
   severityFilter?: IssueSeverity[];
@@ -29,6 +34,9 @@ const issueTypeLabelKeys: Record<IssueType, string> = {
   terminology: 'review.typeTerminology',
 };
 
+/** 이동한 카드와 sticky 헤더 사이에 두는 여백 */
+const CARD_TOP_GAP_PX = 8;
+
 const severityLabelKeys: Record<IssueSeverity, string> = {
   critical: 'review.severityCritical',
   major: 'review.severityMajor',
@@ -42,13 +50,41 @@ export function ReviewResultsTable({
   onIgnore,
   onCopy,
   onApply,
-  onViewInDocument,
+  onNavigate,
+  pendingScrollIssue,
+  onPendingScrollHandled,
   allChecked = false,
   totalIssuesFound = 0,
   severityFilter,
   onToggleSeverity,
 }: ReviewResultsTableProps): JSX.Element {
   const { t } = useTranslation();
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * 카드 이동 요청 소비. 스크롤 대상은 **카드 목록 컨테이너**다 —
+   * `scrollIntoView()`에 맡기면 바깥 패널까지 함께 움직인다.
+   * 필터로 숨겨졌거나 이미 사라진 카드는 이동만 건너뛰고 요청은 소비한다(stale 방지).
+   */
+  useEffect(() => {
+    if (!pendingScrollIssue) return;
+    const list = listRef.current;
+    const card = list
+      ? Array.from(list.querySelectorAll<HTMLElement>('[data-issue-id]'))
+        .find((el) => el.getAttribute('data-issue-id') === pendingScrollIssue.issueId)
+      : undefined;
+    if (list && card) {
+      // "전체 선택" 헤더가 sticky라 목록 최상단은 헤더에 가린다 — 그 높이만큼 더 띄운다
+      const header = list.querySelector<HTMLElement>('[data-review-list-header]');
+      scrollContainerToElement(
+        list,
+        card,
+        useUIStore.getState().editorZoom,
+        (header?.offsetHeight ?? 0) + CARD_TOP_GAP_PX,
+      );
+    }
+    onPendingScrollHandled?.(pendingScrollIssue.requestId);
+  }, [pendingScrollIssue, onPendingScrollHandled]);
 
   // 전체 이슈에서 심각도별 카운트 (필터링 전)
   const severityCounts = useMemo(
@@ -197,8 +233,11 @@ export function ReviewResultsTable({
       </div>
 
       {/* 이슈 카드 리스트 — 250px 사이드바에서 3열 table-fixed가 뭉개지던 것을 대체 */}
-      <div className="flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
-        <label className="sticky top-0 z-10 flex items-center gap-2 px-3.5 py-2 bg-editor-surface border-b border-editor-hairline text-[11px] text-editor-muted cursor-pointer">
+      <div ref={listRef} className="flex-1 overflow-y-auto border border-editor-border rounded-md min-h-0">
+        <label
+          data-review-list-header
+          className="sticky top-0 z-10 flex items-center gap-2 px-3.5 py-2 bg-editor-surface border-b border-editor-hairline text-[11px] text-editor-muted cursor-pointer"
+        >
           <input
             type="checkbox"
             checked={allChecked}
@@ -213,11 +252,39 @@ export function ReviewResultsTable({
           <div
             key={issue.id}
             data-testid="review-issue-card"
+            data-issue-id={issue.id}
+            {...(onNavigate
+              ? {
+                role: 'button',
+                tabIndex: 0,
+                'aria-label': t('review.navigateIssue', '이 이슈 위치로 이동'),
+                // 카드 안의 조작(체크박스·적용·복사·무시)은 그 자체 동작만 한다
+                onClick: (e: React.MouseEvent<HTMLDivElement>) => {
+                  if ((e.target as HTMLElement).closest('button, input, a, label')) return;
+                  // 카드 안 구절을 드래그해 복사하는 중이면 이동하지 않는다 —
+                  // mouseup에서도 click이 뜨고, 이동은 포커스를 옮겨 선택을 지운다.
+                  const selection = window.getSelection();
+                  if (
+                    selection
+                    && !selection.isCollapsed
+                    && e.currentTarget.contains(selection.anchorNode)
+                  ) return;
+                  onNavigate(issue.id);
+                },
+                onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  onNavigate(issue.id);
+                },
+              }
+              : {})}
             className={`
               p-3.5 border-b border-editor-hairline border-l-[3px] transition-colors
               ${issue.checked
                 ? 'bg-accent-tint border-l-primary-500'
                 : 'border-l-transparent hover:bg-editor-bg/50'}
+              ${onNavigate ? 'cursor-pointer' : ''}
             `}
           >
             <div className="flex items-center gap-2">
@@ -266,16 +333,6 @@ export function ReviewResultsTable({
                   title={t('review.apply', '적용')}
                 >
                   {t('review.apply', '적용')}
-                </button>
-              )}
-              {issue.targetExcerpt && onViewInDocument && (
-                <button
-                  type="button"
-                  onClick={() => onViewInDocument(issue)}
-                  className="h-[30px] px-2.5 text-xs rounded bg-editor-surface text-editor-text hover:bg-editor-border active:scale-95 transition-colors"
-                  title={t('review.viewInDocument', '본문에서 보기')}
-                >
-                  {t('review.viewInDocument', '본문에서 보기')}
                 </button>
               )}
               {issue.suggestedFix && onCopy && (

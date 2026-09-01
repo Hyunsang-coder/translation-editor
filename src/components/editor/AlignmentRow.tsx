@@ -28,6 +28,12 @@ interface AlignmentRowProps {
   onEdit: (() => void) | null;
   /** 이 행에 매핑된 이슈·코멘트. 매핑된 게 없으면 null */
   annotations: UnitAnnotations | null;
+  /**
+   * 이슈 배지를 눌렀을 때. 한 행에 여러 이슈가 걸릴 수 있으므로 배지는 개별 이슈
+   * 선택 UI가 아니라 "문서 순서상 첫 이슈로 이동" 버튼이다 — 특정 이슈를 고르는
+   * 것은 검수 패널의 카드 몫이다.
+   */
+  onNavigateIssue: ((issueId: string) => void) | null;
 }
 
 /** heading은 본문보다 크게 — 표에서도 문서 구조가 읽히도록. */
@@ -50,6 +56,7 @@ export function AlignmentRow({
   onSelect,
   onEdit,
   annotations,
+  onNavigateIssue,
 }: AlignmentRowProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -137,14 +144,35 @@ export function AlignmentRow({
             {op.kind === 'source-only' ? '1:0' : '0:1'}
           </span>
         )}
-        {annotations && annotations.issueCount > 0 && (
-          <span
-            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${severityBadgeClass(annotations.topSeverity)}`}
-            data-testid="alignment-issue-badge"
-          >
-            {t('editor.alignment.issueBadge', { count: annotations.issueCount })}
-          </span>
-        )}
+        {annotations && annotations.issueCount > 0 && (() => {
+          const badgeClass = `px-1.5 py-0.5 rounded text-[10px] font-bold ${severityBadgeClass(annotations.topSeverity)}`;
+          const label = t('editor.alignment.issueBadge', { count: annotations.issueCount });
+          const firstIssueId = annotations.issueIds[0];
+          if (!onNavigateIssue || !firstIssueId) {
+            return (
+              <span className={badgeClass} data-testid="alignment-issue-badge">{label}</span>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigateIssue(firstIssueId);
+              }}
+              // 버튼의 Enter/Space가 행 선택까지 실행되지 않게 막는다
+              // (행의 keydown은 preventDefault를 하므로 두면 클릭 자체가 죽는다)
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+              }}
+              aria-label={t('editor.alignment.viewIssue', { count: annotations.issueCount })}
+              className={`${badgeClass} hover:brightness-95 active:scale-95 transition-transform cursor-pointer`}
+              data-testid="alignment-issue-badge"
+            >
+              {label}
+            </button>
+          );
+        })()}
         {annotations && annotations.commentCount > 0 && (
           <span
             className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-editor-surface text-editor-muted"

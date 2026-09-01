@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { computeAlignmentAnnotations } from '@/components/editor/useAlignmentAnnotations';
+import { renderHook } from '@testing-library/react';
+import {
+  computeAlignmentAnnotations,
+  mergeUnitAnnotations,
+  useAlignmentAnnotations,
+  type UnitAnnotations,
+} from '@/components/editor/useAlignmentAnnotations';
+import { useReviewStore } from '@/stores/reviewStore';
+import { useCommentStore } from '@/stores/commentStore';
 import type { AlignOp } from '@/utils/alignUnits';
 import type { ReviewIssue } from '@/stores/reviewStore';
 import type { UserComment } from '@/stores/commentStore';
@@ -94,5 +102,73 @@ describe('computeAlignmentAnnotations', () => {
     expect(result.byUnitId.get('s1')?.commentCount).toBe(1);
     expect(result.byUnitId.get('t2')?.commentCount).toBe(1);
     expect(result.byUnitId.get('t1')).toBeUndefined();
+  });
+});
+
+describe('useAlignmentAnnotations 이슈 원천', () => {
+  function seedReview(issues: ReviewIssue[], resolvedIssueIds: string[] = []): void {
+    useReviewStore.setState({
+      results: [{ chunkIndex: 0, issues }],
+      resolvedIssueIds,
+      reviewActionHistory: [],
+      highlightNonce: useReviewStore.getState().highlightNonce + 1,
+    });
+    useCommentStore.setState({ comments: [] });
+  }
+
+  it('행별 issueIds가 issueCount와 일치하고 문서 순서를 따른다', () => {
+    const first = { ...issue('반동이 감소'), id: 'later', segmentOrder: 5 };
+    const second = { ...issue('반동이'), id: 'earlier', segmentOrder: 1 };
+    seedReview([first, second]);
+
+    const { result } = renderHook(() => useAlignmentAnnotations(ops));
+
+    const entry = result.current.byUnitId.get('t1')!;
+    expect(entry.issueCount).toBe(2);
+    expect(entry.issueIds).toEqual(['earlier', 'later']);
+  });
+
+  it('해결된 이슈는 개수와 issueIds에서 함께 빠진다', () => {
+    const kept = { ...issue('반동이 감소'), id: 'kept' };
+    const resolved = { ...issue('반동이'), id: 'resolved-one' };
+    seedReview([kept, resolved], ['resolved-one']);
+
+    const { result } = renderHook(() => useAlignmentAnnotations(ops));
+
+    expect(result.current.byUnitId.get('t1')).toMatchObject({
+      issueCount: 1,
+      issueIds: ['kept'],
+    });
+  });
+});
+
+describe('mergeUnitAnnotations', () => {
+  function entry(overrides: Partial<UnitAnnotations> = {}): UnitAnnotations {
+    return { issueCount: 1, issueIds: ['i1'], topSeverity: 'major', commentCount: 1, ...overrides };
+  }
+
+  it('원문·번역문이 같은 유닛 ID를 쓰는 문서에서 두 번 세지 않는다', () => {
+    // 전체 번역/폴리싱을 적용하면 reattachTranslationUnitIds가 원문 ID를 번역문에 이식한다
+    const byUnitId = new Map([['same', entry()]]);
+
+    expect(mergeUnitAnnotations(byUnitId, ['same', 'same'])).toEqual(entry());
+  });
+
+  it('서로 다른 유닛의 주석은 합치고 최고 심각도를 고른다', () => {
+    const byUnitId = new Map([
+      ['s1', entry({ issueCount: 0, issueIds: [], topSeverity: null, commentCount: 2 })],
+      ['t1', entry({ issueIds: ['i9'], topSeverity: 'critical' })],
+    ]);
+
+    expect(mergeUnitAnnotations(byUnitId, ['s1', 't1'])).toEqual({
+      issueCount: 1,
+      issueIds: ['i9'],
+      commentCount: 3,
+      topSeverity: 'critical',
+    });
+  });
+
+  it('매핑된 유닛이 없으면 배지를 만들지 않는다', () => {
+    expect(mergeUnitAnnotations(new Map(), ['s1', null])).toBeNull();
   });
 });

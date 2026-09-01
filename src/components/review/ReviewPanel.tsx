@@ -29,11 +29,9 @@ import { ReviewResultsTable } from '@/components/review/ReviewResultsTable';
 import { resolveReviewIssueSegmentOrders } from '@/components/review/reviewIssueOrder';
 import {
   applySuggestionToEditor,
-  deriveReplacementText,
-  resolveAlignedUnitRange,
   REVIEW_SUGGESTION_APPLY_META,
-  resolveSuggestionRange,
 } from '@/components/review/reviewApply';
+import { navigateToReviewIssue } from '@/components/review/navigateToReviewIssue';
 import type { TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
 import { useEditorStore } from '@/stores/editorStore';
 import { hashContent, stripHtml } from '@/utils/hash';
@@ -103,6 +101,9 @@ export function ReviewPanel(): JSX.Element {
   const progress = useReviewStore((s) => s.progress);
   const reviewActionHistory = useReviewStore((s) => s.reviewActionHistory);
   const registeredTargetEditor = useEditorStore((s) => s.targetEditor);
+  // 정렬 화면에서 넘어온 카드 이동 요청 — 패널이 마운트된 뒤에야 소비할 수 있다
+  const pendingIssueNavigation = useUIStore((s) => s.pendingReviewIssueNavigation);
+  const consumeReviewIssueNavigation = useUIStore((s) => s.consumeReviewIssueNavigation);
 
   // 액션 함수들 (참조 항상 동일)
   const initializeReview = useReviewStore((s) => s.initializeReview);
@@ -513,42 +514,12 @@ export function ReviewPanel(): JSX.Element {
    * 오역/문법 등 유형: targetExcerpt를 에디터에서 찾아 suggestedFix로 교체
    * 성공 시 이슈를 해결 상태로 숨기고, editor undo/redo와 해결 상태를 함께 동기화
    */
-  // 이슈가 가리키는 구절을 번역문 에디터에서 선택·포커스한다.
-  // 적용과 같은 탐색 로직(resolveSuggestionRange)을 쓰므로 적용 대상과 항상 일치한다.
-  const handleViewInDocument = useCallback((issue: ReviewIssue) => {
-    const { addToast } = useUIStore.getState();
-    const targetEditor = useEditorStore.getState().targetEditor;
-
-    if (!targetEditor || targetEditor.isDestroyed) {
-      addToast({
-        type: 'error',
-        message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.'),
-      });
-      return;
-    }
-
-    const range = resolveSuggestionRange(
-      targetEditor.state.doc,
-      issue.targetExcerpt,
-      issue.segmentGroupId,
-      deriveReplacementText(issue.suggestedFix),
-      resolveAlignedUnitRange(
-        targetEditor.state.doc,
-        getSourceDocForAlignment(),
-        issue.sourceExcerpt,
-      ),
-    );
-    if (!range) {
-      addToast({
-        type: 'warning',
-        message: t('review.viewNotFound', '본문에서 해당 구절을 찾지 못했습니다.'),
-      });
-      return;
-    }
-
-    targetEditor.commands.setTextSelection({ from: range.from, to: range.to });
-    targetEditor.commands.focus();
-  }, [t]);
+  // 이슈 위치로 원문·번역문 패널을 함께 이동한다. 정렬 화면의 이슈 배지와 **같은**
+  // 경로를 쓴다. 적용(resolveSuggestionRange)과 달리 suggestedFix 길이가 위치를
+  // 좌우해서는 안 되므로 이동 전용 resolver를 쓴다.
+  const handleNavigateIssue = useCallback((issueId: string) => {
+    navigateToReviewIssue(issueId, 'review-card');
+  }, []);
 
   const handleUndoReviewAction = useCallback((actionId?: string) => {
     const { addToast } = useUIStore.getState();
@@ -1109,7 +1080,9 @@ export function ReviewPanel(): JSX.Element {
                   onIgnore={handleIgnoreIssue}
                   onCopy={handleCopySuggestion}
                   onApply={handleApplySuggestion}
-                  onViewInDocument={handleViewInDocument}
+                  onNavigate={handleNavigateIssue}
+                  pendingScrollIssue={pendingIssueNavigation}
+                  onPendingScrollHandled={consumeReviewIssueNavigation}
                   onToggleAll={() => setAllIssuesChecked(!allChecked)}
                   allChecked={allChecked}
                   totalIssuesFound={totalIssuesFound}
@@ -1154,6 +1127,9 @@ export function ReviewPanel(): JSX.Element {
               onIgnore={handleIgnoreIssue}
               onCopy={handleCopySuggestion}
               onApply={handleApplySuggestion}
+              onNavigate={handleNavigateIssue}
+              pendingScrollIssue={pendingIssueNavigation}
+              onPendingScrollHandled={consumeReviewIssueNavigation}
               onToggleAll={() => setAllIssuesChecked(!allChecked)}
               allChecked={allChecked}
               totalIssuesFound={totalIssuesFound}

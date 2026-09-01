@@ -57,6 +57,14 @@ interface UIState extends EditorUIState {
   editorViewMode: EditorViewMode;
   activeAlignmentUnitId: string | null; // 인스펙터가 볼 대상 (target 유닛 id). 비영속.
 
+  /**
+   * 검수 카드 목록을 해당 이슈로 스크롤해 달라는 일회성 요청. 정렬 화면에서
+   * 검수 패널을 열 때는 패널이 아직 마운트되지 않았으므로 요청을 여기 남긴다.
+   * 에디터 인스턴스·DOM은 담지 않는다. 비영속(재시작 후 남으면 안 되는 요청).
+   * 같은 이슈를 연속으로 눌러도 처리되도록 requestId를 매번 새로 발급한다.
+   */
+  pendingReviewIssueNavigation: { issueId: string; requestId: number } | null;
+
   // AI 워크플로 (번역/검수/폴리싱) — 실행 로직은 각 소유자(EditorCanvasTipTap,
   // ReviewPanel)에 있고 툴바는 nonce 트리거로 요청만 보낸다. 비영속(persist 제외).
   // reviewTrigger는 "검수 시작 모달 열기"까지다 — 실제 실행 요청은
@@ -78,6 +86,10 @@ interface UIActions {
   // 정렬 검사 뷰
   setEditorViewMode: (mode: EditorViewMode) => void;
   setActiveAlignmentUnitId: (unitId: string | null) => void;
+
+  // 검수 카드 목록 이동 요청 (ReviewPanel 마운트 후 소비)
+  requestReviewIssueNavigation: (issueId: string) => void;
+  consumeReviewIssueNavigation: (requestId: number) => void;
 
   // Panel
   setActivePanel: (panel: 'source' | 'target' | 'chat') => void;
@@ -178,6 +190,9 @@ type UIStore = UIState & UIActions;
 const sidebarKey = (side: SidebarSide): 'leftSidebar' | 'rightSidebar' =>
   side === 'left' ? 'leftSidebar' : 'rightSidebar';
 
+/** 검수 카드 이동 요청의 일련번호 — 같은 이슈를 연속 요청해도 새 요청으로 구분된다 */
+let reviewIssueNavigationSequence = 0;
+
 // ============================================
 // Store Implementation
 // ============================================
@@ -190,6 +205,7 @@ export const useUIStore = create<UIStore>()(
       sourceOnlyMode: false,
       editorViewMode: 'document',
       activeAlignmentUnitId: null,
+      pendingReviewIssueNavigation: null,
       activePanel: 'target',
       selectedBlockId: null,
       showDiff: false,
@@ -262,6 +278,23 @@ export const useUIStore = create<UIStore>()(
 
       setActiveAlignmentUnitId: (unitId: string | null): void => {
         set({ activeAlignmentUnitId: unitId });
+      },
+
+      requestReviewIssueNavigation: (issueId: string): void => {
+        reviewIssueNavigationSequence += 1;
+        set({
+          pendingReviewIssueNavigation: {
+            issueId,
+            requestId: reviewIssueNavigationSequence,
+          },
+        });
+      },
+
+      // 대상 카드를 찾지 못한 경우에도 소비한다 — stale 요청이 남으면 다음 마운트에서 튄다
+      consumeReviewIssueNavigation: (requestId: number): void => {
+        const pending = get().pendingReviewIssueNavigation;
+        if (!pending || pending.requestId !== requestId) return;
+        set({ pendingReviewIssueNavigation: null });
       },
 
       // Panel
