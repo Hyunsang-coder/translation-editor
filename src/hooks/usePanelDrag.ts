@@ -63,9 +63,11 @@ function createGhost(label: string): void {
     borderRadius: '6px',
     fontSize: '12px',
     fontWeight: '500',
-    background: 'var(--color-editor-surface, #2d2d2d)',
-    color: 'var(--color-editor-text, #e0e0e0)',
-    border: '1px solid var(--color-primary-500, #6366f1)',
+    // --color-* 는 정의된 적이 없어 항상 fallback으로 떨어졌다 — 라이트 모드에서도
+    // 드래그 고스트가 검은 배경(#2d2d2d)으로 떴다는 뜻이다.
+    background: 'var(--editor-surface)',
+    color: 'var(--editor-text)',
+    border: '1px solid var(--primary-500)',
     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
     opacity: '0.9',
     whiteSpace: 'nowrap',

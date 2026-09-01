@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { buildSourceDocument } from '@/editor/sourceDocument';
 import { buildTargetDocument } from '@/editor/targetDocument';
+import { formatTimeOfDay } from '@/utils/datetime';
 
 interface HistoryRestoreDialogProps {
   open: boolean;
@@ -47,7 +48,7 @@ export function HistoryRestoreDialog({
         if (!blocksForSnapshot) {
           throw new Error('Project blocks are unavailable for snapshot');
         }
-        const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = formatTimeOfDay(Date.now());
         await createSnapshotIfChanged({
           projectId,
           description: `${t('history.autoSnapshotBeforeRestore')} ${timeLabel}`,

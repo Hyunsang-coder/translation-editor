@@ -11,6 +11,7 @@ import {
 import { hashContent } from '@/utils/hash';
 import { useProjectStore } from '@/stores/projectStore';
 import i18n from '@/i18n/config';
+import { formatTimeOfDay } from '@/utils/datetime';
 
 interface HistoryState {
   snapshots: HistorySnapshotMeta[];
@@ -341,7 +342,7 @@ export const useHistoryStore = create<HistoryStore>((set, get) => ({
 
           autoSnapshotInFlight = true;
           autoSnapshotActiveProjectId = project.id;
-          const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const timeLabel = formatTimeOfDay(Date.now());
           // description은 표시용일 뿐이다 — 자동 슬롯 판별은 백엔드의 kind 컬럼이 한다.
           const autoDescription = `${i18n.t('history.autoSnapshotLabel')} ${timeLabel}`;
           const snapshotProjectId = project.id;

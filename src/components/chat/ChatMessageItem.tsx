@@ -17,6 +17,7 @@ import type {
   ProjectMemoryChangeProposal,
 } from '@/types';
 import { ProjectKnowledgeProposalCards } from './ProjectKnowledgeProposalCards';
+import { formatTimeOfDay } from '@/utils/datetime';
 import {
   readForbiddenTermProposals,
   readGlossaryEntryProposals,
@@ -365,7 +366,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       {/* Timestamp + Action Icons */}
       <div className="flex items-center gap-2 mt-1">
         <span className="text-xs text-editor-muted">
-          {new Date(message.timestamp).toLocaleTimeString('ko-KR')}
+          {formatTimeOfDay(message.timestamp)}
           {message.metadata?.editedAt && (
             <span className="ml-1.5 group/edited relative inline-block cursor-help hover:text-editor-text transition-colors">
               ({t('chat.edited')})

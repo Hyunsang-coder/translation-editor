@@ -8,9 +8,12 @@ export function ToastHost(): JSX.Element {
       toastOptions={{
         className: 'bg-editor-surface border border-editor-border text-editor-text',
         style: {
-          background: 'var(--color-editor-surface)',
-          border: '1px solid var(--color-editor-border)',
-          color: 'var(--color-editor-text)',
+          // index.css가 정의하는 이름은 --editor-* 다. --color-* 는 어디에도 없어
+          // 인라인 스타일이 통째로 무효가 되고, className의 bg-editor-surface까지
+          // 덮어써 토스트가 배경 없이 떴다.
+          background: 'var(--editor-surface)',
+          border: '1px solid var(--editor-border)',
+          color: 'var(--editor-text)',
         },
       }}
       gap={8}

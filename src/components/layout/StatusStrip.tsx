@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useHistoryStore } from '@/stores/historyStore';
 import { countTotalWords } from '@/utils/wordCounter';
+import { formatTimeOfDay } from '@/utils/datetime';
 
 /** 상대 시간 표시가 굳지 않도록 1분마다 리렌더 */
 function useMinuteTick(): number {
@@ -14,11 +15,6 @@ function useMinuteTick(): number {
     return () => window.clearInterval(timer);
   }, []);
   return now;
-}
-
-function formatClock(timestamp: number): string {
-  const d = new Date(timestamp);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 /**
@@ -107,7 +103,7 @@ export function StatusStrip(): JSX.Element {
         {isDirty
           ? t('status.saving')
           : lastSavedAt > 0
-            ? `${t('status.saved')} · ${formatClock(lastSavedAt)}`
+            ? `${t('status.saved')} · ${formatTimeOfDay(lastSavedAt)}`
             : t('status.notSavedYet')}
       </span>
 
