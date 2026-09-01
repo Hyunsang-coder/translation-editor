@@ -338,7 +338,7 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(lastStreamText).not.toContain('---TRANSLATION_END---');
     });
 
-    it('이미지 노드는 번역 프롬프트에서 제거됨', async () => {
+    it('이미지 원본은 프롬프트에 포함하지 않고 앵커는 번역 결과에서 원본 이미지로 복원한다', async () => {
       const docWithImage: TipTapDocJson = {
         type: 'doc',
         content: [
@@ -361,9 +361,24 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       };
 
       const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
+      model.stream.mockImplementation(async function* (messages: Array<{ content?: unknown }>) {
+        const userPrompt = String(messages[1]?.content ?? '');
+        const marker = userPrompt.match(/!\[([^\]]*)\]\((oddeyes-image-anchor:[^)]+)\)/);
+        if (!marker) throw new Error('이미지 앵커가 번역 프롬프트에 없습니다.');
+
+        yield {
+          content: [
+            '---TRANSLATION_START---\n',
+            'Translated before the image\n',
+            `![${marker[1]}](${marker[2]})\n`,
+            'Translated after the image\n',
+            '---TRANSLATION_END---',
+          ].join(''),
+        };
+      });
       vi.mocked(createChatModel).mockReturnValue(model as never);
 
-      await translateWithStreaming({
+      const result = await translateWithStreaming({
         project: mockProject,
         sourceDocJson: docWithImage,
       });
@@ -372,8 +387,19 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       const userPrompt = String(messages[1]?.content ?? '');
       expect(userPrompt).toContain('Texto antes de la imagen');
       expect(userPrompt).toContain('Texto despues de la imagen');
-      expect(userPrompt).not.toContain('![');
+      expect(userPrompt).toContain('oddeyes-image-anchor:');
+      expect(userPrompt).toContain('ODDEYES_IMAGE_');
       expect(userPrompt).not.toContain('https://example.com/cat.png');
+
+      const resultContent = Array.isArray(result.doc.content)
+        ? result.doc.content as TipTapDocJson[]
+        : [];
+      const resultImage = resultContent[1] as TipTapDocJson;
+      expect(resultImage.type).toBe('image');
+      expect(resultImage.attrs).toMatchObject({
+        src: 'https://example.com/cat.png',
+        alt: 'cat',
+      });
     });
 
     it.skip('Diff 뷰에서 변경 부분 강조', () => {

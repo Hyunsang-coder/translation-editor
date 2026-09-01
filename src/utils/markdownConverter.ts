@@ -75,6 +75,12 @@ export type TipTapDocJson = Record<string, unknown>;
 let cachedExtensions: ReturnType<typeof createExtensions> | null = null;
 let cachedExtensionsForTranslation: ReturnType<typeof createExtensionsForTranslation> | null = null;
 
+// DOMPurify는 기본적으로 알 수 없는 URI scheme을 제거한다. 번역 중에만 쓰는
+// 이미지 앵커는 문서 복원에 필요한 내부 scheme이므로, 기본 허용 목록을
+// 유지하면서 해당 scheme만 추가로 허용한다. 외부 HTML의 javascript: 등은
+// 계속 차단된다.
+const TRANSLATION_HTML_ALLOWED_URI = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|oddeyes-image-anchor):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+
 /**
  * 기본 Extension 생성 (html: false)
  * Chat, Review, 에디터 등 일반적인 용도
@@ -857,7 +863,9 @@ function parseMarkdownWithTables(normalized: string): TipTapDocJson {
         if (nodes) allNodes.push(...nodes);
       } else {
         const div = document.createElement('div');
-        div.innerHTML = DOMPurify.sanitize(segment.content);
+        div.innerHTML = DOMPurify.sanitize(segment.content, {
+          ALLOWED_URI_REGEXP: TRANSLATION_HTML_ALLOWED_URI,
+        });
         const parsed = PMDOMParser.fromSchema(schema).parse(div);
         parsed.content.forEach(node => {
           allNodes.push(node.toJSON());

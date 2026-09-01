@@ -25,7 +25,12 @@ import {
   isValidTipTapDocJson,
   type TipTapDocJson,
 } from '@/utils/markdownConverter';
-import { stripImages } from '@/utils/imagePlaceholder';
+import {
+  hideImageAnchorsFromStreaming,
+  prepareImageAnchors,
+  restoreImageAnchors,
+  type ImageAnchor,
+} from '@/utils/imageAnchors';
 import { resolveDirection } from '@/utils/detectLanguage';
 import {
   completeWithTauriAiBackend,
@@ -187,12 +192,13 @@ function buildTranslationSetup(params: {
     }
   }
 
-  // TipTap JSON → Markdown 변환 + 이미지 제거
-  const rawSourceMarkdown = tipTapJsonToMarkdownForTranslation(params.sourceDocJson);
-  const { stripped: sourceMarkdown, imageCount } = stripImages(rawSourceMarkdown);
+  // TipTap JSON → Markdown 변환. 실제 URL/Base64 대신 짧은 이미지 앵커를 남긴다.
+  // 앵커는 번역 결과를 JSON으로 되돌린 뒤 원본 image 노드로 복원된다.
+  const imagePreparation = prepareImageAnchors(params.sourceDocJson);
+  const sourceMarkdown = tipTapJsonToMarkdownForTranslation(imagePreparation.doc);
 
-  if (imageCount > 0) {
-    console.warn(`[Translation] Stripped ${imageCount} images from source`);
+  if (imagePreparation.anchors.length > 0) {
+    console.warn(`[Translation] Replaced ${imagePreparation.anchors.length} images with anchors`);
   }
 
   // 원문·타겟이 '자동'(또는 미설정)이면 원문 Markdown에서 방향을 푼다.
@@ -228,6 +234,7 @@ function buildTranslationSetup(params: {
     '- 문서 구조/서식(heading, list, bold, italic, link, table 등)은 그대로 유지하고, 텍스트 내용만 번역하세요.',
     '- HTML 테이블(<table>...</table>)이 있으면 테이블 구조와 속성은 그대로 유지하고, 셀 안의 텍스트만 번역하세요.',
     '- 링크 URL(href), 숫자, 코드/태그/변수(예: {var}, <tag>, %s)는 그대로 유지하세요.',
+    '- `oddeyes-image-anchor:`로 시작하는 이미지 URL과 `ODDEYES_IMAGE_`로 시작하는 alt 값은 절대 번역·삭제·이동하지 마세요.',
     '- 불확실하면 임의로 꾸미지 말고 원문 표현을 최대한 보존하세요.',
     '',
   ];
@@ -371,13 +378,22 @@ function buildTranslationSetup(params: {
     },
   ];
 
-  return { cfg, model, messages, maxTokens };
+  return {
+    cfg,
+    model,
+    messages,
+    maxTokens,
+    imageAnchors: imagePreparation.anchors,
+  };
 }
 
 /**
  * 번역 응답 후처리: 마커 추출, truncation 검증, TipTap JSON 변환
  */
-function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
+function processTranslationResponse(
+  raw: string,
+  imageAnchors: readonly ImageAnchor[] = [],
+): { doc: TipTapDocJson } {
   const translatedMarkdownRaw = extractTranslationMarkdown(raw);
 
   const truncation = detectMarkdownTruncation(translatedMarkdownRaw);
@@ -390,7 +406,8 @@ function processTranslationResponse(raw: string): { doc: TipTapDocJson } {
   }
 
   const translatedMarkdown = fixMisalignedBoldMarks(translatedMarkdownRaw);
-  const translatedDoc = parseTranslationResponseToTipTap(translatedMarkdown);
+  const parsedDoc = parseTranslationResponseToTipTap(translatedMarkdown);
+  const translatedDoc = restoreImageAnchors(parsedDoc, imageAnchors);
 
   if (!isValidTipTapDocJson(translatedDoc)) {
     throw new Error('번역 결과가 TipTap doc JSON 형식이 아닙니다.');
@@ -439,7 +456,7 @@ export async function translateSourceDocToTargetDocJson(params: {
    */
   cacheSystem?: boolean | undefined;
 }): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const { cfg, model, messages, maxTokens } = buildTranslationSetup(params);
+  const { cfg, model, messages, maxTokens, imageAnchors } = buildTranslationSetup(params);
 
   // 취소 확인
   if (params.abortSignal?.aborted) {
@@ -459,7 +476,7 @@ export async function translateSourceDocToTargetDocJson(params: {
     if (!raw || raw.trim().length === 0) {
       throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
     }
-    const { doc } = processTranslationResponse(raw);
+    const { doc } = processTranslationResponse(raw, imageAnchors);
     return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   }
 
@@ -495,7 +512,7 @@ export async function translateSourceDocToTargetDocJson(params: {
     throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
   }
 
-  const { doc } = processTranslationResponse(raw);
+  const { doc } = processTranslationResponse(raw, imageAnchors);
   return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
 }
 
@@ -548,7 +565,7 @@ export interface StreamingTranslationParams {
 export async function translateWithStreaming(
   params: StreamingTranslationParams
 ): Promise<{ doc: TipTapDocJson; raw: string }> {
-  const { cfg, model, messages, maxTokens } = buildTranslationSetup(params);
+  const { cfg, model, messages, maxTokens, imageAnchors } = buildTranslationSetup(params);
 
   // 취소 확인
   if (params.abortSignal?.aborted) {
@@ -566,7 +583,7 @@ export async function translateWithStreaming(
       let filtered = rawSoFar.slice(startIdx + startMarker.length);
       const endIdx = filtered.indexOf(endMarker);
       if (endIdx !== -1) filtered = filtered.slice(0, endIdx);
-      params.onToken?.(filtered.trim());
+      params.onToken?.(hideImageAnchorsFromStreaming(filtered.trim()));
     };
 
     const raw = await streamWithTauriAiBackend({
@@ -585,7 +602,7 @@ export async function translateWithStreaming(
       throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
     }
 
-    const { doc } = processTranslationResponse(raw);
+    const { doc } = processTranslationResponse(raw, imageAnchors);
     return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   }
 
@@ -626,7 +643,7 @@ export async function translateWithStreaming(
           if (endIdx !== -1) {
             filtered = filtered.slice(0, endIdx);
           }
-          params.onToken?.(filtered.trim());
+          params.onToken?.(hideImageAnchorsFromStreaming(filtered.trim()));
         }
         // 마커가 아직 없으면 콜백 호출 안함 (로딩 상태 유지)
       }
@@ -646,9 +663,9 @@ export async function translateWithStreaming(
     });
     const translatedMarkdown = extractTranslationMarkdown(raw);
     if (translatedMarkdown.trim()) {
-      params.onToken?.(translatedMarkdown.trim());
+      params.onToken?.(hideImageAnchorsFromStreaming(translatedMarkdown.trim()));
     }
-    const { doc } = processTranslationResponse(raw);
+    const { doc } = processTranslationResponse(raw, imageAnchors);
     return { doc: restoreTranslationUnitIds(params.sourceDocJson, doc), raw };
   } finally {
     recordAiUsage({
@@ -664,7 +681,7 @@ export async function translateWithStreaming(
     throw new Error('번역 응답이 비어 있습니다. 모델이 응답을 생성하지 못했습니다.');
   }
 
-  const { doc } = processTranslationResponse(accumulated);
+  const { doc } = processTranslationResponse(accumulated, imageAnchors);
   return {
     doc: restoreTranslationUnitIds(params.sourceDocJson, doc),
     raw: accumulated,
