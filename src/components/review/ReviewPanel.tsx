@@ -40,7 +40,7 @@ import { TranslatePreviewModal } from '@/components/editor/TranslatePreviewModal
 import { Modal } from '@/components/ui/Modal';
 import { RecentInstructions } from '@/components/ui/RecentInstructions';
 import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
-import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { resolveDirection } from '@/utils/detectLanguage';
 
 interface RetranslateRequestMeta {
@@ -902,14 +902,17 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
-    // 번역·폴리싱 적용과 같은 경로로 에디터에 직접 쓴다.
+    // 폴리싱 적용과 같은 경로로 에디터에 직접 쓴다.
+    // - replaceDocumentWithAppliedChanges: AI가 바꾼 구간에 적용 표시를 남긴다.
+    //   검수 제안·폴리싱과 같은 성격의 수정인데 여기만 표시가 없어 일관되지 않았다.
+    //   범위는 단어 단위 diff라 선택 구간 밖은 칠해지지 않는다.
     // - addToHistory: true → Ctrl+Z로 재번역 취소 가능. store를 거쳐 들어가면
     //   content prop 동기화가 addToHistory:false 경로를 타서 undo가 불가능했다.
     // - store의 targetDocument/targetDocJson은 onUpdate 디바운스 동기화가 함께 갱신하므로
     //   여기서 직접 set하지 않는다. 아래 materializeBlocksForSnapshot이 내부에서
     //   flushPendingEditorSyncs를 먼저 돌려 스냅샷 전에 반영을 보장한다.
     try {
-      replaceDocContent(targetEditor, doc, { addToHistory: true });
+      replaceDocumentWithAppliedChanges(targetEditor, doc, { addToHistory: true });
     } catch (e) {
       // schema.nodeFromJSON은 스키마에 없는 노드에 throw한다. 적용만 포기하고
       // 검수 결과와 프리뷰는 남겨, 사용자가 다시 시도할 수 있게 한다.

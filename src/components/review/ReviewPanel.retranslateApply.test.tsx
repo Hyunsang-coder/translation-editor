@@ -4,7 +4,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useUIStore } from '@/stores/uiStore';
-import { replaceDocContent } from '@/editor/utils/replaceDocContent';
+import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { translateWithStreaming } from '@/ai/translateDocument';
 import { message } from '@tauri-apps/plugin-dialog';
 import { ReviewPanel } from './ReviewPanel';
@@ -36,7 +36,7 @@ vi.mock('@/ai/translateDocument', () => ({
 }));
 vi.mock('@/components/review/ReviewResultsTable', () => ({ ReviewResultsTable: () => null }));
 vi.mock('@/components/glossary/ProjectGlossarySection', () => ({ ProjectGlossarySection: () => null }));
-vi.mock('@/editor/utils/replaceDocContent', () => ({ replaceDocContent: vi.fn() }));
+vi.mock('@/editor/utils/applyDocumentWithHighlight', () => ({ replaceDocumentWithAppliedChanges: vi.fn() }));
 // 적용 취소 안내는 토스트가 아니라 네이티브 팝업(plugin-dialog message)으로 나간다.
 vi.mock('@tauri-apps/plugin-dialog', () => ({ message: vi.fn(async () => undefined) }));
 
@@ -91,7 +91,7 @@ vi.mock('@/components/editor/TranslatePreviewModal', () => ({
   },
 }));
 
-const mockReplaceDocContent = vi.mocked(replaceDocContent);
+const mockReplaceDocContent = vi.mocked(replaceDocumentWithAppliedChanges);
 const mockTranslateWithStreaming = vi.mocked(translateWithStreaming);
 const mockMessageDialog = vi.mocked(message);
 // 토스트는 store 배열이 아니라 sonner로 나가므로, 액션 자체를 스파이로 대체해 관찰한다.
