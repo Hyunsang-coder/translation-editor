@@ -1899,7 +1899,15 @@ export function EditorCanvasTipTap(): JSX.Element {
     // replaceDocContent는 onUpdate를 발동시키므로 store 자동 동기화됨
     // addToHistory: true → Ctrl+Z로 번역 취소 가능
     setTranslateApplyNotice(null);
-    replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
+    // 번역문이 이미 있으면 무엇이 바뀌었는지가 정보다 — 검수·폴리싱·재번역과 같은
+    // 적용 표시를 남긴다. 반대로 첫 번역(빈 번역문)은 문서 전체가 '추가'로 잡혀
+    // 통째로 칠해지므로 표시가 아니라 소음이 된다. 그때만 표시 없이 갈아끼운다.
+    const hadTranslation = targetEditorRef.current.state.doc.textContent.trim().length > 0;
+    if (hadTranslation) {
+      replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
+    } else {
+      replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
+    }
     setTranslatePreviewOpen(false);
     setTranslateOriginalDocJson(null);
 
