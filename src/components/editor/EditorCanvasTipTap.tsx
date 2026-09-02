@@ -344,6 +344,8 @@ export function EditorCanvasTipTap(): JSX.Element {
     targetRevision: string | null;
   }
   const translateRequestMetaRef = useRef<PreviewRequestMeta | null>(null);
+  // 적용이 가드에 막힌 사유. 토스트는 4초 뒤 사라져 원인을 놓치므로 모달에도 남긴다.
+  const [translateApplyNotice, setTranslateApplyNotice] = useState<string | null>(null);
   const polishRequestMetaRef = useRef<PreviewRequestMeta | null>(null);
 
   // Target 문서 리비전: 살아있는 에디터 기준(store 캐시는 디바운스로 뒤처질 수 있음).
@@ -1859,7 +1861,9 @@ export function EditorCanvasTipTap(): JSX.Element {
 
   const applyTranslateDoc = useCallback((doc: TipTapDocJson): void => {
     if (!targetEditorRef.current) {
-      addToast({ type: 'error', message: t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.') });
+      const reason = t('editor.targetEditorNotReady', 'Target 에디터가 아직 준비되지 않았습니다.');
+      setTranslateApplyNotice(reason);
+      addToast({ type: 'error', message: reason });
       return;
     }
 
@@ -1868,10 +1872,9 @@ export function EditorCanvasTipTap(): JSX.Element {
     const meta = translateRequestMetaRef.current;
     const currentProjectId = useProjectStore.getState().project?.id ?? null;
     if (!meta || !currentProjectId || meta.projectId !== currentProjectId) {
-      addToast({
-        type: 'warning',
-        message: t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.'),
-      });
+      const reason = t('editor.applyCancelledProjectSwitched', '프로젝트가 전환되어 적용을 취소했습니다.');
+      setTranslateApplyNotice(reason);
+      addToast({ type: 'warning', message: reason });
       setTranslatePreviewOpen(false);
       setTranslatePreviewDoc(null);
       setTranslateOriginalDocJson(null);
@@ -1887,15 +1890,15 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 이 경우 가드를 통째로 건너뛰면 stale 번역이 사용자 편집을 소리 없이 덮으므로,
     // 보수적으로 적용을 중단한다(§검증 불가 → 차단).
     if (meta.targetRevision !== null && meta.targetRevision !== currentRevision) {
-      addToast({
-        type: 'warning',
-        message: t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.'),
-      });
+      const reason = t('editor.applyCancelledDocChanged', '번역 요청 이후 문서가 수정되어 적용을 취소했습니다. 문서를 확인한 뒤 다시 실행해주세요.');
+      setTranslateApplyNotice(reason);
+      addToast({ type: 'warning', message: reason });
       return;
     }
 
     // replaceDocContent는 onUpdate를 발동시키므로 store 자동 동기화됨
     // addToHistory: true → Ctrl+Z로 번역 취소 가능
+    setTranslateApplyNotice(null);
     replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
     setTranslatePreviewOpen(false);
     setTranslateOriginalDocJson(null);
@@ -2733,6 +2736,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         isLoading={translateLoading}
         error={translatePreviewError}
         streamingChannel="translate"
+        applyNotice={translateApplyNotice}
         originalDocJson={translateOriginalDocJson}
         onApplySelective={applyTranslateDoc}
         onClose={() => {

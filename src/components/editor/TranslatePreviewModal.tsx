@@ -66,6 +66,9 @@ interface TranslatePreviewModalProps {
   originalHtml?: string | null;
   isLoading?: boolean;
   error?: string | null;
+  /** 적용이 가드에 막혔을 때의 사유. 결과를 덮지 않고 헤더에 남긴다
+   *  (토스트는 4초 뒤 사라져 원인을 놓치기 쉽다). */
+  applyNotice?: string | null;
   /** 청크 분할 번역 진행률 */
   progress?: { completed: number; total: number } | null;
   /** 스트리밍 중 실시간 Markdown 텍스트 (prop 경로 — ReviewPanel 등 기존 호출부 호환) */
@@ -109,6 +112,7 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     originalHtml,
     isLoading,
     error,
+    applyNotice,
     progress,
     streamingText: streamingTextProp,
     streamingChannel,
@@ -232,9 +236,25 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
     setSelectedUnitIds(selected ? new Set(changeUnits.map((unit) => unit.id)) : new Set());
   }, [changeUnits]);
 
+  // 적용 버튼이 왜 안 눌리는지 화면에 말해준다. 비활성 사유가 없으면 null.
+  // (버튼은 disabled여도 :hover는 먹으므로 "호버는 되는데 안 눌린다"로 보인다.)
+  const applyDisabledReason = isLoading
+    ? t('editor.applyDisabledLoading', '번역이 끝나야 적용할 수 있습니다')
+    : !docJson
+      ? t('editor.applyDisabledNoResult', '적용할 결과가 없습니다')
+      : isApplying
+        ? t('editor.applyingChanges')
+        : selectiveActive && selectedCount === 0
+          ? t('editor.applyDisabledNoSelection', '적용할 변경사항을 하나 이상 선택하세요')
+          : null;
+
+  // 적용 중 던져진 예외. try/finally만 있어 unhandled rejection으로 조용히 사라졌다.
+  const [applyError, setApplyError] = useState<string | null>(null);
+
   // Apply 핸들러 래퍼
   const handleApply = (): void => {
     if (isApplying) return;
+    setApplyError(null);
     setIsApplying(true);
     void (async () => {
       try {
@@ -252,6 +272,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
         } else {
           await onApply();
         }
+      } catch (e) {
+        setApplyError(e instanceof Error ? e.message : String(e));
       } finally {
         setIsApplying(false);
       }
@@ -368,6 +390,22 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* 적용이 막혀 있으면 이유를 화면에 적는다. 비활성 컨트롤을 이유 없이
+                두지 않는다 — 툴팁은 올려봐야 알 수 있어 발견되지 않는다. */}
+            {(() => {
+              const notice = applyError ?? applyNotice ?? (isApplying ? null : applyDisabledReason);
+              if (!notice) return null;
+              const isProblem = applyError !== null || applyNotice != null;
+              return (
+                <span
+                  className={`text-xs max-w-[320px] truncate ${isProblem ? 'text-severity-major-deep font-semibold' : 'text-editor-muted'}`}
+                  data-testid="translate-preview-apply-notice"
+                  title={notice}
+                >
+                  {notice}
+                </span>
+              );
+            })()}
             {isLoading && onCancel && (
               <button
                 type="button"
@@ -382,8 +420,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
               type="button"
               className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary-fill text-white hover:bg-primary-fill-hover disabled:opacity-60 transition-colors flex items-center gap-1.5"
               onClick={handleApply}
-              disabled={isLoading || !docJson || isApplying || (selectiveActive && selectedCount === 0)}
-              title={t('common.apply')}
+              disabled={applyDisabledReason !== null}
+              title={applyDisabledReason ?? t('common.apply')}
               data-testid="translate-preview-apply-button"
             >
               {isApplying ? (
