@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import { Mark } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
+import { addAppliedChangeMarksToTransaction } from '@/editor/extensions/AppliedChangeHighlight';
 import {
   getSingleAnchorRange,
   readAnchorText,
@@ -127,6 +128,13 @@ export function applySelectionEdit(
     );
   } else {
     tr.delete(range.from, range.to);
+  }
+  // AI가 바꾼 구간에 적용 표시를 남긴다 — 검수·폴리싱·재번역 적용과 같은 성격이다.
+  // 지우기(빈 문자열)는 남길 범위가 없다.
+  if (replacementText) {
+    addAppliedChangeMarksToTransaction(tr, [
+      { from: range.from, to: range.from + replacementText.length },
+    ]);
   }
   tr.setSelection(
     TextSelection.create(
@@ -257,6 +265,12 @@ export function applySelectionEdits(
         range.to,
         editor.schema.text(replacement, [...marksByRange[index]!]),
       );
+      // 마크는 루프 안에서 붙인다. 여기서 range.from은 아직 유효하고, 이후 더 앞쪽
+      // 범위를 치환하면 마크는 문서에 실려 함께 밀린다. 루프 뒤에 몰아 붙이면
+      // 앞쪽 치환으로 밀린 좌표를 그대로 써 엉뚱한 곳이 칠해진다.
+      addAppliedChangeMarksToTransaction(tr, [
+        { from: range.from, to: range.from + replacement.length },
+      ]);
     } else {
       tr.delete(range.from, range.to);
     }
