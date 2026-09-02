@@ -701,15 +701,24 @@ export function GlossaryManagerModal({
                         : t('glossaryManager.addTerm')}
                     </button>
                   </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <input
-                      value={entryDraft.notes}
-                      onChange={(event) => setEntryDraft((draft) => ({ ...draft, notes: event.target.value }))}
-                      placeholder={t('glossaryManager.notesPlaceholder')}
-                      aria-label={t('glossaryManager.notesPlaceholder')}
-                      className="min-w-0 flex-1 border-0 bg-transparent text-[11px] text-editor-text outline-none placeholder:text-editor-muted"
-                    />
-                    <label className="flex items-center gap-1.5 text-[10px] text-editor-muted">
+                  {/* 메모도 입력란이다. 테두리 없이 두면 원문·번역문 옆에서 라벨처럼 읽혀
+                      입력할 수 있다는 걸 알 수 없다 — 위 두 필드와 같은 모양으로 맞춘다. */}
+                  <div className="mt-2 flex items-end gap-3">
+                    <label className="min-w-0 flex-1 text-[11px] font-medium text-editor-muted">
+                      {t('glossaryManager.notes')}
+                      <input
+                        value={entryDraft.notes}
+                        onChange={(event) => setEntryDraft((draft) => ({ ...draft, notes: event.target.value }))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') void handleSaveEntry();
+                        }}
+                        placeholder={t('glossaryManager.notesPlaceholder')}
+                        aria-label={t('glossaryManager.notes')}
+                        data-testid="glossary-entry-notes"
+                        className="mt-1 w-full rounded-md border border-editor-border bg-editor-surface px-2.5 py-2 text-xs text-editor-text outline-none focus:border-primary-500 placeholder:text-editor-muted"
+                      />
+                    </label>
+                    <label className="mb-2 flex shrink-0 items-center gap-1.5 text-[10px] text-editor-muted">
                       <input
                         type="checkbox"
                         checked={entryDraft.caseSensitive}
