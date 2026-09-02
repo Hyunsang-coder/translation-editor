@@ -99,15 +99,20 @@ describe('navigateToReviewIssue', () => {
     expect(addToast).not.toHaveBeenCalled();
   });
 
-  it('기준 패널만 선택·포커스하고, 포커스가 스크롤을 덮어쓰지 않게 한다', () => {
+  it('범위 선택 대신 캐럿만 두고, 포커스는 옮기지 않는다', () => {
+    // 선택이 생기면 인라인 툴바까지 떠서 카드를 누를 때마다 화면이 어수선했다.
+    // 이슈 구간은 ReviewHighlight가 칠하므로 선택 없이도 위치를 알 수 있다.
     const target = useEditorStore.getState().targetEditor!;
     const source = useEditorStore.getState().sourceEditor!;
 
     navigateToReviewIssue(ISSUE.id, 'review-card');
 
-    expect(target.commands.setTextSelection).toHaveBeenCalledWith({ from: 10, to: 20 });
-    expect(target.commands.focus).toHaveBeenCalledWith(undefined, { scrollIntoView: false });
+    // 범위가 아니라 캐럿(빈 선택) — 인라인 툴바는 빈 범위를 걸러낸다.
+    expect(target.commands.setTextSelection).toHaveBeenCalledWith({ from: 10, to: 10 });
+    // 포커스는 옮기지 않는다 (검수 패널이 포커스를 유지한다).
+    expect(target.commands.focus).not.toHaveBeenCalled();
     expect(source.commands.setTextSelection).not.toHaveBeenCalled();
+    expect(scrollEditorToAnchor).toHaveBeenCalledTimes(2);
   });
 
   it('이미 해결·무시된 이슈는 아무것도 하지 않는다', () => {

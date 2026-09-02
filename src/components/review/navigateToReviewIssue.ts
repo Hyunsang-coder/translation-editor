@@ -51,13 +51,19 @@ function moveEditors(issue: ReviewIssue): void {
       : { targetDocJson: (project.targetDocJson as TranslationUnitDocument | null) ?? null }),
   });
 
-  // 선택·포커스를 스크롤보다 먼저 끝낸다 — 순서가 뒤집히면 포커스가 만드는
-  // 자체 스크롤이 방금 맞춘 위치를 덮어쓴다.
+  // 이슈 구간을 '선택'하지 않고 캐럿만 그 앞에 둔다.
+  // - 범위 선택을 만들면 인라인 툴바까지 떠서 카드를 누를 때마다 화면이 어수선했다.
+  //   buildSelectionBubble은 빈 범위를 걸러내므로 캐럿은 툴바를 띄우지 않는다.
+  // - 그렇다고 캐럿을 아예 안 옮기면, 나중에 에디터가 포커스를 받을 때 브라우저가
+  //   문서 맨 앞의 캐럿을 노출시키며 스크롤을 최상단으로 되돌린다.
+  // - 포커스는 옮기지 않는다. 검수 패널이 포커스를 유지해야 카드 간 이동이 끊기지 않고,
+  //   포커스가 만드는 자체 스크롤이 방금 맞춘 위치를 덮어쓰던 문제도 사라진다.
+  // 이슈 구간 자체는 ReviewHighlight가 칠하므로 선택 없이도 어디인지 보인다.
   const primaryEditor = navigation.primarySide === 'source' ? source : target;
   const primaryAnchor = navigation.primarySide === 'source' ? navigation.source : navigation.target;
   if (primaryEditor && primaryAnchor.kind === 'exact-range' && primaryAnchor.range) {
-    primaryEditor.commands.setTextSelection(primaryAnchor.range);
-    primaryEditor.commands.focus(undefined, { scrollIntoView: false });
+    const caret = primaryAnchor.range.from;
+    primaryEditor.commands.setTextSelection({ from: caret, to: caret });
   }
 
   // 두 패널은 서로의 scrollTop을 복사하지 않는다 — 각자의 앵커를 각자 상단으로.
