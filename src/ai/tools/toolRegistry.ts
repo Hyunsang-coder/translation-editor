@@ -48,6 +48,27 @@ export const CHAT_TOOL_REGISTRY: readonly ChatToolDescriptor[] = [
     requires: ['project'],
   },
   {
+    // 문서 전체 검수. 첫 청크 + 검수 지침을 함께 돌려주므로 출력이 크다 —
+    // 청크 상한(DEFAULT_REVIEW_CHUNK_SIZE 12,000자)에 지침·용어집을 더한 값을 잡는다.
+    // 세그먼트는 원문/번역문 쌍이라 문서 조회 도구와 달리 짝이 맞은 채로 온다.
+    name: 'review_translation',
+    profiles: ['general'],
+    effect: 'read',
+    trust: 'document',
+    maxOutputChars: 24_000,
+    displayNameKey: 'chat.toolName.reviewTranslation',
+    requires: ['project'],
+  },
+  {
+    name: 'get_review_chunk',
+    profiles: ['general'],
+    effect: 'read',
+    trust: 'document',
+    maxOutputChars: 16_000,
+    displayNameKey: 'chat.toolName.getReviewChunk',
+    requires: ['project'],
+  },
+  {
     name: 'get_review_results',
     profiles: PROJECT_PROFILES,
     effect: 'read',

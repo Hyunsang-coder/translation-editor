@@ -15,6 +15,34 @@ describe('resolveChatToolNames', () => {
     expect(names).not.toContain('propose_selection_edit');
   });
 
+// 프롬프트가 "전체 문서 검수도 처리 가능"이라고 약속하는데 도구가 바인딩되지 않아
+  // 모델이 문서 조회 도구 두 개(각각 독립적으로 잘림)를 대조하던 결함 (ADR-0022).
+  it('general profile에 문서 전체 검수 도구가 있다', () => {
+    const names = resolveChatToolNames({ profile: 'general', hasProject: true });
+
+    expect(names).toContain('review_translation');
+    expect(names).toContain('get_review_chunk');
+  });
+
+  it('프로젝트가 없으면 검수 도구도 노출하지 않는다', () => {
+    const names = resolveChatToolNames({ profile: 'general', hasProject: false });
+
+    expect(names).not.toContain('review_translation');
+    expect(names).not.toContain('get_review_chunk');
+  });
+
+  it('선택 프로필에는 문서 전체 검수 도구를 노출하지 않는다', () => {
+    for (const profile of ['selection-source', 'selection-target'] as const) {
+      const names = resolveChatToolNames({
+        profile,
+        hasProject: true,
+        hasSourceSelection: profile === 'selection-source',
+        hasTargetSelection: profile === 'selection-target',
+      });
+      expect(names).not.toContain('review_translation');
+    }
+  });
+
   it('selection-source profile에는 조회 도구만 있고 문서 수정 제안은 없다', () => {
     const names = resolveChatToolNames({
       profile: 'selection-source',

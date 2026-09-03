@@ -24,6 +24,7 @@ import type { ClientTool, ServerTool, StructuredToolInterface } from '@langchain
 import { resolveModelCapabilities } from '@/ai/chatContext/modelCapabilities';
 import { approxTokens } from '@/ai/chatContext/tokenBudget';
 import { toJsonSchema } from '@langchain/core/utils/json_schema';
+import { getReviewChunkTool, reviewTranslationTool } from '@/ai/tools/reviewTool';
 import { resolveChatToolNames } from '@/ai/tools/resolveChatTools';
 import { createSelectionTools } from '@/ai/tools/selectionTools';
 import { createProjectGuidanceTools } from '@/ai/tools/projectGuidanceTools';
@@ -169,6 +170,8 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
     getSourceDocumentTool,
     getTargetDocumentTool,
     getReviewResultsTool,
+    reviewTranslationTool,
+    getReviewChunkTool,
     suggestTranslationRule,
     proposeProjectMemoryChange,
     suggestForbiddenTerm,
@@ -254,6 +257,14 @@ function buildToolGuideMessage(params: {
   if (has('get_target_document')) {
     toolGuide.push('- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.');
   }
+  // 문서 전체 검수 도구. 이게 없으면 모델이 get_source_document + get_target_document를
+  // 각각 부르는데, 둘은 독립적으로 잘려 원문·번역문 조각이 서로 대응하지 않는다 (ADR-0022).
+  if (has('review_translation')) {
+    toolGuide.push('- review_translation: 문서 전체 검수. 원문↔번역문이 짝지어진 세그먼트와 검수 지침을 함께 돌려준다.');
+    if (has('get_review_chunk')) {
+      toolGuide.push('  · totalChunks > 1이면 get_review_chunk로 나머지 청크를 순서대로 가져와 이어서 검수하세요.');
+    }
+  }
   if (has('get_selection_surroundings')) {
     toolGuide.push('- get_selection_surroundings: 선택 영역만으로 부족할 때 앞뒤 문맥을 제한적으로 조회.');
   }
@@ -317,6 +328,14 @@ function buildToolGuideMessage(params: {
 
   // 우선순위 가이드 (바인딩된 도구에 따라 동적 생성)
   let priority = 1;
+
+  if (has('review_translation')) {
+    toolGuide.push(`${priority}. 문서 전체 검수 ("전체 검수해줘", "번역 다 확인해줘")`);
+    toolGuide.push('   → review_translation으로 시작하고, totalChunks > 1이면 get_review_chunk로 끝까지');
+    toolGuide.push('   → 문서 조회 도구로 대신하지 마세요. 원문·번역문이 따로 잘려 대응이 어긋납니다');
+    toolGuide.push('');
+    priority++;
+  }
 
   if (has('get_source_document') || has('get_target_document')) {
     toolGuide.push(`${priority}. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")`);

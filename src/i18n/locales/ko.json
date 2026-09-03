@@ -833,6 +833,8 @@
       "getSelectionSurroundings": "선택 주변 조회",
       "getAlignedSelectionContext": "연결된 원문 조회",
       "getReviewResults": "검수 결과 조회",
+      "reviewTranslation": "문서 전체 검수",
+      "getReviewChunk": "검수 구간 가져오기",
       "getProjectGuidance": "프로젝트 지침 조회",
       "searchProjectGlossary": "프로젝트 용어집 검색",
       "proposeSelectionEdit": "선택 수정안 제안",

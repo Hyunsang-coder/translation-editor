@@ -854,6 +854,8 @@
       "getSelectionSurroundings": "Selection Surroundings",
       "getAlignedSelectionContext": "Aligned Source",
       "getReviewResults": "Review Results",
+      "reviewTranslation": "Reviewing document",
+      "getReviewChunk": "Fetching review chunk",
       "getProjectGuidance": "Project Guidance",
       "searchProjectGlossary": "Project Glossary",
       "proposeSelectionEdit": "Selection Edit Proposal",
