@@ -9,6 +9,7 @@ import type {
 } from '@/types';
 import { stripHtml } from '@/utils/hash';
 import { resolveDirection } from '@/utils/detectLanguage';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 
 // ============================================
 // 요청 유형 정의
@@ -214,9 +215,6 @@ function buildQuestionSystemPrompt(project: ITEProject | null, _opts?: PromptOpt
     '- 번역 개선: 특정 문장의 다듬기, 자연스러운 표현 제안',
     '- 전체 문서 번역: 문서 전체 번역 요청도 처리 가능',
     '- 전체 문서 검수: 문서 전체 검수 요청도 처리 가능',
-    '',
-    '출력 포맷:',
-    '- 간결하게 작성하고, 필요 시 불릿/리스트/강조(볼드/이탤릭)를 사용할 수 있습니다.',
   ].join('\n');
 }
 
@@ -230,12 +228,15 @@ function buildGeneralSystemPrompt(project: ITEProject | null, _opts?: PromptOpti
 // 컨텍스트 포매터
 // ============================================
 
+// 라벨만 있고 "이걸 어떻게 쓰라"가 없으면 모델이 참고 목록으로 읽을지 지켜야 할 기준으로
+// 읽을지가 운에 달린다(projectKnowledgeRender.ts). 번역·검수가 쓰는 문장을 채팅도 쓴다 —
+// 갈라 두면 채팅이 만든 번역을 검수가 되잡는다.
 function formatTranslationRules(rules?: string): string {
   const trimmed = rules?.trim();
   if (!trimmed) return '';
   const maxLen = LIMITS.translationRulesChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[번역 규칙]', sliced].join('\n');
+  return ['[번역 규칙]', KNOWLEDGE_DIRECTIVES.translationRules, sliced].join('\n');
 }
 
 function formatProjectMemoryDigest(digest?: string): string {
@@ -245,6 +246,7 @@ function formatProjectMemoryDigest(digest?: string): string {
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
   return [
     '[프로젝트 메모리]',
+    KNOWLEDGE_DIRECTIVES.projectMemory,
     '(사용자가 승인한 장기 프로젝트 지식입니다. 아래 요약에 없는 상세가 필요하면 get_project_guidance로 조회하세요.)',
     sliced,
   ].join('\n');
@@ -255,7 +257,7 @@ function formatForbiddenTerms(digest?: string): string {
   if (!trimmed) return '';
   const maxLen = LIMITS.forbiddenTermsChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[금칙어]', sliced].join('\n');
+  return ['[금칙어]', KNOWLEDGE_DIRECTIVES.forbiddenTerms, sliced].join('\n');
 }
 
 function formatConversationSummary(summary?: string): string {
@@ -273,7 +275,7 @@ function formatGlossaryInjected(glossary?: string): string {
   if (!trimmed) return '';
   const maxLen = LIMITS.glossaryChars;
   const sliced = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-  return ['[글로서리(주입)]', sliced].join('\n');
+  return ['[글로서리(주입)]', KNOWLEDGE_DIRECTIVES.glossary, sliced].join('\n');
 }
 
 function formatDocument(label: string, text?: string): string {

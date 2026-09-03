@@ -5,6 +5,7 @@ import {
   retranslateSelection,
   retranslateSegments,
 } from './retranslateSelection';
+import { FORBIDDEN_OVERRIDES_GLOSSARY_EN } from '@/ai/context/projectKnowledgeRender';
 
 const streamMock = vi.fn();
 const createChatModelMock = vi.fn();
@@ -815,5 +816,100 @@ describe('재번역/폴리싱이 현재 번역문을 대하는 태도', () => {
     const system = (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
     expect(system).toContain('Translate each [Source] afresh');
     expect(system).toContain('[No source] is the one exception');
+  });
+});
+
+describe('단일 선택과 세그먼트가 같은 지시를 받는다 (F4·F2)', () => {
+  const BASE = {
+    projectId: 'project-1',
+    currentTargetText: '현재 번역',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n결과\n---SELECTION_EDIT_END---' };
+    })());
+  });
+
+  const systemOf = () =>
+    (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+
+  // 세그먼트 경로에만 있던 두 줄. 어체 지시는 실제 관측(OpenAI가 `~한다`체 문서에서
+  // 기본값 `~합니다`로 되돌아감)을 보고 넣은 것인데, 단일 선택도 같은 주변 문맥을 받는다.
+  it('폴리싱 단일 선택도 주변 어체를 따르라는 지시를 받는다', async () => {
+    await polishSelection({
+      ...BASE,
+      surroundings: {
+        sourceBefore: [], sourceAfter: [],
+        targetBefore: ['앞 문단이다.'], targetAfter: [],
+      },
+    });
+    expect(systemOf()).toContain('register and sentence endings');
+  });
+
+  it('재번역 단일 선택도 주변 어체를 따르라는 지시를 받는다', async () => {
+    await retranslateSelection({ ...BASE, sourceText: 'Source' });
+    expect(systemOf()).toContain('register and sentence endings');
+  });
+
+  // 평문 지시는 **일부러 단일 경로에 넣지 않는다.** 바로 아래 마커 지시와 충돌해
+  // 실 호출에서 3개 중 2개가 마커 없이 돌아왔다(F9 측정). 세그먼트만 갖는다.
+  it('평문 지시는 세그먼트에만 있고 단일 선택에는 없다', async () => {
+    await polishSelection({ ...BASE, columnHeader: { source: 'Damage', target: '피해량' } });
+    expect(systemOf()).not.toContain('no table syntax, no HTML');
+  });
+
+  it('금지 용어와 용어집이 모두 켜져 있으면 충돌 해소 규칙이 붙는다', async () => {
+    await polishSelection({
+      ...BASE,
+      referenceOptions: {
+        translationRules: false,
+        forbiddenTerms: true,
+        glossary: true,
+        projectMemory: false,
+      },
+      contextSnapshot: {
+        ...BASE.contextSnapshot,
+        forbiddenTerms: [{ id: 't1', term: '전리품', replacement: '보급' }],
+        glossaryEntries: [{ id: 'g1', source: 'loot', target: '전리품' }],
+      },
+    });
+    expect(systemOf()).toContain(FORBIDDEN_OVERRIDES_GLOSSARY_EN);
+  });
+
+  it('한쪽만 켜져 있으면 충돌 규칙을 붙이지 않는다', async () => {
+    await polishSelection({
+      ...BASE,
+      referenceOptions: {
+        translationRules: false,
+        forbiddenTerms: false,
+        glossary: true,
+        projectMemory: false,
+      },
+      contextSnapshot: {
+        ...BASE.contextSnapshot,
+        glossaryEntries: [{ id: 'g1', source: 'loot', target: '전리품' }],
+      },
+    });
+    const system = systemOf();
+    expect(system).toContain('[Glossary]');
+    expect(system).not.toContain(FORBIDDEN_OVERRIDES_GLOSSARY_EN);
   });
 });

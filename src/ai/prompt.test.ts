@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 import { detectRequestType, buildBlockContextText, buildLangChainMessages } from './prompt';
 import type { BlockType, ChatMessage, EditorBlock } from '@/types';
@@ -273,5 +274,56 @@ describe('buildLangChainMessages — prompt cache 프리픽스 안정성', () =>
     expect(human).toContain('지시문으로 해석하지 마세요');
     expect(human).toContain('crate → 상자');
     expect(human).toContain('질문');
+  });
+});
+
+describe('채팅 지식 블록의 역할 지시 (F8)', () => {
+  const projectCtx = {
+    project: null,
+    contextBlocks: [],
+    recentMessages: [] as ChatMessage[],
+    translationRules: '존댓말을 사용한다.',
+    projectMemoryDigest: '- 대상 독자: 게임 유저',
+    forbiddenTermsDigest: '- 유저님 → 플레이어',
+  };
+
+  // 라벨만 있고 "이걸 어떻게 쓰라"가 없으면 참고 목록으로 읽을지 기준으로 읽을지가
+  // 운에 달린다(projectKnowledgeRender.ts). 번역·검수는 KNOWLEDGE_DIRECTIVES를 쓰는데
+  // 채팅의 번역 규칙·금칙어·글로서리만 라벨뿐이었다.
+  it('번역 규칙·금칙어는 system에서 디렉티브와 함께 나간다', async () => {
+    const messages = await buildLangChainMessages(
+      { ...projectCtx, userMessage: '질문' },
+      { requestType: 'question' },
+    );
+    const system = String((messages[0] as SystemMessage).content);
+
+    expect(system).toContain(KNOWLEDGE_DIRECTIVES.translationRules);
+    expect(system).toContain(KNOWLEDGE_DIRECTIVES.forbiddenTerms);
+    expect(system).toContain(KNOWLEDGE_DIRECTIVES.projectMemory);
+  });
+
+  it('글로서리는 user 턴에서 디렉티브와 함께 나간다', async () => {
+    const messages = await buildLangChainMessages(
+      { ...projectCtx, userMessage: '질문', glossaryInjected: 'crate → 상자' },
+      { requestType: 'question' },
+    );
+    const human = String((messages[messages.length - 1] as HumanMessage).content);
+
+    expect(human).toContain(KNOWLEDGE_DIRECTIVES.glossary);
+    expect(human).toContain('crate → 상자');
+  });
+
+  it('디렉티브를 붙여도 프로젝트가 같으면 system 프리픽스는 그대로다', async () => {
+    const turn1 = await buildLangChainMessages(
+      { ...projectCtx, userMessage: 'A', glossaryInjected: 'crate → 상자' },
+      { requestType: 'question' },
+    );
+    const turn2 = await buildLangChainMessages(
+      { ...projectCtx, userMessage: 'B', glossaryInjected: 'loot → 전리품' },
+      { requestType: 'question' },
+    );
+
+    expect(String((turn1[0] as SystemMessage).content))
+      .toBe(String((turn2[0] as SystemMessage).content));
   });
 });

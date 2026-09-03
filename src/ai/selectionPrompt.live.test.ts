@@ -14,6 +14,8 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { polishSelection, retranslateSegments, retranslateSelection } from './retranslateSelection';
+import { polishTargetDocumentWithStreaming } from './polishDocument';
+import { tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 import { buildLangChainMessages } from '@/ai/prompt';
 import { createChatModel } from '@/ai/client';
 import { useAiConfigStore } from '@/stores/aiConfigStore';
@@ -484,5 +486,65 @@ describe.skipIf(!LIVE)('여러 블록 경로 — 수정 전후', () => {
       reportDoc('AFTER 문맥있음', index, result.replacements[i]!);
       expectUsableReplacement(result.replacements[i]!);
     });
+  }, 180_000);
+});
+
+/**
+ * F9 — **문서 전체 폴리싱과 선택 폴리싱이 같은 세기로 고치는가.**
+ *
+ * 두 경로는 범위만 다른 같은 작업인데 프롬프트가 반대로 기운다:
+ *   문서: 'conservative … editor' + Edit threshold 7줄 + 'Reorder … only when necessary'
+ *   선택: 'Sentence structure is the main job … whenever the current form follows the
+ *         source language's syntax'
+ *
+ * 같은 문단을 양쪽에 넣고 **어절 유지율**을 비교한다. 실측 기준선은
+ * 한 단어 결함 수정 0.90(치환) / 직역투 구조 재작성 0.47(재작성)이다.
+ * 두 경로의 차이가 0.1 이내면 F9는 취향으로 강등하고 프롬프트를 손대지 않는다.
+ *
+ * **이 실행이 베이스라인이다** — 문구는 아직 아무것도 바꾸지 않았다(§5가 "지표로 먼저
+ * 관측할 것"을 조건으로 걸어 둔 사안이라, 수정 제안 전에 숫자를 먼저 만든다).
+ *
+ * 비용: 픽스처 3개 × 2경로 = **6콜**.
+ */
+describe.skipIf(!LIVE)('문서 폴리싱 ↔ 선택 폴리싱 세기 대조 (F9 베이스라인)', () => {
+  beforeAll(() => {
+    useAiConfigStore.setState({ provider: PROVIDER });
+  });
+
+  it.each(FIXTURES)('같은 문단을 두 경로에 넣는다 — $label', async ({ label, source, target }) => {
+    const docResult = await polishTargetDocumentWithStreaming({
+      targetDocJson: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: target }] }],
+      },
+      targetLanguage: 'Korean',
+    });
+    const docText = tipTapJsonToMarkdownForTranslation(docResult.doc).trim();
+
+    // 원문을 함께 넘긴다 — 제품에서 선택 폴리싱은 보통 짝지어진 원문을 받고, 이 파일의
+    // 다른 폴리싱 픽스처도 그렇다. (원문 없이 부르면 n=3에서 1번 마커를 빠뜨렸다.)
+    const selResult = await polishSelection({
+      projectId: 'live-harness',
+      sourceText: source,
+      currentTargetText: target,
+      currentTargetUnitText: target,
+      targetLanguage: 'Korean',
+      referenceOptions: REFERENCE_OPTIONS,
+      contextSnapshot: EMPTY_SNAPSHOT,
+    });
+
+    report('문서 폴리싱', label, target, docText);
+    report('선택 폴리싱', label, target, selResult.replacementText);
+
+    const docRatio = structureDelta(target, docText).keptWordRatio;
+    const selRatio = structureDelta(target, selResult.replacementText).keptWordRatio;
+    console.log(
+      `   대조  : 문서 ${docRatio} vs 선택 ${selRatio} · 차이 ${Math.abs(docRatio - selRatio).toFixed(2)}` +
+      `  (기준선 치환 0.90 / 재작성 0.47, 차이 0.1 이내면 같은 세기로 본다)`,
+    );
+
+    expect(docText.trim().length).toBeGreaterThan(0);
+    expect(docText).not.toContain('---POLISH');
+    expectUsableReplacement(selResult.replacementText);
   }, 180_000);
 });

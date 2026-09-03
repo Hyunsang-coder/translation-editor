@@ -7,6 +7,7 @@ import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
 import { createMockAiConfig } from '@/test/mocks/ai';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
+import { FORBIDDEN_OVERRIDES_GLOSSARY_EN } from '@/ai/context/projectKnowledgeRender';
 import type { ResolvedWorkflowContext } from '@/types';
 
 const mocks = vi.hoisted(() => ({
@@ -156,9 +157,12 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(systemPrompt).toContain('Preserve the document topology');
     expect(systemPrompt).toContain('Do not add, remove, reorder, merge, or split document blocks');
     expect(systemPrompt).toContain('Instruction priority:');
-    expect(systemPrompt.indexOf('Additional instructions for this polishing run:'))
+    expect(systemPrompt.indexOf('Additional instructions for this polishing run'))
       .toBeLessThan(systemPrompt.indexOf('User comments attached to specific excerpts'));
+    // 금칙어가 사다리에 없어 용어집과 충돌했을 때 해소 규칙이 없었다 (검수만 갖고 있었다)
     expect(systemPrompt.indexOf('User comments attached to specific excerpts'))
+      .toBeLessThan(systemPrompt.indexOf('Forbidden terms and required replacements'));
+    expect(systemPrompt.indexOf('Forbidden terms and required replacements'))
       .toBeLessThan(systemPrompt.indexOf('Glossary terminology'));
     expect(systemPrompt.indexOf('Glossary terminology'))
       .toBeLessThan(systemPrompt.indexOf('Project style and translation rules'));
@@ -175,9 +179,12 @@ describe('polishTargetDocumentWithStreaming', () => {
 
     const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
     const systemPrompt = String(messages[0]?.content);
+    const userPrompt = String(messages[1]?.content);
 
-    expect(systemPrompt).toContain('Additional user instructions for this polishing run:');
-    expect(systemPrompt).toContain('Make the tone more formal without changing product terminology.');
+    // 이번 실행에만 적용되는 지시는 user에 둔다 (system은 cacheSystem 프리픽스)
+    expect(userPrompt).toContain('Additional user instructions for this polishing run:');
+    expect(userPrompt).toContain('Make the tone more formal without changing product terminology.');
+    expect(systemPrompt).not.toContain('Make the tone more formal without changing product terminology.');
   });
 
   it('프로젝트 컨텍스트를 폴리싱 프롬프트에 포함한다', async () => {
@@ -190,7 +197,7 @@ describe('polishTargetDocumentWithStreaming', () => {
     const [messages] = mocks.stream.mock.calls[0] as [Array<{ content?: string }>, unknown];
     const systemPrompt = String(messages[0]?.content);
 
-    expect(systemPrompt).toContain('Style/translation rules to respect:');
+    expect(systemPrompt).toContain('These rules take precedence over general convention:');
     expect(systemPrompt).toContain('Keep product names untranslated.');
     expect(systemPrompt).toContain('[Project Context]');
     expect(systemPrompt).toContain('PUBG patch notes for competitive players.');
@@ -209,6 +216,46 @@ describe('polishTargetDocumentWithStreaming', () => {
     expect(systemPrompt).toContain('Keep these preferred translations exactly. Do not substitute synonyms:');
     expect(systemPrompt).toContain('- Care Package = 보급 상자');
     expect(systemPrompt).toContain('- Blue Zone = 블루존');
+  });
+
+
+  describe('금칙어 우선순위와 캐시 경계 (F2·F5)', () => {
+    const collect = async (
+      params: Partial<Parameters<typeof polishTargetDocumentWithStreaming>[0]> = {},
+    ) => {
+      await polishTargetDocumentWithStreaming({ targetDocJson, ...params });
+      const [messages] = mocks.stream.mock.calls.at(-1) as [Array<{ content?: string }>, unknown];
+      return {
+        system: String(messages[0]?.content),
+        user: String(messages[1]?.content),
+      };
+    };
+
+    it('금지 용어와 용어집이 모두 있으면 충돌 해소 규칙이 붙는다', async () => {
+      const { system } = await collect({ resolvedContext });
+      expect(system).toContain(FORBIDDEN_OVERRIDES_GLOSSARY_EN);
+    });
+
+    it('한쪽만 있으면 붙이지 않는다', async () => {
+      const { system } = await collect({ glossary: '- workspace = workspace' });
+      expect(system).toContain('[Glossary]');
+      expect(system).not.toContain(FORBIDDEN_OVERRIDES_GLOSSARY_EN);
+    });
+
+    it('지시사항만 바꿔 재실행해도 system은 바이트 동일하다', async () => {
+      const first = await collect({ resolvedContext, polishMessage: 'More formal.' });
+      const second = await collect({ resolvedContext, polishMessage: 'More casual.' });
+
+      expect(second.system).toBe(first.system);
+      expect(first.user).toContain('More formal.');
+      expect(second.user).toContain('More casual.');
+    });
+
+    it('사용자 인라인 코멘트도 user에 둔다', async () => {
+      const { system, user } = await collect({ userComments: '[사용자 코멘트]\n1. "x" — keep it.' });
+      expect(user).toContain('[사용자 코멘트]');
+      expect(system).not.toContain('[사용자 코멘트]');
+    });
   });
 
   it('취소 신호가 이미 있으면 호출하지 않는다', async () => {

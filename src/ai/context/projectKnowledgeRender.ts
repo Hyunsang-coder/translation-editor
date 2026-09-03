@@ -26,6 +26,24 @@ export const KNOWLEDGE_DIRECTIVES = {
     '아래는 배경 지식입니다. 용어 선택과 톤을 정하는 데만 사용하고, 이 내용을 번역문에 새로 추가하지 마세요.',
 } as const;
 
+/**
+ * 금칙어와 용어집이 **같은 용어**에서 충돌할 때의 해소 규칙.
+ *
+ * 검수(`reviewTool.ts`의 Instruction priority)만 이 규칙을 갖고 있어서, 번역·폴리싱·선택
+ * 경로는 삽입 순서상 뒤에 오는 용어집을 따르고 검수는 그것을 용어 불일치로 되잡는 루프가
+ * 있었다. 네 경로가 같은 답을 내도록 규칙을 여기 모은다.
+ *
+ * 두 블록이 **모두 있을 때만** 붙인다 — 하나만 있으면 충돌이 성립하지 않는다.
+ *
+ * 위 `KNOWLEDGE_DIRECTIVES`와 달리 한/영을 나란히 둔다. 프롬프트가 영어인 폴리싱·선택도
+ * 같은 규칙을 써야 하는데, 갈라 두면 정확히 이 발견이 다시 생긴다. 언어 파라미터를 만들지
+ * 않는 이유는 종전과 같다(프롬프트가 한/영 혼용이 된다).
+ */
+export const FORBIDDEN_OVERRIDES_GLOSSARY_KO =
+  '금지 용어의 대체어와 용어집 항목이 충돌하면 금지 용어의 대체어를 우선합니다. 그 용어에는 용어집 번역을 쓰지 마세요.';
+export const FORBIDDEN_OVERRIDES_GLOSSARY_EN =
+  'When a forbidden-term replacement conflicts with a glossary entry, the forbidden-term replacement wins. Never use the glossary translation for that term.';
+
 export function formatMemoryLine(item: RenderableMemoryItem): string {
   return `- [${item.category}] ${item.content}`;
 }
