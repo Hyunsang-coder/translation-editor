@@ -88,6 +88,23 @@ describe('SelectionEditPreviewModal', () => {
     );
   });
 
+  it('셀 목록은 스크롤되고 추가 지시사항 이하는 고정 영역에 둔다', () => {
+    const cells = [
+      { sourceText: 'One', currentText: '하나', replacementText: '하나 다듬음' },
+      { sourceText: 'Two', currentText: '둘', replacementText: '둘 다듬음' },
+    ];
+    renderModal({ mode: 'polish', cells });
+
+    const scrollArea = screen.getByTestId('selection-edit-scroll-area');
+    const fixedArea = screen.getByTestId('selection-edit-fixed-area');
+
+    expect(scrollArea).toHaveClass('overflow-y-auto', 'flex-1', 'min-h-0');
+    expect(screen.getAllByTestId('selection-edit-cell')[0]).toBeInTheDocument();
+    expect(scrollArea).toContainElement(screen.getAllByTestId('selection-edit-cell')[0]!);
+    expect(fixedArea).toContainElement(screen.getByTestId('selection-edit-instruction'));
+    expect(fixedArea).toContainElement(screen.getByTestId('selection-edit-primary-button'));
+  });
+
   it('수정안이 있으면 "다시 재번역"으로 재생성할 수 있다', () => {
     const { props } = renderModal({ replacementText: '개선된 번역' });
 

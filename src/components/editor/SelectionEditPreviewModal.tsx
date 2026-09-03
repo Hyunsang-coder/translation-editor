@@ -225,7 +225,7 @@ export function SelectionEditPreviewModal({
       <div className="absolute inset-0 bg-black/35" aria-hidden />
       <div
         data-testid="selection-edit-modal"
-        className="relative z-10 w-[min(720px,calc(100vw-32px))] max-h-[85vh] overflow-y-auto rounded-2xl border border-editor-border bg-editor-surface p-5 shadow-2xl"
+        className="relative z-10 flex max-h-[85vh] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-editor-border bg-editor-surface p-5 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -340,278 +340,285 @@ export function SelectionEditPreviewModal({
           </div>
         )}
 
-        {cells ? (
-          // 셀마다 원문·현재·제안을 따로 보여준다. 이어 붙여 보여주면 어느 제안이 어느
-          // 셀로 가는지가 흐려지고, 손편집이 열리면 셀 경계가 무너진다.
-          <div className="mt-4 space-y-3">
-            {selectableCells && (
-              <div className="flex items-center gap-2 px-1">
-                <input
-                  data-testid="selection-edit-cell-select-all"
-                  type="checkbox"
-                  checked={selectedCellIndexes.size === applicableCellIndexes.length}
-                  onChange={(event) =>
-                    setDeselectedCells(
-                      event.currentTarget.checked ? new Set() : new Set(applicableCellIndexes),
-                    )
-                  }
-                  aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
-                />
-                <span className="text-xs text-editor-muted">
-                  {t('selection.selectedBlockCount', {
-                    total: cells.length,
-                    selected: selectedCellIndexes.size,
-                    defaultValue: '블록 {{total}}개 중 {{selected}}개 적용',
-                  })}
-                </span>
-              </div>
-            )}
-            {cells.map((cell, index) => (
-              <section
-                key={index}
-                data-testid="selection-edit-cell"
-                className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
-                  selectableCells && !selectedCellIndexes.has(index) ? 'opacity-50' : ''
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-                  <label className="flex items-center gap-2">
-                    {/* 제안이 안 온 블록은 체크박스를 주지 않는다 — 고를 것이 없다. */}
-                    {selectableCells && Boolean(cell.replacementText) && (
-                      <input
-                        data-testid="selection-edit-cell-checkbox"
-                        type="checkbox"
-                        checked={selectedCellIndexes.has(index)}
-                        onChange={() => toggleCell(index)}
-                        aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
-                      />
+        <div
+          data-testid="selection-edit-scroll-area"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 scrollbar-thin"
+        >
+          {cells ? (
+            // 셀마다 원문·현재·제안을 따로 보여준다. 이어 붙여 보여주면 어느 제안이 어느
+            // 셀로 가는지가 흐려지고, 손편집이 열리면 셀 경계가 무너진다.
+            <div className="mt-4 space-y-3">
+              {selectableCells && (
+                <div className="flex items-center gap-2 px-1">
+                  <input
+                    data-testid="selection-edit-cell-select-all"
+                    type="checkbox"
+                    checked={selectedCellIndexes.size === applicableCellIndexes.length}
+                    onChange={(event) =>
+                      setDeselectedCells(
+                        event.currentTarget.checked ? new Set() : new Set(applicableCellIndexes),
+                      )
+                    }
+                    aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
+                  />
+                  <span className="text-xs text-editor-muted">
+                    {t('selection.selectedBlockCount', {
+                      total: cells.length,
+                      selected: selectedCellIndexes.size,
+                      defaultValue: '블록 {{total}}개 중 {{selected}}개 적용',
+                    })}
+                  </span>
+                </div>
+              )}
+              {cells.map((cell, index) => (
+                <section
+                  key={index}
+                  data-testid="selection-edit-cell"
+                  className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
+                    selectableCells && !selectedCellIndexes.has(index) ? 'opacity-50' : ''
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                    <label className="flex items-center gap-2">
+                      {/* 제안이 안 온 블록은 체크박스를 주지 않는다 — 고를 것이 없다. */}
+                      {selectableCells && Boolean(cell.replacementText) && (
+                        <input
+                          data-testid="selection-edit-cell-checkbox"
+                          type="checkbox"
+                          checked={selectedCellIndexes.has(index)}
+                          onChange={() => toggleCell(index)}
+                          aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
+                        />
+                      )}
+                      <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
+                    </label>
+                    {cell.columnHeader && (
+                      <span className="normal-case font-medium text-primary-500">
+                        {t('selection.tableColumnHeaderLabel', {
+                          header: [cell.columnHeader.source, cell.columnHeader.target]
+                            .filter(Boolean)
+                            .join(' / '),
+                        })}
+                      </span>
                     )}
-                    <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
-                  </label>
-                  {cell.columnHeader && (
-                    <span className="normal-case font-medium text-primary-500">
-                      {t('selection.tableColumnHeaderLabel', {
-                        header: [cell.columnHeader.source, cell.columnHeader.target]
-                          .filter(Boolean)
-                          .join(' / '),
-                      })}
+                  </div>
+                  {cell.sourceText ? (
+                    <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
+                      {cell.sourceText}
+                    </div>
+                  ) : isPolish ? (
+                    // 폴리싱은 원문이 없어도 정상 경로다 — 경고가 아니라 사실만 적는다
+                    <div className="mb-2 text-xs text-editor-muted">
+                      {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
+                    </div>
+                  ) : (
+                    // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
+                    <div className="mb-2 text-xs font-medium text-severity-major-deep">
+                      {t('selection.segmentSourceMissing')}
+                    </div>
+                  )}
+                  {cell.replacementText ? (
+                    <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
+                  ) : (
+                    <div className="whitespace-pre-wrap text-sm text-editor-text">
+                      {cell.currentText}
+                    </div>
+                  )}
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className={`mt-4 grid gap-3 ${showSourceCard ? 'sm:grid-cols-2' : ''}`}>
+              {showSourceCard && (
+              <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                  <span>Source</span>
+                  {alignmentLabel && (
+                    <span
+                      data-testid="selection-source-alignment-precision"
+                      className="normal-case font-medium text-primary-500"
+                    >
+                      {alignmentLabel}
                     </span>
                   )}
                 </div>
-                {cell.sourceText ? (
-                  <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
-                    {cell.sourceText}
-                  </div>
-                ) : isPolish ? (
-                  // 폴리싱은 원문이 없어도 정상 경로다 — 경고가 아니라 사실만 적는다
-                  <div className="mb-2 text-xs text-editor-muted">
-                    {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
-                  </div>
-                ) : (
-                  // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
-                  <div className="mb-2 text-xs font-medium text-severity-major-deep">
-                    {t('selection.segmentSourceMissing')}
-                  </div>
-                )}
-                {cell.replacementText ? (
-                  <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
-                ) : (
-                  <div className="whitespace-pre-wrap text-sm text-editor-text">
-                    {cell.currentText}
-                  </div>
-                )}
+                <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
               </section>
-            ))}
-          </div>
-        ) : (
-          <div className={`mt-4 grid gap-3 ${showSourceCard ? 'sm:grid-cols-2' : ''}`}>
-            {showSourceCard && (
-            <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-              <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-                <span>Source</span>
-                {alignmentLabel && (
-                  <span
-                    data-testid="selection-source-alignment-precision"
-                    className="normal-case font-medium text-primary-500"
-                  >
-                    {alignmentLabel}
-                  </span>
-                )}
-              </div>
-              <div className="whitespace-pre-wrap text-sm text-editor-text">{sourceText}</div>
-            </section>
-            )}
-            <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
-              <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-                <span>Target</span>
-                {/* 원문 카드가 빠진 이유를 카드 안에서 밝힌다 — 폴리싱에서만 생기는 상태 */}
-                {isPolish && !showSourceCard && (
-                  <span className="normal-case font-medium text-editor-muted">
-                    {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
-                  </span>
-                )}
-              </div>
-              <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
-            </section>
-          </div>
-        )}
+              )}
+              <section className="rounded-xl border border-editor-border bg-editor-bg p-3">
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                  <span>Target</span>
+                  {/* 원문 카드가 빠진 이유를 카드 안에서 밝힌다 — 폴리싱에서만 생기는 상태 */}
+                  {isPolish && !showSourceCard && (
+                    <span className="normal-case font-medium text-editor-muted">
+                      {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
+                    </span>
+                  )}
+                </div>
+                <div className="whitespace-pre-wrap text-sm text-editor-text">{selection.text}</div>
+              </section>
+            </div>
+          )}
+        </div>
 
-        {!proposalOnly && <div className="mt-4">
-          <label className="block">
-            <span className="text-xs font-medium text-editor-text">
-              {t('selection.instruction', '추가 지시사항')}
-            </span>
-            <textarea
-              data-testid="selection-edit-instruction"
-              className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+        <div data-testid="selection-edit-fixed-area" className="shrink-0">
+          {!proposalOnly && <div className="mt-4">
+            <label className="block">
+              <span className="text-xs font-medium text-editor-text">
+                {t('selection.instruction', '추가 지시사항')}
+              </span>
+              <textarea
+                data-testid="selection-edit-instruction"
+                className="mt-1 min-h-20 w-full rounded-xl border border-editor-border bg-editor-bg px-3 py-2 text-sm text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+                value={instruction}
+                onChange={(event) => onInstructionChange(event.target.value)}
+                placeholder={
+                  isPolish
+                    ? t('selection.polishInstructionPlaceholder', '예: 더 간결하게, 문어체로')
+                    : t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')
+                }
+                disabled={isLoading}
+              />
+            </label>
+            {/* 칩은 label 밖에 둔다 — label 안의 button은 클릭이 textarea 포커스로 새어 간다. */}
+            <RecentInstructions
+              projectId={selection.projectId}
+              kind={isPolish ? 'selectionPolish' : 'selectionRetranslate'}
               value={instruction}
-              onChange={(event) => onInstructionChange(event.target.value)}
-              placeholder={
-                isPolish
-                  ? t('selection.polishInstructionPlaceholder', '예: 더 간결하게, 문어체로')
-                  : t('selection.instructionPlaceholder', '예: 더 간결하고 자연스럽게')
-              }
+              onPick={onInstructionChange}
               disabled={isLoading}
             />
-          </label>
-          {/* 칩은 label 밖에 둔다 — label 안의 button은 클릭이 textarea 포커스로 새어 간다. */}
-          <RecentInstructions
-            projectId={selection.projectId}
-            kind={isPolish ? 'selectionPolish' : 'selectionRetranslate'}
-            value={instruction}
-            onPick={onInstructionChange}
-            disabled={isLoading}
-          />
-        </div>}
+          </div>}
 
-        {!proposalOnly && <fieldset className="mt-3">
-          <legend className="text-xs font-medium text-editor-text">
-            {t('selection.optionalReferences', '선택적 컨텍스트')}
-          </legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {OPTION_KEYS.map(({ key, label }) => (
-              <label
-                key={key}
-                className="flex items-center gap-2 rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-xs text-editor-text"
-              >
-                <input
-                  data-testid={`selection-reference-${key}`}
-                  type="checkbox"
-                  checked={referenceOptions[key]}
-                  onChange={(event) =>
-                    onReferenceOptionsChange({
-                      ...referenceOptions,
-                      [key]: event.target.checked,
-                    })
-                  }
-                  disabled={isLoading}
-                />
-                {t(label)}
-              </label>
-            ))}
-          </div>
-        </fieldset>}
-
-        {!cells && (replacementText || isLoading) && (
-          <section className="mt-4 rounded-xl border border-primary-300/70 bg-primary-50/40 p-3 dark:bg-primary-950/20">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-editor-text">
-                {t('selection.proposal', '수정안')}
-              </span>
-              {canEditProposal && (
-                <button
-                  type="button"
-                  data-testid="selection-edit-proposal-toggle"
-                  className="rounded px-2 py-0.5 text-[11px] font-medium text-primary-500 hover:bg-primary-100/60 dark:hover:bg-primary-900/40"
-                  onClick={() => setEditingProposal((value) => !value)}
+          {!proposalOnly && <fieldset className="mt-3">
+            <legend className="text-xs font-medium text-editor-text">
+              {t('selection.optionalReferences', '선택적 컨텍스트')}
+            </legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {OPTION_KEYS.map(({ key, label }) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-2 rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-xs text-editor-text"
                 >
-                  {editingProposal
-                    ? t('selection.previewChanges', '변경 미리보기')
-                    : t('selection.editProposal', '직접 수정')}
-                </button>
-              )}
+                  <input
+                    data-testid={`selection-reference-${key}`}
+                    type="checkbox"
+                    checked={referenceOptions[key]}
+                    onChange={(event) =>
+                      onReferenceOptionsChange({
+                        ...referenceOptions,
+                        [key]: event.target.checked,
+                      })
+                    }
+                    disabled={isLoading}
+                  />
+                  {t(label)}
+                </label>
+              ))}
             </div>
-            {replacementText ? (
-              editingProposal && canEditProposal ? (
-                <textarea
-                  data-testid="selection-edit-proposal-editor"
-                  className="min-h-24 w-full rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-sm leading-relaxed text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
-                  value={replacementText}
-                  onChange={(event) => onReplacementChange?.(event.target.value)}
-                  autoFocus
-                />
-              ) : (
-                // SelectiveDiffList(폴리싱)와 같은 좌우 비교
-                <ProposalDiff original={selection.text} suggested={replacementText} />
-              )
-            ) : (
-              <div className="text-sm text-editor-muted">
-                {t('selection.generating', '수정안을 생성하는 중…')}
+          </fieldset>}
+
+          {!cells && (replacementText || isLoading) && (
+            <section className="mt-4 rounded-xl border border-primary-300/70 bg-primary-50/40 p-3 dark:bg-primary-950/20">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-editor-text">
+                  {t('selection.proposal', '수정안')}
+                </span>
+                {canEditProposal && (
+                  <button
+                    type="button"
+                    data-testid="selection-edit-proposal-toggle"
+                    className="rounded px-2 py-0.5 text-[11px] font-medium text-primary-500 hover:bg-primary-100/60 dark:hover:bg-primary-900/40"
+                    onClick={() => setEditingProposal((value) => !value)}
+                  >
+                    {editingProposal
+                      ? t('selection.previewChanges', '변경 미리보기')
+                      : t('selection.editProposal', '직접 수정')}
+                  </button>
+                )}
               </div>
-            )}
-          </section>
-        )}
+              {replacementText ? (
+                editingProposal && canEditProposal ? (
+                  <textarea
+                    data-testid="selection-edit-proposal-editor"
+                    className="min-h-24 w-full rounded-lg border border-editor-border bg-editor-bg px-3 py-2 text-sm leading-relaxed text-editor-text outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+                    value={replacementText}
+                    onChange={(event) => onReplacementChange?.(event.target.value)}
+                    autoFocus
+                  />
+                ) : (
+                  // SelectiveDiffList(폴리싱)와 같은 좌우 비교
+                  <ProposalDiff original={selection.text} suggested={replacementText} />
+                )
+              ) : (
+                <div className="text-sm text-editor-muted">
+                  {t('selection.generating', '수정안을 생성하는 중…')}
+                </div>
+              )}
+            </section>
+          )}
 
-        {contextManifest && (
-          <div className="mt-2 text-[10px] text-editor-muted">
-            {t('chat.contextReferences', '참조')}: {contextManifest.included.join(' · ')}
-          </div>
-        )}
-        {error && (
-          <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep">
-            {error}
-          </div>
-        )}
+          {contextManifest && (
+            <div className="mt-2 text-[10px] text-editor-muted">
+              {t('chat.contextReferences', '참조')}: {contextManifest.included.join(' · ')}
+            </div>
+          )}
+          {error && (
+            <div className="mt-3 rounded-lg border border-severity-critical/40 bg-severity-critical/10 px-3 py-2 text-xs text-severity-critical-deep">
+              {error}
+            </div>
+          )}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            data-testid="selection-edit-cancel-button"
-            className="rounded-lg border border-editor-border px-3 py-2 text-sm text-editor-muted hover:bg-editor-border/60"
-            onClick={onClose}
-          >
-            {t('common.cancel')}
-          </button>
-          {!proposalOnly && hasProposal && !isLoading && (
+          <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
-              data-testid="selection-edit-regenerate-button"
-              className="rounded-lg border border-primary-300 px-3 py-2 text-sm font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/40"
-              onClick={onGenerate}
+              data-testid="selection-edit-cancel-button"
+              className="rounded-lg border border-editor-border px-3 py-2 text-sm text-editor-muted hover:bg-editor-border/60"
+              onClick={onClose}
             >
-              {actionLabel}
+              {t('common.cancel')}
             </button>
-          )}
-          <button
-            type="button"
-            data-testid="selection-edit-primary-button"
-            className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
-            onClick={
-              hasProposal && !isLoading
-                ? () => onApply(cells ? selectedCellIndexes : undefined)
-                : onGenerate
-            }
-            // 폴리싱은 원문이 없어도 실행된다 — 있어야 하는 건 다듬을 번역문뿐이다.
-            disabled={
-              isLoading ||
-              (!hasProposal && !(isPolish ? selection.text.trim() : sourceText.trim())) ||
-              // 전부 해제하면 적용할 것이 없다 — 빈 트랜잭션으로 앵커만 날리지 않는다.
-              (selectableCells && selectedCellIndexes.size === 0)
-            }
-          >
-            {hasProposal
-              ? selectableCells && selectedCellIndexes.size < (cells?.length ?? 0)
-                ? t('selection.applySelectedCount', {
-                    count: selectedCellIndexes.size,
-                    defaultValue: '{{count}}개 적용',
-                  })
-                : t('common.apply', '적용')
-              : isLoading
-                ? isPolish
-                  ? t('editor.polishing')
-                  : t('editor.translating')
-                : actionLabel}
-          </button>
+            {!proposalOnly && hasProposal && !isLoading && (
+              <button
+                type="button"
+                data-testid="selection-edit-regenerate-button"
+                className="rounded-lg border border-primary-300 px-3 py-2 text-sm font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+                onClick={onGenerate}
+              >
+                {actionLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              data-testid="selection-edit-primary-button"
+              className="rounded-lg bg-primary-fill px-3 py-2 text-sm font-medium text-white hover:bg-primary-fill-hover disabled:opacity-50"
+              onClick={
+                hasProposal && !isLoading
+                  ? () => onApply(cells ? selectedCellIndexes : undefined)
+                  : onGenerate
+              }
+              // 폴리싱은 원문이 없어도 실행된다 — 있어야 하는 건 다듬을 번역문뿐이다.
+              disabled={
+                isLoading ||
+                (!hasProposal && !(isPolish ? selection.text.trim() : sourceText.trim())) ||
+                // 전부 해제하면 적용할 것이 없다 — 빈 트랜잭션으로 앵커만 날리지 않는다.
+                (selectableCells && selectedCellIndexes.size === 0)
+              }
+            >
+              {hasProposal
+                ? selectableCells && selectedCellIndexes.size < (cells?.length ?? 0)
+                  ? t('selection.applySelectedCount', {
+                      count: selectedCellIndexes.size,
+                      defaultValue: '{{count}}개 적용',
+                    })
+                  : t('common.apply', '적용')
+                : isLoading
+                  ? isPolish
+                    ? t('editor.polishing')
+                    : t('editor.translating')
+                  : actionLabel}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
