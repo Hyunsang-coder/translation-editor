@@ -51,11 +51,26 @@ function extractText(ai: unknown): string {
   return '';
 }
 
+/**
+ * 콘텐츠가 구분자를 위조해 신뢰경계를 벗어나지 못하도록 태그 문자열을 무해화한다.
+ *
+ * 대화에는 사용자가 외부에서 붙여넣은 본문이 그대로 들어온다 — 그 안에
+ * `</untrusted_conversation>`가 있으면 그 뒤가 경계 밖 지시문으로 읽힌다.
+ * documentTools의 neutralizeUntrustedMarkers, middleware의 neutralizeExternalMarkers와
+ * 같은 방식(zero-width space 삽입).
+ */
+function neutralizeConversationMarkers(text: string): string {
+  return text.replace(
+    /<(\/?)untrusted_conversation>/gi,
+    '<\u200b$1untrusted_conversation\u200b>',
+  );
+}
+
 function buildTranscript(messages: ChatMessage[]): string {
   return messages
     .map((m) => {
       const role = m.role === 'assistant' ? 'AI' : m.role === 'system' ? 'SYSTEM' : 'USER';
-      return `${role}: ${m.content}`;
+      return `${role}: ${neutralizeConversationMarkers(m.content)}`;
     })
     .join('\n');
 }
