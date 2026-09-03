@@ -55,12 +55,22 @@ export interface RunReviewParams {
 // Sonnet 5 기본 adaptive thinking이 예산을 잠식해 이슈 목록이 무음 truncation되는 것을 방지.
 const REVIEW_MAX_TOKENS = 16384;
 
-function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
+/**
+ * 검수 프롬프트 조립. 개발 패널(`ReviewTestPanel`)이 "실제로 보내는 프롬프트"를
+ * 그대로 보여줄 수 있도록 export 한다 — 정적부(`buildReviewPrompt`)만 표시하면
+ * 용어집·금칙어·메모리·문맥 지시가 빠진 다른 프롬프트를 디버깅하게 된다.
+ */
+export function buildReviewMessages(params: RunReviewParams): AiPromptMessage[] {
   // 프로젝트 공유 컨텍스트(용어집/규칙/메모리/금지어)는 system에 둔다.
   // 검수 시작 시 고정된 snapshot이라 런 내 모든 청크에서 바이트 동일 —
   // cacheSystem의 cache_control 마커가 청크 2부터 이 부분을 캐시 read로 돌린다.
-  // 청크별로 달라지는 것들(번역 방향: sourceLanguage 청크별 감지, 사용자 코멘트:
-  // 청크 범위 한정 직렬화, 검수 대상)은 user 메시지에 남긴다.
+  //
+  // user에 남기는 것: 사용자 코멘트(청크 범위로 한정 직렬화)와 검수 대상 세그먼트,
+  // 그리고 이번 실행에만 적용되는 추가 지시.
+  // 번역 방향은 ADR-0021 이후 **실행당 한 번** 푼 값을 모든 청크가 공유하지만
+  // (ReviewPanel이 루프 밖에서 resolveDirection 1회), excerpt 혼동 경고와 함께
+  // 검수 대상 바로 앞에 두는 편이 읽기 쉬워 user에 남긴다. 청크 수만큼 재과금되는
+  // 대신(≈120토큰) 방향·경고·대상이 한 덩어리로 붙는다.
   const systemParts: string[] = [buildReviewPrompt()];
 
   if (params.partialContext) {

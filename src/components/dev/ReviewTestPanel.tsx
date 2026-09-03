@@ -13,8 +13,12 @@ import { useState, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useChatStore } from '@/stores/chatStore';
-import { buildAlignedChunks, buildReviewPrompt } from '@/ai/tools/reviewTool';
-import { runReview } from '@/ai/review/runReview';
+import { buildAlignedChunks } from '@/ai/tools/reviewTool';
+import { buildReviewMessages, runReview } from '@/ai/review/runReview';
+import { buildContextSnapshot } from '@/ai/context/buildContextSnapshot';
+import { resolveWorkflowContextFromSnapshot } from '@/ai/context/resolveWorkflowContext';
+import { resolveGlossaryEntries } from '@/utils/glossaryInject';
+import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { parseReviewResult } from '@/ai/review/parseReviewResult';
 import { normalizeForSearch, buildNormalizedTextWithMapping } from '@/utils/normalizeForSearch';
 import { extractTextFromTipTap } from '@/utils/tipTapText';
@@ -54,10 +58,10 @@ export function ReviewTestPanel(): JSX.Element {
   // 현재 선택된 청크
   const currentChunk = chunks[selectedChunkIndex];
 
-  // 시스템 프롬프트
-  const systemPrompt = useMemo(() => {
-    return buildReviewPrompt();
-  }, []);
+  // 앱 검수 경로와 **같은 조립**으로 만든 실제 프롬프트.
+  // 정적부(buildReviewPrompt)만 보여주면 용어집·금칙어·메모리·문맥 지시가 빠진
+  // 다른 프롬프트를 디버깅하게 된다.
+  const [sentPrompt, setSentPrompt] = useState('(검수를 실행하면 실제로 보낸 프롬프트가 표시됩니다)');
 
   // 에디터 텍스트 가져오기 (projectStore의 targetDocJson에서 추출)
   const getEditorText = (): string => {
@@ -84,11 +88,44 @@ export function ReviewTestPanel(): JSX.Element {
         { source: project.metadata.sourceLanguage, target: project.metadata.targetLanguage },
         currentChunk.segments.slice(0, 50).map((s) => s.sourceText).join(' '),
       );
-      const response = await runReview({
+      // 앱 검수 경로와 같은 컨텍스트를 고정한다 (ReviewPanel과 동일한 조립).
+      const memory = useProjectMemoryStore.getState();
+      const glossaryEntries = await resolveGlossaryEntries({
+        projectId: project.id,
+        text: currentChunk.segments
+          .map((s) => `${s.sourceText}\n${s.targetText}`)
+          .join('\n'),
+        domain: project.metadata.domain,
+        limit: 40,
+      });
+      const resolvedContext = resolveWorkflowContextFromSnapshot({
+        mode: 'review',
+        snapshot: buildContextSnapshot({
+          revision: memory.revision,
+          projectMemoryItems: memory.items,
+          translationRules,
+          forbiddenTerms: memory.forbiddenTerms,
+          glossaryEntries,
+        }),
+      });
+
+      const reviewParams = {
         segments: currentChunk.segments,
-        translationRules,
+        resolvedContext,
         ...(direction.source.language ? { sourceLanguage: direction.source.language } : {}),
         ...(direction.target.language ? { targetLanguage: direction.target.language } : {}),
+        // 이 패널은 청크 하나만 보낸다 — 문서가 여러 청크면 앞뒤 문맥이 없다.
+        ...(chunks.length > 1 ? { partialContext: true } : {}),
+      };
+
+      setSentPrompt(
+        buildReviewMessages(reviewParams)
+          .map((m) => `===== ${m.role} =====\n${m.content}`)
+          .join('\n\n'),
+      );
+
+      const response = await runReview({
+        ...reviewParams,
         onToken: (text) => setAiResponse(text),
       });
 
@@ -334,7 +371,7 @@ export function ReviewTestPanel(): JSX.Element {
         {/* 시스템 프롬프트 */}
         {activeTab === 'prompt' && (
           <pre className="text-xs bg-editor-surface p-3 rounded overflow-auto whitespace-pre-wrap">
-            {systemPrompt}
+            {sentPrompt}
           </pre>
         )}
 

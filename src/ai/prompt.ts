@@ -35,6 +35,15 @@ const LIMITS = {
  * 사용자 메시지에서 요청 유형을 감지
  * - 번역 요청: "번역", "translate", "~로 옮겨", "~로 바꿔" 등
  * - 질문 요청: "?", "무엇", "왜", "어떻게", "뭐야", "알려줘" 등
+ *
+ * **현재 프로덕션 채팅에서는 호출되지 않는다.** `streamAssistantReply`의 유일한 호출부인
+ * `chatStore.ai.ts`가 `requestType: 'question'`을 항상 넘기므로, `chat.ts`의 `??` 폴백은
+ * mock provider 경로(`getMockResponse`)에서만 실행된다.
+ *
+ * 되살릴 때 먼저 풀어야 할 충돌: `'다듬어'`·`'수정해'`·`'고쳐'`가 translate로 분류되는데,
+ * translate 모드는 "오직 번역 결과만 응답"을 요구한다. Target 선택이 있는 상태에서 그 모드로
+ * 가면 모델이 `propose_selection_edit`을 건너뛰고 평문을 내놓아 **적용 버튼이 사라진다**
+ * (2026-09-03 프롬프트 감사 F7). 선택이 있을 때는 translate로 보내지 않는 것이 전제다.
  */
 export function detectRequestType(message: string): RequestType {
   const lowerMessage = message.toLowerCase();
@@ -174,6 +183,7 @@ function buildBaseSystemPrompt(project: ITEProject | null, sourceSample?: string
   ].join('\n');
 }
 
+/** `detectRequestType` 참고 — 프로덕션 채팅에서는 도달하지 않는다(mock 경로 전용). */
 function buildTranslateSystemPrompt(project: ITEProject | null, _opts?: PromptOptions, sourceSample?: string): string {
   const base = buildBaseSystemPrompt(project, sourceSample);
 

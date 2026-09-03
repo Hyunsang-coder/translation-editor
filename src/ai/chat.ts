@@ -495,7 +495,8 @@ export async function streamAssistantReply(
     return mock;
   }
 
-  // 요청 유형 자동 감지
+  // 요청 유형. 유일한 호출부(chatStore.ai.ts)가 'question'을 항상 넘기므로 아래 폴백은
+  // 실질적으로 mock 경로 전용이다 — 되살릴 때의 전제는 detectRequestType 주석 참고.
   const requestType = input.requestType ?? detectRequestType(input.userMessage);
 
   // 캡처된 runConfig로 모델 생성 (요청 도중 전역 store 재조회 없음 → 모델 결정 경쟁 조건 제거)
