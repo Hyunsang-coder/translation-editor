@@ -900,20 +900,52 @@ export function parseTranslationResponseToTipTap(content: string): TipTapDocJson
  * @param response - LLM 응답 텍스트
  * @returns 추출된 Markdown
  */
-export function extractTranslationMarkdown(response: string): string {
-  const startMarker = '---TRANSLATION_START---';
-  const endMarker = '---TRANSLATION_END---';
-
+/**
+ * 시작/끝 마커 사이를 꺼낸다. 한쪽만 있으면 그 한쪽을 기준으로 자르고,
+ * 둘 다 없으면 전체를 쓴다(부분 복구).
+ */
+export function extractBetweenMarkers(
+  response: string,
+  startMarker: string,
+  endMarker: string,
+  logPrefix: string,
+): string {
   const startIdx = response.indexOf(startMarker);
   const endIdx = response.indexOf(endMarker);
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     return response.slice(startIdx + startMarker.length, endIdx).trim();
   }
+  if (startIdx !== -1) {
+    console.warn(`${logPrefix} End marker missing, using text after start marker`);
+    return response.slice(startIdx + startMarker.length).trim();
+  }
+  if (endIdx !== -1) {
+    console.warn(`${logPrefix} Start marker missing, using text before end marker`);
+    return response.slice(0, endIdx).trim();
+  }
 
-  // Fallback: 구분자 없으면 전체 응답 사용 (경고 로그)
-  console.warn('[Translation] No markers found, using raw response');
+  console.warn(`${logPrefix} No markers found, using raw response`);
   return response.trim();
+}
+
+/**
+ * 마커 사이의 번역 Markdown을 꺼낸다.
+ *
+ * 마커가 **한쪽만** 온 경우까지 다룬다. 종전에는 그때도 raw 전체를 돌려줘서
+ * `---TRANSLATION_START---` 리터럴과 모델의 사족("알겠습니다…")이 번역 문서의
+ * 첫 문단으로 들어갔다. 잘린 응답은 어차피 `detectMarkdownTruncation`이 잡는다.
+ *
+ * 마커가 하나도 없으면 종전대로 전체를 쓴다 — 부분 복구를 버리는 것보다 낫고,
+ * 결과는 Preview를 거쳐 사용자가 보게 된다(ADR-0003).
+ */
+export function extractTranslationMarkdown(response: string): string {
+  return extractBetweenMarkers(
+    response,
+    '---TRANSLATION_START---',
+    '---TRANSLATION_END---',
+    '[Translation]',
+  );
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   fixMisalignedBoldMarks,
   parseTranslationResponseToTipTap,
   tipTapJsonToHtml,
+  extractTranslationMarkdown,
 } from './markdownConverter';
 import {
   collectTranslationUnits,
@@ -819,5 +820,52 @@ describe('fixMisalignedBoldMarks - LLM 볼드 마크 경계 보정', () => {
   // 인라인 코드(`)는 건드리지 않음
   it('인라인 코드 backtick은 건드리지 않음', () => {
     expect(fixMisalignedBoldMarks('`code`block')).toBe('`code`block');
+  });
+});
+
+describe('extractTranslationMarkdown — 마커가 온전하지 않은 응답 (F15)', () => {
+  it('두 마커가 모두 있으면 사이만 잘라 낸다', () => {
+    const raw = [
+      '---TRANSLATION_START---',
+      '# 제목',
+      '',
+      '본문입니다.',
+      '---TRANSLATION_END---',
+    ].join('\n');
+
+    expect(extractTranslationMarkdown(raw)).toBe('# 제목\n\n본문입니다.');
+  });
+
+  // 스트리밍이 잘리면 START만 온다. 종전에는 폴백이 raw 전체를 돌려줘
+  // `---TRANSLATION_START---` 리터럴이 번역 문서의 첫 문단으로 들어갔다.
+  it('END가 잘린 응답에서도 마커 리터럴을 문서에 남기지 않는다', () => {
+    const raw = [
+      '알겠습니다. 번역하겠습니다.',
+      '---TRANSLATION_START---',
+      '# 제목',
+      '',
+      '본문이 여기서 잘림',
+    ].join('\n');
+
+    const extracted = extractTranslationMarkdown(raw);
+
+    expect(extracted).not.toContain('TRANSLATION_START');
+    expect(extracted).not.toContain('알겠습니다');
+    expect(extracted).toBe('# 제목\n\n본문이 여기서 잘림');
+  });
+
+  it('마커가 하나도 없으면 부분 복구를 위해 전체를 쓰되 마커 잔해는 남기지 않는다', () => {
+    const raw = '# 제목\n\n마커 없이 온 본문';
+
+    expect(extractTranslationMarkdown(raw)).toBe(raw);
+  });
+
+  it('END만 있는 응답은 END 앞부분만 쓴다', () => {
+    const raw = '# 제목\n\n본문\n---TRANSLATION_END---';
+
+    const extracted = extractTranslationMarkdown(raw);
+
+    expect(extracted).not.toContain('TRANSLATION_END');
+    expect(extracted).toBe('# 제목\n\n본문');
   });
 });

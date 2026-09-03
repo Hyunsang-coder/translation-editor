@@ -118,6 +118,11 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
     let segmentGroupId: string | undefined;
     let explanation = '';
     let suggestion = '';
+    // Suggestion만 이어지는 줄을 받는다. 출력 계약이 "해당 단위를 통째로 교체할 완성된
+    // 수정안"을 요구하는데(reviewTool.ts OUTPUT_FORMAT) 목록 항목·표 셀 단위에는 줄바꿈이
+    // 있을 수 있고, 한 줄만 읽으면 나머지가 조용히 버려져 잘린 제안이 문서에 적용된다.
+    // Source/Target은 라인 regex가 직선 따옴표 한 쌍을 벗기므로 이어붙이지 않는다.
+    let suggestionOpen = false;
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -128,6 +133,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const sourceMatch = trimmed.match(/\*\*Source\*\*:\s*"?(.*?)"?\s*$/i);
       if (sourceMatch) {
         sourceExcerpt = sourceMatch[1]?.trim() || '';
+        suggestionOpen = false;
         continue;
       }
 
@@ -136,6 +142,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       if (targetMatch) {
         const val = targetMatch[1]?.trim() || '';
         targetExcerpt = val === '(missing)' ? '' : val;
+        suggestionOpen = false;
         continue;
       }
 
@@ -143,6 +150,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const typeMatch = trimmed.match(/\*\*Type\*\*:\s*(.+)/i);
       if (typeMatch) {
         typeStr = typeMatch[1]?.trim() || '';
+        suggestionOpen = false;
         continue;
       }
 
@@ -150,6 +158,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const severityMatch = trimmed.match(/\*\*Severity\*\*:\s*(.+)/i);
       if (severityMatch) {
         severityStr = severityMatch[1]?.trim() || '';
+        suggestionOpen = false;
         continue;
       }
 
@@ -157,6 +166,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const segmentMatch = trimmed.match(/\*\*SegmentGroupId\*\*:\s*(.+)/i);
       if (segmentMatch) {
         segmentGroupId = segmentMatch[1]?.trim();
+        suggestionOpen = false;
         continue;
       }
 
@@ -164,6 +174,7 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const explanationMatch = trimmed.match(/\*\*Explanation\*\*:\s*(.+)/i);
       if (explanationMatch) {
         explanation = explanationMatch[1]?.trim() || '';
+        suggestionOpen = false;
         continue;
       }
 
@@ -171,8 +182,17 @@ function parseMarkdownIssues(content: string): ReviewIssue[] {
       const suggestionMatch = trimmed.match(/\*\*Suggestion\*\*:\s*(.+)/i);
       if (suggestionMatch) {
         suggestion = suggestionMatch[1]?.trim() || '';
+        suggestionOpen = true;
         continue;
       }
+
+      // 라벨이 아닌 줄은 직전 Suggestion이 이어진 것으로 본다.
+      // 빈 줄·구분선·다른 라벨에서 끊어, 이슈 뒤에 붙은 산문이 제안으로 흘러들지 않게 한다.
+      if (suggestionOpen && trimmed && !/^-{3,}$/.test(trimmed) && !/^-?\s*\*\*/.test(trimmed)) {
+        suggestion += `\n${trimmed}`;
+        continue;
+      }
+      suggestionOpen = false;
     }
 
     // 유효한 이슈인지 확인 (최소한 타입과 source/target 중 하나는 있어야 함)

@@ -11,6 +11,7 @@ import {
 import {
   detectMarkdownTruncation,
   estimateMarkdownTokens,
+  extractBetweenMarkers,
   fixMisalignedBoldMarks,
   isValidTipTapDocJson,
   parseTranslationResponseToTipTap,
@@ -35,16 +36,9 @@ import type { ResolvedWorkflowContext } from '@/types';
 const POLISH_START = '---POLISH_START---';
 const POLISH_END = '---POLISH_END---';
 
+/** 번역과 같은 규칙 — 마커가 한쪽만 와도 마커 리터럴을 문서에 남기지 않는다. */
 function extractPolishedMarkdown(response: string): string {
-  const startIdx = response.indexOf(POLISH_START);
-  const endIdx = response.indexOf(POLISH_END);
-
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    return response.slice(startIdx + POLISH_START.length, endIdx).trim();
-  }
-
-  console.warn('[Polish] No markers found, using raw response');
-  return response.trim();
+  return extractBetweenMarkers(response, POLISH_START, POLISH_END, '[Polish]');
 }
 
 function buildPolishSystemPrompt(params: {

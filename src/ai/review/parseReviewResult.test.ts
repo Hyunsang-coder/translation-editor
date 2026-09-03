@@ -507,3 +507,73 @@ describe('감싸는 따옴표 처리', () => {
     expect(issues[0]?.suggestedFix).toBe('"안녕하세요"');
   });
 });
+
+describe('여러 줄 Suggestion (F6)', () => {
+  it('줄바꿈이 있는 교체 단위를 잘라내지 않고 전부 읽는다', () => {
+    const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: "Press Start to begin"
+- **Target**: "시작을 눌러 개시하세요"
+- **Type**: Awkward
+- **Severity**: Minor
+- **SegmentGroupId**: seg-1
+- **Explanation**: 목록 항목 전체를 교체해야 한다
+- **Suggestion**: 첫 줄입니다
+둘째 줄입니다
+---REVIEW_END---
+    `;
+
+    const issues = parseReviewResult(response);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.suggestedFix).toBe('첫 줄입니다\n둘째 줄입니다');
+  });
+
+  it('빈 줄·구분선·다음 이슈는 Suggestion에 섞이지 않는다', () => {
+    const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: "A"
+- **Target**: "가"
+- **Type**: Awkward
+- **Severity**: Minor
+- **Suggestion**: 제안 첫 줄
+제안 둘째 줄
+
+---
+### Issue #2
+- **Source**: "B"
+- **Target**: "나"
+- **Type**: Grammar
+- **Severity**: Minor
+- **Suggestion**: 두 번째 제안
+---REVIEW_END---
+    `;
+
+    const issues = parseReviewResult(response);
+
+    expect(issues).toHaveLength(2);
+    expect(issues[0]?.suggestedFix).toBe('제안 첫 줄\n제안 둘째 줄');
+    expect(issues[1]?.suggestedFix).toBe('두 번째 제안');
+  });
+
+  it('Suggestion 뒤에 다른 라벨이 오면 거기서 끊는다', () => {
+    const response = `
+---REVIEW_START---
+### Issue #1
+- **Source**: "A"
+- **Target**: "가"
+- **Suggestion**: 제안 본문
+- **Type**: Grammar
+- **Severity**: Minor
+---REVIEW_END---
+    `;
+
+    const issues = parseReviewResult(response);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.suggestedFix).toBe('제안 본문');
+    expect(issues[0]?.type).toBe('grammar');
+  });
+});
