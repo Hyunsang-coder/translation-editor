@@ -78,6 +78,13 @@ async function selectAndOpenToolbar(
   await expect(page.getByTestId(toolbarTestId)).toBeVisible();
 }
 
+// 재번역·폴리싱·검수는 툴바 표면이 아니라 AI 드롭다운 안에 있다 — 셋을 나란히
+// 펼치면 바가 선택 영역보다 넓어져 하나로 묶였다(`SelectionInlineToolbar`).
+async function openSelectionAiMenu(page: Page): Promise<void> {
+  await page.getByTestId('selection-inline-ai').click();
+  await expect(page.getByTestId('selection-inline-ai-menu')).toBeVisible();
+}
+
 test.describe('Selection editing and scoped context', () => {
   test.beforeEach(async ({ page }) => {
     const now = Date.now();
@@ -133,7 +140,12 @@ test.describe('Selection editing and scoped context', () => {
 
     // 150ms 디바운스 후 선택 영역 위에 뜬다.
     await expect(page.getByTestId('selection-inline-toolbar-target')).toBeVisible();
-    for (const action of ['retranslate', 'add-chat', 'comment', 'copy']) {
+    for (const action of ['ai', 'add-chat', 'comment', 'copy']) {
+      await expect(page.getByTestId(`selection-inline-${action}`)).toBeVisible();
+    }
+
+    await openSelectionAiMenu(page);
+    for (const action of ['retranslate', 'polish', 'review']) {
       await expect(page.getByTestId(`selection-inline-${action}`)).toBeVisible();
     }
   });
@@ -146,6 +158,7 @@ test.describe('Selection editing and scoped context', () => {
     await sourceEditor.selectText();
 
     await expect(page.getByTestId('selection-inline-toolbar-source')).toBeVisible();
+    await expect(page.getByTestId('selection-inline-ai')).toHaveCount(0);
     await expect(page.getByTestId('selection-inline-retranslate')).toHaveCount(0);
     await expect(page.getByTestId('selection-inline-add-chat')).toBeVisible();
   });
@@ -181,6 +194,7 @@ test.describe('Selection editing and scoped context', () => {
     );
     await selectAndOpenToolbar(page, sourceEditor, 'selection-inline-toolbar-source');
 
+    await expect(page.getByTestId('selection-inline-ai')).toHaveCount(0);
     await expect(page.getByTestId('selection-inline-retranslate')).toHaveCount(0);
     await page.getByTestId('selection-inline-add-chat').click();
 
@@ -197,6 +211,7 @@ test.describe('Selection editing and scoped context', () => {
       "[data-testid='target-editor'] [contenteditable='true']",
     );
     await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
+    await openSelectionAiMenu(page);
 
     await expect(page.getByTestId('selection-inline-retranslate')).toBeVisible();
     await page.getByTestId('selection-inline-retranslate').click();
@@ -204,13 +219,13 @@ test.describe('Selection editing and scoped context', () => {
     await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
     await expect(page.getByTestId('selection-edit-modal')).toContainText(sourceText);
     await expect(page.getByTestId('selection-edit-modal')).toContainText(targetText);
-    // 번역 규칙·금칙어는 모든 문장에 적용되는 전역 제약이라 부분 수정에도 기본 on이다.
-    for (const option of ['translationRules', 'forbiddenTerms']) {
+    // 번역 규칙·금칙어는 전역 제약이라 기본 on이다. 용어집도 선택 원문으로 검색해
+    // 상위 12개만 주입하므로 기본 on으로 합류했다(`DEFAULT_SELECTION_REFERENCE_OPTIONS`).
+    for (const option of ['translationRules', 'forbiddenTerms', 'glossary']) {
       await expect(page.getByTestId(`selection-reference-${option}`)).toBeChecked();
     }
-    for (const option of ['glossary', 'projectMemory']) {
-      await expect(page.getByTestId(`selection-reference-${option}`)).not.toBeChecked();
-    }
+    // 프로젝트 메모리만 남는다 — 질의와 무관하게 최대 20개가 통째로 들어간다.
+    await expect(page.getByTestId('selection-reference-projectMemory')).not.toBeChecked();
   });
 
   test('Target retranslate generates via mock AI, applies, and clears the highlight', async ({ page }) => {
@@ -218,6 +233,7 @@ test.describe('Selection editing and scoped context', () => {
       "[data-testid='target-editor'] [contenteditable='true']",
     );
     await selectAndOpenToolbar(page, targetEditor, 'selection-inline-toolbar-target');
+    await openSelectionAiMenu(page);
     await page.getByTestId('selection-inline-retranslate').click();
 
     const modal = page.getByTestId('selection-edit-modal');
@@ -258,17 +274,18 @@ test.describe('Selection editing and scoped context', () => {
     await page.getByTestId('project-memory-new-item').fill('Audience: enterprise administrators');
     await page.getByTestId('project-memory-add').click();
 
-    await expect(page.getByTestId('project-memory-settings')).toContainText(
-      'Audience: enterprise administrators',
-    );
+    await expect(
+      page.getByTestId('project-memory-item').filter({ hasText: 'Audience: enterprise administrators' }),
+    ).toHaveCount(1);
     // 보관이 아니라 하드 삭제 하나로 통일됐다. 행 액션은 ⋯ 메뉴 안에 있다.
     await page.getByTestId('project-memory-row-menu').click();
     await expect(page.getByTestId('project-memory-delete')).toBeVisible();
   });
 });
 
-// 문단을 가로지르는 선택은 채팅 참조로만 허용한다. 적용 경로(재번역·수정안 적용)는
-// 평문 하나로 교체하면 블록 구조가 뭉개져 막혀 있다.
+// 문단을 가로지르는 선택도 재번역할 수 있다 — 블록마다 범위를 쪼개 각각 교체하므로
+// 블록 구조가 뭉개지지 않는다(`canApplySelectionEdits`). 대신 결과를 손으로 고치는
+// 직접 수정만 막혀 있다.
 // 문서는 주입으로 만든다 — 키보드로 문단을 늘리면 캐럿 위치가 레이아웃에 따라 달라져
 // 두 문단이 하나로 합쳐지는 셋업 사고가 난다.
 test.describe('Multi-block selection', () => {
@@ -310,14 +327,18 @@ test.describe('Multi-block selection', () => {
     await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   });
 
-  test('retranslate is blocked before generating and leaves no anchor', async ({ page }) => {
+  test('retranslate opens a per-block scoped modal instead of being blocked', async ({ page }) => {
     await selectBothParagraphs(page);
+    await openSelectionAiMenu(page);
 
     await page.getByTestId('selection-inline-retranslate').click();
 
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible();
-    await expect(page.getByTestId('selection-edit-modal')).toHaveCount(0);
-    await expect(page.locator('.selection-anchor')).toHaveCount(0);
+    // 블록마다 하나씩 '구간'으로 나뉘어 뜬다.
+    await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
+    await expect(page.getByTestId('selection-edit-cell')).toHaveCount(2);
+    // 인라인 데코레이션도 블록마다 하나씩 그려진다.
+    await expect(page.locator('.selection-anchor')).toHaveCount(2);
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
   });
 
   test('a selection inside one paragraph still allows retranslate', async ({ page }) => {
@@ -328,6 +349,7 @@ test.describe('Multi-block selection', () => {
     await targetEditor.locator('p').first().click();
     await targetEditor.locator('p').first().selectText();
     await expect(page.getByTestId('selection-inline-toolbar-target')).toBeVisible();
+    await openSelectionAiMenu(page);
 
     await page.getByTestId('selection-inline-retranslate').click();
 

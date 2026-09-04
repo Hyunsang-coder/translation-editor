@@ -70,11 +70,10 @@ test.describe('Project memory import', () => {
     await expect(page.getByTestId('project-memory-settings')).toBeVisible();
 
     // 대상에 원본과 같은 내용을 미리 넣어 중복 건너뛰기를 검증한다.
+    const memoryItems = page.getByTestId('project-memory-item');
     await page.getByTestId('project-memory-new-item').fill('Korean PC and console players');
     await page.getByTestId('project-memory-add').click();
-    await expect(page.getByTestId('project-memory-settings')).toContainText(
-      'Korean PC and console players',
-    );
+    await expect(memoryItems.filter({ hasText: 'Korean PC and console players' })).toHaveCount(1);
 
     await page.getByTestId('project-memory-import-open').click();
     const modal = page.getByTestId('project-memory-import-modal');
@@ -86,13 +85,13 @@ test.describe('Project memory import', () => {
     await page.getByTestId('project-memory-import-submit').click();
     await expect(modal).toBeHidden();
 
-    const settings = page.getByTestId('project-memory-settings');
-    await expect(settings).toContainText('Battle royale shooter patch notes');
-    await expect(page.getByTestId('forbidden-terms-settings')).toContainText('battlegrounds');
+    await expect(memoryItems.filter({ hasText: 'Battle royale shooter patch notes' })).toHaveCount(1);
+    await expect(
+      page.getByTestId('forbidden-term-item').filter({ hasText: 'battlegrounds' }),
+    ).toHaveCount(1);
     // 중복된 항목은 한 번만 남는다. 직접 넣은 1건 + 가져온 1건 = 2행.
-    await expect(page.getByTestId('project-memory-item')).toHaveCount(2);
-    const settingsText = await settings.innerText();
-    expect(settingsText.split('Korean PC and console players').length - 1).toBe(1);
+    await expect(memoryItems).toHaveCount(2);
+    await expect(memoryItems.filter({ hasText: 'Korean PC and console players' })).toHaveCount(1);
   });
 
   test('does not offer the active project as an import source', async ({ page }) => {
