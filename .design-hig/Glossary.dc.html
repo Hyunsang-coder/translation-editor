@@ -1,0 +1,256 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #9E9EA6;
+      font-family: system-ui, -apple-system, 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #1D1D1F;
+    }
+    a { color: #0066CC; }
+    a:hover { color: #0055AB; }
+    svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .cap { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6E6E73; }
+    .btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid #E0E0E0; border-radius: 8px; background: #FFFFFF; font-size: 12px; font-weight: 600; color: #1D1D1F; }
+    .field { height: 34px; display: flex; align-items: center; padding: 0 11px; border: 1px solid #E0E0E0; border-radius: 8px; background: #FFFFFF; font-size: 13px; color: #6E6E73; }
+    .row { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; }
+  </style>
+</helmet>
+
+<div style="padding: 40px; display: flex; justify-content: center;">
+<div style="width: 1080px; height: 760px; background: #F5F5F7; border: 1px solid #E0E0E0; border-radius: 12px; box-shadow: 0 22px 60px rgba(0,0,0,0.28); overflow: hidden; display: flex; flex-direction: column;">
+
+  <!-- 헤더 48px -->
+  <div style="height: 48px; flex: none; display: flex; align-items: center; gap: 11px; padding: 0 16px; border-bottom: 1px solid #E0E0E0; background: #F5F5F7;">
+    <div style="width: 28px; height: 28px; flex: none; border-radius: 8px; background: rgba(0,102,204,0.10); color: #0066CC; display: flex; align-items: center; justify-content: center;">
+      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a1.7 1.7 0 0 0-1.7-1.5H5.5A1.5 1.5 0 0 1 4 16z"></path><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a1.7 1.7 0 0 1 1.7-1.5h4.8A1.5 1.5 0 0 0 20 16z"></path></svg>
+    </div>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+      <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.006em;">용어집 관리</span>
+      <span style="font-size: 12px; color: #6E6E73;">용어집을 만들고 프로젝트마다 필요한 항목을 연결합니다.</span>
+    </div>
+    <div style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #6E6E73;">
+      <svg viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+    </div>
+  </div>
+
+  <!-- 본문 -->
+  <div style="flex: 1; min-height: 0; display: flex;">
+
+    <!-- 좌: 용어집 목록 -->
+    <div style="width: 264px; flex: none; border-right: 1px solid #E0E0E0; display: flex; flex-direction: column; min-height: 0;">
+      <div style="height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px;">
+        <span class="cap" style="flex: 1;">내 용어집</span>
+        <div style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: #0066CC;">
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+        </div>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 0 8px; display: flex; flex-direction: column; gap: 1px;">
+        <!-- 선택 = 틴트 + 우선순위 배지. 라디오 ○ 이중 표시를 걷어냈다 -->
+        <div class="row" style="background: rgba(0,102,204,0.08);">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600; color: #004C99;">Basic</span>
+            <span style="font-size: 12px; color: #6E6E73;">19개 · 이 프로젝트에서 사용</span>
+          </div>
+          <span style="width: 18px; height: 18px; flex: none; border-radius: 999px; background: #0066CC; color: #FFFFFF; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</span>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">Bravo</span>
+            <span style="font-size: 12px; color: #6E6E73;">48개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">CTU Report Glossary</span>
+            <span style="font-size: 12px; color: #6E6E73;">46개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">HeistRoyale2 project glossary</span>
+            <span style="font-size: 12px; color: #6E6E73;">4개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">Modor glossary</span>
+            <span style="font-size: 12px; color: #6E6E73;">5개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">Moria</span>
+            <span style="font-size: 12px; color: #6E6E73;">12개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">PAYDAY 서비스 분석</span>
+            <span style="font-size: 12px; color: #6E6E73;">7개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">PUBG BR Project Glossary</span>
+            <span style="font-size: 12px; color: #6E6E73;">8개</span>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">PUBG Store</span>
+            <span style="font-size: 12px; color: #6E6E73;">99개</span>
+          </div>
+        </div>
+        <div class="row" style="opacity: 0.55;">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; font-weight: 600;">PUBGxBulkHead Glossary</span>
+            <span style="font-size: 12px; color: #6E6E73;">3개</span>
+          </div>
+        </div>
+      </div>
+      <!-- 목록이 창 경계에서 잘리지 않도록 페이드로 더 있음을 알린다 -->
+      <div style="height: 28px; flex: none; background: linear-gradient(to bottom, rgba(245,245,247,0), #F5F5F7);"></div>
+    </div>
+
+    <!-- 우: 상세 -->
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; background: #FFFFFF;">
+
+      <div style="flex: none; padding: 18px 24px 0; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 17px; font-weight: 600; letter-spacing: -0.012em;">Basic</span>
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; color: #6E6E73;"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"></path></svg>
+          <span style="font-size: 13px; color: #6E6E73; margin-left: 4px;">별도 설명이 없습니다.</span>
+        </div>
+
+        <!-- 사용 여부 + 우선순위 -->
+        <div style="height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid #E0E0E0; border-radius: 8px; background: #FAFAFC;">
+          <span style="width: 15px; height: 15px; flex: none; border-radius: 4px; background: #0066CC; color: #FFFFFF; display: flex; align-items: center; justify-content: center;">
+            <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; stroke-width: 2.6;"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+          </span>
+          <span style="flex: 1; font-size: 13px; font-weight: 600;">이 프로젝트에서 사용</span>
+          <span style="font-size: 12px; color: #6E6E73;">우선순위</span>
+          <div style="display: flex; align-items: center; border: 1px solid #E0E0E0; border-radius: 8px; overflow: hidden; background: #FFFFFF;">
+            <span style="width: 30px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;">1</span>
+            <span style="width: 1px; height: 26px; background: #E0E0E0;"></span>
+            <span style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #6E6E73;">
+              <svg viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M6 15l6-6 6 6"></path></svg>
+            </span>
+            <span style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #6E6E73;">
+              <svg viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M6 9l6 6 6-6"></path></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- 가져오기/내보내기: 4버튼 → 2개 메뉴. 형식 안내는 도움말로 -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="btn">
+            <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; color: #6E6E73;"><path d="M12 15.5V4"></path><path d="M8 11.5l4 4 4-4"></path><path d="M4.5 19.5h15"></path></svg>
+            <span>가져오기</span>
+            <svg viewBox="0 0 24 24" style="width: 11px; height: 11px; color: #6E6E73;"><path d="M6 9l6 6 6-6"></path></svg>
+          </div>
+          <div class="btn">
+            <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; color: #6E6E73;"><path d="M12 4v11.5"></path><path d="M8 8l4-4 4 4"></path><path d="M4.5 19.5h15"></path></svg>
+            <span>내보내기</span>
+            <svg viewBox="0 0 24 24" style="width: 11px; height: 11px; color: #6E6E73;"><path d="M6 9l6 6 6-6"></path></svg>
+          </div>
+          <div style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; color: #6E6E73;">
+            <svg viewBox="0 0 24 24" style="width: 14px; height: 14px;"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.8h.01"></path></svg>
+          </div>
+        </div>
+
+        <!-- 용어 추가 -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 232px; flex: none;" class="field">원문 용어</div>
+            <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; color: #6E6E73; flex: none;"><path d="M4 12h15"></path><path d="M14 7l5 5-5 5"></path></svg>
+            <div style="width: 232px; flex: none;" class="field">번역 용어</div>
+            <button type="button" style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: #0066CC; color: #FFFFFF; font-size: 13px; font-weight: 600; opacity: 0.4; font-family: inherit;">추가</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <span style="font-size: 12px; color: #6E6E73;">메모 추가 (선택)</span>
+            <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6E6E73;">
+              <span style="width: 13px; height: 13px; border: 1px solid #C9C9CE; border-radius: 3px;"></span>대소문자 구분</span>
+          </div>
+        </div>
+
+        <div class="field" style="gap: 8px;">
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; color: #6E6E73; flex: none;"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg>
+          <span>원문, 번역문 또는 메모 검색</span>
+        </div>
+      </div>
+
+      <!-- 항목 목록: 원문↔번역문을 붙여 시선 이동을 줄인다 -->
+      <div style="flex: 1; min-height: 0; overflow: hidden; margin: 14px 24px 0; border: 1px solid #E0E0E0; border-radius: 8px; background: #FFFFFF; display: flex; flex-direction: column;">
+        <div style="height: 30px; flex: none; display: flex; align-items: center; gap: 0; padding: 0 14px; border-bottom: 1px solid #F0F0F2; background: #FAFAFC;">
+          <span class="cap" style="width: 240px;">원문</span>
+          <span class="cap" style="width: 240px;">번역문</span>
+          <span class="cap" style="flex: 1;">메모</span>
+        </div>
+        <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">Bingo Perk</span>
+            <span style="width: 240px;">빙고 퍼크</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;"></span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">carry</span>
+            <span style="width: 240px;">업기</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;">동사일 때만</span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">chicken</span>
+            <span style="width: 240px;">치킨</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;"></span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">DBNO</span>
+            <span style="width: 240px;">DBNO</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;">약어 유지</span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">indicator</span>
+            <span style="width: 240px;">인디케이터</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;"></span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid #F5F5F7; font-size: 13px;">
+            <span style="width: 240px;">iteration</span>
+            <span style="width: 240px;">이터레이션</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;"></span>
+          </div>
+          <div style="height: 36px; flex: none; display: flex; align-items: center; padding: 0 14px; font-size: 13px;">
+            <span style="width: 240px;">Karakin</span>
+            <span style="width: 240px;">카라킨</span>
+            <span style="flex: 1; color: #6E6E73; font-size: 12px;"></span>
+          </div>
+          <div style="flex: 1; background: linear-gradient(to bottom, rgba(255,255,255,0), #FFFFFF);"></div>
+        </div>
+      </div>
+      <div style="height: 14px; flex: none;"></div>
+    </div>
+  </div>
+
+  <!-- 푸터 48px: 파괴적 액션은 라벨을 달고 확인 버튼 반대쪽에 둔다 -->
+  <div style="height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-top: 1px solid #E0E0E0; background: #F5F5F7;">
+    <button type="button" style="height: 30px; padding: 0 11px; border: 1px solid rgba(215,0,21,0.30); border-radius: 8px; background: transparent; color: #A3000F; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; font-family: inherit;">
+      <svg viewBox="0 0 24 24" style="width: 13px; height: 13px;"><path d="M4.5 6.5h15"></path><path d="M9.5 6.5V5A1.5 1.5 0 0 1 11 3.5h2A1.5 1.5 0 0 1 14.5 5v1.5"></path><path d="M6.5 6.5l.8 12A1.5 1.5 0 0 0 8.8 20h6.4a1.5 1.5 0 0 0 1.5-1.5l.8-12"></path></svg>
+      용어집 삭제
+    </button>
+    <div style="flex: 1;"></div>
+    <button type="button" style="height: 30px; padding: 0 18px; border: 0; border-radius: 8px; background: #0066CC; color: #FFFFFF; font-size: 13px; font-weight: 600; font-family: inherit;">완료</button>
+  </div>
+
+</div>
+</div>
+</x-dc>
+</body>
+</html>

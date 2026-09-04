@@ -98,7 +98,9 @@ export function MainLayout(): JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleDevTestPanel]);
 
-  // AI 워크플로 단축키 (Cmd/Ctrl + T/R/P) — 툴바 단축키 칩과 짝을 이룬다.
+  // AI 워크플로 단축키 (Cmd/Ctrl + T/R/P) — 웹 모드 경로.
+  // Tauri에서는 네이티브 AI 메뉴의 accelerator가 웹뷰보다 먼저 키를 가져가
+  // `App.tsx`의 tauri-menu 핸들러가 같은 트리거를 올린다 (여기까지 오지 않는다).
   // TipTap이 포커스를 가진 상태에서도 동작해야 하므로 document 레벨에 등록한다.
   // project 객체는 문서 편집마다 새로 만들어지므로 존재 여부만 의존한다(리스너 재등록 방지).
   const hasProject = project !== null;

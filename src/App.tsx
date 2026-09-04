@@ -152,6 +152,19 @@ function App(): JSX.Element {
         case 'view-toggle-chat':
           useUIStore.getState().toggleChatVisibility();
           break;
+        // AI 메뉴 — macOS에서는 메뉴 accelerator가 웹뷰보다 먼저 키를 가져가므로
+        // Tauri에서 ⌘T/⌘R/⌘P는 이 경로로 들어온다. 웹 모드에는 메뉴 막대가 없어
+        // `MainLayout`의 document 리스너가 같은 트리거를 올린다 (두 경로 동일 동작).
+        // 프로젝트가 없을 때 무시하는 것도 `MainLayout`과 맞춘다.
+        case 'ai-translate':
+          if (useProjectStore.getState().project) useUIStore.getState().triggerTranslate();
+          break;
+        case 'ai-review':
+          if (useProjectStore.getState().project) useUIStore.getState().triggerReview();
+          break;
+        case 'ai-polish':
+          if (useProjectStore.getState().project) useUIStore.getState().triggerPolish();
+          break;
       }
     };
     window.addEventListener('tauri-menu', handler);

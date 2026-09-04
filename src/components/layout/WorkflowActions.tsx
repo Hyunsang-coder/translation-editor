@@ -25,8 +25,6 @@ const SECONDARY_BUTTON_CLASS =
 const SECONDARY_IDLE_CLASS = 'border-editor-border text-editor-text hover:bg-editor-border disabled:opacity-50';
 const SECONDARY_RUNNING_CLASS = 'border-primary-500 bg-primary-500/10 text-primary-600 dark:text-primary-400';
 
-const SHORTCUT_CHIP_CLASS = 'text-[11px] px-1 py-0.5 bg-editor-border/60 text-editor-muted rounded';
-
 /**
  * 상단 툴바의 AI 워크플로 액션 (번역 · 검수 · 폴리싱) + 모델 선택.
  *
@@ -122,7 +120,7 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
         onClick={triggerTranslate}
         disabled={translateLoading}
         className="h-[34px] px-3 rounded-md bg-primary-fill text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-primary-fill-hover active:scale-95 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
-        title={t('editor.translateTitle')}
+        title={`${t('editor.translateTitle')} (${shortcutLabel('T')})`}
         data-testid="editor-translate-button"
       >
         {translateLoading ? (
@@ -134,7 +132,6 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
           <>
             <Sparkles size={15} />
             <span>{t('workflow.translateDocument')}</span>
-            <span className="text-[11px] px-1 py-0.5 bg-white/20 rounded">{shortcutLabel('T')}</span>
           </>
         )}
       </button>
@@ -145,7 +142,7 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
         onClick={triggerReview}
         disabled={isReviewing}
         className={`${SECONDARY_BUTTON_CLASS} ${isReviewing ? SECONDARY_RUNNING_CLASS : SECONDARY_IDLE_CLASS}`}
-        title={t('editor.reviewTitle', '번역 검수')}
+        title={`${t('editor.reviewTitle', '번역 검수')} (${shortcutLabel('R')})`}
         data-testid="editor-review-button"
       >
         {isReviewing ? (
@@ -162,7 +159,6 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
                 {issueCount}
               </span>
             )}
-            <span className={SHORTCUT_CHIP_CLASS}>{shortcutLabel('R')}</span>
           </>
         )}
       </button>
@@ -175,7 +171,7 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
         className={`${SECONDARY_BUTTON_CLASS} ${polishLoading ? SECONDARY_RUNNING_CLASS : SECONDARY_IDLE_CLASS}`}
         title={!hasTargetContent && !polishLoading
           ? t('editor.polishDisabledNoTarget')
-          : t('review.polish', '폴리싱')}
+          : `${t('review.polish', '폴리싱')} (${shortcutLabel('P')})`}
         data-testid="editor-polish-button"
       >
         {polishLoading ? (
@@ -187,7 +183,6 @@ export function WorkflowActions({ onOpenModelSettings }: WorkflowActionsProps): 
           <>
             <Highlighter size={15} />
             <span>{t('review.polish', '폴리싱')}</span>
-            <span className={SHORTCUT_CHIP_CLASS}>{shortcutLabel('P')}</span>
           </>
         )}
       </button>

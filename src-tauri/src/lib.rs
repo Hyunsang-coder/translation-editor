@@ -367,7 +367,6 @@ pub fn run() {
                 .build()?;
 
             let reload_item = MenuItemBuilder::with_id("reload", "Reload This Page")
-                .accelerator("CmdOrCtrl+R")
                 .build(app)?;
             let toggle_project_item = MenuItemBuilder::with_id("view-toggle-project", "Project Sidebar")
                 .build(app)?;
@@ -388,6 +387,22 @@ pub fn run() {
                 .item(&toggle_chat_item)
                 .build()?;
 
+            let ai_translate_item = MenuItemBuilder::with_id("ai-translate", "Translate Document")
+                .accelerator("CmdOrCtrl+T")
+                .build(app)?;
+            let ai_review_item = MenuItemBuilder::with_id("ai-review", "Review")
+                .accelerator("CmdOrCtrl+R")
+                .build(app)?;
+            let ai_polish_item = MenuItemBuilder::with_id("ai-polish", "Polish")
+                .accelerator("CmdOrCtrl+P")
+                .build(app)?;
+
+            let ai_menu = SubmenuBuilder::new(app, "AI")
+                .item(&ai_translate_item)
+                .item(&ai_review_item)
+                .item(&ai_polish_item)
+                .build()?;
+
             let window_menu = SubmenuBuilder::new(app, "Window")
                 .minimize()
                 .maximize()
@@ -401,6 +416,7 @@ pub fn run() {
                 .item(&file_menu)
                 .item(&edit_menu)
                 .item(&view_menu)
+                .item(&ai_menu)
                 .item(&window_menu)
                 .build()?;
 
