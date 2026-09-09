@@ -231,6 +231,7 @@ export function ReviewPanel(): JSX.Element {
     extraInstruction?: string,
     scope?: ReviewRunScope,
   ) => {
+    const reviewStartedAt = performance.now();
     // Snapshot: deps에 project?.id만 사용하므로 콜백 내에서 최신 project 참조
     const project = useProjectStore.getState().project;
     if (!project) return;
@@ -271,6 +272,7 @@ export function ReviewPanel(): JSX.Element {
     // 범위 검수는 project.segments(죽은 모델)를 우회하고 살아있는 두 에디터를 직접
     // 정렬한다 — 선택 유닛 ID가 그 문서 기준으로 발급된 값이기 때문이다.
     let freshChunks: AlignedChunk[];
+    const chunkBuildStartedAt = performance.now();
     if (scope) {
       const sourceEditor = useEditorStore.getState().sourceEditor;
       const targetEditor = useEditorStore.getState().targetEditor;
@@ -316,6 +318,18 @@ export function ReviewPanel(): JSX.Element {
       return;
     }
 
+    const reviewSegments = freshChunks.flatMap((chunk) => chunk.segments);
+    const reviewChars = reviewSegments.reduce(
+      (sum, segment) => sum + segment.sourceText.length + segment.targetText.length,
+      0,
+    );
+    console.warn(
+      `[Review perf] scope=${scope ? 'scoped' : 'full'} ` +
+      `requestedUnitIds=${scope?.targetUnitIds.length ?? '-'} chunks=${freshChunks.length} ` +
+      `segments=${reviewSegments.length} chars=${reviewChars} ` +
+      `chunkBuildMs=${Math.round(performance.now() - chunkBuildStartedAt)}`,
+    );
+
     // 청크 캐싱 (재번역에서 사용)
     chunksRef.current = freshChunks;
 
@@ -340,12 +354,18 @@ export function ReviewPanel(): JSX.Element {
         .flatMap((chunk) => chunk.segments)
         .map((segment) => `${segment.sourceText}\n${segment.targetText}`)
         .join('\n');
+      const glossaryStartedAt = performance.now();
       const glossaryEntries = await resolveGlossaryEntries({
         projectId: startProjectId,
         text: reviewText,
         domain: project.metadata.domain,
         limit: 40,
       });
+      console.warn(
+        `[Review perf] glossaryEntries=${glossaryEntries.length} ` +
+        `glossaryMs=${Math.round(performance.now() - glossaryStartedAt)} ` +
+        `preApiTotalMs=${Math.round(performance.now() - reviewStartedAt)}`,
+      );
       const resolvedContext = resolveWorkflowContextFromSnapshot({
         mode: 'review',
         snapshot: buildContextSnapshot({

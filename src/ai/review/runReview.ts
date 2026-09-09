@@ -24,6 +24,7 @@ import { isTauriRuntime } from '@/tauri/invoke';
 import { mergeUsageFromChunk, recordAiUsage, type AiUsageTokens } from '@/ai/usageLedger';
 import { KNOWLEDGE_DIRECTIVES } from '@/ai/context/projectKnowledgeRender';
 import type { ResolvedWorkflowContext } from '@/types';
+import { approxTokens } from '@/ai/chatContext/tokenBudget';
 
 export interface RunReviewParams {
   segments: AlignedSegment[];
@@ -154,8 +155,31 @@ Excerpt 계약:
  * @returns AI 응답 텍스트 (JSON 형식)
  */
 export async function runReview(params: RunReviewParams): Promise<string> {
+  const startedAt = performance.now();
   const cfg = getAiConfig({ useFor: 'review' });
   const promptMessages = buildReviewMessages(params);
+  const inputChars = promptMessages.reduce((sum, message) => sum + message.content.length, 0);
+  const inputTokens = approxTokens(promptMessages.map((message) => message.content).join('\n'));
+  const segmentChars = params.segments.reduce(
+    (sum, segment) => sum + segment.sourceText.length + segment.targetText.length,
+    0,
+  );
+  let firstTokenMs: number | null = null;
+  const emitAccumulated = (text: string): void => {
+    if (firstTokenMs === null && text.length > 0) {
+      firstTokenMs = Math.round(performance.now() - startedAt);
+    }
+    params.onToken?.(text);
+  };
+  const logCompleted = (path: 'tauri' | 'langchain' | 'tauri-fallback', output: string): void => {
+    console.warn(
+      `[Review perf] path=${path} provider=${cfg.provider} model=${cfg.model} ` +
+      `effort=${cfg.reasoningEffort ?? '-'} segments=${params.segments.length} ` +
+      `segmentChars=${segmentChars} inputChars=${inputChars} inputTokens≈${inputTokens} ` +
+      `firstTokenMs=${firstTokenMs ?? '-'} totalMs=${Math.round(performance.now() - startedAt)} ` +
+      `outputChars=${output.length}`,
+    );
+  };
 
   if (params.abortSignal?.aborted) {
     throw new DOMException('Request aborted', 'AbortError');
@@ -164,16 +188,18 @@ export async function runReview(params: RunReviewParams): Promise<string> {
   // 검수는 도구 호출 없는 단순 스트리밍이므로 Tauri에서는 WebView fetch를 거치지 않는다.
   // 시스템 프롬프트(검수 지침)는 모든 청크가 동일하므로 Anthropic prompt caching 대상.
   if (isTauriRuntime() && cfg.provider !== 'mock') {
-    return await streamWithTauriAiBackend({
+    const output = await streamWithTauriAiBackend({
       cfg,
       messages: promptMessages,
       maxTokens: REVIEW_MAX_TOKENS,
-      onAccumulated: params.onToken,
+      onAccumulated: emitAccumulated,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
       usageFeature: 'review',
       cacheSystem: true,
     });
+    logCompleted('tauri', output);
+    return output;
   }
 
   // 도구 없이 직접 스트리밍 (1회 호출)
@@ -201,23 +227,25 @@ export async function runReview(params: RunReviewParams): Promise<string> {
       const text = extractChunkContent(chunk as AIMessageChunk);
       if (text) {
         result += text;
-        params.onToken?.(result);
+        emitAccumulated(result);
       }
     }
   } catch (error) {
     if (!shouldRetryWithTauriAiBackend(error)) {
       throw error;
     }
-    return await streamWithTauriAiBackend({
+    const output = await streamWithTauriAiBackend({
       cfg,
       messages: promptMessages,
       maxTokens: REVIEW_MAX_TOKENS,
-      onAccumulated: params.onToken,
+      onAccumulated: emitAccumulated,
       cancelMessage: '검수가 취소되었습니다.',
       abortSignal: params.abortSignal,
       usageFeature: 'review',
       cacheSystem: true,
     });
+    logCompleted('tauri-fallback', output);
+    return output;
   } finally {
     // 취소된 검수도 생성분만큼 과금되므로 finally에서 기록한다.
     recordAiUsage({
@@ -228,5 +256,6 @@ export async function runReview(params: RunReviewParams): Promise<string> {
     });
   }
 
+  logCompleted('langchain', result);
   return result;
 }
