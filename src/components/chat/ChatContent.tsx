@@ -644,8 +644,17 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     markProposal(messageId, kind, proposalId, 'dismissed');
   }, [markProposal]);
 
+  const insertNativeClipboardText = useCallback((text: string): void => {
+    setLocalComposerText((previous) => (
+      previous.trim().length > 0 ? `${previous}\n${text}` : text
+    ));
+  }, []);
+
   // 붙여넣기/첨부 핸들러
-  const { handleComposerPaste, handleAttachClick } = useChatComposerHandlers(addComposerAttachment);
+  const { handleComposerPaste, handleAttachClick } = useChatComposerHandlers(
+    addComposerAttachment,
+    insertNativeClipboardText,
+  );
 
   // sessionId prop이 변경되면 해당 세션으로 전환
   useEffect(() => {

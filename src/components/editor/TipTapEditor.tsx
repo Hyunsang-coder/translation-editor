@@ -6,6 +6,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import { CellSelection } from '@tiptap/pm/tables';
 import { ImageOriginal, ImagePlaceholder } from '@/editor/extensions/ImagePlaceholder';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
@@ -47,6 +48,8 @@ export interface TipTapEditorProps {
   onSearchOpen?: () => void;
   onSearchOpenWithReplace?: () => void;
   onSelectionShortcut?: (editor: Editor, panel: 'source' | 'target') => void;
+  /** 표 셀 선택의 복사는 WebView 기본 경로 대신 앱 클립보드로 처리한다. */
+  onCopySelection?: (editor: Editor) => void;
   onCommentClick?: (payload: { commentId: string; top: number; left: number }) => void;
 }
 
@@ -60,6 +63,7 @@ function TipTapEditor({
   onSearchOpen,
   onSearchOpenWithReplace,
   onSelectionShortcut,
+  onCopySelection,
   onCommentClick,
 }: TipTapEditorProps): JSX.Element {
   const { t } = useTranslation();
@@ -125,10 +129,12 @@ function TipTapEditor({
   const onSearchOpenRef = useRef(onSearchOpen);
   const onSearchOpenWithReplaceRef = useRef(onSearchOpenWithReplace);
   const onSelectionShortcutRef = useRef(onSelectionShortcut);
+  const onCopySelectionRef = useRef(onCopySelection);
   const onCommentClickRef = useRef(onCommentClick);
   onSearchOpenRef.current = onSearchOpen;
   onSearchOpenWithReplaceRef.current = onSearchOpenWithReplace;
   onSelectionShortcutRef.current = onSelectionShortcut;
+  onCopySelectionRef.current = onCopySelection;
   onCommentClickRef.current = onCommentClick;
 
   // ─── 디바운스된 store 동기화 (P1) ─────────────────────────────────────────
@@ -190,6 +196,26 @@ function TipTapEditor({
         class: 'tiptap-editor focus:outline-none',
       },
       handleDOMEvents: {
+        copy: (view, event) => {
+          // ProseMirror의 기본 copy 이벤트는 WKWebView에서 표 선택을 안정적으로
+          // 기록하지 못한다. 다중 셀(CellSelection)과 셀 안 텍스트 선택을 모두 잡는다.
+          const selection = view.state.selection;
+          const isInsideTable = selection.ranges.some(({ $from, $to }) =>
+            [$from, $to].some(($pos) => {
+              for (let depth = $pos.depth; depth >= 0; depth--) {
+                if ($pos.node(depth).type.name === 'table') return true;
+              }
+              return false;
+            }),
+          );
+          if (!(selection instanceof CellSelection) && !isInsideTable) return false;
+          const handler = onCopySelectionRef.current;
+          if (!handler) return false;
+
+          event.preventDefault();
+          handler(editorInstanceRef.current ?? (view as unknown as Editor));
+          return true;
+        },
         click: (_view, event) => {
           const handler = onCommentClickRef.current;
           if (!handler) return false;

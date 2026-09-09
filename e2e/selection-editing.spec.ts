@@ -427,15 +427,28 @@ test.describe('Table cell selection', () => {
       return {
         types: item.types,
         html: await (await item.getType('text/html')).text(),
-        markdown: await (await item.getType('text/plain')).text(),
+        text: await (await item.getType('text/plain')).text(),
       };
     });
     expect(copied.types).toEqual(expect.arrayContaining(['text/html', 'text/plain']));
     expect(copied.html).toContain('<table');
     expect(copied.html).toContain('cell 하나');
     expect(copied.html).toContain('cell 셋');
-    expect(copied.markdown).toContain('<table');
-    expect(copied.markdown).toContain('cell 하나');
-    expect(copied.markdown).toContain('cell 셋');
+    expect(copied.text).not.toContain('<table');
+    expect(copied.text).toContain('cell 하나');
+    expect(copied.text).toContain('cell 셋');
+  });
+
+  test('Cmd+C copies the selected table cells', async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await dragAcrossCells(page);
+
+    await page.keyboard.press('Meta+C');
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      if (!item) return '';
+      return (await item.getType('text/plain')).text();
+    })).toContain('cell 하나');
   });
 });

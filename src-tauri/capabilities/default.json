@@ -17,6 +17,8 @@
     "updater:default",
     "process:allow-restart",
     "shell:allow-open",
-    "clipboard-manager:allow-read-image"
+    "clipboard-manager:allow-read-image",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-html"
   ]
 }

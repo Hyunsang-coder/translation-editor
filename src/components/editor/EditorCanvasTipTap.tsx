@@ -2134,7 +2134,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     try {
       const html = editor.getHTML();
       const markdown = tipTapJsonToMarkdownForTranslation(editor.getJSON() as Record<string, unknown>);
-      await writeRichClipboard({ html, markdown });
+      await writeRichClipboard({ html, text: markdown });
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
@@ -2200,20 +2200,26 @@ export function EditorCanvasTipTap(): JSX.Element {
   const handleAlignFromSource = useCallback(() => alignCounterpartScroll('source'), [alignCounterpartScroll]);
   const handleAlignFromTarget = useCallback(() => alignCounterpartScroll('target'), [alignCounterpartScroll]);
 
-  const handleCopySelection = useCallback(async (bubble: SelectionBubble): Promise<void> => {
-    if (!bubble.text.trim()) {
+  const copySelectionToClipboard = useCallback(async (editor: Editor, slice?: Slice): Promise<void> => {
+    const selectionSlice = slice ?? editor.state.selection.content();
+    if (selectionSlice.content.size === 0) {
       addToast({ type: 'error', message: t('common.copyError', '복사할 내용이 없습니다.') });
       return;
     }
 
     try {
-      const content = serializeSelectionForClipboard(bubble.editor, bubble.slice);
+      const content = serializeSelectionForClipboard(editor, selectionSlice);
       await writeRichClipboard(content);
       addToast({ type: 'success', message: t('common.copied', '클립보드에 복사되었습니다.') });
     } catch {
       addToast({ type: 'error', message: t('common.copyError', '복사에 실패했습니다.') });
     }
   }, [addToast, t]);
+
+  const handleCopySelection = useCallback(
+    (bubble: SelectionBubble): Promise<void> => copySelectionToClipboard(bubble.editor, bubble.slice),
+    [copySelectionToClipboard],
+  );
 
   // Source/Target 중 포커스된 에디터의 selection watcher를 연결
   useEffect(() => {
@@ -2377,6 +2383,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                     onEditorReady={handleSourceEditorReady}
                     onSearchOpen={handleSourceSearchOpen}
                     onSelectionShortcut={handleSelectionShortcut}
+                    onCopySelection={(editor) => void copySelectionToClipboard(editor)}
                     onCommentClick={handleSourceCommentClick}
                   />
                   {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}
@@ -2480,6 +2487,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 onSearchOpen={handleTargetSearchOpen}
                 onSearchOpenWithReplace={handleTargetSearchOpenWithReplace}
                 onSelectionShortcut={handleSelectionShortcut}
+                onCopySelection={(editor) => void copySelectionToClipboard(editor)}
                 onCommentClick={handleTargetCommentClick}
               />
               {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}

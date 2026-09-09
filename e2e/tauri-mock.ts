@@ -699,6 +699,18 @@ function buildMockScript(seedProjects: MockProject[]): string {
       return '/mock/' + (options.defaultPath || 'download');
     },
 
+    // 네이티브 HTML 클립보드 경로는 브라우저 권한을 부여한 E2E에서 동일 MIME으로 흉내 낸다.
+    'plugin:clipboard-manager|write_html': async (args) => {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([args?.html ?? ''], { type: 'text/html' }),
+          'text/plain': new Blob([args?.altText ?? ''], { type: 'text/plain' }),
+        }),
+      ]);
+      return null;
+    },
+    'plugin:clipboard-manager|read_text': async () => navigator.clipboard.readText(),
+
     // ── File write (내보내기 검증용) — 실제로 쓰지 않고 window에 모아둔다 ──
     write_text_file: (args) => {
       window.__MOCK_WRITTEN_FILES__ = window.__MOCK_WRITTEN_FILES__ || [];
