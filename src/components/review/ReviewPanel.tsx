@@ -42,6 +42,7 @@ import { RecentInstructions } from '@/components/ui/RecentInstructions';
 import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { resolveDirection } from '@/utils/detectLanguage';
+import { tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';
 
 interface RetranslateRequestMeta {
   projectId: string;
@@ -806,6 +807,9 @@ export function ReviewPanel(): JSX.Element {
         sourceDocJson,
         resolvedContext,
         reviewIssues: checkedIssues,
+        ...(targetSnapshot.doc
+          ? { currentTargetStyleReference: tipTapJsonToMarkdownForTranslation(targetSnapshot.doc) }
+          : {}),
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { retranslateMessage: trimmedMessage } : {}),
         onToken: (text) => setRetranslateStreamingText(text),

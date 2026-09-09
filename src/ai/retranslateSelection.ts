@@ -14,6 +14,7 @@ import { approxTokens } from '@/ai/chatContext/tokenBudget';
 import { resolveWorkflowContextFromSnapshot } from '@/ai/context/resolveWorkflowContext';
 import { FORBIDDEN_OVERRIDES_GLOSSARY_EN } from '@/ai/context/projectKnowledgeRender';
 import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
+import { languageEnglishName } from '@/utils/detectLanguage';
 
 const START_MARKER = '---SELECTION_EDIT_START---';
 const END_MARKER = '---SELECTION_EDIT_END---';
@@ -282,6 +283,7 @@ type SelectionMessagesInput =
   & { sourceText?: string };
 
 function buildMessages(input: SelectionMessagesInput, mode: SelectionEditMode) {
+  const targetLanguage = languageEnglishName(input.targetLanguage);
   const surroundings = normalizeSurroundings(input.surroundings);
   const sourceText = input.sourceText?.trim() ? input.sourceText : '';
   const { text: optionalContext, manifest } = buildOptionalContext(
@@ -298,9 +300,9 @@ function buildMessages(input: SelectionMessagesInput, mode: SelectionEditMode) {
   );
   const system = (mode === 'polish'
     ? [
-        `You are a native ${input.targetLanguage} editor who removes translationese.`,
-        `Polish only the selected Target text so it reads as if it had been written in ${input.targetLanguage} from the start.`,
-        `Sentence structure is the main job: reorder clauses, change voice or subject, replace connectives, and split or combine sentences whenever the current form follows the source language's syntax instead of natural ${input.targetLanguage}. Also fix awkward collocations and unnatural word choices.`,
+        `You are a native ${targetLanguage} editor who removes translationese.`,
+        `Polish only the selected Target text so it reads as if it had been written in ${targetLanguage} from the start.`,
+        `Sentence structure is the main job: reorder clauses, change voice or subject, replace connectives, and split or combine sentences whenever the current form follows the source language's syntax instead of natural ${targetLanguage}. Also fix awkward collocations and unnatural word choices.`,
         'A substantial rewrite is allowed when a smaller edit cannot remove the awkward construction; otherwise make the smallest change that fully resolves it.',
         'Preserve the existing meaning exactly: never add, drop, or reinterpret content.',
         'Even when the Source plainly contradicts the current Target, keep the current meaning exactly as it is. Correcting a mistranslation belongs to the retranslate and review paths — someone who asked to polish did not ask to change what the text says.',
@@ -319,7 +321,7 @@ function buildMessages(input: SelectionMessagesInput, mode: SelectionEditMode) {
         optionalContext,
       ]
     : [
-        `You are a professional translator into ${input.targetLanguage}.`,
+        `You are a professional translator into ${targetLanguage}.`,
         'Retranslate only the selected Target text from its aligned Source.',
         'Translate the Source afresh. The current Target only shows which part of the Source is selected and what terminology surrounds it — it is not a draft to edit, and its wording carries no authority.',
         'Choose the most natural rendering of the Source, and keep the current wording only where it is already the best choice.',
@@ -577,6 +579,7 @@ function parseSegmentReplacements(raw: string, count: number): string[] {
 }
 
 function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEditMode) {
+  const targetLanguage = languageEnglishName(input.targetLanguage);
   // 표에서는 "앞 2칸"이 행 우선 순서라 이전 행의 꼬리가 되어 무관하므로 호출부가
   // 아예 안 넘긴다(열 헤더가 그 역할을 한다). 문단이면 넘어온다 — 고른 블록들끼리
   // 서로 문맥이 되긴 하지만, 용어·어체를 정한 블록이 선택 밖이면 못 보기 때문이다.
@@ -600,9 +603,9 @@ function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEd
   const lastIndex = input.segments.length - 1;
   const modeDirectives = mode === 'polish'
     ? [
-        `You are a native ${input.targetLanguage} editor who removes translationese.`,
-        `Polish each selected block so it reads as if it had been written in ${input.targetLanguage} from the start.`,
-        `Sentence structure is the main job: reorder clauses, change voice or subject, replace connectives, and split or combine sentences whenever the current form follows the source language's syntax instead of natural ${input.targetLanguage}. Also fix awkward collocations and unnatural word choices.`,
+        `You are a native ${targetLanguage} editor who removes translationese.`,
+        `Polish each selected block so it reads as if it had been written in ${targetLanguage} from the start.`,
+        `Sentence structure is the main job: reorder clauses, change voice or subject, replace connectives, and split or combine sentences whenever the current form follows the source language's syntax instead of natural ${targetLanguage}. Also fix awkward collocations and unnatural word choices.`,
         'A substantial rewrite is allowed when a smaller edit cannot remove the awkward construction; otherwise make the smallest change that fully resolves it.',
         'Preserve each block\'s existing meaning exactly: never add, drop, or reinterpret content.',
         'Even when a [Source] plainly contradicts its current target, keep the current meaning exactly as it is. Correcting a mistranslation belongs to the retranslate and review paths — someone who asked to polish did not ask to change what the text says.',
@@ -614,7 +617,7 @@ function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEd
         'A [Source] block is there only to disambiguate wording the current target leaves unclear. Do not translate it again, do not pull in content the current target does not already carry, and never use it to correct the target.',
       ]
     : [
-        `You are a professional translator into ${input.targetLanguage}.`,
+        `You are a professional translator into ${targetLanguage}.`,
         'Retranslate each selected block from its aligned Source.',
         'Translate each [Source] afresh. The current target shows only what terminology surrounds the block — it is not a draft to edit, and its wording carries no authority.',
         'Choose the most natural rendering of the Source, and keep the current wording only where it is already the best choice.',

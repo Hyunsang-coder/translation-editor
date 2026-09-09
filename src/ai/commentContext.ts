@@ -3,6 +3,8 @@ import type { CommentField, UserComment } from '@/stores/commentStore';
 export interface SerializeUserCommentsOptions {
   /** 특정 필드(source/target)만 포함. 미지정 시 전체. */
   field?: CommentField;
+  /** 섹션 헤더 교체. 미지정 시 한국어 기본 라벨. */
+  heading?: string;
   /** 헤더 다음 안내 문구 교체. 미지정 시 번역용 기본 문구. */
   leadIn?: string;
   /**
@@ -47,9 +49,10 @@ export function serializeUserComments(
 
   const leadIn = options.leadIn
     ?? '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 번역 시 반드시 반영하세요:';
+  const heading = options.heading ?? '[사용자 코멘트]';
 
   return [
-    '[사용자 코멘트]',
+    heading,
     leadIn,
     ...lines,
   ].join('\n');

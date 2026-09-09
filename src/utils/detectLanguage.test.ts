@@ -11,6 +11,7 @@ import {
   detectDominantLangCode,
   detectSourceLangCode,
   isSameLanguage,
+  languageEnglishName,
   normalizeLang,
   resolveDirection,
 } from './detectLanguage';
@@ -27,6 +28,23 @@ describe('normalizeLang', () => {
     expect(normalizeLang('원문')).toBeNull();
     expect(normalizeLang('')).toBeNull();
     expect(normalizeLang(null)).toBeNull();
+  });
+});
+
+describe('languageEnglishName', () => {
+  it('저장용 한글 라벨을 영어 프롬프트용 이름으로 바꾼다', () => {
+    expect(languageEnglishName('한국어')).toBe('Korean');
+    expect(languageEnglishName('영어')).toBe('English');
+    expect(languageEnglishName('일본어')).toBe('Japanese');
+    expect(languageEnglishName('중국어')).toBe('Chinese');
+    expect(languageEnglishName('스페인어')).toBe('Spanish');
+    expect(languageEnglishName('러시아어')).toBe('Russian');
+  });
+
+  it('이미 영문이거나 모르는 라벨은 손상하지 않는다', () => {
+    expect(languageEnglishName('English')).toBe('English');
+    expect(languageEnglishName('Target')).toBe('Target');
+    expect(languageEnglishName(undefined)).toBe('Target');
   });
 });
 

@@ -30,6 +30,31 @@ export function languageShortCode(language: string | null | undefined): string |
   return LANGUAGE_CODES[language.trim()] ?? null;
 }
 
+const ENGLISH_LANGUAGE_NAME_BY_CODE: Record<string, string> = {
+  KO: 'Korean',
+  EN: 'English',
+  JA: 'Japanese',
+  ZH: 'Chinese',
+  ES: 'Spanish',
+  RU: 'Russian',
+};
+
+/**
+ * 영어로 작성된 프롬프트의 역할 문장에 쓸 언어명.
+ *
+ * 프로젝트 저장값은 한글 라벨이지만 프롬프트는 영어라 `native 영어 editor` 같은 혼용이
+ * 생길 수 있다. 알려진 언어만 영문명으로 바꾸고, 커스텀/미지 라벨은 그대로 보존한다.
+ */
+export function languageEnglishName(
+  language: string | null | undefined,
+  fallback = 'Target',
+): string {
+  const trimmed = language?.trim();
+  if (!trimmed) return fallback;
+  const code = languageShortCode(trimmed);
+  return (code && ENGLISH_LANGUAGE_NAME_BY_CODE[code]) || trimmed;
+}
+
 /**
  * 언어 이름을 비교 가능한 코드로 정규화한다. 저장값은 한글 라벨('한국어'),
  * 외부(검수 응답·브리지)에서는 영문명('Korean')이 들어올 수 있다 —

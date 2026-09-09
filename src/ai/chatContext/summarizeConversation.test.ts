@@ -84,6 +84,9 @@ describe('summarizeConversation', () => {
     const joined = passedMessages.map((m) => String(m.content)).join('\n');
     expect(joined).toContain('기존 요약');
     expect(joined).toContain('Hello');
+    expect(joined).toContain('총 4,000자 이내');
+    expect(joined).toContain('해결된 질문');
+    expect(joined).toContain('완료된 작업');
   });
 
   it('모델이 빈 응답을 주면 기존 요약을 유지(무손실 fallback)', async () => {

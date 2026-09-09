@@ -291,7 +291,22 @@ export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string 
   const markdown = editor.storage.markdown.getMarkdown();
   editor.destroy();
 
-  return normalizeMarkdownWhitespace(markdown);
+  return normalizeTranslationBlockBoundaries(normalizeMarkdownWhitespace(markdown));
+}
+
+/**
+ * tiptap-markdown이 block image 뒤의 다음 블록 구분자를 개행 없이 붙이는 경우를 보정한다.
+ *
+ * `![...](anchor)```json`처럼 붙으면 이미지 뒤 코드 블록이 paragraph 텍스트로 파싱되어
+ * 구조와 코드가 동시에 유실된다. 이미지 자체는 번역 파이프라인에서 block 노드이므로
+ * 다음 block syntax와 맞닿은 경우에만 빈 줄을 넣는다. 문장 안 이미지 뒤 일반 텍스트는
+ * 건드리지 않는다.
+ */
+function normalizeTranslationBlockBoundaries(markdown: string): string {
+  return markdown.replace(
+    /(!\[[^\]]*\]\([^)]+\))(?=(?:```|#{1,6}\s|<table\b|(?:[-+*]|\d+\.)\s))/g,
+    '$1\n\n',
+  );
 }
 
 /**
@@ -865,6 +880,10 @@ function parseMarkdownWithTables(normalized: string): TipTapDocJson {
         const div = document.createElement('div');
         div.innerHTML = DOMPurify.sanitize(segment.content, {
           ALLOWED_URI_REGEXP: TRANSLATION_HTML_ALLOWED_URI,
+          // TipTap TableCell/TableHeader는 리사이즈 폭을 비표준 `colwidth` 속성으로
+          // 직렬화·파싱한다. DOMPurify 기본 설정이 이를 제거하면 번역 왕복에서 열 폭이
+          // 조용히 초기화되므로 번역 전용 표 HTML에 한해 명시적으로 허용한다.
+          ADD_ATTR: ['colwidth'],
         });
         const parsed = PMDOMParser.fromSchema(schema).parse(div);
         parsed.content.forEach(node => {

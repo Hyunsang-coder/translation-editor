@@ -29,6 +29,7 @@ import {
   AUTO_LANGUAGE,
   LANGUAGE_VALUES,
   checkDirection,
+  languageEnglishName,
   normalizeLang,
   resolveAutoDirection,
   resolveDirection,
@@ -1117,7 +1118,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             currentTargetText: cell.currentText,
             ...(cell.columnHeader ? { columnHeader: cell.columnHeader } : {}),
           })),
-          targetLanguage: resolveDirectionNow().target.language ?? 'Target',
+          targetLanguage: languageEnglishName(resolveDirectionNow().target.language),
           ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
           ...(request.surroundings ? { surroundings: request.surroundings } : {}),
           referenceOptions: request.referenceOptions,
@@ -1161,7 +1162,7 @@ export function EditorCanvasTipTap(): JSX.Element {
         projectId: requestProjectId,
         currentTargetUnitText: request.currentTargetUnitText,
         currentTargetText: request.selection.text,
-        targetLanguage: resolveDirectionNow().target.language ?? 'Target',
+        targetLanguage: languageEnglishName(resolveDirectionNow().target.language),
         ...(request.surroundings ? { surroundings: request.surroundings } : {}),
         ...(request.columnHeader ? { columnHeader: request.columnHeader } : {}),
         ...(request.instruction.trim() ? { instruction: request.instruction.trim() } : {}),
@@ -1718,7 +1719,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         useCommentStore.getState().comments,
         {
           field: 'target',
-          leadIn: '아래는 번역가가 특정 구절에 남긴 코멘트입니다. 다듬을 때 반드시 반영하세요:',
+          heading: '[User comments]',
+          leadIn: 'Apply each comment to its anchored excerpt unless it conflicts with a higher-priority constraint:',
         },
       );
       const trimmedMessage = extraMessage?.trim();
@@ -1761,7 +1763,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       );
       const { doc } = await polishTargetDocumentWithStreaming({
         targetDocJson: polishInputDocJson,
-        targetLanguage: resolveDirectionNow().target.language ?? undefined,
+        targetLanguage: languageEnglishName(resolveDirectionNow().target.language),
         resolvedContext,
         ...(serializedComments ? { userComments: serializedComments } : {}),
         ...(trimmedMessage ? { polishMessage: trimmedMessage } : {}),

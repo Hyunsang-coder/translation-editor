@@ -299,7 +299,7 @@ Critical implementation warnings learned from past issues.
 
 102. **Chat Document Tools Table Support**: `documentTools.ts`의 `get_source_document`, `get_target_document`는 `tipTapJsonToMarkdownForTranslation()` 사용. 테이블을 `[table]` 플레이스홀더 대신 HTML로 변환하여 LLM이 내용 조회 가능.
 
-103. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. 프롬프트에 `⚠️ 절대 금지` 경고와 "잘못 복사하면 시스템이 텍스트를 찾지 못합니다!" 메시지로 강조. 언어 방향(영→한 등) 명시 필수.
+103. **Review sourceExcerpt/targetExcerpt 언어 혼동**: AI가 `targetExcerpt`에 번역문 대신 원문을 넣는 경우 Apply 실패. `runReview.ts`의 간결한 `Excerpt 계약`에서 sourceExcerpt는 Source 열, targetExcerpt는 Target 열의 표시 텍스트를 정확히 복사하도록 하고 언어 방향(영→한 등)을 함께 명시한다. 청크마다 장문의 경고를 반복하지 말 것.
 
 104. **Review Suggestion Parsing Key Compatibility**: `parseReviewResult.ts`는 JSON 파싱 시 `suggestedFix`, `suggestion`, `Suggestion` 세 가지 키를 모두 지원. AI가 프롬프트에서 `Suggestion` 키를 사용하더라도 JSON으로 출력할 때 다른 키를 사용할 수 있으므로 호환성 보장.
 
@@ -396,3 +396,7 @@ Critical implementation warnings learned from past issues.
 155. **외부 텍스트를 도구 결과로 넘길 때 신뢰경계 태그 무해화**: `<untrusted>`(문서·선택 도구)와 `<external_content>`(`wrapExternalToolOutput`) 둘 다 본문이 닫는 태그를 포함하면 경계가 위조된다. 사내 위키처럼 **제3자가 편집할 수 있는 텍스트**를 새 경로로 흘릴 때는 해당 래퍼가 무해화(zero-width space 삽입)를 하는지 먼저 확인할 것. 절단은 래핑보다 **먼저** 해야 닫는 태그가 살아남는다.
 
 156. **번역 방향은 날값으로 읽지도, 문자열로 비교하지도 말 것**: `project.metadata.sourceLanguage`/`targetLanguage`의 기본값은 센티널 `'auto'`다([ADR-0020](../docs/adr/0020-auto-target-language.md), [ADR-0021](../docs/adr/0021-explicit-source-language.md)). 프롬프트·MCP·UI로 흘리기 전에 반드시 `resolveDirection({ source, target }, sourceText)` **하나**를 거칠 것 — 두 값을 따로 풀면 원문이 명시 선택일 때 타겟이 텍스트 재감지로 조용히 되돌아간다. 비교는 `normalizeLang()`을 거칠 것: 저장값은 한글 라벨(`'한국어'`), 외부에서 오는 값은 영문명(`'Korean'`)이라 `===`로는 **동일언어 가드가 영원히 안 걸린다**. **판정기 둘을 섞지 말 것**: 방향을 *고르는* 데는 `detectSourceLangCode`(한글 5%), 번역을 *막는* 데는 `detectDominantLangCode`(비율 30%)다 — 공격적인 쪽을 차단에 쓰면 한국어 용어가 섞인 영문 문서의 정당한 EN→KO 번역이 막힌다. 브리지(`oddeyesAppBridge`)는 저장값이 아니라 해석값을 내보내야 한다 — 센티널을 주면 외부 에이전트의 방향 교차검증이 통째로 꺼진다.
+
+157. **전체 번역·문서 폴리싱 결과는 문서 무결성 하드 게이트를 우회하지 말 것**: `documentIntegrity.ts`는 text만 제외한 TipTap topology, 표 행/열/셀 타입/`rowspan`/`colspan`/`colwidth`, 이미지 경로·attrs, 링크 href와 mark, 코드·URL·숫자·날짜·버전·placeholder, `translationUnitId`를 비교한다. 파싱 성공만으로 안전한 결과가 아니다. `finalizeTranslatedDocument` / `finalizePolishedDocument`에서 한 항목이라도 다르면 `DocumentIntegrityError`로 전체 프리뷰를 차단한다. 품질 점수나 일부 성공으로 상쇄하지 않는다.
+
+158. **번역 Markdown의 블록 이미지 경계와 표 `colwidth`는 별도 보정이 필요**: tiptap-markdown은 block image 다음 code fence를 `![...](...)```json`처럼 붙일 수 있어 코드 블록이 paragraph로 무너진다 — `normalizeTranslationBlockBoundaries`를 제거하지 말 것. 번역용 raw HTML 표의 `colwidth`는 DOMPurify 기본 허용 목록에서 빠져 리사이즈 폭이 null로 초기화되므로 `parseMarkdownWithTables`의 `ADD_ATTR: ['colwidth']`가 필수다.

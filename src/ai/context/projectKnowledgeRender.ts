@@ -73,6 +73,10 @@ export interface ChatMemoryDigest {
   /** 실제 렌더링된 항목 ID (ContextManifest 기록용). */
   itemIds: string[];
   forbiddenTermIds: string[];
+  /** 프로젝트 메모리 항목이 개수/문자 상한으로 잘렸는지 여부. */
+  projectMemoryTruncated: boolean;
+  /** 금칙어 항목이 개수 상한으로 잘렸는지 여부. */
+  forbiddenTermsTruncated: boolean;
   /** 상한 때문에 빠진 항목이 있으면 true. */
   truncated: boolean;
 }
@@ -111,16 +115,17 @@ export function renderChatMemoryDigest(input: ChatMemoryDigestInput): ChatMemory
 
   const enabledTerms = input.forbiddenTerms.filter((term) => term.enabled);
   const selectedTerms = enabledTerms.slice(0, maxForbiddenTerms);
+  const projectMemoryTruncated = droppedCount > 0 || charBudgetExceeded;
+  const forbiddenTermsTruncated = enabledTerms.length > selectedTerms.length;
 
   return {
     projectMemory: memoryLines.join('\n'),
     forbiddenTerms: selectedTerms.map(formatForbiddenTermLine).join('\n'),
     itemIds,
     forbiddenTermIds: selectedTerms.map((term) => term.id),
-    truncated:
-      droppedCount > 0
-      || charBudgetExceeded
-      || enabledTerms.length > selectedTerms.length,
+    projectMemoryTruncated,
+    forbiddenTermsTruncated,
+    truncated: projectMemoryTruncated || forbiddenTermsTruncated,
   };
 }
 

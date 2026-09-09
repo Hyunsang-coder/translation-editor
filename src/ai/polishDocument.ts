@@ -33,6 +33,8 @@ import {
 } from '@/editor/extensions/TranslationUnitId';
 import { FORBIDDEN_OVERRIDES_GLOSSARY_EN } from '@/ai/context/projectKnowledgeRender';
 import type { ResolvedWorkflowContext } from '@/types';
+import { languageEnglishName } from '@/utils/detectLanguage';
+import { assertDocumentIntegrity } from '@/ai/documentIntegrity';
 
 const POLISH_START = '---POLISH_START---';
 const POLISH_END = '---POLISH_END---';
@@ -56,7 +58,7 @@ function buildPolishSystemPrompt(params: {
   forbiddenTerms?: string | undefined;
   glossary?: string | undefined;
 }): string {
-  const targetLanguage = params.targetLanguage?.trim() || 'Target';
+  const targetLanguage = languageEnglishName(params.targetLanguage);
   const rules = params.styleRules?.trim();
   const projectContext = params.projectContext?.trim();
   const forbiddenTerms = params.forbiddenTerms?.trim();
@@ -70,6 +72,7 @@ function buildPolishSystemPrompt(params: {
     'Goal:',
     '- Correct clear translationese, awkward collocations, non-native sentence structure, and objectively distracting phrasing.',
     '- Preserve the author\'s wording, sentence structure, rhythm, and punctuation whenever they are already acceptable in the target language and satisfy the applicable instructions.',
+    '- Keep the document\'s established register and sentence endings; do not normalize them to the target language\'s default.',
     '',
     'Edit threshold — apply this before making any edit:',
     '- Treat an unchanged document as a successful result when no clear problem exists.',
@@ -282,6 +285,15 @@ function restoreTranslationUnitIds(
   ).doc as TipTapDocJson;
 }
 
+function finalizePolishedDocument(
+  targetDocJson: TipTapDocJson,
+  polishedDocJson: TipTapDocJson,
+): TipTapDocJson {
+  const restored = restoreTranslationUnitIds(targetDocJson, polishedDocJson);
+  assertDocumentIntegrity(targetDocJson, restored, '폴리싱 결과');
+  return restored;
+}
+
 export interface PolishTargetDocumentParams {
   targetDocJson: TipTapDocJson;
   targetLanguage?: string | undefined;
@@ -337,7 +349,7 @@ export async function polishTargetDocumentWithStreaming(
     }
 
     const { doc } = processPolishResponse(raw);
-    return { doc: restoreTranslationUnitIds(params.targetDocJson, doc), raw };
+    return { doc: finalizePolishedDocument(params.targetDocJson, doc), raw };
   }
 
   let accumulated = '';
@@ -389,7 +401,7 @@ export async function polishTargetDocumentWithStreaming(
       params.onToken?.(polishedMarkdown.trim());
     }
     const { doc } = processPolishResponse(raw);
-    return { doc: restoreTranslationUnitIds(params.targetDocJson, doc), raw };
+    return { doc: finalizePolishedDocument(params.targetDocJson, doc), raw };
   } finally {
     recordAiUsage({
       feature: 'polish',
@@ -405,7 +417,7 @@ export async function polishTargetDocumentWithStreaming(
 
   const { doc } = processPolishResponse(accumulated);
   return {
-    doc: restoreTranslationUnitIds(params.targetDocJson, doc),
+    doc: finalizePolishedDocument(params.targetDocJson, doc),
     raw: accumulated,
   };
 }
