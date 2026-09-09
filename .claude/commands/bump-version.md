@@ -5,7 +5,7 @@ allowed-tools: Read, Edit, Bash(git diff:*), Bash(git log:*), Bash(git add:*), B
 
 # Version Bump
 
-버전 파일 동기화 + 커밋 + 태그 + 푸시를 한 번에 처리합니다.
+버전 파일 동기화 + 로컬 설치본 교체 + 커밋 + 태그 + 푸시를 한 번에 처리합니다.
 
 ## Version Files
 
@@ -58,7 +58,19 @@ allowed-tools: Read, Edit, Bash(git diff:*), Bash(git log:*), Bash(git add:*), B
 1. `package.json`, `Cargo.toml`, `tauri.conf.json`에 새 버전 적용
 2. `cd src-tauri && cargo check` 실행 → Cargo.lock 자동 갱신
 
-### Step 5: 커밋 + 태그 + 푸시 여부 확인
+### Step 5: 로컬 릴리스 빌드 및 설치본 교체 (필수)
+
+커밋·태그·푸시보다 먼저 새 버전을 로컬에 빌드하고 `/Applications/OddEyes.ai.app`을 교체합니다.
+
+```bash
+npm run install:local
+```
+
+- 설치본이 실행 중이면 강제 종료하지 않습니다. 먼저 `npm run tauri:build`로 빌드를 끝낸 뒤 사용자에게 앱 종료를 요청하고, 종료 후 `npm run install:local -- --skip-build`로 교체합니다.
+- 명령이 출력한 설치 버전과 `/Applications/OddEyes.ai.app`의 `CFBundleShortVersionString`이 새 버전과 일치하는지 확인합니다.
+- 로컬 빌드 또는 설치본 교체가 실패하면 커밋·태그·푸시를 진행하지 않습니다.
+
+### Step 6: 커밋 + 태그 + 푸시 여부 확인
 
 AskUserQuestion으로 확인:
 
@@ -72,7 +84,7 @@ AskUserQuestion으로 확인:
 - [ ] 아무것도 안 함 (수동 처리)
 ```
 
-### Step 6: Git 작업 실행
+### Step 7: Git 작업 실행
 
 사용자 선택에 따라:
 
@@ -88,7 +100,7 @@ git tag v1.1.0
 git push && git push origin v1.1.0
 ```
 
-### Step 7: 결과 표시
+### Step 8: 결과 표시
 
 ```
 ✅ Version Release Complete: 1.0.0 → 1.1.0
@@ -97,6 +109,7 @@ git push && git push origin v1.1.0
    ✓ src-tauri/Cargo.toml
    ✓ src-tauri/Cargo.lock
    ✓ src-tauri/tauri.conf.json
+   ✓ /Applications/OddEyes.ai.app 로컬 교체
    ✓ Committed: "chore: bump version to 1.1.0"
    ✓ Tagged: v1.1.0
    ✓ Pushed to origin
