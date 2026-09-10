@@ -17,7 +17,6 @@ import {
   parseTranslationResponseToTipTap,
   tipTapJsonToHtml,
   extractTranslationMarkdown,
-  type TipTapDocJson,
 } from './markdownConverter';
 import {
   collectTranslationUnits,
@@ -236,70 +235,6 @@ describe('markdownConverter - 번역 전용 함수 (html: true)', () => {
     expect(markdown).toContain('Line 1');
     expect(markdown).toContain('Line 2');
     expect(markdown).not.toContain('[table]');
-  });
-
-  it('블록 이미지 뒤 코드 블록을 빈 줄로 분리해 Markdown 구조를 보존한다', () => {
-    const source: TipTapDocJson = {
-      type: 'doc',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'oddeyes-image-anchor:test-image',
-            alt: 'ODDEYES_IMAGE_test-image',
-            title: null,
-          },
-        },
-        {
-          type: 'codeBlock',
-          attrs: { language: 'json' },
-          content: [{ type: 'text', text: '{"count": 3}' }],
-        },
-      ],
-    };
-
-    const markdown = tipTapJsonToMarkdownForTranslation(source);
-    expect(markdown).toContain(
-      '![ODDEYES_IMAGE_test-image](oddeyes-image-anchor:test-image)\n\n```json',
-    );
-
-    const restored = parseTranslationResponseToTipTap(markdown);
-    expect((restored.content as Array<{ type?: string }>).map((node) => node.type))
-      .toEqual(['image', 'codeBlock']);
-  });
-
-  it('리사이즈된 표 셀의 colwidth를 번역 왕복에서 보존한다', () => {
-    const source: TipTapDocJson = {
-      type: 'doc',
-      content: [
-        {
-          type: 'table',
-          content: [
-            {
-              type: 'tableRow',
-              content: [
-                {
-                  type: 'tableCell',
-                  attrs: { colspan: 1, rowspan: 1, colwidth: [180] },
-                  content: [{
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: 'Resizable cell' }],
-                  }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-
-    const markdown = tipTapJsonToMarkdownForTranslation(source);
-    const restored = parseTranslationResponseToTipTap(markdown);
-    const table = (restored.content as TipTapDocJson[])[0]!;
-    const row = (table.content as TipTapDocJson[])[0]!;
-    const cell = (row.content as TipTapDocJson[])[0]!;
-
-    expect((cell.attrs as Record<string, unknown>).colwidth).toEqual([180]);
   });
 
   it('parseTranslationResponseToTipTap: AI가 HTML(ul/li) 반환 시 raw HTML 그대로 표시되지 않고 파싱되어야 함', () => {

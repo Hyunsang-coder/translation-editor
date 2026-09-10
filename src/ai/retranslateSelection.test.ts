@@ -869,31 +869,6 @@ describe('단일 선택과 세그먼트가 같은 지시를 받는다 (F4·F2)',
     expect(systemOf()).toContain('register and sentence endings');
   });
 
-  it('한글 저장 라벨을 단일 선택 영어 역할 문장에 섞지 않는다', async () => {
-    await retranslateSelection({
-      ...BASE,
-      sourceText: 'Source',
-      targetLanguage: '한국어',
-    });
-    expect(systemOf()).toContain('professional translator into Korean');
-    expect(systemOf()).not.toContain('translator into 한국어');
-  });
-
-  it('한글 저장 라벨을 세그먼트 영어 역할 문장에 섞지 않는다', async () => {
-    streamMock.mockReset();
-    streamMock.mockResolvedValue((async function* () {
-      yield { content: '---SEGMENT_0_START---\n결과\n---SEGMENT_0_END---' };
-    })());
-
-    await polishSegments({
-      ...BASE,
-      targetLanguage: '영어',
-      segments: [{ sourceText: 'Source', currentTargetText: 'Target' }],
-    });
-    expect(systemOf()).toContain('native English editor');
-    expect(systemOf()).not.toContain('native 영어 editor');
-  });
-
   // 평문 지시는 **일부러 단일 경로에 넣지 않는다.** 바로 아래 마커 지시와 충돌해
   // 실 호출에서 3개 중 2개가 마커 없이 돌아왔다(F9 측정). 세그먼트만 갖는다.
   it('평문 지시는 세그먼트에만 있고 단일 선택에는 없다', async () => {

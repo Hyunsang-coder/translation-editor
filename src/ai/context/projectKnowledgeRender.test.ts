@@ -100,33 +100,7 @@ describe('renderChatMemoryDigest', () => {
       maxForbiddenTerms: 1,
     });
     expect(digest.forbiddenTermIds).toEqual(['t1']);
-    expect(digest.projectMemoryTruncated).toBe(false);
-    expect(digest.forbiddenTermsTruncated).toBe(true);
     expect(digest.truncated).toBe(true);
-  });
-
-  it('메모리와 금칙어 truncation 원인을 분리해서 반환한다', () => {
-    const memoryOnly = renderChatMemoryDigest({
-      items: [
-        memoryItem({ id: 'a', content: 'A', category: 'domain' }),
-        memoryItem({ id: 'b', content: 'B', category: 'reference_fact' }),
-      ],
-      forbiddenTerms: [forbiddenTerm({ id: 't1', term: '유저' })],
-      maxItems: 1,
-    });
-    expect(memoryOnly.projectMemoryTruncated).toBe(true);
-    expect(memoryOnly.forbiddenTermsTruncated).toBe(false);
-
-    const forbiddenOnly = renderChatMemoryDigest({
-      items: [],
-      forbiddenTerms: [
-        forbiddenTerm({ id: 't1', term: 'A' }),
-        forbiddenTerm({ id: 't2', term: 'B' }),
-      ],
-      maxForbiddenTerms: 1,
-    });
-    expect(forbiddenOnly.projectMemoryTruncated).toBe(false);
-    expect(forbiddenOnly.forbiddenTermsTruncated).toBe(true);
   });
 
   it('itemIds는 실제 렌더링된 항목만 담는다', () => {

@@ -1,7 +1,7 @@
 {
   "name": "integrated-translation-editor",
   "private": true,
-  "version": "3.14.2",
+  "version": "3.14.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,9 +16,6 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
-    "test:prompt-audit": "vitest run src/ai/promptAuditHarness.test.ts",
-    "test:prompt-integrity": "vitest run src/ai/documentIntegrity.test.ts src/utils/imageAnchors.test.ts src/utils/markdownConverter.test.ts src/ai/translateDocument.test.ts src/ai/polishDocument.test.ts",
-    "test:prompt-live": "LIVE_AI=1 vitest run src/ai/review/reviewPrompt.live.test.ts src/ai/selectionPrompt.live.test.ts src/ai/translationPrompt.live.test.ts",
     "test:ci:local": "npm run test:run && npm run test:e2e:web && cargo test --manifest-path src-tauri/Cargo.toml",
     "test:tauri": "npm run test:run && npm run test:e2e && cargo test --manifest-path src-tauri/Cargo.toml && cargo check --release --manifest-path src-tauri/Cargo.toml",
     "test:e2e": "npm run test:e2e:tauri",

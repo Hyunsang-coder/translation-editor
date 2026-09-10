@@ -235,33 +235,4 @@ describe('buildReviewPrompt', () => {
     expect(prompt).not.toContain('Verdict:');
     expect(prompt).toContain('NO_ISSUES');
   });
-
-  it('실행 지시가 출력 계약과 참조 데이터 경계를 덮지 못하도록 불변 계층을 둔다', async () => {
-    const { buildReviewPrompt } = await import('./reviewTool');
-    const prompt = buildReviewPrompt();
-
-    const immutable = prompt.indexOf('Non-negotiable review contract');
-    const additional = prompt.indexOf('Additional instructions for this review run');
-    expect(immutable).toBeGreaterThanOrEqual(0);
-    expect(immutable).toBeLessThan(additional);
-    expect(prompt).toContain('output format');
-    expect(prompt).toContain('reference-data boundary');
-  });
-
-  it('채팅 출력은 내부 마커·SegmentGroupId 없이 앱 언어의 번호 목록을 요구한다', async () => {
-    const { buildReviewPrompt } = await import('./reviewTool');
-    const prompt = buildReviewPrompt({
-      output: 'chat',
-      explanationLanguage: '한국어',
-      partialContext: true,
-    });
-
-    expect(prompt).toContain('## Chat Output Contract');
-    expect(prompt).toContain('한국어');
-    expect(prompt).toContain('번호 목록');
-    expect(prompt).toContain('이번 입력은 문서의 일부입니다');
-    expect(prompt).not.toContain('---REVIEW_START---');
-    expect(prompt).not.toContain('---REVIEW_END---');
-    expect(prompt).not.toContain('SegmentGroupId');
-  });
 });

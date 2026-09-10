@@ -234,7 +234,6 @@ export function createAiActions(
       const forbiddenTermsDigest = memoryDigest.forbiddenTerms
         ? maskGhostChips(memoryDigest.forbiddenTerms, maskSession)
         : '';
-      const forbiddenTermsTruncated = memoryDigest.forbiddenTermsTruncated;
 
       // 로컬 글로서리 주입 (on-demand, 문서 전역 윈도우)
       let glossaryInjected = '';
@@ -666,7 +665,6 @@ export function createAiActions(
           translationRules,
           ...(projectMemoryDigest ? { projectMemoryDigest } : {}),
           ...(forbiddenTermsDigest ? { forbiddenTermsDigest } : {}),
-          ...(forbiddenTermsTruncated ? { forbiddenTermsTruncated: true } : {}),
           ...(glossaryInjected ? { glossaryInjected } : {}),
           ...(conversationSummary ? { conversationSummary } : {}),
           requestType: 'question',

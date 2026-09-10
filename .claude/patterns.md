@@ -178,16 +178,7 @@ normalizePastedHtml(html, options?)
 // Pipeline: TipTap JSON → Markdown → LLM → Markdown → TipTap JSON
 // Direct message array: SystemMessage + HumanMessage
 // No chat history
-// Static contract regression: npm run test:prompt-audit
-// Document integrity hard gate: npm run test:prompt-integrity
-// Opt-in live fixtures: npm run test:prompt-live
 ```
-
-번역·문서 폴리싱은 파싱과 `translationUnitId` 재부착 뒤
-`assertDocumentIntegrity(source, result)`를 통과해야 프리뷰에 들어간다. 이 게이트는
-TipTap topology, 표 기하/`colwidth`, 이미지 위치·속성, 링크 href/인라인 mark,
-코드·URL·숫자·날짜·버전·placeholder를 비교하며, 한 항목이라도 다르면 전체 결과를
-fail-closed한다. 문장 품질 점수로 포맷 손실을 상쇄하지 않는다.
 
 ### Target Polishing Mode
 ```typescript

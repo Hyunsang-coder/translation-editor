@@ -67,8 +67,6 @@ export interface GenerateReplyInput {
   projectMemoryDigest?: string;
   /** 활성 금칙어 목록 */
   forbiddenTermsDigest?: string;
-  /** 활성 금칙어 요약이 상한 때문에 일부만 포함됐는지 여부. */
-  forbiddenTermsTruncated?: boolean;
   /** 원문 문서 */
   sourceDocument?: string;
   /** 번역문 문서 */
@@ -239,13 +237,12 @@ async function buildToolSpecs(input: BuildToolSpecsInput): Promise<BuildToolSpec
 /**
  * Phase 3.2: 실제 바인딩된 도구 기반으로 가이드 동적 생성
  */
-export function buildToolGuideMessage(params: {
+function buildToolGuideMessage(params: {
   boundToolNames: string[];
-  profile: ChatToolProfile;
+  provider: string;
 }): SystemMessage {
-  const { boundToolNames, profile } = params;
+  const { boundToolNames, provider } = params;
   const has = (name: string) => boundToolNames.includes(name);
-  const isSelectionProfile = profile === 'selection-source' || profile === 'selection-target';
 
   const toolGuide: string[] = [
     '도구 사용 가이드:',
@@ -255,18 +252,10 @@ export function buildToolGuideMessage(params: {
 
   // 문서 도구
   if (has('get_source_document')) {
-    toolGuide.push(
-      isSelectionProfile
-        ? '- get_source_document: 선택 문맥으로 답할 수 없고 전체 원문이 꼭 필요할 때만 조회.'
-        : '- get_source_document: 원문 조회. 사용자가 문서 내용에 대해 질문하면 먼저 호출하세요.',
-    );
+    toolGuide.push('- get_source_document: 원문 조회. 사용자가 문서 내용에 대해 질문하면 먼저 호출하세요.');
   }
   if (has('get_target_document')) {
-    toolGuide.push(
-      isSelectionProfile
-        ? '- get_target_document: 선택 문맥으로 답할 수 없고 전체 번역문이 꼭 필요할 때만 조회.'
-        : '- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.',
-    );
+    toolGuide.push('- get_target_document: 번역문 조회. 번역 품질/표현에 대한 질문이면 먼저 호출하세요.');
   }
   // 문서 전체 검수 도구. 이게 없으면 모델이 get_source_document + get_target_document를
   // 각각 부르는데, 둘은 독립적으로 잘려 원문·번역문 조각이 서로 대응하지 않는다 (ADR-0022).
@@ -320,7 +309,8 @@ export function buildToolGuideMessage(params: {
   }
   // 웹 검색
   if (has('web_search')) {
-    toolGuide.push('- 내장 웹 검색: 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용.');
+    const providerHint = provider === 'openai' ? 'web_search_preview' : 'web_search';
+    toolGuide.push(`- 내장 웹 검색: 최신 정보/뉴스/기술 문서 등 웹 검색이 필요할 때 사용 (${providerHint})`);
   }
 
   // Confluence 도구
@@ -347,16 +337,7 @@ export function buildToolGuideMessage(params: {
     priority++;
   }
 
-  if (has('get_aligned_selection_context')) {
-    toolGuide.push(`${priority}. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")`);
-    toolGuide.push('   → get_aligned_selection_context로 선택 구간의 원문↔번역문을 함께 조회');
-    if (has('get_selection_surroundings')) {
-      toolGuide.push('   → 앞뒤 흐름이 필요할 때만 get_selection_surroundings를 추가 호출');
-    }
-    toolGuide.push('   → 전체 문서는 선택 문맥으로 답할 수 없을 때만 조회');
-    toolGuide.push('');
-    priority++;
-  } else if (has('get_source_document') || has('get_target_document')) {
+  if (has('get_source_document') || has('get_target_document')) {
     toolGuide.push(`${priority}. 부분 검토/질문 ("이 문장 맞아?", "이 표현 자연스러워?")`);
     toolGuide.push('   → get_source_document + get_target_document로 문서 조회 후 답변');
     toolGuide.push('');
@@ -383,7 +364,7 @@ export function buildToolGuideMessage(params: {
     priority++;
   }
 
-  if (!isSelectionProfile && (has('get_source_document') || has('get_target_document'))) {
+  if (has('get_source_document') || has('get_target_document')) {
     toolGuide.push(`${priority}. 문서 내용 필요 (문서 관련 질문이면 적극적으로 호출)`);
     toolGuide.push('   → get_source_document, get_target_document를 먼저 호출하여 근거 확보');
     toolGuide.push('   → 문서가 길면 query/maxChars 파라미터로 필요한 부분만 조회');
@@ -546,7 +527,6 @@ export async function streamAssistantReply(
       ...(input.glossaryInjected ? { glossaryInjected: input.glossaryInjected } : {}),
       ...(input.projectMemoryDigest ? { projectMemoryDigest: input.projectMemoryDigest } : {}),
       ...(input.forbiddenTermsDigest ? { forbiddenTermsDigest: input.forbiddenTermsDigest } : {}),
-      ...(input.forbiddenTermsTruncated ? { forbiddenTermsTruncated: true } : {}),
       ...(input.conversationSummary ? { conversationSummary: input.conversationSummary } : {}),
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(sourceDocument ? { sourceDocument } : {}),
@@ -559,15 +539,14 @@ export async function streamAssistantReply(
   );
 
   // Phase 3.1: 공통 도구 빌더 사용 (스트리밍/비스트리밍 통합)
-  const toolProfile = input.toolProfile ?? (
+  const { bindTools, boundToolNames } = await buildToolSpecs({
+    profile: input.toolProfile ?? (
       input.selection?.panel === 'source'
         ? 'selection-source'
         : input.selection?.panel === 'target'
           ? 'selection-target'
           : 'general'
-    );
-  const { bindTools, boundToolNames } = await buildToolSpecs({
-    profile: toolProfile,
+    ),
     project: input.project,
     selection: input.selection,
     selectionProposalEnabled: input.selectionProposalEnabled,
@@ -583,7 +562,7 @@ export async function streamAssistantReply(
   // Phase 3.2: 동적 가이드 생성
   const basePrompt = String((messages[0] as SystemMessage).content);
   const toolGuide = String(
-    buildToolGuideMessage({ boundToolNames, profile: toolProfile }).content,
+    buildToolGuideMessage({ boundToolNames, provider: runConfig.provider }).content,
   );
   const messagesWithGuide: BaseMessage[] = [
     // systemPrompt에 가이드를 병합하여 하나의 SystemMessage만 유지

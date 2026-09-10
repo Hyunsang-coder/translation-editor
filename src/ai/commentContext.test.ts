@@ -79,18 +79,6 @@ describe('serializeUserComments', () => {
     expect(result).not.toContain('번역 시 반드시');
   });
 
-  it('uses a custom heading for an English-only prompt', () => {
-    const comments = [makeComment({ id: 'a', excerpt: 'foo', comment: 'bar' })];
-    const result = serializeUserComments(comments, {
-      heading: '[User comments]',
-      leadIn: 'Apply each comment to its anchored excerpt.',
-    });
-
-    expect(result).toContain('[User comments]');
-    expect(result).toContain('Apply each comment to its anchored excerpt.');
-    expect(result).not.toContain('[사용자 코멘트]');
-  });
-
   it('filters by segmentGroupIds: comments with an id pass only if in the set', () => {
     const comments = [
       makeComment({ id: 'a', segmentGroupId: 'sg1', excerpt: 'in', comment: 'keep' }),

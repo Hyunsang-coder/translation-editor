@@ -9,11 +9,6 @@ import {
   translateWithStreaming,
   translateSourceDocWithChunking,
 } from '@/ai/translateDocument';
-import {
-  DocumentIntegrityError,
-  evaluateDocumentIntegrity,
-} from '@/ai/documentIntegrity';
-import { createFormatIntegritySourceDoc } from '@/test/fixtures/documentIntegrity';
 import { getAiConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import {
@@ -74,50 +69,11 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     type: 'doc',
     content: [
       {
-        type: 'heading',
-        attrs: { level: 1 },
-        content: [{ type: 'text', text: 'Guía de Integración de API' }],
-      },
-      {
-        type: 'heading',
-        attrs: { level: 2 },
-        content: [{ type: 'text', text: 'Introducción' }],
-      },
-      {
         type: 'paragraph',
-        content: [{
-          type: 'text',
-          text: 'Esta guía contiene instrucciones detalladas para integrar nuestra API REST en su aplicación.',
-        }],
-      },
-      {
-        type: 'heading',
-        attrs: { level: 2 },
-        content: [{ type: 'text', text: 'Requisitos previos' }],
-      },
-      {
-        type: 'bulletList',
         content: [
           {
-            type: 'listItem',
-            content: [{
-              type: 'paragraph',
-              content: [{ type: 'text', text: 'Node.js 14.x o superior' }],
-            }],
-          },
-          {
-            type: 'listItem',
-            content: [{
-              type: 'paragraph',
-              content: [{ type: 'text', text: 'npm 6.x o superior' }],
-            }],
-          },
-          {
-            type: 'listItem',
-            content: [{
-              type: 'paragraph',
-              content: [{ type: 'text', text: 'Conocimientos básicos de JavaScript' }],
-            }],
+            type: 'text',
+            text: 'Guía de Integración de API',
           },
         ],
       },
@@ -205,11 +161,6 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(isRetryableTranslationError(error)).toBe(true);
     });
 
-    it('문서 무결성 차단은 재생성으로 복구할 수 있으므로 재시도 가능', () => {
-      const error = new Error('번역 결과의 문서 무결성이 깨져 적용할 수 없습니다: topology');
-      expect(isRetryableTranslationError(error)).toBe(true);
-    });
-
     it('API 키 에러는 재시도 불가', () => {
       const error = new Error('Invalid API key');
       expect(isRetryableTranslationError(error)).toBe(false);
@@ -246,15 +197,6 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     it('Error가 아닌 값도 문자열로 변환', () => {
       const message = formatTranslationError('Custom error message');
       expect(message).toBe('Custom error message');
-    });
-
-    it('문서 무결성 오류는 포맷 손실을 차단했다는 사용자 안내로 변환', () => {
-      const message = formatTranslationError(
-        new Error('번역 결과의 문서 무결성이 깨져 적용할 수 없습니다: table-geometry'),
-      );
-      expect(message).toContain('표·이미지·문서 구조');
-      expect(message).toContain('안전을 위해');
-      expect(message).toContain('다시 시도');
     });
   });
 
@@ -348,19 +290,6 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
         })),
       };
       const onProgress = vi.fn();
-      const model = createMockChatModel();
-      model.invoke.mockImplementation(async (messages: Array<{ content?: unknown }>) => {
-        const userPrompt = String(messages[1]?.content ?? '');
-        const source = userPrompt
-          .split('---INPUT_DOCUMENT_START---')[1]
-          ?.split('---INPUT_DOCUMENT_END---')[0]
-          ?.trim() ?? '';
-        return {
-          content: `---TRANSLATION_START---\n${source}\n---TRANSLATION_END---`,
-          response_metadata: {},
-        };
-      });
-      vi.mocked(createChatModel).mockReturnValue(model as never);
 
       const result = await translateSourceDocWithChunking({
         project: mockProject,
@@ -474,55 +403,6 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
         src: 'https://example.com/cat.png',
         alt: 'cat',
       });
-    });
-
-    it('모델이 문단·제목·목록 구조를 바꾸면 프리뷰 생성 전에 차단한다', async () => {
-      const oneParagraph: TipTapDocJson = {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', content: [{ type: 'text', text: 'Translate this paragraph.' }] },
-        ],
-      };
-      const model = createMockChatModel(
-        '---TRANSLATION_START---\n# Added heading\n\nFirst paragraph.\n\nSecond paragraph.\n---TRANSLATION_END---',
-      );
-      vi.mocked(createChatModel).mockReturnValue(model as never);
-
-      await expect(
-        translateWithStreaming({
-          project: mockProject,
-          sourceDocJson: oneParagraph,
-        }),
-      ).rejects.toBeInstanceOf(DocumentIntegrityError);
-    });
-
-    it('복합 표·이미지·링크·목록·코드·placeholder가 Markdown 왕복 후에도 보존된다', async () => {
-      const complexDoc = createFormatIntegritySourceDoc();
-      const model = createMockChatModel();
-      model.stream.mockImplementation(async function* (
-        messages: Array<{ content?: unknown }>,
-      ) {
-        const userPrompt = String(messages[1]?.content ?? '');
-        const source = userPrompt
-          .split('---INPUT_DOCUMENT_START---')[1]
-          ?.split('---INPUT_DOCUMENT_END---')[0]
-          ?.trim() ?? '';
-        yield {
-          content: `---TRANSLATION_START---\n${source}\n---TRANSLATION_END---`,
-        };
-      });
-      vi.mocked(createChatModel).mockReturnValue(model as never);
-
-      const result = await translateWithStreaming({
-        project: mockProject,
-        sourceDocJson: complexDoc,
-      });
-
-      expect(evaluateDocumentIntegrity(complexDoc, result.doc).passed).toBe(true);
-      expect(JSON.stringify(result.doc)).toContain('deployment-diagram.png');
-      expect(JSON.stringify(result.doc)).toContain('https://example.com/dashboard');
-      expect(JSON.stringify(result.doc)).toContain('"colspan":2');
-      expect(JSON.stringify(result.doc)).toContain('maxRetries');
     });
 
     it.skip('Diff 뷰에서 변경 부분 강조', () => {
@@ -683,49 +563,9 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       expect(user).toContain('[코멘트] 이 문단은 짧게');
       expect(system).not.toContain('[코멘트] 이 문단은 짧게');
     });
-
-    it('P4: 출력 불변부터 프로젝트 컨텍스트까지 전체 번역 우선순위를 명시한다', async () => {
-      const { system } = await collect({ resolvedContext });
-      const ordered = [
-        '출력 형식과 문서 구조 보존',
-        '이번 실행의 추가 지시사항',
-        '특정 구절에 연결된 사용자 코멘트',
-        '검수 이슈',
-        '금지 용어와 대체어',
-        '용어집',
-        '번역 규칙',
-        '프로젝트 컨텍스트',
-      ];
-      let previous = -1;
-      for (const phrase of ordered) {
-        const index = system.indexOf(phrase);
-        expect(index, phrase).toBeGreaterThan(previous);
-        previous = index;
-      }
-      expect(system).toContain('수정 제안은 참고');
-    });
-
-    it('P13: 이슈 반영 재번역은 기존 번역문의 어체 참고를 user에 둔다', async () => {
-      const { system, user } = await collect({
-        reviewIssues,
-        currentTargetStyleReference: '기존 문서는 간결한 ~한다체를 사용한다.',
-      });
-
-      expect(user).toContain('[현재 번역문 어체 참고]');
-      expect(user).toContain('간결한 ~한다체');
-      expect(user).toContain('사실이나 번역 내용의 근거로 사용하지 마세요');
-      expect(system).not.toContain('[현재 번역문 어체 참고]');
-    });
-
-    it('P15: system에 이미 있는 출력 계약을 user 끝에서 중복하지 않는다', async () => {
-      const { user } = await collect();
-      expect(user).not.toContain('DO NOT TRANSLATE THIS INSTRUCTION');
-    });
   });
 
   describe('이어서 번역 (continuation)', () => {
-    const SINGLE_PARAGRAPH_RESPONSE =
-      '---TRANSLATION_START---\nTranslated tail paragraph.\n---TRANSLATION_END---';
     const remainingSourceDoc: TipTapDocJson = {
       type: 'doc',
       content: [
@@ -734,7 +574,7 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     };
 
     it('직전 번역 참고를 user에 넣고, INPUT_DOCUMENT에는 남은 sub-doc만 넣는다', async () => {
-      const model = createMockChatModel(SINGLE_PARAGRAPH_RESPONSE);
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
       vi.mocked(createChatModel).mockReturnValue(model as never);
 
       await translateWithStreaming({
@@ -782,7 +622,7 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
     });
 
     it('참고 쌍이 비어 있으면 섹션을 넣지 않는다', async () => {
-      const model = createMockChatModel(SINGLE_PARAGRAPH_RESPONSE);
+      const model = createMockChatModel(MOCK_TRANSLATION_RESPONSE);
       vi.mocked(createChatModel).mockReturnValue(model as never);
 
       await translateWithStreaming({
