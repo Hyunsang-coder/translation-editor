@@ -4,97 +4,57 @@
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| **PRD** | `/prd.md` | 제품 비전, UX 원칙, 성공 지표 |
-| **TRD** | `/docs/trd/` | 아키텍처, 기술 명세, API 구조 (README.md가 인덱스) |
-| **ADR** | `/docs/adr/` | 아키텍처 결정 기록 — **왜 그렇게 됐고 무엇을 버렸는지** (README.md가 인덱스) |
-| **CLAUDE.md** | `/CLAUDE.md` | AI Agent 지침 (코드 작업 시 필수) |
+| **CLAUDE.md** | `/.claude/CLAUDE.md` | AI Agent 지침 및 개발 환경 가이드 (세션 프롬프트) |
+| **ADR** | `/docs/adr/` | 아키텍처 결정 기록 — **왜 그렇게 됐고 무엇을 버렸는지** (`README.md`가 인덱스) |
+| **Architecture** | `/.claude/architecture.md` | 기술 스택, 시스템 아키텍처, SQLite 스키마, 보안 |
+| **Patterns** | `/.claude/patterns.md` | AI / Editor / MCP 구현 패턴 및 불변식 |
+| **Gotchas** | `/.claude/gotchas.md` | 과거 이슈에서 축적된 주제별 구현 함정 목록 |
+| **Testing** | `/.claude/testing.md` | 테스트 전략, Vitest 유닛 테스트, E2E 및 Tauri 런타임 제어 |
 
-> **TRD vs ADR**: TRD는 *지금 어떻게 동작하는가*, ADR은 *왜 그 선택을 했고 무엇을 버렸는가*.
-> 되돌리기 비싼 결정(스키마 변경, MCP breaking, 기능 폐기)을 할 때는 ADR을 함께 커밋합니다.
+> **ADR**: 되돌리기 비싼 결정(스키마 변경, MCP breaking, 대안을 버린 선택, 기능 폐기)을 할 때는 ADR을 함께 커밋합니다.
 
 ## 진행 중인 태스크
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| **표 특정 구간 부분 AI** | `/docs/table-range-scoped-ai-plan.md` | 부분 리뷰/폴리싱/재번역이 표의 일부 셀만 대상으로 동작하게 — Phase 0–4 구현 완료 (E2E 제외) |
-| **유닛 대응 LCS 교체** | `/docs/aligned-unit-lookup-lcs-plan.md` | 원문 문단 추가 시 재번역이 문서 전체에서 죽는 문제 — 미착수 |
-| **검수 이슈 양 패널 위치 이동** | `/docs/review-issue-dual-panel-navigation-plan.md` | 검수 이슈 선택 시 원문·번역문 패널과 검수 카드 공동 이동 — 단계 1–3 구현 완료 (E2E·폭 동일화 제외) |
-| **동적 프로젝트 지식 수정 계획** | `/docs/dynamic-project-knowledge-fix-plan.md` | 채팅 ↔ Project Memory/금칙어/용어집 갱신 루프 결함 D1–D7 ✅ (D8-4 E2E 잔여) |
+| **검수 이슈 양 패널 위치 이동** | `/docs/review-issue-dual-panel-navigation-plan.md` | 검수 이슈 선택 시 원문·번역문 패널과 검수 카드 공동 이동 — 단계 1–3 구현 완료 (단계 4 사용자 확인 대기) |
 | **웹 버전 이행 조사** | `/docs/web-migration-research-2026-09-04.md` | 데스크톱 유지 + 웹 추가 시의 구조·비용·기능 정리 — 조사 완료, 미착수 |
-| **AI Chat 장기 대화·세션 모델 개선** | `/docs/ai-chat-context-model-plan.md` | 토큰 기반 요약, 세션별 모델, 모델 변경 안전성 구현 계획 |
-| 검수 적용 기능 | `/docs/review-apply-suggestion.md` | 추천 문장 클릭 시 번역문 반영 ✅ |
-| 진행 현황 | `/docs/review-apply-suggestion-progress.md` | 체크리스트 (검색 정규화 완료) |
-| **적용 개선 분석** | `/docs/review-apply-improvement-analysis.md` | 누락/검색 실패 원인 분석 및 개선 방안 |
-
-## 구현 태스크
-
-| 문서 | 경로 | 설명 |
-|------|------|------|
-| Tasks 개요 | `/tasks/README.md` | Phase별 현황 요약 |
-| Phase 1 | `/tasks/phase-1.md` | 기반 구축 ✅ |
-| Phase 2 | `/tasks/phase-2.md` | AI 연동 ✅ |
-| Phase 3 | `/tasks/phase-3.md` | 데이터 관리 ✅ |
-| Phase 4 | `/tasks/phase-4.md` | 용어집 & Context ✅ |
-| Phase 5 | `/tasks/phase-5.md` | Tools 시스템 🚧 |
-| Phase 6 | `/tasks/phase-6.md` | 외부 연동 ✅ |
-| Phase 7 | `/tasks/phase-7.md` | UX 개선 🚧 |
 
 ## 테스트/배포 운영
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
 | **Tauri 테스트 가이드** | `/docs/TAURI_TESTING.md` | Tauri 중심 테스트 명령 및 릴리즈 전 스모크 절차 |
-| **Tauri Testing Plugin 명세** | `/docs/TAURI_TESTING_PLUGIN.md` | Tauri 테스트 플러그인 + MCP 브리지 MVP 구현 명세 |
-| **OddEyes Desktop MCP** | `/docs/ODDEYES_DESKTOP_MCP.md` | Claude Desktop extension(.mcpb) 구조, bridge.json 연결 전략, preview flow |
+| **Tauri Testing Plugin 명세** | `/docs/TAURI_TESTING_PLUGIN.md` | Tauri 테스트 플러그인 + MCP 브리지 구현 명세 |
+| **OddEyes Desktop MCP** | `/docs/ODDEYES_DESKTOP_MCP.md` | Claude Desktop extension(.mcpb) 구조, bridge 연결 전략, preview flow |
 
-## 코드 리뷰
+## 완료된 문서 (Archive)
 
-| 문서 | 경로 | 설명 |
-|------|------|------|
-| **리뷰 v3** | `/docs/CODE_REVIEW_2026-02-09.md` | 전체 코드베이스 리뷰 (v1.6.2, 23개 이슈) |
-| 리뷰 v2 | `/docs/CODE_REVIEW_2026-01-21_v2.md` | 이전 리뷰 (beta-1.0) |
-
-## 완료된 스펙 (Archive)
-
-| 문서 | 경로 | 설명 |
-|------|------|------|
-| 요약 | `/docs/archive/COMPLETED.md` | 완료된 스펙 요약 |
-| 검수 개선 | `/docs/archive/review_tool_improvement.md` | 번역 검수 기능 |
-| Secret Manager | `/docs/archive/secret_manager.md` | 보안 저장소 |
-| 시스템 이슈 | `/docs/archive/issues.md` | 채팅/에디터/검수/번역 연동 분석 (13개 이슈) |
-| 이슈 진행 | `/docs/archive/issues_progress.md` | 이슈 수정 체크리스트 ✅ (13/13 완료) |
-
-## MCP 스펙
-
-| 문서 | 경로 | 설명 |
-|------|------|------|
-| MCP 스펙 | `/tasks/mcp-specs.md` | Rovo MCP (Confluence) 연동 |
+- **보관소**: `/docs/archive/` — 완료된 기능 계획서, 이전 코드 리뷰, 스펙 및 마이그레이션 분석 문서 일체 보관.
 
 ## Claude Code 설정
 
 | 경로 | 설명 |
 |------|------|
-| `/.claude/agents/` | 전문 Agent 정의 (ai-chain, editor, mcp 등) |
-| `/.claude/commands/` | 커스텀 명령어 (commit, update-docs) |
-| `/.claude/skills/` | 스킬 정의 (dev, typecheck 등) |
+| `/.claude/agents/` | 전문 Agent 정의 |
+| `/.claude/commands/` | 커스텀 명령어 |
+| `/.claude/skills/` | 스킬 정의 |
 
 ---
 
 ## Agent를 위한 빠른 참조
 
 ### 작업 시작 전
-1. `CLAUDE.md` 읽기 (필수)
-2. 관련 Phase 문서 확인
-3. PRD/TRD에서 요구사항 확인
+1. `.claude/CLAUDE.md` 읽기 (필수)
+2. ADR 및 관련 패턴/함정 확인 (`.claude/patterns.md`, `.claude/gotchas.md`)
 
 ### 코드 위치
 - Frontend: `src/`
 - Backend: `src-tauri/src/`
-- 상태: `src/stores/`
-- AI: `src/ai/`
+- 상태 관리: `src/stores/`
+- AI 연동: `src/ai/`
 - 에디터: `src/editor/`
 
 ### 주요 원칙
-- **Document-First**: TipTap JSON이 표준 포맷
-- **Non-Intrusive AI**: 자동 적용 금지, 항상 Preview → Apply
-- **Source of Truth**: PRD/TRD 우선
+- **TipTap JSON is Canonical**: 문서 저장은 SQLite `blocks`/`segments` 테이블 기반 TipTap JSON 표준 준수
+- **No Auto-Apply & Preview-First**: AI는 사용자 확인 없이 문서를 직접 수정하지 않으며, 항상 Preview 후 적용

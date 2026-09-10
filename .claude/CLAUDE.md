@@ -21,12 +21,12 @@ npm run tauri:dev        # Dev server (frontend + Tauri)
 npm run tauri:build      # Build release app
 npm run install:local    # 빌드 후 /Applications 설치본 교체 (CI 릴리스 대기 없이)
 # Claude Code: /deploy-local # 위 명령을 호출하는 로컬 배포 단축 명령
-npx tsc --noEmit         # TypeScript type check
+npx tsc --noEmit         # TypeScript type check (주의: CI/훅에서 자동 실행되지 않음)
 npm test                 # Vitest watch mode
 npm run test:run         # Single test run
 npm run test:e2e:web     # Playwright web E2E
-npm run test:ci:local    # CI verify equivalent (typecheck+unit+web e2e+cargo test)
-npm run test:tauri       # Full pre-deploy gate (typecheck+unit+e2e+rust+release)
+npm run test:ci:local    # CI verify equivalent (unit+web e2e+cargo test)
+npm run test:tauri       # Full pre-deploy gate (unit+e2e+rust+release)
 npm run test:e2e         # Tauri smoke test (Playwright)
 npm run tauri-testing-mcp:build  # Build MCP bridge server
 npm run tauri-testing-mcp:start  # Start MCP bridge server (stdio)
@@ -76,7 +76,6 @@ This `.claude/` directory contains:
 - `architecture.md` - Tech stack, design decisions, security
 - `patterns.md` - AI/Editor/MCP implementation patterns
 - `gotchas.md` - Critical implementation warnings (150+ items)
-- `review-audit.md` - Review feature code audit (13 issues, 10 strengths)
 - `testing.md` - Testing, debugging, file organization
 
 ### 무엇을 어디에 쓰나
@@ -110,16 +109,21 @@ Test Script (.mjs) → MCP Client (stdio) → MCP Server (tauri-testing-mcp)
     → bridge.js → DOM / Dialog / Tauri API
 ```
 
-### Prerequisites
-MCP 테스트 실행 전, `--features testing` 플래그로 앱을 먼저 띄워야 합니다:
+### Prerequisites & Running
+`scripts/tauri-testing-mcp-*.mjs` 스크립트들은 자기완결적(MCP 서버 빌드 → `--features testing` 앱 자동 구동 → 포트 대기 → 시나리오 실행 → 프로세스 정리)이므로 단일 명령으로 실행됩니다:
 ```bash
+npm run test:e2e:tauri:mcp:workflow     # Full workflow (번역+리뷰+채팅)
+```
+
+(선택) 이미 실행 중인 앱에 수동 연결할 때만 별도 구동:
+```bash
+# 터미널 1: 앱 수동 실행
 TAURI_TESTING_ENABLED=1 \
 TAURI_TEST_TOKEN=tauri-testing-token \
 TAURI_TEST_PORT=9988 \
 npx tauri dev --features testing --no-watch --config src-tauri/tauri.conf.json --config '{"build":{"beforeDevCommand":""}}'
-```
-별도 터미널에서 MCP 서버 실행:
-```bash
+
+# 터미널 2: MCP 서버 실행
 TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-mcp:start
 ```
 
@@ -139,7 +143,7 @@ node scripts/tauri-testing-mcp-<name>.mjs  # Custom scenario
 /e2e-scenario --attach-to-running 채팅 테스트       # 실행 중인 앱에 연결
 ```
 
-### Available MCP Tools (36개)
+### Available MCP Tools (33개)
 - **DOM**: `query_selector`, `click`, `click_by_text`, `fill`, `fill_by_placeholder`, `type_contenteditable`, `type_contenteditable_by_selector`, `get_text`, `get_value`, `get_all`, `get_page_content`, `select`, `keyboard`, `scroll_to`, `wait_for_selector`, `wait_for_text`, `wait_for_hidden`
 - **Dialog**: `get_state`, `set_auto_response`, `push_response`, `clear`
 - **Tauri**: `invoke`, `emit`

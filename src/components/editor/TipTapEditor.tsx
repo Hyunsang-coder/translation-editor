@@ -12,6 +12,8 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
@@ -97,6 +99,8 @@ function TipTapEditor({
       TableHeader,
       TableCell,
       imageExtension,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Underline,
       Highlight.configure({ multicolor: false }),
       Subscript,
@@ -242,6 +246,72 @@ function TipTapEditor({
           return normalizePastedHtml(html, { removeImages });
         }
         return normalizePastedHtml(html);
+      },
+      handlePaste: (view, event) => {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return false;
+
+        const html = clipboard.getData('text/html');
+        // HTML이 있는 경우: transformPastedHTML이 처리하므로 false 반환하여 기본 흐름 유지
+        if (html && html.trim().length > 0) {
+          return false;
+        }
+
+        // text/plain만 있는 경우:
+        const text = clipboard.getData('text/plain');
+        if (!text) return false;
+
+        // 체크박스 패턴(☐, ☑, ☒, □, ▢, [ ], [x], [])이 포함되어 있는지 확인
+        const hasCheckboxPattern = /[\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\]/.test(text);
+        if (!hasCheckboxPattern) return false;
+
+        const lines = text.split('\n');
+        let htmlContent = '';
+        let inTaskList = false;
+
+        const CHECKBOX_LINE_REGEX = /^([ \t]*)(?:[-*][ \t]+)?([\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\])[ \t]*(.*)$/;
+
+        for (const line of lines) {
+          const match = line.match(CHECKBOX_LINE_REGEX);
+          if (match) {
+            if (!inTaskList) {
+              htmlContent += '<ul data-type="taskList">';
+              inTaskList = true;
+            }
+            const char = match[2] ?? '';
+            const isChecked = char === '\u2611' || char === '\u2612' || char.toLowerCase() === '[x]';
+            const itemText = match[3] ?? '';
+            const escaped = itemText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+            htmlContent += `<li data-type="taskItem" data-checked="${isChecked ? 'true' : 'false'}"><p>${escaped}</p></li>`;
+          } else {
+            if (inTaskList) {
+              htmlContent += '</ul>';
+              inTaskList = false;
+            }
+            if (line.trim().length > 0) {
+              const escaped = line
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+              htmlContent += `<p>${escaped}</p>`;
+            }
+          }
+        }
+        if (inTaskList) {
+          htmlContent += '</ul>';
+        }
+
+        if (htmlContent.length > 0) {
+          event.preventDefault();
+          const ed = editorInstanceRef.current ?? (view as unknown as Editor);
+          ed.commands.insertContent(htmlContent);
+          return true;
+        }
+
+        return false;
       },
       handleKeyDown: (_view, event) => {
         // Cmd+F: 검색 열기

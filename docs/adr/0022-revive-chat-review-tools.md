@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-03
-- **관련**: [ADR-0011](0011-remove-notion-integration.md)·[ADR-0015](0015-confluence-tools-as-local-wrappers.md)(같은 계열의 결함), `src/ai/tools/reviewTool.ts`, `src/ai/tools/toolRegistry.ts`, `src/ai/chat.ts`, `docs/prompt-intent-audit-2026-09-03.md`(F3)
+- **관련**: [ADR-0011](0011-remove-notion-integration.md)·[ADR-0015](0015-confluence-tools-as-local-wrappers.md)(같은 계열의 결함), `src/ai/tools/reviewTool.ts`, `src/ai/tools/toolRegistry.ts`, `src/ai/chat.ts`, `docs/archive/prompt-intent-audit-2026-09-03.md`(F3)
 
 ## Context
 

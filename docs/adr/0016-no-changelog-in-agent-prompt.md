@@ -57,4 +57,4 @@ ADR-0001이 놓친 것은 이것입니다. **CLAUDE.md는 문서가 아니라 �
 - **따라오는 의무**:
   - 작업 후 남길 지식은 위 표대로 배분합니다. CLAUDE.md에 이력을 쓰고 싶어지면 그 내용은 gotchas나 ADR에 속한 것입니다.
   - 300줄 상한은 자동 검사가 없습니다. `/update-docs`의 마지막 단계에서 사람이 확인합니다.
-  - `.claude/handoff.md`와 `docs/dynamic-project-knowledge-fix-plan.md`에 "Recent Updates에 추가" 체크박스가 남아 있습니다. 완료된 세션 기록이라 손대지 않았지만, 그 지시를 따르면 안 됩니다.
+  - `docs/archive/handoff.md`와 `docs/archive/dynamic-project-knowledge-fix-plan.md`에 "Recent Updates에 추가" 체크박스가 남아 있습니다. 완료된 세션 기록이라 손대지 않았지만, 그 지시를 따르면 안 됩니다.

@@ -14,6 +14,8 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import DOMPurify from 'dompurify';
 import { stripHtml } from '@/utils/hash';
 import { countTotalWords } from '@/utils/wordCounter';
@@ -308,6 +310,8 @@ function TranslatePreviewModalInner(props: TranslatePreviewModalProps): JSX.Elem
       inline: true,
       allowBase64: true,
     }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
     Underline,
     Highlight.configure({ multicolor: false }),
     Subscript,

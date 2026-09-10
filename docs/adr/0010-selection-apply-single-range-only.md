@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-07-30
-- **관련**: `61a38d1`, `8becda2`, `50e4a33`, `983ee3d`, `f8af463` / [ADR-0003](0003-no-auto-apply-preview-first.md)(Preview → Apply) / `docs/selection-editing-and-dynamic-context-plan.md` §7.4
+- **관련**: `61a38d1`, `8becda2`, `50e4a33`, `983ee3d`, `f8af463` / [ADR-0003](0003-no-auto-apply-preview-first.md)(Preview → Apply) / `docs/archive/selection-editing-and-dynamic-context-plan.md` §7.4
 
 ## Context
 

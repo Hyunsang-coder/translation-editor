@@ -2,7 +2,7 @@
 
 - **Status**: Accepted — 일부 수정됨 ([ADR-0017](0017-model-override-for-evaluation.md), 2026-07-31)
 - **Date**: 2026-07-30
-- **관련**: [작업 계획](../provider-only-model-selection-plan.md), [ADR-0005](0005-fixed-context-snapshot-per-workflow.md)
+- **관련**: [작업 계획](../archive/provider-only-model-selection-plan.md), [ADR-0005](0005-fixed-context-snapshot-per-workflow.md)
 
 > **ADR-0017이 아래 Consequences의 "사용자가 모델을 직접 고를 수 없다" 한 줄을 뒤집었다.**
 > 평가 목적의 용도별 모델 지정이 Settings에 생겼다. 다만 이 ADR의 핵심 — 사용자가 고르는

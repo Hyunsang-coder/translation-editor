@@ -480,6 +480,68 @@
   @apply my-0;
 }
 
+/* Task Lists (Checkboxes) */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
+  padding-left: 1.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.ProseMirror ul[data-type="taskList"] li,
+.ProseMirror li[data-type="taskItem"],
+.ProseMirror li[data-checked] {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  list-style: none !important;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label,
+.ProseMirror li[data-type="taskItem"] > label,
+.ProseMirror li[data-checked] > label {
+  flex: 0 0 auto !important;
+  margin-right: 0.5rem;
+  user-select: none;
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+  margin-top: 0.15rem;
+  line-height: 1;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"],
+.ProseMirror li[data-type="taskItem"] > label input[type="checkbox"],
+.ProseMirror li[data-checked] > label input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border-radius: 0.25rem;
+  accent-color: var(--primary-500);
+}
+
+.ProseMirror ul[data-type="taskList"] li > div,
+.ProseMirror li[data-type="taskItem"] > div,
+.ProseMirror li[data-checked] > div {
+  flex: 1 1 auto !important;
+  min-width: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div p,
+.ProseMirror li[data-type="taskItem"] > div p,
+.ProseMirror li[data-checked] > div p {
+  margin: 0 !important;
+}
+
 /* Blockquote - Notion Style */
 .ProseMirror blockquote {
   @apply border-l-4 border-editor-border pl-4 my-4;

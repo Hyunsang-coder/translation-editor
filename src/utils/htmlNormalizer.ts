@@ -34,9 +34,14 @@ const ALLOWED_TAGS = [
   'th',
   'td',
   'img',
+  'label',
+  'input',
+  'div',
+  'span',
 ];
 
 const ALLOWED_ATTR = [
+  'class',
   'href',
   'src',
   'alt',
@@ -50,6 +55,15 @@ const ALLOWED_ATTR = [
   'height',
   'colwidth',
   'start',
+  'type',
+  'checked',
+  'role',
+  'aria-checked',
+  'data-type',
+  'data-checked',
+  'data-task-state',
+  'data-task-local-id',
+  'data-inline-tasks-content-id',
 ];
 
 const BLOCK_TAGS = new Set([
@@ -223,10 +237,21 @@ export function shouldNormalizePastedHtml(html: string): boolean {
     lower.includes('<video') ||
     lower.includes('<iframe') ||
     lower.includes('<img') ||
+    lower.includes('<input') ||        // 체크박스/폼 요소 정규화 필요
+    lower.includes('task-list') ||     // 태스크 리스트 클래스 정규화 필요
+    lower.includes('inline-task') ||   // Confluence 인라인 태스크
+    lower.includes('ak-task') ||       // Confluence Fabric 태스크
+    lower.includes('notion-to-do') ||  // Notion To-do
+    lower.includes('data-task') ||     // Confluence task state
+    lower.includes('taskitem') ||      // TipTap taskItem 속성
+    lower.includes('tasklist') ||      // TipTap taskList 속성
+    lower.includes('checkbox') ||      // 체크박스 관련 속성/클래스
     lower.includes('style=') ||        // 인라인 스타일 변환 필요
     lower.includes('javascript:') ||   // XSS 차단 필요
     lower.includes('data:text') ||     // 위험한 data URL 차단 필요
-    lower.includes('data:application') // 위험한 data URL 차단 필요
+    lower.includes('data:application') || // 위험한 data URL 차단 필요
+    /[\u2610\u2611\u2612\u25A1\u25A2]/.test(html) || // 유니코드 체크박스 문자
+    /\[[ xX]?\]/.test(html)            // 대괄호 체크박스: [ ], [x], [X], []
   );
 }
 
@@ -257,6 +282,7 @@ export function normalizePastedHtml(html: string, options?: NormalizePasteOption
     const doc = parser.parseFromString(sanitized, 'text/html');
     if (!doc.body) return sanitized;
 
+    normalizeTaskListsInHtml(doc.body);
     unwrapSpans(doc.body);
     normalizeDivs(doc.body);
     removeEmptyParagraphs(doc.body);
@@ -498,6 +524,275 @@ function findPreviousElementSibling(node: Element): Element | null {
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const CHECKBOX_PREFIX_REGEX = /^([ \t]*)([\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\])[ \t]*/;
+
+function isCheckedChar(char: string): boolean {
+  return char === '\u2611' || char === '\u2612' || char.toLowerCase() === '[x]';
+}
+
+function findFirstTextNode(node: Node): Text | null {
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (node.textContent && node.textContent.trim().length > 0) {
+      return node as Text;
+    }
+    return null;
+  }
+  for (let i = 0; i < node.childNodes.length; i++) {
+    const child = node.childNodes[i];
+    if (child) {
+      const found = findFirstTextNode(child);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * 체크박스 및 태스크 리스트 HTML 정규화
+ * - Confluence Cloud / Fabric / Server 태스크 리스트 정규화
+ * - Notion To-do 블록 정규화
+ * - 유니코드 체크박스 문자(☐, ☑, ☒, □, ▢) 및 [ ], [x] 문단/리스트 정규화
+ * - 체크박스가 아닌 input 태그 제거 (보안)
+ */
+function normalizeTaskListsInHtml(root: HTMLElement): void {
+  // 1. input 태그 중 checkbox가 아닌 것은 제거 (보안)
+  const inputs = Array.from(root.querySelectorAll('input'));
+  for (const input of inputs) {
+    if (input.getAttribute('type') !== 'checkbox') {
+      input.remove();
+    }
+  }
+
+  // 2. Confluence Fabric: table.ak-tasks-table 정규화
+  const akTables = Array.from(root.querySelectorAll('table.ak-tasks-table'));
+  for (const table of akTables) {
+    const ul = table.ownerDocument.createElement('ul');
+    ul.setAttribute('data-type', 'taskList');
+    const trs = Array.from(table.querySelectorAll('tr'));
+    for (const tr of trs) {
+      const checkbox = tr.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+      const isChecked = checkbox?.checked || checkbox?.hasAttribute('checked') || false;
+      const descCell = tr.querySelector('.ak-task-description') || tr.querySelector('td:last-child');
+      const li = table.ownerDocument.createElement('li');
+      li.setAttribute('data-type', 'taskItem');
+      li.setAttribute('data-checked', isChecked ? 'true' : 'false');
+      if (descCell) {
+        while (descCell.firstChild) {
+          li.appendChild(descCell.firstChild);
+        }
+      }
+      ul.appendChild(li);
+    }
+    table.replaceWith(ul);
+  }
+
+  // 2-1. Confluence Cloud 최신 Action Item (div[data-task-list-local-id] 및 div[data-task-local-id]) 정규화
+  const confluenceTaskContainers = Array.from(
+    root.querySelectorAll('div[data-task-list-local-id], div[role="group"][aria-label="Action Item List"]'),
+  );
+  for (const container of confluenceTaskContainers) {
+    const ul = container.ownerDocument.createElement('ul');
+    ul.setAttribute('data-type', 'taskList');
+    const taskItems = Array.from(container.querySelectorAll('div[data-task-local-id]'));
+    for (const item of taskItems) {
+      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+      const isChecked = checkbox?.checked || checkbox?.hasAttribute('checked') || false;
+      const contentEl = item.querySelector('div[data-component="content"]') || item.querySelector('div:last-child');
+
+      const li = container.ownerDocument.createElement('li');
+      li.setAttribute('data-type', 'taskItem');
+      li.setAttribute('data-checked', isChecked ? 'true' : 'false');
+
+      const p = container.ownerDocument.createElement('p');
+      if (contentEl) {
+        while (contentEl.firstChild) {
+          p.appendChild(contentEl.firstChild);
+        }
+      } else {
+        // 체크박스 제외 텍스트
+        const clone = item.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll('input, svg, button, span[contenteditable="false"]').forEach((el) => el.remove());
+        p.textContent = clone.textContent?.trim() || '';
+      }
+      li.appendChild(p);
+      ul.appendChild(li);
+    }
+    container.replaceWith(ul);
+  }
+
+  // 2-2. 컨테이너 없이 복사된 독립 div[data-task-local-id] 정규화
+  const orphanTaskItems = Array.from(root.querySelectorAll('div[data-task-local-id]'));
+  for (const item of orphanTaskItems) {
+    const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    const isChecked = checkbox?.checked || checkbox?.hasAttribute('checked') || false;
+    const contentEl = item.querySelector('div[data-component="content"]') || item.querySelector('div:last-child');
+
+    const li = item.ownerDocument.createElement('li');
+    li.setAttribute('data-type', 'taskItem');
+    li.setAttribute('data-checked', isChecked ? 'true' : 'false');
+
+    const p = item.ownerDocument.createElement('p');
+    if (contentEl) {
+      while (contentEl.firstChild) {
+        p.appendChild(contentEl.firstChild);
+      }
+    } else {
+      const clone = item.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll('input, svg, button, span[contenteditable="false"]').forEach((el) => el.remove());
+      p.textContent = clone.textContent?.trim() || '';
+    }
+    li.appendChild(p);
+
+    const prev = item.previousElementSibling;
+    if (prev && prev.tagName === 'UL' && prev.getAttribute('data-type') === 'taskList') {
+      prev.appendChild(li);
+      item.remove();
+    } else {
+      const ul = item.ownerDocument.createElement('ul');
+      ul.setAttribute('data-type', 'taskList');
+      ul.appendChild(li);
+      item.replaceWith(ul);
+    }
+  }
+
+  // 3. Confluence Cloud: ul.inline-task-list / ul[data-inline-tasks-content-id] 정규화
+  const inlineTaskUls = Array.from(root.querySelectorAll('ul.inline-task-list, ul[data-inline-tasks-content-id]'));
+  for (const ul of inlineTaskUls) {
+    ul.setAttribute('data-type', 'taskList');
+  }
+
+  // 4. Notion: div.notion-to-do-block 정규화
+  const notionBlocks = Array.from(root.querySelectorAll('div.notion-to-do-block'));
+  for (const block of notionBlocks) {
+    const checkboxEl = block.querySelector('[role="checkbox"]');
+    const isChecked = checkboxEl?.getAttribute('aria-checked') === 'true';
+    checkboxEl?.remove();
+
+    const li = block.ownerDocument.createElement('li');
+    li.setAttribute('data-type', 'taskItem');
+    li.setAttribute('data-checked', isChecked ? 'true' : 'false');
+
+    while (block.firstChild) {
+      li.appendChild(block.firstChild);
+    }
+
+    const prev = block.previousElementSibling;
+    if (prev && prev.tagName === 'UL' && prev.getAttribute('data-type') === 'taskList') {
+      prev.appendChild(li);
+      block.remove();
+    } else {
+      const ul = block.ownerDocument.createElement('ul');
+      ul.setAttribute('data-type', 'taskList');
+      ul.appendChild(li);
+      block.replaceWith(ul);
+    }
+  }
+
+  // 5. li 항목들 정규화 (Confluence inline-task-item, GitHub task-list-item, input[type=checkbox], 유니코드 체크박스 기호)
+  const lis = Array.from(root.querySelectorAll('li'));
+  for (const li of lis) {
+    const checkbox = li.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    const isConfluenceTask = li.classList.contains('inline-task-item') || li.hasAttribute('data-task-state');
+    const isGithubTask = li.classList.contains('task-list-item');
+    const hasCheckboxInput = checkbox !== null;
+    const hasDataType = li.getAttribute('data-type') === 'taskItem';
+
+    let startsWithCheckboxPrefix = false;
+    let prefixChecked = false;
+    const firstTextNode = findFirstTextNode(li);
+    if (firstTextNode && firstTextNode.textContent) {
+      const match = firstTextNode.textContent.match(CHECKBOX_PREFIX_REGEX);
+      if (match) {
+        startsWithCheckboxPrefix = true;
+        prefixChecked = isCheckedChar(match[2] ?? '');
+        firstTextNode.textContent = firstTextNode.textContent.slice(match[0].length);
+      }
+    }
+
+    if (isConfluenceTask || isGithubTask || hasCheckboxInput || hasDataType || startsWithCheckboxPrefix) {
+      li.setAttribute('data-type', 'taskItem');
+      let isChecked = false;
+      if (startsWithCheckboxPrefix) {
+        isChecked = prefixChecked;
+      } else if (isConfluenceTask) {
+        isChecked = li.getAttribute('data-task-state') === 'completed' || li.classList.contains('checked');
+      } else if (checkbox) {
+        isChecked = checkbox.checked || checkbox.hasAttribute('checked');
+      } else {
+        isChecked = li.getAttribute('data-checked') === 'true' || li.classList.contains('checked');
+      }
+      li.setAttribute('data-checked', isChecked ? 'true' : 'false');
+
+      // Confluence의 placeholder span(.placeholder-inline-tasks) 제거
+      const placeholderSpan = li.querySelector('.placeholder-inline-tasks');
+      if (placeholderSpan) {
+        placeholderSpan.remove();
+      }
+
+      const parentUl = li.closest('ul');
+      if (parentUl) {
+        parentUl.setAttribute('data-type', 'taskList');
+      }
+    }
+  }
+
+  // 6. 문단(p, div) 수준에서 유니코드 체크박스 문자나 [ ]로 시작하는 경우:
+  //    연속된 체크박스 블록들을 ul[data-type="taskList"] > li[data-type="taskItem"]로 변환
+  const paragraphs = Array.from(root.querySelectorAll('p, div'));
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    if (!p || !p.parentNode || p.closest('li') || p.closest('ul[data-type="taskList"]')) continue;
+
+    const firstText = findFirstTextNode(p);
+    if (!firstText || !firstText.textContent) continue;
+
+    const match = firstText.textContent.match(CHECKBOX_PREFIX_REGEX);
+    if (!match) continue;
+
+    // 연속된 체크박스 문단들을 수집
+    const group: Array<{ el: HTMLElement; checked: boolean }> = [];
+    let cur: Element | null = p;
+
+    while (cur && (cur.tagName === 'P' || cur.tagName === 'DIV')) {
+      const curFirstText = findFirstTextNode(cur as HTMLElement);
+      if (!curFirstText || !curFirstText.textContent) break;
+      const curMatch = curFirstText.textContent.match(CHECKBOX_PREFIX_REGEX);
+      if (!curMatch) break;
+
+      curFirstText.textContent = curFirstText.textContent.slice(curMatch[0].length);
+      group.push({
+        el: cur as HTMLElement,
+        checked: isCheckedChar(curMatch[2] ?? ''),
+      });
+      cur = cur.nextElementSibling;
+    }
+
+    if (group.length > 0) {
+      const ul = p.ownerDocument.createElement('ul');
+      ul.setAttribute('data-type', 'taskList');
+      p.parentNode.insertBefore(ul, p);
+
+      for (const item of group) {
+        const li = p.ownerDocument.createElement('li');
+        li.setAttribute('data-type', 'taskItem');
+        li.setAttribute('data-checked', item.checked ? 'true' : 'false');
+
+        if (item.el.tagName === 'P') {
+          li.appendChild(item.el);
+        } else {
+          const innerP = p.ownerDocument.createElement('p');
+          while (item.el.firstChild) {
+            innerP.appendChild(item.el.firstChild);
+          }
+          li.appendChild(innerP);
+          item.el.remove();
+        }
+        ul.appendChild(li);
+      }
+    }
+  }
 }
 
 /**

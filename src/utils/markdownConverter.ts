@@ -15,6 +15,8 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
@@ -105,6 +107,8 @@ function createExtensions() {
       inline: false,
       allowBase64: true,
     }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
     // TipTapEditor.tsx와 동일한 mark extensions (Markdown 변환 시 손실되지만 JSON 파싱에 필요)
     Underline,
     Highlight.configure({ multicolor: false }),
@@ -192,6 +196,8 @@ function createExtensionsForTranslation() {
       inline: false,
       allowBase64: true,
     }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
     Underline,
     Highlight.configure({ multicolor: false }),
     Subscript,
@@ -253,12 +259,13 @@ export function tipTapJsonToMarkdown(json: TipTapDocJson): string {
  * @returns TipTap document JSON
  */
 export function markdownToTipTapJson(markdown: string): TipTapDocJson {
+  const normalized = normalizeTaskLists(markdown);
   const editor = new Editor({
     extensions: getExtensions(),
   });
 
   // 명시적 Markdown 파싱
-  editor.commands.setContent(markdown);
+  editor.commands.setContent(normalized);
 
   const json = editor.getJSON() as TipTapDocJson;
   editor.destroy();
@@ -306,8 +313,76 @@ export function tipTapJsonToMarkdownForTranslation(json: TipTapDocJson): string 
  * @returns TipTap document JSON
  */
 export function markdownToTipTapJsonForTranslation(markdown: string): TipTapDocJson {
-  const normalized = normalizeHorizontalRules(markdown);
+  const normalized = normalizeHorizontalRules(normalizeTaskLists(markdown));
   return parseMarkdownWithTables(normalized);
+}
+
+/**
+ * 마크다운의 불릿 없는 체크박스 표기([ ], [x], [])를 표준 리스트 형태(- [ ], - [x])로 정규화
+ *
+ * 사용자가 불릿(-) 없이 [ ] 또는 []를 줄 시작에 쓰는 경우,
+ * markdown-it-task-lists가 리스트 아이템이 아니라고 판단해 일반 텍스트 문단으로 뭉개는 문제를 방지합니다.
+ */
+export function normalizeTaskLists(markdown: string): string {
+  const lines = markdown.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+
+    // 코드 블록 토글
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      result.push(line);
+      continue;
+    }
+
+    if (inCodeBlock) {
+      result.push(line);
+      continue;
+    }
+
+    // 1) 유니코드 체크박스 패턴: ☐(\u2610), ☑(\u2611), ☒(\u2612), □(\u25A1), ▢(\u25A2)
+    // 예: "☐ 할 일" -> "- [ ] 할 일", "- ☐ 할 일" -> "- [ ] 할 일", "☑ 완료" -> "- [x] 완료"
+    const unicodeMatch = line.match(/^([ \t]*)(?:[-*][ \t]+)?([\u2610\u2611\u2612\u25A1\u25A2])([ \t]*)(.*)$/);
+    if (unicodeMatch) {
+      const indent = unicodeMatch[1] ?? '';
+      const char = unicodeMatch[2];
+      const rest = unicodeMatch[4] ?? '';
+      const isChecked = char === '\u2611' || char === '\u2612';
+      const checkStr = isChecked ? '[x]' : '[ ]';
+      const content = rest.length > 0 ? ` ${rest}` : '';
+      result.push(`${indent}- ${checkStr}${content}`);
+      continue;
+    }
+
+    // 2) 줄 시작의 [ ], [x], [X], [] 패턴 (불릿 없는 경우)
+    // 예: "[ ] 할 일" -> "- [ ] 할 일", "  [x] 완료" -> "  - [x] 완료"
+    // 단, 참조 링크 정의([x]: http...)는 제외
+    const match = line.match(/^([ \t]*)\[([ xX])?\]([ \t]*)(.*)$/);
+    if (match) {
+      const indent = match[1] ?? '';
+      const checkChar = match[2];
+      const rest = match[4] ?? '';
+
+      // 참조 링크 정의([x]: url)는 체크박스가 아니므로 건너뜀
+      if (rest.startsWith(':')) {
+        result.push(line);
+        continue;
+      }
+
+      const isChecked = checkChar === 'x' || checkChar === 'X';
+      const checkStr = isChecked ? '[x]' : '[ ]';
+      const content = rest.length > 0 ? ` ${rest}` : '';
+      result.push(`${indent}- ${checkStr}${content}`);
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
 }
 
 /**
@@ -676,6 +751,16 @@ function convertHtmlListsToMarkdown(html: string): string {
         return;
       }
       if (el.tagName === 'LI') {
+        const isTaskItem = el.getAttribute('data-type') === 'taskItem' ||
+          el.classList.contains('task-list-item') ||
+          el.querySelector('input[type="checkbox"]') !== null;
+        let isChecked = false;
+        if (isTaskItem) {
+          const checkbox = el.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+          isChecked = checkbox?.checked || el.getAttribute('data-checked') === 'true';
+        }
+        const bulletPrefix = isTaskItem ? (isChecked ? '- [x] ' : '- [ ] ') : '- ';
+
         // 자식은 반드시 문서 순서대로 방출해야 한다. 중첩 리스트는 walk가 즉시
         // blocks에 넣는데 parts는 루프가 끝난 뒤 넣으므로, flush 없이 두면 자식이
         // 부모보다 먼저 나가고 들여쓰기만 남아 중첩이 통째로 깨진다.
@@ -686,29 +771,38 @@ function convertHtmlListsToMarkdown(html: string): string {
           parts.length = 0;
         };
 
-        for (const node of el.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
-            parts.push(`${indent}- ${node.textContent.trim()}`);
-          } else if (node instanceof Element) {
-            if (node.tagName === 'UL' || node.tagName === 'OL') {
-              flushParts();
-              walk(node, indent + '  ');
-            } else if (node.tagName === 'P') {
-              const t = node.textContent?.trim();
-              if (t) parts.push(`${indent}- ${t}`);
-            } else {
-              flushParts();
-              walk(node, indent);
+        const processChildNodes = (childNodes: NodeListOf<ChildNode>): void => {
+          for (const node of childNodes) {
+            if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+              parts.push(`${indent}${bulletPrefix}${node.textContent.trim()}`);
+            } else if (node instanceof Element) {
+              if (node.tagName === 'LABEL' || (node.tagName === 'INPUT' && (node as HTMLInputElement).type === 'checkbox')) {
+                // 체크박스 마커는 bulletPrefix로 처리했으므로 건너뜀
+                continue;
+              } else if (node.tagName === 'UL' || node.tagName === 'OL') {
+                flushParts();
+                walk(node, indent + '  ');
+              } else if (node.tagName === 'P') {
+                const t = node.textContent?.trim();
+                if (t) parts.push(`${indent}${bulletPrefix}${t}`);
+              } else if (node.tagName === 'DIV') {
+                processChildNodes(node.childNodes);
+              } else {
+                flushParts();
+                walk(node, indent);
+              }
             }
           }
-        }
+        };
+
+        processChildNodes(el.childNodes);
         flushParts();
 
         // 아무것도 못 알아본 경우에만 통째로 살린다. parts가 비었는지로 판정하면
         // 중첩 리스트만 있는 <li>가 자식 텍스트를 한 번 더 방출한다(중복).
         if (blocks.length === startIndex) {
           const t = el.textContent?.trim();
-          if (t) pushBlock(`${indent}- ${t}`, true);
+          if (t) pushBlock(`${indent}${bulletPrefix}${t}`, true);
         }
         return;
       }
@@ -891,7 +985,7 @@ export function parseTranslationResponseToTipTap(content: string): TipTapDocJson
   const toParse = looksLikeBlockHtml(trimmed)
     ? convertHtmlListsToMarkdown(trimmed)
     : trimmed;
-  return parseMarkdownWithTables(normalizeHorizontalRules(toParse));
+  return parseMarkdownWithTables(normalizeHorizontalRules(normalizeTaskLists(toParse)));
 }
 
 /**

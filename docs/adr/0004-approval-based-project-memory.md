@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-07-24 (MCP 계약 정리 2026-07-27, 소급 기록 2026-07-29)
-- **관련**: `src-tauri/src/commands/project_memory.rs`, `src/ai/context/projectMemoryPolicy.ts`, `docs/dynamic-project-knowledge-fix-plan.md`
+- **관련**: `src-tauri/src/commands/project_memory.rs`, `src/ai/context/projectMemoryPolicy.ts`, `docs/archive/dynamic-project-knowledge-fix-plan.md`
 
 ## Context
 

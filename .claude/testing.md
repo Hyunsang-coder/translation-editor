@@ -24,10 +24,10 @@ npm run test:coverage # Coverage report
 ## Pre-Deploy Test Gate
 
 ```bash
-npm run test:tauri    # ⭐ Full gate: lint + unit + e2e + rust + release check
+npm run test:tauri    # ⭐ Full gate: unit + e2e + rust + release check
 ```
 
-Runs sequentially: `lint` → `test:run` → `test:e2e` → `cargo test` → `cargo check --release`
+Runs sequentially: `test:run` → `test:e2e` → `cargo test` → `cargo check --release`
 
 ## E2E Testing (Tauri Smoke + Playwright)
 
@@ -41,11 +41,21 @@ npm run test:harness      # Editor test harness (manual testing)
 - **Default (`test:e2e`)**: Tauri smoke test — `node scripts/tauri-smoke.mjs` (빌드 + 실행 검증)
 - **Web (`test:e2e:web`)**: Playwright web harness — `playwright.web.config.ts`
 - **Location**: `e2e/*.spec.ts`
-- **Test Harness**: `src/test-harness/` - Tauri/API 키 없이 에디터만 독립 테스트
+- **Test Harness**: 루트 `test-harness.html` (`npm run test:harness`가 포트 1421에서 `/test-harness.html` 서빙) - Tauri/API 키 없이 에디터만 독립 테스트
 
 ### Tauri Runtime Automation (Testing Plugin + MCP)
 
-Tauri 런타임을 AI/MCP로 제어하려면 아래 2개를 함께 실행:
+MCP 시나리오 스크립트(`scripts/tauri-testing-mcp-*.mjs`)는 자기완결적(MCP 서버 빌드 → `--features testing` 앱 자동 구동 → 포트 대기 → 시나리오 실행 → 프로세스 정리)이므로 단일 명령으로 실행됩니다:
+
+```bash
+npm run test:e2e:tauri:mcp:workflow         # 워크플로우 전체 (번역+리뷰+채팅)
+npm run test:e2e:tauri:mcp:new-project      # 새 프로젝트 생성 smoke test
+npm run test:e2e:tauri:mcp:review-highlight # 리뷰 하이라이트 검증
+npm run test:e2e:tauri:mcp:history-compare  # 히스토리 스냅샷 비교 검증
+npm run test:e2e:tauri:mcp:chat-selection   # SelectionContext 카드 숏컷
+```
+
+(선택) 이미 실행 중인 앱에 수동으로 붙일 때만 2개 분리 실행:
 
 ```bash
 # 1) 앱 실행 (testing feature + env)
@@ -66,23 +76,26 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - DOM: `tauri_dom_query_selector`, `tauri_dom_click`, `tauri_dom_click_by_text`, `tauri_dom_fill`, `tauri_dom_fill_by_placeholder`, `tauri_dom_type_contenteditable`, `tauri_dom_type_contenteditable_by_selector`, `tauri_dom_wait_for_selector`, `tauri_dom_wait_for_text`
 - Dialog: `tauri_dialog_get_state`, `tauri_dialog_set_auto_response`, `tauri_dialog_push_response`, `tauri_dialog_clear`
 
-워크플로우 검증 스크립트:
+워크플로우 검증 스크립트(`scripts/tauri-testing-mcp-workflow.mjs`):
 - 실행: `npm run test:e2e:tauri:mcp:workflow`
-- 파일: `scripts/tauri-testing-mcp-workflow.mjs`
 - 검증 기준:
   - 원문 에디터에 5줄 계층형 bullet(`-`) 한국어 입력
   - 타깃 언어를 영어로 명시 선택(선택 실패 시 즉시 실패)
-  - 채팅 패널에서 `번여문 내용 간략히 요약해줘` 전송
+  - 채팅 패널에서 `'번역문 내용 간략히 요약해줘'` 전송
   - assistant 메시지가 새로 생성되고 오류(`⚠️`)가 아닌 응답인지 확인
 
 ### E2E Test Files
 
-| File | Tests |
-|------|-------|
+| File | Tests / Description |
+|------|---------------------|
 | `e2e/user-story.spec.ts` | 프로젝트 생성, 문서 입력, 번역/리뷰 UI, 히스토리, 컨텍스트 메뉴 (7 TC) |
 | `e2e/paste-normalizer.spec.ts` | HTML 붙여넣기 정규화 (Confluence, XSS, 테이블 등) |
 | `e2e/selection-editing.spec.ts` | 인라인 툴바, 선택 재번역/적용, 멀티블록 선택, 표 셀 선택(채팅·코멘트·복사) |
 | `e2e/alignment-view.spec.ts` | 정렬 검사 뷰(문단 대조, 불일치 배너, 문서 보기 점프) |
+| `e2e/project-memory-import.spec.ts` | 프로젝트 메모리(용어/가이드라인) 임포트 및 검증 |
+| `e2e/project-sidebar-new.spec.ts` | 프로젝트 사이드바 새 프로젝트 생성/전환 |
+| `e2e/record-demos.spec.ts` | 데모 영상 녹화기 (`playwright.web.config.ts`의 `testIgnore`로 회귀 스위트에서 제외) |
+| `e2e/record-ai.spec.ts` | AI 데모 영상 녹화기 (타이핑 지연 + `.webm`을 `remotion-demo/public/recordings`로 복사. 주의: 현재 `testIgnore`에 없어 회귀 스위트에 섞여 실행됨) |
 
 **여러 블록이 필요한 테스트는 문서를 주입한다** (`seedProject` in `selection-editing.spec.ts`):
 
@@ -100,52 +113,14 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
 
-### Unit Test Files (as of 2026-06-10: 37 test files; table below lists the main ones)
+### Unit Tests (Vitest)
 
-| File | Tests | Description |
-|------|-------|-------------|
-| `src/ai/prompt.test.ts` | 19 | `detectRequestType`, `buildBlockContextText` |
-| `src/ai/polishDocument.test.ts` | 2 | Target-only polishing prompt and payload behavior |
-| `src/ai/review/parseReviewResult.test.ts` | 33 | `parseReviewResult`, `deduplicateIssues` |
-| `src/ai/review/runReview.test.ts` | 13 (3 skip) | Review pipeline, max_tokens 16384, Tauri useFor |
-| `src/ai/modelCallOptions.test.ts` | 7 | `resolveModelCallOptions` per model/useFor |
-| `src/ai/backendCompletion.test.ts` | 8 | Tauri backend temperature/thinking/effort args |
-| `src/ai/client.test.ts` | 4 | `createChatModel` sampling guards |
-| `src/ai/translateDocument.test.ts` | 28 (5 skip) | `isTimeoutError`, `isRetryableTranslationError`, `formatTranslationError` |
-| `src/ai/config.test.ts` | 3 | 테스트 환경 API 키 fallback 우선순위 검증 |
-| `src/ai/tools/buildAlignedChunks.test.ts` | 8 | `buildAlignedChunks`, `buildAlignedChunksAsync` |
-| `src/components/review/reviewApply.test.ts` | varies | Review suggestion apply + F1/F2/F3/F6 guards |
-| `src/components/review/reviewApply.integration.test.ts` | 5 | Parse → highlight → apply E2E |
-| `src/components/chat/useChatScroll.test.ts` | 3 | F9 auto-scroll flag logic |
-| `src/utils/docBlockDiff.test.ts` | varies | F5 flat-block swap vs sentence diff |
-| `src/editor/extensions/ReviewHighlight.test.ts` | 6 | ReviewHighlight decoration |
-| `src/editor/extensions/SearchHighlight.test.ts` | 5 | SearchHighlight normalization |
-| `src/stores/aiConfigStore.test.ts` | 9 | Key loading latch, concurrent call prevention, secure persistence handling |
-| `src/stores/chatStore.selectors.test.ts` | 7 | Grouped Zustand selectors |
-| `src/utils/clipboardImage.test.ts` | 4 | Clipboard image extraction from `DataTransfer` |
-| `src-tauri/src/utils.rs` (`utils::tests`) | 3 | `validate_path` macOS temp allowlist |
-| `src/stores/chatStore.integration.test.ts` | 10 (3 skip) | Session/message CRUD integration |
-| `src/stores/historyStore.test.ts` | 16 | History store snapshot create/list race/rename/createSnapshotIfChanged behavior |
-| `src/components/settings/ConnectorsSection.test.tsx` | 4 | Connector selector/render optimization |
-| `src/stores/reviewStore.test.ts` | 6 | ReviewPanel selector optimization |
-| `src/stores/uiStore.test.ts` | 5 | syncChatPanels 복구 로직, toggleChatVisibility 양방향 토글 |
-| `src/utils/normalizeForSearch.test.ts` | 31 | `normalizeForSearch`, Unicode normalization |
-| `src/utils/imagePlaceholder.test.ts` | 27 | `extractImages`, `restoreImages`, token savings |
-| `src/utils/wordCounter.test.ts` | 79 | `countWords`, MS Word style word counting |
-| `src/utils/htmlContentExtractor.test.ts` | 25 | `extractContent`, Confluence HTML parsing |
-| `src/utils/markdownConverter.test.ts` | varies | TipTap ↔ Markdown conversion |
-| `src/utils/cleanSuggestionContent.test.ts` | 12 | Suggestion content cleanup |
-| `src/utils/adfParser.test.ts` | 54 | ADF document parsing, section extraction |
-| `src/stores/chatStore.helpers.test.ts` | 10 | Chat store pure helper functions |
-| `src/stores/layoutResolver.test.ts` | 13 | Layout resolver responsive breakpoints |
-| `src/components/history/HistoryCompareModal.test.tsx` | 2 | History compare modal diff display |
-| `src/components/history/HistoryTimeline.test.tsx` | 10 | History timeline snapshot list/modified badge |
-| `src/components/history/HistoryRestoreDialog.autoSnapshot.test.tsx` | 2 | Auto-snapshot before restore |
-| `src/components/ui/Modal.test.tsx` | 3 | Body portal under CSS zoom, unmount focus restore, nested-modal ESC stack |
-| `src/components/editor/TranslatePreviewModal.history.test.tsx` | 3 | Apply deduplication and loading cancel behavior |
-| `src/components/editor/TranslatePreviewModal.selection.test.tsx` | 2 | Select all/none/individual immediacy and callback-reference stability |
-| `src/components/review/ReviewPanel.test.tsx` | 3 | ReviewPanel empty document validation |
-| `src/desktop/oddeyesAppBridge.test.ts` | 10 | Desktop bridge: method routing, getStatus/getSource, `setReviewIssues`(정규화/드롭/projectId 가드), `setTranslationContext`(replace/append/빈문자열/projectId 가드) |
+- **테스트 파일 검색 패턴**: `vitest.config.ts`의 `include: ['src/**/*.{test,spec}.{ts,tsx}']`
+- **테스트 파일 개수 확인**:
+  ```bash
+  find src -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" | wc -l
+  ```
+- 테스트 코드는 대상 소스와 동일 디렉토리에 위치(`*.test.ts`, `*.test.tsx`, `*.spec.ts`)하며, 특정 파일 목록은 코드 변경에 따라 지속적으로 갱신되므로 위 명령어로 실시간 개수를 파악합니다.
 
 ## Backend Testing (Rust)
 
@@ -219,110 +194,10 @@ cd src-tauri && cargo check
   - 필요 시 `tauri_dialog_push_response`로 다음 confirm/prompt 1회 응답 주입
   - 발생 이벤트는 `tauri_dialog_get_state`로 확인
 
-## File Organization
+## File Organization & Version Management
 
-### Feature Co-location
-Related files grouped by feature (e.g., `ai/`, `editor/`, `stores/`)
-
-### Key Directories
-
-```
-src/
-├── ai/               # AI integration
-│   ├── chat.ts       # Chat mode with tool calling
-│   ├── polishDocument.ts # Target-only polishing workflow
-│   ├── translateDocument.ts
-│   ├── client.ts     # LangChain model initialization
-│   ├── prompt.ts     # Prompt construction
-│   ├── review/       # Review feature
-│   │   ├── runReview.ts
-│   │   └── parseReviewResult.ts
-│   └── tools/        # LangChain tools
-│       └── confluenceTools.ts  # Confluence word count
-├── editor/           # TipTap extensions
-│   ├── extensions/
-│   │   └── ReviewHighlight.ts
-│   ├── utils/
-│   │   └── replaceDocContent.ts  # ProseMirror 트랜잭션 기반 콘텐츠 교체
-│   └── plugins/
-│       └── pluginKeys.ts       # Plugin Key 중앙화
-├── stores/           # Zustand stores
-│   ├── projectStore.ts
-│   ├── chatStore.ts          # 메인 컴포지션 (7개 슬라이스)
-│   ├── chatStore.types.ts
-│   ├── chatStore.helpers.ts
-│   ├── chatStore.persist.ts
-│   ├── chatStore.session.ts
-│   ├── chatStore.ai.ts
-│   ├── chatStore.settings.ts
-│   ├── chatStore.selectors.ts
-│   ├── aiConfigStore.ts
-│   ├── connectorStore.ts
-│   ├── editorStore.ts        # TipTap 에디터 인스턴스 관리
-│   ├── uiStore.ts
-│   └── reviewStore.ts
-├── components/
-│   ├── panels/       # SettingsSidebar, DockedChatPanel, Source/TargetPanel
-│   ├── chat/         # ChatContent, ChatComposerEditor
-│   ├── ui/           # Modal, Select, UpdateModal
-│   ├── editor/       # TipTapMenuBar, SearchBar
-│   └── review/       # ReviewPanel, ReviewResultsTable
-├── utils/
-│   ├── markdownConverter.ts      # TipTap ↔ Markdown
-│   ├── imagePlaceholder.ts       # Image extraction/restoration
-│   ├── imageResize.ts            # Canvas API resizing
-│   ├── normalizeForSearch.ts     # Markdown normalization
-│   ├── htmlNormalizer.ts         # HTML sanitization
-│   ├── wordCounter.ts            # MS Word style word counting
-│   ├── htmlContentExtractor.ts   # Confluence HTML content extraction
-│   ├── hash.ts
-│   └── diff.ts
-├── hooks/
-│   └── useAutoUpdate.ts
-├── tauri/            # TypeScript wrappers for Tauri commands
-├── types/
-│   └── index.ts      # Shared interfaces
-└── i18n/
-    └── locales/
-        ├── ko.json
-        └── en.json
-
-src-tauri/src/
-├── commands/         # Tauri commands
-│   ├── secure_store.rs
-│   └── confluence.rs   # MCP tool direct invocation
-├── mcp/
-│   ├── client.rs     # Confluence SSE client
-└── utils/
-    └── mod.rs        # Path validation
-```
-
-## Version Management
-
-### Version Files (Must Stay in Sync)
-- `package.json` → `"version": "x.y.z"`
-- `src-tauri/Cargo.toml` → `version = "x.y.z"`
-- `src-tauri/tauri.conf.json` → `"version": "x.y.z"`
-
-### SemVer Guidelines
-
-| Type | When | Example |
-|------|------|---------|
-| **major** | Breaking changes, DB schema changes | 1.0.0 → 2.0.0 |
-| **minor** | New features, UI improvements | 1.0.0 → 1.1.0 |
-| **patch** | Bug fixes, docs, refactoring | 1.0.0 → 1.0.1 |
-
-### Version Update Command
-```
-/bump-version          # Analyze changes, suggest version type
-/bump-version patch    # Update to patch version
-```
-
-## Git Hooks
-
-- **pre-commit**: Runs `npx tsc --noEmit` for type checking
-- Location: `.git/hooks/pre-commit` (not version-controlled)
-- No external dependency (husky removed)
+- **File Organization**: 주요 디렉토리 구조 및 아키텍처는 `.claude/CLAUDE.md`의 `Key Directories` 및 `.claude/architecture.md`를 참조하세요.
+- **Version Management**: 버전 동기화 대상 4개 파일(`package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json`) 및 관리 규칙은 `.claude/CLAUDE.md`를 참조하세요.
 
 ## Version Control
 

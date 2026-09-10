@@ -20,7 +20,7 @@
 ### 1. TipTap Document-First Approach
 
 - **Two Editor Instances**: Source (left) and Target (right), both editable
-- **Storage Format**: TipTap JSON stored in SQLite `documents` table
+- **Storage Format**: TipTap JSON is canonical format, stored across SQLite `blocks` and `segments` tables
 - **Supported Formats**: Headings (H1-H6), lists, bold, italic, strike, blockquote, links, tables, images
 - **Editor-only Formats**: Underline, Highlight, Subscript, Superscript (lost during Markdown conversion)
 - **Notion-Style UX**: Noto Sans KR font, 16px, line-height 1.8, max-width 800px
@@ -111,16 +111,6 @@ Bound in `src/ai/chat.ts`; the **single source of truth is `src/ai/tools/toolReg
 
 **Important**: `sourceDocJson`/`targetDocJson` in projectStore are TipTap JSON caches for AI tools.
 
-### 7. Tauri Menu ↔ React Event Bridge
-
-Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
-
-- **Rust → React**: `on_menu_event` → `window.eval(CustomEvent('tauri-menu'))` → `App.tsx` 리스너
-- **React → Rust**: `setViewChatMenuChecked()` Tauri command로 CheckMenuItem 상태 업데이트
-- **View 메뉴**: Project Sidebar / Settings / Review (MenuItemBuilder) + Chat (CheckMenuItemBuilder)
-- **OddEyes 메뉴**: App Settings (`Cmd+,`) / Check for Updates
-- 상세 패턴: `patterns.md` → Tauri Menu Event Bridge
-
 ### 6. Security
 
 #### Secret Management (Two-Tier)
@@ -153,16 +143,37 @@ Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
 - Context: 30,000 chars
 - Glossary: 30,000 chars
 
+### 7. Tauri Menu ↔ React Event Bridge
+
+Rust 네이티브 메뉴 이벤트와 React UI 상태를 양방향 동기화:
+
+- **Rust → React**: `on_menu_event` → `window.eval(CustomEvent('tauri-menu'))` → `App.tsx` 리스너
+- **React → Rust**: `setViewChatMenuChecked()` Tauri command로 CheckMenuItem 상태 업데이트
+- **View 메뉴**: Project Sidebar / Settings / Review (MenuItemBuilder) + Chat (CheckMenuItemBuilder)
+- **OddEyes 메뉴**: App Settings (`Cmd+,`) / Check for Updates
+- 상세 패턴: `patterns.md` → Tauri Menu Event Bridge
+
 ## SQLite Schema
 
 | Table | Content |
 |-------|---------|
 | `projects` | Project metadata (id, name, domain, languages, settings) |
-| `documents` | Source/Target TipTap JSON blobs |
+| `blocks` | Document block elements (heading, paragraph, list item, table, etc.) |
+| `segments` | Translation text units within blocks (Source/Target text, status, hash) |
+| `history` | Document snapshots and history timeline records |
+| `comments` | Inline/block comments on translation segments |
 | `chat_sessions` | Chat tabs with metadata |
-| `chat_messages` | Messages with tool calls, parent references |
-| `glossary` | Term pairs (source/target) |
+| `chat_messages` | Messages with tool calls, context items, token metrics |
+| `chat_project_settings` | Per-project chat configuration overrides |
+| `glossaries` | Glossary metadata (global and project-scoped) |
+| `glossary_entries` | Term pairs (source/target, context, pos, notes) |
+| `project_glossaries` | Project-glossary link mappings |
+| `project_memory_items` | Project-specific memory items (terms, style guidelines) |
+| `project_memory_state` | Project memory sync/generation state and digest |
+| `forbidden_terms` | Forbidden/banned translation terms per project |
 | `attachments` | Reference documents |
+| `mcp_servers` | Configured MCP server registrations and settings |
+| `ai_usage_records` | AI model token usage and cost accounting records |
 
 **Auto-save**: Changes trigger `isDirty` flag → periodic save to SQLite.
 

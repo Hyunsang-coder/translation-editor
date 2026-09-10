@@ -12,6 +12,8 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import type { TipTapDocJson } from '@/ai/translateDocument';
 import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 
@@ -30,6 +32,8 @@ const extensions = [
   TableHeader,
   TableCell,
   Image.configure({ inline: false, allowBase64: true }),
+  TaskList,
+  TaskItem,
   AppliedChangeHighlight,
 ];
 

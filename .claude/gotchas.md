@@ -1,6 +1,7 @@
 # Common Gotchas
 
 Critical implementation warnings learned from past issues.
+(Note: Item numbers are stable identifiers; intentional gaps exist where past issues were permanently resolved in code.)
 
 ## TipTap / Editor
 
@@ -20,7 +21,7 @@ Critical implementation warnings learned from past issues.
 
 8. **ProseMirror Base Style Override**: `.ProseMirror` base styles (`px-6 py-4`, `min-h-[200px]`) apply to all TipTap editors. For chat composer, explicitly override with `.chat-composer-tiptap` using `@apply px-0 py-0 min-h-0`. Check full CSS inheritance chain when modifying UI.
 
-154. **선택 범위는 `selection.ranges`로 읽을 것 (`from/to` 금지)**: 표에서 여러 셀을 드래그하면 `CellSelection`이고 `selection.from/to`는 **head 셀 하나**만 가리킨다(문서 순서도 아님 — 실측 시 `[[23,27],[3,7],[9,13],[17,21]]`). `from/to`를 쓰면 조용히 한 셀만 처리된다(코멘트·복사가 실제로 그랬다). `ranges`의 min/max span으로 합치는 것도 틀렸다 — 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다. 범위마다 따로 처리하고 `from` 기준으로 정렬할 것(`buildSelectionBubble`, `resolveTopLevelBlockRange`). head가 빈 셀이면 `selection.empty === true`여도 다른 셀 range는 내용이 있다 — `empty`로 먼저 return하지 말 것. 코멘트 마크도 한 chain에서 범위마다 적용한다. 표 셀 단위 폴리싱/재번역은 `docs/table-range-scoped-ai-plan.md`.
+154. **선택 범위는 `selection.ranges`로 읽을 것 (`from/to` 금지)**: 표에서 여러 셀을 드래그하면 `CellSelection`이고 `selection.from/to`는 **head 셀 하나**만 가리킨다(문서 순서도 아님 — 실측 시 `[[23,27],[3,7],[9,13],[17,21]]`). `from/to`를 쓰면 조용히 한 셀만 처리된다(코멘트·복사가 실제로 그랬다). `ranges`의 min/max span으로 합치는 것도 틀렸다 — 3열 표에서 1·3열만 고르면 사이의 2열이 들어온다. 범위마다 따로 처리하고 `from` 기준으로 정렬할 것(`buildSelectionBubble`, `resolveTopLevelBlockRange`). head가 빈 셀이면 `selection.empty === true`여도 다른 셀 range는 내용이 있다 — `empty`로 먼저 return하지 말 것. 코멘트 마크도 한 chain에서 범위마다 적용한다. 표 셀 단위 폴리싱/재번역은 `docs/archive/table-range-scoped-ai-plan.md`.
 
 154-b. **표 사각형을 잘라 붙일 땐 격자 좌표 ≠ JSON 인덱스임을 먼저 막을 것**: `TableMap`의 row/col은 격자 좌표라 `colspan`/`rowspan`이 있으면 `row.content[col]`과 어긋난다 — 사각형 **안**만 병합을 검사하면 rect 왼쪽/위쪽의 병합이 인덱스를 밀어 **엉뚱한 셀에 결과가 들어간다**. 표 전체가 평평한 격자일 때만 `table-rect`로 분류한다(`isPlainGrid`). 병합 결과를 되돌릴 때는 셀 자체(타입·`translationUnitId`·`colwidth`)를 원본에서 재사용하고 **내용만** 갈아끼운다 — 모델은 셀 ID를 자주 버리므로 병합 키는 ID가 아니라 기하다. 차원이 어긋나면 `TableStructureMismatchError`로 적용을 막는다(`tableRectSplice.ts`).
 
@@ -33,6 +34,14 @@ Critical implementation warnings learned from past issues.
 156. **앵커 텍스트는 블록 구분자를 포함해 읽을 것**: `doc.textBetween(from, to)`를 구분자 없이 쓰면 문단 병합이 텍스트를 바꾸지 않아(`One`+`Two` → `OneTwo`) 구조 변경을 stale로 못 잡는다. `readAnchorText`가 `'\n'`을 넣는다. 단일 블록에서는 두 값이 문자 단위로 동일하므로 무회귀이고, `SelectionContext.text`(`'\n'` + trim)와 값이 일치해 proposal 검증이 옳아진다.
 
 165. **반대쪽 유닛 조회는 `findAlignedCounterpartUnits` 하나로**: 재번역·채팅 선택 문맥·검수 위치 힌트·**범위 검수 세그먼트**(`buildScopedAlignedChunks`, 유닛별로 나눠 받는 `findAlignedCounterpartUnitMap`)가 모두 `editor/utils/alignedCounterpartUnits.ts`를 쓴다(ID 직접 매칭 → 실패 시 `alignUnits` LCS). 범위 검수는 한때 자체 LCS를 돌렸고, ID 직매칭이 없고 `degraded`를 무조건 거부해 **같은 문서에서 선택 재번역은 되는데 범위 검수만 실패**했다(유닛 수 곱 25만 초과 = 양쪽 500유닛, 표는 셀+문단으로 이중 카운트라 120행×4열 표 하나로 도달). `TranslationUnitId.ts`에 대응 로직을 다시 만들지 말 것 — `alignUnits`가 그 파일을 import하므로 역방향은 런타임 순환이고, 그래서 조합 모듈이 따로 있다. 옛 순번 fallback은 **문서 전체가 1:1**일 때만 동작해 legacy 문서에서 원문 문단 하나만 추가·분할해도 문서 전체의 재번역이 죽었다. 불변식: 정렬 뷰가 `pair`로 보여주는 유닛은 재번역도 되어야 하고, 짝을 못 찾은 유닛만 실패한다. 판정은 유닛 개수가 아니라 **고유 ID 수**로(문단 중간 분할이 attrs를 복사해 같은 ID가 복제된다), 선택 일부만 대응되면 부분 결과 대신 빈 배열.
+
+143. **Selection Anchor는 영속 객체가 아님**: `SelectionAnchor`의 DecorationSet은 에디터 런타임에만 존재한다. 저장된 채팅 proposal을 재수화할 때 `active`로 복원하지 말고 `detached`로 표시해 재선택을 요구한다.
+
+144. **Same-text Replace 금지**: 선택 수정 적용 시 문서 전체에서 문자열 검색/치환하면 중복 문구의 잘못된 위치를 바꿀 수 있다. 반드시 anchor range와 현재 텍스트를 함께 검증하고 해당 range에만 단일 transaction을 적용한다.
+
+149. **Selection Anchor 수명 = 모든 종료 경로에서 제거**: `createSelectionAnchor`로 만든 앵커(하이라이트)는 apply 성공(`applySelectionEdit`) 시에만 자동 제거된다. 그 외 종료 경로 — chat chip dismiss, proposal 폐기/stale, 새 선택으로 교체, 프로젝트 전환 — 에서 `removeSelectionAnchor`를 짝지어 호출하지 않으면 하이라이트가 `MAX_SELECTION_ANCHORS` eviction 전까지 영구 잔존한다. 앵커를 만드는 코드는 제거 경로를 함께 설계할 것.
+
+151. **선택 앵커 범위는 트림된 range로 생성**: `SelectionContext.text`는 `.trim()`되지만 앵커 검증은 `doc.textBetween(from, to)`(비트림)와 비교한다. `normalizeSelectionAnchorRange`가 가장자리 공백을 range에서 제외하지 않으면 두 값이 어긋나 proposal 적용이 항상 stale로 판정된다.
 
 ## AI / Chat
 
@@ -77,6 +86,21 @@ Critical implementation warnings learned from past issues.
 161. **세션 pin은 provider 문자열이 아닐 수 있다**: `chat_sessions.model_preset`은 `provider[#model[#effort]]` 형태다(채팅 지정 스냅샷, ADR-0017) — `"anthropic"`, `"anthropic#claude-haiku-4-5"`, effort만 지정하면 `"anthropic##medium"`처럼 모델 구간이 빈다. 읽을 때는 `normalizeProvider()`(구분자 뒤를 잘라냄)와 `pinnedChatSpec()`을 쓸 것. pin을 provider로 단정하고 `session.modelPreset !== provider`로 비교하면 스냅샷이 붙은 세션이 hydrate마다 "안 맞는 값"으로 판정돼 provider만 남기고 깎이고, 그러면 **진행 중 대화가 다음 실행에서 현재 설정의 모델로 갈아타 캐시 프리픽스를 버린다.** 정규화가 필요하면 `normalizeSessionPin()`을 쓸 것 — 이미 정규형이면 같은 문자열을 그대로 돌려주므로 불필요한 되쓰기가 없다. **해석 규칙: 채팅에 pin이 있으면 pin이 유일한 권위이고 현재 지정은 보지 않는다.** 스냅샷 없는 pin을 "지정 없음"으로 읽고 현재 지정으로 채우면, 기능을 켜는 순간 존재하던 모든 세션이 다음 턴에 모델을 갈아탄다(`resolveModelRunConfig`).
 
 162. **`resolveModelForUse`는 지정을 인자로 받는다 — 스토어를 안 읽는다**: 순수 함수라 3번째 인자를 빠뜨리면 사용자의 모델 지정이 **조용히 무시된다**(에러도 경고도 없다). 실제로 요약 경로(`resolveSummaryModelRunConfig`)가 그래서 드롭다운이 아무 일도 안 했다. 스토어를 읽어야 하는 자리에서는 `getModelSpecForUse(provider, useFor)`를 쓸 것. 순수 버전은 테스트와, 이미 스토어를 손에 쥔 호출부(`getAiConfig` 등)에서만 쓴다.
+
+146. **Legacy Project Context Fallback**: 구조화 Project Memory가 아직 비었거나 migration 조회가 실패한 순간에도 기존 `projectContext`를 버리면 안 된다. `buildContextSnapshot({ legacyProjectContext })`가 `legacy-project-context` 항목으로 보존한다. (v2.13.0에서 Settings UI 편집 필드와 chat 직접 주입은 제거됐지만, 스토어 필드·DB persist·hydrate migration·이 fallback·Desktop MCP 주입은 유지된다.)
+
+147. **Selection Retranslate Tool Binding**: 직접 부분 재번역은 단일 AI 호출이며 `selection-retranslate` profile의 bound tools는 항상 0개다. 외부 MCP/웹/커넥터 도구를 우회로 추가하지 않는다.
+
+148. **External Tool Gate**: MCP/Confluence/빌트인 커넥터는 registry allowlist와 explicit external intent를 모두 통과해야 한다. 특히 selection profile에서 동적 커넥터 배열을 무조건 `bindTools`에 합치면 최소 컨텍스트 계약이 깨진다.
+
+150. **Marker 워크플로우 maxTokens는 thinking 포함 예산**: `---X_START/END---` 마커 기반 응답(번역/부분 재번역 등)에서 maxTokens을 교체문 길이만 보고 작게 잡으면(예: 4096), Anthropic adaptive thinking / OpenAI reasoning 토큰이 예산을 먼저 소비해 END 마커 전에 truncation → 파싱 실패한다. `retranslateSelection`은 `SELECTION_EDIT_MAX_TOKENS=16384`, review는 16384, chat은 8192. 신규 마커 워크플로우는 8192+ 기준으로 산정한다. (F13과 동일 문제 클래스.)
+
+152. **번역 응답을 첫 태그만 보고 HTML로 분류하지 말 것**: `parseTranslationResponseToTipTap`은 `looksLikeBlockHtml`로 마크다운/HTML을 가른다. 번역 직렬화는 표를 **항상 raw HTML**로 쓰므로(`TableForTranslation`), 첫 태그만 보면 표로 시작하는 문서가 전부 HTML로 분류돼 DOM 파서(`convertHtmlListsToMarkdown`)를 탄다. 그 경로에서 마크다운 본문은 텍스트 노드라 유실되고, tiptap-markdown이 `텍스트 == href`인 링크를 직렬화한 **autolink `<https://…>`는 미지의 시작 태그로 삼켜져** URL이 소멸한다. 판정에서 `<table>` 세그먼트를 빼고, 혼합 콘텐츠는 `parseMarkdownWithTables`(`html: true`)에 맡길 것 — 표 밖 `<ul>`/`<p>`도 이쪽이 정상 파싱한다.
+
+153. **DOM walk로 마크다운을 재조립할 때 3가지**: `convertHtmlListsToMarkdown`류 코드의 반복 함정. ① `children`(Element만) 순회는 텍스트 노드를 **조용히 삭제**한다 — `childNodes`를 쓸 것. ② 블록을 전부 `'\n'`으로 이으면 마크다운에서 문단이 합쳐진다 — 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`. ③ 중첩 리스트는 walk가 즉시 방출하므로, 부모 텍스트를 루프 뒤에 방출하면 **자식이 부모보다 먼저 나가** 중첩이 평탄화된다 — 내려가기 전에 flush하고, "아무것도 못 알아봤다" 폴백은 누적 버퍼가 아니라 **출력 길이 변화**로 판정할 것(아니면 중복 방출).
+
+156. **번역 방향은 날값으로 읽지도, 문자열로 비교하지도 말 것**: `project.metadata.sourceLanguage`/`targetLanguage`의 기본값은 센티널 `'auto'`다([ADR-0020](../docs/adr/0020-auto-target-language.md), [ADR-0021](../docs/adr/0021-explicit-source-language.md)). 프롬프트·MCP·UI로 흘리기 전에 반드시 `resolveDirection({ source, target }, sourceText)` **하나**를 거칠 것 — 두 값을 따로 풀면 원문이 명시 선택일 때 타겟이 텍스트 재감지로 조용히 되돌아간다. 비교는 `normalizeLang()`을 거칠 것: 저장값은 한글 라벨(`'한국어'`), 외부에서 오는 값은 영문명(`'Korean'`)이라 `===`로는 **동일언어 가드가 영원히 안 걸린다**. **판정기 둘을 섞지 말 것**: 방향을 *고르는* 데는 `detectSourceLangCode`(한글 5%), 번역을 *막는* 데는 `detectDominantLangCode`(비율 30%)다 — 공격적인 쪽을 차단에 쓰면 한국어 용어가 섞인 영문 문서의 정당한 EN→KO 번역이 막힌다. 브리지(`oddeyesAppBridge`)는 저장값이 아니라 해석값을 내보내야 한다 — 센티널을 주면 외부 에이전트의 방향 교차검증이 통째로 꺼진다.
+
 ## AbortController / Async
 
 21. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.
@@ -121,6 +145,14 @@ Critical implementation warnings learned from past issues.
 
 147. **Review Naturalness Criteria**: 검수 프롬프트에는 누락/오역/왜곡/일관성뿐 아니라 원어민이 보기에 어색한 collocation, 표현, 문장 구조도 명시해야 한다. 단, 검수는 이슈 제안만 생성하고 문서를 자동 수정하지 않는다.
 
+122. **Review segmentOrder Always Zero**: `parseReviewResult.ts` Markdown 파싱에서 `segmentOrder`가 항상 0으로 하드코딩. 동일 타입+excerpt 조합의 이슈가 다른 세그먼트에 있으면 ID 충돌로 하나가 소실.
+
+124. **Review Glossary First Chunk Only**: `ReviewPanel.tsx`에서 glossary 검색이 첫 번째 청크(4000자)만 대상. 긴 문서 후반부의 용어 불일치 누락 가능.
+
+138. **Review Empty Document Pre-Check (HTML Direct)**: `ReviewPanel.tsx`의 `handleStartReview()`에서 `buildAlignedChunksAsync` 전에 `stripHtml(sourceDocument).trim()` / `stripHtml(targetDocument).trim()`으로 빈 문서 직접 검증. Markdown 변환 파이프라인이 `<p></p>`를 빈 문자열로 정확히 변환하지 못하는 문제 방지.
+
+145. **Review Context Drift**: 리뷰 청크 루프 안에서 `chatStore`/`projectMemoryStore`를 다시 읽으면 청크마다 규칙 revision이 달라질 수 있다. glossary 검색과 `ContextSnapshot` 생성을 루프 전에 한 번만 수행하고 동일 `ResolvedWorkflowContext` 객체를 재사용한다.
+
 ## JSON Parsing
 
 37. **JSON Parsing with Brace Counting**: Avoid greedy regex for JSON extraction. Use brace counting (`extractJsonObject` in `parseReviewResult.ts`) to handle nested objects and extra brackets in AI responses.
@@ -133,7 +165,7 @@ Critical implementation warnings learned from past issues.
 
 40. **Debounce Timer Project ID Verification**: When using debounced persist operations (like `schedulePersist`), capture the project ID at schedule time and verify it hasn't changed before executing the persist.
 
-41. **Chat Session Message Limit**: Frontend `MAX_MESSAGES_PER_SESSION = 1000` enforces FIFO in-memory. Backend (`db/mod.rs`) saves up to 100 messages per session to SQLite. Ensure backend limit stays reasonable relative to frontend.
+41. **Chat Session Message Limit**: Frontend (`MAX_MESSAGES_PER_SESSION = 1000`) and Backend (`db/mod.rs:1135` limit 1000) are aligned at 1,000 messages per session. Keep both limits aligned when modifying session capacity.
 
 113. **Save Concurrency Guard**: `projectStore.ts`의 `saveProject()`는 `saveInFlight` Promise로 동시 실행을 방지. Auto-save 타이머와 write-through 타이머가 독립적으로 `saveProject()`를 호출할 수 있으므로, 이전 save가 완료될 때까지 다음 save가 대기.
 
@@ -142,6 +174,18 @@ Critical implementation warnings learned from past issues.
 115. **toParagraphHtml HTML 감지**: `/<[a-z][a-z0-9]*[\s/>]/i` 정규식으로 실제 HTML 태그 존재 여부를 확인. 이전의 `startsWith('<') && endsWith('>')` 방식은 `<user input>`을 HTML로 오인하거나 `<p>Hello</p> world`를 텍스트로 오인하는 문제가 있었음.
 
 42. **Grouped Zustand Selectors**: Use selectors from `chatStore.selectors.ts` instead of individual `useChatStore()` calls. Grouped selectors use `useShallow` to minimize re-renders.
+
+126. **DB Import Pragma Reset**: `import_db_from_file()` (SQLite backup API)은 커넥션 프래그마(`foreign_keys`, `journal_mode`, `synchronous`)를 리셋함. import 후 반드시 `initialize()` 호출 필요 — 내부에서 `apply_pragmas()`로 복원. `foreign_keys=OFF`가 되면 CASCADE DELETE 미작동 → 고아 레코드 발생.
+
+131. **streamingSessionId 세션별 격리**: `chatStore.selectors.ts`의 `useChatSessionState`는 `streamingSessionId`로 현재 스트리밍 중인 세션만 `isLoading`/`streamingContent` 표시. 다른 세션 탭은 스트리밍 상태가 아닌 것으로 렌더링. 동시 다중 스트리밍 방지.
+
+132. **Zustand Store Selector 필수**: 컴포넌트에서 `useStore()`로 전체 store를 구독하면, 어느 필드든 변경 시 전체 리렌더 발생. 필드별 개별 selector 사용: `useStore((s) => s.field)`. 객체 구조 사용 시 매번 새 객체 생성되어 무한 리렌더 루프 가능 → 개별 selector로 분산.
+
+133. **Zustand 비동기 상태 플래그 (동시 호출 방지)**: 비동기 로드 함수에서 `keysLoaded: boolean | 'loading'` 상태 사용. `'loading'` 체크로 진행 중인 호출 방지, 성공/실패 여부로 캐시/재시도 제어. ❌ 금지: `keysLoaded = true`를 try 시작에 설정 (에러 시 영구 실패, 재시도 불가).
+
+134. **Cross-Store 접근 (getState 사용)**: 한 store에서 다른 store의 값이 필요할 때 `useOtherStore.subscribe()`로 구독하지 말 것 (순환 참조, 메모리 누수). 대신 콜백 내에서 `useOtherStore.getState().field` 사용하여 현재값만 읽기.
+
+141. **createSnapshotIfChanged Dedup**: `historyStore.ts`의 `createSnapshotIfChanged()`는 `latestBlocksHash` 캐시로 중복 스냅샷 방지. Fast path (캐시 비교) → Slow path (스냅샷 로드 비교) → 변경 감지 시만 새 스냅샷 생성. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 `createSnapshot` 대신 사용.
 
 ## UI Components
 
@@ -159,6 +203,20 @@ Critical implementation warnings learned from past issues.
 
 164. **포털 메뉴 바깥 클릭 판정은 SVG를 포함해야 한다**: `document.body` 포털은 원래 컴포넌트 `ref.contains(target)` 밖에 있으므로 `closest('[data-…]')`로 내부를 판정한다. 아이콘 클릭의 `event.target`은 `SVGElement`일 수 있어 `target instanceof HTMLElement`로 검사하면 내부 클릭을 바깥 클릭으로 오판한다 — `target instanceof Element`를 사용할 것. 행 보조 작업(`…`)은 부모 행 `onClick`의 전파 차단에 의존하지 말고, 프로젝트 선택 버튼과 형제 버튼으로 분리한다. 회귀 테스트는 버튼뿐 아니라 아이콘 SVG의 `mousedown`도 보내야 한다.
 
+128. **System Theme OS Change Listener**: `App.tsx`에서 `theme === 'system'`일 때 `matchMedia('prefers-color-scheme: dark').addEventListener('change', ...)` 구독 필수. 미등록 시 OS 다크/라이트 전환이 앱에 반영되지 않음.
+
+130. **ProjectSidebar mergeProjectListStable**: `listRecentProjects()` 갱신 시 `setItems(list)` 대신 `setItems((prev) => mergeProjectListStable(prev, list))` 사용. 신규 프로젝트는 상단에 추가, 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환. updatedAt 정렬 제거로 리스트 점프 방지.
+
+135. **Tauri Menu Event Bridge (window.eval)**: Rust `on_menu_event`에서 `window.eval()`로 `CustomEvent('tauri-menu')`를 디스패치. `serde_json::to_string(id)`로 JSON 이스케이프하여 특수문자 안전성 보장. `App.tsx`의 `useEffect` 리스너에서 `menuId`로 분기 처리. `reload`만 별도 분기 (URL 네비게이트), 나머지는 모두 CustomEvent로 통합.
+
+136. **View Menu Chat CheckMenuItem 동기화**: Chat 메뉴는 `CheckMenuItemBuilder`로 생성 (체크 상태 표시). React 측 `isViewChatOn` 상태 변경 시 `setViewChatMenuChecked()` Tauri command로 Rust 메뉴 상태 업데이트. `useEffect` deps에 `isViewChatOn`만 포함. 실패 시 `console.warn`으로 무시 (메뉴 동기화는 non-critical).
+
+137. **toggleChatVisibility 중앙화**: Chat 토글 로직이 `Toolbar.tsx`에 인라인으로 있었으나, View 메뉴에서도 동일 동작이 필요하여 `uiStore.toggleChatVisibility()`로 중앙화. `aria-pressed` 상태도 `isAnyChatVisible` (양쪽 사이드바 모두 검사)로 통합.
+
+139. **Project Creation Double-Click Prevention**: `MainLayout.tsx`의 `handleCreateProject()`에서 `isCreating` 상태로 중복 클릭 방지. `disabled` 속성 + "생성 중..." 텍스트 피드백. `finally` 블록에서 상태 리셋.
+
+140. **Toolbar Project Null Guard**: `Toolbar.tsx`의 Settings/Review/Chat 메뉴 버튼에 `disabled={!project}` 가드 + 핸들러 `if (!project) return` 얼리 리턴. 프로젝트 없는 상태에서 패널 열기 시도 방지.
+
 ## Chat Composer
 
 51. **ChatComposerEditor IME Handling**: `ChatComposerEditor.tsx` uses `isComposingRef` with `compositionstart`/`compositionend` events to prevent Enter key from sending messages during IME composition (Korean, Japanese). The `event.isComposing` check alone is not reliable across all browsers.
@@ -170,6 +228,8 @@ Critical implementation warnings learned from past issues.
 54. **Chat Clipboard Image Paste (Tauri)**: WKWebView paste 이벤트의 `clipboardData`에 이미지가 없는 경우가 많음(macOS 스크린샷 등). `ChatComposerEditor`는 `paste` capture 리스너 + `useChatComposerHandlers.handleComposerPaste`로 처리하고, Web `DataTransfer`에 이미지가 없으면 `@tauri-apps/plugin-clipboard-manager` `readImage()`로 네이티브 fallback. `text/plain`이 있으면 텍스트 붙여넣기를 우선(이미지 fallback 스킵). 플러그인 등록(`lib.rs`) + capability `clipboard-manager:allow-read-image` 필수.
 
 55. **Chat Composer Temp Image Path**: 클립보드/드래그앤드롭 이미지는 `save_temp_image` → `std::env::temp_dir()/oddeyes-uploads`에 저장 후 `preview_attachment`로 DTO 생성. macOS에서는 canonical path가 `/private/var/folders/...`이므로 `validate_path()`가 `/private/var` 전체를 차단하면 첨부가 silent fail함. `/private/var/folders/`, `/var/folders/`는 사용자 임시 디렉토리로 허용.
+
+142. **Selection Text Raw Append 금지**: 선택 영역을 채팅에 보낼 때 `appendComposerText()`를 호출하면 scope/anchor/audit 정보가 사라진다. 인라인 선택 툴바와 Cmd/Ctrl+K/L 모두 `SelectionContext`를 생성해 `setComposerSelection()`을 사용해야 한다.
 
 ## Image Handling
 
@@ -215,6 +275,10 @@ Critical implementation warnings learned from past issues.
 
 116. **Console Log Content Leakage**: `saveProject`의 디버그 로그에서 사용자 콘텐츠(`content.slice(0, 100)`)를 출력하지 않도록 주의. `console.debug`로 최소 정보(projectId, blocksCount)만 기록. 프로덕션 빌드에서도 브라우저 콘솔에 노출됨.
 
+129. **Vault AAD Not Used**: `secrets/vault.rs`의 XChaCha20-Poly1305 암호화에서 AAD(Associated Data)를 사용하지 않음. Poly1305 태그로 ciphertext 무결성은 보장되지만, vault magic 바인딩은 없음. AAD 추가 시 기존 vault 파일 호환이 깨지므로 마이그레이션 필요.
+
+155. **외부 텍스트를 도구 결과로 넘길 때 신뢰경계 태그 무해화**: `<untrusted>`(문서·선택 도구)와 `<external_content>`(`wrapExternalToolOutput`) 둘 다 본문이 닫는 태그를 포함하면 경계가 위조된다. 사내 위키처럼 **제3자가 편집할 수 있는 텍스트**를 새 경로로 흘릴 때는 해당 래퍼가 무해화(zero-width space 삽입)를 하는지 먼저 확인할 것. 절단은 래핑보다 **먼저** 해야 닫는 태그가 살아남는다.
+
 ## i18n / Git
 
 65. **i18n Keys**: Match keys in `src/i18n/locales/ko.json` and `en.json`.
@@ -254,6 +318,8 @@ Critical implementation warnings learned from past issues.
 80. **buildToolSpecs 공통 함수**: 스트리밍/비스트리밍 모두 `buildToolSpecs()`로 도구 빌드. `boundToolNames` 반환하여 `buildToolGuideMessage()`가 실제 바인딩된 도구 기반으로 가이드 동적 생성. 가이드-도구 불일치 에러("Tool not found") 방지.
 
 81. **Confluence 민감정보 로그**: `confluenceTools.ts`에서 문서 내용 미리보기 로그는 `import.meta.env.DEV` 조건 하에서만 출력. 프로덕션 보안 강화.
+
+154. **Confluence 도구는 registry 등재된 로컬 래퍼만**: 서버 MCP 도구를 `bindTools`에 그대로 합치면 `allowedNames`(registry 파생)에서 전량 탈락한다 — 이름이 registry에 없기 때문이며, 2026-07-24~07-30 사이 Confluence 검색이 조용히 죽어 있던 원인이다([ADR-0015](../docs/adr/0015-confluence-tools-as-local-wrappers.md)). 새 Confluence 기능은 `mcp_call_tool`을 호출하는 로컬 도구로 만들고 registry(+ i18n `chat.toolName.*` ko/en)에 등재할 것. 바인딩은 `confluenceSearchEnabled`만이 아니라 **`mcpClientManager.getStatus().isConnected`까지** 봐야 한다 — 미연결에 붙이면 첫 호출이 실패해 모델 왕복을 버린다.
 
 82. **Image Extension Dual Mode**: `ImagePlaceholder`(placeholder)와 `ImageOriginal`(실제 이미지 렌더링) 두 extension 존재. `pasteImageMode` 설정에 따라 `TipTapEditor.tsx`에서 선택. 두 extension 모두 `extendedParseHTML`을 공유하여 `img[src]`와 `div[data-type="image"]` 양쪽 파싱 가능 → 모드 전환 시 이미지 데이터 보존.
 
@@ -319,80 +385,4 @@ Critical implementation warnings learned from past issues.
 
 112. **CSP img-src 외부 이미지 허용**: `tauri.conf.json`의 CSP에 `img-src 'self' asset: data: https: http:` 필요. `https: http:` 누락 시 original 모드에서 CDN 이미지 로드 차단됨.
 
-## Review Audit (2026-02-09)
-
-119. **Review Error Detection False Positive**: `parseReviewResult.ts`의 `detectAiErrorResponse()`가 `/error\s*:\s*/i` 패턴을 사용하여, 정상 검수 응답에서 "error"라는 단어가 포함되면 전체 응답을 에러로 처리하여 throw. 마커(`---REVIEW_START/END---`)가 존재하면 에러 감지를 스킵해야 함. 상세: `.claude/review-audit.md` 이슈 #1.
-
-120. **Review Excerpt Quote Parsing Truncation**: `parseReviewResult.ts`의 Markdown 파싱에서 `[^"]*` 패턴이 excerpt 내부 따옴표에서 잘림. 예: `**Source**: "He said "hello""` → `He said `만 캡처. 하이라이트 실패 원인. 상세: `.claude/review-audit.md` 이슈 #2.
-
-121. **Review maxTokens Truncation Undetected**: `runReview.ts`의 `maxTokens: 4096` 제한으로 이슈가 많은 청크에서 응답 잘림 발생 가능. `---REVIEW_END---` 마커 존재 여부로 잘림 감지 필요. 상세: `.claude/review-audit.md` 이슈 #3.
-
-122. **Review segmentOrder Always Zero**: `parseReviewResult.ts` Markdown 파싱에서 `segmentOrder`가 항상 0으로 하드코딩. 동일 타입+excerpt 조합의 이슈가 다른 세그먼트에 있으면 ID 충돌로 하나가 소실. 상세: `.claude/review-audit.md` 이슈 #4.
-
-123. **ReviewHighlight Production Console Logs**: `ReviewHighlight.ts`에 디버깅용 `console.log`가 잔존. 에디터 문서 변경마다 + 이슈 수만큼 로그 출력되어 성능 영향. 상세: `.claude/review-audit.md` 이슈 #5.
-
-124. **Review Glossary First Chunk Only**: `ReviewPanel.tsx`에서 glossary 검색이 첫 번째 청크(4000자)만 대상. 긴 문서 후반부의 용어 불일치 누락 가능. 상세: `.claude/review-audit.md` 이슈 #6.
-
-125. **Review severityFilter Set Re-render**: `reviewStore.ts`의 `severityFilter`가 `Set<IssueSeverity>` 타입. `toggleSeverityFilter()`에서 매번 `new Set()` 생성 → Zustand shallow 비교 시 항상 새 참조 → 전체 구독자 리렌더. `Record<IssueSeverity, boolean>`으로 변경 권장. 상세: `.claude/review-audit.md` 이슈 #7.
-
-126. **DB Import Pragma Reset**: `import_db_from_file()` (SQLite backup API)은 커넥션 프래그마(`foreign_keys`, `journal_mode`, `synchronous`)를 리셋함. import 후 반드시 `initialize()` 호출 필요 — 내부에서 `apply_pragmas()`로 복원. `foreign_keys=OFF`가 되면 CASCADE DELETE 미작동 → 고아 레코드 발생.
-
-127. **History Commands Not Implemented**: `commands/history.rs`의 `create_snapshot`, `restore_snapshot`, `list_history`는 `NOT_IMPLEMENTED` 에러를 반환. 프론트엔드에서 현재 호출하지 않지만, 향후 연동 시 주의.
-
-128. **System Theme OS Change Listener**: `App.tsx`에서 `theme === 'system'`일 때 `matchMedia('prefers-color-scheme: dark').addEventListener('change', ...)` 구독 필수. 미등록 시 OS 다크/라이트 전환이 앱에 반영되지 않음.
-
-129. **Vault AAD Not Used**: `secrets/vault.rs`의 XChaCha20-Poly1305 암호화에서 AAD(Associated Data)를 사용하지 않음. Poly1305 태그로 ciphertext 무결성은 보장되지만, vault magic 바인딩은 없음. AAD 추가 시 기존 vault 파일 호환이 깨지므로 마이그레이션 필요.
-
-130. **ProjectSidebar mergeProjectListStable**: `listRecentProjects()` 갱신 시 `setItems(list)` 대신 `setItems((prev) => mergeProjectListStable(prev, list))` 사용. 신규 프로젝트는 상단에 추가, 기존 프로젝트는 기존 순서 유지하되 최신 데이터로 치환. updatedAt 정렬 제거로 리스트 점프 방지.
-
-131. **streamingSessionId 세션별 격리**: `chatStore.selectors.ts`의 `useChatSessionState`는 `streamingSessionId`로 현재 스트리밍 중인 세션만 `isLoading`/`streamingContent` 표시. 다른 세션 탭은 스트리밍 상태가 아닌 것으로 렌더링. 동시 다중 스트리밍 방지.
-
-132. **Zustand Store Selector 필수**: 컴포넌트에서 `useStore()`로 전체 store를 구독하면, 어느 필드든 변경 시 전체 리렌더 발생. 필드별 개별 selector 사용: `useStore((s) => s.field)`. 객체 구조 사용 시 매번 새 객체 생성되어 무한 리렌더 루프 가능 → 개별 selector로 분산.
-
-133. **Zustand 비동기 상태 플래그 (동시 호출 방지)**: 비동기 로드 함수에서 `keysLoaded: boolean | 'loading'` 상태 사용. `'loading'` 체크로 진행 중인 호출 방지, 성공/실패 여부로 캐시/재시도 제어. ❌ 금지: `keysLoaded = true`를 try 시작에 설정 (에러 시 영구 실패, 재시도 불가).
-
-134. **Cross-Store 접근 (getState 사용)**: 한 store에서 다른 store의 값이 필요할 때 `useOtherStore.subscribe()`로 구독하지 말 것 (순환 참조, 메모리 누수). 대신 콜백 내에서 `useOtherStore.getState().field` 사용하여 현재값만 읽기.
-
-135. **Tauri Menu Event Bridge (window.eval)**: Rust `on_menu_event`에서 `window.eval()`로 `CustomEvent('tauri-menu')`를 디스패치. `serde_json::to_string(id)`로 JSON 이스케이프하여 특수문자 안전성 보장. `App.tsx`의 `useEffect` 리스너에서 `menuId`로 분기 처리. `reload`만 별도 분기 (URL 네비게이트), 나머지는 모두 CustomEvent로 통합.
-
-136. **View Menu Chat CheckMenuItem 동기화**: Chat 메뉴는 `CheckMenuItemBuilder`로 생성 (체크 상태 표시). React 측 `isViewChatOn` 상태 변경 시 `setViewChatMenuChecked()` Tauri command로 Rust 메뉴 상태 업데이트. `useEffect` deps에 `isViewChatOn`만 포함. 실패 시 `console.warn`으로 무시 (메뉴 동기화는 non-critical).
-
-137. **toggleChatVisibility 중앙화**: Chat 토글 로직이 `Toolbar.tsx`에 인라인으로 있었으나, View 메뉴에서도 동일 동작이 필요하여 `uiStore.toggleChatVisibility()`로 중앙화. `aria-pressed` 상태도 `isAnyChatVisible` (양쪽 사이드바 모두 검사)로 통합.
-
-138. **Review Empty Document Pre-Check (HTML Direct)**: `ReviewPanel.tsx`의 `handleStartReview()`에서 `buildAlignedChunksAsync` 전에 `stripHtml(sourceDocument).trim()` / `stripHtml(targetDocument).trim()`으로 빈 문서 직접 검증. Markdown 변환 파이프라인이 `<p></p>`를 빈 문자열로 정확히 변환하지 못하는 문제 방지.
-
-139. **Project Creation Double-Click Prevention**: `MainLayout.tsx`의 `handleCreateProject()`에서 `isCreating` 상태로 중복 클릭 방지. `disabled` 속성 + "생성 중..." 텍스트 피드백. `finally` 블록에서 상태 리셋.
-
-140. **Toolbar Project Null Guard**: `Toolbar.tsx`의 Settings/Review/Chat 메뉴 버튼에 `disabled={!project}` 가드 + 핸들러 `if (!project) return` 얼리 리턴. 프로젝트 없는 상태에서 패널 열기 시도 방지.
-
-141. **createSnapshotIfChanged Dedup**: `historyStore.ts`의 `createSnapshotIfChanged()`는 `latestBlocksHash` 캐시로 중복 스냅샷 방지. Fast path (캐시 비교) → Slow path (스냅샷 로드 비교) → 변경 감지 시만 새 스냅샷 생성. `TranslatePreviewModal`, `HistoryRestoreDialog`에서 `createSnapshot` 대신 사용.
-
-142. **Selection Text Raw Append 금지**: 선택 영역을 채팅에 보낼 때 `appendComposerText()`를 호출하면 scope/anchor/audit 정보가 사라진다. 인라인 선택 툴바와 Cmd/Ctrl+K/L 모두 `SelectionContext`를 생성해 `setComposerSelection()`을 사용해야 한다.
-
-143. **Selection Anchor는 영속 객체가 아님**: `SelectionAnchor`의 DecorationSet은 에디터 런타임에만 존재한다. 저장된 채팅 proposal을 재수화할 때 `active`로 복원하지 말고 `detached`로 표시해 재선택을 요구한다.
-
-144. **Same-text Replace 금지**: 선택 수정 적용 시 문서 전체에서 문자열 검색/치환하면 중복 문구의 잘못된 위치를 바꿀 수 있다. 반드시 anchor range와 현재 텍스트를 함께 검증하고 해당 range에만 단일 transaction을 적용한다.
-
-145. **Review Context Drift**: 리뷰 청크 루프 안에서 `chatStore`/`projectMemoryStore`를 다시 읽으면 청크마다 규칙 revision이 달라질 수 있다. glossary 검색과 `ContextSnapshot` 생성을 루프 전에 한 번만 수행하고 동일 `ResolvedWorkflowContext` 객체를 재사용한다.
-
-146. **Legacy Project Context Fallback**: 구조화 Project Memory가 아직 비었거나 migration 조회가 실패한 순간에도 기존 `projectContext`를 버리면 안 된다. `buildContextSnapshot({ legacyProjectContext })`가 `legacy-project-context` 항목으로 보존한다. (v2.13.0에서 Settings UI 편집 필드와 chat 직접 주입은 제거됐지만, 스토어 필드·DB persist·hydrate migration·이 fallback·Desktop MCP 주입은 유지된다.)
-
-147. **Selection Retranslate Tool Binding**: 직접 부분 재번역은 단일 AI 호출이며 `selection-retranslate` profile의 bound tools는 항상 0개다. 외부 MCP/웹/커넥터 도구를 우회로 추가하지 않는다.
-
-148. **External Tool Gate**: MCP/Confluence/빌트인 커넥터는 registry allowlist와 explicit external intent를 모두 통과해야 한다. 특히 selection profile에서 동적 커넥터 배열을 무조건 `bindTools`에 합치면 최소 컨텍스트 계약이 깨진다.
-
-149. **Selection Anchor 수명 = 모든 종료 경로에서 제거**: `createSelectionAnchor`로 만든 앵커(하이라이트)는 apply 성공(`applySelectionEdit`) 시에만 자동 제거된다. 그 외 종료 경로 — chat chip dismiss, proposal 폐기/stale, 새 선택으로 교체, 프로젝트 전환 — 에서 `removeSelectionAnchor`를 짝지어 호출하지 않으면 하이라이트가 `MAX_SELECTION_ANCHORS` eviction 전까지 영구 잔존한다. 앵커를 만드는 코드는 제거 경로를 함께 설계할 것.
-
-150. **Marker 워크플로우 maxTokens는 thinking 포함 예산**: `---X_START/END---` 마커 기반 응답(번역/부분 재번역 등)에서 maxTokens을 교체문 길이만 보고 작게 잡으면(예: 4096), Anthropic adaptive thinking / OpenAI reasoning 토큰이 예산을 먼저 소비해 END 마커 전에 truncation → 파싱 실패한다. `retranslateSelection`은 `SELECTION_EDIT_MAX_TOKENS=16384`, review는 16384, chat은 8192. 신규 마커 워크플로우는 8192+ 기준으로 산정한다. (F13과 동일 문제 클래스.)
-
-151. **선택 앵커 범위는 트림된 range로 생성**: `SelectionContext.text`는 `.trim()`되지만 앵커 검증은 `doc.textBetween(from, to)`(비트림)와 비교한다. `normalizeSelectionAnchorRange`가 가장자리 공백을 range에서 제외하지 않으면 두 값이 어긋나 proposal 적용이 항상 stale로 판정된다.
-
-152. **번역 응답을 첫 태그만 보고 HTML로 분류하지 말 것**: `parseTranslationResponseToTipTap`은 `looksLikeBlockHtml`로 마크다운/HTML을 가른다. 번역 직렬화는 표를 **항상 raw HTML**로 쓰므로(`TableForTranslation`), 첫 태그만 보면 표로 시작하는 문서가 전부 HTML로 분류돼 DOM 파서(`convertHtmlListsToMarkdown`)를 탄다. 그 경로에서 마크다운 본문은 텍스트 노드라 유실되고, tiptap-markdown이 `텍스트 == href`인 링크를 직렬화한 **autolink `<https://…>`는 미지의 시작 태그로 삼켜져** URL이 소멸한다. 판정에서 `<table>` 세그먼트를 빼고, 혼합 콘텐츠는 `parseMarkdownWithTables`(`html: true`)에 맡길 것 — 표 밖 `<ul>`/`<p>`도 이쪽이 정상 파싱한다.
-
-153. **DOM walk로 마크다운을 재조립할 때 3가지**: `convertHtmlListsToMarkdown`류 코드의 반복 함정. ① `children`(Element만) 순회는 텍스트 노드를 **조용히 삭제**한다 — `childNodes`를 쓸 것. ② 블록을 전부 `'\n'`으로 이으면 마크다운에서 문단이 합쳐진다 — 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`. ③ 중첩 리스트는 walk가 즉시 방출하므로, 부모 텍스트를 루프 뒤에 방출하면 **자식이 부모보다 먼저 나가** 중첩이 평탄화된다 — 내려가기 전에 flush하고, "아무것도 못 알아봤다" 폴백은 누적 버퍼가 아니라 **출력 길이 변화**로 판정할 것(아니면 중복 방출).
-
-154. **Confluence 도구는 registry 등재된 로컬 래퍼만**: 서버 MCP 도구를 `bindTools`에 그대로 합치면 `allowedNames`(registry 파생)에서 전량 탈락한다 — 이름이 registry에 없기 때문이며, 2026-07-24~07-30 사이 Confluence 검색이 조용히 죽어 있던 원인이다([ADR-0015](../docs/adr/0015-confluence-tools-as-local-wrappers.md)). 새 Confluence 기능은 `mcp_call_tool`을 호출하는 로컬 도구로 만들고 registry(+ i18n `chat.toolName.*` ko/en)에 등재할 것. 바인딩은 `confluenceSearchEnabled`만이 아니라 **`mcpClientManager.getStatus().isConnected`까지** 봐야 한다 — 미연결에 붙이면 첫 호출이 실패해 모델 왕복을 버린다.
-
-155. **외부 텍스트를 도구 결과로 넘길 때 신뢰경계 태그 무해화**: `<untrusted>`(문서·선택 도구)와 `<external_content>`(`wrapExternalToolOutput`) 둘 다 본문이 닫는 태그를 포함하면 경계가 위조된다. 사내 위키처럼 **제3자가 편집할 수 있는 텍스트**를 새 경로로 흘릴 때는 해당 래퍼가 무해화(zero-width space 삽입)를 하는지 먼저 확인할 것. 절단은 래핑보다 **먼저** 해야 닫는 태그가 살아남는다.
-
-156. **번역 방향은 날값으로 읽지도, 문자열로 비교하지도 말 것**: `project.metadata.sourceLanguage`/`targetLanguage`의 기본값은 센티널 `'auto'`다([ADR-0020](../docs/adr/0020-auto-target-language.md), [ADR-0021](../docs/adr/0021-explicit-source-language.md)). 프롬프트·MCP·UI로 흘리기 전에 반드시 `resolveDirection({ source, target }, sourceText)` **하나**를 거칠 것 — 두 값을 따로 풀면 원문이 명시 선택일 때 타겟이 텍스트 재감지로 조용히 되돌아간다. 비교는 `normalizeLang()`을 거칠 것: 저장값은 한글 라벨(`'한국어'`), 외부에서 오는 값은 영문명(`'Korean'`)이라 `===`로는 **동일언어 가드가 영원히 안 걸린다**. **판정기 둘을 섞지 말 것**: 방향을 *고르는* 데는 `detectSourceLangCode`(한글 5%), 번역을 *막는* 데는 `detectDominantLangCode`(비율 30%)다 — 공격적인 쪽을 차단에 쓰면 한국어 용어가 섞인 영문 문서의 정당한 EN→KO 번역이 막힌다. 브리지(`oddeyesAppBridge`)는 저장값이 아니라 해석값을 내보내야 한다 — 센티널을 주면 외부 에이전트의 방향 교차검증이 통째로 꺼진다.
+163. **Task List / Checkbox Markdown 지원**: TipTap에서 체크박스(`- [ ]`, `- [x]`, `[ ]`, `[x]`, `[]`) 지원을 위해 `@tiptap/extension-task-list`와 `@tiptap/extension-task-item`이 필요하다. `tiptap-markdown`은 `taskList`와 `taskItem` 노드가 스키마에 있을 때만 파싱/직렬화를 수행하며, 스키마에 없으면 `bulletList`로 강등되거나 `\[ \]`로 이스케이프된다. 또한 사용자가 불릿(-) 없이 `[ ]`나 `[]`를 쓰는 경우 markdown-it-task-lists가 리스트로 보지 않고 일반 문단으로 합치므로 `normalizeTaskLists`로 `- [ ]` 형태로 전처리한다. HTML 붙여넣기 시 `htmlNormalizer`에서 `label`, `input[type="checkbox"]`, `data-type`, `data-checked`를 허용 및 정규화해야 한다.
