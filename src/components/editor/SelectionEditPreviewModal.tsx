@@ -10,6 +10,7 @@ import type {
 } from '@/types';
 import type { SourceAlignmentPrecision } from '@/editor/utils/alignedSelectionRange';
 import type { SelectionEditMode } from '@/ai/retranslateSelection';
+import { isSegmentChanged } from '@/utils/selectionEditDiff';
 
 /**
  * 부분 재번역에서 고른 블록 하나(표 셀 또는 문단). 여러 블록 재번역은 경계가
@@ -150,12 +151,15 @@ export function SelectionEditPreviewModal({
    * 선택이 지워진다. 비어 있음 = 전부 적용(기존 동작).
    */
   const [deselectedCells, setDeselectedCells] = useState<ReadonlySet<number>>(new Set());
+  /** 변경 없는 블록 표시 여부 (기본 false: 변경된 블록만 집중 표시) */
+  const [showUnchanged, setShowUnchanged] = useState(false);
   // 모달을 닫거나 재생성이 시작되면 편집 모드를 해제한다(스트리밍 중 편집 금지).
   // 선택도 함께 되돌린다 — 새 제안은 새로 고르는 것이 맞다.
   useEffect(() => {
     if (!open || isLoading) {
       setEditingProposal(false);
       setDeselectedCells(new Set());
+      setShowUnchanged(false);
     }
   }, [open, isLoading]);
   // 탭을 바꾸면 화면에 뜨는 제안 자체가 다른 것으로 갈린다. 손편집 화면과 블록 선택은
@@ -163,6 +167,7 @@ export function SelectionEditPreviewModal({
   useEffect(() => {
     setEditingProposal(false);
     setDeselectedCells(new Set());
+    setShowUnchanged(false);
   }, [mode]);
   if (!open || !selection) return null;
 
@@ -175,17 +180,27 @@ export function SelectionEditPreviewModal({
     !cells && onReplacementChange && replacementText && !isLoading,
   );
 
+  const isCellChanged = (cell: SelectionEditCell): boolean =>
+    isSegmentChanged(cell.currentText, cell.replacementText);
+
+  // 실제 텍스트가 변경된 블록 인덱스
+  const changedCellIndexes = (cells ?? []).flatMap((cell, index) =>
+    isCellChanged(cell) ? [index] : [],
+  );
+
+  // 제안은 도착했으나 내용이 기존과 동일한 블록 인덱스
+  const unchangedCellIndexes = (cells ?? []).flatMap((cell, index) =>
+    cell.replacementText && !isCellChanged(cell) ? [index] : [],
+  );
+
   // 블록별 선택은 제안이 다 온 뒤에만 연다. 스트리밍 중에는 아직 안 온 블록이 "제안 없음"과
   // 구분되지 않아, 그때 고르면 무엇을 고른 것인지가 흐려진다.
   const selectableCells = Boolean(cells && cells.length > 1 && hasProposal && !isLoading);
   /**
-   * 제안이 **도착한** 블록만 고를 수 있다. 빈 제안을 적용하면 그 블록이 지워지기 때문에
-   * (빈 문자열 = 삭제), 기본 선택에도 들어가면 안 된다. `isLoading`만으로는 부족하다 —
-   * 스트리밍이 중간에 끊기면 일부만 채워진 채로 로딩이 풀린다(`generateSelectionEdit`의 catch).
+   * 제안이 도착했고 **실제로 변경된** 블록만 기본 적용 대상으로 삼는다.
+   * 내용이 완전히 동일한 블록은 적용(치환)할 필요가 없어 불필요한 트랜잭션을 방지한다.
    */
-  const applicableCellIndexes = (cells ?? []).flatMap((cell, index) =>
-    cell.replacementText ? [index] : [],
-  );
+  const applicableCellIndexes = changedCellIndexes;
   const selectedCellIndexes = new Set(
     applicableCellIndexes.filter((index) => !deselectedCells.has(index)),
   );
@@ -340,92 +355,166 @@ export function SelectionEditPreviewModal({
           </div>
         )}
 
+        {/* 전체 선택 및 변경점 요약 헤더 — 리스트 스크롤 영역 밖에 두어 항상 상단에 고정된다 */}
+        {cells && selectableCells && (
+          <div
+            data-testid="selection-edit-cells-header"
+            className="mt-3 flex items-center justify-between gap-2 border-b border-editor-border/60 pb-2.5 pt-1 shrink-0"
+          >
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                data-testid="selection-edit-cell-select-all"
+                type="checkbox"
+                disabled={applicableCellIndexes.length === 0}
+                checked={
+                  applicableCellIndexes.length > 0 &&
+                  selectedCellIndexes.size === applicableCellIndexes.length
+                }
+                onChange={(event) =>
+                  setDeselectedCells(
+                    event.currentTarget.checked ? new Set() : new Set(applicableCellIndexes),
+                  )
+                }
+                aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
+              />
+              <span className="text-xs font-medium text-editor-text">
+                {unchangedCellIndexes.length > 0
+                  ? t('selection.selectedChangedBlockCount', {
+                      total: changedCellIndexes.length,
+                      selected: selectedCellIndexes.size,
+                      unchanged: unchangedCellIndexes.length,
+                      defaultValue: `변경 ${selectedCellIndexes.size}/${changedCellIndexes.length}개 적용 (변경 없음 ${unchangedCellIndexes.length}개)`,
+                    })
+                  : t('selection.selectedBlockCount', {
+                      total: applicableCellIndexes.length,
+                      selected: selectedCellIndexes.size,
+                      defaultValue: `블록 ${applicableCellIndexes.length}개 중 ${selectedCellIndexes.size}개 적용`,
+                    })}
+              </span>
+            </label>
+
+            {unchangedCellIndexes.length > 0 && (
+              <button
+                type="button"
+                data-testid="selection-edit-toggle-unchanged"
+                className="rounded px-2 py-0.5 text-xs font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950/40 transition-colors cursor-pointer"
+                onClick={() => setShowUnchanged((prev) => !prev)}
+              >
+                {showUnchanged
+                  ? t('selection.hideUnchanged', '변경 없는 블록 숨기기')
+                  : t('selection.showUnchangedCount', {
+                      count: unchangedCellIndexes.length,
+                      defaultValue: `변경 없는 블록 ${unchangedCellIndexes.length}개 보기`,
+                    })}
+              </button>
+            )}
+          </div>
+        )}
+
         <div
           data-testid="selection-edit-scroll-area"
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 scrollbar-thin"
         >
           {cells ? (
-            // 셀마다 원문·현재·제안을 따로 보여준다. 이어 붙여 보여주면 어느 제안이 어느
-            // 셀로 가는지가 흐려지고, 손편집이 열리면 셀 경계가 무너진다.
-            <div className="mt-4 space-y-3">
-              {selectableCells && (
-                <div className="flex items-center gap-2 px-1">
-                  <input
-                    data-testid="selection-edit-cell-select-all"
-                    type="checkbox"
-                    checked={selectedCellIndexes.size === applicableCellIndexes.length}
-                    onChange={(event) =>
-                      setDeselectedCells(
-                        event.currentTarget.checked ? new Set() : new Set(applicableCellIndexes),
-                      )
-                    }
-                    aria-label={t('editor.selectiveDiff.selectAll', '전체 선택')}
-                  />
-                  <span className="text-xs text-editor-muted">
-                    {t('selection.selectedBlockCount', {
-                      total: cells.length,
-                      selected: selectedCellIndexes.size,
-                      defaultValue: '블록 {{total}}개 중 {{selected}}개 적용',
-                    })}
-                  </span>
+            // 셀마다 원문·현재·제안을 따로 보여준다. 변경된 블록만 기본 표시하고
+            // 변경 없는 블록은 위쪽 토글을 통해 확인할 수 있다.
+            <div className="mt-3 space-y-3">
+              {/* 변경된 블록이 없고 제안 생성이 완료된 경우 안내 */}
+              {!isLoading && hasProposal && changedCellIndexes.length === 0 && (
+                <div
+                  data-testid="selection-edit-no-changes"
+                  className="rounded-xl border border-dashed border-editor-border bg-editor-bg/60 p-6 text-center"
+                >
+                  <p className="text-sm font-semibold text-editor-text">
+                    {t('selection.noChangesTitle', '제안된 변경 사항이 없습니다')}
+                  </p>
+                  <p className="mt-1 text-xs text-editor-muted">
+                    {t('selection.noChangesDescription', '선택한 모든 블록의 표현이 이미 적절하여 변경할 내용이 없습니다.')}
+                  </p>
+                  {unchangedCellIndexes.length > 0 && !showUnchanged && (
+                    <button
+                      type="button"
+                      className="mt-3 text-xs font-semibold text-primary-500 hover:underline cursor-pointer"
+                      onClick={() => setShowUnchanged(true)}
+                    >
+                      {t('selection.showUnchangedBlocks', {
+                        count: unchangedCellIndexes.length,
+                        defaultValue: `변경 없는 블록 ${unchangedCellIndexes.length}개 확인하기`,
+                      })}
+                    </button>
+                  )}
                 </div>
               )}
-              {cells.map((cell, index) => (
-                <section
-                  key={index}
-                  data-testid="selection-edit-cell"
-                  className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
-                    selectableCells && !selectedCellIndexes.has(index) ? 'opacity-50' : ''
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
-                    <label className="flex items-center gap-2">
-                      {/* 제안이 안 온 블록은 체크박스를 주지 않는다 — 고를 것이 없다. */}
-                      {selectableCells && Boolean(cell.replacementText) && (
-                        <input
-                          data-testid="selection-edit-cell-checkbox"
-                          type="checkbox"
-                          checked={selectedCellIndexes.has(index)}
-                          onChange={() => toggleCell(index)}
-                          aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
-                        />
+
+              {cells.map((cell, index) => {
+                const isChanged = isCellChanged(cell);
+                // 변경 없는 셀은 showUnchanged가 켜져 있을 때만 노출
+                if (!isChanged && !showUnchanged) {
+                  return null;
+                }
+
+                return (
+                  <section
+                    key={index}
+                    data-testid="selection-edit-cell"
+                    className={`rounded-xl border border-editor-border bg-editor-bg p-3 ${
+                      selectableCells && isChanged && !selectedCellIndexes.has(index) ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase text-editor-muted">
+                      <label className="flex items-center gap-2">
+                        {/* 변경된 블록에만 체크박스를 준다 */}
+                        {selectableCells && isChanged && (
+                          <input
+                            data-testid="selection-edit-cell-checkbox"
+                            type="checkbox"
+                            checked={selectedCellIndexes.has(index)}
+                            onChange={() => toggleCell(index)}
+                            aria-label={t('editor.selectiveDiff.selectChange', '변경 선택')}
+                          />
+                        )}
+                        <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
+                        {!isChanged && Boolean(cell.replacementText) && (
+                          <span className="rounded bg-editor-border/60 px-1.5 py-0.5 text-[10px] font-normal normal-case text-editor-muted">
+                            {t('selection.unchangedBadge', '변경 없음')}
+                          </span>
+                        )}
+                      </label>
+                      {cell.columnHeader && (
+                        <span className="normal-case font-medium text-primary-500">
+                          {t('selection.tableColumnHeaderLabel', {
+                            header: [cell.columnHeader.source, cell.columnHeader.target]
+                              .filter(Boolean)
+                              .join(' / '),
+                          })}
+                        </span>
                       )}
-                      <span>{t('selection.tableCellLabel', { index: index + 1 })}</span>
-                    </label>
-                    {cell.columnHeader && (
-                      <span className="normal-case font-medium text-primary-500">
-                        {t('selection.tableColumnHeaderLabel', {
-                          header: [cell.columnHeader.source, cell.columnHeader.target]
-                            .filter(Boolean)
-                            .join(' / '),
-                        })}
-                      </span>
+                    </div>
+                    {cell.sourceText ? (
+                      <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
+                        {cell.sourceText}
+                      </div>
+                    ) : isPolish ? (
+                      // 폴리싱은 원문이 없어도 정상 경로다 — 경고가 아니라 사실만 적는다
+                      <div className="mb-2 text-xs text-editor-muted">
+                        {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
+                      </div>
+                    ) : (
+                      // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
+                      <div className="mb-2 text-xs font-medium text-severity-major-deep">
+                        {t('selection.segmentSourceMissing')}
+                      </div>
                     )}
-                  </div>
-                  {cell.sourceText ? (
-                    <div className="mb-2 whitespace-pre-wrap text-xs text-editor-muted">
-                      {cell.sourceText}
-                    </div>
-                  ) : isPolish ? (
-                    // 폴리싱은 원문이 없어도 정상 경로다 — 경고가 아니라 사실만 적는다
-                    <div className="mb-2 text-xs text-editor-muted">
-                      {t('selection.sourceUnavailable', '원문 없이 번역문만 다듬습니다')}
-                    </div>
-                  ) : (
-                    // 원문 없이 기존 번역문만 다듬은 블록 — 적용 전에 구분되어야 한다
-                    <div className="mb-2 text-xs font-medium text-severity-major-deep">
-                      {t('selection.segmentSourceMissing')}
-                    </div>
-                  )}
-                  {cell.replacementText ? (
-                    <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
-                  ) : (
-                    <div className="whitespace-pre-wrap text-sm text-editor-text">
-                      {cell.currentText}
-                    </div>
-                  )}
-                </section>
-              ))}
+                    {cell.replacementText ? (
+                      <ProposalDiff original={cell.currentText} suggested={cell.replacementText} />
+                    ) : (
+                      <div className="whitespace-pre-wrap text-sm text-editor-text">
+                        {cell.currentText}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
             </div>
           ) : (
             <div className={`mt-4 grid gap-3 ${showSourceCard ? 'sm:grid-cols-2' : ''}`}>

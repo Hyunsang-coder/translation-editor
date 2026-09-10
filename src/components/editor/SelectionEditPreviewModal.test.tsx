@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SelectionEditPreviewModal } from './SelectionEditPreviewModal';
+import { isSegmentChanged } from '@/utils/selectionEditDiff';
 import {
   DEFAULT_SELECTION_REFERENCE_OPTIONS,
   type SelectionContext,
@@ -265,6 +266,73 @@ describe('SelectionEditPreviewModal', () => {
 
       expect(screen.queryByTestId('selection-edit-cell-checkbox')).toBeNull();
       expect(screen.getByTestId('selection-edit-progress')).toHaveTextContent('1/3');
+    });
+
+    it('전체 선택 체크박스는 스크롤 영역 밖 고정 헤더(selection-edit-cells-header)에 위치한다', () => {
+      renderModal({ mode: 'polish', cells });
+
+      const header = screen.getByTestId('selection-edit-cells-header');
+      const scrollArea = screen.getByTestId('selection-edit-scroll-area');
+      const selectAll = screen.getByTestId('selection-edit-cell-select-all');
+
+      expect(header).toContainElement(selectAll);
+      expect(scrollArea).not.toContainElement(selectAll);
+    });
+
+    it('내용 변경이 없는 블록은 기본적으로 목록에서 숨겨지고 토글 버튼으로 볼 수 있다', () => {
+      const mixedCells = [
+        { sourceText: 'Player', currentText: 'Player', replacementText: 'Player' }, // 변경 없음
+        { sourceText: 'Jump', currentText: '점프', replacementText: '점프 제거' }, // 변경됨
+        { sourceText: 'Move', currentText: '이동', replacementText: '이동' }, // 변경 없음
+      ];
+
+      renderModal({ mode: 'polish', cells: mixedCells });
+
+      // 기본적으로 변경된 1개 블록만 카드에 표시됨
+      expect(screen.getAllByTestId('selection-edit-cell')).toHaveLength(1);
+      expect(screen.getByTestId('selection-edit-cell')).toHaveTextContent('점프 제거');
+
+      // 상단 헤더에 "변경 없음 2개" 및 토글 버튼 확인
+      const toggleButton = screen.getByTestId('selection-edit-toggle-unchanged');
+      expect(toggleButton).toHaveTextContent('변경 없는 블록 2개 보기');
+
+      // 변경 없는 블록 보기 클릭 -> 3개 모두 표시됨
+      fireEvent.click(toggleButton);
+      expect(screen.getAllByTestId('selection-edit-cell')).toHaveLength(3);
+
+      // 다시 토글 클릭 -> 숨겨짐
+      fireEvent.click(toggleButton);
+      expect(screen.getAllByTestId('selection-edit-cell')).toHaveLength(1);
+    });
+
+    it('모든 블록이 변경 없는 경우 안내 문구가 뜨고 적용 버튼이 비활성화된다', () => {
+      const unchangedCells = [
+        { sourceText: 'Player', currentText: 'Player', replacementText: 'Player' },
+        { sourceText: 'Move', currentText: '이동', replacementText: '이동' },
+      ];
+
+      renderModal({ mode: 'polish', cells: unchangedCells });
+
+      expect(screen.getByTestId('selection-edit-no-changes')).toBeInTheDocument();
+      expect(screen.getByTestId('selection-edit-primary-button')).toBeDisabled();
+    });
+  });
+
+  describe('isSegmentChanged', () => {
+    it('제안 텍스트가 없으면 변경 없음으로 판정한다', () => {
+      expect(isSegmentChanged('텍스트', undefined)).toBe(false);
+      expect(isSegmentChanged('텍스트', '')).toBe(false);
+    });
+
+    it('앞뒤 공백만 다른 경우 변경 없음으로 판정한다', () => {
+      expect(isSegmentChanged('텍스트', '  텍스트  ')).toBe(false);
+      expect(isSegmentChanged('텍스트\n', '텍스트')).toBe(false);
+    });
+
+    it('내용이 실제로 달라졌을 때만 변경으로 판정한다', () => {
+      expect(isSegmentChanged('기존 텍스트', '개선된 텍스트')).toBe(true);
+      expect(isSegmentChanged('Player', 'Player')).toBe(false);
+      expect(isSegmentChanged('Player', 'Player 1')).toBe(true);
     });
   });
 });
