@@ -154,6 +154,55 @@ function sanitizeUrls(root: ParentNode): void {
 }
 
 /**
+ * `<pre>` 없이 `<code>`만으로 블록 코드를 표현하는 출처를 `<pre><code>`로 승격한다.
+ *
+ * Confluence Cloud가 이렇게 복사한다: `<code class="language-" style="… white-space: pre …">`
+ * 안에 줄마다 span row. 승격하지 않으면 개행을 담은 채 문단 속 인라인 code mark가 되어
+ * 화면에서 한 줄로 접혀 보인다.
+ *
+ * DOMPurify가 style 속성을 제거하므로 반드시 sanitize 전에 호출해야 한다.
+ */
+function promoteBlockCode(html: string): string {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    if (!doc.body) return html;
+
+    const codes = Array.from(doc.body.querySelectorAll('code'));
+    for (const code of codes) {
+      if (code.closest('pre')) continue;
+
+      const whiteSpace = (code.getAttribute('style') || '').toLowerCase();
+      const isPreformatted = /white-space:\s*pre(-wrap|-line)?\b/.test(whiteSpace);
+      const hasCodeRows = code.querySelector('[data-ds--code--row]') !== null;
+      if (!isPreformatted && !hasCodeRows) continue;
+
+      // 언어 정보가 빈 값이면(`language-`) 클래스를 아예 버린다.
+      const language = (code.getAttribute('class') || '')
+        .split(/\s+/)
+        .find((name) => name.startsWith('language-'))
+        ?.slice('language-'.length);
+      if (language) {
+        code.setAttribute('class', `language-${language}`);
+      } else {
+        code.removeAttribute('class');
+      }
+
+      const parent = code.parentNode;
+      if (!parent) continue;
+      const pre = doc.createElement('pre');
+      parent.replaceChild(pre, code);
+      pre.appendChild(code);
+    }
+
+    return doc.body.innerHTML;
+  } catch (error) {
+    console.warn('Failed to promote block code:', error);
+    return html;
+  }
+}
+
+/**
  * Confluence 커스텀 태그를 표준 HTML로 변환
  * - ac:image → img placeholder
  * - ac:structured-macro (multimedia) → img placeholder (video)
@@ -272,7 +321,9 @@ export function normalizePastedHtml(html: string, options?: NormalizePasteOption
   try {
     // Confluence 커스텀 태그를 표준 HTML로 변환 (DOMPurify 전에 처리)
     const confluenceNormalized = normalizeConfluenceTags(html);
-    const styledNormalized = convertInlineStyles(confluenceNormalized);
+    // pre 승격은 style 속성을 읽으므로 DOMPurify(style 제거)보다 먼저 수행한다.
+    const blockCodeNormalized = promoteBlockCode(confluenceNormalized);
+    const styledNormalized = convertInlineStyles(blockCodeNormalized);
     const sanitized = DOMPurify.sanitize(styledNormalized, {
       ALLOWED_TAGS,
       ALLOWED_ATTR,
