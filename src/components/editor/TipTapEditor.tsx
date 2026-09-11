@@ -27,6 +27,7 @@ import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
+import { plainTextToPasteHtml } from '@/utils/plainTextPaste';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
 /**
@@ -257,61 +258,20 @@ function TipTapEditor({
           return false;
         }
 
-        // text/plain만 있는 경우:
+        // text/plain만 있는 경우: 마크다운 코드 표기·체크박스를 살려서 삽입한다.
         const text = clipboard.getData('text/plain');
         if (!text) return false;
 
-        // 체크박스 패턴(☐, ☑, ☒, □, ▢, [ ], [x], [])이 포함되어 있는지 확인
-        const hasCheckboxPattern = /[\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\]/.test(text);
-        if (!hasCheckboxPattern) return false;
+        const pasteHtml = plainTextToPasteHtml(text);
+        if (!pasteHtml) return false;
 
-        const lines = text.split('\n');
-        let htmlContent = '';
-        let inTaskList = false;
-
-        const CHECKBOX_LINE_REGEX = /^([ \t]*)(?:[-*][ \t]+)?([\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\])[ \t]*(.*)$/;
-
-        for (const line of lines) {
-          const match = line.match(CHECKBOX_LINE_REGEX);
-          if (match) {
-            if (!inTaskList) {
-              htmlContent += '<ul data-type="taskList">';
-              inTaskList = true;
-            }
-            const char = match[2] ?? '';
-            const isChecked = char === '\u2611' || char === '\u2612' || char.toLowerCase() === '[x]';
-            const itemText = match[3] ?? '';
-            const escaped = itemText
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;');
-            htmlContent += `<li data-type="taskItem" data-checked="${isChecked ? 'true' : 'false'}"><p>${escaped}</p></li>`;
-          } else {
-            if (inTaskList) {
-              htmlContent += '</ul>';
-              inTaskList = false;
-            }
-            if (line.trim().length > 0) {
-              const escaped = line
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-              htmlContent += `<p>${escaped}</p>`;
-            }
-          }
-        }
-        if (inTaskList) {
-          htmlContent += '</ul>';
-        }
-
-        if (htmlContent.length > 0) {
-          event.preventDefault();
-          const ed = editorInstanceRef.current ?? (view as unknown as Editor);
-          ed.commands.insertContent(htmlContent);
-          return true;
-        }
-
-        return false;
+        event.preventDefault();
+        const ed = editorInstanceRef.current ?? (view as unknown as Editor);
+        // preserveWhitespace: 코드블럭의 들여쓰기와 개행을 접지 않기 위해 필요하다.
+        ed.commands.insertContent(pasteHtml, {
+          parseOptions: { preserveWhitespace: 'full' },
+        });
+        return true;
       },
       handleKeyDown: (_view, event) => {
         // Cmd+F: 검색 열기
