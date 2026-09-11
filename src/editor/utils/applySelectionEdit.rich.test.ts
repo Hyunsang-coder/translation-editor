@@ -8,6 +8,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import { serializeInlineMarks } from './inlineMarkSpans';
 import { SelectionAnchor } from '@/editor/extensions/SelectionAnchor';
 import {
   createSelectionAnchor,
@@ -123,5 +128,94 @@ describe('applySelectionEdits — 셀마다 인라인 서식', () => {
       }),
     ).toBe('applied');
     expect(editor.getHTML()).toBe('<p><strong>첫째</strong></p><p><code>둘째</code></p>');
+  });
+});
+
+describe('표 셀 인라인 서식', () => {
+  let editor: Editor | null = null;
+
+  afterEach(() => {
+    editor?.destroy();
+    editor = null;
+  });
+
+  const TABLE_EXTENSIONS = [
+    StarterKit,
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    SelectionAnchor,
+  ];
+
+  function posOfText(ed: Editor, text: string): number {
+    let from = -1;
+    ed.state.doc.descendants((node, pos) => {
+      if (from === -1 && node.isText && node.text === text) from = pos;
+    });
+    if (from === -1) throw new Error(`text not found: ${text}`);
+    return from;
+  }
+
+  it('셀 안 서식을 직렬화가 살린다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr><td><p>피해량 <strong>12</strong></p></td></tr></tbody></table>',
+    });
+    const from = posOfText(editor, '피해량 ');
+    const end = posOfText(editor, '12');
+    expect(serializeInlineMarks(editor.state.doc, from, end + '12'.length)).toBe(
+      '피해량 **12**',
+    );
+  });
+
+  it('셀 안 부분 교체에 bold가 들어가고 표가 깨지지 않는다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr><td><p>Alpha target</p></td><td><p>Keep this</p></td></tr></tbody></table>',
+    });
+    const targetFrom = posOfText(editor, 'Alpha target') + 'Alpha '.length;
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from: targetFrom, to: targetFrom + 'target'.length }],
+    });
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, '**표적**', {
+        expectedText: 'target',
+      }),
+    ).toBe('applied');
+    const html = editor.getHTML();
+    expect(html).toContain('<strong>표적</strong>');
+    expect(html).toContain('Keep this');
+    expect(html).toContain('<table');
+  });
+
+  it('두 셀에 각자 mark가 들어가고 셀 경계가 유지된다', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr><td><p>cell one</p></td><td><p>cell two</p></td></tr></tbody></table>',
+    });
+    const oneFrom = posOfText(editor, 'cell one');
+    const twoFrom = posOfText(editor, 'cell two');
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [
+        { from: oneFrom, to: oneFrom + 'cell one'.length },
+        { from: twoFrom, to: twoFrom + 'cell two'.length },
+      ],
+    });
+    expect(
+      applySelectionEdits(
+        editor,
+        resolveSelectionAnchor(editor, anchorId)!,
+        ['**첫째**', '`둘째`'],
+        { expectedTexts: ['cell one', 'cell two'] },
+      ),
+    ).toBe('applied');
+    const html = editor.getHTML();
+    expect(html).toContain('<strong>첫째</strong>');
+    expect(html).toContain('<code>둘째</code>');
+    expect(html).toContain('<table');
   });
 });
