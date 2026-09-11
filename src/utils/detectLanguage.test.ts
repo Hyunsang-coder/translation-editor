@@ -7,7 +7,9 @@ import { describe, it, expect } from 'vitest';
 import {
   AUTO_LANGUAGE,
   checkDirection,
+  checkDirectionWarnings,
   detectDominantLangCode,
+  detectDominantLanguageLabel,
   detectSourceLangCode,
   isSameLanguage,
   LANGUAGE_DETECTION_MAX_CHARS,
@@ -145,6 +147,54 @@ describe('resolveDirection', () => {
 
     expect(resolveDirection({ source: '일본어', target: AUTO_LANGUAGE }, '아무 텍스트').target.language).toBeNull();
     expect(resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '').target.language).toBeNull();
+  });
+});
+
+describe('checkDirectionWarnings', () => {
+  const warnings = (stored: Parameters<typeof resolveDirection>[0], text: string) =>
+    checkDirectionWarnings(resolveDirection(stored, text), text);
+
+  it('정상 방향은 경고 없음', () => {
+    expect(warnings({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toEqual([]);
+    expect(warnings({ source: '한국어', target: '영어' }, '보급 상자 스폰 규칙을 변경합니다')).toEqual([]);
+  });
+
+  it('수동 원문이 문서와 어긋나면 경고하되 차단은 하지 않는다', () => {
+    const text = '보급 상자 스폰 규칙을 변경합니다';
+    const direction = resolveDirection({ source: '영어', target: AUTO_LANGUAGE }, text);
+    expect(checkDirection(direction)).toBeNull();
+    expect(checkDirectionWarnings(direction, text)).toEqual(['source-mismatch']);
+  });
+
+  it('같은 언어 선택이면 경고하되 차단은 하지 않는다', () => {
+    const text = '보급 상자 스폰 규칙을 변경합니다';
+    const manual = resolveDirection({ source: '한국어', target: '한국어' }, text);
+    expect(checkDirection(manual)).toBeNull();
+    expect(checkDirectionWarnings(manual, text)).toEqual(['same-language']);
+    // 자동 원문 + 수동으로 같은 언어 타겟을 골라도 경고한다
+    expect(warnings({ source: AUTO_LANGUAGE, target: '한국어' }, text)).toEqual(['same-language']);
+  });
+
+  it('한국어 용어가 섞인 영문 문서의 정상 EN 선택에는 경고하지 않는다', () => {
+    const text =
+      'The care package spawn table was rebalanced this patch. ' +
+      'Glossary: care package = 보급 상자, blue zone = 자기장, scope = 조준경. ' +
+      'Weapon damage falloff was adjusted for all assault rifles.';
+    expect(warnings({ source: '영어', target: '한국어' }, text)).toEqual([]);
+  });
+
+  it('판단 재료가 없으면 경고하지 않는다', () => {
+    const direction = resolveDirection({ source: '한국어', target: '한국어' }, '');
+    expect(checkDirectionWarnings(direction, '')).toEqual(['same-language']);
+    expect(warnings({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '')).toEqual([]);
+  });
+});
+
+describe('detectDominantLanguageLabel', () => {
+  it('경고 토스트용 표시 라벨을 돌려준다', () => {
+    expect(detectDominantLanguageLabel('보급 상자 스폰 규칙을 변경합니다')).toBe('한국어');
+    expect(detectDominantLanguageLabel('This update changes the spawn rules.')).toBe('영어');
+    expect(detectDominantLanguageLabel('')).toBeNull();
   });
 });
 

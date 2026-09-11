@@ -248,3 +248,46 @@ export function checkDirection(direction: ResolvedDirection): DirectionIssue | n
   if (!direction.target.language) return 'target-undecided';
   return null;
 }
+
+/**
+ * 번역을 막지 않고 경고만 띄울 사유. 수동 선택을 신뢰하되(차단 없음),
+ * stale 설정·같은 언어 선택의 실수 가능성은 토스트로 알린다.
+ *
+ * 차단 판단은 보수 판정(`detectDominantLangCode`)으로만 한다 — 공격적 임계는
+ * 한국어 용어가 섞인 영문 문서를 'ko'로 오판해 정상 선택에 경고를 울린다.
+ */
+export type DirectionWarning = 'source-mismatch' | 'same-language';
+
+/** 보수 판정의 표시용 라벨. 경고 토스트의 {{detected}} 파라미터용이다. */
+export function detectDominantLanguageLabel(text: string): string | null {
+  const code = detectDominantLangCode(text);
+  return code ? LABEL_BY_CODE[code] : null;
+}
+
+/** 차단은 하지 않고 경고 사유만 모은다. 빈 배열이면 경고 없음. */
+export function checkDirectionWarnings(
+  direction: ResolvedDirection,
+  sourceText: string,
+): DirectionWarning[] {
+  const warnings: DirectionWarning[] = [];
+  const dominant = detectDominantLangCode(sourceText);
+
+  // 명시 원문이 문서와 어긋난다 — 복사본의 stale 값이 대표 케이스. 자동은 정의상
+  // 자기 자신과 모순될 수 없어 이 갈래는 명시 선택에서만 작동한다.
+  if (!direction.source.auto) {
+    const declared = normalizeLang(direction.source.language);
+    if (declared !== null && dominant !== null && declared !== dominant) {
+      warnings.push('source-mismatch');
+    }
+  }
+
+  // 같은 언어로 번역시키면 모델이 원문을 되받아쓴다. 막지는 않고 경고만 한다.
+  const sourceForGuard = direction.source.auto
+    ? (dominant && LABEL_BY_CODE[dominant]) || null
+    : direction.source.language;
+  if (isSameLanguage(sourceForGuard, direction.target.language)) {
+    warnings.push('same-language');
+  }
+
+  return warnings;
+}

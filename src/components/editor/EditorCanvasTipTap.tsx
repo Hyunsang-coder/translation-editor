@@ -29,6 +29,8 @@ import {
   AUTO_LANGUAGE,
   LANGUAGE_VALUES,
   checkDirection,
+  checkDirectionWarnings,
+  detectDominantLanguageLabel,
   normalizeLang,
   resolveAutoDirection,
   resolveDirection,
@@ -284,20 +286,26 @@ export function EditorCanvasTipTap(): JSX.Element {
   );
 
   /**
+   * 실행 시점의 원문 텍스트. 번역 요청이 실제로 쓰는 Markdown과 같은 재료를 쓴다.
+   * 코드 블록·URL을 제외하는 감지기가 UI 라벨, 실행 직전 검증, AI 프롬프트에서
+   * 서로 다른 결과를 내지 않는다.
+   */
+  const resolveSourceTextNow = useCallback((): string => {
+    return sourceEditorRef.current
+      ? tipTapJsonToMarkdownForTranslation(sourceEditorRef.current.getJSON() as TipTapDocJson)
+      : sourceSampleFromHtml(sourceDocument);
+  }, [sourceDocument]);
+
+  /**
    * 실행 시점의 번역 방향. 스토어의 HTML 캐시는 에디터 onChange 디바운스로 뒤처질 수 있어
    * 살아있는 에디터 텍스트를 먼저 본다 — 방금 붙여넣은 원문으로 방향이 잡혀야 한다.
    */
   const resolveDirectionNow = useCallback((): ResolvedDirection => {
-    // 번역 요청이 실제로 쓰는 Markdown과 같은 재료로 자동 방향을 푼다. 코드 블록·URL을
-    // 제외하는 감지기가 UI 라벨, 실행 직전 검증, AI 프롬프트에서 서로 다른 결과를 내지 않는다.
-    const sourceText = sourceEditorRef.current
-      ? tipTapJsonToMarkdownForTranslation(sourceEditorRef.current.getJSON() as TipTapDocJson)
-      : sourceSampleFromHtml(sourceDocument);
     return resolveDirection(
       { source: project?.metadata.sourceLanguage, target: project?.metadata.targetLanguage },
-      sourceText,
+      resolveSourceTextNow(),
     );
-  }, [project?.metadata.sourceLanguage, project?.metadata.targetLanguage, sourceDocument]);
+  }, [project?.metadata.sourceLanguage, project?.metadata.targetLanguage, resolveSourceTextNow]);
 
   // 추가: Flash 효과 상태
   const [targetFlash, setTargetFlash] = useState(false);
@@ -1447,11 +1455,32 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
 
     // 방향 확정: 감지는 자동 선택의 방향만 정한다. 수동 선택은 문서 감지 결과와 관계없이 신뢰한다.
-    const direction = resolveDirectionNow();
+    // stale 설정·같은 언어 선택은 막지 않고 경고 토스트만 띄운 뒤 그대로 진행한다.
+    const sourceText = resolveSourceTextNow();
+    const direction = resolveDirection(
+      { source: project?.metadata.sourceLanguage, target: project?.metadata.targetLanguage },
+      sourceText,
+    );
     const issue = checkDirection(direction);
     if (issue === 'target-undecided') {
       addToast({ type: 'warning', message: t('editor.autoTargetLanguageFailed') });
       return;
+    }
+    const warnings = checkDirectionWarnings(direction, sourceText);
+    if (warnings.includes('source-mismatch')) {
+      addToast({
+        type: 'warning',
+        message: t('editor.sourceLanguageMismatch', {
+          declared: direction.source.language,
+          detected: detectDominantLanguageLabel(sourceText),
+        }),
+      });
+    }
+    if (warnings.includes('same-language')) {
+      addToast({
+        type: 'warning',
+        message: t('editor.targetLanguageSameAsSource', { language: direction.target.language }),
+      });
     }
     setTranslatePreviewError(null);
     setTranslatePreviewDoc(null);
@@ -1592,7 +1621,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     addToast,
     t,
     computeTargetRevision,
-    resolveDirectionNow,
+    resolveSourceTextNow,
     setStreamingChannelText,
     setTranslateLoading,
   ]);
