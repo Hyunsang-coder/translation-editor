@@ -1,8 +1,7 @@
 /**
  * detectLanguage.ts 자동 방향 결정 단위 테스트
  *
- * 수동 타겟 언어 선택이 원문과 같은 언어로 남아 번역이 자기복사가 되던 문제를 막는 층이라,
- * 실패 모드(국문 원문 + 타겟 한국어)와 오탐 위험(영어 용어 범벅 국문, 일본어·중국어)을 함께 고정한다.
+ * 자동 선택의 방향과 수동 선택의 우선순위, 코드·URL이 많은 기술 문서의 감지 회귀를 함께 고정한다.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -11,6 +10,8 @@ import {
   detectDominantLangCode,
   detectSourceLangCode,
   isSameLanguage,
+  LANGUAGE_DETECTION_MAX_CHARS,
+  languageDetectionSample,
   normalizeLang,
   resolveDirection,
 } from './detectLanguage';
@@ -68,6 +69,14 @@ describe('detectSourceLangCode', () => {
     expect(detectSourceLangCode('   \n  ')).toBeNull();
     expect(detectSourceLangCode('123 456 / 789')).toBeNull();
   });
+
+  it('긴 문서는 고정 크기 표본으로 앞·중간·끝을 함께 반영한다', () => {
+    const source = `${'const apiKey = process.env.API_KEY;\n'.repeat(1_000)}${'한국어 본문입니다. '.repeat(1_000)}`;
+    const sample = languageDetectionSample(source);
+
+    expect(sample.length).toBeLessThanOrEqual(LANGUAGE_DETECTION_MAX_CHARS + 2);
+    expect(sample).toContain('한국어 본문입니다');
+  });
 });
 
 describe('detectDominantLangCode', () => {
@@ -78,14 +87,13 @@ describe('detectDominantLangCode', () => {
     expect(detectDominantLangCode('本次更新调整了补给箱的生成规则。')).toBe('zh');
   });
 
-  it('한국어 용어가 조금 섞인 영문 문서는 en — 방향 판정기와 답이 갈리고, 그게 의도다', () => {
+  it('한국어 용어가 조금 섞인 영문 문서는 en으로 판정한다', () => {
     const text =
       'The care package spawn table was rebalanced this patch. ' +
       'Glossary: care package = 보급 상자, blue zone = 자기장, scope = 조준경. ' +
       'Weapon damage falloff was adjusted for all assault rifles.';
     expect(detectDominantLangCode(text)).toBe('en');
-    // 같은 문서를 방향 판정기는 ko로 본다 (한글 5% 임계). 차단 가드에 쓰면 안 되는 이유.
-    expect(detectSourceLangCode(text)).toBe('ko');
+    expect(detectSourceLangCode(text)).toBe('en');
   });
 
   it('판단 재료가 없으면 null', () => {
@@ -142,7 +150,7 @@ describe('resolveDirection', () => {
 
 describe('checkDirection', () => {
   const check = (stored: Parameters<typeof resolveDirection>[0], text: string) =>
-    checkDirection(resolveDirection(stored, text), text);
+    checkDirection(resolveDirection(stored, text));
 
   it('정상 방향은 통과', () => {
     expect(check({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toBeNull();
@@ -153,23 +161,22 @@ describe('checkDirection', () => {
     expect(check({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, 'このアップデート')).toBe('target-undecided');
   });
 
-  it('원문과 타겟이 같은 언어면 same-language — 복사본에 굳은 스테일 타겟이 여기서 잡힌다', () => {
-    expect(check({ source: AUTO_LANGUAGE, target: '한국어' }, '보급 상자 스폰 규칙을 변경합니다')).toBe('same-language');
+  it('수동 타겟은 원문과 같은 언어여도 그대로 진행한다', () => {
+    expect(check({ source: AUTO_LANGUAGE, target: '한국어' }, '보급 상자 스폰 규칙을 변경합니다')).toBeNull();
   });
 
-  it('명시 원문이 문서와 어긋나면 source-mismatch', () => {
-    expect(check({ source: '영어', target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toBe('source-mismatch');
+  it('수동 원문은 감지 결과와 달라도 그대로 진행한다', () => {
+    expect(check({ source: '영어', target: AUTO_LANGUAGE }, '보급 상자 스폰 규칙을 변경합니다')).toBeNull();
   });
 
-  it('한국어 용어가 섞인 영문 원문 + 명시 타겟 한국어를 막지 않는다 (보수 판정을 쓰는 이유)', () => {
-    const text =
-      'The care package spawn table was rebalanced this patch. ' +
-      'Glossary: care package = 보급 상자, blue zone = 자기장, scope = 조준경. ' +
-      'Weapon damage falloff was adjusted for all assault rifles.';
-    expect(check({ source: AUTO_LANGUAGE, target: '한국어' }, text)).toBeNull();
-  });
+  it('앞부분의 긴 코드 블록이 영어여도 뒤의 한국어 본문으로 자동 방향을 정한다', () => {
+    const code = `\`\`\`powershell\n${'Set-ItemProperty -Path $env:Path -Value "C:\\\\tools"\n'.repeat(500)}\`\`\``;
+    const koreanGuide = '이 문서는 한국어 사용자를 위한 설치 및 API 키 발급 안내입니다. '.repeat(80);
 
-  it('보수 판정이 표현할 수 없는 언어(스페인어)를 명시하면 대조하지 않는다', () => {
-    expect(check({ source: '스페인어', target: '한국어' }, 'Ajustamos las reglas de generacion')).toBeNull();
+    expect(check({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, `${code}\n\n${koreanGuide}`)).toBeNull();
+    expect(resolveDirection({ source: AUTO_LANGUAGE, target: AUTO_LANGUAGE }, `${code}\n\n${koreanGuide}`)).toEqual({
+      source: { language: '한국어', auto: true },
+      target: { language: '영어', auto: true },
+    });
   });
 });

@@ -19,7 +19,6 @@ const TEXT = {
   delete: /^(삭제|Delete)$/,
   webSearch: /^(웹 검색|Web Search)$/,
   confluenceSearch: /^(Confluence 검색|Confluence Search)$/,
-  sameLanguageWarning: /타겟 언어도|target language is also/i,
 };
 
 async function openAppSettings(page: Page): Promise<void> {
@@ -87,7 +86,7 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     await expect(anthropicToggle).toBeChecked();
   });
 
-  test('Phase 3~5: 프로젝트 생성, Source 입력, 번역 가드', async ({ page }) => {
+  test('Phase 3~5: 프로젝트 생성, Source 입력, 수동 번역 방향', async ({ page }) => {
     await injectTauriMock(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -106,15 +105,11 @@ test.describe('User Story: Maria의 번역 워크플로우', () => {
     const targetLanguageSelect = page.getByTestId('target-language-select');
     await expect(targetLanguageSelect).toHaveText(/자동 \(영어\)|Auto \(English\)/);
 
-    // 원문과 같은 언어를 명시로 고르면 번역을 막는다 (모델이 원문을 되받아쓰는 것 방지)
+    // 수동 선택은 감지 결과와 같아도 막지 않는다. 자동 감지는 자동 드롭다운의 기본값만 정한다.
     await targetLanguageSelect.click();
     await page.getByRole('option', { name: /^(한국어|Korean)$/ }).click();
     await page.getByTestId('editor-translate-button').click();
-    await expect(page.getByText(TEXT.sameLanguageWarning)).toBeVisible();
-
-    await targetLanguageSelect.click();
-    await page.getByRole('option', { name: /^(영어|English)$/ }).click();
-    await expect(targetLanguageSelect).toHaveText(/^(영어|English)$/);
+    await expect(page.getByRole('dialog')).toBeVisible();
   });
 
   test('Phase 6~7: Review/AI Chat 패널 진입', async ({ page }) => {

@@ -61,87 +61,114 @@ const LABEL_BY_CODE: Record<LangCode, string> = {
   zh: '중국어',
 };
 
-/** 자동 방향 판정 표본. 500자는 표 헤더·영문 제목만 걸려 오판이 나서 넉넉히 잡는다. */
-const AUTO_SAMPLE_CHARS = 4000;
+/**
+ * 자동 언어 감지의 최대 입력 크기. 긴 문서는 앞·중간·끝을 고르게 뽑으므로 첫 코드 블록이나
+ * 영문 제목에 끌리지 않으며, 모든 호출의 작업량도 이 상한으로 고정된다.
+ */
+export const LANGUAGE_DETECTION_MAX_CHARS = 12_000;
+const LANGUAGE_SAMPLE_PARTS = 3;
+const KOREAN_MIN_CHARS = 12;
+const KOREAN_MIN_RATIO = 0.08;
+const ENGLISH_MIN_CHARS = 20;
+const ENGLISH_MIN_RATIO = 0.6;
+
+interface LanguageCounts {
+  korean: number;
+  japanese: number;
+  chinese: number;
+  latin: number;
+  total: number;
+}
+
+/** 긴 문서도 고정 예산 안에서 앞·중간·끝의 본문 신호를 모두 반영한다. */
+function takeBalancedSample(text: string): string {
+  if (text.length <= LANGUAGE_DETECTION_MAX_CHARS) return text;
+
+  const partLength = Math.floor(LANGUAGE_DETECTION_MAX_CHARS / LANGUAGE_SAMPLE_PARTS);
+  const middleStart = Math.max(0, Math.floor((text.length - partLength) / 2));
+  const endStart = Math.max(0, text.length - partLength);
+  return [
+    text.slice(0, partLength),
+    text.slice(middleStart, middleStart + partLength),
+    text.slice(endStart),
+  ].join('\n');
+}
+
+/** 셸 명령·소스 코드처럼 라틴 문자가 많지만 자연어가 아닌 줄은 언어 신호에서 제외한다. */
+function isCodeLikeLine(line: string): boolean {
+  const compact = line.replace(/\s/g, '');
+  if (compact.length < 12) return false;
+  const syntax = (compact.match(/[\\{}[\]();=|$<>`]/g) || []).length;
+  return syntax >= 2 && syntax / compact.length >= 0.04;
+}
 
 /**
- * 방향 판정에 쓸 원문 표본을 HTML에서 뽑는다.
- * 태그가 부풀리는 몫을 감안해 넉넉히 자른 뒤 벗긴다(판정기가 다시 자기 표본 길이로 자른다).
+ * 자동 감지에만 쓸 정규화 표본. URL·코드·HTML 서식은 자연어의 언어 신호가 아니므로 제외한다.
+ * 입력을 먼저 고정 예산으로 자른 뒤 처리해 대형 문서에서도 UI 작업을 막지 않는다.
  */
+export function languageDetectionSample(text: string | null | undefined): string {
+  const sampled = takeBalancedSample(String(text ?? ''));
+  return stripHtml(sampled)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/\b(?:https?:\/\/|www\.)[^\s<>)\]]+/gi, ' ')
+    .split(/\r?\n/)
+    .filter((line) => !isCodeLikeLine(line))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** HTML 원문을 쓰는 호출부도 동일한 감지 표본을 사용한다. */
 export function sourceSampleFromHtml(html: string | null | undefined): string {
-  return stripHtml((html || '').slice(0, 12_000));
+  return languageDetectionSample(html);
 }
 
-/** 보수 판정 표본. 종전 동작을 그대로 보존하려고 500자를 유지한다. */
-const DOMINANT_SAMPLE_CHARS = 500;
-
-/**
- * **자동 방향 결정 전용** 원문 판정 — KO/EN만 답하고 나머지는 null.
- *
- * 비율 다수결이 아니라 **한글이 있는지**를 본다. 영문 문서의 한글은 0%지만 영어 용어가
- * 범벅인 국문 문서도 한글이 5% 밑으로는 잘 안 내려가는 비대칭 신호라, L10N 표처럼 두 언어가
- * 섞인 문서에서 비율 임계보다 훨씬 안정적이다. 일본어·중국어는 자동 결정 대상에서 빼고
- * null → 호출부가 명시 선택을 요구한다.
- *
- * **차단 가드에는 쓰지 말 것.** 임계가 공격적이라(한글 5%) 한국어 용어가 섞인 영문 문서를
- * 'ko'로 본다. 방향을 고르는 데는 그 편이 안전하지만, 정당한 번역을 막는 데 쓰면
- * 오탐이 곧 차단이 된다 — 차단 판단은 `detectDominantLangCode`가 한다.
- */
-export function detectSourceLangCode(text: string): 'ko' | 'en' | null {
-  const sample = String(text ?? '').slice(0, AUTO_SAMPLE_CHARS);
-  if (!sample.trim()) return null;
-
-  const hangul = (sample.match(/[가-힯ᄀ-ᇿ]/g) || []).length;
-  const kana = (sample.match(/[぀-ゟ゠-ヿ]/g) || []).length;
-  const han = (sample.match(/[一-鿿]/g) || []).length;
-  const latin = (sample.match(/[a-zA-Z]/g) || []).length;
-
-  const total = hangul + kana + han + latin;
-  if (total === 0) return null;
-
-  if (kana / total >= 0.05) return null; // 일본어
-  if (hangul / total >= 0.05) return 'ko';
-  if (han / total >= 0.1) return null; // 중국어
-  if (latin / total >= 0.5) return 'en';
-  return null;
-}
-
-/**
- * **차단 가드 전용** 보수 판정 — 문서를 지배하는 문자 체계를 비율 다수결로 고른다.
- *
- * `detectSourceLangCode`와 답이 갈릴 수 있고, 그게 의도다. 한국어 용어가 5%쯤 섞인 영문
- * 문서를 저쪽은 'ko'로 보지만 여기서는 'en'이다 — 번역을 **막을지** 정하는 자리에서는
- * 오탐 비용이 훨씬 비싸므로 확실할 때만 답한다. 임계·표본은 종전 동작 그대로다.
- */
-export function detectDominantLangCode(text: string): LangCode | null {
-  const sample = String(text ?? '').slice(0, DOMINANT_SAMPLE_CHARS);
-  if (!sample.trim()) return null;
-
+function countLanguageSignals(sample: string): LanguageCounts {
   const korean = (sample.match(/[가-힯ᄀ-ᇿ]/g) || []).length;
   const japanese = (sample.match(/[぀-ゟ゠-ヿ]/g) || []).length;
   const chinese = (sample.match(/[一-鿿]/g) || []).length;
   const latin = (sample.match(/[a-zA-Z]/g) || []).length;
+  return { korean, japanese, chinese, latin, total: korean + japanese + chinese + latin };
+}
 
-  const total = korean + japanese + chinese + latin;
-  if (total === 0) return null;
+function ratio(count: number, total: number): number {
+  return total === 0 ? 0 : count / total;
+}
 
-  if (korean / total > 0.3) return 'ko';
-  if (japanese / total > 0.3) return 'ja';
-  if (chinese / total > 0.3) return 'zh';
-  if (latin / total > 0.5) return 'en';
+/** 자동 방향 결정 전용 원문 판정 — 신뢰도가 낮으면 null로 두고 수동 선택을 요구한다. */
+function detectSourceFromCounts(counts: LanguageCounts): 'ko' | 'en' | null {
+  if (counts.total === 0) return null;
+
+  if (ratio(counts.japanese, counts.total) >= 0.05) return null;
+  if (ratio(counts.chinese, counts.total) >= 0.1) return null;
+  if (counts.korean >= KOREAN_MIN_CHARS && ratio(counts.korean, counts.total) >= KOREAN_MIN_RATIO) return 'ko';
+  if (counts.latin >= ENGLISH_MIN_CHARS && ratio(counts.latin, counts.total) >= ENGLISH_MIN_RATIO) return 'en';
   return null;
 }
 
-/**
- * 자동일 때 표시·프롬프트에 쓸 원문 언어.
- *
- * 방향 판정기를 먼저 본다 — **라벨이 실제로 쓰이는 방향과 어긋나면 안 되기 때문**이다.
- * (국문에 영어 용어가 범벅인 문서에서 보수 판정은 '영어', 방향은 ko→en을 고르는데,
- * 라벨만 '영어'로 띄우면 헤더가 "영어 → 영어"로 읽힌다.)
- * 방향 판정기가 기권하는 일본어·중국어에서만 보수 판정으로 내려간다.
- */
+export function detectSourceLangCode(text: string): 'ko' | 'en' | null {
+  return detectSourceFromCounts(countLanguageSignals(languageDetectionSample(text)));
+}
+
+/** 자동 라벨의 보조 판정. 일본어·중국어는 라벨만 표시하고 자동 타겟은 정하지 않는다. */
+function detectDominantFromCounts(counts: LanguageCounts): LangCode | null {
+  if (counts.total === 0) return null;
+  if (ratio(counts.korean, counts.total) > 0.3) return 'ko';
+  if (ratio(counts.japanese, counts.total) > 0.3) return 'ja';
+  if (ratio(counts.chinese, counts.total) > 0.3) return 'zh';
+  if (ratio(counts.latin, counts.total) >= ENGLISH_MIN_RATIO) return 'en';
+  return null;
+}
+
+export function detectDominantLangCode(text: string): LangCode | null {
+  return detectDominantFromCounts(countLanguageSignals(languageDetectionSample(text)));
+}
+
+/** 자동일 때 표시·프롬프트에 쓸 원문 언어. 하나의 표본을 공유해 재계산을 피한다. */
 function detectSourceLabel(text: string): string | null {
-  const code = detectSourceLangCode(text) ?? detectDominantLangCode(text);
+  const counts = countLanguageSignals(languageDetectionSample(text));
+  const code = detectSourceFromCounts(counts) ?? detectDominantFromCounts(counts);
   return code ? LABEL_BY_CODE[code] : null;
 }
 
@@ -211,37 +238,13 @@ export function resolveAutoDirection(sourceText: string): ResolvedDirection {
 }
 
 /** 번역을 막아야 하는 이유. 호출부가 그대로 토스트 키로 쓴다. */
-export type DirectionIssue = 'target-undecided' | 'source-mismatch' | 'same-language';
-
-/** 보수 판정기가 표현할 수 있는 언어인가. 스페인어·러시아어는 판정 대상이 아니라 대조하지 않는다. */
-function isDetectable(code: string | null): code is LangCode {
-  return code === 'ko' || code === 'en' || code === 'ja' || code === 'zh';
-}
+export type DirectionIssue = 'target-undecided';
 
 /**
- * 번역 실행 전 방향 검증 — 문제가 없으면 null.
- *
- * **차단 판단은 전부 `detectDominantLangCode`(보수)로 한다.** 방향을 *고르는* 데 쓰는
- * `detectSourceLangCode`는 임계가 공격적이라, 한국어 용어가 섞인 영문 문서를 'ko'로 보고
- * 정당한 EN→KO 번역을 막아버린다.
+ * 번역 실행 전 방향 검증. 감지는 자동 선택의 방향만 정하며, 수동으로 고른 언어는 항상 신뢰한다.
+ * 따라서 자동 타겟을 정할 근거가 없을 때만 사용자의 명시 선택을 요구한다.
  */
-export function checkDirection(direction: ResolvedDirection, sourceText: string): DirectionIssue | null {
+export function checkDirection(direction: ResolvedDirection): DirectionIssue | null {
   if (!direction.target.language) return 'target-undecided';
-
-  const dominant = detectDominantLangCode(sourceText);
-
-  // 명시 선택한 원문 언어가 문서와 어긋난다 — 복사본에 굳은 스테일 값이 여기서 잡힌다.
-  // 자동은 정의상 자기 자신과 모순될 수 없어 이 갈래는 명시 선택에서만 작동한다.
-  if (!direction.source.auto) {
-    const declared = normalizeLang(direction.source.language);
-    if (isDetectable(declared) && dominant && declared !== dominant) return 'source-mismatch';
-  }
-
-  // 같은 언어로 번역시키면 모델이 원문을 되받아쓴다.
-  const sourceForGuard = direction.source.auto
-    ? (dominant && LABEL_BY_CODE[dominant]) || null
-    : direction.source.language;
-  if (isSameLanguage(sourceForGuard, direction.target.language)) return 'same-language';
-
   return null;
 }

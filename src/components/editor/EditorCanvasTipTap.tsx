@@ -288,7 +288,11 @@ export function EditorCanvasTipTap(): JSX.Element {
    * 살아있는 에디터 텍스트를 먼저 본다 — 방금 붙여넣은 원문으로 방향이 잡혀야 한다.
    */
   const resolveDirectionNow = useCallback((): ResolvedDirection => {
-    const sourceText = sourceEditorRef.current?.getText() || sourceSampleFromHtml(sourceDocument);
+    // 번역 요청이 실제로 쓰는 Markdown과 같은 재료로 자동 방향을 푼다. 코드 블록·URL을
+    // 제외하는 감지기가 UI 라벨, 실행 직전 검증, AI 프롬프트에서 서로 다른 결과를 내지 않는다.
+    const sourceText = sourceEditorRef.current
+      ? tipTapJsonToMarkdownForTranslation(sourceEditorRef.current.getJSON() as TipTapDocJson)
+      : sourceSampleFromHtml(sourceDocument);
     return resolveDirection(
       { source: project?.metadata.sourceLanguage, target: project?.metadata.targetLanguage },
       sourceText,
@@ -1442,39 +1446,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
 
-    // 방향 확정: '자동'이면 원문 감지로 풀고, 못 풀면 명시 선택을 요구한다.
-    const sourceText = sourceEditorRef.current.getText();
-    const direction = resolveDirection(
-      { source: project.metadata.sourceLanguage, target: project.metadata.targetLanguage },
-      sourceText,
-    );
-    const issue = checkDirection(direction, sourceText);
+    // 방향 확정: 감지는 자동 선택의 방향만 정한다. 수동 선택은 문서 감지 결과와 관계없이 신뢰한다.
+    const direction = resolveDirectionNow();
+    const issue = checkDirection(direction);
     if (issue === 'target-undecided') {
       addToast({ type: 'warning', message: t('editor.autoTargetLanguageFailed') });
       return;
     }
-    if (issue === 'source-mismatch') {
-      addToast({
-        type: 'warning',
-        message: t('editor.sourceLanguageMismatch', {
-          declared: localizeLanguage(t, direction.source.language ?? ''),
-          // 감지 라벨은 **가드가 실제로 본 텍스트**에서 다시 뽑는다 —
-          // autoDirection은 디바운스된 스토어 HTML 기준이라 방금 붙여넣은 원문과 어긋날 수 있다.
-          detected: localizeLanguage(t, resolveAutoDirection(sourceText).source.language ?? ''),
-        }),
-      });
-      return;
-    }
-    if (issue === 'same-language') {
-      addToast({
-        type: 'warning',
-        message: t('editor.targetLanguageSameAsSource', {
-          language: localizeLanguage(t, direction.target.language ?? ''),
-        }),
-      });
-      return;
-    }
-
     setTranslatePreviewError(null);
     setTranslatePreviewDoc(null);
     setTranslatePreviewOpen(true);
@@ -1614,6 +1592,7 @@ export function EditorCanvasTipTap(): JSX.Element {
     addToast,
     t,
     computeTargetRevision,
+    resolveDirectionNow,
     setStreamingChannelText,
     setTranslateLoading,
   ]);
