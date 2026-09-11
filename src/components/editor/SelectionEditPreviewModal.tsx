@@ -20,6 +20,12 @@ export interface SelectionEditCell {
   /** 짝을 못 찾으면 빈 문자열 — 그 블록은 원문 없이 기존 번역문만 다듬는다. */
   sourceText: string;
   currentText: string;
+  /**
+   * 모델 입력용 — currentText에 인라인 서식(`**`/`*`/`` ` ``)을 살린 것.
+   * 서식이 없으면 currentText와 같다. 표시·스냅샷(expectedText)·diff는
+   * 평문 currentText를 계속 쓴다.
+   */
+  markedText?: string | undefined;
   replacementText: string;
   /** 이 셀이 속한 열의 헤더 — 모델에 문맥으로 들어간 것을 사용자에게도 보여준다. */
   columnHeader?: { source?: string; target: string } | undefined;

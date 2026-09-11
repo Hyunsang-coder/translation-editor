@@ -197,6 +197,10 @@ const SHARED_SELECTION_DIRECTIVES = [
   // 되돌아갔다(측정: 용어는 맞추고 어체만 틀림). 어체는 따로 이름 붙여 지시한다.
   'The surrounding Target units also show the register and sentence endings this document has settled on. Match them instead of defaulting to the most common register of the target language.',
   'Do not use or assume context that is not included in this request.',
+  // 입력 Target 텍스트에는 원문의 인라인 서식이 `**bold**`, `*italic*`, `` `code` ``
+  // 기호로 실려 있다. 대응되는 단어에 그대로 살려 보내면 적용 단계에서 mark로
+  // 되살아난다. 블록 라벨 얘기는 꺼내지 않는다 — 마커 스캐폴딩과 충돌한다(F9).
+  'The current Target text may carry inline formatting marks (`**bold**`, `*italic*`, `` `code` ``). Keep each mark on the corresponding words in the replacement; do not add formatting the original did not have and do not use any other markup.',
 ] as const;
 
 function buildOptionalContext(
@@ -624,7 +628,7 @@ function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEd
       ];
   const system = [
     ...modeDirectives,
-    'Return plain text for each block — no table syntax, no HTML, no block labels.',
+    'Return plain text for each block — inline **bold**, *italic*, `code` marks from the input may be kept on the corresponding words; no table syntax, no HTML, no block labels.',
     'Surrounding context, when provided, is read-only reference for tone, terminology, and flow; never translate or polish it, and never add its content to a replacement.',
     ...SHARED_SELECTION_DIRECTIVES,
     `Return exactly ${input.segments.length} block(s), in order, using the exact markers below and nothing else:`,

@@ -114,6 +114,7 @@ import {
 } from '@/types';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { resolveGlossaryEntries } from '@/utils/glossaryInject';
+import { serializeInlineMarks } from '@/editor/utils/inlineMarkSpans';
 import {
   polishSegments,
   polishSelection,
@@ -415,6 +416,11 @@ export function EditorCanvasTipTap(): JSX.Element {
     sourceText: string;
     sourceAlignmentPrecision: SourceAlignmentPrecision;
     currentTargetUnitText: string;
+    /**
+     * 단일 선택의 모델 입력용 — selection.text에 인라인 서식을 살린 것.
+     * 서식이 없으면 selection.text와 같다. 표시·스냅샷은 평문을 계속 쓴다.
+     */
+    markedTargetText?: string | undefined;
     /** 선택 유닛 앞뒤 문맥 (모달 열 때 계산, 정렬 검증된 쪽만). 없으면 미주입. */
     surroundings?: RetranslateSurroundings;
     /** 표 셀 선택일 때 그 열의 헤더. 표 밖이거나 헤더 행이 없으면 미주입. */
@@ -922,6 +928,8 @@ export function EditorCanvasTipTap(): JSX.Element {
         return {
           sourceText,
           currentText: readAnchorText(bubble.editor.state.doc, range.from, range.to),
+          // 모델 입력용 서식 포함 텍스트 — 표시·스냅샷은 평문 currentText 유지.
+          markedText: serializeInlineMarks(bubble.editor.state.doc, range.from, range.to),
           replacementText: '',
           ...(columnHeader ? { columnHeader } : {}),
         };
@@ -1051,6 +1059,12 @@ export function EditorCanvasTipTap(): JSX.Element {
       sourceText: initialAlignment.text,
       sourceAlignmentPrecision: initialAlignment.precision,
       currentTargetUnitText,
+      // 모델 입력용 서식 포함 텍스트 — 표시·스냅샷은 평문 selection.text 유지.
+      markedTargetText: serializeInlineMarks(
+        bubble.editor.state.doc,
+        anchorRange.from,
+        anchorRange.to,
+      ),
       ...(surroundings ? { surroundings } : {}),
       ...(columnHeader ? { columnHeader } : {}),
       instruction: selectionInstructionRef.current,
@@ -1126,7 +1140,7 @@ export function EditorCanvasTipTap(): JSX.Element {
           projectId: requestProjectId,
           segments: requestCells.map((cell) => ({
             ...(cell.sourceText ? { sourceText: cell.sourceText } : {}),
-            currentTargetText: cell.currentText,
+            currentTargetText: cell.markedText ?? cell.currentText,
             ...(cell.columnHeader ? { columnHeader: cell.columnHeader } : {}),
           })),
           targetLanguage: resolveDirectionNow().target.language ?? 'Target',
@@ -1172,7 +1186,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       const commonInput = {
         projectId: requestProjectId,
         currentTargetUnitText: request.currentTargetUnitText,
-        currentTargetText: request.selection.text,
+        currentTargetText: request.markedTargetText ?? request.selection.text,
         targetLanguage: resolveDirectionNow().target.language ?? 'Target',
         ...(request.surroundings ? { surroundings: request.surroundings } : {}),
         ...(request.columnHeader ? { columnHeader: request.columnHeader } : {}),

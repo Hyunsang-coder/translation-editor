@@ -386,3 +386,5 @@ Critical implementation warnings learned from past issues.
 112. **CSP img-src 외부 이미지 허용**: `tauri.conf.json`의 CSP에 `img-src 'self' asset: data: https: http:` 필요. `https: http:` 누락 시 original 모드에서 CDN 이미지 로드 차단됨.
 
 163. **Task List / Checkbox Markdown 지원**: TipTap에서 체크박스(`- [ ]`, `- [x]`, `[ ]`, `[x]`, `[]`) 지원을 위해 `@tiptap/extension-task-list`와 `@tiptap/extension-task-item`이 필요하다. `tiptap-markdown`은 `taskList`와 `taskItem` 노드가 스키마에 있을 때만 파싱/직렬화를 수행하며, 스키마에 없으면 `bulletList`로 강등되거나 `\[ \]`로 이스케이프된다. 또한 사용자가 불릿(-) 없이 `[ ]`나 `[]`를 쓰는 경우 markdown-it-task-lists가 리스트로 보지 않고 일반 문단으로 합치므로 `normalizeTaskLists`로 `- [ ]` 형태로 전처리한다. HTML 붙여넣기 시 `htmlNormalizer`에서 `label`, `input[type="checkbox"]`, `data-type`, `data-checked`를 허용 및 정규화해야 한다.
+
+114. **선택 경로 인라인 서식 왕복 규칙**: 모델 입출력의 `**bold**`/`*italic*`/`` `code` ``는 `inlineMarkSpans.ts`가 담당(파서 `parseInlineMarks`, 입력 직렬화 `serializeInlineMarks`, 적용 `buildReplacementNodes`). `***`·`_ both_·짝 없는 기호·빈 쌍은 전부 리터럴(삭제 사고 방지). bold+italic 겹침 run은 직렬화에서 bold만 살린다. 표시·expectedText·diff는 평문을 계속 쓰고 모델 입력(`markedText`)에만 서식을 싣는다. 프롬프트에 블록 라벨 얘기를 꺼내면 마커 스캐폴딩과 충돌한다(F9) — 인라인 mark만 언급할 것.

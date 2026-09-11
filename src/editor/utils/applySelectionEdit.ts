@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
-import { Mark } from '@tiptap/pm/model';
+import { Mark, type Node as PMNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
+import { parseInlineMarks, type InlineMarkKind } from './inlineMarkSpans';
 import { addAppliedChangeMarksToTransaction } from '@/editor/extensions/AppliedChangeHighlight';
 import {
   getSingleAnchorRange,
@@ -87,6 +88,36 @@ export function selectionHasUniformFormatting(
   return anchor.ranges.every((range) => getUniformRangeMarks(editor, range) !== null);
 }
 
+/**
+ * 교체문을 ProseMirror 텍스트 노드들로 나눈다. 모델이 살려 보낸 인라인 마크
+ * (`**bold**`, `*italic*`, `` `code` ``)는 파서 mark로, 표시 없는 스팬은 범위
+ * 기본 mark(균일/공통)로 넣는다. 마크 없는 출력은 예전과 같은 단일 노드다.
+ *
+ * 스키마에 해당 mark가 없으면 조용히 떨군다. 벗긴 평문 길이를 함께 돌려준다 —
+ * 적용 표시·캐럿 범위는 마크 기호를 제외한 길이로 잡아야 한다.
+ */
+function buildReplacementNodes(
+  schema: Editor['schema'],
+  replacement: string,
+  baseMarks: readonly Mark[],
+): { nodes: PMNode[]; plainLength: number } {
+  const spans = parseInlineMarks(replacement);
+  const plainLength = spans.reduce((length, span) => length + span.text.length, 0);
+  const toMark = (kind: InlineMarkKind): Mark | null =>
+    schema.marks[kind]?.create() ?? null;
+  const nodes = spans.map((span) => {
+    const marks =
+      span.marks.length > 0
+        ? span.marks.flatMap((kind) => {
+            const mark = toMark(kind);
+            return mark ? [mark] : [];
+          })
+        : [...baseMarks];
+    return schema.text(span.text, marks);
+  });
+  return { nodes, plainLength };
+}
+
 export function applySelectionEdit(
   editor: Editor,
   anchor: SelectionAnchorRecord,
@@ -119,13 +150,14 @@ export function applySelectionEdit(
     : getUniformRangeMarks(editor, range);
   if (!marks) return 'formatting-conflict';
 
+  const replacement = replacementText
+    ? buildReplacementNodes(editor.schema, replacementText, marks)
+    : null;
+  const replacementLength = replacement?.plainLength ?? 0;
+
   const tr = editor.state.tr;
-  if (replacementText) {
-    tr.replaceWith(
-      range.from,
-      range.to,
-      editor.schema.text(replacementText, [...marks]),
-    );
+  if (replacement) {
+    tr.replaceWith(range.from, range.to, replacement.nodes);
   } else {
     tr.delete(range.from, range.to);
   }
@@ -133,14 +165,14 @@ export function applySelectionEdit(
   // 지우기(빈 문자열)는 남길 범위가 없다.
   if (replacementText) {
     addAppliedChangeMarksToTransaction(tr, [
-      { from: range.from, to: range.from + replacementText.length },
+      { from: range.from, to: range.from + replacementLength },
     ]);
   }
   tr.setSelection(
     TextSelection.create(
       tr.doc,
       range.from,
-      range.from + replacementText.length,
+      range.from + replacementLength,
     ),
   );
   tr.setMeta(pluginKeys.selectionAnchor, {
@@ -260,16 +292,18 @@ export function applySelectionEdits(
     const replacement = replacements[index]!;
     if (replacement === null) continue;
     if (replacement) {
-      tr.replaceWith(
-        range.from,
-        range.to,
-        editor.schema.text(replacement, [...marksByRange[index]!]),
+      const { nodes, plainLength } = buildReplacementNodes(
+        editor.schema,
+        replacement,
+        marksByRange[index]!,
       );
+      tr.replaceWith(range.from, range.to, nodes);
       // 마크는 루프 안에서 붙인다. 여기서 range.from은 아직 유효하고, 이후 더 앞쪽
       // 범위를 치환하면 마크는 문서에 실려 함께 밀린다. 루프 뒤에 몰아 붙이면
       // 앞쪽 치환으로 밀린 좌표를 그대로 써 엉뚱한 곳이 칠해진다.
+      // 길이는 마크 기호를 벗긴 평문 기준이다.
       addAppliedChangeMarksToTransaction(tr, [
-        { from: range.from, to: range.from + replacement.length },
+        { from: range.from, to: range.from + plainLength },
       ]);
     } else {
       tr.delete(range.from, range.to);
