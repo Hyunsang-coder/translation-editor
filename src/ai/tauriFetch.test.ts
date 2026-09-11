@@ -76,7 +76,7 @@ describe('getTauriResilientFetch', () => {
     expect(args.body).toBe('{"input":"hello"}');
   });
 
-  it('Request 객체 입력에서도 body/header/signal을 프록시에 전달', async () => {
+  it('Request 객체 입력에서도 body/header와 init signal을 프록시에 전달', async () => {
     mocks.isTauriRuntime.mockReturnValue(true);
     const { getTauriResilientFetch } = await import('./tauriFetch');
     const controller = new AbortController();
@@ -85,11 +85,10 @@ describe('getTauriResilientFetch', () => {
       method: 'POST',
       headers: { 'x-api-key': 'sk-ant-test' },
       body: '{"messages":[]}',
-      signal: controller.signal,
     });
-    const removeListenerSpy = vi.spyOn(request.signal, 'removeEventListener');
+    const removeListenerSpy = vi.spyOn(controller.signal, 'removeEventListener');
 
-    const response = await getTauriResilientFetch()(request);
+    const response = await getTauriResilientFetch()(request, { signal: controller.signal });
 
     expect(await response.text()).toBe('proxied');
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -124,10 +123,9 @@ describe('getTauriResilientFetch', () => {
     const request = new Request('https://api.openai.com/v1/responses', {
       method: 'POST',
       body: '{"input":"hello"}',
-      signal: controller.signal,
     });
 
-    const responsePromise = getTauriResilientFetch()(request);
+    const responsePromise = getTauriResilientFetch()(request, { signal: controller.signal });
     await proxyStarted;
     controller.abort();
 

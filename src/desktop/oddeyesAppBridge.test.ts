@@ -131,6 +131,7 @@ vi.mock('@/stores/glossaryStore', () => ({
 
 vi.mock('@/utils/hash', () => ({
   hashContent: vi.fn(() => 'mock-hash-123'),
+  stripHtml: (value: string) => value.replace(/<[^>]*>/g, ''),
 }));
 
 vi.mock('@/utils/markdownConverter', () => ({
