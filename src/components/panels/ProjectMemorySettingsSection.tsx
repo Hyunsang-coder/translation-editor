@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
+import { SETTINGS_ADD_BUTTON_CLASS, SETTINGS_INPUT_CLASS } from '@/components/settings/settingsFormClasses';
 import { useShallow } from 'zustand/shallow';
-import { MoreHorizontal } from 'lucide-react';
+import { ChevronDown, MoreHorizontal } from 'lucide-react';
 import type { ProjectMemoryCategory } from '@/types';
 import { MEMORY_CATEGORY_PRIORITY } from '@/ai/context/projectMemoryPolicy';
 import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
@@ -200,20 +201,24 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           {/* 대부분 기본값으로 충분하므로 상시 폼이 아니라 눈에 덜 띄는 보조 컨트롤로 둔다. */}
           <label className="flex items-center gap-1 text-[11px] text-editor-muted">
             {t('memory.categoryLabel', '카테고리')}
-            <select
-              className="bg-transparent text-[11px] text-editor-muted outline-none"
-              value={category}
-              onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
-            >
-              {CATEGORIES.map((value) => (
-                <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
-              ))}
-            </select>
+            {/* 셰브론이 없으면 "일반"이 조작 가능한 컨트롤로 읽히지 않는다 */}
+            <span className="relative inline-flex items-center">
+              <select
+                className="appearance-none rounded bg-transparent pr-3.5 text-[11px] text-editor-muted hover:text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+                value={category}
+                onChange={(event) => setCategory(event.target.value as ProjectMemoryCategory)}
+              >
+                {CATEGORIES.map((value) => (
+                  <option key={value} value={value}>{t(`memory.category.${value}`)}</option>
+                ))}
+              </select>
+              <ChevronDown size={10} className="pointer-events-none absolute right-0" />
+            </span>
           </label>
           <div className="flex gap-2">
             <input
               data-testid="project-memory-new-item"
-              className="min-w-0 flex-1 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
+              className={`${SETTINGS_INPUT_CLASS} flex-1`}
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder={t('memory.newItemPlaceholder', '장기적으로 유지할 프로젝트 정보')}
@@ -221,7 +226,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
             <button
               type="button"
               data-testid="project-memory-add"
-              className="rounded-lg bg-primary-fill px-3 py-2 text-xs text-white disabled:opacity-50"
+              className={SETTINGS_ADD_BUTTON_CLASS}
               disabled={saving || !content.trim()}
               onClick={() => void handleAdd()}
             >
@@ -251,7 +256,8 @@ export function ProjectMemorySettingsSection(): JSX.Element {
                     /* 본문이 카테고리의 유일한 hover 대상이다. 네이티브 title은 뜨기까지
                        1초 넘게 걸려 카테고리를 확인하려면 매번 기다려야 했다 —
                        설정 패널의 다른 도움말과 같은 group-hover 툴팁으로 바꿔 즉시 뜬다. */
-                    <div className="group/tip relative">
+                    /* pt-1: 첫 줄(16px)을 ⋯ 버튼(24px)의 세로 가운데에 맞춘다. 여러 줄이어도 첫 줄 기준이라 버튼이 위에 남는다. */
+                    <div className="group/tip relative pt-1">
                       <div
                         className={`whitespace-pre-wrap break-words text-xs ${
                           injected ? 'text-editor-text' : 'text-editor-muted'

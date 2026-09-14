@@ -33,11 +33,10 @@ vi.mock('@/stores/uiStore', () => ({
 }));
 
 describe('ProjectGlossarySection', () => {
-  it('다른 설정 섹션과 같은 제목·설명·컨트롤 크기를 사용한다', () => {
+  it('다른 설정 섹션과 같은 제목·컨트롤 크기를 사용한다', () => {
     render(<ProjectGlossarySection projectId="project-1" />);
 
     expect(screen.getByText('settings.glossary')).toHaveClass('text-xs');
-    expect(screen.getByText('settings.glossaryDescription')).toHaveClass('text-[11px]');
     expect(screen.getByRole('button', { name: 'glossaryManager.manage' })).toHaveClass('text-xs');
     expect(screen.getByRole('button', { name: 'glossaryManager.noActiveGlossaries' })).toHaveClass('text-xs');
   });

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
+import { SETTINGS_ADD_BUTTON_CLASS, SETTINGS_INPUT_CLASS } from '@/components/settings/settingsFormClasses';
 import { useShallow } from 'zustand/shallow';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -49,14 +50,14 @@ export function ProjectForbiddenTermsSection(): JSX.Element {
       <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
         <input
           data-testid="forbidden-term-input"
-          className="min-w-0 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
+          className={SETTINGS_INPUT_CLASS}
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder={t('memory.forbiddenTerm', '금칙어')}
         />
         <input
           data-testid="forbidden-term-replacement"
-          className="min-w-0 rounded-lg border border-editor-border bg-editor-surface px-3 py-2 text-xs text-editor-text"
+          className={SETTINGS_INPUT_CLASS}
           value={replacement}
           onChange={(event) => setReplacement(event.target.value)}
           placeholder={t('memory.replacement', '권장 표현')}
@@ -64,7 +65,7 @@ export function ProjectForbiddenTermsSection(): JSX.Element {
         <button
           type="button"
           data-testid="forbidden-term-add"
-          className="rounded-lg bg-primary-fill px-3 py-2 text-xs text-white disabled:opacity-50"
+          className={SETTINGS_ADD_BUTTON_CLASS}
           disabled={saving || !term.trim()}
           onClick={() => {
             void saveForbiddenTerm({

@@ -31,7 +31,6 @@
     "translationRulesDescription": "Rules applied to translation such as format, style, and tone. (e.g., \"Use formal tone\", \"Preserve quotes\", \"Transliterate proper nouns\")",
     "translationRulesPlaceholder": "Enter translation rules...",
     "glossary": "Glossary",
-    "glossaryDescription": "Link the glossaries this project should use.",
     "glossaryColumns": "Columns: [Source] [Target] (Header required, case-insensitive)",
     "glossaryImportCsv": "Import CSV",
     "glossaryImportExcel": "Import Excel",

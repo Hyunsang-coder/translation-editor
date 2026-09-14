@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, BookOpen, Plus, X } from 'lucide-react';
+import { ArrowRight, Plus, X } from 'lucide-react';
 import { GlossaryManagerModal } from './GlossaryManagerModal';
 import { useGlossaryStore } from '@/stores/glossaryStore';
 import { useUIStore } from '@/stores/uiStore';
 import { CollapsibleSection } from '@/components/settings/CollapsibleSection';
+import { SETTINGS_ADD_BUTTON_CLASS, SETTINGS_INPUT_CLASS } from '@/components/settings/settingsFormClasses';
 
 interface ProjectGlossarySectionProps {
   projectId: string;
@@ -89,15 +90,13 @@ export function ProjectGlossarySection({
         dense
         persistId="glossary"
         title={t('settings.glossary')}
-        description={t('settings.glossaryDescription')}
         testId="settings-section-glossary"
         action={(
           <button
             type="button"
             onClick={() => setManagerOpen(true)}
-            className="flex shrink-0 items-center gap-1 rounded-md border border-editor-border bg-editor-surface px-2 py-1 text-xs font-medium text-editor-text hover:border-primary-500 hover:text-primary-500"
+            className="flex items-center text-xs text-editor-muted hover:text-primary-600"
           >
-            <BookOpen size={12} />
             {t('glossaryManager.manage')}
           </button>
         )}
@@ -160,7 +159,7 @@ export function ProjectGlossarySection({
               <select
                 value={glossaryId}
                 onChange={(event) => setGlossaryId(event.target.value)}
-                className="mb-2 w-full rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
+                className={`${SETTINGS_INPUT_CLASS} mb-2 w-full`}
               >
                 {projectGlossaries.map((glossary) => (
                   <option key={glossary.id} value={glossary.id}>{glossary.name}</option>
@@ -176,7 +175,7 @@ export function ProjectGlossarySection({
                 }}
                 placeholder={t('glossaryManager.sourcePlaceholder')}
                 aria-label={t('glossaryManager.source')}
-                className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
+                className={`${SETTINGS_INPUT_CLASS} flex-1`}
               />
               <ArrowRight size={12} className="shrink-0 text-primary-500" />
               <input
@@ -187,13 +186,13 @@ export function ProjectGlossarySection({
                 }}
                 placeholder={t('glossaryManager.targetPlaceholder')}
                 aria-label={t('glossaryManager.target')}
-                className="min-w-0 flex-1 rounded border border-editor-border bg-editor-surface px-2 py-1.5 text-xs text-editor-text outline-none focus:border-primary-500"
+                className={`${SETTINGS_INPUT_CLASS} flex-1`}
               />
               <button
                 type="button"
                 onClick={() => void handleQuickAdd()}
                 disabled={!source.trim() || !target.trim() || saving}
-                className="shrink-0 rounded bg-primary-fill px-2 py-1.5 text-xs font-semibold text-white hover:bg-primary-fill-hover disabled:opacity-40"
+                className={SETTINGS_ADD_BUTTON_CLASS}
               >
                 {t('glossaryManager.add')}
               </button>
