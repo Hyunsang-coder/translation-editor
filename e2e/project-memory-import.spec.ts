@@ -79,7 +79,12 @@ test.describe('Project memory import', () => {
     const modal = page.getByTestId('project-memory-import-modal');
     await expect(modal).toBeVisible();
 
-    await page.getByTestId('project-memory-import-source').selectOption(SOURCE_ID);
+    // 원본 프로젝트는 좌측 목록의 행 버튼이다. 행 안에 수정일도 있어 제목 포함으로 찾는다.
+    await page
+      .getByTestId('project-memory-import-source')
+      .getByRole('button')
+      .filter({ hasText: 'Season 34 Patch Notes' })
+      .click();
     await expect(modal).toContainText('Battle royale shooter patch notes');
 
     await page.getByTestId('project-memory-import-submit').click();
@@ -98,8 +103,9 @@ test.describe('Project memory import', () => {
     await openProjectSettings(page);
     await page.getByTestId('project-memory-import-open').click();
 
-    const options = page.getByTestId('project-memory-import-source').locator('option');
-    await expect(options).toHaveCount(2);
-    await expect(options.nth(1)).toHaveAttribute('value', SOURCE_ID);
+    const sources = page.getByTestId('project-memory-import-source').getByRole('button');
+    await expect(sources).toHaveCount(1);
+    await expect(sources.first()).toContainText('Season 34 Patch Notes');
+    await expect(page.getByTestId('project-memory-import-source')).not.toContainText('Season 35 Patch Notes');
   });
 });
