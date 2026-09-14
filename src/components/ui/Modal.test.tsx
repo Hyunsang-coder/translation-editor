@@ -42,6 +42,22 @@ describe('Modal', () => {
     opener.remove();
   });
 
+  it('자식이 autoFocus로 잡은 포커스를 첫 요소로 빼앗지 않는다', async () => {
+    render(
+      <Modal open onClose={vi.fn()} labelId="autofocus-modal-title">
+        <h2 id="autofocus-modal-title">검색 모달</h2>
+        <button type="button">닫기</button>
+        <input aria-label="검색" autoFocus />
+      </Modal>,
+    );
+
+    const search = screen.getByRole('textbox', { name: '검색' });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await waitFor(() => {
+      expect(search).toHaveFocus();
+    });
+  });
+
   it('중첩 모달에서는 ESC가 최상위 모달만 닫는다', () => {
     const closeParent = vi.fn();
     const closeChild = vi.fn();

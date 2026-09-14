@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { memoryItemLimit } from '@/ai/context/projectMemoryPolicy';
@@ -36,6 +37,7 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
 
   const [projects, setProjects] = useState<RecentProjectInfo[]>([]);
   const [sourceId, setSourceId] = useState<string>('');
+  const [query, setQuery] = useState('');
   const [preview, setPreview] = useState<SourcePreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -51,6 +53,7 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
   useEffect(() => {
     if (!open) return;
     setSourceId('');
+    setQuery('');
     setPreview(null);
     setSelectedItems(new Set());
     setSelectedTerms(new Set());
@@ -82,6 +85,13 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
       });
     return () => { cancelled = true; };
   }, [sourceId, reportError]);
+
+  // 검색은 왼쪽 목록만 거른다. 이미 고른 프로젝트가 걸러져도 오른쪽 체크리스트는 유지한다.
+  const visibleProjects = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    if (!normalized) return projects;
+    return projects.filter((entry) => entry.title.toLocaleLowerCase().includes(normalized));
+  }, [projects, query]);
 
   const selectedCount = selectedItems.size + selectedTerms.size;
   const chatLimit = memoryItemLimit('general-chat');
@@ -168,6 +178,22 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
             <p className="px-4 pb-1 pt-3 text-xs font-medium text-editor-muted">
               {t('memory.import.sourceLabel', '원본 프로젝트')}
             </p>
+            <div className="relative px-2 pb-2">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 -mt-1 text-editor-muted"
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('projectSidebar.searchProjects')}
+                aria-label={t('projectSidebar.searchProjects')}
+                autoFocus
+                data-testid="project-memory-import-search"
+                className="w-full rounded-md border border-editor-border bg-editor-surface py-1.5 pl-7 pr-2 text-xs text-editor-text focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-focus focus-visible:outline-offset-2"
+              />
+            </div>
             <ul
               data-testid="project-memory-import-source"
               className="min-h-0 flex-1 space-y-0.5 overflow-y-auto scrollbar-thin px-2 pb-2"
@@ -176,7 +202,11 @@ export function ProjectMemoryImportModal({ open, onClose }: Props): JSX.Element 
                 <li className="px-2 py-1.5 text-xs text-editor-muted">
                   {t('memory.import.noProjects', '다른 프로젝트가 없습니다.')}
                 </li>
-              ) : projects.map((entry) => {
+              ) : visibleProjects.length === 0 ? (
+                <li className="px-2 py-1.5 text-xs text-editor-muted">
+                  {t('projectSidebar.noSearchResults')}
+                </li>
+              ) : visibleProjects.map((entry) => {
                 const selected = entry.id === sourceId;
                 return (
                   <li key={entry.id}>

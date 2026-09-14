@@ -62,6 +62,8 @@ export function Modal({
     const timer = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
       if (!dialog) return;
+      // 자식이 autoFocus로 이미 포커스를 잡았으면 첫 요소(대개 닫기 버튼)로 빼앗지 않는다.
+      if (dialog.contains(document.activeElement)) return;
       const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       if (first) {
         first.focus();
