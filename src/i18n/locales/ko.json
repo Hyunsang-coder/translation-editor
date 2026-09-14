@@ -274,11 +274,7 @@
   },
   "status": {
     "reviewing": "검수 중",
-    "saving": "저장 중…",
-    "saved": "모든 변경사항 저장됨",
-    "notSavedYet": "아직 저장되지 않음",
-    "snapshotJustNow": "스냅샷 방금 전",
-    "snapshotAgo": "스냅샷 {{minutes}}분 전",
+    "saveFailedRetrying": "저장 실패 · 재시도 중",
     "sourceWords": "원문 {{words}} 단어",
     "targetWords": "번역문 {{words}} 단어"
   },

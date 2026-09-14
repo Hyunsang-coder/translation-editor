@@ -1,36 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
 import { useProjectStore } from '@/stores/projectStore';
 import { useReviewStore } from '@/stores/reviewStore';
-import { useHistoryStore } from '@/stores/historyStore';
 import { countTotalWords } from '@/utils/wordCounter';
-import { formatTimeOfDay } from '@/utils/datetime';
-
-/** 상대 시간 표시가 굳지 않도록 1분마다 리렌더 */
-function useMinuteTick(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
-}
 
 /**
  * 에디터 상단 상태 스트립.
  *
- * 검수 진행률 / 저장 상태 / 최신 스냅샷 / 단어 수를 한 줄에 모은다.
+ * 검수 진행률 / 저장 실패 / 단어 수를 한 줄에 모은다.
  * 전부 기존 스토어에서 파생하며 새 스토어 필드를 만들지 않는다.
+ *
+ * 평상시 저장 상태는 보여주지 않는다 — 편집이 멈추면 write-through(0.5초)와 autosave 루프가
+ * 곧바로 저장하므로 "저장 중/저장됨"은 깜빡임일 뿐이다. 스냅샷 시각은 히스토리 패널의 몫이다.
  * 단어 수는 이전에 Source/Target 패널 헤더에 각각 있던 값을 여기로 옮긴 것이다.
  */
 export function StatusStrip(): JSX.Element {
   const { t } = useTranslation();
-  const now = useMinuteTick();
 
-  const { isDirty, lastSavedAt, sourceDocument, targetDocument, projectId } = useProjectStore(
+  const { saveStatus, lastSaveError, lastSavedAt, sourceDocument, targetDocument, projectId } = useProjectStore(
     useShallow((s) => ({
-      isDirty: s.isDirty,
+      saveStatus: s.saveStatus,
+      lastSaveError: s.lastSaveError,
       lastSavedAt: s.lastSavedAt,
       sourceDocument: s.sourceDocument,
       targetDocument: s.targetDocument,
@@ -42,8 +34,17 @@ export function StatusStrip(): JSX.Element {
     useShallow((s) => ({ isReviewing: s.isReviewing, progress: s.progress }))
   );
 
-  const snapshots = useHistoryStore((s) => s.snapshots);
-  const snapshotsProjectId = useHistoryStore((s) => s.snapshotsProjectId);
+  // 실패 후 autosave가 재시도할 때마다 saveOnce가 saveStatus를 'saving'으로, lastSaveError를 null로
+  // 되돌린다. saveStatus를 그대로 따라가면 경고가 재시도 주기로 깜빡이므로, 실패는 여기서 붙잡아 두고
+  // 저장이 실제로 성공(lastSavedAt 갱신)하거나 프로젝트가 바뀔 때만 지운다.
+  // 지우는 effect가 먼저 선언돼야 한다 — 이미 실패 상태로 마운트될 때 경고가 곧바로 지워지지 않도록.
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  useEffect(() => {
+    setSaveFailure(null);
+  }, [lastSavedAt, projectId]);
+  useEffect(() => {
+    if (saveStatus === 'error') setSaveFailure(lastSaveError ?? '');
+  }, [saveStatus, lastSaveError]);
 
   // 문서는 타이핑마다 바뀌므로 카운트를 300ms 디바운스한다 (기존 패널 헤더 로직과 동일).
   const [sourceWords, setSourceWords] = useState(0);
@@ -62,20 +63,6 @@ export function StatusStrip(): JSX.Element {
     }, 300);
     return () => window.clearTimeout(timer);
   }, [targetDocument]);
-
-  const latestSnapshot = useMemo(() => {
-    if (projectId && snapshotsProjectId !== null && snapshotsProjectId !== projectId) return null;
-    if (snapshots.length === 0) return null;
-    return snapshots.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
-  }, [snapshots, snapshotsProjectId, projectId]);
-
-  const snapshotAgeLabel = useMemo(() => {
-    if (!latestSnapshot) return null;
-    const minutes = Math.max(0, Math.floor((now - latestSnapshot.timestamp) / 60_000));
-    return minutes < 1
-      ? t('status.snapshotJustNow')
-      : t('status.snapshotAgo', { minutes });
-  }, [latestSnapshot, now, t]);
 
   const reviewPercent = progress.total > 0
     ? Math.round((progress.completed / progress.total) * 100)
@@ -99,18 +86,15 @@ export function StatusStrip(): JSX.Element {
         </div>
       )}
 
-      <span className="shrink-0 truncate">
-        {isDirty
-          ? t('status.saving')
-          : lastSavedAt > 0
-            ? `${t('status.saved')} · ${formatTimeOfDay(lastSavedAt)}`
-            : t('status.notSavedYet')}
-      </span>
-
-      {snapshotAgeLabel && (
-        <span className="min-w-0 truncate">
-          {snapshotAgeLabel}
-          {latestSnapshot?.description ? ` (${latestSnapshot.description})` : ''}
+      {saveFailure !== null && (
+        <span
+          className="flex min-w-0 items-center gap-1 text-severity-critical"
+          title={saveFailure || undefined}
+          role="status"
+          data-testid="status-save-failed"
+        >
+          <AlertTriangle size={12} className="shrink-0" />
+          <span className="truncate">{t('status.saveFailedRetrying')}</span>
         </span>
       )}
 

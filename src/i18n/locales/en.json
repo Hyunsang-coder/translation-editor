@@ -276,11 +276,7 @@
   },
   "status": {
     "reviewing": "Reviewing",
-    "saving": "Saving…",
-    "saved": "All changes saved",
-    "notSavedYet": "Not saved yet",
-    "snapshotJustNow": "Snapshot just now",
-    "snapshotAgo": "Snapshot {{minutes}}m ago",
+    "saveFailedRetrying": "Save failed · retrying",
     "sourceWords": "Source {{words}} words",
     "targetWords": "Target {{words}} words"
   },
