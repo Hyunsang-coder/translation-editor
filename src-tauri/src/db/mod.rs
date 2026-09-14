@@ -760,12 +760,12 @@ impl Database {
     }
 
     /// 최근 프로젝트 목록(간단 메타 포함)
-    pub fn list_recent_projects(&self, limit: usize) -> Result<Vec<RecentProjectRow>, IteError> {
+    pub fn list_recent_projects(&self) -> Result<Vec<RecentProjectRow>, IteError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, metadata_json, updated_at FROM projects ORDER BY updated_at DESC LIMIT ?1",
+            "SELECT id, metadata_json, updated_at FROM projects ORDER BY updated_at DESC",
         )?;
 
-        let iter = stmt.query_map([limit as i64], |row| {
+        let iter = stmt.query_map([], |row| {
             let id: String = row.get(0)?;
             let metadata_json: String = row.get(1)?;
             let updated_at: i64 = row.get(2)?;
@@ -3471,6 +3471,22 @@ mod tests {
             }],
             blocks,
         }
+    }
+
+    #[test]
+    fn list_recent_projects_returns_every_project() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+
+        // 예전에는 20개로 잘랐다. 드롭다운 검색이 클라이언트 필터라 오래된 프로젝트도 와야 한다.
+        for i in 0..25 {
+            db.save_project(&build_test_project(&format!("project-list-{i}")))
+                .expect("failed to save project");
+        }
+
+        let rows = db.list_recent_projects().expect("failed to list projects");
+        assert_eq!(rows.len(), 25);
     }
 
     #[test]

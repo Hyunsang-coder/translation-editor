@@ -158,13 +158,16 @@ pub async fn list_project_ids(db_state: State<'_, DbState>) -> CommandResult<Vec
     .await
 }
 
-/// 최근 프로젝트 목록(간단 메타 포함)
+/// 전체 프로젝트 목록(간단 메타 포함, 최근 수정 우선)
+///
+/// 개수 제한을 두지 않는다. 프로젝트 드롭다운 검색이 클라이언트에서 거르므로
+/// 잘라 보내면 오래된 프로젝트는 검색되지 않는다.
 #[tauri::command]
 pub async fn list_recent_projects(
     db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<RecentProjectInfo>> {
     run_db_task(&db_state, |db| {
-        let rows = db.list_recent_projects(20).map_err(CommandError::from)?;
+        let rows = db.list_recent_projects().map_err(CommandError::from)?;
         Ok(rows
             .into_iter()
             .map(|r| RecentProjectInfo {

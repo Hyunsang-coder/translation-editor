@@ -331,6 +331,8 @@
     "projects": "Projects",
     "newProject": "New Project",
     "projectTitlePlaceholder": "Project title",
+    "searchProjects": "Search projects",
+    "noSearchResults": "No matching projects.",
     "projectActions": "Project actions for {{title}}",
     "duplicateProject": "Duplicate",
     "renameProject": "Rename",

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, MoreHorizontal, Plus, Search } from 'lucide-react';
 import { listRecentProjects, deleteProject, type RecentProjectInfo } from '@/tauri/storage';
 import { useInstructionHistoryStore } from '@/stores/instructionHistoryStore';
 import {
@@ -41,6 +41,8 @@ export function ProjectPicker(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState('New Project');
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState('');
@@ -55,8 +57,21 @@ export function ProjectPicker(): JSX.Element {
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedId = project?.id ?? null;
+
+  // 검색은 화면에 보이는 행만 거른다. 삭제 후 전환 대상·중복 제목 계산·이름 변경은
+  // 계속 전체 목록(items)을 기준으로 해야 한다.
+  const visibleItems = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    if (!normalized) return items;
+    return items.filter((p) => p.title.toLocaleLowerCase().includes(normalized));
+  }, [items, query]);
+  // 목록이 줄어들어도(새로고침·삭제) 강조가 범위 밖을 가리키지 않게 한다.
+  const highlightedIndex = visibleItems.length === 0
+    ? -1
+    : Math.min(activeIndex, visibleItems.length - 1);
 
   const updateMenuPosition = useCallback((): void => {
     const trigger = triggerRef.current;
@@ -75,6 +90,10 @@ export function ProjectPicker(): JSX.Element {
 
   const openPicker = useCallback((): void => {
     setActionMenu(null);
+    setQuery('');
+    setActiveIndex(0);
+    // 제목 폼이 남아 있으면 검색창과 둘 다 autoFocus라 검색창이 포커스를 가져간다.
+    setShowNew(false);
     updateMenuPosition();
     setOpen(true);
   }, [updateMenuPosition]);
@@ -436,7 +455,53 @@ export function ProjectPicker(): JSX.Element {
             </button>
           )}
 
+          <div className="px-2 py-2 border-b border-editor-hairline">
+            <div className="relative">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-editor-muted"
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setActionMenu(null);
+                  setQuery(e.target.value);
+                  setActiveIndex(0);
+                }}
+                onKeyDown={(e) => {
+                  // 한글 조합을 끝내는 Enter가 프로젝트 전환으로 새지 않게 한다.
+                  // WKWebView는 조합 종료 keydown에 isComposing=false를 주기도 해서 229도 본다.
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (highlightedIndex < 0) return;
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const next = e.key === 'ArrowDown'
+                      ? Math.min(highlightedIndex + 1, visibleItems.length - 1)
+                      : Math.max(highlightedIndex - 1, 0);
+                    setActiveIndex(next);
+                    listRef.current
+                      ?.querySelector(`[data-project-row-index="${next}"]`)
+                      ?.scrollIntoView?.({ block: 'nearest' });
+                    return;
+                  }
+                  const target = visibleItems[highlightedIndex];
+                  if (e.key === 'Enter' && target) {
+                    e.preventDefault();
+                    handleSelect(target.id);
+                  }
+                }}
+                placeholder={t('projectSidebar.searchProjects')}
+                aria-label={t('projectSidebar.searchProjects')}
+                autoFocus
+                className="w-full rounded-md border border-editor-border bg-editor-bg py-1.5 pl-7 pr-2 text-xs text-editor-text outline-none focus:border-primary-500"
+                data-testid="project-search-input"
+              />
+            </div>
+          </div>
+
           <div
+            ref={listRef}
             className="flex-1 max-h-[320px] overflow-y-auto"
             onScroll={() => setActionMenu(null)}
           >
@@ -448,10 +513,19 @@ export function ProjectPicker(): JSX.Element {
             {loading && (
               <div className="px-3 py-2 text-xs text-editor-muted">불러오는 중...</div>
             )}
+            {!loading && items.length > 0 && visibleItems.length === 0 && (
+              <div
+                className="px-3 py-2 text-xs text-editor-muted"
+                data-testid="project-search-empty"
+              >
+                {t('projectSidebar.noSearchResults')}
+              </div>
+            )}
             {!loading &&
-              items.map((p) => {
+              visibleItems.map((p, index) => {
                 const active = selectedId === p.id;
                 const isRenaming = renamingId === p.id;
+                const highlighted = index === highlightedIndex;
 
                 return (
                   <div
@@ -459,9 +533,18 @@ export function ProjectPicker(): JSX.Element {
                     role="none"
                     data-project-row
                     data-testid={`project-row-${p.id}`}
+                    data-project-row-index={index}
+                    data-highlighted={highlighted || undefined}
+                    // 호버 배경 대신 강조 상태를 쓴다. 키보드와 마우스 강조가 두 줄로 갈라지지 않게.
+                    // mouseenter는 키보드 스크롤로 행이 커서 밑을 지나갈 때도 떠서 mousemove를 쓴다.
+                    onMouseMove={() => {
+                      if (!highlighted) setActiveIndex(index);
+                    }}
                     className={`group px-2 py-2 flex items-center gap-1 border-l-2 ${active
                       ? 'bg-editor-bg border-primary-500'
-                      : 'hover:bg-editor-bg border-transparent'
+                      : highlighted
+                        ? 'bg-editor-bg border-transparent'
+                        : 'border-transparent'
                       }`}
                   >
                     {isRenaming ? (
