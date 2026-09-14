@@ -188,7 +188,7 @@ export function ProjectMemorySettingsSection(): JSX.Element {
           <button
             type="button"
             data-testid="project-memory-import-open"
-            className="text-xs text-editor-muted hover:text-primary-500"
+            className="flex items-center text-xs text-editor-muted hover:text-primary-600"
             onClick={() => setImportOpen(true)}
           >
             {t('memory.import.open', '가져오기')}
