@@ -49,41 +49,18 @@ npm run tauri:build  # 프로덕션 빌드
 - 이 경로는 앱이 실행 중일 때만 유효합니다. Claude Desktop에는 생성된 `claude-desktop-config.json` 내용을 사용하면 됩니다.
 - 상세 가이드는 `/docs/ODDEYES_DESKTOP_MCP.md` 참조
 
-## 린트 & 테스트
+## 테스트
 
 ```bash
-npm run lint          # ESLint 검사
-npm run lint:fix      # 자동 수정
-npm test              # Watch mode
-npm run test:run      # Unit/Component/Store 단일 실행
-npm run test:coverage # Unit coverage report
-npm run test:e2e:web  # Playwright 웹 E2E (Tauri IPC mock 기반)
-npm run test:e2e      # Tauri build smoke (debug/no-bundle 빌드 검증)
-npm run test:ci:local # CI verify와 동일한 로컬 프리플라이트
-npm run test:tauri    # 배포 전 전체 점검 (lint+unit+smoke+rust+release check)
+npm test              # Vitest watch
+npm run test:run      # Vitest 1회
+npm run test:harness  # 기본 백그라운드 게이트 (Vitest + Rust)
+npm run test:e2e:web  # 필요할 때만 Playwright UI 검증
+npm run test:e2e      # 필요할 때만 Tauri build smoke
+npm run test:tauri    # 배포 전 전체 점검
 ```
 
-### Tauri MCP E2E 테스트
-
-```bash
-npm run test:e2e:tauri:mcp:workflow          # Full workflow (번역+리뷰+채팅)
-npm run test:e2e:tauri:mcp:new-project       # 프로젝트 생성 smoke test
-npm run test:e2e:tauri:mcp:review-highlight  # 검수 하이라이트 테스트
-npm run test:e2e:tauri:mcp:history-compare   # 히스토리 비교(선택 기반 UI) 테스트
-```
-
-**배포 전 체크리스트**: `npm run test:tauri`로 모든 테스트를 한 번에 실행합니다.
-- ESLint (0 경고)
-- Unit Tests (Vitest)
-- Tauri Build Smoke (`tauri build --debug --no-bundle`)
-- Rust Tests (`cargo test`)
-- Release Build 검증
-
-### 테스트 환경 API 키
-
-- **런타임 앱(Tauri)**: Settings에서 입력한 API 키를 secure store(OS keychain + 암호화 vault)에서 읽습니다.
-- **Vitest 테스트 실행 시에만**: `.env.local`의 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`를 fallback으로 참조할 수 있습니다.
-- Store에 키가 있으면 Store 값이 우선됩니다.
+기본 하네스는 브라우저나 Tauri 앱을 띄우지 않습니다. 자세한 기준은 [`docs/TAURI_TESTING.md`](docs/TAURI_TESTING.md)를 참고하세요.
 
 ## 빌드 및 배포
 
@@ -171,10 +148,8 @@ GitHub Actions로 자동 빌드 (`v*` 태그 push 시):
 │   ├── src/commands/        # Tauri 명령
 │   ├── src/mcp/             # MCP 클라이언트
 │   └── src/secrets/         # Secret Manager
-├── crates/                  # Rust 크레이트
-│   └── tauri-plugin-testing/  # E2E 테스트 브리지 플러그인
-├── tauri-testing-mcp/       # MCP 서버 (E2E 런타임 제어)
-├── scripts/                 # 빌드/테스트 스크립트
+├── crates/                  # Rust 플러그인 크레이트
+├── scripts/                 # 빌드/배포 보조 스크립트
 ├── docs/                    # 문서
 └── tasks/                   # 구현 태스크
 ```

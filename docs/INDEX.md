@@ -24,8 +24,7 @@
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| **Tauri 테스트 가이드** | `/docs/TAURI_TESTING.md` | Tauri 중심 테스트 명령 및 릴리즈 전 스모크 절차 |
-| **Tauri Testing Plugin 명세** | `/docs/TAURI_TESTING_PLUGIN.md` | Tauri 테스트 플러그인 + MCP 브리지 구현 명세 |
+| **Tauri 테스트 가이드** | `/docs/TAURI_TESTING.md` | 백그라운드 하네스와 선택적 UI/릴리즈 테스트 |
 | **OddEyes Desktop MCP** | `/docs/ODDEYES_DESKTOP_MCP.md` | Claude Desktop extension(.mcpb) 구조, bridge 연결 전략, preview flow |
 
 ## 완료된 문서 (Archive)
