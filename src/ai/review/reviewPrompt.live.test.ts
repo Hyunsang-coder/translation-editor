@@ -18,6 +18,10 @@
  * - 구조/의미: 직역투 + 강도 부사. 구조를 손댔는지와 부사가 살아남았는지가 지표.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { patchFetchForLiveTests } from '@/test/liveFetchPatch';
+
+// jsdom signal × undici fetch 충돌 회피. SDK가 fetch를 호출 시점에 조회한다.
+patchFetchForLiveTests();
 import { runReview } from './runReview';
 import { parseReviewResult } from './parseReviewResult';
 import type { AlignedSegment } from '@/ai/tools/reviewTool';

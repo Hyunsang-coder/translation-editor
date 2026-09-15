@@ -95,6 +95,8 @@ Critical implementation warnings learned from past issues.
 
 150. **Marker 워크플로우 maxTokens는 thinking 포함 예산**: `---X_START/END---` 마커 기반 응답(번역/부분 재번역 등)에서 maxTokens을 교체문 길이만 보고 작게 잡으면(예: 4096), Anthropic adaptive thinking / OpenAI reasoning 토큰이 예산을 먼저 소비해 END 마커 전에 truncation → 파싱 실패한다. `retranslateSelection`은 `SELECTION_EDIT_MAX_TOKENS=16384`, review는 16384, chat은 8192. 신규 마커 워크플로우는 8192+ 기준으로 산정한다. (F13과 동일 문제 클래스.)
 
+150a. **세그먼트 마커 파싱을 엄격하게 짜지 말 것**: 모델은 1-based 번호·INPUT 에코·빈 블록·잘림·마커 생략을 간헐적으로 내놓는다. 하나라도 못 읽으면 전부 버리면 멀쩡한 블록까지 날아가 "자꾸 실패"가 된다(`runSegments` 구 동작). 계약은 정규화 후 블록별 원문 유지, 마커 전무 때만 스니펫 포함 throw다. 빈 블록 금지는 프롬프트(`never leave one empty`)가 아니라 코드가 보장해야 한다 — 지시는 위반된다. 안전망은 Preview-First + 모달의 "변경 없음" 표시다.
+
 152. **번역 응답을 첫 태그만 보고 HTML로 분류하지 말 것**: `parseTranslationResponseToTipTap`은 `looksLikeBlockHtml`로 마크다운/HTML을 가른다. 번역 직렬화는 표를 **항상 raw HTML**로 쓰므로(`TableForTranslation`), 첫 태그만 보면 표로 시작하는 문서가 전부 HTML로 분류돼 DOM 파서(`convertHtmlListsToMarkdown`)를 탄다. 그 경로에서 마크다운 본문은 텍스트 노드라 유실되고, tiptap-markdown이 `텍스트 == href`인 링크를 직렬화한 **autolink `<https://…>`는 미지의 시작 태그로 삼켜져** URL이 소멸한다. 판정에서 `<table>` 세그먼트를 빼고, 혼합 콘텐츠는 `parseMarkdownWithTables`(`html: true`)에 맡길 것 — 표 밖 `<ul>`/`<p>`도 이쪽이 정상 파싱한다.
 
 153. **DOM walk로 마크다운을 재조립할 때 3가지**: `convertHtmlListsToMarkdown`류 코드의 반복 함정. ① `children`(Element만) 순회는 텍스트 노드를 **조용히 삭제**한다 — `childNodes`를 쓸 것. ② 블록을 전부 `'\n'`으로 이으면 마크다운에서 문단이 합쳐진다 — 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`. ③ 중첩 리스트는 walk가 즉시 방출하므로, 부모 텍스트를 루프 뒤에 방출하면 **자식이 부모보다 먼저 나가** 중첩이 평탄화된다 — 내려가기 전에 flush하고, "아무것도 못 알아봤다" 폴백은 누적 버퍼가 아니라 **출력 길이 변화**로 판정할 것(아니면 중복 방출).
@@ -112,6 +114,8 @@ Critical implementation warnings learned from past issues.
 24. **Streaming Finalization Guard**: Use `isFinalizingStreaming` flag in `chatStore.ts` to prevent race conditions when streaming completes while a new message is being sent. Wait for finalization to complete before starting new requests.
 
 25. **Async Operation Project Validation**: After any `await` in ReviewPanel or similar components, validate that `project.id` still matches `useProjectStore.getState().project?.id` to handle project switching during async operations.
+
+26. **jsdom AbortSignal은 undici fetch가 거부한다**: vitest jsdom에서 LangChain SDK 실호출(`*.live.test.ts`)을 하면 SDK 내부의 jsdom 클래스 signal 때문에 `RequestInit: Expected signal ... to be an instance of AbortSignal`으로 전멸한다. `src/test/liveFetchPatch.ts`의 `patchFetchForLiveTests()`를 live 파일 최상단에서 호출할 것(비-네이티브 signal만 제거, vitest 타임아웃이 행잉 가드). `new Request(...).signal.constructor`로 네이티브 클래스를 빼오는 꼼수는 통하지 않는다 — undici가 만든 signal도 전역 클래스를 따른다.
 
 ## Review Feature
 

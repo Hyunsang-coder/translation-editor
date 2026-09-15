@@ -218,4 +218,43 @@ describe('표 셀 인라인 서식', () => {
     expect(html).toContain('<code>둘째</code>');
     expect(html).toContain('<table');
   });
+
+  it('모델이 표 구문을 에코해도 리터럴로 들어가고 표가 깨지지 않는다 (품질 구멍 문서화)', () => {
+    // "no table syntax" 지시 위반이지만 파서는 마커만 보므로 통과한다.
+    // 프리뷰에서 사람이 걸러내는 전제라, 여기서는 리터럴 적용까지만 고정한다.
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr><td><p>손상</p></td><td><p>맛있다</p></td></tr></tbody></table>',
+    });
+    const from = posOfText(editor, '손상');
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from, to: from + '손상'.length }],
+    });
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, '| 피해량 |', {
+        expectedText: '손상',
+      }),
+    ).toBe('applied');
+    expect(editor.state.doc.textContent).toContain('| 피해량 |');
+    expect(editor.getHTML()).toContain('<table');
+  });
+
+  it('모델이 열 헤더를 베껴도 리터럴로 들어간다 (품질 구멍 문서화)', () => {
+    editor = new Editor({
+      extensions: TABLE_EXTENSIONS,
+      content:
+        '<table><tbody><tr><td><p>손상</p></td></tr></tbody></table>',
+    });
+    const from = posOfText(editor, '손상');
+    const anchorId = createSelectionAnchor(editor, {
+      ranges: [{ from, to: from + '손상'.length }],
+    });
+    expect(
+      applySelectionEdit(editor, resolveSelectionAnchor(editor, anchorId)!, '스탯: 피해량', {
+        expectedText: '손상',
+      }),
+    ).toBe('applied');
+    expect(editor.state.doc.textContent).toContain('스탯: 피해량');
+  });
 });

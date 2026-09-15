@@ -148,6 +148,31 @@ describe('buildScopedAlignedChunks', () => {
     ]);
   });
 
+  it('불릿 아이템 선택은 아이템마다 세그먼트가 된다', () => {
+    const item = (text: string, id?: string) => ({
+      type: 'listItem',
+      content: [p(text, id)],
+    });
+    const bullets = (...items: unknown[]) => ({ type: 'bulletList', content: items });
+    const source = doc(bullets(item('First source.'), item('Second source.')));
+    const target = doc(bullets(item('첫째 번역.', 'b1'), item('둘째 번역.', 'b2')));
+
+    const chunks = buildScopedAlignedChunks({
+      sourceDocJson: source,
+      targetDocJson: target,
+      targetUnitIds: ['b1', 'b2'],
+    });
+
+    expect(chunks?.[0]?.segments.map((s) => s.sourceText)).toEqual([
+      'First source.',
+      'Second source.',
+    ]);
+    expect(chunks?.[0]?.segments.map((s) => s.targetText)).toEqual([
+      '첫째 번역.',
+      '둘째 번역.',
+    ]);
+  });
+
   it('빈 유닛만 선택하면 null', () => {
     const source = doc(p('First source.'), p('Second source.'));
     const target = doc(p('첫 번역.', 'u1'), p('', 'empty'));

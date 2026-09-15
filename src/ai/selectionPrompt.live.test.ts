@@ -13,6 +13,10 @@
  * 읽는 것이 목적이라, 단정은 "형식이 깨지지 않았다" 수준으로만 건다.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { patchFetchForLiveTests } from '@/test/liveFetchPatch';
+
+// jsdom signal × undici fetch 충돌 회피. SDK가 fetch를 호출 시점에 조회한다.
+patchFetchForLiveTests();
 import { polishSelection, retranslateSegments, retranslateSelection } from './retranslateSelection';
 import { polishTargetDocumentWithStreaming } from './polishDocument';
 import { tipTapJsonToMarkdownForTranslation } from '@/utils/markdownConverter';

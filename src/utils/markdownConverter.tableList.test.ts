@@ -16,6 +16,7 @@ import {
   parseTranslationResponseToTipTap,
   tipTapJsonToMarkdownForTranslation,
 } from './markdownConverter';
+import { replaceTopLevelBlockRange } from '@/editor/utils/topLevelBlockSplice';
 
 const CELL_LIST_ITEMS = ['첫 번째 항목', '두 번째 항목'];
 
@@ -126,5 +127,78 @@ describe('표 안 리스트 왕복', () => {
     const bullet = blocks.find((b) => b.type === 'bulletList');
     expect(bullet).toBeDefined();
     expect(listItemTexts(bullet)).toEqual(CELL_LIST_ITEMS);
+  });
+});
+
+describe('최상위 불릿 스코프 부분 폴리싱 왕복', () => {
+  // 폴리싱 모달의 범위 실행(top-level-blocks)은 구간만 잘라 모델에 보내고
+  // 결과를 같은 자리에 되돌려 놓는다. 불릿리스트가 그 왕복에서 살아남는지 고정한다.
+  const SCOPE_ITEMS = ['첫째 항목', '둘째 항목', '셋째 항목'];
+  const baseDoc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '앞 문단' }],
+      },
+      {
+        type: 'bulletList',
+        content: SCOPE_ITEMS.map((item) => ({
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: item }] }],
+        })),
+      },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '뒤 문단' }],
+      },
+    ],
+  };
+
+  function sliceScope() {
+    return {
+      type: 'doc',
+      content: [baseDoc.content[1]],
+    };
+  }
+
+  it('구간 직렬화는 불릿 마커를 살린다', () => {
+    const md = tipTapJsonToMarkdownForTranslation(sliceScope());
+    for (const item of SCOPE_ITEMS) {
+      expect(md).toContain(item);
+    }
+    expect(md).toMatch(/^-\s/m);
+  });
+
+  it('모델 응답을 파싱해도 항목 수·순서가 보존된다', () => {
+    const md = tipTapJsonToMarkdownForTranslation(sliceScope());
+    const raw = `---POLISH_START---\n${md}\n---POLISH_END---`;
+    const extracted = extractBetweenMarkers(
+      raw,
+      '---POLISH_START---',
+      '---POLISH_END---',
+      '[Polish-Scope-Test]',
+    );
+    const doc = parseTranslationResponseToTipTap(extracted);
+    const content = (doc.content ?? []) as Array<{ type?: string }>;
+    const bullet = content.find((node) => node.type === 'bulletList') as unknown as {
+      content: Array<{ content: Array<{ content: Array<{ text?: string }> }> }>;
+    };
+    expect(bullet).toBeDefined();
+    expect(
+      bullet.content.map((item) => item.content[0]!.content[0]!.text ?? ''),
+    ).toEqual(SCOPE_ITEMS);
+  });
+
+  it('병합 후 앞뒤 문단이 그대로 남는다', () => {
+    const md = tipTapJsonToMarkdownForTranslation(sliceScope());
+    const replacement = parseTranslationResponseToTipTap(md);
+    const merged = replaceTopLevelBlockRange(baseDoc, 1, 1, replacement);
+    const mergedContent = (merged.content ?? []) as unknown[];
+
+    expect(mergedContent).toHaveLength(3);
+    expect(mergedContent[0]).toEqual(baseDoc.content[0]);
+    expect(mergedContent[2]).toEqual(baseDoc.content[2]);
+    expect((mergedContent[1] as { type?: string }).type).toBe('bulletList');
   });
 });

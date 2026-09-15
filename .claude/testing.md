@@ -21,6 +21,16 @@ npm run test:coverage # Coverage report
 - `getAiConfig()`는 **테스트 런타임에서만** `process.env` fallback을 허용합니다.
 - 런타임 앱(Tauri)에서는 fallback을 사용하지 않고, 설정 화면/secure store 키를 사용합니다.
 
+### Live AI 하네스 (실모델 검증, 기본 skip)
+
+```bash
+LIVE_AI=1 npx vitest run src/ai/selectionPrompt.live.test.ts [-t "픽스처명"]
+LIVE_AI_PROVIDER=anthropic LIVE_AI=1 npx vitest run src/ai/review/reviewPrompt.live.test.ts
+```
+
+- 대상: `src/ai/selectionPrompt.live.test.ts` (선택 재번역/폴리싱), `src/ai/review/reviewPrompt.live.test.ts` (검수). 유닛 테스트가 "지시가 들어갔는가"까지만 보고, 문구 변경의 실제 효과는 여기서만 확인됩니다.
+- `src/test/liveFetchPatch.ts`의 `patchFetchForLiveTests()`를 각 live 파일 최상단에서 호출할 것 — LangChain SDK가 만드는 AbortSignal은 jsdom 클래스라 undici fetch가 거부합니다 (`RequestInit: Expected signal ...`). node env로 바꾸는 것은 DOM이 필요한 테스트(F9 문서-폴리싱 대조)가 깨지므로 jsdom+패치로 통일합니다.
+
 ## Pre-Deploy Test Gate
 
 ```bash
@@ -54,6 +64,16 @@ npm run test:e2e:tauri:mcp:review-highlight # 리뷰 하이라이트 검증
 npm run test:e2e:tauri:mcp:history-compare  # 히스토리 스냅샷 비교 검증
 npm run test:e2e:tauri:mcp:chat-selection   # SelectionContext 카드 숏컷
 ```
+
+### Scenario Patterns
+| Pattern | Flow | Use Case |
+|---------|------|----------|
+| A. Full Workflow | 프로젝트→설정→번역→리뷰→채팅 | CI 회귀 테스트 |
+| B. Translation | 프로젝트→원문→번역→확인 | 번역 기능 검증 |
+| C. Chat | 프로젝트→번역→채팅 다양한 질문 | 채팅/프롬프트 검증 |
+| D. Settings | 프로젝트→앱 설정→프로젝트 설정 | 설정 UI 검증 |
+| E. History | 프로젝트→번역→저장→수정→비교/복원 | 히스토리 기능 |
+| F. Edge Case | 빈 문서, 긴 문서, 특수문자 등 | 안정성 테스트 |
 
 (선택) 이미 실행 중인 앱에 수동으로 붙일 때만 2개 분리 실행:
 
