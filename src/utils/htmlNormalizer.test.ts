@@ -88,6 +88,29 @@ describe('removeDuplicateTableHeaders', () => {
     expect(result).toContain('NS_ERA_Car');
   });
 
+  it('sticky header와 본문 표 사이의 빈 문단을 건너뛰고 함께 제거', () => {
+    const html = `
+      <table>
+        <thead><tr><th>위치/클래스</th><th>종류</th><th>상태</th><th>역할</th></tr></thead>
+      </table>
+      <p>\u200B</p>
+      <p>\uFEFF</p>
+      <p><br></p>
+      <table>
+        <thead><tr><th>위치/클래스</th><th>종류</th><th>상태</th><th>역할</th></tr></thead>
+        <tbody><tr><td>AHPlayerState</td><td>PlayerState</td><td>확장</td><td>보유 상태</td></tr></tbody>
+      </table>
+    `;
+
+    const result = normalizePastedHtml(html);
+
+    expect((result.match(/<table/g) ?? []).length).toBe(1);
+    expect(result).not.toMatch(/<p>\s*<\/p>/);
+    expect(result).not.toContain('\u200B');
+    expect(result).not.toContain('\uFEFF');
+    expect(result).toContain('AHPlayerState');
+  });
+
   it('두 표의 헤더가 다르면 둘 다 유지', () => {
     const html = `
       <table>

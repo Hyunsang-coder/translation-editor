@@ -26,7 +26,8 @@ import { SelectionAnchor } from '@/editor/extensions/SelectionAnchor';
 import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
 import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
-import { normalizePastedHtml } from '@/utils/htmlNormalizer';
+import { isConfluencePastedHtml, normalizePastedHtml } from '@/utils/htmlNormalizer';
+import { normalizeConfluencePastedSlice } from '@/utils/pastedSliceNormalizer';
 import { plainTextToPasteHtml } from '@/utils/plainTextPaste';
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 
@@ -73,6 +74,7 @@ function TipTapEditor({
   const highlightNonce = useReviewStore((s) => s.highlightNonce);
   const pasteImageMode = useUIStore((s) => s.pasteImageMode);
   const pasteLinkPreserve = useUIStore((s) => s.pasteLinkPreserve);
+  const confluencePasteRef = useRef(false);
 
   // pasteImageMode에 따라 Image extension 선택
   // original: 기본 Image (실제 <img> 렌더링), placeholder/ignore: ImagePlaceholder
@@ -240,6 +242,7 @@ function TipTapEditor({
         },
       },
       transformPastedHTML: (html) => {
+        confluencePasteRef.current = isConfluencePastedHtml(html);
         // 항상 최신 설정값을 읽어서 stale closure 문제 방지
         const { pasteImageMode: imgMode } = useUIStore.getState();
         const removeImages = imgMode === 'ignore';
@@ -247,6 +250,11 @@ function TipTapEditor({
           return normalizePastedHtml(html, { removeImages });
         }
         return normalizePastedHtml(html);
+      },
+      transformPasted: (slice) => {
+        const isConfluencePaste = confluencePasteRef.current;
+        confluencePasteRef.current = false;
+        return isConfluencePaste ? normalizeConfluencePastedSlice(slice) : slice;
       },
       handlePaste: (view, event) => {
         const clipboard = event.clipboardData;

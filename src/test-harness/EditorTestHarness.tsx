@@ -20,6 +20,9 @@ import Superscript from '@tiptap/extension-superscript';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
 import '../index.css';
 
+const CONFLUENCE_FORMATTING_REFERENCE_URL =
+  'https://krafton.atlassian.net/wiki/spaces/ARC2/pages/1119881451/Inventory+System+Implementation';
+
 // 복사 버튼 컴포넌트
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -162,6 +165,14 @@ export function EditorTestHarness() {
         <p className="text-editor-muted text-sm mt-1">
           붙여넣기 또는 HTML 직접 주입으로 normalizePastedHtml 동작 테스트
         </p>
+        <a
+          href={CONFLUENCE_FORMATTING_REFERENCE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block text-primary-500 underline text-sm mt-1"
+        >
+          Confluence 서식 기준 페이지
+        </a>
       </header>
 
       <div className="grid grid-cols-2 gap-6">
@@ -320,6 +331,38 @@ const TEST_FIXTURES = [
   {
     name: 'confluence-nested-list',
     html: `<ul><li><p>부모 항목</p><ul><li><div data-node-type="mediaSingle"><img src="test.png" alt="[Image]"></div></li></ul></li></ul>`,
+  },
+  {
+    // 기준 페이지 전체 대신 이번 회귀에 필요한 구조만 고정한다.
+    name: 'confluence-inline-code-list',
+    html: `<ul>
+      <li>
+        <p>해결 방안</p>
+        <ul>
+          <li>
+            <p>시작음인 <code style="white-space: pre-wrap">Mordor.Weapon.PlantedBomb.StartDefuse</code>는 개별 볼륨이다.</p>
+          </li>
+          <li><p>다음 설정 항목</p></li>
+        </ul>
+      </li>
+    </ul>`,
+  },
+  {
+    name: 'confluence-wrapped-code-block',
+    html: `<p>코드 블록 앞 문단</p>
+      <p><span><code style="white-space: pre"><span data-ds--code--row="">line 1\n</span><span data-ds--code--row="">line 2</span></code></span></p>
+      <p>코드 블록 뒤 문단</p>`,
+  },
+  {
+    name: 'confluence-sticky-table',
+    html: `<table>
+      <thead><tr><th>위치/클래스</th><th>종류</th><th>상태</th><th>역할</th></tr></thead>
+    </table>
+    <p>\u200B</p><p>\uFEFF</p><p><br></p>
+    <table>
+      <thead><tr><th>위치/클래스</th><th>종류</th><th>상태</th><th>역할</th></tr></thead>
+      <tbody><tr><td>AHPlayerState</td><td>PlayerState</td><td>확장</td><td>보유 상태</td></tr></tbody>
+    </table>`,
   },
 ];
 

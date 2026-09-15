@@ -132,6 +132,9 @@ TAURI_TEST_TOKEN=tauri-testing-token TAURI_TEST_PORT=9988 npm run tauri-testing-
 - Input HTML / Normalized HTML / Editor HTML / Editor JSON 비교
 - Quick Test Cases 버튼으로 엣지 케이스 테스트
 - 실제 TipTap 에디터와 동일한 설정 사용
+- Confluence 서식 수동 기준 페이지:
+  `https://krafton.atlassian.net/wiki/spaces/ARC2/pages/1119881451/Inventory+System+Implementation`
+  - 자동 테스트는 로그인이나 페이지 변경에 의존하지 않고, 필요한 HTML 일부만 `TEST_FIXTURES`와 단위 테스트에 고정한다.
 
 ### Unit Tests (Vitest)
 

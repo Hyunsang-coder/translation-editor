@@ -46,6 +46,30 @@ describe('normalizePastedHtml — <pre> 없는 블록 코드 승격', () => {
       const html = normalizePastedHtml(CONFLUENCE_CODE_BLOCK_MULTI_LINE);
       expect(html).not.toContain('language-"');
     });
+
+    it('문단·인라인 래퍼 안의 코드 블록을 꺼내며 앞뒤 빈 문단을 만들지 않는다', () => {
+      const html = `
+        <p>코드 블록 앞 문단</p>
+        <p>
+          <span>
+            <code style="white-space: pre">
+              <span data-ds--code--row="">line 1\n</span>
+              <span data-ds--code--row="">line 2</span>
+            </code>
+          </span>
+        </p>
+        <p>코드 블록 뒤 문단</p>
+      `;
+
+      const doc = parseToDoc(normalizePastedHtml(html));
+
+      expect((doc.content ?? []).map((node) => node.type)).toEqual([
+        'paragraph',
+        'codeBlock',
+        'paragraph',
+      ]);
+      expect(doc.content?.[1]?.content?.[0]?.text).toContain('line 1\n');
+    });
   });
 
   describe('승격 신호', () => {
@@ -79,6 +103,25 @@ describe('normalizePastedHtml — <pre> 없는 블록 코드 승격', () => {
   });
 
   describe('승격하지 않아야 하는 경우', () => {
+    it('Confluence 한 줄 인라인 코드는 white-space: pre-wrap이어도 code mark로 남긴다', () => {
+      const doc = parseToDoc(
+        normalizePastedHtml(
+          '<p>폭탄 해체 시작음인 <code style="white-space: pre-wrap">Mordor.Weapon.PlantedBomb.StartDefuse</code>는 개별 볼륨이다.</p>',
+        ),
+      );
+
+      expect(doc.content?.[0]?.type).toBe('paragraph');
+      expect(doc.content?.[0]?.content).toEqual([
+        { type: 'text', text: '폭탄 해체 시작음인 ' },
+        {
+          type: 'text',
+          marks: [{ type: 'code' }],
+          text: 'Mordor.Weapon.PlantedBomb.StartDefuse',
+        },
+        { type: 'text', text: '는 개별 볼륨이다.' },
+      ]);
+    });
+
     it('문장 중간의 인라인 <code>는 code mark로 남긴다', () => {
       const doc = parseToDoc(
         normalizePastedHtml(

@@ -175,7 +175,11 @@ function promoteBlockCode(html: string): string {
       const whiteSpace = (code.getAttribute('style') || '').toLowerCase();
       const isPreformatted = /white-space:\s*pre(-wrap|-line)?\b/.test(whiteSpace);
       const hasCodeRows = code.querySelector('[data-ds--code--row]') !== null;
-      if (!isPreformatted && !hasCodeRows) continue;
+      const hasLineBreak = code.textContent?.includes('\n') ?? false;
+      // Confluence 인라인 코드에도 white-space: pre-wrap이 붙는다.
+      // 한 줄 인라인 코드를 블록으로 오인하지 않도록, 전용 코드 행 마커가 있거나
+      // 실제 여러 줄 콘텐츠인 경우에만 <pre>로 승격한다.
+      if (!hasCodeRows && !(isPreformatted && hasLineBreak)) continue;
 
       // 언어 정보가 빈 값이면(`language-`) 클래스를 아예 버린다.
       const language = (code.getAttribute('class') || '')
@@ -191,8 +195,45 @@ function promoteBlockCode(html: string): string {
       const parent = code.parentNode;
       if (!parent) continue;
       const pre = doc.createElement('pre');
-      parent.replaceChild(pre, code);
-      pre.appendChild(code);
+      const paragraph = code.closest('p');
+
+      if (paragraph) {
+        // <p><span><code>…</code></span></p> 안에 <pre>를 그대로 만들면
+        // HTML 재파싱 시 브라우저가 잘못된 중첩을 보정하며 빈 <p>를 앞뒤로 만든다.
+        // code 앞뒤의 실제 인라인 콘텐츠만 각각 문단으로 보존하고 pre는 문단 밖으로 꺼낸다.
+        const paragraphParent = paragraph.parentNode;
+        if (!paragraphParent) continue;
+
+        const beforeRange = doc.createRange();
+        beforeRange.selectNodeContents(paragraph);
+        beforeRange.setEndBefore(code);
+        const before = beforeRange.cloneContents();
+
+        const afterRange = doc.createRange();
+        afterRange.selectNodeContents(paragraph);
+        afterRange.setStartAfter(code);
+        const after = afterRange.cloneContents();
+
+        if (hasMeaningfulInlineContent(before)) {
+          const beforeParagraph = paragraph.cloneNode(false) as HTMLParagraphElement;
+          beforeParagraph.appendChild(before);
+          paragraphParent.insertBefore(beforeParagraph, paragraph);
+        }
+
+        pre.appendChild(code);
+        paragraphParent.insertBefore(pre, paragraph);
+
+        if (hasMeaningfulInlineContent(after)) {
+          const afterParagraph = paragraph.cloneNode(false) as HTMLParagraphElement;
+          afterParagraph.appendChild(after);
+          paragraphParent.insertBefore(afterParagraph, paragraph);
+        }
+
+        paragraph.remove();
+      } else {
+        parent.replaceChild(pre, code);
+        pre.appendChild(code);
+      }
     }
 
     return doc.body.innerHTML;
@@ -200,6 +241,11 @@ function promoteBlockCode(html: string): string {
     console.warn('Failed to promote block code:', error);
     return html;
   }
+}
+
+function hasMeaningfulInlineContent(fragment: DocumentFragment): boolean {
+  if (normalizeText(fragment.textContent).length > 0) return true;
+  return fragment.querySelector('img') !== null;
 }
 
 /**
@@ -304,6 +350,16 @@ export function shouldNormalizePastedHtml(html: string): boolean {
   );
 }
 
+export function isConfluencePastedHtml(html: string): boolean {
+  const lower = html.toLowerCase();
+  return (
+    lower.includes('atlassian') ||
+    lower.includes('data-renderer-start-pos') ||
+    lower.includes('data-local-id') ||
+    lower.includes('ak-renderer')
+  );
+}
+
 export interface NormalizePasteOptions {
   removeImages?: boolean;
   removeLinks?: boolean;
@@ -336,6 +392,7 @@ export function normalizePastedHtml(html: string, options?: NormalizePasteOption
     normalizeTaskListsInHtml(doc.body);
     unwrapSpans(doc.body);
     normalizeDivs(doc.body);
+    removeTopLevelFormattingWhitespace(doc.body);
     removeEmptyParagraphs(doc.body);
     removeDuplicateTableHeaders(doc.body);
     sanitizeUrls(doc.body); // 보안: 위험한 URL 프로토콜 제거
@@ -469,10 +526,24 @@ function normalizeDivs(root: ParentNode) {
 function removeEmptyParagraphs(root: ParentNode) {
   const paragraphs = Array.from(root.querySelectorAll('p'));
   for (const paragraph of paragraphs) {
-    const text = paragraph.textContent?.replace(/\u00a0/g, ' ').trim();
+    const text = normalizeText(paragraph.textContent);
     if (text) continue;
     if (paragraph.querySelector('img')) continue;
     paragraph.remove();
+  }
+}
+
+/**
+ * 원본 HTML을 보기 좋게 들여쓴 개행/공백이 블록 사이에 남으면,
+ * preserveWhitespace 파싱에서 빈 paragraph로 승격될 수 있다.
+ * 본문 최상위의 서식용 공백 텍스트만 제거하고 pre 내부 공백은 건드리지 않는다.
+ */
+function removeTopLevelFormattingWhitespace(root: ParentNode) {
+  const children = Array.from(root.childNodes);
+  for (const child of children) {
+    if (child.nodeType !== Node.TEXT_NODE) continue;
+    if (normalizeText(child.textContent).length > 0) continue;
+    child.remove();
   }
 }
 
@@ -574,7 +645,11 @@ function findPreviousElementSibling(node: Element): Element | null {
 }
 
 function normalizeText(value: string | null | undefined): string {
-  return (value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  return (value ?? '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 const CHECKBOX_PREFIX_REGEX = /^([ \t]*)([\u2610\u2611\u2612\u25A1\u25A2]|\[[ xX]?\])[ \t]*/;
