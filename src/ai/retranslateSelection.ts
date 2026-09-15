@@ -99,16 +99,26 @@ function filterMarkerText(raw: string): string {
   return (end >= 0 ? afterStart.slice(0, end) : afterStart).trim();
 }
 
+/**
+ * 단일 선택 교체문 추출.
+ * - START가 있으면 그 뒤(END가 없어도 끝까지)를 쓴다. 짧은 단일 선택에서 잘림은
+ *   거의 없고, END를 빠뜨린 응답을 버리면 "자꾸 실패"가 된다.
+ * - 마커가 통째로 없으면 응답 전체가 교체문이다 — 블록이 하나라 나눌 걱정이 없어서
+ *   세그먼트 경로와 달리 버리지 않는다. 거절문 같은 것도 프리뷰에 그대로 보여
+ *   사용자가 걸러낸다(Preview-First, 단일 모드는 손편집도 된다).
+ * - 빈 응답만 프로토콜 이탈로 던진다.
+ */
 function extractReplacement(raw: string, mode: SelectionEditMode): string {
-  const replacement = filterMarkerText(raw);
-  if (!replacement || !raw.includes(END_MARKER)) {
-    throw new Error(
-      mode === 'polish'
-        ? '선택 영역 폴리싱 응답 형식이 올바르지 않습니다.'
-        : '선택 영역 재번역 응답 형식이 올바르지 않습니다.',
-    );
-  }
-  return replacement;
+  const marked = filterMarkerText(raw);
+  if (marked) return marked;
+  const bare = raw.trim();
+  if (bare) return bare;
+  throw new Error(
+    (mode === 'polish'
+      ? '선택 영역 폴리싱 응답 형식이 올바르지 않습니다.'
+      : '선택 영역 재번역 응답 형식이 올바르지 않습니다.') +
+      ` 응답: ${rawSnippet(raw)}`,
+  );
 }
 
 function extractBetween(raw: string, startMarker: string, endMarker: string): string {
@@ -529,7 +539,8 @@ export async function polishSelection(
  *
  * 블록마다 호출하지 않는 이유는 두 가지다 — 같은 구간의 블록들은 서로 문맥이고, N번
  * 호출하면 규칙·용어집이 든 system이 N번 재과금된다. 대신 블록마다 마커를 붙여 하나의
- * 응답에서 잘라 낸다. 개수가 안 맞거나 END가 없으면 던진다(부분 적용 금지).
+ * 응답에서 잘라 낸다. 못 읽은 블록(1-based 번호·INPUT 에코·빈 블록·잘림)은 그 블록의
+ * 원문으로 유지하고, 마커가 하나도 없을 때만 던진다.
  */
 export interface SegmentRetranslateInput {
   /**
@@ -580,6 +591,42 @@ function parseSegmentReplacements(raw: string, count: number): string[] {
   );
 }
 
+/**
+ * 모델이 자주 어기는 두 가지 마커 변형을 정규화한다 (재현: segmentMarker.breakage.test.ts).
+ * - INPUT 에코: 입력(`---SEGMENT_0_INPUT_START---`)을 출력에 그대로 돌려보냄
+ * - 1-based 번호: 0..N-1 대신 1..N으로 매김
+ * 정규화 후에도 읽히지 않는 블록은 호출부가 원문으로 유지한다 — extractBetween은
+ * END가 없으면 빈 문자열을 주므로 잘린 응답의 마지막 블록도 여기서 걸린다.
+ */
+function normalizeSegmentMarkers(raw: string, count: number): string {
+  let normalized = raw.replace(
+    /---SEGMENT_(\d+)_INPUT_(START|END)---/g,
+    '---SEGMENT_$1_$2---',
+  );
+  if (count > 0 && !normalized.includes(segmentStartMarker(0))) {
+    const indices = new Set<number>();
+    for (const match of normalized.matchAll(/---SEGMENT_(\d+)_(?:START|END)---/g)) {
+      indices.add(Number(match[1]));
+    }
+    const oneBased = Array.from({ length: count }, (_unused, i) => i + 1).every((i) =>
+      indices.has(i),
+    );
+    if (oneBased && !indices.has(0)) {
+      normalized = normalized.replace(
+        /---SEGMENT_(\d+)_(START|END)---/g,
+        (_m, n: string, edge: string) => `---SEGMENT_${Number(n) - 1}_${edge}---`,
+      );
+    }
+  }
+  return normalized;
+}
+
+/** 다음 실패를 바로 판별할 수 있게 원문 응답 앞부분을 에러에 싣는다. */
+function rawSnippet(raw: string): string {
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, 200) : '(빈 응답)';
+}
+
 function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEditMode) {
   // 표에서는 "앞 2칸"이 행 우선 순서라 이전 행의 꼬리가 되어 무관하므로 호출부가
   // 아예 안 넘긴다(열 헤더가 그 역할을 한다). 문단이면 넘어온다 — 고른 블록들끼리
@@ -628,7 +675,7 @@ function buildSegmentMessages(input: RetranslateSegmentsInput, mode: SelectionEd
       ];
   const system = [
     ...modeDirectives,
-    'Return plain text for each block — inline **bold**, *italic*, `code` marks from the input may be kept on the corresponding words; no table syntax, no HTML, no block labels.',
+    'Return plain text for each block — inline **bold**, *italic*, `code` marks from the input may be kept on the corresponding words; no table syntax, no HTML, no other labels. The ---SEGMENT_<i>_START--- / ---SEGMENT_<i>_END--- markers are required scaffolding, not labels — keep every pair exactly and put only that block\'s replacement between them.',
     'Surrounding context, when provided, is read-only reference for tone, terminology, and flow; never translate or polish it, and never add its content to a replacement.',
     ...SHARED_SELECTION_DIRECTIVES,
     `Return exactly ${input.segments.length} block(s), in order, using the exact markers below and nothing else:`,
@@ -693,19 +740,29 @@ async function runSegments(
       input.onToken?.(parseSegmentReplacements(accumulated, input.segments.length)),
   });
 
-  const replacements = parseSegmentReplacements(raw, input.segments.length);
-  // 하나라도 못 읽으면 전부 버린다 — 일부만 적용하면 블록 경계가 어긋난 채로 들어간다.
-  // (extractBetween은 END 마커가 없으면 빈 문자열을 준다 → 잘린 응답도 여기서 걸린다.)
-  const missing = replacements.findIndex((replacement) => !replacement);
-  if (missing >= 0) {
+  const normalized = normalizeSegmentMarkers(raw, input.segments.length);
+  const replacements = parseSegmentReplacements(normalized, input.segments.length);
+  // 못 읽은 블록은 그 블록의 원문으로 유지한다 — 하나 때문에 전부를 버리면(구 동작)
+  // 멀쩡한 블록까지 날아가 "자꾸 실패"가 된다. 모달이 원문과 같은 제안을 "변경 없음"으로
+  // 보여주는 기존 경로와 같은 값이라 적용 단계도 그대로 탄다. Preview-First(ADR-0003)라
+  // 사용자가 보기 전에 문서에 들어가지 않는다.
+  // 단, 마커가 하나도 없으면 프로토콜 이탈(거절·엉뚱한 작업 등)이라 조용히 넘기지 않고
+  // 응답 앞부분을 담아 던진다.
+  if (
+    replacements.every((replacement) => !replacement) &&
+    !normalized.includes(segmentStartMarker(0))
+  ) {
     throw new Error(
       mode === 'polish'
-        ? `부분 폴리싱 응답 형식이 올바르지 않습니다 (${missing + 1}번째 블록 누락).`
-        : `부분 재번역 응답 형식이 올바르지 않습니다 (${missing + 1}번째 블록 누락).`,
+        ? `부분 폴리싱 응답 형식이 올바르지 않습니다. 응답: ${rawSnippet(raw)}`
+        : `부분 재번역 응답 형식이 올바르지 않습니다. 응답: ${rawSnippet(raw)}`,
     );
   }
+  const filled = replacements.map((replacement, index) =>
+    replacement ? replacement : input.segments[index]!.currentTargetText,
+  );
 
-  return { replacements, contextManifest: manifest };
+  return { replacements: filled, contextManifest: manifest };
 }
 
 export async function retranslateSegments(

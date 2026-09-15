@@ -3,12 +3,15 @@ import { polishSegments } from './retranslateSelection';
 import type { RetranslateSegmentsInput } from './retranslateSelection';
 
 /**
- * 부분 폴리싱 마커 깨짐 재현 케이스.
+ * 부분 폴리싱 마커 관대 파싱 계약.
  *
- * 실제 LLM을 부르지 않고 `createChatModel().stream`을 목으로 갈아끼워
- * 모델이 자주 내놓는 깨진 모양 5가지를 그대로 흘려보낸다.
- * 지금 파서(엄격 모드)가 전부 throw하는 것을 고정한다 — 즉 이 테스트들은
- * "왜 종종 터지는가"의 증거용이지, 관대 파서 구현 후에는 반대로 고쳐야 한다.
+ * 엄격 모드(하나라도 어긋나면 전체 throw)에서는 아래 변형이 전부
+ * "N번째 블록 누락"으로 터졌다. 관대 파서부터는 계약이 바뀐다:
+ * - 읽힌 블록은 적용하고, 못 읽은 블록만 그 블록의 원문으로 유지한다.
+ *   모달이 원문과 같은 제안을 "변경 없음"으로 보여주는 기존 경로와 같은 값이다.
+ * - 마커가 하나도 없는 응답만 던진다(프로토콜 이탈). 이때는 응답 앞부분을
+ *   에러에 실어 다음 실패를 바로 판별할 수 있게 한다.
+ * Preview-First(ADR-0003)라 fallback이 문서에 바로 들어가지 않는다.
  */
 
 const streamMock = vi.fn();
@@ -67,7 +70,7 @@ function systemOf(): string {
   return messages.find((m) => m.content.includes('SEGMENT'))?.content ?? '';
 }
 
-describe('부분 폴리싱 마커 깨짐 재현', () => {
+describe('부분 폴리싱 마커 관대 파싱', () => {
   beforeEach(() => {
     streamMock.mockReset();
   });
@@ -80,62 +83,62 @@ describe('부분 폴리싱 마커 깨짐 재현', () => {
     expect(result.replacements).toEqual(['첫 번째 다듬음.', '두 번째 다듬음.']);
   });
 
-  it('원인1 — 프롬프트에 no block labels와 마커 지시가 공존한다', async () => {
+  it('프롬프트는 세그먼트 마커가 label 금지의 예외임을 명시한다', async () => {
     mockStreamWhole(
       '---SEGMENT_0_START---\na\n---SEGMENT_0_END---\n---SEGMENT_1_START---\nb\n---SEGMENT_1_END---',
     );
     await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
     const system = systemOf();
-    // 이 두 줄이 동시에 있으면 모델이 마커를 block label로 보고 생략할 수 있다.
-    expect(system).toContain('no block labels');
-    expect(system).toContain('---SEGMENT_<i>_START---');
+    expect(system).toContain('required scaffolding, not labels');
+    expect(system).not.toContain('no block labels');
   });
 
-  it('원인2 — 마지막 END 전 잘림(토큰 예산 공유)은 N번째 누락으로 터진다', async () => {
+  it('마지막 END 전 잘림은 잘린 블록만 원문 유지한다', async () => {
     mockStreamWhole(
       '---SEGMENT_0_START---\n첫 번째 다듬음.\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n두 번째 다듬음.',
     );
-    await expect(
-      polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] }),
-    ).rejects.toThrow('2번째 블록 누락');
+    const result = await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
+    expect(result.replacements).toEqual(['첫 번째 다듬음.', '두 번째 문단입니다.']);
   });
 
-  it('원인3a — 마커 통째로 생략(plain text만 반환)', async () => {
+  it('마커 통째로 생략은 응답 앞부분을 담은 에러를 던진다', async () => {
     mockStreamWhole('첫 번째 다듬음.\n\n두 번째 다듬음.');
-    await expect(
-      polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] }),
-    ).rejects.toThrow('1번째 블록 누락');
+    let error: Error | null = null;
+    try {
+      await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error?.message).toContain('부분 폴리싱');
+    expect(error?.message).toContain('첫 번째 다듬음.');
   });
 
-  it('원인3b — 1-based 번호 매김', async () => {
+  it('1-based 번호 매김을 받아들인다', async () => {
     mockStreamWhole(
       '---SEGMENT_1_START---\n첫 번째 다듬음.\n---SEGMENT_1_END---\n---SEGMENT_2_START---\n두 번째 다듬음.\n---SEGMENT_2_END---',
     );
-    await expect(
-      polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] }),
-    ).rejects.toThrow('1번째 블록 누락');
+    const result = await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
+    expect(result.replacements).toEqual(['첫 번째 다듬음.', '두 번째 다듬음.']);
   });
 
-  it('원인3c — INPUT 마커 에코(출력 마커와 혼동)', async () => {
+  it('INPUT 마커 에코를 받아들인다', async () => {
     mockStreamWhole(
       '---SEGMENT_0_INPUT_START---\n첫 번째 다듬음.\n---SEGMENT_0_INPUT_END---\n---SEGMENT_1_INPUT_START---\n두 번째 다듬음.\n---SEGMENT_1_INPUT_END---',
     );
-    await expect(
-      polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] }),
-    ).rejects.toThrow('1번째 블록 누락');
+    const result = await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
+    expect(result.replacements).toEqual(['첫 번째 다듬음.', '두 번째 다듬음.']);
   });
 
-  it('원인4 — 빈 블록(unchanged인데 비워둠)은 전체를 버린다', async () => {
+  it('빈 블록(unchanged인데 비워둠)은 그 블록만 원문 유지한다', async () => {
     mockStreamWhole(
       '---SEGMENT_0_START---\n첫 번째 다듬음.\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n\n---SEGMENT_1_END---',
     );
-    await expect(
-      polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] }),
-    ).rejects.toThrow('2번째 블록 누락');
+    const result = await polishSegments({ ...BASE_INPUT, segments: [...BASE_INPUT.segments] });
+    expect(result.replacements).toEqual(['첫 번째 다듬음.', '두 번째 문단입니다.']);
   });
 });
 
-describe('표 셀 깨짐 재현', () => {
+describe('표 셀 관대 파싱', () => {
   const TABLE_INPUT = {
     ...BASE_INPUT,
     segments: [
@@ -164,9 +167,11 @@ describe('표 셀 깨짐 재현', () => {
     expect(result.replacements).toEqual(['피해량', '받는 피해 감소']);
   });
 
-  it('표 고유1 — 두 셀을 한 블록으로 합치면 뒷 블록 누락으로 터진다', async () => {
+  it('두 셀을 한 블록으로 합치면 못 읽은 셀만 원문 유지한다', async () => {
     mockStreamWhole('---SEGMENT_0_START---\n피해량. 받는 피해 감소.\n---SEGMENT_0_END---');
-    await expect(polishSegments(TABLE_INPUT)).rejects.toThrow('2번째 블록 누락');
+    const result = await polishSegments(TABLE_INPUT);
+    // 합쳐진 0번은 프리뷰에서 사람이 걸러낸다(Preview-First). 1번은 날조 대신 원문.
+    expect(result.replacements).toEqual(['피해량. 받는 피해 감소.', '들어오는 타격 감소']);
   });
 
   it('표 고유2 — 마크다운 표 구문 에코는 파서를 통과한다(품질 구멍)', async () => {

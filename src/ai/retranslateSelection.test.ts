@@ -336,22 +336,22 @@ describe('retranslateSegments', () => {
     expect(payload).toContain('베타 번역');
   });
 
-  it('블록 하나라도 마커가 없으면 던진다 (부분 적용 금지)', async () => {
+  it('못 읽은 블록은 원문으로 유지한다 (부분 적용하되 날조 금지)', async () => {
     streamMock.mockResolvedValue((async function* () {
       yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---' };
     })());
 
-    await expect(retranslateSegments({ ...BASE, segments: TWO_CELLS }))
-      .rejects.toThrow(/2번째 블록 누락/);
+    const result = await retranslateSegments({ ...BASE, segments: TWO_CELLS });
+    expect(result.replacements).toEqual(['알파 개선', '베타 번역']);
   });
 
-  it('END 마커가 잘린 응답도 던진다', async () => {
+  it('END 마커가 잘린 블록은 원문으로 유지한다', async () => {
     streamMock.mockResolvedValue((async function* () {
       yield { content: '---SEGMENT_0_START---\n알파 개선\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n베타' };
     })());
 
-    await expect(retranslateSegments({ ...BASE, segments: TWO_CELLS }))
-      .rejects.toThrow(/올바르지 않습니다/);
+    const result = await retranslateSegments({ ...BASE, segments: TWO_CELLS });
+    expect(result.replacements).toEqual(['알파 개선', '베타 번역']);
   });
 
   it('체크되지 않은 컨텍스트는 페이로드에 넣지 않는다', async () => {
@@ -677,12 +677,46 @@ describe('polishSelection', () => {
     expect(result.contextManifest.included).toContain('translation-rules');
   });
 
-  it('마커가 없으면 폴리싱 형식 오류로 던진다', async () => {
+  it('마커 없는 bare 응답은 통째로 제안으로 쓴다 (블록이 하나라 나눌 걱정이 없다)', async () => {
     streamMock.mockResolvedValue((async function* () {
       yield { content: '그냥 텍스트' };
     })());
 
-    await expect(polishSelection({ ...BASE })).rejects.toThrow('선택 영역 폴리싱');
+    const result = await polishSelection({ ...BASE });
+    expect(result.replacementText).toBe('그냥 텍스트');
+  });
+
+  it('빈 응답만 스니펫을 담은 에러를 던진다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '   \n  ' };
+    })());
+
+    let error: Error | null = null;
+    try {
+      await polishSelection({ ...BASE });
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error?.message).toContain('선택 영역 폴리싱');
+    expect(error?.message).toContain('(빈 응답)');
+  });
+
+  it('END 없이 끊긴 단일 응답은 START 뒷부분을 제안으로 쓴다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '---SELECTION_EDIT_START---\n끊겼지만 온 다듬음' };
+    })());
+
+    const result = await polishSelection({ ...BASE });
+    expect(result.replacementText).toBe('끊겼지만 온 다듬음');
+  });
+
+  it('마커가 전혀 없는 단일 응답도 통째로 제안으로 쓴다', async () => {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: '마커 없는 다듬음 결과' };
+    })());
+
+    const result = await polishSelection({ ...BASE });
+    expect(result.replacementText).toBe('마커 없는 다듬음 결과');
   });
 });
 
@@ -730,18 +764,19 @@ describe('polishSegments', () => {
     expect(system).not.toContain('Retranslate each selected block');
   });
 
-  it('블록이 하나라도 비면 전부 버린다', async () => {
+  it('못 읽은 블록은 원문으로 유지한다 (전부 버리지 않는다)', async () => {
     streamMock.mockResolvedValue((async function* () {
       yield { content: '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---' };
     })());
 
-    await expect(polishSegments({
+    const result = await polishSegments({
       ...BASE,
       segments: [
         { currentTargetText: '기존 1' },
         { currentTargetText: '기존 2' },
       ],
-    })).rejects.toThrow('부분 폴리싱');
+    });
+    expect(result.replacements).toEqual(['다듬음 1', '기존 2']);
   });
 });
 
@@ -911,5 +946,117 @@ describe('단일 선택과 세그먼트가 같은 지시를 받는다 (F4·F2)',
     const system = systemOf();
     expect(system).toContain('[Glossary]');
     expect(system).not.toContain(FORBIDDEN_OVERRIDES_GLOSSARY_EN);
+  });
+});
+
+describe('세그먼트 관대 파싱 — 하나가 어긋나도 나머지는 살린다', () => {
+  const BASE = {
+    projectId: 'project-1',
+    targetLanguage: 'Korean',
+    referenceOptions: {
+      translationRules: false,
+      forbiddenTerms: false,
+      glossary: false,
+      projectMemory: false,
+    },
+    contextSnapshot: {
+      revision: 1,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [],
+      createdAt: 1,
+    },
+  };
+  const SEGMENTS = [
+    { currentTargetText: '기존 1' },
+    { currentTargetText: '기존 2' },
+  ];
+
+  function mockStreamWhole(raw: string): void {
+    streamMock.mockResolvedValue((async function* () {
+      yield { content: raw };
+    })());
+  }
+
+  function systemOf(): string {
+    return (streamMock.mock.calls[0]?.[0] as Array<{ content: string }>)[0]!.content;
+  }
+
+  beforeEach(() => {
+    streamMock.mockReset();
+    createChatModelMock.mockReset();
+    isTauriRuntimeMock.mockReturnValue(false);
+  });
+
+  it('1-based 번호 매김을 받아들인다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_1_START---\n다듬음 1\n---SEGMENT_1_END---\n---SEGMENT_2_START---\n다듬음 2\n---SEGMENT_2_END---',
+    );
+    const result = await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    expect(result.replacements).toEqual(['다듬음 1', '다듬음 2']);
+  });
+
+  it('INPUT 마커 에코를 받아들인다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_0_INPUT_START---\n다듬음 1\n---SEGMENT_0_INPUT_END---\n---SEGMENT_1_INPUT_START---\n다듬음 2\n---SEGMENT_1_INPUT_END---',
+    );
+    const result = await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    expect(result.replacements).toEqual(['다듬음 1', '다듬음 2']);
+  });
+
+  it('빈 블록은 원문으로 유지하고 나머지는 적용한다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n\n---SEGMENT_1_END---',
+    );
+    const result = await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    // 모달이 "변경 없음"으로 보여주는 기존 경로와 같은 값이다.
+    expect(result.replacements).toEqual(['다듬음 1', '기존 2']);
+  });
+
+  it('마지막 END 없이 잘린 응답은 잘린 블록만 원문 유지한다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n다듬음 2',
+    );
+    const result = await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    expect(result.replacements).toEqual(['다듬음 1', '기존 2']);
+  });
+
+  it('마커가 전혀 없으면 응답 앞부분을 담은 에러를 던진다', async () => {
+    mockStreamWhole('첫 번째 다듬음.\n\n두 번째 다듬음.');
+    let error: Error | null = null;
+    try {
+      await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.message).toContain('부분 폴리싱');
+    // 다음 실패를 바로 판별할 수 있게 원문 응답의 앞부분을 싣는다.
+    expect(error?.message).toContain('첫 번째 다듬음.');
+  });
+
+  it('재번역도 빈 블록은 원문 유지한다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_0_START---\n새 번역 1\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n\n---SEGMENT_1_END---',
+    );
+    const result = await retranslateSegments({
+      ...BASE,
+      segments: [
+        { sourceText: 'Source 1', currentTargetText: '기존 1' },
+        { sourceText: 'Source 2', currentTargetText: '기존 2' },
+      ],
+    });
+    expect(result.replacements).toEqual(['새 번역 1', '기존 2']);
+  });
+
+  it('세그먼트 마커는 block label 금지의 예외임을 명시한다', async () => {
+    mockStreamWhole(
+      '---SEGMENT_0_START---\n다듬음 1\n---SEGMENT_0_END---\n---SEGMENT_1_START---\n다듬음 2\n---SEGMENT_1_END---',
+    );
+    await polishSegments({ ...BASE, segments: [...SEGMENTS] });
+    const system = systemOf();
+    expect(system).toContain('required scaffolding, not labels');
+    expect(system).not.toContain('no block labels');
   });
 });
