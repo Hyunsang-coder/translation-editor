@@ -333,9 +333,11 @@ test.describe('Multi-block selection', () => {
 
     await page.getByTestId('selection-inline-retranslate').click();
 
-    // 블록마다 하나씩 '구간'으로 나뉘어 뜬다.
-    await expect(page.getByTestId('selection-edit-modal')).toBeVisible();
-    await expect(page.getByTestId('selection-edit-cell')).toHaveCount(2);
+    const modal = page.getByTestId('selection-edit-modal');
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText(/부분 수정 \(2곳\)|Edit 2 selections/);
+    // 셀별 diff는 모델 제안이 도착한 뒤에만 렌더된다.
+    await expect(page.getByTestId('selection-edit-cell')).toHaveCount(0);
     // 인라인 데코레이션도 블록마다 하나씩 그려진다.
     await expect(page.locator('.selection-anchor')).toHaveCount(2);
     await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);

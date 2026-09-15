@@ -5,6 +5,67 @@
 import { describe, it, expect } from 'vitest';
 import { normalizePastedHtml } from './htmlNormalizer';
 
+describe('일반 HTML 정규화', () => {
+  it.each([
+    [
+      'Confluence 이미지',
+      '<ac:image><ri:attachment ri:filename="test.png" /></ac:image>',
+      ['alt="[Image]"'],
+      [],
+    ],
+    [
+      'Confluence 비디오',
+      '<ac:structured-macro ac:name="multimedia"><ri:attachment ri:filename="video.mp4" /></ac:structured-macro>',
+      ['alt="[Video]"'],
+      [],
+    ],
+    [
+      '인라인 굵기',
+      '<span style="font-weight: bold">Bold text</span>',
+      ['<strong>'],
+      [],
+    ],
+    [
+      '중첩 굵기와 기울임',
+      '<span style="font-weight: bold"><span style="font-style: italic">Bold Italic</span></span>',
+      ['<strong>', '<em>'],
+      [],
+    ],
+    [
+      'iframe',
+      '<iframe src="https://youtube.com/embed/xxx"></iframe>',
+      ['alt="[Embed]"'],
+      ['<iframe'],
+    ],
+  ])('%s을 안전한 에디터 HTML로 바꾼다', (_name, html, included, excluded) => {
+    const result = normalizePastedHtml(html);
+    for (const value of included) expect(result).toContain(value);
+    for (const value of excluded) expect(result).not.toContain(value);
+  });
+
+  it('실행 가능한 URL과 이벤트 핸들러를 제거한다', () => {
+    const result = normalizePastedHtml(
+      '<a href="javascript:alert(1)">js</a>'
+      + '<a href="data:text/html,<script>alert(1)</script>">data</a>'
+      + '<img src="x" onerror="alert(1)" />',
+    );
+
+    expect(result).not.toContain('javascript:');
+    expect(result).not.toContain('data:text/html');
+    expect(result).not.toContain('onerror');
+  });
+
+  it('리스트 내부 미디어 래퍼를 제거하고 이미지는 유지한다', () => {
+    const result = normalizePastedHtml(
+      '<ul><li>항목<div data-node-type="mediaSingle"><img src="test.png" alt="[Image]"></div></li></ul>',
+    );
+
+    expect(result).toContain('<li>');
+    expect(result).toContain('<img');
+    expect(result).not.toContain('<div');
+  });
+});
+
 describe('removeDuplicateTableHeaders', () => {
   it('표 앞 p 태그가 헤더와 동일한 텍스트면 제거 (기존 동작)', () => {
     const html = `
