@@ -350,16 +350,6 @@ export function shouldNormalizePastedHtml(html: string): boolean {
   );
 }
 
-export function isConfluencePastedHtml(html: string): boolean {
-  const lower = html.toLowerCase();
-  return (
-    lower.includes('atlassian') ||
-    lower.includes('data-renderer-start-pos') ||
-    lower.includes('data-local-id') ||
-    lower.includes('ak-renderer')
-  );
-}
-
 export interface NormalizePasteOptions {
   removeImages?: boolean;
   removeLinks?: boolean;
