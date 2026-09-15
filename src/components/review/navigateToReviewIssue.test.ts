@@ -76,6 +76,7 @@ beforeEach(() => {
     sourceOnlyMode: false,
     editorViewMode: 'document',
     editorZoom: 1,
+    editorScrollSyncEnabled: false,
     pendingReviewIssueNavigation: null,
     leftSidebar: {
       hidden: false,
@@ -97,6 +98,16 @@ describe('navigateToReviewIssue', () => {
     );
     expect(sides).toEqual(['source', 'target']);
     expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it('위치 동기화가 켜져 있으면 두 정확한 검수 이동을 즉시 실행한다', () => {
+    useUIStore.setState({ editorScrollSyncEnabled: true });
+
+    navigateToReviewIssue(ISSUE.id, 'review-card');
+
+    expect(scrollEditorToAnchor).toHaveBeenCalledTimes(2);
+    expect(scrollEditorToAnchor.mock.calls[0]![3]).toEqual({ behavior: 'auto' });
+    expect(scrollEditorToAnchor.mock.calls[1]![3]).toEqual({ behavior: 'auto' });
   });
 
   it('범위 선택 대신 캐럿만 두고, 포커스는 옮기지 않는다', () => {

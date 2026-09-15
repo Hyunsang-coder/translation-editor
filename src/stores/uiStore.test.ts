@@ -50,6 +50,44 @@ describe('uiStore editorViewMode', () => {
   });
 });
 
+describe('uiStore editor panel synchronization preferences', () => {
+  beforeEach(() => {
+    useUIStore.setState({
+      equalEditorPanelWidths: false,
+      editorScrollSyncEnabled: false,
+      editorSourcePanelPercent: 50,
+    });
+  });
+
+  it('기본값은 기존 동작을 보존하도록 모두 꺼져 있다', () => {
+    const initial = useUIStore.getInitialState();
+    expect(initial.equalEditorPanelWidths).toBe(false);
+    expect(initial.editorScrollSyncEnabled).toBe(false);
+    expect(initial.editorSourcePanelPercent).toBe(50);
+  });
+
+  it('패널 너비 잠금과 위치 동기화를 독립적으로 설정한다', () => {
+    const store = useUIStore.getState();
+    store.setEqualEditorPanelWidths(true);
+    store.setEditorScrollSyncEnabled(true);
+
+    expect(useUIStore.getState().equalEditorPanelWidths).toBe(true);
+    expect(useUIStore.getState().editorScrollSyncEnabled).toBe(true);
+  });
+
+  it('마지막 수동 원문 패널 비율을 20~80 범위로 제한한다', () => {
+    const store = useUIStore.getState();
+    store.setEditorSourcePanelPercent(13);
+    expect(useUIStore.getState().editorSourcePanelPercent).toBe(20);
+
+    store.setEditorSourcePanelPercent(87);
+    expect(useUIStore.getState().editorSourcePanelPercent).toBe(80);
+
+    store.setEditorSourcePanelPercent(37.5);
+    expect(useUIStore.getState().editorSourcePanelPercent).toBe(37.5);
+  });
+});
+
 describe('uiStore syncChatPanels', () => {
   beforeEach(() => {
     useUIStore.setState({

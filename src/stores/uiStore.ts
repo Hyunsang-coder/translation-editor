@@ -54,6 +54,16 @@ interface UIState extends EditorUIState {
   focusMode: boolean;
   sourceOnlyMode: boolean;
 
+  /**
+   * 문서 보기의 2분할 패널 환경설정.
+   * - `equalEditorPanelWidths`: 두 패널이 보일 때 50:50으로 잠그기
+   * - `editorScrollSyncEnabled`: 대응 번역 유닛의 viewport 위치를 상시 맞추기
+   * - `editorSourcePanelPercent`: 잠금 해제 시 복원할 마지막 수동 원문 비율
+   */
+  equalEditorPanelWidths: boolean;
+  editorScrollSyncEnabled: boolean;
+  editorSourcePanelPercent: number;
+
   // 정렬 검사 뷰 (Phase 4.5) — 문서 보기와 배타적인 읽기 전용 대조 뷰.
   // 정렬 결과 자체는 스토어에 두지 않는다. AlignmentView가 문서 리비전으로 계산한다.
   editorViewMode: EditorViewMode;
@@ -84,6 +94,11 @@ interface UIActions {
   setFocusMode: (focusMode: boolean) => void;
   toggleSourceOnlyMode: () => void;
   setSourceOnlyMode: (sourceOnlyMode: boolean) => void;
+
+  // Editor panel synchronization preferences
+  setEqualEditorPanelWidths: (enabled: boolean) => void;
+  setEditorScrollSyncEnabled: (enabled: boolean) => void;
+  setEditorSourcePanelPercent: (percent: number) => void;
 
   // 정렬 검사 뷰
   setEditorViewMode: (mode: EditorViewMode) => void;
@@ -206,6 +221,9 @@ export const useUIStore = create<UIStore>()(
       // Initial State
       focusMode: false,
       sourceOnlyMode: false,
+      equalEditorPanelWidths: false,
+      editorScrollSyncEnabled: false,
+      editorSourcePanelPercent: 50,
       editorViewMode: 'document',
       activeAlignmentUnitId: null,
       pendingReviewIssueNavigation: null,
@@ -273,6 +291,18 @@ export const useUIStore = create<UIStore>()(
 
       setSourceOnlyMode: (sourceOnlyMode: boolean): void => {
         set({ sourceOnlyMode, ...(sourceOnlyMode ? { focusMode: false } : {}) });
+      },
+
+      setEqualEditorPanelWidths: (enabled: boolean): void => {
+        set({ equalEditorPanelWidths: enabled });
+      },
+
+      setEditorScrollSyncEnabled: (enabled: boolean): void => {
+        set({ editorScrollSyncEnabled: enabled });
+      },
+
+      setEditorSourcePanelPercent: (percent: number): void => {
+        set({ editorSourcePanelPercent: Math.max(20, Math.min(80, percent)) });
       },
 
       // 정렬 검사 뷰
@@ -923,7 +953,7 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'ite-ui-storage',
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const data = persisted as Record<string, unknown>;
 
@@ -1055,6 +1085,14 @@ export const useUIStore = create<UIStore>()(
           data.floatingChatRect = { x: 24, y: 24, width: 400, height: 560 };
         }
 
+        // v7 → v8: 2분할 패널 너비 잠금/위치 동기화 환경설정.
+        // 모든 값은 기존 UX를 유지하도록 opt-in으로 시작한다.
+        if (version < 8) {
+          data.equalEditorPanelWidths = false;
+          data.editorScrollSyncEnabled = false;
+          data.editorSourcePanelPercent = 50;
+        }
+
         return data;
       },
       partialize: (state) => ({
@@ -1063,6 +1101,9 @@ export const useUIStore = create<UIStore>()(
         collapsedSettingsSections: state.collapsedSettingsSections,
         focusMode: state.focusMode,
         sourceOnlyMode: state.sourceOnlyMode,
+        equalEditorPanelWidths: state.equalEditorPanelWidths,
+        editorScrollSyncEnabled: state.editorScrollSyncEnabled,
+        editorSourcePanelPercent: state.editorSourcePanelPercent,
         // 사용자가 고른 보기 모드는 유지한다 (activeAlignmentUnitId는 persist 안함)
         editorViewMode: state.editorViewMode,
         isPanelsSwapped: state.isPanelsSwapped,

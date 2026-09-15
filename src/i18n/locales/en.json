@@ -348,6 +348,14 @@
       "document": "Document",
       "alignment": "Alignment"
     },
+    "panelSync": {
+      "label": "Panel synchronization",
+      "equalWidths": "Equal width",
+      "equalWidthsTitle": "Keep source and target panels the same width",
+      "syncPosition": "Sync position",
+      "syncPositionTitle": "Keep corresponding paragraphs at the same viewport position",
+      "requiresBothPanels": "Available when both source and target panels are visible."
+    },
     "alignment": {
       "readOnly": "Read only",
       "sourceColumn": "Source",

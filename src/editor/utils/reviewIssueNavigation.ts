@@ -277,9 +277,13 @@ export function findScrollContainer(element: HTMLElement): HTMLElement {
 }
 
 /** jsdom에는 `Element.scrollTo`가 없다 — 테스트에서도 안전하게 동작시킨다. */
-function scrollElementTo(element: HTMLElement, top: number): void {
+function scrollElementTo(
+  element: HTMLElement,
+  top: number,
+  behavior: ScrollBehavior,
+): void {
   if (typeof element.scrollTo === 'function') {
-    element.scrollTo({ top, behavior: 'smooth' });
+    element.scrollTo({ top, behavior });
   } else {
     element.scrollTop = top;
   }
@@ -310,6 +314,7 @@ export function scrollEditorToAnchor(
   editor: Editor,
   anchor: ReviewIssueAnchor,
   zoom: number,
+  options?: { behavior?: ScrollBehavior },
 ): boolean {
   if (anchor.kind === 'none' || editor.isDestroyed) return false;
 
@@ -329,7 +334,9 @@ export function scrollEditorToAnchor(
     clientHeight: container.clientHeight,
     zoom,
   });
-  if (nextTop !== null) scrollElementTo(container, nextTop);
+  if (nextTop !== null) {
+    scrollElementTo(container, nextTop, options?.behavior ?? 'smooth');
+  }
   return true;
 }
 
@@ -349,5 +356,5 @@ export function scrollContainerToElement(
     zoom,
     ...(topGap === undefined ? {} : { topGap }),
   });
-  if (nextTop !== null) scrollElementTo(container, nextTop);
+  if (nextTop !== null) scrollElementTo(container, nextTop, 'smooth');
 }

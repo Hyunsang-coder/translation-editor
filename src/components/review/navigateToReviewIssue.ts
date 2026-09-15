@@ -20,6 +20,7 @@ import {
   resolveReviewIssueNavigation,
   scrollEditorToAnchor,
 } from '@/editor/utils/reviewIssueNavigation';
+import { withPanelScrollSyncSuppressed } from '@/editor/utils/panelScrollSyncController';
 
 /** 이동 요청 출처 — 부수 동작(검수 패널 열기)만 다르고 위치 계산은 같다. */
 export type ReviewIssueNavigationOrigin = 'review-card' | 'alignment-row';
@@ -30,7 +31,13 @@ function liveEditor(editor: Editor | null): Editor | null {
 
 function moveEditors(issue: ReviewIssue): void {
   const { sourceEditor, targetEditor } = useEditorStore.getState();
-  const { focusMode, sourceOnlyMode, editorZoom, addToast } = useUIStore.getState();
+  const {
+    focusMode,
+    sourceOnlyMode,
+    editorZoom,
+    editorScrollSyncEnabled,
+    addToast,
+  } = useUIStore.getState();
 
   // 보기 모드로 숨겨진 패널은 DOM 좌표를 측정하지도, 강제로 열지도 않는다.
   const source = focusMode ? null : liveEditor(sourceEditor);
@@ -67,8 +74,24 @@ function moveEditors(issue: ReviewIssue): void {
   }
 
   // 두 패널은 서로의 scrollTop을 복사하지 않는다 — 각자의 앵커를 각자 상단으로.
-  const movedSource = source ? scrollEditorToAnchor(source, navigation.source, editorZoom) : false;
-  const movedTarget = target ? scrollEditorToAnchor(target, navigation.target, editorZoom) : false;
+  // 위치 동기화가 켜진 경우에는 자동 listener가 두 정확한 이동을 서로 덮어쓰지 않도록
+  // 두 프레임 동안 억제하고, 브라우저 smooth animation 대신 즉시 이동한다.
+  let movedSource = false;
+  let movedTarget = false;
+  const move = (): void => {
+    const options = editorScrollSyncEnabled ? { behavior: 'auto' as const } : undefined;
+    movedSource = source
+      ? scrollEditorToAnchor(source, navigation.source, editorZoom, options)
+      : false;
+    movedTarget = target
+      ? scrollEditorToAnchor(target, navigation.target, editorZoom, options)
+      : false;
+  };
+  if (editorScrollSyncEnabled) {
+    withPanelScrollSyncSuppressed(move);
+  } else {
+    move();
+  }
 
   if (!movedSource && !movedTarget) {
     addToast({ type: 'warning', message: i18n.t('review.issuePositionNotFound') });

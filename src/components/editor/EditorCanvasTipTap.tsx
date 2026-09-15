@@ -19,7 +19,13 @@ import {
   type TipTapDocJson,
 } from '@/ai/translateDocument';
 import { polishTargetDocumentWithStreaming } from '@/ai/polishDocument';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import {
+  Panel,
+  Group as PanelGroup,
+  Separator as PanelResizeHandle,
+  useGroupRef,
+  type Layout,
+} from 'react-resizable-panels';
 import { getModelIdForUse } from '@/ai/config';
 import { useTranslationPreviewStore } from '@/stores/translationPreviewStore';
 import { Select } from '@/components/ui/Select';
@@ -67,6 +73,8 @@ import {
 import { replaceDocContent } from '@/editor/utils/replaceDocContent';
 import { replaceDocumentWithAppliedChanges } from '@/editor/utils/applyDocumentWithHighlight';
 import { AlignmentView } from '@/components/editor/AlignmentView';
+import { EditorPanelSyncControls } from '@/components/editor/EditorPanelSyncControls';
+import { useSyncedPanelScroll } from '@/components/editor/useSyncedPanelScroll';
 import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { BAND_1, BAND_2, CAPTION } from '@/constants/styles';
 import { useCommentStore, type CommentField } from '@/stores/commentStore';
@@ -103,6 +111,7 @@ import {
 } from '@/editor/extensions/TranslationUnitId';
 import { useReviewStore } from '@/stores/reviewStore';
 import { findAlignedCounterpartUnits } from '@/editor/utils/alignedCounterpartUnits';
+import { resolveCounterpartScrollTop } from '@/editor/utils/alignedPanelScroll';
 import {
   SelectionEditPreviewModal,
   type SelectionEditCell,
@@ -220,8 +229,17 @@ export function EditorCanvasTipTap(): JSX.Element {
   const sourceOnlyMode = useUIStore((s) => s.sourceOnlyMode);
   const toggleFocusMode = useUIStore((s) => s.toggleFocusMode);
   const toggleSourceOnlyMode = useUIStore((s) => s.toggleSourceOnlyMode);
+  const equalEditorPanelWidths = useUIStore((s) => s.equalEditorPanelWidths);
+  const editorScrollSyncEnabled = useUIStore((s) => s.editorScrollSyncEnabled);
+  const editorSourcePanelPercent = useUIStore((s) => s.editorSourcePanelPercent);
+  const setEditorSourcePanelPercent = useUIStore((s) => s.setEditorSourcePanelPercent);
+  const editorZoom = useUIStore((s) => s.editorZoom);
   const editorViewMode = useUIStore((s) => s.editorViewMode);
   const setEditorViewMode = useUIStore((s) => s.setEditorViewMode);
+  const showSource = !focusMode;
+  const showTarget = !sourceOnlyMode;
+  const showSplitHandle = showSource && showTarget;
+  const isAlignmentMode = editorViewMode === 'alignment';
 
   // 숨긴 사이드바 되살림 (에디터 헤더 양 끝) — 바 내부엔 UI가 없어 에디터 쪽에 노출.
   // 좌/우 모두 hidden뿐 아니라 panels 빈 상태(렌더 null)도 되살림 대상 (좌우 대칭).
@@ -261,6 +279,8 @@ export function EditorCanvasTipTap(): JSX.Element {
   const targetEditorRef = useRef<Editor | null>(null);
   const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
   const [targetEditor, setTargetEditor] = useState<Editor | null>(null);
+  const editorPanelGroupRef = useGroupRef();
+  const [panelLayoutRevision, setPanelLayoutRevision] = useState(0);
 
   /**
    * 두 Select의 '자동' 항목 라벨용 — **저장값과 무관하게** "자동이면 무엇이 될지"를 보여준다.
@@ -2205,22 +2225,96 @@ export function EditorCanvasTipTap(): JSX.Element {
       if (!counterpartEl) continue;
       const viewportOffset = unitEl.getBoundingClientRect().top - primaryRect.top;
       const counterpartRect = counterpartScroll.getBoundingClientRect();
-      const top =
-        counterpartEl.getBoundingClientRect().top -
-        counterpartRect.top +
-        counterpartScroll.scrollTop -
-        viewportOffset;
-      counterpartScroll.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      const top = resolveCounterpartScrollTop({
+        counterpartTop: counterpartEl.getBoundingClientRect().top,
+        counterpartContainerTop: counterpartRect.top,
+        counterpartScrollTop: counterpartScroll.scrollTop,
+        counterpartScrollHeight: counterpartScroll.scrollHeight,
+        counterpartClientHeight: counterpartScroll.clientHeight,
+        primaryViewportOffset: viewportOffset,
+        zoom: editorZoom,
+      });
+      if (top !== null) {
+        counterpartScroll.scrollTo({ top, behavior: 'smooth' });
+      }
       return;
     }
     addToast({
       type: 'error',
       message: t('editor.alignScrollNoCounterpart', '대응하는 유닛을 찾을 수 없습니다.'),
     });
-  }, [addToast, t]);
+  }, [addToast, editorZoom, t]);
 
   const handleAlignFromSource = useCallback(() => alignCounterpartScroll('source'), [alignCounterpartScroll]);
   const handleAlignFromTarget = useCallback(() => alignCounterpartScroll('target'), [alignCounterpartScroll]);
+
+  // 프로그램으로 상대 패널을 움직이면 그 패널 위에 떠 있던 선택/코멘트 팝오버의
+  // 화면 좌표가 낡는다. 문서 selection/mark는 유지하고 휘발성 UI만 닫는다.
+  const closeFollowerOverlays = useCallback((side: 'source' | 'target'): void => {
+    setSelectionToolbar((current) => (current?.field === side ? null : current));
+    setCommentPopover((current) => (current?.field === side ? null : current));
+    setCommentDetailPopover((current) => (current?.field === side ? null : current));
+  }, []);
+
+  const { requestSync: requestPanelScrollSync } = useSyncedPanelScroll({
+    enabled:
+      editorScrollSyncEnabled
+      && showSource
+      && showTarget
+      && !isAlignmentMode,
+    sourceEditor,
+    targetEditor,
+    editorZoom,
+    layoutRevision: panelLayoutRevision,
+    sourceFontSize,
+    sourceLineHeight,
+    targetFontSize,
+    targetLineHeight,
+    onBeforeFollowerScroll: closeFollowerOverlays,
+  });
+
+  const handleEditorPanelsLayoutChanged = useCallback((layout: Layout): void => {
+    if (!showSource || !showTarget) return;
+    if (!equalEditorPanelWidths && typeof layout.source === 'number') {
+      setEditorSourcePanelPercent(layout.source);
+    }
+    setPanelLayoutRevision((current) => current + 1);
+  }, [
+    equalEditorPanelWidths,
+    setEditorSourcePanelPercent,
+    showSource,
+    showTarget,
+  ]);
+
+  // PanelGroup은 uncontrolled layout을 유지하므로, 잠금/복원은 ref API로만 적용한다.
+  // 단일 패널 상태에서 setLayout하면 저장해 둔 2분할 비율이 100으로 오염될 수 있어
+  // 두 패널이 동시에 보일 때만 실행한다.
+  useLayoutEffect(() => {
+    if (!showSource || !showTarget) return;
+    const frame = requestAnimationFrame(() => {
+      // Panel은 각자의 layout effect에서 Group에 등록된다. 부모 effect가 먼저 실행되는
+      // 타이밍에는 source만 등록돼 2-panel layout을 넣으면 라이브러리가 예외를 던진다.
+      // 한 프레임 뒤 현재 layout에 두 ID가 모두 있는지 확인한 뒤에만 적용한다.
+      const group = editorPanelGroupRef.current;
+      const current = group?.getLayout();
+      if (!group || !current || !('source' in current) || !('target' in current)) return;
+      const source = equalEditorPanelWidths ? 50 : editorSourcePanelPercent;
+      group.setLayout({
+        source,
+        target: 100 - source,
+      });
+      setPanelLayoutRevision((current) => current + 1);
+      requestPanelScrollSync();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [
+    editorPanelGroupRef,
+    editorSourcePanelPercent,
+    equalEditorPanelWidths,
+    requestPanelScrollSync,
+    showSource,
+    showTarget,
+  ]);
 
   const copySelectionToClipboard = useCallback(async (editor: Editor, slice?: Slice): Promise<void> => {
     const selectionSlice = slice ?? editor.state.selection.content();
@@ -2264,11 +2358,6 @@ export function EditorCanvasTipTap(): JSX.Element {
   const activeDetailComment = commentDetailPopover
     ? comments.find((c) => c.id === commentDetailPopover.commentId)
     : undefined;
-
-  const showSource = !focusMode;
-  const showTarget = !sourceOnlyMode;
-  const showSplitHandle = showSource && showTarget;
-  const isAlignmentMode = editorViewMode === 'alignment';
 
   return (
     <div className="flex-1 h-full min-h-0 flex flex-col min-w-0 bg-editor-surface">
@@ -2316,6 +2405,9 @@ export function EditorCanvasTipTap(): JSX.Element {
             </button>
           ))}
         </div>
+        {!isAlignmentMode && (
+          <EditorPanelSyncControls available={showSource && showTarget} />
+        )}
         <StatusStrip />
         {rightSidebarInvisible && (
           <button
@@ -2341,7 +2433,24 @@ export function EditorCanvasTipTap(): JSX.Element {
         className="h-full min-h-0 min-w-0"
         style={isAlignmentMode ? { visibility: 'hidden' } : undefined}
       >
-      <PanelGroup orientation="horizontal" className="h-full min-h-0 min-w-0" id="editor-panels">
+      <PanelGroup
+        orientation="horizontal"
+        className="h-full min-h-0 min-w-0"
+        id="editor-panels"
+        groupRef={editorPanelGroupRef}
+        disabled={equalEditorPanelWidths && showSource && showTarget}
+        defaultLayout={
+          showSource && showTarget
+            ? {
+                source: editorSourcePanelPercent,
+                target: 100 - editorSourcePanelPercent,
+              }
+            : showSource
+              ? { source: 100 }
+              : { target: 100 }
+        }
+        onLayoutChanged={handleEditorPanelsLayoutChanged}
+      >
         {/* Source Panel */}
         {showSource && (
           <>
@@ -2410,7 +2519,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                   />
                   {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}
                   <div className="absolute top-2 right-2 flex items-center gap-1">
-                    {showTarget && (
+                    {showTarget && !editorScrollSyncEnabled && (
                       <button
                         type="button"
                         onClick={handleAlignFromSource}
@@ -2439,7 +2548,14 @@ export function EditorCanvasTipTap(): JSX.Element {
               </div>
             </Panel>
             {showSplitHandle && (
-              <PanelResizeHandle className="w-1 bg-editor-border hover:bg-primary-500 transition-colors cursor-col-resize z-10" />
+              <PanelResizeHandle
+                id="editor-panel-resize-handle"
+                className={
+                  equalEditorPanelWidths
+                    ? 'w-px bg-editor-border z-10'
+                    : 'w-1 bg-editor-border hover:bg-primary-500 transition-colors cursor-col-resize z-10'
+                }
+              />
             )}
           </>
         )}
@@ -2514,7 +2630,7 @@ export function EditorCanvasTipTap(): JSX.Element {
               />
               {/* 호버 오버레이 버튼 (위치 맞춤 / 복사) */}
               <div className="absolute top-2 right-2 flex items-center gap-1">
-                {showSource && (
+                {showSource && !editorScrollSyncEnabled && (
                   <button
                     type="button"
                     onClick={handleAlignFromTarget}
