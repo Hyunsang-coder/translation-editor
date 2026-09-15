@@ -33,7 +33,6 @@ dependencies = [
  "tauri-plugin-oddeyes-bridge",
  "tauri-plugin-process",
  "tauri-plugin-shell",
- "tauri-plugin-testing",
  "tauri-plugin-updater",
  "tempfile",
  "thiserror 2.0.18",
@@ -5386,7 +5385,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tokio",
- "tokio-tungstenite 0.26.2",
+ "tokio-tungstenite",
  "uuid",
 ]
 
@@ -5419,19 +5418,6 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "tauri-plugin-testing"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "serde",
- "serde_json",
- "tauri",
- "tokio",
- "tokio-tungstenite 0.24.0",
- "uuid",
 ]
 
 [[package]]
@@ -5742,18 +5728,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc5f74e248dc973e0dbb7b74c7e0d6fcc301c694ff50049504004ef4d0cdcd9"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.24.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
@@ -5761,7 +5735,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.26.2",
+ "tungstenite",
 ]
 
 [[package]]
@@ -5987,24 +5961,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "tungstenite"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18e5b8366ee7a95b16d32197d0b2604b43a0be89dc5fac9f8e96ccafbaedda8a"
-dependencies = [
- "byteorder",
- "bytes",
- "data-encoding",
- "http 1.4.0",
- "httparse",
- "log",
- "rand 0.8.5",
- "sha1",
- "thiserror 1.0.69",
- "utf-8",
-]
 
 [[package]]
 name = "tungstenite"

@@ -7,7 +7,7 @@ const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 // Default E2E gate for this project is Tauri smoke (`npm run test:e2e`).
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: 'record-demos.spec.ts',
+  testIgnore: 'record-*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

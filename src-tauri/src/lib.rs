@@ -32,10 +32,8 @@ fn get_non_empty_env(key: &str) -> Option<String> {
 }
 
 async fn seed_api_keys_bundle_from_env_if_missing() {
-    // Production에서는 env 주입 동작을 기본적으로 건너뜁니다.
-    let should_seed = cfg!(debug_assertions)
-        || std::env::var("TAURI_TESTING_ENABLED").ok().as_deref() == Some("1");
-    if !should_seed {
+    // Production에서는 env 주입 동작을 건너뜁니다.
+    if !cfg!(debug_assertions) {
         return;
     }
 
@@ -248,19 +246,13 @@ fn set_view_chat_menu_checked(app: tauri::AppHandle, checked: bool) -> Result<()
 pub fn run() {
     let desktop_mcp_runtime = desktop_mcp::configure_runtime_env();
 
-    #[allow(unused_mut)]
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_oddeyes_bridge::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
-
-    #[cfg(feature = "testing")]
-    {
-        builder = builder.plugin(tauri_plugin_testing::init());
-    }
 
     builder
         .setup(move |app| {
