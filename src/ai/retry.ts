@@ -7,6 +7,11 @@ export interface RetryConfig {
   maxRetries: number;
   baseDelayMs: number;
   maxDelayMs: number;
+  /**
+   * 요청 취소용 AbortSignal. 전달되면 재시도 대기 sleep도 즉시 중단된다.
+   * (요약처럼 선행 await가 UI를 묶는 경로에서 취소가 수 초 지연되는 것 방지)
+   */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_CONFIG: RetryConfig = {
@@ -15,8 +20,34 @@ const DEFAULT_CONFIG: RetryConfig = {
   maxDelayMs: 30000,
 };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new DOMException('The operation was aborted.', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * AbortError 판별. LangChain/provider 래핑으로 DOMException이 아닌
+ * 일반 Error(name='AbortError')로 도착하는 경우도 커버하도록 name 기준이다.
+ */
+export function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
 }
 
 function isRateLimitError(error: unknown): boolean {
@@ -54,7 +85,7 @@ export async function withRetry<T>(
   fn: () => Promise<T>,
   config: Partial<RetryConfig> = {},
 ): Promise<T> {
-  const { maxRetries, baseDelayMs, maxDelayMs } = { ...DEFAULT_CONFIG, ...config };
+  const { maxRetries, baseDelayMs, maxDelayMs, signal } = { ...DEFAULT_CONFIG, ...config };
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -63,8 +94,8 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error;
 
-      // Don't retry on abort
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      // Don't retry on abort (DOMException 여부와 무관하게 name 기준)
+      if (isAbortError(error)) {
         throw error;
       }
 
@@ -81,7 +112,8 @@ export async function withRetry<T>(
       console.warn(`[Retry] Attempt ${attempt + 1}/${maxRetries} failed, retrying in ${Math.round(delay)}ms:`,
         error instanceof Error ? error.message : error);
 
-      await sleep(delay);
+      // signal이 abort되면 sleep이 즉시 AbortError로 reject되어 전파된다.
+      await sleep(delay, signal);
     }
   }
 

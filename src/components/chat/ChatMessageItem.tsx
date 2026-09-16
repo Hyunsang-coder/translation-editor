@@ -219,6 +219,11 @@ export const ChatMessageItem = memo(function ChatMessageItem({
       <div>
         <SkeletonParagraph seed={0} lines={3} />
         <div className="mt-2.5 flex items-center gap-2 px-1">
+          <span
+            className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-primary-500/30 border-t-primary-500"
+            role="progressbar"
+            aria-label={statusText}
+          />
           <span className="text-[11px] font-medium shimmer-text">
             {statusText}
           </span>

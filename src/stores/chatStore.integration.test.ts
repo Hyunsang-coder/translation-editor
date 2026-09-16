@@ -771,8 +771,42 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       expect(session?.memory?.summary ?? '').toBe('');
     });
 
-    it('짧은 대화는 요약하지 않고 memory를 만들지 않는다', async () => {
-      useChatStore.getState().createSession('Short');
+    it('요약 진행 중 취소하면 요청이 중단되고 로딩 상태가 해제된다', async () => {
+      useChatStore.getState().createSession('LongCancel');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      seedMessages(sessionId, 30);
+      // 요약 invoke를 pending으로 묶어 둔다 (signal abort 시 AbortError로 reject)
+      mocks.webInvoke.mockImplementation(
+        (_m: unknown, o?: { signal?: AbortSignal }) =>
+          new Promise((_, reject) => {
+            o?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+              { once: true },
+            );
+          }),
+      );
+
+      const sending = useChatStore.getState().sendMessage('새 질문', sessionId);
+      // 요약 단계 진입까지 대기
+      await vi.waitFor(() => {
+        expect(useChatStore.getState().statusMessage).toBe('이전 대화 요약 중...');
+      });
+      // 요약 단계에서도 세션 스코프 로딩이 보여야 스켈레톤/스피너가 뜬다
+      expect(useChatStore.getState().streamingSessionId).toBe(sessionId);
+      expect(useChatStore.getState().isLoading).toBe(true);
+
+      useChatStore.getState().cancelRequest();
+      await sending;
+
+      const st = useChatStore.getState();
+      expect(st.isLoading).toBe(false);
+      expect(st.abortController).toBeNull();
+      expect(st.statusMessage).toBeNull();
+      expect(st.streamingSessionId).toBeNull();
+    });
+
+    it('짧은 대화는 요약하지 않고 memory를 만들지 않는다', async () => {      useChatStore.getState().createSession('Short');
       const sessionId = useChatStore.getState().currentSessionId!;
       seedMessages(sessionId, 4);
 

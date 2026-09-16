@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, MessageSquarePlus, X, FileText, FileChartColumn, MessagesSquare } from 'lucide-react';
+import { Paperclip, MessageSquarePlus, X, FileText, FileChartColumn, MessagesSquare, Square } from 'lucide-react';
 import { isTauriRuntime } from '@/tauri/invoke';
 import { useChatStore, MAX_CHAT_SESSIONS } from '@/stores/chatStore';
 import {
@@ -158,6 +158,7 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     deleteMessageFrom,
     updateMessage,
     appendToTranslationRules,
+    cancelRequest,
   } = useChatMessageActions();
 
   // 개별 선택자 (그룹에 포함되지 않는 것들)
@@ -272,6 +273,11 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
       <div>
         <SkeletonParagraph seed={0} lines={3} />
         <div className="mt-2.5 flex items-center gap-2 px-1">
+          <span
+            className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-primary-500/30 border-t-primary-500"
+            role="progressbar"
+            aria-label={statusText}
+          />
           <span className="text-[11px] font-medium shimmer-text">
             {statusText}
           </span>
@@ -764,6 +770,11 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
     await sendCurrent();
   }, [sendCurrent]);
 
+  // 로딩 중(요약 단계 포함)에는 전송 버튼 자리에 중단 버튼을 노출한다.
+  const handleCancelRequest = useCallback((): void => {
+    cancelRequest();
+  }, [cancelRequest]);
+
   useEffect(() => {
     if (!composerMenuOpen) return;
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -1110,18 +1121,32 @@ export function ChatContent({ side, sessionId }: ChatContentProps = {}): JSX.Ele
                 anchor="top"
                 data-testid="chat-model-select"
               />
-              <button
-                type="submit"
-                disabled={globalIsLoading || !localComposerText.trim()}
-                className="shrink-0 w-7 h-7 rounded-full bg-primary-fill text-white
-                           hover:bg-primary-fill-hover disabled:opacity-50 disabled:cursor-not-allowed
-                           transition-colors flex items-center justify-center"
-                title={t('chat.send')}
-                aria-label={t('chat.sendAriaLabel')}
-                data-testid="chat-send-button"
-              >
-                <span className="text-xs leading-none">↑</span>
-              </button>
+              {globalIsLoading ? (
+                <button
+                  type="button"
+                  onClick={handleCancelRequest}
+                  className="shrink-0 w-7 h-7 rounded-full bg-editor-surface border border-editor-border text-editor-text
+                             hover:bg-editor-border transition-colors flex items-center justify-center"
+                  title={t('chat.stopGenerating')}
+                  aria-label={t('chat.stopGeneratingAriaLabel')}
+                  data-testid="chat-stop-button"
+                >
+                  <Square size={11} fill="currentColor" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!localComposerText.trim()}
+                  className="shrink-0 w-7 h-7 rounded-full bg-primary-fill text-white
+                             hover:bg-primary-fill-hover disabled:opacity-50 disabled:cursor-not-allowed
+                             transition-colors flex items-center justify-center"
+                  title={t('chat.send')}
+                  aria-label={t('chat.sendAriaLabel')}
+                  data-testid="chat-send-button"
+                >
+                  <span className="text-xs leading-none">↑</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

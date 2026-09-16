@@ -903,6 +903,8 @@
     "modelBadgeTitle": "Model that generated this reply",
     "send": "Send",
     "sendAriaLabel": "Send",
+    "stopGenerating": "Stop",
+    "stopGeneratingAriaLabel": "Stop generating",
     "scrollToBottom": "Scroll to latest",
     "removeAttachment": "Remove attachment",
     "summarizing": "Summarizing...",

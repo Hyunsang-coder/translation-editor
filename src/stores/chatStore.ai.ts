@@ -191,7 +191,11 @@ export function createAiActions(
     // (취소/전환된 요청 A의 후속 코드가 새 요청 B의 상태를 덮어쓰는 것 방지)
     const abortController = new AbortController();
     const ownsStream = (): boolean => get().abortController === abortController;
-    set({ abortController, isLoading: true, error: null, streamingMessageId: null, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
+    // streamingSessionId를 요청 시작 시점에 먼저 세팅한다: 요약 단계(await summarizeConversation)는
+    // assistant placeholder 생성보다 앞서서, 세션 스코프 셀렉터(useSessionStreamingState)가
+    // 그 동안 isLoading=false·statusMessage=null을 반환해 진행 표시·취소가 먹통이 되던 문제 방지.
+    // (streamingMessageId는 여전히 null이라 finalizeStreaming은 no-op으로 안전)
+    set({ abortController, isLoading: true, error: null, streamingMessageId: null, streamingSessionId: effectiveSessionId, statusMessage: '요청 분석 및 컨텍스트 확인 중...' });
 
     // catch 경로에서도 이 요청의 placeholder를 식별할 수 있도록 try 밖에 보관
     let assistantId: string | null = null;
@@ -1044,6 +1048,15 @@ export function createStreamingActions(set: ChatSet, get: ChatGet) {
   };
 
   /**
+   * 진행 중인 AI 요청(요약 단계 포함)을 취소합니다.
+   * abort 자체는 in-flight 파이프라인의 catch가 정리하며(isLoading 해제·placeholder 제거),
+   * 여기서는 신호만 보낸다. 요청이 없으면 no-op.
+   */
+  const cancelRequest = (): void => {
+    get().abortController?.abort();
+  };
+
+  /**
    * 스트리밍 내용을 메시지 배열에 커밋합니다.
    * @param assistantId 커밋 대상 placeholder id (호출자가 명시 전달 권장).
    *   L1: 현재 streamingMessageId와 다르면 다른 요청(새 스트림)의 상태이므로 커밋하지 않습니다.
@@ -1089,5 +1102,6 @@ export function createStreamingActions(set: ChatSet, get: ChatGet) {
     setStreamingContent,
     setStreamingMetadata,
     finalizeStreaming,
+    cancelRequest,
   };
 }

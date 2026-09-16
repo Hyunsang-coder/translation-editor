@@ -81,8 +81,7 @@ describe('planConversationContext', () => {
     expect(plan.recentRawMessages[0]!.role).toBe('user');
   });
 
-  it('작은 컨텍스트 예산일수록 원문 윈도우가 줄어든다 (재예산)', () => {
-    const messages = mkMessages(40);
+  it('작은 컨텍스트 예산일수록 원문 윈도우가 줄어든다 (재예산)', () => {    const messages = mkMessages(40);
     const large = planConversationContext({
       messages,
       budget: computeInputBudget({ maxInputTokens: 180_000, outputTokenBudget: 8_000 }),
@@ -94,5 +93,50 @@ describe('planConversationContext', () => {
       reservedContextTokens: 3_000,
     });
     expect(small.recentRawMessages.length).toBeLessThanOrEqual(large.recentRawMessages.length);
+  });
+
+  it('요약 입력 상한을 넘으면 오래된 쪽 청크만 자르고 경계 id는 자른 끝까지만 전진', () => {
+    // 각 ~10k 토큰짜리 장문 40개 → 요약 대상이 상한을 초과하는 배치
+    const messages: ChatMessage[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `m${i}`,
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: 'x'.repeat(40_000),
+      timestamp: 1000 + i,
+    }));
+    const plan = planConversationContext({
+      messages,
+      budget: bigBudget,
+      maxSummaryTokens: 25_000,
+    });
+
+    expect(plan.needsSummary).toBe(true);
+    // 가장 오래된 메시지부터 포함
+    expect(plan.messagesToSummarize[0]!.id).toBe('m0');
+    // 경계 id는 실제 요약 대상의 끝 (잘린 꼬리는 다음 턴에 다시 잡힘)
+    expect(plan.summarizedThroughMessageId).toBe(
+      plan.messagesToSummarize[plan.messagesToSummarize.length - 1]!.id,
+    );
+    // 잘린 꼬리가 최근 원문에도 없으면 이번 턴 컨텍스트에서 빠지지만,
+    // throughId가 전진하지 않았으므로 다음 턴 증분 대상에 남는다
+    const covered = new Set([
+      ...plan.messagesToSummarize.map((m) => m.id),
+      ...plan.recentRawMessages.map((m) => m.id),
+    ]);
+    const firstUncovered = messages.find((m) => !covered.has(m.id));
+    expect(firstUncovered).toBeDefined();
+    const followUp = planConversationContext({
+      messages,
+      budget: bigBudget,
+      maxSummaryTokens: 25_000,
+      memory: {
+        summary: '1차 요약',
+        summarizedThroughMessageId: plan.summarizedThroughMessageId,
+        summaryUpdatedAt: 1,
+        summaryModel: 'test',
+        summaryVersion: 1,
+      },
+    });
+    // 잘렸던 꼬리가 다음 턴 요약 대상에 다시 잡힌다
+    expect(followUp.messagesToSummarize.some((m) => m.id === firstUncovered!.id)).toBe(true);
   });
 });

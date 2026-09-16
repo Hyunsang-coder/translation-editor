@@ -882,6 +882,8 @@
     "modelBadgeTitle": "이 응답을 생성한 모델",
     "send": "전송",
     "sendAriaLabel": "전송",
+    "stopGenerating": "중단",
+    "stopGeneratingAriaLabel": "생성 중단",
     "scrollToBottom": "최신 메시지로 이동",
     "removeAttachment": "첨부 제거",
     "summarizing": "요약 중...",

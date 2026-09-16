@@ -97,7 +97,7 @@ describe('summarizeConversation', () => {
     expect(out).toBe('기존 요약');
   });
 
-  it('abortSignal을 모델 invoke 옵션으로 전달', async () => {
+  it('abortSignal을 모델 invoke 옵션으로 전달(부모 취소 시 전파되는 자식 signal)', async () => {
     const invoke = vi.fn().mockResolvedValue({ content: '요약' });
     createChatModel.mockReturnValue({ invoke });
     const ac = new AbortController();
@@ -108,7 +108,48 @@ describe('summarizeConversation', () => {
       abortSignal: ac.signal,
     });
     const invokeOpts = invoke.mock.calls[0]![1] as { signal?: AbortSignal };
-    expect(invokeOpts.signal).toBe(ac.signal);
+    expect(invokeOpts.signal).toBeInstanceOf(AbortSignal);
+    expect(invokeOpts.signal?.aborted).toBe(false);
+  });
+
+  it('부모 abort 시 요약 invoke의 signal도 abort되고 AbortError가 전파된다', async () => {
+    let seenSignal: AbortSignal | undefined;
+    const invoke = vi.fn().mockImplementation(
+      (_m: unknown, o?: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          seenSignal = o?.signal;
+          o?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+            { once: true },
+          );
+        }),
+    );
+    createChatModel.mockReturnValue({ invoke });
+    const ac = new AbortController();
+    const pending = summarizeConversation({
+      priorSummary: '기존',
+      messagesToSummarize: msgs,
+      runConfig: baseRc(),
+      abortSignal: ac.signal,
+      timeoutMs: 5_000,
+    });
+    await Promise.resolve();
+    ac.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(seenSignal?.aborted).toBe(true);
+  });
+
+  it('시간 초과 시 기존 요약을 반환하고 본 요청은 막지 않는다(무손실 fallback)', async () => {
+    const invoke = vi.fn().mockImplementation(() => new Promise(() => {}));
+    createChatModel.mockReturnValue({ invoke });
+    const out = await summarizeConversation({
+      priorSummary: '기존 요약',
+      messagesToSummarize: msgs,
+      runConfig: baseRc(),
+      timeoutMs: 30,
+    });
+    expect(out).toBe('기존 요약');
   });
 });
 

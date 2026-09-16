@@ -9,10 +9,17 @@ import type { ChatMessage } from '@/types';
 import type { ModelRunConfig } from '@/ai/config';
 import { getModelSpecForUse } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
-import { withRetry } from '@/ai/retry';
+import { isAbortError, withRetry } from '@/ai/retry';
 
 /** 요약 출력 토큰 상한(저비용·짧은 요약). */
 const SUMMARY_MAX_TOKENS = 4_096;
+
+/**
+ * 요약 1회 호출의 전체 상한(ms, 재시도 포함).
+ * non-streaming invoke에 타임아웃이 없어 stall 시 채팅이 무한 대기(먹통)되던 문제 방지.
+ * 초과 시 에러가 아니라 기존 요약을 반환하고 본 답변으로 진행한다(무손실 fallback).
+ */
+export const SUMMARY_TIMEOUT_MS = 60_000;
 
 /**
  * 실행 runConfig에서 요약용 저비용 runConfig를 파생한다.
@@ -96,16 +103,19 @@ const SUMMARY_SYSTEM_PROMPT = [
 
 /**
  * 증분 요약을 생성한다.
- * @returns 갱신된 누적 요약. 대상이 없거나 실패/빈 응답이면 priorSummary를 그대로 반환.
+ * @returns 갱신된 누적 요약. 대상이 없거나 실패/빈 응답/시간 초과면 priorSummary를 그대로 반환.
  */
 export async function summarizeConversation(input: {
   priorSummary: string;
   messagesToSummarize: ChatMessage[];
   runConfig: ModelRunConfig;
   abortSignal?: AbortSignal;
+  /** 전체 상한 오버라이드(ms, 테스트용). 기본값 SUMMARY_TIMEOUT_MS. */
+  timeoutMs?: number;
 }): Promise<string> {
   const { priorSummary, messagesToSummarize, runConfig, abortSignal } = input;
   if (messagesToSummarize.length === 0) return priorSummary;
+  const timeoutMs = input.timeoutMs ?? SUMMARY_TIMEOUT_MS;
 
   const summaryRc = resolveSummaryModelRunConfig(runConfig);
   const model = createChatModel(undefined, {
@@ -131,23 +141,76 @@ export async function summarizeConversation(input: {
     { role: 'user', content: humanText },
   ];
 
-  const invokeOptions = abortSignal ? { signal: abortSignal } : {};
+  // 타임아웃 abort가 본 요청의 abortSignal까지 끊지 않도록 자식 컨트롤러로 분리한다.
+  // (부모 취소 → 자식 전파, 타임아웃 → 자식만 abort 후 fallback)
+  const child = new AbortController();
+  const onParentAbort = (): void => child.abort();
+  if (abortSignal?.aborted) {
+    child.abort();
+  } else {
+    abortSignal?.addEventListener('abort', onParentAbort, { once: true });
+  }
+  const invokeOptions = { signal: child.signal };
 
   try {
-    const ai = await withRetry(() =>
-      (model as { invoke: (m: unknown, o?: unknown) => Promise<unknown> }).invoke(
-        messages,
-        invokeOptions,
+    const ai = await withTimeout(
+      withRetry(
+        () =>
+          (model as { invoke: (m: unknown, o?: unknown) => Promise<unknown> }).invoke(
+            messages,
+            invokeOptions,
+          ),
+        // 재시도 대기 sleep도 취소 신호를 봐야 취소가 수 초 지연되지 않는다.
+        { signal: child.signal },
       ),
+      timeoutMs,
+      () => child.abort(),
     );
     const text = extractText(ai).trim();
     return text || priorSummary;
   } catch (e) {
-    // abort는 상위로 전파(요청 취소), 그 외 실패는 기존 요약 유지(무손실)
-    if (e && typeof e === 'object' && (e as { name?: unknown }).name === 'AbortError') {
+    // 사용자 취소는 상위로 전파(요청 취소), 시간 초과/그 외 실패는 기존 요약 유지(무손실)
+    if (isAbortError(e) && abortSignal?.aborted) {
+      throw e;
+    }
+    if (e && typeof e === 'object' && (e as { name?: unknown }).name === 'SummaryTimeoutError') {
+      console.warn('[summarizeConversation] 요약 시간 초과, 기존 요약 유지 후 본 답변으로 진행');
+      return priorSummary;
+    }
+    if (isAbortError(e)) {
       throw e;
     }
     console.warn('[summarizeConversation] 요약 생성 실패, 기존 요약 유지:', e instanceof Error ? e.message : e);
     return priorSummary;
+  } finally {
+    abortSignal?.removeEventListener('abort', onParentAbort);
   }
+}
+
+/**
+ * 전체 상한을 거는 래퍼. 시간 초과 시 onTimeout(요약 fetch abort)을 실행하고
+ * SummaryTimeoutError로 reject한다. 사용자 abort는 AbortError 그대로 전파된다.
+ */
+function withTimeout<T>(
+  task: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => void,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // 타임아웃 후 늦게 실패하는 task가 unhandled rejection이 되지 않게 붙잡아 둔다.
+  // (race는 이미 끝나 있으므로 결과에 영향 없음)
+  task.catch(() => undefined);
+  const gate = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      const err = new Error(
+        `[summarizeConversation] timed out after ${timeoutMs}ms`,
+      );
+      err.name = 'SummaryTimeoutError';
+      reject(err);
+    }, timeoutMs);
+  });
+  return Promise.race([task, gate]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }

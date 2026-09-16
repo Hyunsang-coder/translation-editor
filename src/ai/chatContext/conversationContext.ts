@@ -9,6 +9,7 @@ import type { ChatMessage, ChatSessionMemory } from '@/types';
 import {
   approxTokens,
   IMAGE_TOKEN_COST,
+  MAX_SUMMARY_INPUT_TOKENS,
   MIN_RECENT_TURNS,
   MAX_RECENT_TURNS,
   type InputBudget,
@@ -57,9 +58,16 @@ export function planConversationContext(input: {
   memory?: ChatSessionMemory | undefined;
   budget: InputBudget;
   reservedContextTokens?: number;
+  /**
+   * 1회 증분 요약 입력 상한(근사 토큰). 오래된 구간이 상한을 넘으면
+   * 오래된 쪽부터 상한 안에 드는 만큼만 이번 요약 대상으로 자르고,
+   * 나머지는 다음 턴 증분 요약으로 넘긴다(throughId는 자른 끝까지만 전진).
+   */
+  maxSummaryTokens?: number;
 }): ConversationContextPlan {
   const { messages, memory, budget } = input;
   const reserved = input.reservedContextTokens ?? 0;
+  const maxSummaryTokens = input.maxSummaryTokens ?? MAX_SUMMARY_INPUT_TOKENS;
 
   // 1) 이미 요약된 prefix 제외 → 아직 요약되지 않은 구간만 대상으로 한다(증분).
   const throughId = memory?.summarizedThroughMessageId ?? null;
@@ -105,12 +113,25 @@ export function planConversationContext(input: {
   }
 
   let recentRawMessages = unsummarized.slice(start);
-  const messagesToSummarize = unsummarized.slice(0, start);
+  let messagesToSummarize = unsummarized.slice(0, start);
 
   // 3) 원문 윈도우는 user부터 시작해야 한다. 앞의 assistant/system은 요약 구간으로 넘긴다.
   while (recentRawMessages.length > 0 && recentRawMessages[0]!.role !== 'user') {
     messagesToSummarize.push(recentRawMessages[0]!);
     recentRawMessages = recentRawMessages.slice(1);
+  }
+
+  // 4) 요약 입력 상한: 오래된 쪽부터 상한 안에 드는 청크만 이번 대상으로 한다.
+  //    잘린 꼬리는 memory에 미반영(throughId 미전진)되어 다음 턴에 다시 잡힌다.
+  if (messagesToSummarize.length > 0) {
+    let acc = 0;
+    let end = 0;
+    for (; end < messagesToSummarize.length; end++) {
+      const t = chatMessageTokens(messagesToSummarize[end]!);
+      if (acc + t > maxSummaryTokens && end > 0) break;
+      acc += t;
+    }
+    messagesToSummarize = messagesToSummarize.slice(0, Math.max(1, end));
   }
 
   const needsSummary = messagesToSummarize.length > 0;

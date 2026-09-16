@@ -20,6 +20,12 @@ export const MAX_RECENT_TURNS = 12;
 export const IMAGE_TOKEN_COST = 800;
 /** 추론/도구 왕복을 위한 안전 예약 토큰. */
 export const TOOL_SAFETY_RESERVE_TOKENS = 4_000;
+/**
+ * 1회 증분 요약에 넣을 오래된 대화 구간의 입력 상한(근사 토큰).
+ * 상한을 넘는 꼬리는 이번 턴에서 제외하고 다음 턴 증분 요약으로 넘긴다.
+ * (unbounded 요약 입력이 수 분 hang의 주범 — transcript는 보존되므로 무손실)
+ */
+export const MAX_SUMMARY_INPUT_TOKENS = 40_000;
 /** 메시지 1개당 role/구분자 오버헤드 근사치. */
 const PER_MESSAGE_OVERHEAD_TOKENS = 4;
 

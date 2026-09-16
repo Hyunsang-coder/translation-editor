@@ -167,6 +167,11 @@ export interface ChatActions {
   setStreamingContent: (content: string) => void;
   setStreamingMetadata: (metadata: ChatMessage['metadata']) => void;
   /**
+   * 진행 중인 AI 요청(요약 단계 포함)을 취소합니다. 요청이 없으면 no-op.
+   * 상태 정리는 in-flight 파이프라인의 abort catch가 담당한다.
+   */
+  cancelRequest: () => void;
+  /**
    * 스트리밍 내용을 메시지 배열에 커밋합니다.
    * assistantId를 명시 전달하면 현재 streamingMessageId와 일치할 때만 커밋합니다 (L1 소유권 가드).
    */
