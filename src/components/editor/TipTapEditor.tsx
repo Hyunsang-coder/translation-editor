@@ -24,6 +24,7 @@ import { SearchHighlight } from '@/editor/extensions/SearchHighlight';
 import { CommentMark } from '@/editor/extensions/CommentMark';
 import { SelectionAnchor } from '@/editor/extensions/SelectionAnchor';
 import { TranslationUnitId } from '@/editor/extensions/TranslationUnitId';
+import { ListKeymap } from '@/editor/extensions/ListKeymap';
 import { AppliedChangeHighlight } from '@/editor/extensions/AppliedChangeHighlight';
 import { getCommentIdFromDomTarget } from '@/editor/utils/commentNavigation';
 import { normalizePastedHtml } from '@/utils/htmlNormalizer';
@@ -101,6 +102,7 @@ function TipTapEditor({
       TableRow,
       TableHeader,
       TableCell,
+      ListKeymap,
       imageExtension,
       TaskList,
       TaskItem.configure({ nested: true }),

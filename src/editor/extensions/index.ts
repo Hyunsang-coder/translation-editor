@@ -39,6 +39,7 @@ export type {
   TranslationUnitDocument,
   TranslationUnitReattachmentResult,
 } from './TranslationUnitId';
+export { ListKeymap } from './ListKeymap';
 export { pluginKeys } from '@/editor/plugins/pluginKeys';
 // Backward compatibility: searchHighlightPluginKey는 pluginKeys.searchHighlight로 접근
 export { searchHighlightPluginKey } from './SearchHighlight';

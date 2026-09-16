@@ -43,6 +43,8 @@ Critical implementation warnings learned from past issues.
 
 151. **선택 앵커 범위는 트림된 range로 생성**: `SelectionContext.text`는 `.trim()`되지만 앵커 검증은 `doc.textBetween(from, to)`(비트림)와 비교한다. `normalizeSelectionAnchorRange`가 가장자리 공백을 range에서 제외하지 않으면 두 값이 어긋나 proposal 적용이 항상 stale로 판정된다.
 
+166. **리스트 키맵 충돌 2종 (`ListKeymap`, priority 200)**: ① 표 안 리스트의 Tab/Shift-Tab은 Table 키맵이 가로챈다 — 키맵 플러그인은 `[...extensions].reverse()` 후 priority 내림차순 stable sort라 전부 100이면 등록 역순이고, `TipTapEditor`가 StarterKit(ListItem) 뒤에 Table을 등록하므로 Table의 Tab(`goToNextCell`)이 ListItem의 Tab(`sinkListItem`)보다 먼저 실행된다(마지막 셀 Tab은 행까지 추가). 표 안 리스트에서만 sink/lift를 먼저 시도하고 false면 표 이동으로 폴백한다. ② 불릿 시작점 Backspace의 기본 `joinBackward`는 두 불릿을 한 아이템 안의 두 문단으로 합쳐 줄바꿈이 깨져 보인다 — 윗 불릿 끝에 이어 붙이고(마크·이미지 유지) 빈 불릿은 lift한다. 중첩 등 문단이 하나가 아닌 아이템은 스키마(`paragraph block*`)를 깰 수 있어 폴백한다. extensions 배열 순서로 고치지 말 것 — 순서 의존이라 다음 충돌 때 다시 뒤집힌다.
+
 ## AI / Chat
 
 9. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.
