@@ -383,6 +383,7 @@ export function normalizePastedHtml(html: string, options?: NormalizePasteOption
     unwrapSpans(doc.body);
     normalizeDivs(doc.body);
     removeTopLevelFormattingWhitespace(doc.body);
+    removeFormattingWhitespace(doc.body);
     removeEmptyParagraphs(doc.body);
     removeDuplicateTableHeaders(doc.body);
     sanitizeUrls(doc.body); // 보안: 위험한 URL 프로토콜 제거
@@ -474,7 +475,10 @@ function unwrapSpans(root: ParentNode) {
 }
 
 function normalizeDivs(root: ParentNode) {
-  const divs = Array.from(root.querySelectorAll('div'));
+  // 안쪽 div부터 처리한다. 바깥부터 바꾸면 바깥 div가 <p>로 바뀌고 나서 안쪽 div가
+  // 그 안에 또 <p>를 만들어 중첩 <p>가 된다 (mediaSingle 래퍼가 대표 사례).
+  // 중첩 <p>는 파싱 때 이미지 위아래 빈 문단으로 쪼개진다.
+  const divs = Array.from(root.querySelectorAll('div')).reverse();
   for (const div of divs) {
     const parent = div.parentNode;
     if (!parent) continue;
@@ -534,6 +538,27 @@ function removeTopLevelFormattingWhitespace(root: ParentNode) {
     if (child.nodeType !== Node.TEXT_NODE) continue;
     if (normalizeText(child.textContent).length > 0) continue;
     child.remove();
+  }
+}
+
+/**
+ * 표·리스트 안의 서식용 공백 텍스트를 제거한다.
+ *
+ * 들여쓴 클립보드 HTML은 td/th·tr·li 사이에 개행/공백 텍스트를 남기고,
+ * 클립보드 파싱(preserveWhitespace)이 이를 빈 paragraph로 승격해
+ * 셀 안 이미지 위아래에 빈 줄이 생긴다. 공백만 있는 직접 자식만 지우고
+ * 실제 텍스트(문단으로 감싸진다)는 건드리지 않는다.
+ */
+function removeFormattingWhitespace(root: ParentNode) {
+  const containers = Array.from(
+    root.querySelectorAll('table, thead, tbody, tfoot, tr, td, th, ul, ol, li'),
+  );
+  for (const container of containers) {
+    for (const child of Array.from(container.childNodes)) {
+      if (child.nodeType !== Node.TEXT_NODE) continue;
+      if (normalizeText(child.textContent).length > 0) continue;
+      child.remove();
+    }
   }
 }
 

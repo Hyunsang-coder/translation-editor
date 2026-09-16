@@ -45,6 +45,8 @@ Critical implementation warnings learned from past issues.
 
 166. **리스트 키맵 충돌 2종 (`ListKeymap`, priority 200)**: ① 표 안 리스트의 Tab/Shift-Tab은 Table 키맵이 가로챈다 — 키맵 플러그인은 `[...extensions].reverse()` 후 priority 내림차순 stable sort라 전부 100이면 등록 역순이고, `TipTapEditor`가 StarterKit(ListItem) 뒤에 Table을 등록하므로 Table의 Tab(`goToNextCell`)이 ListItem의 Tab(`sinkListItem`)보다 먼저 실행된다(마지막 셀 Tab은 행까지 추가). 표 안 리스트에서만 sink/lift를 먼저 시도하고 false면 표 이동으로 폴백한다. ② 불릿 시작점 Backspace의 기본 `joinBackward`는 두 불릿을 한 아이템 안의 두 문단으로 합쳐 줄바꿈이 깨져 보인다 — 윗 불릿 끝에 이어 붙이고(마크·이미지 유지) 빈 불릿은 lift한다. 중첩 등 문단이 하나가 아닌 아이템은 스키마(`paragraph block*`)를 깰 수 있어 폴백한다. extensions 배열 순서로 고치지 말 것 — 순서 의존이라 다음 충돌 때 다시 뒤집힌다.
 
+167. **붙여넣기 표 셀 빈 줄 2종 (`htmlNormalizer`)**: ① `normalizeDivs`는 div를 안쪽부터 처리할 것 — 바깥부터 바꾸면 mediaSingle 같은 중첩 래퍼가 `<p><p><img></p></p>`가 되어 이미지 위아래에 빈 문단이 생긴다. ② 표·리스트 안 서식용 공백 텍스트(들여쓴 클립보드의 개행)는 직접 자식 중 공백만 있는 것만 제거한다 — 클립보드 파싱(preserveWhitespace)이 이를 빈 paragraph로 승격시킨다. 최상위만 지우는 `removeTopLevelFormattingWhitespace`로 부족하다.
+
 ## AI / Chat
 
 9. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.

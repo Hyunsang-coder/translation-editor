@@ -221,6 +221,34 @@ describe('ordered list start 속성 보존', () => {
   });
 });
 
+describe('표 셀 이미지 붙여넣기', () => {
+  it('mediaSingle 중첩 div를 중첩 p 없이 하나의 이미지 문단으로 바꾼다', () => {
+    const html =
+      '<table><tbody><tr><td><p>위 텍스트</p>' +
+      '<div data-node-type="mediaSingle"><div><img src="https://example.com/a.png" alt="보기" /></div></div>' +
+      '<p>아래 텍스트</p></td></tr></tbody></table>';
+    const result = normalizePastedHtml(html);
+    expect(result).not.toContain('<p><p>');
+    expect(result.match(/<p><img/g) ?? []).toHaveLength(1);
+    expect(result).not.toMatch(/<p>\s*<\/p>/);
+    expect(result).toContain('위 텍스트');
+    expect(result).toContain('아래 텍스트');
+  });
+
+  it('td 안 서식용 공백을 제거해 빈 문단이 생기지 않게 한다', () => {
+    const html = `<table><tbody><tr><td>
+          <p>위 텍스트</p>
+          <p><img src="https://example.com/a.png" alt="보기" /></p>
+          <p>아래 텍스트</p>
+        </td></tr></tbody></table>`;
+    const result = normalizePastedHtml(html);
+    expect(result).not.toMatch(/<p>\s*<\/p>/);
+    expect(result).toContain('위 텍스트');
+    expect(result).toContain('아래 텍스트');
+    expect(result).toContain('<img');
+  });
+});
+
 describe('Task list / Checkbox 붙여넣기 정규화', () => {
   it('Confluence 인라인 태스크 리스트(inline-task-item)를 taskList와 taskItem으로 정규화', () => {
     const html = `
