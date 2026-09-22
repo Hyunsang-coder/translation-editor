@@ -567,6 +567,29 @@ export function EditorCanvasTipTap(): JSX.Element {
     }
   }, [buildSelectionBubble]);
 
+  // 메뉴바 코멘트 버튼 경로 — 인라인 툴바와 같은 commentPopover를 연다.
+  // 메뉴바 클릭으로 포커스가 옮겨가도 selection 자체는 유지되므로 bubble을 그대로 쓴다.
+  // popover는 선택 영역 아래에 띄운다(인라인 툴바는 위).
+  const openCommentFromMenuBar = useCallback((editor: Editor, field: CommentField): void => {
+    const bubble = buildSelectionBubble(editor, field);
+    if (!bubble) return;
+    try {
+      const start = editor.view.coordsAtPos(bubble.from);
+      const end = editor.view.coordsAtPos(bubble.to);
+      setCommentPopover({
+        top: end.bottom + 8,
+        left: Math.max(8, start.left),
+        excerpt: bubble.text.trim(),
+        editor,
+        field,
+        ranges: bubble.ranges,
+        segmentGroupId: bubble.segmentGroupId,
+      });
+    } catch {
+      // 좌표 계산 실패 시 조용히 무시
+    }
+  }, [buildSelectionBubble]);
+
   // 툴바 폭은 라벨(i18n)·재번역 버튼 유무에 따라 달라져 미리 알 수 없다.
   // 렌더 후 실측해서 화면 밖으로 나간 만큼만 왼쪽으로 되민다.
   // (에디터 zoom과 툴바의 역-zoom이 상쇄돼 CSS px = 화면 px이므로 그대로 뺀다.)
@@ -2498,7 +2521,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                     ) : null}
                   </div>
                 </div>
-                <TipTapMenuBar editor={sourceEditor} panelType="source" />
+                <TipTapMenuBar editor={sourceEditor} panelType="source" onAddComment={sourceEditor ? () => openCommentFromMenuBar(sourceEditor, 'source') : undefined} />
                 <SearchBar
                   editor={sourceEditor}
                   panelType="source"
@@ -2606,7 +2629,7 @@ export function EditorCanvasTipTap(): JSX.Element {
                 />
               </div>
             </div>
-            <TipTapMenuBar editor={targetEditor} panelType="target" />
+            <TipTapMenuBar editor={targetEditor} panelType="target" onAddComment={targetEditor ? () => openCommentFromMenuBar(targetEditor, 'target') : undefined} />
             <SearchBar
               editor={targetEditor}
               panelType="target"
