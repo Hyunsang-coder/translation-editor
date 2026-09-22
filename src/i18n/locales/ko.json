@@ -437,7 +437,7 @@
       "scopeLabelCells": "선택한 셀만 다듬기 ({{count}}개)"
     },
     "addToChat": "선택한 텍스트를 채팅 입력창에 추가",
-    "addToChatLabel": "채팅에 추가",
+    "addToChatLabel": "채팅",
     "copySelection": "복사",
     "retranslateSelection": "재번역",
     "polishSelection": "폴리싱",

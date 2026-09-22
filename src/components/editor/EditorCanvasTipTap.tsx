@@ -625,8 +625,13 @@ export function EditorCanvasTipTap(): JSX.Element {
         openSelectionToolbar(editor, field);
       }, SELECTION_TOOLBAR_DELAY_MS);
     };
-    const onBlur = (): void => {
+    const onBlur = ({ event }: { event: FocusEvent }): void => {
       clearToolbarTimer();
+      // 링크 입력창처럼 툴바 안으로 포커스가 옮겨가면 툴바를 유지한다.
+      // relatedTarget이 툴바 안이면 숨기지 않는다 — 아니면 입력창을 여는 순간
+      // 툴바째 언마운트되어 링크를 걸 수 없다.
+      const related = event?.relatedTarget as Node | null;
+      if (related && selectionToolbarRef.current?.contains(related)) return;
       setSelectionToolbar((prev) => (prev?.editor === editor ? null : prev));
     };
     const onTransaction = (): void => {
@@ -2946,6 +2951,7 @@ export function EditorCanvasTipTap(): JSX.Element {
       {selectionToolbar && !commentPopover && !commentDetailPopover && (
         <SelectionInlineToolbar
           panel={selectionToolbar.field}
+          editor={selectionToolbar.editor}
           containerRef={selectionToolbarRef}
           style={{
             position: 'fixed',

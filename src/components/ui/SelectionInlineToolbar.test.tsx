@@ -1,6 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import type { Editor as ReactEditor } from '@tiptap/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SelectionInlineToolbar } from './SelectionInlineToolbar';
+
+let editor: Editor | null = null;
+
+afterEach(() => {
+  editor?.destroy();
+  editor = null;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -100,5 +111,68 @@ describe('SelectionInlineToolbar', () => {
     expect(screen.getByRole('menuitem', { name: 'editor.retranslateSelection' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'editor.polishSelection' })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: 'editor.reviewSelection' })).toBeNull();
+  });
+
+  it('editor가 있으면 우측 포맷 섹션을 보여준다', () => {
+    editor = new Editor({ extensions: [StarterKit], content: '<p>hello</p>' });
+    render(
+      <SelectionInlineToolbar
+        editor={editor as unknown as ReactEditor}
+        onCopy={vi.fn()}
+        onAddToChat={vi.fn()}
+        onAddComment={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('selection-inline-heading')).toBeTruthy();
+    expect(screen.getByTestId('selection-inline-bold')).toBeTruthy();
+    expect(screen.getByTestId('selection-inline-format')).toBeTruthy();
+    expect(screen.getByTestId('selection-inline-bullet-list')).toBeTruthy();
+    expect(screen.getByTestId('selection-inline-list-menu')).toBeTruthy();
+  });
+
+  it('Link extension이 없으면 링크 버튼을 숨긴다', () => {
+    editor = new Editor({ extensions: [StarterKit], content: '<p>hello</p>' });
+    render(
+      <SelectionInlineToolbar
+        editor={editor as unknown as ReactEditor}
+        onCopy={vi.fn()}
+        onAddToChat={vi.fn()}
+        onAddComment={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('selection-inline-link')).toBeNull();
+  });
+
+  it('링크 입력창에서 URL을 적용하고 해제한다', () => {
+    editor = new Editor({
+      extensions: [StarterKit, Link.configure({ openOnClick: false })],
+      content: '<p>hello world</p>',
+    });
+    act(() => {
+      editor!.commands.setTextSelection({ from: 1, to: 6 });
+    });
+    render(
+      <SelectionInlineToolbar
+        editor={editor as unknown as ReactEditor}
+        onCopy={vi.fn()}
+        onAddToChat={vi.fn()}
+        onAddComment={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('selection-inline-link'));
+    fireEvent.change(screen.getByTestId('selection-inline-link-input'), {
+      target: { value: 'example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'editor.menuBar.linkApply' }));
+
+    expect(editor.isActive('link')).toBe(true);
+    expect(editor.getAttributes('link').href).toBe('https://example.com');
+
+    fireEvent.click(screen.getByTestId('selection-inline-link'));
+    fireEvent.click(screen.getByRole('button', { name: 'editor.menuBar.unlink' }));
+    expect(editor.isActive('link')).toBe(false);
   });
 });

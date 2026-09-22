@@ -456,7 +456,7 @@
       "scopeLabelCells_one": "Polish only the selected cell ({{count}})"
     },
     "addToChat": "Add selected text to chat input",
-    "addToChatLabel": "Add to chat",
+    "addToChatLabel": "Chat",
     "copySelection": "Copy",
     "retranslateSelection": "Retranslate",
     "polishSelection": "Polish",
