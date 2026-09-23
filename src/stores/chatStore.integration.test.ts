@@ -26,11 +26,11 @@ vi.mock('@/ai/config', () => ({
   resolveModelRunConfig: mocks.resolveModelRunConfig,
   // resolveSummaryModelRunConfig(요약 모델 파생)이 사용하는 실 구현 스텁
   resolveModelForUse: (provider: string) => ({
-    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-5.6-luna',
+    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-6-luna',
     effort: 'medium',
   }),
   getModelSpecForUse: (provider: string) => ({
-    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-5.6-luna',
+    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-6-luna',
     effort: 'medium',
   }),
   normalizeProvider: (v: string | undefined | null) => {
@@ -81,7 +81,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       openaiApiKey: 'sk-test',
     });
     mocks.resolveModelRunConfig.mockReturnValue({
-      resolvedModel: 'gpt-5.6-luna',
+      resolvedModel: 'gpt-6-luna',
       provider: 'openai',
       reasoningEffort: 'medium',
       maxRecentMessages: 20,
@@ -338,7 +338,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       // Assert: 실제 호출에 쓰인 runConfig(mock)가 메시지 메타데이터로 기록됨
       const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
       const assistant = session?.messages.find((m) => m.role === 'assistant');
-      expect(assistant?.metadata?.resolvedModel).toBe('gpt-5.6-luna');
+      expect(assistant?.metadata?.resolvedModel).toBe('gpt-6-luna');
       expect(assistant?.metadata?.provider).toBe('openai');
       // usage_metadata가 finalize 후에도 보존됨
       expect(assistant?.metadata?.inputTokens).toBe(120);

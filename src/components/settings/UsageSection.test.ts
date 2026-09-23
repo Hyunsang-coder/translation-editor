@@ -18,9 +18,9 @@ function row(partial: Partial<UsageDailyRow> & { day: string; model: string }): 
 describe('summarizeUsageRows', () => {
   it('일자별로 접고 최신 날짜를 먼저 둔다', () => {
     const summaries = summarizeUsageRows([
-      row({ day: '2026-07-01', model: 'claude-opus-5', inputTokens: 1000 }),
-      row({ day: '2026-07-03', model: 'claude-opus-5', inputTokens: 2000 }),
-      row({ day: '2026-07-01', model: 'claude-opus-5', feature: 'translate', outputTokens: 500 }),
+      row({ day: '2026-07-01', model: 'claude-opus-5-5', inputTokens: 1000 }),
+      row({ day: '2026-07-03', model: 'claude-opus-5-5', inputTokens: 2000 }),
+      row({ day: '2026-07-01', model: 'claude-opus-5-5', feature: 'translate', outputTokens: 500 }),
     ]);
 
     expect(summaries.map((s) => s.day)).toEqual(['2026-07-03', '2026-07-01']);
@@ -32,7 +32,7 @@ describe('summarizeUsageRows', () => {
     const [summary] = summarizeUsageRows([
       row({
         day: '2026-07-01',
-        model: 'claude-opus-5',
+        model: 'claude-opus-5-5',
         // 입력 1000 중 300은 캐시 read, 400은 캐시 write로 들어온 몫이다.
         inputTokens: 1000,
         outputTokens: 200,
@@ -48,26 +48,26 @@ describe('summarizeUsageRows', () => {
     const [summary] = summarizeUsageRows([
       row({
         day: '2026-07-01',
-        model: 'claude-opus-5',
+        model: 'claude-opus-5-5',
         inputTokens: 1_000_000,
         cacheReadInputTokens: 1_000_000,
       }),
     ]);
 
-    // $5 정가 대신 $0.5 → 비용 $0.5, 절감 $4.5
-    expect(summary!.costUsd).toBeCloseTo(0.5, 6);
-    expect(summary!.savingsUsd).toBeCloseTo(4.5, 6);
+    // $4 정가 대신 $0.2 → 비용 $0.2, 절감 $3.8
+    expect(summary!.costUsd).toBeCloseTo(0.2, 6);
+    expect(summary!.savingsUsd).toBeCloseTo(3.8, 6);
     expect(summary!.hasUnpricedModel).toBe(false);
   });
 
   it('단가 미등록 모델은 비용에서 빠지고 플래그로 알린다', () => {
     const [summary] = summarizeUsageRows([
       row({ day: '2026-07-01', model: 'unknown-model', inputTokens: 1_000_000 }),
-      row({ day: '2026-07-01', model: 'claude-opus-5', inputTokens: 1_000_000 }),
+      row({ day: '2026-07-01', model: 'claude-opus-5-5', inputTokens: 1_000_000 }),
     ]);
 
     // 모르는 단가를 0으로 넣어 "공짜"로 보이게 하지 않고, 합계에서 제외하고 표시로 알린다.
-    expect(summary!.costUsd).toBeCloseTo(5, 6);
+    expect(summary!.costUsd).toBeCloseTo(4, 6);
     expect(summary!.hasUnpricedModel).toBe(true);
     // 토큰 자체는 모르는 모델도 그대로 집계한다.
     expect(summary!.totalTokens).toBe(2_000_000);

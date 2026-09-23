@@ -60,10 +60,10 @@ const opts = resolveModelCallOptions(cfg, useFor); // useFor: 'translation' | 'c
 // Rust: src-tauri/src/commands/ai.rs — adaptive_thinking, effort 필드
 
 // 규칙 요약:
-// - Opus 4.7+ / Sonnet 5 / gpt-5*: temperature 미전달 (400 방지)
+// - Opus 4.7+ / Sonnet 5 / gpt-5*·gpt-6*: temperature 미전달 (400 방지)
 // - Opus 4.7+: adaptiveThinking + effort high (Anthropic effort high는 서버 기본값이라 no-op)
 // - Sonnet 5: adaptiveThinking; review일 때만 effort high
-// - OpenAI gpt-5: review일 때만 reasoning_effort high
+// - OpenAI gpt-5/gpt-6: review일 때만 reasoning_effort high
 // - runReview Tauri 경로: streamWithTauriAiBackend({ useFor: 'review', ... })
 ```
 

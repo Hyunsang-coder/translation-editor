@@ -41,19 +41,19 @@ describe('resolveModelRunConfig', () => {
 
   it('명시적 provider가 전역 값보다 우선한다', () => {
     const rc = resolveModelRunConfig({ provider: 'openai' });
-    expect(rc.resolvedModel).toBe('gpt-5.6-luna');
+    expect(rc.resolvedModel).toBe('gpt-6-luna');
     expect(rc.provider).toBe('openai');
   });
 
   // 세션 pin에는 v13 이전 프리셋 ID가 남아 있을 수 있다. 정규화하지 않으면
   // 매핑 테이블을 undefined로 인덱싱하게 된다.
   it('레거시 프리셋 ID로 pin된 세션도 provider로 정규화해 받는다', () => {
-    expect(resolveModelRunConfig({ provider: 'gpt-5.6-luna-medium' }).provider).toBe('openai');
+    expect(resolveModelRunConfig({ provider: 'gpt-6-luna-medium' }).provider).toBe('openai');
     expect(resolveModelRunConfig({ provider: 'claude-opus-4-8' }).provider).toBe('anthropic');
   });
 
   it('용도별로 모델·effort가 달라진다', () => {
-    expect(resolveModelRunConfig({ useFor: 'review' }).resolvedModel).toBe('claude-opus-5');
+    expect(resolveModelRunConfig({ useFor: 'review' }).resolvedModel).toBe('claude-opus-5-5');
     expect(resolveModelRunConfig({ useFor: 'polish' }).resolvedModel).toBe('claude-sonnet-5');
     expect(resolveModelRunConfig({ useFor: 'summary' }).reasoningEffort).toBe('medium');
   });
@@ -113,7 +113,7 @@ describe('createChatModel with runConfig — 모델 결정 경쟁 조건 제거'
 
     expect(openaiCtorSpy).toHaveBeenCalledTimes(1);
     const callArgs = openaiCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('gpt-5.6-luna');
+    expect(callArgs.model).toBe('gpt-6-luna');
     expect(callArgs.reasoning).toEqual({ effort: 'medium' });
   });
 });

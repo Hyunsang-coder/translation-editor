@@ -26,12 +26,13 @@ export interface ModelPrice {
 }
 
 /**
- * 단가표 (2026-07 기준).
+ * 단가표 (2026-09-22 기준: Claude Opus 5.5 / GPT-6 Sol·Luna 출시 반영).
  *
- * - Anthropic: 공식 문서(platform.claude.com/docs/en/about-claude/models/overview) 확인값.
- *   캐시 read는 정가의 0.1배, write(5m TTL)는 1.25배. 이 앱은 5m TTL만 쓴다.
- * - OpenAI: 2026-07-30 가격 개편 반영값(Luna -80%, Sol 동결). 캐시 read는 정가의 0.1배이며,
- *   캐시 write에 대한 별도 과금이 없어(자동 캐싱) `cacheWritePerMTok`은 두지 않는다 —
+ * - Anthropic: Opus 5.5 $4/$20, 캐시 read $0.20 (공식 발표·출시일 보도 확인값).
+ *   캐시 write(5m TTL)는 1.25배. 이 앱은 5m TTL만 쓴다.
+ * - OpenAI: Sol $2/$10, Luna $0.10/$0.50 (영구 단가, 5.6 대비 절반).
+ *   캐시 read는 정가의 0.1배이며, 캐시 write에 대한 별도 과금이 없어(자동 캐싱)
+ *   `cacheWritePerMTok`은 두지 않는다 —
  *   LangChain도 OpenAI 응답에서 cache_creation을 채우지 않으므로 해당 항목은 항상 0이다.
  *   Sol Fast(`service_tier: "priority"`)는 Standard의 2배지만 이 앱은 쓰지 않아 표에 없다.
  *
@@ -39,12 +40,12 @@ export interface ModelPrice {
  * 과거 사용량 기록의 단가 조회에 필요하므로 남긴다.
  */
 export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
-  // ── Anthropic (공식 문서 확인값) ──────────────────────────────
-  'claude-opus-5': {
-    inputPerMTok: 5,
-    outputPerMTok: 25,
-    cacheReadPerMTok: 0.5, // 5 × 0.1
-    cacheWritePerMTok: 6.25, // 5 × 1.25
+  // ── Anthropic (공식 발표 확인값) ──────────────────────────────
+  'claude-opus-5-5': {
+    inputPerMTok: 4,
+    outputPerMTok: 20,
+    cacheReadPerMTok: 0.2,
+    cacheWritePerMTok: 5, // 4 × 1.25
   },
   'claude-sonnet-5': {
     // 2026-08-31까지 $2/$10 도입가가 적용되지만, 만료 후 과거 기록까지 바뀌면
@@ -61,21 +62,16 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
     cacheWritePerMTok: 1.25,
   },
 
-  // ── OpenAI (2026-07-30 개편 반영) ────────────────────────────
-  'gpt-5.6-sol': {
-    inputPerMTok: 5,
-    outputPerMTok: 30,
-    cacheReadPerMTok: 0.5, // 5 × 0.1
-  },
-  'gpt-5.6-terra': {
-    inputPerMTok: 2, // 개편 전 $2.50
-    outputPerMTok: 12, // 개편 전 $15
+  // ── OpenAI (2026-09-22 GPT-6 출시 단가) ───────────────────────
+  'gpt-6-sol': {
+    inputPerMTok: 2,
+    outputPerMTok: 10,
     cacheReadPerMTok: 0.2, // 2 × 0.1
   },
-  'gpt-5.6-luna': {
-    inputPerMTok: 0.2, // 개편 전 $1
-    outputPerMTok: 1.2, // 개편 전 $6
-    cacheReadPerMTok: 0.02, // 0.2 × 0.1
+  'gpt-6-luna': {
+    inputPerMTok: 0.1,
+    outputPerMTok: 0.5,
+    cacheReadPerMTok: 0.01, // 0.1 × 0.1
   },
 };
 

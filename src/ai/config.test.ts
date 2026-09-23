@@ -49,7 +49,7 @@ describe('getAiConfig - provider × 용도 매핑', () => {
     const cfg = getAiConfig({ useFor: 'chat' });
 
     expect(cfg.provider).toBe('openai');
-    expect(cfg.model).toBe('gpt-5.6-luna');
+    expect(cfg.model).toBe('gpt-6-luna');
     expect(cfg.reasoningEffort).toBe('high');
     expect(cfg.openaiApiKey).toBe('env-openai-key');
   });
@@ -58,7 +58,7 @@ describe('getAiConfig - provider × 용도 매핑', () => {
   it('검수만 상위 모델로 해석되고 번역·폴리싱·채팅은 동일 모델', () => {
     useAiConfigStore.setState({ provider: 'anthropic' });
 
-    expect(getAiConfig({ useFor: 'review' }).model).toBe('claude-opus-5');
+    expect(getAiConfig({ useFor: 'review' }).model).toBe('claude-opus-5-5');
     expect(getAiConfig({ useFor: 'translation' }).model).toBe('claude-sonnet-5');
     expect(getAiConfig({ useFor: 'polish' }).model).toBe('claude-sonnet-5');
     expect(getAiConfig({ useFor: 'chat' }).model).toBe('claude-sonnet-5');
@@ -74,11 +74,11 @@ describe('getAiConfig - provider × 용도 매핑', () => {
   });
 
   it('OpenAI도 검수만 Sol이고 나머지는 Luna', () => {
-    expect(resolveModelForUse('openai', 'review').model).toBe('gpt-5.6-terra');
-    expect(resolveModelForUse('openai', 'translation').model).toBe('gpt-5.6-luna');
-    expect(resolveModelForUse('openai', 'polish').model).toBe('gpt-5.6-luna');
+    expect(resolveModelForUse('openai', 'review').model).toBe('gpt-6-sol');
+    expect(resolveModelForUse('openai', 'translation').model).toBe('gpt-6-luna');
+    expect(resolveModelForUse('openai', 'polish').model).toBe('gpt-6-luna');
     expect(resolveModelForUse('openai', 'summary')).toEqual({
-      model: 'gpt-5.6-luna',
+      model: 'gpt-6-luna',
       effort: 'medium',
     });
   });
@@ -129,8 +129,8 @@ describe('normalizeProvider - 레거시 프리셋 ID 정규화', () => {
   it('v13 이전 프리셋 ID를 provider로 환산', () => {
     expect(normalizeProvider('claude-sonnet-5')).toBe('anthropic');
     expect(normalizeProvider('claude-haiku-4-5')).toBe('anthropic');
-    expect(normalizeProvider('gpt-5.6-sol-high')).toBe('openai');
-    expect(normalizeProvider('gpt-5.6-luna-medium')).toBe('openai');
+    expect(normalizeProvider('gpt-6-sol-high')).toBe('openai');
+    expect(normalizeProvider('gpt-6-luna-medium')).toBe('openai');
   });
 
   it('값이 없으면 null (호출부가 기본 provider로 채운다)', () => {
@@ -148,7 +148,7 @@ describe('모델 직접 지정 (ADR-0017)', () => {
     expect(resolveModelForUse('anthropic', 'translation', overrides).model).toBe('claude-sonnet-5');
     expect(resolveModelForUse('anthropic', 'polish', overrides).model).toBe('claude-sonnet-5');
     // 다른 provider는 영향을 받지 않는다.
-    expect(resolveModelForUse('openai', 'review', overrides).model).toBe('gpt-5.6-terra');
+    expect(resolveModelForUse('openai', 'review', overrides).model).toBe('gpt-6-sol');
   });
 
   it('모델만 지정하면 effort는 기본값을 유지한다', () => {
@@ -186,12 +186,12 @@ describe('모델 직접 지정 (ADR-0017)', () => {
   it('목록에 없는 모델은 무시하고 기본값으로 떨어진다', () => {
     // localStorage가 손으로 고쳐지거나 모델이 목록에서 빠진 경우. 모르는 모델로 튀지 않는다.
     const overrides = { anthropic: { review: { model: 'claude-opus-4-1' } } };
-    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-opus-5');
+    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-opus-5-5');
   });
 
   it('provider가 엇갈린 지정은 적용되지 않는다', () => {
-    const overrides = { anthropic: { review: { model: 'gpt-5.6-luna' } } };
-    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-opus-5');
+    const overrides = { anthropic: { review: { model: 'gpt-6-luna' } } };
+    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-opus-5-5');
   });
 });
 
@@ -249,7 +249,7 @@ describe('resolveModelRunConfig — 세션 pin이 채팅 모델의 권위다 (�
   });
 
   it('지정을 바꿔도 이미 스냅샷된 세션은 흔들리지 않는다', () => {
-    useAiConfigStore.setState({ modelOverrides: { anthropic: { chat: { model: 'claude-opus-5' } } } });
+    useAiConfigStore.setState({ modelOverrides: { anthropic: { chat: { model: 'claude-opus-5-5' } } } });
     expect(resolveModelRunConfig({ provider: 'anthropic#claude-haiku-4-5' }).resolvedModel).toBe(
       'claude-haiku-4-5',
     );

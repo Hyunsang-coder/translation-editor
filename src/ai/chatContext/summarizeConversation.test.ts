@@ -38,10 +38,10 @@ describe('resolveSummaryModelRunConfig', () => {
 
   it('openai 실행은 Luna + effort medium으로 요약', () => {
     const rc = resolveSummaryModelRunConfig(
-      baseRc({ provider: 'openai', resolvedModel: 'gpt-5.6-sol' }),
+      baseRc({ provider: 'openai', resolvedModel: 'gpt-6-sol' }),
     );
     expect(rc.provider).toBe('openai');
-    expect(rc.resolvedModel).toBe('gpt-5.6-luna');
+    expect(rc.resolvedModel).toBe('gpt-6-luna');
     expect(rc.openaiApiKey).toBe('sk-openai');
   });
 

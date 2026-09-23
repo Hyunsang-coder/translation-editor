@@ -63,7 +63,7 @@ describe('aiConfigStore - migrate → v14 (provider 단일 선택)', () => {
 
   it('v13 저장값(프리셋 rename이 이미 끝난 상태)도 provider로 환산', () => {
     expect(migrateAiConfig({ translationModel: 'claude-sonnet-5' }, 13).provider).toBe('anthropic');
-    expect(migrateAiConfig({ translationModel: 'gpt-5.6-sol-high' }, 13).provider).toBe('openai');
+    expect(migrateAiConfig({ translationModel: 'gpt-6-sol-high' }, 13).provider).toBe('openai');
   });
 
   // 값이 아예 없던 저장본이 openai로 튀면 키 없는 provider가 선택돼 앱이 바로 막힌다.
@@ -272,11 +272,11 @@ describe('모델 직접 지정 (ADR-0017)', () => {
 
     setModelOverride('anthropic', 'review', 'claude-sonnet-5');
     setEffortOverride('anthropic', 'review', 'medium');
-    setModelOverride('openai', 'chat', 'gpt-5.6-terra');
+    setModelOverride('openai', 'chat', 'gpt-6-sol');
 
     expect(useAiConfigStore.getState().modelOverrides).toEqual({
       anthropic: { review: { model: 'claude-sonnet-5', effort: 'medium' } },
-      openai: { chat: { model: 'gpt-5.6-terra' } },
+      openai: { chat: { model: 'gpt-6-sol' } },
     });
   });
 
@@ -319,7 +319,7 @@ describe('모델 직접 지정 (ADR-0017)', () => {
   it('전체 초기화는 모든 provider의 지정을 한 번에 걷어낸다', () => {
     const { setModelOverride, clearModelOverrides } = useAiConfigStore.getState();
     setModelOverride('anthropic', 'review', 'claude-sonnet-5');
-    setModelOverride('openai', 'polish', 'gpt-5.6-terra');
+    setModelOverride('openai', 'polish', 'gpt-6-sol');
 
     clearModelOverrides();
 

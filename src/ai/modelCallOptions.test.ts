@@ -16,9 +16,9 @@ describe('resolveModelCallOptions', () => {
     expect(opts.temperature).toBeUndefined();
   });
 
-  it('Opus 5 → adaptiveThinking + effort high, temperature 없음', () => {
+  it('Opus 5-5 → adaptiveThinking + effort high, temperature 없음', () => {
     const opts = resolveModelCallOptions(
-      cfg({ provider: 'anthropic', model: 'claude-opus-5', temperature: 0.5, reasoningEffort: 'high' }),
+      cfg({ provider: 'anthropic', model: 'claude-opus-5-5', temperature: 0.5, reasoningEffort: 'high' }),
     );
     expect(opts.adaptiveThinking).toBe(true);
     expect(opts.effort).toBe('high');
@@ -41,17 +41,17 @@ describe('resolveModelCallOptions', () => {
     expect(medium.effort).toBe('medium');
   });
 
-  it('gpt-5 계열 → 매핑 effort 전달, temperature 없음', () => {
+  it('gpt-6 계열 → 매핑 effort 전달, temperature 없음', () => {
     const opts = resolveModelCallOptions(
-      cfg({ provider: 'openai', model: 'gpt-5.6-sol', temperature: 0.7, reasoningEffort: 'high' }),
+      cfg({ provider: 'openai', model: 'gpt-6-sol', temperature: 0.7, reasoningEffort: 'high' }),
     );
     expect(opts.effort).toBe('high');
     expect(opts.temperature).toBeUndefined();
   });
 
-  it('gpt-5 계열 medium도 그대로 전달', () => {
+  it('gpt-6 계열 medium도 그대로 전달', () => {
     const opts = resolveModelCallOptions(
-      cfg({ provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' }),
+      cfg({ provider: 'openai', model: 'gpt-6-luna', reasoningEffort: 'medium' }),
     );
     expect(opts.effort).toBe('medium');
   });
@@ -65,7 +65,7 @@ describe('resolveModelCallOptions', () => {
     expect(opts.effort).toBeUndefined();
   });
 
-  // A3: reasoning_effort는 gpt-5 계열만 지원하므로 비 gpt-5 모델에는 붙이지 않는다
+  // A3: reasoning_effort는 gpt-5/gpt-6 계열만 지원하므로 그 외 모델에는 붙이지 않는다
   it('gpt-4o → effort 없음 (reasoning_effort 미지원 모델 가드), temperature 유지', () => {
     const opts = resolveModelCallOptions(
       cfg({ provider: 'openai', model: 'gpt-4o', temperature: 0.3, reasoningEffort: 'high' }),
@@ -74,7 +74,7 @@ describe('resolveModelCallOptions', () => {
     expect(opts.temperature).toBe(0.3);
   });
 
-  it('mock provider, 비 gpt-5 모델 → effort 없음 (OpenAI fallback 경로)', () => {
+  it('mock provider, 비 gpt-5/gpt-6 모델 → effort 없음 (OpenAI fallback 경로)', () => {
     const opts = resolveModelCallOptions(
       cfg({ provider: 'mock', model: 'gpt-4o-mini', reasoningEffort: 'high' }),
     );

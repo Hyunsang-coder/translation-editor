@@ -2,7 +2,7 @@ import { useAiConfigStore } from '@/stores/aiConfigStore';
 
 /**
  * AI Provider 타입
- * - openai: OpenAI (GPT-5 시리즈)
+ * - openai: OpenAI (GPT 시리즈)
  * - anthropic: Anthropic (Claude 시리즈)
  * - mock: 개발/테스트용 (내부적으로 OpenAI 사용)
  */
@@ -42,20 +42,20 @@ export const MODEL_BY_USE: Readonly<
 > = {
   anthropic: {
     translation: { model: 'claude-sonnet-5', effort: 'high' },
-    review: { model: 'claude-opus-5', effort: 'high' },
+    review: { model: 'claude-opus-5-5', effort: 'high' },
     polish: { model: 'claude-sonnet-5', effort: 'high' },
     chat: { model: 'claude-sonnet-5', effort: 'high' },
     summary: { model: 'claude-sonnet-5', effort: 'medium' },
   },
   openai: {
-    translation: { model: 'gpt-5.6-luna', effort: 'high' },
-    // Sol이 아니라 Terra다. 검수는 문서 전체를 넣는 경로라 long-context recall이 관건인데
-    // Terra는 그 축에서 Sol과 사실상 동급(MRCR 256K–512K 89.6 vs 91.5)이면서 단가가 40%다.
-    // Luna는 같은 축에서 41.3으로 무너져 검수·번역 용도 후보가 아니다.
-    review: { model: 'gpt-5.6-terra', effort: 'high' },
-    polish: { model: 'gpt-5.6-luna', effort: 'high' },
-    chat: { model: 'gpt-5.6-luna', effort: 'high' },
-    summary: { model: 'gpt-5.6-luna', effort: 'medium' },
+    translation: { model: 'gpt-6-luna', effort: 'high' },
+    // 검수는 문서 전체를 넣는 경로라 long-context recall이 관건이다. GPT-6 세대에
+    // Terra가 없으므로 Sol을 쓴다 — 5.6 시절 Terra(저렴·동급 recall) 자리의 대체다.
+    // Luna는 같은 축에서 무너져 검수·번역 용도 후보가 아니다.
+    review: { model: 'gpt-6-sol', effort: 'high' },
+    polish: { model: 'gpt-6-luna', effort: 'high' },
+    chat: { model: 'gpt-6-luna', effort: 'high' },
+    summary: { model: 'gpt-6-luna', effort: 'medium' },
   },
 };
 
@@ -76,8 +76,8 @@ export const PROVIDER_LABELS: Readonly<Record<SelectableProvider, string>> = {
  * 첫 항목이 그 provider의 기본값이 아니라는 점에 주의 — 기본값은 항상 `MODEL_BY_USE`다.
  */
 export const MODEL_CHOICES: Readonly<Record<SelectableProvider, readonly string[]>> = {
-  anthropic: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
-  openai: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+  anthropic: ['claude-opus-5-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+  openai: ['gpt-6-sol', 'gpt-6-luna'],
 };
 
 /**

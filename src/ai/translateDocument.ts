@@ -374,7 +374,7 @@ function buildTranslationSetup(params: {
   const minOutputTokens = Math.max(estimatedInputTokens * 1.5, 8192);
   const maxAllowedTokens = cfg.provider === 'anthropic'
     ? CLAUDE_MAX_OUTPUT_TOKENS
-    : (cfg.model?.startsWith('gpt-5') ? GPT5_MAX_OUTPUT_TOKENS : GPT4O_MAX_OUTPUT_TOKENS);
+    : (cfg.model?.startsWith('gpt-5') || cfg.model?.startsWith('gpt-6') ? GPT5_MAX_OUTPUT_TOKENS : GPT4O_MAX_OUTPUT_TOKENS);
   const calculatedMaxTokens = Math.max(minOutputTokens, Math.min(availableOutputTokens, maxAllowedTokens));
 
   if (availableOutputTokens < minOutputTokens) {

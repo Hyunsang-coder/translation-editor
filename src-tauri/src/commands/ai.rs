@@ -406,7 +406,7 @@ async fn complete_openai(
         "messages": messages,
     });
 
-    if args.model.starts_with("gpt-5") {
+    if args.model.starts_with("gpt-5") || args.model.starts_with("gpt-6") {
         body["max_completion_tokens"] = json!(args.max_tokens);
         if let Some(effort) = &args.effort {
             body["reasoning_effort"] = json!(effort);
@@ -704,7 +704,7 @@ async fn stream_openai(
         "stream_options": { "include_usage": true },
     });
 
-    if args.model.starts_with("gpt-5") {
+    if args.model.starts_with("gpt-5") || args.model.starts_with("gpt-6") {
         body["max_completion_tokens"] = json!(args.max_tokens);
         if let Some(effort) = &args.effort {
             body["reasoning_effort"] = json!(effort);

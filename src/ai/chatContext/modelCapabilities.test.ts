@@ -12,7 +12,7 @@ describe('resolveModelCapabilities', () => {
   });
 
   it('openai 모델은 anthropic보다 큰 입력 예산', () => {
-    const oa = resolveModelCapabilities({ resolvedModel: 'gpt-5.6-sol', provider: 'openai' });
+    const oa = resolveModelCapabilities({ resolvedModel: 'gpt-6-sol', provider: 'openai' });
     const an = resolveModelCapabilities({ resolvedModel: 'claude-sonnet-5', provider: 'anthropic' });
     expect(oa.maxInputTokens).toBeGreaterThan(an.maxInputTokens);
     expect(oa.toolCalling).toBe(true);
