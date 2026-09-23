@@ -271,6 +271,8 @@ Critical implementation warnings learned from past issues.
 
 144. **`oddeyes-desktop-mcp` 도구/스키마 변경 = 배포 3종 동기화 필수**: `src/tools/*.ts`에 도구를 등록·스키마를 바꾸고 `index.ts`에 register하면 코드는 동작하지만, 클라이언트가 **옛 목록/필드**를 본다. ① `package.json` + `manifest.template.json` 버전 bump, ② `manifest.template.json`의 `tools` 배열(추가·설명 변경), ③ `npm run build`로 `.mcpb` 재번들 **그리고** `npm publish`(npx 경로 사용 시)까지 해야 함. 예: v0.7.0 glossary entry CRUD + link/unlink — 미배포 시 Desktop이 옛 스키마를 봄. 사용 측은 `.mcpb` 재설치 또는 npx 캐시 무효화 후 클라이언트 재연결. (`npm view oddeyes-desktop-mcp version`으로 확인.) Persona/참고 문서 MCP 도구는 의도적으로 없음. 용어집 생성(관리 UI)은 라이브러리만 추가하고 프로젝트 연결은 별도(토글/MCP link); 미연결 용어집 용어 추가는 orphan 방지로 자동 연결.
 
+171. **버전은 단조 증가 — 다음 라인은 4.0.0부터**: 2026-09-10 "3.2.0 재배포"처럼 버전 파일을 과거 번호로 되돌리면 업데이터가 깨진다. endpoint가 `releases/latest`의 latest.json을 보므로 되돌린 번호는 기존 설치(3.13.x·3.14.x)보다 낮아 업데이트가 뜨지 않고 해당 사용자군은 발이 묶인다. 번호를 리셋하고 싶으면 뒤로 가지 말고 앞으로 점프할 것. **다음 bump부터 4.x 라인(4.0.0 시작)** — 3.x로는 돌아가지 않는다. (3.15.0이 3.x 마지막).
+
 ## Security
 
 62. **Keychain Access**: First run requires OS authentication prompt for keychain access.
