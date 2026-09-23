@@ -425,6 +425,7 @@
     "applyCancelledTitle": "Apply cancelled",
     "applyCancelledProjectSwitched": "Apply was cancelled because the project was switched.",
     "applyCancelledDocChanged": "Apply was cancelled because the document was edited after the request. Please review the document and run again.",
+    "applyFailed": "Could not apply the result because its document structure is invalid.",
     "applySelected": "Apply {{count}} selected",
     "selectiveDiff": {
       "changedCount": "{{selected}} of {{total}} changes selected",

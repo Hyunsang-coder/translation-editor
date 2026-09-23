@@ -1973,10 +1973,19 @@ export function EditorCanvasTipTap(): JSX.Element {
     // 적용 표시를 남긴다. 반대로 첫 번역(빈 번역문)은 문서 전체가 '추가'로 잡혀
     // 통째로 칠해지므로 표시가 아니라 소음이 된다. 그때만 표시 없이 갈아끼운다.
     const hadTranslation = targetEditorRef.current.state.doc.textContent.trim().length > 0;
-    if (hadTranslation) {
-      replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
-    } else {
-      replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
+    try {
+      if (hadTranslation) {
+        replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
+      } else {
+        replaceDocContent(targetEditorRef.current, doc, { addToHistory: true });
+      }
+    } catch (e) {
+      // 스키마 검증 실패는 교체 전에 던져지므로 문서는 그대로다 — 미리보기를 유지한다.
+      console.warn('[translate] apply failed:', e);
+      const reason = t('editor.applyFailed', '결과 문서 구조가 올바르지 않아 적용하지 못했습니다.');
+      setTranslateApplyNotice(reason);
+      addToast({ type: 'error', message: reason });
+      return;
     }
     setTranslatePreviewOpen(false);
     setTranslateOriginalDocJson(null);
@@ -2062,7 +2071,13 @@ export function EditorCanvasTipTap(): JSX.Element {
       return;
     }
 
-    replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
+    try {
+      replaceDocumentWithAppliedChanges(targetEditorRef.current, doc, { addToHistory: true });
+    } catch (e) {
+      console.warn('[polish] apply failed:', e);
+      addToast({ type: 'error', message: t('editor.applyFailed', '결과 문서 구조가 올바르지 않아 적용하지 못했습니다.') });
+      return;
+    }
     handlePolishClose();
 
     const { project, materializeBlocksForSnapshot } = useProjectStore.getState();

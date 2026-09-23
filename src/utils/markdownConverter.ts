@@ -939,6 +939,10 @@ const INLINE_CONTENT_PARENTS = new Set(['paragraph', 'heading']);
  * insertContent 등)에서 "Invalid content for node listItem"이 터진다.
  * 앵커 복원(restoreImageAnchors)은 제자리 치환이므로, 여기서 감싸두면
  * 복원된 원본 이미지도 paragraph 안에 남는다.
+ *
+ * HTML 경로(htmlToTipTapJson)는 `<p><img></p>`에서 image를 끌어올리며 빈
+ * paragraph를 남긴다. 그대로 두면 감싼 뒤 빈 줄이 하나 생기므로, image 바로
+ * 앞의 빈 paragraph는 새로 만들지 않고 그 자리를 재사용한다.
  */
 export function wrapBlockImagesInParagraphs(doc: TipTapDocJson): TipTapDocJson {
   const visit = (node: TipTapDocJson): TipTapDocJson => {
@@ -946,19 +950,27 @@ export function wrapBlockImagesInParagraphs(doc: TipTapDocJson): TipTapDocJson {
     const content = Array.isArray(node.content) ? node.content as TipTapDocJson[] : undefined;
     if (!content) return node;
     const parentType = typeof node.type === 'string' ? node.type : '';
-    return {
-      ...node,
-      content: content.map((child) => {
-        if (
-          child && typeof child === 'object'
-          && (child as TipTapDocJson).type === 'image'
-          && !INLINE_CONTENT_PARENTS.has(parentType)
-        ) {
-          return { type: 'paragraph', content: [visit(child as TipTapDocJson)] };
+    const next: TipTapDocJson[] = [];
+    for (const child of content) {
+      if (
+        child && typeof child === 'object'
+        && child.type === 'image'
+        && !INLINE_CONTENT_PARENTS.has(parentType)
+      ) {
+        const image = visit(child);
+        const prev = next[next.length - 1];
+        const prevIsEmptyParagraph = prev?.type === 'paragraph'
+          && !(Array.isArray(prev.content) && prev.content.length > 0);
+        if (prevIsEmptyParagraph) {
+          next[next.length - 1] = { ...prev, content: [image] };
+        } else {
+          next.push({ type: 'paragraph', content: [image] });
         }
-        return visit(child as TipTapDocJson);
-      }),
-    };
+        continue;
+      }
+      next.push(visit(child));
+    }
+    return { ...node, content: next };
   };
   return visit(doc);
 }
