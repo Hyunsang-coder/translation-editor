@@ -151,6 +151,33 @@ describe('summarizeConversation', () => {
     });
     expect(out).toBe('기존 요약');
   });
+
+  it('부모가 살아있는데 타임아웃으로 자식 signal이 끊기면 취소로 처리하지 않고 기존 요약을 반환', async () => {
+    // invoke가 abort에 AbortError로 reject하지만 절대 resolve하지 않는 stall 재현.
+    // withTimeout 게이트보다 task의 AbortError가 먼저 이기는 레이스에서도
+    // 부모 abort가 아니면 fallback해야 본 요청이 죽지 않는다.
+    const invoke = vi.fn().mockImplementation(
+      (_m: unknown, o?: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          o?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+            { once: true },
+          );
+        }),
+    );
+    createChatModel.mockReturnValue({ invoke });
+    const ac = new AbortController();
+    const out = await summarizeConversation({
+      priorSummary: '기존 요약',
+      messagesToSummarize: msgs,
+      runConfig: baseRc(),
+      abortSignal: ac.signal,
+      timeoutMs: 30,
+    });
+    expect(ac.signal.aborted).toBe(false);
+    expect(out).toBe('기존 요약');
+  });
 });
 
 describe('신뢰 경계 (F11)', () => {

@@ -169,16 +169,20 @@ export async function summarizeConversation(input: {
     const text = extractText(ai).trim();
     return text || priorSummary;
   } catch (e) {
-    // 사용자 취소는 상위로 전파(요청 취소), 시간 초과/그 외 실패는 기존 요약 유지(무손실)
-    if (isAbortError(e) && abortSignal?.aborted) {
-      throw e;
-    }
+    // 시간 초과는 기존 요약 유지 후 본 답변으로 진행(무손실 fallback).
     if (e && typeof e === 'object' && (e as { name?: unknown }).name === 'SummaryTimeoutError') {
       console.warn('[summarizeConversation] 요약 시간 초과, 기존 요약 유지 후 본 답변으로 진행');
       return priorSummary;
     }
     if (isAbortError(e)) {
-      throw e;
+      // 부모 abort(사용자 취소)일 때만 상위로 전파한다.
+      // 부모가 살아있는데 AbortError면 타임아웃이 끊은 자식 abort이므로
+      // 요청 전체를 취소로 처리하지 않고 기존 요약으로 진행한다.
+      if (abortSignal?.aborted) {
+        throw e;
+      }
+      console.warn('[summarizeConversation] 요약 대기 중단(타임아웃), 기존 요약 유지 후 본 답변으로 진행');
+      return priorSummary;
     }
     console.warn('[summarizeConversation] 요약 생성 실패, 기존 요약 유지:', e instanceof Error ? e.message : e);
     return priorSummary;

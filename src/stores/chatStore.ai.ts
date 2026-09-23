@@ -18,8 +18,11 @@ import { streamAssistantReply, type StreamCallbacks } from '@/ai/chat';
 import { resolveModelRunConfig } from '@/ai/config';
 import { createChatModel } from '@/ai/client';
 import { resolveModelCapabilities } from '@/ai/chatContext/modelCapabilities';
-import { approxTokens, computeInputBudget } from '@/ai/chatContext/tokenBudget';
-import { planConversationContext } from '@/ai/chatContext/conversationContext';
+import { approxTokens, computeInputBudget, MIN_RECENT_TURNS } from '@/ai/chatContext/tokenBudget';
+import {
+  estimateChatMessagesTokens,
+  planConversationContext,
+} from '@/ai/chatContext/conversationContext';
 import {
   summarizeConversation,
   resolveSummaryModelRunConfig,
@@ -121,6 +124,34 @@ function isAbortError(error: unknown): boolean {
     (error as { name?: unknown }).name === 'AbortError'
   );
 }
+
+/**
+ * 컨텍스트 오버플로우 판별 (채팅 전용).
+ * provider/SDK마다 에러 형태가 달라 메시지 패턴으로 본다. 429/5xx(재시도 대상)와
+ * 달리 오버플로우는 같은 입력으로 재시도해도 성공하지 않으므로 긴급 요약 후 1회만 재시도한다.
+ */
+function isContextOverflowError(error: unknown): boolean {
+  const message = (
+    error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? error ?? '')
+  ).toLowerCase();
+  return (
+    message.includes('context') && (message.includes('length') || message.includes('limit') || message.includes('window') || message.includes('too long') || message.includes('exceed'))
+    || message.includes('too many tokens')
+    || message.includes('input is too long')
+    || message.includes('maximum context')
+    || message.includes('context_window_exceeded')
+  );
+}
+
+/** selection 스코프 요청에서 예산 trim 시 최소 보존 메시지 수 (2턴). */
+const MIN_SELECTION_RECENT_MESSAGES = 4;
+
+/**
+ * 도구 정의가 모델 입력에 실리는 추정치 (정적 예약).
+ * planner/guard의 메시지 추정치에는 도구 스펙이 안 들어가 실제 입력보다 적게 보므로,
+ * 오버플로우를 사전에 막도록 고정분으로 뺀다. [AI prompt] 로그의 tools= 합계로 주기적 점검.
+ */
+const TOOL_DEFINITIONS_RESERVE_TOKENS = 10_000;
 
 function buildWebSearchPrompt(webQuery: string): string {
   return [
@@ -276,19 +307,45 @@ export function createAiActions(
         maxInputTokens: capabilities.maxInputTokens,
         outputTokenBudget: DEFAULT_CHAT_MAX_TOKENS,
       });
-      // 시스템 프롬프트/도구 가이드 + 규칙/글로서리/컨텍스트/현재 입력의 고정 컨텍스트 추정치
+      // 시스템 프롬프트/도구 가이드 + 규칙/글로서리/컨텍스트/현재 입력의 고정 컨텍스트 추정치.
+      // planner/guard의 메시지 추정치에 안 들어가는 항목(첨부·컨텍스트블록·선택·도구정의)도
+      // 빼먹으면 예산이 과대평가돼 실제 오버플로우가 나므로 함께 예약한다.
       const SYSTEM_BASE_TOKENS = 1_500;
       const reservedContextTokens =
         SYSTEM_BASE_TOKENS +
+        TOOL_DEFINITIONS_RESERVE_TOKENS +
         approxTokens(translationRules) +
         approxTokens(projectMemoryDigest) +
         approxTokens(forbiddenTermsDigest) +
         approxTokens(glossaryInjected) +
-        approxTokens(content);
+        approxTokens(content) +
+        approxTokens(
+          capturedAttachments
+            .filter((a) => a.extractedText)
+            .map((a) => a.extractedText!)
+            .join('\n'),
+        ) +
+        approxTokens(contextBlocks.map((b) => stripHtml(b.content)).join('\n')) +
+        approxTokens(selection?.text ?? '');
+
+      // selection 스코프는 세션 공용 memory에 요약하지 않는다(범위外 오염 방지).
+      // 대신 토큰 예산으로 최근 윈도우를 잘라 오버플로우를 사전에 막는다(12개 상한 + 예산 trim).
+      const trimSelectionRecent = (scoped: ChatMessage[]): ChatMessage[] => {
+        const minKeep = Math.min(scoped.length, MIN_SELECTION_RECENT_MESSAGES);
+        const selectionBudget = Math.max(0, budget.summaryTriggerTokens - reservedContextTokens);
+        let from = 0;
+        while (
+          scoped.length - from > minKeep
+          && estimateChatMessagesTokens(scoped.slice(from)) > selectionBudget
+        ) {
+          from++;
+        }
+        return scoped.slice(from);
+      };
 
       const plan = isSelectionRequest
         ? {
-            recentRawMessages: priorMessages.slice(-12),
+            recentRawMessages: trimSelectionRecent(priorMessages.slice(-12)),
             needsSummary: false,
             messagesToSummarize: [],
             summarizedThroughMessageId: null,
@@ -312,14 +369,19 @@ export function createAiActions(
           });
           // 요약 도중 취소/전환됐으면 이 요청의 상태를 더 진행하지 않는다.
           if (!ownsStream()) return;
-          conversationSummary = newSummary;
-          get().updateSessionMemory(effectiveSessionId, {
-            summary: newSummary,
-            summarizedThroughMessageId: plan.summarizedThroughMessageId,
-            summaryUpdatedAt: Date.now(),
-            summaryModel: resolveSummaryModelRunConfig(runConfig).resolvedModel,
-            summaryVersion: 1,
-          });
+          // 요약 실패 fallback은 priorSummary를 그대로 돌려준다. 이때 경계까지
+          // 전진시키면 해당 구간이 요약에도 원문에도 없는 좀비 구간이 되므로,
+          // 실제로 갱신됐을 때만 memory를 전진시키고 다음 턴에 재시도한다.
+          if (newSummary !== conversationSummary) {
+            conversationSummary = newSummary;
+            get().updateSessionMemory(effectiveSessionId, {
+              summary: newSummary,
+              summarizedThroughMessageId: plan.summarizedThroughMessageId,
+              summaryUpdatedAt: Date.now(),
+              summaryModel: resolveSummaryModelRunConfig(runConfig).resolvedModel,
+              summaryVersion: 1,
+            });
+          }
         } catch (e) {
           // abort는 상위 catch가 정리하도록 전파. 그 외 실패는 기존 요약으로 안전 진행(무손실).
           if (isAbortError(e)) throw e;
@@ -330,27 +392,30 @@ export function createAiActions(
         }
       }
 
-      const recent: ChatMessage[] = plan.recentRawMessages;
-      const initialIncluded: ContextManifest['included'] = [];
-      if (selection) initialIncluded.push('selection');
-      if (translationRules) initialIncluded.push('translation-rules');
-      if (projectMemoryDigest) initialIncluded.push('project-memory');
-      if (forbiddenTermsDigest) initialIncluded.push('forbidden-terms');
-      if (glossaryInjected) initialIncluded.push('glossary');
-      if (conversationSummary) initialIncluded.push('chat-summary');
-      if (contextBlocks.length > 0) initialIncluded.push('document-tool');
-      const contextManifest: ContextManifest = {
-        mode: isSelectionRequest ? 'selection-chat' : 'general-chat',
-        revision: memoryState.revision,
-        projectMemoryItemIds: memoryDigest.itemIds,
-        ...(translationRules
-          ? { translationRulesHash: hashContent(translationRules) }
-          : {}),
-        forbiddenTermIds: memoryDigest.forbiddenTermIds,
-        glossaryEntryIds: get().lastInjectedGlossary.map((entry) => entry.id),
-        included: initialIncluded,
-        estimatedInputTokens: reservedContextTokens,
+      let recent: ChatMessage[] = plan.recentRawMessages;
+      const buildContextManifest = (): ContextManifest => {
+        const included: ContextManifest['included'] = [];
+        if (selection) included.push('selection');
+        if (translationRules) included.push('translation-rules');
+        if (projectMemoryDigest) included.push('project-memory');
+        if (forbiddenTermsDigest) included.push('forbidden-terms');
+        if (glossaryInjected) included.push('glossary');
+        if (conversationSummary) included.push('chat-summary');
+        if (contextBlocks.length > 0) included.push('document-tool');
+        return {
+          mode: isSelectionRequest ? 'selection-chat' : 'general-chat',
+          revision: memoryState.revision,
+          projectMemoryItemIds: memoryDigest.itemIds,
+          ...(translationRules
+            ? { translationRulesHash: hashContent(translationRules) }
+            : {}),
+          forbiddenTermIds: memoryDigest.forbiddenTermIds,
+          glossaryEntryIds: get().lastInjectedGlossary.map((entry) => entry.id),
+          included,
+          estimatedInputTokens: reservedContextTokens,
+        };
       };
+      let contextManifest: ContextManifest = buildContextManifest();
 
       // Assistant 빈 메시지 추가 (스트리밍 버블)
       // 실행 출처 메타데이터를 캡처된 runConfig에서 만든다(기록 모델 = 실제 호출 모델 보장).
@@ -655,36 +720,87 @@ export function createAiActions(
         ...extraCallbacks,
       };
 
-      const replyMasked = await streamAssistantReply(
-        {
-          project,
-          contextBlocks,
-          recentMessages: recent,
-          userMessage: maskedUserContent,
-          ...(selection ? { selection } : {}),
-          // 멀티블록 선택은 적용 경로가 없으므로 수정안 제안 도구를 주지 않는다.
-          ...(selectionContext?.status === 'active' && !selectionContext.spansMultipleBlocks
-            ? { selectionProposalEnabled: true }
-            : {}),
-          translationRules,
-          ...(projectMemoryDigest ? { projectMemoryDigest } : {}),
-          ...(forbiddenTermsDigest ? { forbiddenTermsDigest } : {}),
-          ...(glossaryInjected ? { glossaryInjected } : {}),
-          ...(conversationSummary ? { conversationSummary } : {}),
-          requestType: 'question',
-          abortSignal: abortController.signal,
-          attachments: capturedAttachments
-            .filter((a) => a.extractedText)
-            .map((a) => ({ filename: a.filename, text: a.extractedText! })),
-          imageAttachments: capturedAttachments
-            .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
-            .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
-          webSearchEnabled,
-          confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
-        },
-        runConfig,
-        callbacks,
-      );
+      const invokeMain = (): Promise<string> =>
+        streamAssistantReply(
+          {
+            project,
+            contextBlocks,
+            recentMessages: recent,
+            userMessage: maskedUserContent,
+            ...(selection ? { selection } : {}),
+            // 멀티블록 선택은 적용 경로가 없으므로 수정안 제안 도구를 주지 않는다.
+            ...(selectionContext?.status === 'active' && !selectionContext.spansMultipleBlocks
+              ? { selectionProposalEnabled: true }
+              : {}),
+            translationRules,
+            ...(projectMemoryDigest ? { projectMemoryDigest } : {}),
+            ...(forbiddenTermsDigest ? { forbiddenTermsDigest } : {}),
+            ...(glossaryInjected ? { glossaryInjected } : {}),
+            ...(conversationSummary ? { conversationSummary } : {}),
+            requestType: 'question',
+            abortSignal: abortController.signal,
+            attachments: capturedAttachments
+              .filter((a) => a.extractedText)
+              .map((a) => ({ filename: a.filename, text: a.extractedText! })),
+            imageAttachments: capturedAttachments
+              .filter((a) => !!a.filePath && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(String(a.fileType).toLowerCase()))
+              .map((a) => ({ filename: a.filename, fileType: a.fileType, filePath: a.filePath! })),
+            webSearchEnabled,
+            confluenceSearchEnabled: session?.confluenceSearchEnabled ?? false,
+          },
+          runConfig,
+          callbacks,
+        );
+
+      let replyMasked: string;
+      try {
+        replyMasked = await invokeMain();
+      } catch (invokeError) {
+        // 컨텍스트 오버플로우는 같은 입력으로 재시도해도 성공하지 않으므로,
+        // 최소 보존 턴까지 공격적으로 접는 긴급 요약 후 1회만 재시도한다(채팅 계속 이어가기).
+        // selection 스코프(세션 공용 memory 미사용)와 취소 중에는 재시도하지 않는다.
+        if (
+          !isSelectionRequest
+          && isContextOverflowError(invokeError)
+          && !abortController.signal.aborted
+          && ownsStream()
+        ) {
+          set({ statusMessage: '컨텍스트가 가득 차 이전 대화를 요약하고 있습니다...' });
+          const freshSession = get().sessions.find((s) => s.id === effectiveSessionId) ?? null;
+          const freshSummary = freshSession?.memory?.summary ?? '';
+          const emergencyPlan = planConversationContext({
+            messages: priorMessages,
+            memory: freshSession?.memory,
+            budget,
+            reservedContextTokens,
+            maxRecentMessages: MIN_RECENT_TURNS * 2,
+          });
+          // 더 접을 게 없으면(첨부 등 transcript外 초과) 원본 에러를 그대로 보고한다.
+          if (!emergencyPlan.needsSummary) throw invokeError;
+          const emergencySummary = await summarizeConversation({
+            priorSummary: freshSummary,
+            messagesToSummarize: emergencyPlan.messagesToSummarize,
+            runConfig,
+            abortSignal: abortController.signal,
+          });
+          if (!ownsStream()) return;
+          if (emergencySummary !== freshSummary) {
+            conversationSummary = emergencySummary;
+            get().updateSessionMemory(effectiveSessionId, {
+              summary: emergencySummary,
+              summarizedThroughMessageId: emergencyPlan.summarizedThroughMessageId,
+              summaryUpdatedAt: Date.now(),
+              summaryModel: resolveSummaryModelRunConfig(runConfig).resolvedModel,
+              summaryVersion: 1,
+            });
+          }
+          recent = emergencyPlan.recentRawMessages;
+          contextManifest = buildContextManifest();
+          replyMasked = await invokeMain();
+        } else {
+          throw invokeError;
+        }
+      }
 
       // L1: 소유권(epoch) 가드. streamAssistantReply는 청크 사이에서만 abort를
       // 확인하므로, 마지막 청크 이후 취소/전환된 요청도 정상 resolve될 수 있습니다.

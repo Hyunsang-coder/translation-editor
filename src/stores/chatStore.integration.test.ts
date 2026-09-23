@@ -715,11 +715,13 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
   });
 
   describe('Phase 3: 장기 대화 요약/토큰 예산', () => {
-    function seedMessages(sessionId: string, n: number): void {
+    function seedMessages(sessionId: string, n: number, opts?: { long?: boolean }): void {
       const seeded = Array.from({ length: n }, (_, i) => ({
         id: `s${i}`,
         role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: `과거 메시지 ${i}`,
+        // 토큰 예산 기반 플래너가 발동하려면 합산이 trigger를 넘어야 한다.
+        // 짧은 30개는 수백 토큰이라 요약 대상이 아님 — 장문 시드로 예산 초과를 재현한다.
+        content: opts?.long ? `과거 메시지 ${i} ` + 'x'.repeat(40_000) : `과거 메시지 ${i}`,
         timestamp: 1000 + i,
       }));
       useChatStore.setState((state) => ({
@@ -734,7 +736,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
     it('긴 대화는 오래된 구간을 요약해 memory에 저장하고 전체 transcript는 보존한다', async () => {
       useChatStore.getState().createSession('Long');
       const sessionId = useChatStore.getState().currentSessionId!;
-      seedMessages(sessionId, 30);
+      seedMessages(sessionId, 30, { long: true });
       // 요약 모델(createChatModel().invoke) 응답 고정
       mocks.webInvoke.mockResolvedValue({ content: '누적 요약 텍스트' });
 
@@ -757,7 +759,7 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
     it('요약 실패 시 transcript를 보존하고 응답을 계속한다(무손실 fallback)', async () => {
       useChatStore.getState().createSession('LongFail');
       const sessionId = useChatStore.getState().currentSessionId!;
-      seedMessages(sessionId, 30);
+      seedMessages(sessionId, 30, { long: true });
       // 요약 모델 호출이 실패(비재시도 에러) → 기존 요약 유지
       mocks.webInvoke.mockRejectedValue(new Error('summary boom'));
 
@@ -767,14 +769,47 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       // transcript 보존 + 응답 진행
       expect(session?.messages).toHaveLength(32);
       expect(session?.messages.at(-1)?.content).toBe('AI 응답입니다.');
-      // 요약 실패했으므로 memory.summary는 비어 있음
-      expect(session?.memory?.summary ?? '').toBe('');
+      // 요약 실패했으므로 경계도 전진하지 않는다 — memory 미생성, 다음 턴에 재시도된다
+      expect(session?.memory).toBeUndefined();
+      expect(mocks.streamAssistantReply).toHaveBeenCalledWith(
+        expect.not.objectContaining({ conversationSummary: expect.anything() }),
+        expect.any(Object),
+        expect.any(Object),
+      );
+    });
+
+    it('본 호출이 컨텍스트 오버플로우로 실패하면 긴급 요약 후 1회 재시도한다', async () => {
+      useChatStore.getState().createSession('OverflowRetry');
+      const sessionId = useChatStore.getState().currentSessionId!;
+      seedMessages(sessionId, 30, { long: true });
+      // 사전 요약과 긴급 요약을 구분해 긴급 경로의 memory 전진을 검증한다
+      mocks.webInvoke.mockResolvedValueOnce({ content: '사전 요약 텍스트' });
+      mocks.webInvoke.mockResolvedValue({ content: '긴급 요약 텍스트' });
+      mocks.streamAssistantReply.mockRejectedValueOnce(
+        new Error("This model's maximum context length is 128000 tokens, please reduce the length."),
+      );
+
+      await useChatStore.getState().sendMessage('새 질문', sessionId);
+
+      const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+      // 재시도 성공: transcript 보존 + 정상 응답 + memory 저장
+      expect(mocks.streamAssistantReply).toHaveBeenCalledTimes(2);
+      expect(session?.messages).toHaveLength(32);
+      expect(session?.messages.at(-1)?.content).toBe('AI 응답입니다.');
+      expect(session?.memory?.summary).toBe('긴급 요약 텍스트');
+      expect(session?.memory?.summarizedThroughMessageId).toBeTruthy();
+      // 재시도 호출에는 긴급 요약이 컨텍스트로 전달됨
+      expect(mocks.streamAssistantReply).toHaveBeenLastCalledWith(
+        expect.objectContaining({ conversationSummary: '긴급 요약 텍스트' }),
+        expect.any(Object),
+        expect.any(Object),
+      );
     });
 
     it('요약 진행 중 취소하면 요청이 중단되고 로딩 상태가 해제된다', async () => {
       useChatStore.getState().createSession('LongCancel');
       const sessionId = useChatStore.getState().currentSessionId!;
-      seedMessages(sessionId, 30);
+      seedMessages(sessionId, 30, { long: true });
       // 요약 invoke를 pending으로 묶어 둔다 (signal abort 시 AbortError로 reject)
       mocks.webInvoke.mockImplementation(
         (_m: unknown, o?: { signal?: AbortSignal }) =>

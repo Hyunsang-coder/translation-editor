@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ChatMessage, ChatSessionMemory } from '@/types';
 import { planConversationContext } from './conversationContext';
-import { computeInputBudget, MAX_RECENT_TURNS } from './tokenBudget';
+import { computeInputBudget } from './tokenBudget';
 
 function mkMessages(n: number, opts?: { longAt?: number; longChars?: number }): ChatMessage[] {
   const out: ChatMessage[] = [];
@@ -20,16 +20,32 @@ function mkMessages(n: number, opts?: { longAt?: number; longChars?: number }): 
 const bigBudget = computeInputBudget({ maxInputTokens: 180_000, outputTokenBudget: 8_000 });
 
 describe('planConversationContext', () => {
-  it('100개 짧은 메시지: 오래된 구간은 요약 대상, 최근 턴만 원문 유지, 무손실', () => {
+  it('토큰이 예산 안에 들면 100개 짧은 메시지도 요약 없이 전부 원문 유지', () => {
     const messages = mkMessages(100);
     const plan = planConversationContext({ messages, budget: bigBudget });
 
+    // 합산 수백 토큰 수준이라 trigger(126k)와 무관 — 개수만으로 요약 호출하지 않는다
+    expect(plan.needsSummary).toBe(false);
+    expect(plan.messagesToSummarize).toHaveLength(0);
+    expect(plan.recentRawMessages).toHaveLength(100);
+    expect(plan.summarizedThroughMessageId).toBeNull();
+  });
+
+  it('예산 초과 시 오래된 구간은 요약 대상, 최근 턴만 원문 유지, 무손실', () => {
+    // 각 ~1.3k 토큰 장문 100개 → 합산이 trigger를 넘기는 배치
+    const messages: ChatMessage[] = Array.from({ length: 100 }, (_, i) => ({
+      id: `m${i}`,
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `message ${i} ` + 'x'.repeat(5_200),
+      timestamp: 1000 + i,
+    }));
+    const plan = planConversationContext({ messages, budget: bigBudget });
+
     expect(plan.needsSummary).toBe(true);
-    expect(plan.recentRawMessages.length).toBeLessThanOrEqual(MAX_RECENT_TURNS * 2);
     expect(plan.recentRawMessages[0]!.role).toBe('user');
     // 초기 결정(m0)은 원문 윈도우가 아니라 요약 대상에 있어야 한다
     expect(plan.messagesToSummarize.some((m) => m.id === 'm0')).toBe(true);
-    // 무손실: 요약대상 + 최근원문 = 전체
+    // 무손실: 요약대상 + 최근원문 = 전체 (잘린 꼬리는 최근 앞에 붙는다)
     expect(plan.messagesToSummarize.length + plan.recentRawMessages.length).toBe(100);
     // 마지막 요약 경계 id
     expect(plan.summarizedThroughMessageId).toBe(
@@ -81,7 +97,14 @@ describe('planConversationContext', () => {
     expect(plan.recentRawMessages[0]!.role).toBe('user');
   });
 
-  it('작은 컨텍스트 예산일수록 원문 윈도우가 줄어든다 (재예산)', () => {    const messages = mkMessages(40);
+  it('작은 컨텍스트 예산일수록 원문 윈도우가 줄어든다 (재예산)', () => {
+    // 각 ~1k 토큰 장문 40개 → 작은 예산에서만 요약이 발동하는 배치
+    const messages: ChatMessage[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `m${i}`,
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `message ${i} ` + 'x'.repeat(4_000),
+      timestamp: 1000 + i,
+    }));
     const large = planConversationContext({
       messages,
       budget: computeInputBudget({ maxInputTokens: 180_000, outputTokenBudget: 8_000 }),
@@ -92,6 +115,10 @@ describe('planConversationContext', () => {
       // 최근 원문을 강하게 제약하도록 큰 고정 컨텍스트 예약
       reservedContextTokens: 3_000,
     });
+    // 큰 예산은 전부 원문 유지, 작은 예산은 요약 발동 + 윈도우 축소
+    expect(large.needsSummary).toBe(false);
+    expect(large.recentRawMessages).toHaveLength(40);
+    expect(small.needsSummary).toBe(true);
     expect(small.recentRawMessages.length).toBeLessThanOrEqual(large.recentRawMessages.length);
   });
 
@@ -116,14 +143,14 @@ describe('planConversationContext', () => {
     expect(plan.summarizedThroughMessageId).toBe(
       plan.messagesToSummarize[plan.messagesToSummarize.length - 1]!.id,
     );
-    // 잘린 꼬리가 최근 원문에도 없으면 이번 턴 컨텍스트에서 빠지지만,
-    // throughId가 전진하지 않았으므로 다음 턴 증분 대상에 남는다
+    // 잘린 꼬리는 최근 원문 앞에 붙어 이번 턴 무손실 — 전체가 커버된다
     const covered = new Set([
       ...plan.messagesToSummarize.map((m) => m.id),
       ...plan.recentRawMessages.map((m) => m.id),
     ]);
-    const firstUncovered = messages.find((m) => !covered.has(m.id));
-    expect(firstUncovered).toBeDefined();
+    expect(covered.size).toBe(40);
+    expect(plan.recentRawMessages[0]!.role).toBe('user');
+    // 꼬리(m2~)는 미요약 상태이므로 다음 턴 증분 대상에 다시 잡힌다
     const followUp = planConversationContext({
       messages,
       budget: bigBudget,
@@ -136,7 +163,6 @@ describe('planConversationContext', () => {
         summaryVersion: 1,
       },
     });
-    // 잘렸던 꼬리가 다음 턴 요약 대상에 다시 잡힌다
-    expect(followUp.messagesToSummarize.some((m) => m.id === firstUncovered!.id)).toBe(true);
+    expect(followUp.messagesToSummarize.some((m) => m.id === 'm2')).toBe(true);
   });
 });
