@@ -16,6 +16,8 @@ export interface ImageAnchor {
   id: string;
   node: TipTapDocJson;
   path: number[];
+  /** 원문에서 문단 안 다른 내용 없이 홀로 있던 이미지인지 (block 직속 포함). */
+  standalone: boolean;
 }
 
 export interface ImageAnchorPreparation {
@@ -58,16 +60,90 @@ function readAnchorId(node: TipTapDocJson): string | null {
 
 function visitMutable(
   node: TipTapDocJson,
-  visitor: (node: TipTapDocJson, path: number[]) => void,
+  visitor: (node: TipTapDocJson, path: number[], parent: TipTapDocJson | null) => void,
   path: number[] = [],
+  parent: TipTapDocJson | null = null,
 ): void {
-  visitor(node, path);
+  visitor(node, path, parent);
   if (!Array.isArray(node.content)) return;
 
   node.content.forEach((child, index) => {
     if (child && typeof child === 'object') {
-      visitMutable(child as TipTapDocJson, visitor, [...path, index]);
+      visitMutable(child as TipTapDocJson, visitor, [...path, index], node);
     }
+  });
+}
+
+function isStandaloneImage(parent: TipTapDocJson | null): boolean {
+  if (parent?.type === 'heading') return false;
+  if (parent?.type !== 'paragraph') return true;
+  return Array.isArray(parent.content) && parent.content.length === 1;
+}
+
+function isBreakOrBlank(node: TipTapDocJson): boolean {
+  return node.type === 'hardBreak' || (node.type === 'text' && !String(node.text ?? '').trim());
+}
+
+/** 이미지와 맞닿은 쪽의 줄바꿈·공백을 걷어낸다. */
+function trimEdge(nodes: TipTapDocJson[], edge: 'start' | 'end'): TipTapDocJson[] {
+  const result = [...nodes];
+  const at = () => (edge === 'start' ? 0 : result.length - 1);
+  while (result.length > 0 && isBreakOrBlank(result[at()]!)) result.splice(at(), 1);
+  const node = result[at()];
+  if (node?.type === 'text') {
+    const text = String(node.text);
+    result[at()] = { ...node, text: edge === 'start' ? text.trimStart() : text.trimEnd() };
+  }
+  return result;
+}
+
+/**
+ * 원문에서 독립 문단이던 앵커가 다른 텍스트와 한 문단에 섞여 오면 앵커 앞뒤로 문단을 나눈다.
+ *
+ * inline image 스키마에서는 모델이 앵커 앞뒤 빈 줄을 빠뜨리면(`앞\n![..](..)\n뒤`)
+ * 이미지가 문단 하나로 합쳐진다. 원래 문장 안에 있던 앵커는 건드리지 않는다.
+ */
+function splitStandaloneAnchorParagraphs(
+  node: TipTapDocJson,
+  byId: ReadonlyMap<string, ImageAnchor>,
+): void {
+  if (!Array.isArray(node.content)) return;
+
+  node.content = (node.content as TipTapDocJson[]).flatMap((child) => {
+    if (!child || typeof child !== 'object') return [child];
+    splitStandaloneAnchorParagraphs(child, byId);
+    if (child.type !== 'paragraph' || !Array.isArray(child.content) || child.content.length < 2) {
+      return [child];
+    }
+
+    const inline = child.content as TipTapDocJson[];
+    const isStandaloneAnchor = (n: TipTapDocJson) => {
+      const id = readAnchorId(n);
+      return id !== null && byId.get(id)?.standalone === true;
+    };
+    if (!inline.some(isStandaloneAnchor)) return [child];
+
+    const pieces: TipTapDocJson[][] = [];
+    let buffer: TipTapDocJson[] = [];
+    let afterAnchor = false;
+    const flush = () => {
+      pieces.push(trimEdge(afterAnchor ? trimEdge(buffer, 'start') : buffer, 'end'));
+      buffer = [];
+    };
+    for (const n of inline) {
+      if (!isStandaloneAnchor(n)) {
+        buffer.push(n);
+        continue;
+      }
+      flush();
+      pieces.push([n]);
+      afterAnchor = true;
+    }
+    flush();
+
+    return pieces
+      .filter((piece) => piece.some((n) => !isBreakOrBlank(n)))
+      .map((content, index) => (index === 0 ? { ...child, content } : { type: 'paragraph', content }));
   });
 }
 
@@ -84,7 +160,7 @@ export function prepareImageAnchors(
   const doc = clone(sourceDoc);
   const anchors: ImageAnchor[] = [];
 
-  visitMutable(doc, (node, path) => {
+  visitMutable(doc, (node, path, parent) => {
     if (node.type !== 'image') return;
 
     const id = idFactory();
@@ -96,6 +172,7 @@ export function prepareImageAnchors(
       id,
       node: clone(node),
       path,
+      standalone: isStandaloneImage(parent),
     });
 
     node.attrs = {
@@ -114,6 +191,7 @@ export function prepareImageAnchors(
  *
  * 앵커가 하나라도 누락·중복·재배치되면 조용히 적용하지 않는다. 이 검증이
  * 있어야 모델이 문서 구조를 일부 바꾼 경우 잘못된 위치에 이미지를 넣지 않는다.
+ * 원문에서 독립 문단이던 앵커가 텍스트 문단에 합쳐져 오면 먼저 문단을 나눈다.
  */
 export function restoreImageAnchors(
   translatedDoc: TipTapDocJson,
@@ -127,6 +205,7 @@ export function restoreImageAnchors(
   const byId = new Map(anchors.map((anchor) => [anchor.id, anchor]));
   const actualIds: string[] = [];
   const doc = clone(translatedDoc);
+  splitStandaloneAnchorParagraphs(doc, byId);
 
   visitMutable(doc, (node) => {
     const id = readAnchorId(node);

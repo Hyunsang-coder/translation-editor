@@ -294,3 +294,75 @@ describe('imageAnchors', () => {
     });
   });
 });
+
+describe('번역 응답에서 앵커 앞뒤 빈 줄이 빠진 경우', () => {
+  const IMG = { type: 'image', attrs: { src: 'https://example.com/a.png', alt: 'a', title: null } };
+  const anchor = '![ODDEYES_IMAGE_img-1](oddeyes-image-anchor:img-1)';
+  const p = (text: string): TipTapDocJson => ({ type: 'paragraph', content: [{ type: 'text', text }] });
+
+  /** 구조만 비교한다: text는 내용, 그 외 노드는 type(자식…). */
+  function shape(node: TipTapDocJson): string {
+    if (node.type === 'text') return JSON.stringify(node.text);
+    return `${String(node.type)}(${contentOf(node).map(shape).join(', ')})`;
+  }
+
+  function translate(source: TipTapDocJson, responseMarkdown: string): TipTapDocJson {
+    const prepared = prepareImageAnchors(source, () => 'img-1');
+    return restoreImageAnchors(parseTranslationResponseToTipTap(responseMarkdown), prepared.anchors);
+  }
+
+  it('원문에서 독립 문단이던 이미지는 문단 사이에 붙어 와도 독립 문단으로 복원한다', () => {
+    const source: TipTapDocJson = {
+      type: 'doc',
+      content: [p('앞'), { type: 'paragraph', content: [IMG] }, p('뒤')],
+    };
+
+    const restored = translate(source, `Before\n${anchor}\nAfter`);
+
+    expect(shape(restored)).toBe('doc(paragraph("Before"), paragraph(image()), paragraph("After"))');
+  });
+
+  it('block image로 저장된 원문(doc 직속 image)도 같은 규칙을 따른다', () => {
+    const source: TipTapDocJson = { type: 'doc', content: [p('앞'), IMG, p('뒤')] };
+
+    const restored = translate(source, `Before\n${anchor}\nAfter`);
+
+    expect(shape(restored)).toBe('doc(paragraph("Before"), paragraph(image()), paragraph("After"))');
+  });
+
+  it('리스트 항목 안에서도 항목을 벗어나지 않고 독립 문단으로 복원한다', () => {
+    const source: TipTapDocJson = {
+      type: 'doc',
+      content: [{
+        type: 'bulletList',
+        content: [{ type: 'listItem', content: [p('항목'), { type: 'paragraph', content: [IMG] }, p('뒤')] }],
+      }],
+    };
+
+    expect(shape(translate(source, `- Item\n  ${anchor}\n  After`)))
+      .toBe('doc(bulletList(listItem(paragraph("Item"), paragraph(image()), paragraph("After"))))');
+    // 들여쓰기 없이 이어 붙은 줄(lazy continuation)도 리스트 안에 남는다
+    expect(shape(translate(source, `- Item\n${anchor}`)))
+      .toBe('doc(bulletList(listItem(paragraph("Item"), paragraph(image()))))');
+  });
+
+  it('인용문 안에서도 인용문을 벗어나지 않는다', () => {
+    const source: TipTapDocJson = {
+      type: 'doc',
+      content: [{ type: 'blockquote', content: [p('앞'), { type: 'paragraph', content: [IMG] }, p('뒤')] }],
+    };
+
+    expect(shape(translate(source, `> Before\n> ${anchor}\n> After`)))
+      .toBe('doc(blockquote(paragraph("Before"), paragraph(image()), paragraph("After")))');
+  });
+
+  it('원문에서 문장 안에 있던 이미지는 문장 안에 그대로 둔다', () => {
+    const source: TipTapDocJson = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '문장 앞 ' }, IMG, { type: 'text', text: ' 문장 뒤' }] }],
+    };
+
+    expect(shape(translate(source, `Before ${anchor} after`)))
+      .toBe('doc(paragraph("Before ", image(), " after"))');
+  });
+});

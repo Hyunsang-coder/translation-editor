@@ -103,8 +103,10 @@ function createExtensions() {
     TableRow,
     TableHeader,
     TableCell,
+    // 실제 에디터(TipTapEditor.tsx)와 같은 inline image. block이면 `<p>a<img>b</p>`가
+    // 문단 셋으로 쪼개지고 Markdown 왕복에서 이미지 뒤 텍스트가 붙어버린다.
     Image.configure({
-      inline: false,
+      inline: true,
       allowBase64: true,
     }),
     TaskList,
@@ -192,8 +194,10 @@ function createExtensionsForTranslation() {
     TableRow,
     TableHeader,
     TableCell,
+    // 실제 에디터(TipTapEditor.tsx)와 같은 inline image. block이면 `<p>a<img>b</p>`가
+    // 문단 셋으로 쪼개지고 Markdown 왕복에서 이미지 뒤 텍스트가 붙어버린다.
     Image.configure({
-      inline: false,
+      inline: true,
       allowBase64: true,
     }),
     TaskList,

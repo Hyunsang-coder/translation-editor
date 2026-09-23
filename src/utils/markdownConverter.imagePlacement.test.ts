@@ -154,3 +154,29 @@ describe('번역 파이프라인 리스트+이미지 회귀 (TEST 프로젝트 �
     expectValidForRealEditor(restored);
   });
 });
+
+describe('문장 안 이미지 (변환 스키마 inline image)', () => {
+  const shape = (doc: TipTapDocJson): string[] =>
+    (doc.content as TipTapDocJson[]).map((block) =>
+      `${String(block.type)}(${((block.content ?? []) as TipTapDocJson[]).map((n) => String(n.type)).join(',')})`);
+
+  it('문장 안 이미지는 문단을 쪼개거나 빈 문단을 만들지 않는다', () => {
+    const doc = htmlToTipTapJson('<p>앞 <img src="https://example.com/a.png" alt="a"> 뒤</p>');
+
+    expect(shape(doc)).toEqual(['paragraph(text,image,text)']);
+    expectValidForRealEditor(doc);
+  });
+
+  it('번역 왕복 후에도 이미지 뒤 텍스트가 같은 문장에 공백과 함께 남는다', () => {
+    const sourceDoc = htmlToTipTapJson('<p>앞 <img src="https://example.com/a.png" alt="a"> 뒤</p><p>다음</p>');
+    const prepared = prepareImageAnchors(sourceDoc, () => 'img-1');
+
+    const markdown = tipTapJsonToMarkdownForTranslation(prepared.doc);
+    expect(markdown).toBe('앞 ![ODDEYES_IMAGE_img-1](oddeyes-image-anchor:img-1) 뒤\n\n다음');
+
+    const restored = restoreImageAnchors(parseTranslationResponseToTipTap(markdown), prepared.anchors);
+    expect(shape(restored)).toEqual(['paragraph(text,image,text)', 'paragraph(text)']);
+    expect(((restored.content as TipTapDocJson[])[0]!.content as TipTapDocJson[])[2]).toMatchObject({ text: ' 뒤' });
+    expectValidForRealEditor(restored);
+  });
+});
