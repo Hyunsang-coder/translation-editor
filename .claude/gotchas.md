@@ -47,6 +47,8 @@ Critical implementation warnings learned from past issues.
 
 167. **붙여넣기 표 셀 빈 줄 2종 (`htmlNormalizer`)**: ① `normalizeDivs`는 div를 안쪽부터 처리할 것 — 바깥부터 바꾸면 mediaSingle 같은 중첩 래퍼가 `<p><p><img></p></p>`가 되어 이미지 위아래에 빈 문단이 생긴다. ② 표·리스트 안 서식용 공백 텍스트(들여쓴 클립보드의 개행)는 직접 자식 중 공백만 있는 것만 제거한다 — 클립보드 파싱(preserveWhitespace)이 이를 빈 paragraph로 승격시킨다. 최상위만 지우는 `removeTopLevelFormattingWhitespace`로 부족하다.
 
+168. **번역 파이프라인(block image) ↔ 에디터(inline image) 스키마 불일치**: 파이프라인에서 `<li><p>텍스트</p><p><img></p></li>`는 `listItem: [paragraph, image]`로 파싱되지만 에디터(`listItem: paragraph block*`, inline image)에서는 invalid다. `nodeFromJSON`은 검증하지 않으므로 invalid가 에디터에 자리 잡으면 이후 편집에서야 "Invalid content for node …"가 터진다. `wrapBlockImagesInParagraphs()`로 `doc`·`tableCell`·`listItem` 직속 image를 `paragraph`로 감싸고(image 앞 빈 paragraph 재사용), `createDocumentFromContent()`에서 `stripUnknownMarks` 후 `check()`로 교체 전에 차단할 것(`replaceDocContent.ts`).
+
 ## AI / Chat
 
 9. **Chat History**: Chat mode includes last 20 messages (configurable); Translate button workflow excludes all history.
@@ -59,7 +61,7 @@ Critical implementation warnings learned from past issues.
 
 13. **Translation Truncation**: Large documents may cause response truncation. Dynamic max_tokens calculation and truncation detection handle this automatically.
 
-14. **Translation max_tokens by Model**: `translateDocument.ts` dynamically sets `maxAllowedTokens`: Claude 64000, GPT-5 65536, GPT-4o 16384. Exceeding limits causes API errors that may appear as "번역이 취소되었습니다".
+14. **Translation max_tokens by Model**: `translateDocument.ts` dynamically sets `maxAllowedTokens`: Claude 64000, GPT-5/GPT-6 65536, others (GPT-4o 등) 16384. Exceeding limits causes API errors that may appear as "번역이 취소되었습니다".
 
 15. **Multi-Provider Model Selection**: Model selection determines provider automatically (`claude-*` → Anthropic, others → OpenAI). No explicit `provider` field; use `openaiEnabled`/`anthropicEnabled` checkboxes. At least one provider must be enabled.
 
@@ -67,9 +69,9 @@ Critical implementation warnings learned from past issues.
 
 17. **Tool Handler Null Safety**: Always check for null `project` in AI tool handlers before accessing project-related state. Return meaningful error messages like "프로젝트가 로드되지 않았습니다" instead of generic errors.
 
-18. **GPT-5 Temperature Handling**: GPT-5 series doesn't support temperature parameter. In `client.ts`, `isGpt5 = model.startsWith('gpt-5')` determines whether to exclude temperature.
+18. **GPT-5/GPT-6 Temperature Handling**: GPT-5/GPT-6 series doesn't support temperature parameter. In `client.ts`, `isGptReasoning = model.startsWith('gpt-5') || model.startsWith('gpt-6')` determines whether to exclude temperature.
 
-18a. **Opus 4.7+ / Sonnet 5 Sampling & Thinking Guards**: Claude Opus 4.7+ and Sonnet 5 return 400 if non-default `temperature` is sent. GPT-5 series also rejects temperature. **Use `resolveModelCallOptions(cfg, useFor)`** (`src/ai/modelCallOptions.ts`) as the single source of truth — do NOT duplicate guards in `client.ts` and `backendCompletion.ts` separately. LangChain path: `createChatModel`. Tauri path: `getModelCallArgs` → Rust `ai.rs` (`adaptive_thinking`, `output_config.effort` / `reasoning_effort`). Anthropic `effort: 'high'` is the server default (no-op); real uplift on OpenAI review uses `reasoning_effort: 'high'`.
+18a. **Opus 4.7+ / Sonnet 5 Sampling & Thinking Guards**: Claude Opus 4.7+ and Sonnet 5 return 400 if non-default `temperature` is sent. GPT-5/GPT-6 series also rejects temperature. **Use `resolveModelCallOptions(cfg, useFor)`** (`src/ai/modelCallOptions.ts`) as the single source of truth — do NOT duplicate guards in `client.ts` and `backendCompletion.ts` separately. LangChain path: `createChatModel`. Tauri path: `getModelCallArgs` → Rust `ai.rs` (`adaptive_thinking`, `output_config.effort` / `reasoning_effort`). Anthropic `effort: 'high'` is the server default (no-op); real uplift on OpenAI review uses `reasoning_effort: 'high'`.
 
 19. **LangChain Image Format Unification**: LangChain handles both OpenAI and Anthropic vision with the same `image_url` format. LangChain `@langchain/anthropic` internally converts to Anthropic's native `source` format. Do NOT use provider-specific image formats in `chat.ts`.
 
@@ -106,6 +108,8 @@ Critical implementation warnings learned from past issues.
 153. **DOM walk로 마크다운을 재조립할 때 3가지**: `convertHtmlListsToMarkdown`류 코드의 반복 함정. ① `children`(Element만) 순회는 텍스트 노드를 **조용히 삭제**한다 — `childNodes`를 쓸 것. ② 블록을 전부 `'\n'`으로 이으면 마크다운에서 문단이 합쳐진다 — 리스트 항목끼리만 `'\n'`, 그 외는 `'\n\n'`. ③ 중첩 리스트는 walk가 즉시 방출하므로, 부모 텍스트를 루프 뒤에 방출하면 **자식이 부모보다 먼저 나가** 중첩이 평탄화된다 — 내려가기 전에 flush하고, "아무것도 못 알아봤다" 폴백은 누적 버퍼가 아니라 **출력 길이 변화**로 판정할 것(아니면 중복 방출).
 
 156. **번역 방향은 날값으로 읽지도, 문자열로 비교하지도 말 것**: `project.metadata.sourceLanguage`/`targetLanguage`의 기본값은 센티널 `'auto'`다([ADR-0020](../docs/adr/0020-auto-target-language.md), [ADR-0021](../docs/adr/0021-explicit-source-language.md)). 프롬프트·MCP·UI로 흘리기 전에 반드시 `resolveDirection({ source, target }, sourceText)` **하나**를 거칠 것 — 두 값을 따로 풀면 원문이 명시 선택일 때 타겟이 텍스트 재감지로 조용히 되돌아간다. 비교는 `normalizeLang()`을 거칠 것: 저장값은 한글 라벨(`'한국어'`), 외부에서 오는 값은 영문명(`'Korean'`)이라 `===`로는 **동일언어 가드가 영원히 안 걸린다**. **판정기 둘을 섞지 말 것**: 방향을 *고르는* 데는 `detectSourceLangCode`(한글 5%), 번역을 *막는* 데는 `detectDominantLangCode`(비율 30%)다 — 공격적인 쪽을 차단에 쓰면 한국어 용어가 섞인 영문 문서의 정당한 EN→KO 번역이 막힌다. 브리지(`oddeyesAppBridge`)는 저장값이 아니라 해석값을 내보내야 한다 — 센티널을 주면 외부 에이전트의 방향 교차검증이 통째로 꺼진다.
+
+169. **대화 요약-이어가기 5종 (`conversationContext.ts` + `chatStore.ai.ts`)**: ① planner는 토큰 예산 우선 — 예산 안에 들면 개수와 무관하게 요약 없음(개수 캡 선적용이 조기 요약을 유발했다). ② 요약 상한에 잘린 꼬리는 최근 원문 앞에 붙여 이번 턴 무손실로 둘 것 — 빼면 중간 구간이 요약에도 원문에도 없다. ③ 요약 타임아웃 abort는 본 요청 취소로 오분류 금지. ④ 요약 실패 fallback은 경계 동결 — 전진시키면 좀비 구간이 된다. ⑤ 예약 토큰에 첨부/블록/선택/도구정의(10k)를 포함하고, 오버플로우 시 최소 보존 턴 긴급 요약 후 1회만 재시도한다.
 
 ## AbortController / Async
 
@@ -248,6 +252,8 @@ Critical implementation warnings learned from past issues.
 58. **Image Message Immutability**: Messages with `imageAttachments` are treated as immutable inputs. Edit and Replay buttons are hidden for these messages to preserve input snapshot integrity.
 
 59. **addComposerAttachment No Loading State**: `chatStore.ts` → `addComposerAttachment()` does NOT set `isLoading: true` because `isLoading` is reserved for AI response generation. Setting it during image attachment causes skeleton UI to incorrectly appear.
+
+170. **독립 이미지 앵커는 복원 전에 문단을 나눌 것 (`imageAnchors.ts`)**: 원문에서 독립 문단이던 이미지는 inline 스키마에서 모델이 앞뒤 빈 줄을 빠뜨리면 텍스트 문단 하나로 합쳐져 온다. `splitStandaloneAnchorParagraphs()`로 앵커 앞뒤를 분리하지 않으면 앵커 치환 후에도 문장 안 이미지로 남는다. 문장 안 앵커는 건드리지 않는다. 앵커 누락·중복·재배치는 `restoreImageAnchors()`가 throw로 막는다 — 조용히 적용하면 잘못된 위치에 이미지가 들어간다.
 
 ## Build / Platform
 

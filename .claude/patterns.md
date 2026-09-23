@@ -90,6 +90,10 @@ import { pluginKeys } from './pluginKeys';
 // ProseMirror 트랜잭션 기반 콘텐츠 교체 (setContent() 대체)
 // - preventUpdate 미설정 → onUpdate 콜백 정상 발동 → store 자동 동기화
 // - addToHistory 명시 제어: sync용 false, 번역 적용용 true
+// - createDocumentFromContent(): JSON은 스키마 정규화 후 check()로 검증 —
+//   nodeFromJSON은 구조를 검증하지 않으므로 invalid(listItem 직속 image,
+//   미지원 mark 등)를 교체 전에 차단한다. 번역/다듬기 적용 실패 시
+//   미리보기를 유지하고 토스트로 안내한다.
 
 replaceDocContent(editor, content, { addToHistory: false }); // sync
 replaceDocContent(editor, content, { addToHistory: true });  // 번역 적용 (Ctrl+Z 지원)
@@ -501,18 +505,28 @@ htmlToTipTapJson()       // HTML → TipTap JSON
 
 **Important**: `getExtensions()` in converter must include ALL extensions used by TipTapEditor.tsx.
 
+**Image schema contract**: 실제 에디터는 `ImageOriginal.configure({ inline: true })`다.
+번역 파이프라인(block image 스키마) 결과는 적용 전에 `wrapBlockImagesInParagraphs()`로
+정규화한다 — `listItem`/`tableCell`/`doc` 직속 `image`를 `paragraph`로 감싸고,
+image 앞 빈 paragraph는 재사용해 빈 줄을 만들지 않는다. `restoreImageAnchors`는
+제자리 치환이므로 감싼 뒤 복원해도 원본 이미지가 paragraph 안에 남는다.
+
 ## Image Handling
 
 ```typescript
 // src/utils/imagePlaceholder.ts
 stripImages()     // 번역/검수 전 이미지 마크다운 제거 (토큰 절약)
 extractImages()   // Replace base64 with placeholders before translation
-restoreImages()   // Restore after translation (deprecated)
+
+// src/utils/imageAnchors.ts (현재 번역 경로)
+prepareImageAnchors()   // 원본 image → oddeyes-image-anchor:ID 치환 (위치·standalone 기록)
+restoreImageAnchors()   // 앵커 누락·중복·재배치면 throw (조용한 오배치 금지).
+                        // standalone 앵커가 텍스트 문단에 합쳐져 오면 앞뒤로 문단 분리.
 
 // src/utils/imageResize.ts
 resizeImageForApi()   // Progressive resize for API limits
 
-// 번역: translateDocument.ts → stripImages() 적용
+// 번역: translateDocument.ts → prepare/restoreImageAnchors 적용
 // 검수: reviewTool.ts → buildAlignedChunks/Async에서 stripImages() 적용
 // 두 파이프라인 모두 이미지를 LLM 전송 전 제거
 ```
@@ -568,6 +582,21 @@ dom.addEventListener('paste', handlePasteCapture, true);
 // Columns: combined (16.67%), suggestedFix (50%), description (33.33%)
 // Container: flex-1 overflow-y-auto for full-height usage
 ```
+
+## Applied Change Highlight
+
+```typescript
+// src/editor/extensions/AppliedChangeHighlight.ts — 문장 그룹 단위 초록 표시
+clearAppliedChangeById(changeId)  // 해당 문장 그룹만 해제 (텍스트 불변, undo 가능)
+clearAppliedChangeHighlights()    // 전체 해제 (기존 지우개 동작)
+countAppliedChangeGroups(doc)     // distinct changeId 수 (메뉴바 number 구독용)
+getAppliedChangeGroups(doc)       // 문서 순서 groups (탐색 클릭 시에만 계산, 캐시 금지)
+getAppliedChangeIdAtSelection(state) // 캐럿/선택 위치의 changeId (없으면 null)
+```
+
+- `APPLIED_CHANGE_CLEAR_META` 마크-only 확인 트랜잭션은 `ReviewPanel`의 리뷰 undo 감시에서 스킵한다.
+- 렌더 구독은 number/string/null primitive만 — groups 배열을 구독하면 매 키스트로크 리렌더.
+- 상세 계획: `docs/applied-change-highlight-improvement-plan.md` (Phase 1 완료, Phase 2 보류).
 
 ## Search/Replace Feature
 
@@ -876,3 +905,12 @@ projectMemoryStore + translationRules + enabled forbidden terms + matched glossa
 - If structured memory is empty, `legacyProjectContext` is preserved as the explicit `legacy-project-context` fallback until migration succeeds.
 - Glossary entries carry `notes` through the snapshot; the resolver renders them via `formatGlossaryForPrompt` with a per-note cap. Notes are the disambiguation basis — dropping them made the same review return different grounds depending on whether it started from chat or the panel.
 - Every injected knowledge section needs a usage directive, not just a heading. Korean prompts (translate, review) use `KNOWLEDGE_DIRECTIVES` in `projectKnowledgeRender.ts`; polish and selection retranslation are English-only prompts and keep their directives inline — do not add a language parameter to share one sentence.
+
+### Chat Summary Continuation (`conversationContext.ts` + `chatStore.ai.ts`)
+
+- Planner는 토큰 예산 우선 — 미요약 구간이 예산 안에 들면 개수와 무관하게 요약 없음.
+- 요약 입력 상한에 잘린 꼬리는 최근 원문 앞에 붙여 이번 턴 무손실로 둔다 (throughId는 head까지만 전진).
+- 요약 타임아웃 abort는 본 요청 취소로 오분류하지 않는다 (`withRetry` sleep도 signal 수신).
+- 요약 실패 fallback은 경계를 동결한다 — 전진시키면 요약에도 원문에도 없는 좀비 구간이 된다.
+- 예약 토큰에 첨부/컨텍스트블록/선택/도구정의(10k)를 포함한다. selection 스코프는 세션 memory에 요약하지 않고 예산 trim만 한다.
+- 본 호출 컨텍스트 오버플로우 시 최소 보존 턴까지 접는 긴급 요약 후 1회만 재시도한다.

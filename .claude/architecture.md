@@ -34,9 +34,9 @@
 - Output uses `---TRANSLATION_START/END---` markers
 - Uses: System Prompt + Translation Rules + Project Context + Glossary
 - **Dynamic max_tokens** by model:
-  - Claude: 64000 (Haiku 4.5 limit)
-  - GPT-5: 65536
-  - GPT-4o: 16384
+  - Claude: 64000
+  - GPT-5/GPT-6: 65536
+  - Others (GPT-4o 등): 16384
 - **Image Placeholder**: Base64 images replaced with placeholders (saves 99%+ tokens)
 
 #### Target Polishing Mode (`polishDocument.ts`)
