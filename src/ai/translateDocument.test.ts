@@ -397,7 +397,11 @@ describe('translateDocument - 번역 엔드투엔드 (Phase 5)', () => {
       const resultContent = Array.isArray(result.doc.content)
         ? result.doc.content as TipTapDocJson[]
         : [];
-      const resultImage = resultContent[1] as TipTapDocJson;
+      // 에디터 스키마(inline image)에서 최상위 직속 image는 invalid이므로
+      // paragraph로 감싸진다. 원본 속성이 복원됐는지 확인한다.
+      const resultParagraph = resultContent[1] as TipTapDocJson;
+      expect(resultParagraph.type).toBe('paragraph');
+      const resultImage = (resultParagraph.content as TipTapDocJson[])[0] as TipTapDocJson;
       expect(resultImage.type).toBe('image');
       expect(resultImage.attrs).toMatchObject({
         src: 'https://example.com/cat.png',

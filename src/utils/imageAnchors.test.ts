@@ -279,12 +279,12 @@ describe('imageAnchors', () => {
     const parsed = parseTranslationResponseToTipTap(markdown);
 
     const restored = restoreImageAnchors(parsed, prepared.anchors);
-    const table = contentOf(restored)[0]!;
-    const row = contentOf(table)[0]!;
-    const cell = contentOf(row)[0]!;
-    const cellImage = contentOf(cell).find((node) => node.type === 'image');
+    // 에디터 스키마(inline image)에서 image는 셀 직속이 될 수 없어
+    // paragraph로 감싸진다. collectImages로 재귀 탐색한다.
+    const restoredImages = collectImages(restored);
 
-    expect(cellImage).toEqual({
+    expect(restoredImages).toHaveLength(1);
+    expect(restoredImages[0]).toEqual({
       type: 'image',
       attrs: {
         src: 'https://example.com/table.png',

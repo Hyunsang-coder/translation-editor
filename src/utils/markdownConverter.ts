@@ -922,6 +922,48 @@ function splitTablesFromContent(text: string): ContentSegment[] {
 }
 
 /**
+ * 인라인 콘텐츠를 직접 담을 수 있는 부모 노드.
+ * 실제 에디터(TipTapEditor.tsx)는 이미지를 inline으로 쓰므로 image는
+ * paragraph/heading 안에서만 유효하다.
+ */
+const INLINE_CONTENT_PARENTS = new Set(['paragraph', 'heading']);
+
+/**
+ * 번역 파이프라인(block image 스키마) 파싱 결과를 실제 에디터(inline image
+ * 스키마)에 유효한 구조로 정규화한다.
+ *
+ * 파이프라인에서 `<li><p>텍스트</p><p><img></p></li>`는
+ * `listItem: [paragraph, image]`로 파싱된다. 에디터 스키마에서 image는
+ * inline이라 listItem(`paragraph block*`)·tableCell·doc 등의 직속 자식이
+ * 될 수 없고, 이 invalid 구조가 에디터에 들어가면 이후 검증(node.check(),
+ * insertContent 등)에서 "Invalid content for node listItem"이 터진다.
+ * 앵커 복원(restoreImageAnchors)은 제자리 치환이므로, 여기서 감싸두면
+ * 복원된 원본 이미지도 paragraph 안에 남는다.
+ */
+export function wrapBlockImagesInParagraphs(doc: TipTapDocJson): TipTapDocJson {
+  const visit = (node: TipTapDocJson): TipTapDocJson => {
+    if (!node || typeof node !== 'object') return node;
+    const content = Array.isArray(node.content) ? node.content as TipTapDocJson[] : undefined;
+    if (!content) return node;
+    const parentType = typeof node.type === 'string' ? node.type : '';
+    return {
+      ...node,
+      content: content.map((child) => {
+        if (
+          child && typeof child === 'object'
+          && (child as TipTapDocJson).type === 'image'
+          && !INLINE_CONTENT_PARENTS.has(parentType)
+        ) {
+          return { type: 'paragraph', content: [visit(child as TipTapDocJson)] };
+        }
+        return visit(child as TipTapDocJson);
+      }),
+    };
+  };
+  return visit(doc);
+}
+
+/**
  * Markdown + HTML 혼합 콘텐츠를 TipTap JSON으로 변환 (공통 로직)
  *
  * HTML <table> 블록은 ProseMirror DOMParser로 직접 파싱하여
@@ -934,7 +976,7 @@ function parseMarkdownWithTables(normalized: string): TipTapDocJson {
     const editor = new Editor({ extensions: getExtensionsForTranslation() });
     try {
       editor.commands.setContent(normalized);
-      return editor.getJSON() as TipTapDocJson;
+      return wrapBlockImagesInParagraphs(editor.getJSON() as TipTapDocJson);
     } finally {
       editor.destroy();
     }
@@ -967,7 +1009,7 @@ function parseMarkdownWithTables(normalized: string): TipTapDocJson {
       }
     }
 
-    return { type: 'doc', content: allNodes };
+    return wrapBlockImagesInParagraphs({ type: 'doc', content: allNodes });
   } finally {
     editor.destroy();
   }
