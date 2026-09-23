@@ -7,10 +7,14 @@ export { GhostChipExtension } from './GhostChip';
 export { DiffMarkExtension } from './DiffMark';
 export {
   AppliedChangeHighlight,
+  APPLIED_CHANGE_CLEAR_META,
+  countAppliedChangeGroups,
+  getAppliedChangeGroups,
+  getAppliedChangeIdAtSelection,
   hasAppliedChangeHighlights,
   markAppliedChanges,
 } from './AppliedChangeHighlight';
-export type { AppliedChangeRange } from './AppliedChangeHighlight';
+export type { AppliedChangeGroup, AppliedChangeRange } from './AppliedChangeHighlight';
 export { SearchHighlight, getSearchState } from './SearchHighlight';
 export type { SearchMatch, SearchState, SearchHighlightOptions, SearchHighlightStorage } from './SearchHighlight';
 export { ImagePlaceholder, ImageOriginal } from './ImagePlaceholder';

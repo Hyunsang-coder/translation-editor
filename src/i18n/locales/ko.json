@@ -546,7 +546,15 @@
       "lineHeightIncrease": "줄 높이 늘리기",
       "lineHeightIncreaseTitle": "줄 높이 +0.1",
       "clearAppliedChanges": "적용 표시 지우기",
-      "appliedChangesHint": "AI가 적용한 부분이 강조 표시됩니다. 문장을 수정하면 자동으로 사라지고, 메뉴 바의 지우개 버튼으로 한꺼번에 지울 수 있어요.",
+      "appliedChangesGroup": "적용 표시 탐색",
+      "appliedChangesPrev": "이전 적용 표시",
+      "appliedChangesNext": "다음 적용 표시",
+      "appliedChangesPosition": "{{current}}/{{total}}",
+      "appliedChangesCount": "{{count}}개",
+      "confirmAppliedChangeSentence": "이 문장 확인",
+      "confirmAppliedChangeSentenceTitle": "이 문장의 적용 표시만 지우기 (텍스트는 유지)",
+      "confirmAppliedChangeSentenceDisabledHint": "초록 표시 안에 커서를 두세요",
+      "appliedChangesHint": "AI가 적용한 부분이 초록색으로 표시됩니다. 문장을 수정하거나 ‘이 문장 확인’을 누르면 사라지고, 지우개 버튼으로 한꺼번에 지울 수 있어요.",
       "appliedChangesHintTitle": "적용 표시 안내"
     },
     "search": {

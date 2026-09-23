@@ -1,6 +1,6 @@
 import { Editor, useEditorState } from '@tiptap/react';
 import { message } from '@tauri-apps/plugin-dialog';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/stores/uiStore';
 import {
@@ -32,8 +32,14 @@ import {
   Columns3,
   Trash2,
   Eraser,
+  ChevronLeft,
+  ChevronRight,
+  Check,
 } from 'lucide-react';
-import { hasAppliedChangeHighlights } from '@/editor/extensions/AppliedChangeHighlight';
+import {
+  getAppliedChangeGroups,
+  getAppliedChangeIdAtSelection,
+} from '@/editor/extensions/AppliedChangeHighlight';
 
 interface TipTapMenuBarProps {
   editor: Editor | null;
@@ -157,12 +163,30 @@ export function TipTapMenuBar({ editor, panelType, onAddComment }: TipTapMenuBar
     selector: ({ editor: e }) => e?.isActive('table') ?? false,
   }) ?? false;
 
-  const hasAppliedChanges = useEditorState({
+  // 적용 표시 내비게이션 키 — "count|index|activeId" primitive 한 개로 구독한다.
+  // 배열/Map을 selector에서 반환하면 매 트랜잭션 리렌더되므로 금지. groups는
+  // 여기서 한 번만 순회하고, 상세 목록이 필요하면 클릭 핸들러에서 다시 계산한다.
+  const appliedChangeNavKey = useEditorState({
     editor,
-    selector: ({ editor: e }) => (
-      panelType === 'target' && e ? hasAppliedChangeHighlights(e.state.doc) : false
-    ),
-  }) ?? false;
+    selector: ({ editor: e }) => {
+      if (panelType !== 'target' || !e) return '0|-1|';
+      const groups = getAppliedChangeGroups(e.state.doc);
+      if (groups.length === 0) return '0|-1|';
+      const activeId = getAppliedChangeIdAtSelection(e.state) ?? '';
+      const index = activeId ? groups.findIndex((g) => g.id === activeId) : -1;
+      return `${groups.length}|${index}|${activeId}`;
+    },
+  }) ?? '0|-1|';
+
+  const [appliedChangeCount, appliedChangeIndex, appliedChangeActiveId] = useMemo(() => {
+    const [countStr, indexStr, ...idParts] = appliedChangeNavKey.split('|');
+    const count = Number(countStr) || 0;
+    const index = Number(indexStr);
+    const activeId = idParts.join('|') || null;
+    return [count, Number.isNaN(index) ? -1 : index, activeId] as const;
+  }, [appliedChangeNavKey]);
+
+  const hasAppliedChanges = appliedChangeCount > 0;
 
   // 코멘트 버튼 활성 조건 — 텍스트 선택이 있을 때만. 클릭으로 포커스가 옮겨가기 전에 구독값으로 판단한다.
   const hasTextSelection = useEditorState({
@@ -197,6 +221,25 @@ export function TipTapMenuBar({ editor, panelType, onAddComment }: TipTapMenuBar
       { title: t('editor.menuBar.appliedChangesHintTitle', '적용 표시 안내') },
     ).catch(() => {});
   }, [hasAppliedChanges, hintSeen, markAppliedChangesHintSeen, t]);
+
+  // 적용 표시 이전/다음으로 이동 — 범위 선택 + 스크롤은 코멘트 이동(scrollToComment)과 같은 패턴.
+  // groups는 클릭 시점에 다시 계산한다(렌더 시점 캐시를 쓰면 편집 후 위치가 어긋남).
+  const gotoAppliedChange = useCallback((direction: 1 | -1) => {
+    if (!editor) return;
+    const groups = getAppliedChangeGroups(editor.state.doc);
+    if (groups.length === 0) return;
+    const pos = editor.state.selection.from;
+    const target = direction > 0
+      ? groups.find((g) => g.from > pos) ?? groups[0]!
+      : [...groups].reverse().find((g) => g.from < pos) ?? groups[groups.length - 1]!;
+    editor.chain().focus().setTextSelection({ from: target.from, to: target.to }).scrollIntoView().run();
+  }, [editor]);
+
+  // 이 문장 확인 — 텍스트는 그대로 두고 해당 changeId(문장 그룹)의 표시만 제거한다.
+  const confirmAppliedChangeSentence = useCallback(() => {
+    if (!editor || !appliedChangeActiveId) return;
+    editor.chain().focus().clearAppliedChangeById(appliedChangeActiveId).run();
+  }, [editor, appliedChangeActiveId]);
 
   // 표 명령은 모두 같은 형태다(포커스 → 명령 → 메뉴 닫기).
   const runTableCommand = useCallback(
@@ -810,15 +853,62 @@ export function TipTapMenuBar({ editor, panelType, onAddComment }: TipTapMenuBar
       {hasAppliedChanges && (
         <>
           <div className="w-px h-5 bg-editor-border mx-1" />
-          <button
-            type="button"
-            onClick={() => editor.chain().focus().clearAppliedChangeHighlights().run()}
-            className={`${btnBase} text-diff-insertion`}
-            title={t('editor.menuBar.clearAppliedChanges')}
-            aria-label={t('editor.menuBar.clearAppliedChanges')}
+          <div
+            className="flex items-center gap-0.5"
+            role="group"
+            aria-label={t('editor.menuBar.appliedChangesGroup', '적용 표시 탐색')}
           >
-            <Eraser size={ICON_SIZE} />
-          </button>
+            <button
+              type="button"
+              onClick={() => gotoAppliedChange(-1)}
+              className={btnBase}
+              title={t('editor.menuBar.appliedChangesPrev', '이전 적용 표시')}
+              aria-label={t('editor.menuBar.appliedChangesPrev', '이전 적용 표시')}
+            >
+              <ChevronLeft size={ICON_SIZE} />
+            </button>
+            <span aria-hidden="true" className="min-w-8 text-center text-[11px] tabular-nums text-editor-muted">
+              {appliedChangeIndex >= 0
+                ? t('editor.menuBar.appliedChangesPosition', '{{current}}/{{total}}', {
+                  current: appliedChangeIndex + 1,
+                  total: appliedChangeCount,
+                })
+                : t('editor.menuBar.appliedChangesCount', '{{count}}개', { count: appliedChangeCount })}
+            </span>
+            <button
+              type="button"
+              onClick={() => gotoAppliedChange(1)}
+              className={btnBase}
+              title={t('editor.menuBar.appliedChangesNext', '다음 적용 표시')}
+              aria-label={t('editor.menuBar.appliedChangesNext', '다음 적용 표시')}
+            >
+              <ChevronRight size={ICON_SIZE} />
+            </button>
+            <button
+              type="button"
+              onClick={confirmAppliedChangeSentence}
+              disabled={!appliedChangeActiveId}
+              className={`${btnBase} text-diff-insertion disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent`}
+              title={appliedChangeActiveId
+                ? t('editor.menuBar.confirmAppliedChangeSentenceTitle', '이 문장의 적용 표시만 지우기 (텍스트는 유지)')
+                : t('editor.menuBar.confirmAppliedChangeSentenceDisabledHint', '초록 표시 안에 커서를 두세요')}
+              aria-label={t('editor.menuBar.confirmAppliedChangeSentence', '이 문장 확인')}
+            >
+              <Check size={ICON_SIZE} />
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().clearAppliedChangeHighlights().run()}
+              className={`${btnBase} text-diff-insertion flex items-center gap-1`}
+              title={t('editor.menuBar.clearAppliedChanges')}
+              aria-label={t('editor.menuBar.clearAppliedChanges')}
+            >
+              <Eraser size={ICON_SIZE} />
+              <span aria-hidden="true" className="text-[11px] tabular-nums">
+                {t('editor.menuBar.appliedChangesCount', '{{count}}개', { count: appliedChangeCount })}
+              </span>
+            </button>
+          </div>
         </>
       )}
     </div>

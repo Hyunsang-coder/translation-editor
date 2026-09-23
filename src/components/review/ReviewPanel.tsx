@@ -31,6 +31,7 @@ import {
   applySuggestionToEditor,
   REVIEW_SUGGESTION_APPLY_META,
 } from '@/components/review/reviewApply';
+import { APPLIED_CHANGE_CLEAR_META } from '@/editor/extensions/AppliedChangeHighlight';
 import { navigateToReviewIssue } from '@/components/review/navigateToReviewIssue';
 import type { TranslationUnitDocument } from '@/editor/extensions/TranslationUnitId';
 import { useEditorStore } from '@/stores/editorStore';
@@ -207,7 +208,13 @@ export function ReviewPanel(): JSX.Element {
     if (!editor || editor.isDestroyed || !projectId || typeof editor.on !== 'function') return;
 
     const onTransaction = ({ transaction }: { transaction: Transaction }): void => {
-      if (!transaction.docChanged || transaction.getMeta(REVIEW_SUGGESTION_APPLY_META)) return;
+      // 적용 표시 확인(마크-only 제거)은 리뷰 해결 상태와 무관하므로 추적에서 제외한다.
+      // 제외하지 않으면 마크 차이로 before/after .eq 매칭이 실패해 이후 Ctrl+Z 감지를 놓친다.
+      if (
+        !transaction.docChanged
+        || transaction.getMeta(REVIEW_SUGGESTION_APPLY_META)
+        || transaction.getMeta(APPLIED_CHANGE_CLEAR_META)
+      ) return;
       useReviewStore.getState().reconcileAppliedSuggestionTransaction({
         projectId,
         beforeDoc: transaction.before,

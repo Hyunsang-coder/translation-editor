@@ -2,6 +2,7 @@ import { Mark, mergeAttributes } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, type Transaction } from '@tiptap/pm/state';
+import type { EditorState } from '@tiptap/pm/state';
 
 export interface AppliedChangeRange {
   from: number;
@@ -9,7 +10,8 @@ export interface AppliedChangeRange {
 }
 
 const APPLIED_CHANGE_APPLY_META = 'appliedChangeApply';
-const APPLIED_CHANGE_CLEAR_META = 'appliedChangeClear';
+/** 마크-only 확인 트랜잭션 표식. ReviewPanel의 리뷰 undo 감시가 스킵한다. 값 변경 금지. */
+export const APPLIED_CHANGE_CLEAR_META = 'appliedChangeClear';
 const DOCUMENT_REPLACE_META = 'selectionAnchorDocumentReplace';
 const SENTENCE_TERMINATORS = new Set(['.', '!', '?', '。', '！', '？']);
 let nextChangeId = 0;
@@ -19,6 +21,8 @@ declare module '@tiptap/core' {
     appliedChangeHighlight: {
       /** 문서 전체의 AI 적용 표시를 해제한다. 본문 텍스트는 유지한다. */
       clearAppliedChangeHighlights: () => ReturnType;
+      /** 해당 changeId(문장 그룹)의 적용 표시만 해제한다. 본문 텍스트는 유지한다. */
+      clearAppliedChangeById: (changeId: string) => ReturnType;
     };
   }
 }
@@ -142,6 +146,90 @@ export function hasAppliedChangeHighlights(doc: ProseMirrorNode): boolean {
   return found;
 }
 
+export interface AppliedChangeGroup {
+  id: string;
+  from: number;
+  to: number;
+}
+
+/**
+ * 문서 순서대로 정렬된 적용 표시 그룹 목록. 같은 changeId(문장 그룹)는
+ * 최소~최대 위치로 병합한다(findCommentRange와 같은 규칙).
+ * 렌더 경로에서 호출하지 말 것 — 탐색 버튼 클릭 시에만 계산한다.
+ */
+export function getAppliedChangeGroups(doc: ProseMirrorNode): AppliedChangeGroup[] {
+  const groups = new Map<string, { from: number; to: number }>();
+  doc.descendants((node, position) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      if (mark.type.name !== 'appliedChange') continue;
+      const changeId = mark.attrs.changeId;
+      if (typeof changeId !== 'string' || !changeId) continue;
+      const end = position + node.nodeSize;
+      const group = groups.get(changeId);
+      if (group) {
+        if (position < group.from) group.from = position;
+        if (end > group.to) group.to = end;
+      } else {
+        groups.set(changeId, { from: position, to: end });
+      }
+    }
+  });
+  return Array.from(groups, ([id, range]) => ({ id, ...range }))
+    .sort((a, b) => a.from - b.from || a.to - b.to);
+}
+
+/** 서로 다른 changeId 개수. 렌더 구독용 primitive — has 체크는 `count > 0`으로 유도한다. */
+export function countAppliedChangeGroups(doc: ProseMirrorNode): number {
+  const ids = new Set<string>();
+  doc.descendants((node) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      if (mark.type.name !== 'appliedChange') continue;
+      const changeId = mark.attrs.changeId;
+      if (typeof changeId === 'string' && changeId) ids.add(changeId);
+    }
+  });
+  return ids.size;
+}
+
+/**
+ * selection이 걸린 적용 표시의 changeId. 범위 선택이면 첫 적중,
+ * 빈 선택(캐럿)이면 앞뒤 텍스트 노드에서 찾는다. 없으면 null.
+ * 반환이 primitive라 useEditorState selector에 안전하다.
+ */
+export function getAppliedChangeIdAtSelection(state: EditorState): string | null {
+  const { selection, doc } = state;
+  const readMarks = (marks: readonly { type: { name: string }; attrs: Record<string, unknown> }[]): string | null => {
+    for (const mark of marks) {
+      if (mark.type.name !== 'appliedChange') continue;
+      const changeId = mark.attrs.changeId;
+      if (typeof changeId === 'string' && changeId) return changeId;
+    }
+    return null;
+  };
+  if (!selection.empty) {
+    let found: string | null = null;
+    doc.nodesBetween(selection.from, selection.to, (node) => {
+      if (found !== null || !node.isText) return;
+      found = readMarks(node.marks);
+    });
+    return found;
+  }
+  const $pos = doc.resolve(selection.from);
+  const after = $pos.nodeAfter;
+  if (after?.isText) {
+    const found = readMarks(after.marks);
+    if (found !== null) return found;
+  }
+  const before = $pos.nodeBefore;
+  if (before?.isText) {
+    const found = readMarks(before.marks);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 function collectTouchedChangeIds(
   doc: ProseMirrorNode,
   changeFrom: number,
@@ -252,6 +340,29 @@ export const AppliedChangeHighlight = Mark.create({
                 .removeMark(0, state.doc.content.size, markType)
                 .setMeta(APPLIED_CHANGE_CLEAR_META, true),
             );
+          }
+          return true;
+        },
+      clearAppliedChangeById:
+        (changeId: string) =>
+        ({ state, dispatch }) => {
+          const markType = state.schema.marks.appliedChange;
+          if (!markType || !changeId) return false;
+          let found = false;
+          state.doc.descendants((node) => {
+            if (found || !node.isText) return;
+            for (const mark of node.marks) {
+              if (mark.type.name === 'appliedChange' && mark.attrs.changeId === changeId) {
+                found = true;
+                break;
+              }
+            }
+          });
+          if (!found) return false;
+          if (dispatch) {
+            const tr = state.tr;
+            removeAppliedChangeIds(state.doc, tr, new Set([changeId]));
+            dispatch(tr.setMeta(APPLIED_CHANGE_CLEAR_META, true));
           }
           return true;
         },

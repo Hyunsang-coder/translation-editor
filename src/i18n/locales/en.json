@@ -565,7 +565,15 @@
       "lineHeightIncrease": "Increase line height",
       "lineHeightIncreaseTitle": "Line height +0.1",
       "clearAppliedChanges": "Clear applied-change highlights",
-      "appliedChangesHint": "AI-applied changes are highlighted. Highlights clear automatically as you edit the sentence, or use the eraser button in the menu bar to clear them all.",
+      "appliedChangesGroup": "Applied-change navigation",
+      "appliedChangesPrev": "Previous applied change",
+      "appliedChangesNext": "Next applied change",
+      "appliedChangesPosition": "{{current}}/{{total}}",
+      "appliedChangesCount": "{{count}}",
+      "confirmAppliedChangeSentence": "Confirm this sentence",
+      "confirmAppliedChangeSentenceTitle": "Clear this sentence's highlight only (text unchanged)",
+      "confirmAppliedChangeSentenceDisabledHint": "Place the cursor inside a green highlight",
+      "appliedChangesHint": "AI-applied changes are highlighted in green. Highlights clear when you edit the sentence or press “Confirm this sentence”, or use the eraser button to clear them all.",
       "appliedChangesHintTitle": "Applied-change highlights"
     },
     "search": {

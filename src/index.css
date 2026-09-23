@@ -1011,9 +1011,17 @@
   padding: 1px 0;
 }
 
+.applied-change-highlight:hover {
+  --applied-change-bg: rgb(var(--diff-insertion-rgb) / 0.38);
+}
+
 .dark .applied-change-highlight {
   --applied-change-bg: rgb(var(--diff-insertion-rgb) / 0.3);
   --applied-change-border: rgb(var(--diff-insertion-rgb) / 0.8);
+}
+
+.dark .applied-change-highlight:hover {
+  --applied-change-bg: rgb(var(--diff-insertion-rgb) / 0.42);
 }
 
 /* ============================================

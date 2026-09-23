@@ -18,6 +18,7 @@
 | 문서 | 경로 | 설명 |
 |------|------|------|
 | **검수 이슈 양 패널 위치 이동** | `/docs/review-issue-dual-panel-navigation-plan.md` | 검수 이슈 선택 시 원문·번역문 패널과 검수 카드 공동 이동 — 단계 1–3 구현 완료 (단계 4 사용자 확인 대기) |
+| **적용 표시 개별 확인** | `/docs/applied-change-highlight-improvement-plan.md` | 초록 하이라이트 문장 단위 확인 + 개수·탐색 — 계획만 문서화, 미착수 |
 | **웹 버전 이행 조사** | `/docs/web-migration-research-2026-09-04.md` | 데스크톱 유지 + 웹 추가 시의 구조·비용·기능 정리 — 조사 완료, 미착수 |
 
 ## 테스트/배포 운영
