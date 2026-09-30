@@ -1599,7 +1599,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             projectId: project.id,
             text: sourceMarkdown,
             domain: project.metadata.domain,
-            limit: 30,
+            limit: 100,
           });
           if (glossaryEntries.length > 0) {
             console.warn(`[Translation] Glossary injected`);
@@ -1806,7 +1806,7 @@ export function EditorCanvasTipTap(): JSX.Element {
             projectId: project.id,
             text: searchText,
             domain: project.metadata.domain,
-            limit: 30,
+            limit: 100,
           });
         }
       } catch (glossaryError) {

@@ -109,7 +109,7 @@ async function getTranslationContext(): Promise<unknown> {
         projectId: project.id,
         text: sourceMarkdown,
         domain: project.metadata.domain,
-        limit: 30,
+        limit: 100,
       });
     }
   } catch {

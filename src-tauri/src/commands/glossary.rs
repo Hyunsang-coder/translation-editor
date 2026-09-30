@@ -665,7 +665,7 @@ pub async fn search_glossary(
     db_state: State<'_, DbState>,
 ) -> CommandResult<Vec<GlossaryEntryDto>> {
     run_db_task(&db_state, move |db| {
-        let limit = args.limit.unwrap_or(12).min(50);
+        let limit = args.limit.unwrap_or(12).min(100);
         let rows = db
             .search_glossary_in_text(&args.project_id, &args.query, args.domain.as_deref(), limit)
             .map_err(CommandError::from)?;

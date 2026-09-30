@@ -99,7 +99,7 @@ export async function resolveGlossaryEntries(
     projectId,
     text,
     domain,
-    limit = 30,
+    limit = 100,
     windowChars,
     maxWindows,
     search = searchGlossary,

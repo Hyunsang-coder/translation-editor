@@ -474,7 +474,7 @@ export const reviewTranslationTool = tool(
         projectId: project.id,
         text: allChunkText,
         domain: project.metadata.domain,
-        limit: 40,
+        limit: 100,
       });
     }
 
