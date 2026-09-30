@@ -57,14 +57,15 @@ export async function importGlossaryExcel(params: {
 
 export async function searchGlossary(params: {
   projectId: string;
-  query: string;
+  /** 문서를 나눈 윈도우들. 백엔드가 한 번에 검색해 전역 순서로 병합한다. */
+  queries: string[];
   limit?: number;
   domain?: ProjectDomain | string;
 }): Promise<GlossaryEntry[]> {
   return await invoke<GlossaryEntry[]>('search_glossary', {
     args: {
       projectId: params.projectId,
-      query: params.query,
+      queries: params.queries,
       limit: params.limit ?? 12,
       domain: params.domain ?? null,
     },

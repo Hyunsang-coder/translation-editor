@@ -640,7 +640,7 @@ pub async fn reorder_project_glossaries(
 #[serde(rename_all = "camelCase")]
 pub struct SearchGlossaryArgs {
     pub project_id: String,
-    pub query: String,
+    pub queries: Vec<String>,
     pub limit: Option<u32>,
     pub domain: Option<String>,
 }
@@ -667,7 +667,7 @@ pub async fn search_glossary(
     run_db_task(&db_state, move |db| {
         let limit = args.limit.unwrap_or(12).min(100);
         let rows = db
-            .search_glossary_in_text(&args.project_id, &args.query, args.domain.as_deref(), limit)
+            .search_glossary_in_texts(&args.project_id, &args.queries, args.domain.as_deref(), limit)
             .map_err(CommandError::from)?;
 
         Ok(rows

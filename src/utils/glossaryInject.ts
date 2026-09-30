@@ -2,7 +2,8 @@ import { searchGlossary } from '@/tauri/glossary';
 import type { GlossaryEntry, ProjectDomain } from '@/types';
 
 export const DEFAULT_GLOSSARY_WINDOW_CHARS = 3000;
-export const DEFAULT_GLOSSARY_MAX_WINDOWS = 4;
+/** 윈도우 경계에 걸친 용어를 놓치지 않도록 이웃 윈도우끼리 겹치는 글자 수. 가장 긴 용어보다 커야 한다. */
+export const DEFAULT_GLOSSARY_OVERLAP_CHARS = 200;
 
 export function formatGlossaryForPrompt(
   entries: Array<Pick<GlossaryEntry, 'source' | 'target' | 'notes'>>,
@@ -16,65 +17,38 @@ export function formatGlossaryForPrompt(
 }
 
 /**
- * 긴 문서에서도 앞/중간/뒤를 고르게 커버하도록 검색 쿼리 윈도우를 만든다.
- * 검색은 `instr(query, source)`라서 문서 앞부분만 자르면 후반 용어가 누락된다.
+ * 문서 전체를 빈틈없이 덮는 검색 쿼리 윈도우를 만든다.
+ * 검색은 `instr(query, source)`라서 문서 일부만 잘라 보내면 나머지 구간의 용어가 누락된다.
+ * 이웃 윈도우는 `overlapChars`만큼 겹쳐, 경계에 걸친 용어도 한 윈도우에 통째로 들어간다.
  */
 export function buildGlossaryQueryWindows(
   text: string,
   options?: {
     windowChars?: number;
-    maxWindows?: number;
+    overlapChars?: number;
   },
 ): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
 
   const windowChars = Math.max(1, options?.windowChars ?? DEFAULT_GLOSSARY_WINDOW_CHARS);
-  const maxWindows = Math.max(1, options?.maxWindows ?? DEFAULT_GLOSSARY_MAX_WINDOWS);
-
   if (trimmed.length <= windowChars) {
     return [trimmed];
   }
 
+  // 겹침이 윈도우의 절반을 넘으면 전진 폭이 너무 작아지므로 절반으로 제한한다.
+  const overlapChars = Math.min(
+    Math.max(0, options?.overlapChars ?? DEFAULT_GLOSSARY_OVERLAP_CHARS),
+    Math.floor(windowChars / 2),
+  );
+  const step = windowChars - overlapChars;
+
   const windows: string[] = [];
-  const lastStart = trimmed.length - windowChars;
-  const step = maxWindows === 1
-    ? lastStart
-    : Math.max(1, Math.floor(lastStart / (maxWindows - 1)));
-
-  for (let i = 0; i < maxWindows; i += 1) {
-    const start = Math.min(i * step, lastStart);
-    const slice = trimmed.slice(start, start + windowChars);
-    if (windows[windows.length - 1] !== slice) {
-      windows.push(slice);
-    }
-    if (start >= lastStart) break;
+  for (let start = 0; ; start += step) {
+    windows.push(trimmed.slice(start, start + windowChars));
+    if (start + windowChars >= trimmed.length) break;
   }
-
   return windows;
-}
-
-export function mergeGlossaryEntries(
-  lists: GlossaryEntry[][],
-  limit: number,
-): GlossaryEntry[] {
-  const cappedLimit = Math.max(0, limit);
-  if (cappedLimit === 0) return [];
-
-  const seen = new Set<string>();
-  const merged: GlossaryEntry[] = [];
-
-  for (const list of lists) {
-    for (const entry of list) {
-      const key = entry.source.trim().toLocaleLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      merged.push(entry);
-      if (merged.length >= cappedLimit) return merged;
-    }
-  }
-
-  return merged;
 }
 
 export interface ResolveGlossaryForPromptParams {
@@ -83,7 +57,6 @@ export interface ResolveGlossaryForPromptParams {
   domain?: ProjectDomain | string | null;
   limit?: number;
   windowChars?: number;
-  maxWindows?: number;
   /** 테스트용 주입. 기본은 tauri searchGlossary. */
   search?: typeof searchGlossary;
 }
@@ -101,26 +74,22 @@ export async function resolveGlossaryEntries(
     domain,
     limit = 100,
     windowChars,
-    maxWindows,
     search = searchGlossary,
   } = params;
 
   const windows = buildGlossaryQueryWindows(text, {
     ...(windowChars === undefined ? {} : { windowChars }),
-    ...(maxWindows === undefined ? {} : { maxWindows }),
   });
   if (windows.length === 0 || limit <= 0) return [];
 
+  // 윈도우 병합·중복 제거·limit은 백엔드가 전역 순서로 처리한다 (IPC 한 번).
   try {
-    const hitLists = await Promise.all(
-      windows.map((query) => search({
-        projectId,
-        query,
-        ...(domain == null ? {} : { domain }),
-        limit,
-      })),
-    );
-    return mergeGlossaryEntries(hitLists, limit);
+    return await search({
+      projectId,
+      queries: windows,
+      ...(domain == null ? {} : { domain }),
+      limit,
+    });
   } catch {
     return [];
   }

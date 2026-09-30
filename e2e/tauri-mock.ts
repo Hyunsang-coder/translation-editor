@@ -488,17 +488,17 @@ function buildMockScript(seedProjects: MockProject[]): string {
     // ── Glossary ──
     search_glossary: (args) => {
       const a = args?.args ?? args;
-      const query = (a?.query ?? '').trim();
-      if (!query) return [];
+      const queries = (a?.queries ?? []).map(query => query.trim()).filter(Boolean);
+      if (queries.length === 0) return [];
       const domain = a?.domain ?? null;
       const seen = new Set();
       const matches = [];
       for (const [priority, glossaryId] of (projectGlossaryIds.get(a?.projectId) ?? []).entries()) {
         for (const entry of glossaryEntries.get(glossaryId) ?? []) {
           if (domain && entry.domain && entry.domain !== domain) continue;
-          const matched = entry.caseSensitive
+          const matched = queries.some(query => (entry.caseSensitive
             ? query.includes(entry.source)
-            : query.toLowerCase().includes(entry.source.toLowerCase());
+            : query.toLowerCase().includes(entry.source.toLowerCase())));
           if (matched) matches.push({ ...entry, priority });
         }
       }
@@ -512,7 +512,7 @@ function buildMockScript(seedProjects: MockProject[]): string {
         if (seen.has(normalized)) return false;
         seen.add(normalized);
         return true;
-      }).slice(0, Math.min(a?.limit ?? 12, 50)).map(({ priority: _priority, ...entry }) => entry);
+      }).slice(0, Math.min(a?.limit ?? 12, 100)).map(({ priority: _priority, ...entry }) => entry);
     },
     import_glossary_csv: (args) => {
       const a = args?.args ?? args;

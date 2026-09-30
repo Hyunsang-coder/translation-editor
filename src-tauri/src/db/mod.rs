@@ -2227,8 +2227,7 @@ impl Database {
     }
 
     /// query 문자열 안에 등장하는 source 용어를 찾아 상위 N개를 반환합니다.
-    /// - case_sensitive=1: query에서 그대로 포함 여부 검사
-    /// - case_sensitive=0: lower(query)에서 lower(source) 포함 여부 검사
+    /// 단일 query 버전 — 규칙은 `search_glossary_in_texts`와 같습니다.
     pub fn search_glossary_in_text(
         &self,
         project_id: &str,
@@ -2236,14 +2235,33 @@ impl Database {
         domain: Option<&str>,
         limit: u32,
     ) -> Result<Vec<GlossaryEntryRow>, IteError> {
-        let q = query.trim();
-        if q.is_empty() || limit == 0 {
+        self.search_glossary_in_texts(project_id, &[query.to_string()], domain, limit)
+    }
+
+    /// 여러 query(긴 문서를 나눈 윈도우) 각각에 등장하는 source 용어를 합쳐 상위 N개를 반환합니다.
+    /// - case_sensitive=1: query에서 그대로 포함 여부 검사
+    /// - case_sensitive=0: lower(query)에서 lower(source) 포함 여부 검사
+    /// - 어느 query에서 잡혔는지와 무관하게 (글로서리 우선순위, 원문 길이 내림차순,
+    ///   생성 시각, id) 전역 순서로 정렬한 뒤 정규화된 source 중복을 제거하고 limit을 자른다.
+    pub fn search_glossary_in_texts(
+        &self,
+        project_id: &str,
+        queries: &[String],
+        domain: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<GlossaryEntryRow>, IteError> {
+        let queries: Vec<&str> = queries
+            .iter()
+            .map(|q| q.trim())
+            .filter(|q| !q.is_empty())
+            .collect();
+        if queries.is_empty() || limit == 0 {
             return Ok(vec![]);
         }
 
         let mut stmt = self.conn.prepare(
             "SELECT e.id, e.glossary_id, e.source, e.target, e.notes, e.domain,
-                    e.case_sensitive, e.created_at, e.updated_at
+                    e.case_sensitive, e.created_at, e.updated_at, pg.priority
              FROM project_glossaries pg
              JOIN glossary_entries e ON e.glossary_id = pg.glossary_id
              WHERE pg.project_id = ?1
@@ -2251,31 +2269,50 @@ impl Database {
                AND (
                     (e.case_sensitive = 1 AND instr(?3, e.source) > 0)
                  OR (e.case_sensitive = 0 AND instr(lower(?3), lower(e.source)) > 0)
-               )
-             ORDER BY pg.priority ASC, length(e.source) DESC, e.created_at ASC, e.id ASC",
+               )",
         )?;
 
-        let iter = stmt.query_map((project_id, domain, q), |row| {
-            Ok(GlossaryEntryRow {
-                id: row.get(0)?,
-                glossary_id: row.get(1)?,
-                source: row.get(2)?,
-                target: row.get(3)?,
-                notes: row.get(4)?,
-                domain: row.get(5)?,
-                case_sensitive: {
-                    let v: i64 = row.get(6)?;
-                    v == 1
-                },
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-            })
-        })?;
+        let mut hits: std::collections::HashMap<String, (i64, GlossaryEntryRow)> =
+            std::collections::HashMap::new();
+        for query in queries {
+            let iter = stmt.query_map((project_id, domain, query), |row| {
+                let priority: i64 = row.get(9)?;
+                Ok((
+                    priority,
+                    GlossaryEntryRow {
+                        id: row.get(0)?,
+                        glossary_id: row.get(1)?,
+                        source: row.get(2)?,
+                        target: row.get(3)?,
+                        notes: row.get(4)?,
+                        domain: row.get(5)?,
+                        case_sensitive: {
+                            let v: i64 = row.get(6)?;
+                            v == 1
+                        },
+                        created_at: row.get(7)?,
+                        updated_at: row.get(8)?,
+                    },
+                ))
+            })?;
+            for r in iter {
+                let (priority, entry) = r?;
+                hits.entry(entry.id.clone()).or_insert((priority, entry));
+            }
+        }
+
+        let mut ranked: Vec<(i64, GlossaryEntryRow)> = hits.into_values().collect();
+        ranked.sort_by(|(priority_a, a), (priority_b, b)| {
+            priority_a
+                .cmp(priority_b)
+                .then_with(|| b.source.chars().count().cmp(&a.source.chars().count()))
+                .then_with(|| a.created_at.cmp(&b.created_at))
+                .then_with(|| a.id.cmp(&b.id))
+        });
 
         let mut out = Vec::new();
         let mut seen_sources = std::collections::HashSet::new();
-        for r in iter {
-            let entry = r?;
+        for (_, entry) in ranked {
             if seen_sources.insert(normalize_glossary_source(&entry.source)) {
                 out.push(entry);
                 if out.len() >= limit as usize {
@@ -3394,6 +3431,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::AiUsageRecordRow;
+    use super::GlossaryEntryRow;
     use tempfile::NamedTempFile;
 
     use super::Database;
@@ -4207,6 +4245,67 @@ mod tests {
             .expect("list replaced entries");
         assert_eq!(replaced_entries.len(), 1);
         assert_eq!(replaced_entries[0].source, "Replacement term");
+    }
+
+    #[test]
+    fn search_glossary_in_texts_merges_queries_with_global_ordering() {
+        let file = NamedTempFile::new().expect("failed to create temp db file");
+        let db = Database::new(file.path()).expect("failed to create database");
+        db.initialize().expect("failed to initialize database");
+        let project = build_test_project("glossary-multi-query-project");
+        db.save_project(&project).expect("save project");
+
+        let high = db.create_glossary("High", None).expect("create high glossary");
+        let low = db.create_glossary("Low", None).expect("create low glossary");
+        db.create_glossary_entry(&high.id, "Alpha", "HIGH_ALPHA", None, None, false)
+            .expect("create alpha");
+        db.create_glossary_entry(&low.id, "Beta", "LOW_BETA", None, None, false)
+            .expect("create beta");
+        db.create_glossary_entry(&low.id, "Gamma", "LOW_GAMMA", None, None, false)
+            .expect("create gamma");
+        db.create_glossary_entry(&low.id, "Gamma Ray", "LOW_GAMMA_RAY", None, None, false)
+            .expect("create gamma ray");
+        db.set_project_glossaries(&project.id, &[high.id.clone(), low.id.clone()])
+            .expect("link glossaries");
+
+        let queries = |items: &[&str]| -> Vec<String> { items.iter().map(|s| s.to_string()).collect() };
+        let targets = |rows: Vec<GlossaryEntryRow>| -> Vec<String> {
+            rows.into_iter().map(|row| row.target).collect()
+        };
+
+        // 결과 순서는 쿼리 순서가 아니라 (글로서리 우선순위, 원문 길이 내림차순)의 전역 순서를 따른다.
+        let merged = db
+            .search_glossary_in_texts(&project.id, &queries(&["Beta here", "Alpha here"]), None, 10)
+            .expect("search two queries");
+        assert_eq!(targets(merged), vec!["HIGH_ALPHA", "LOW_BETA"]);
+
+        // limit은 병합·정렬 뒤에 적용된다: 뒤쪽 쿼리에서만 잡힌 최우선 항목이 앞쪽 쿼리 항목에 밀리지 않는다.
+        let limited = db
+            .search_glossary_in_texts(&project.id, &queries(&["Beta here", "Alpha here"]), None, 1)
+            .expect("search with limit");
+        assert_eq!(targets(limited), vec!["HIGH_ALPHA"]);
+
+        // 여러 쿼리에 걸려도 같은 항목은 한 번만 나온다.
+        let deduped = db
+            .search_glossary_in_texts(&project.id, &queries(&["Alpha 1", "Alpha 2"]), None, 10)
+            .expect("search duplicate hits");
+        assert_eq!(targets(deduped), vec!["HIGH_ALPHA"]);
+
+        // 같은 우선순위에서는 더 긴 원문이 먼저 — 항목이 서로 다른 쿼리에서 잡혀도 마찬가지.
+        let by_length = db
+            .search_glossary_in_texts(&project.id, &queries(&["Gamma", "Gamma Ray"]), None, 10)
+            .expect("search by length");
+        assert_eq!(targets(by_length), vec!["LOW_GAMMA_RAY", "LOW_GAMMA"]);
+
+        // 빈 쿼리/쿼리 없음은 결과 없음.
+        assert!(db
+            .search_glossary_in_texts(&project.id, &queries(&["  ", ""]), None, 10)
+            .expect("blank queries")
+            .is_empty());
+        assert!(db
+            .search_glossary_in_texts(&project.id, &[], None, 10)
+            .expect("no queries")
+            .is_empty());
     }
 
     #[test]
