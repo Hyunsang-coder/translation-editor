@@ -6,12 +6,12 @@ export const DEFAULT_GLOSSARY_WINDOW_CHARS = 3000;
 export const DEFAULT_GLOSSARY_OVERLAP_CHARS = 200;
 
 export function formatGlossaryForPrompt(
-  entries: Array<Pick<GlossaryEntry, 'source' | 'target' | 'notes'>>,
+  entries: Array<Pick<GlossaryEntry, 'source' | 'target' | 'notes'> & Partial<Pick<GlossaryEntry, 'caseSensitive'>>>,
 ): string {
   if (entries.length === 0) return '';
   return entries
     .map((entry) => (
-      `- ${entry.source} = ${entry.target}${entry.notes ? ` (${entry.notes})` : ''}`
+      `- ${entry.source} = ${entry.target}${entry.notes ? ` (${entry.notes})` : ''}${entry.caseSensitive === true ? ' (대소문자 구분, case-sensitive)' : ''}`
     ))
     .join('\n');
 }

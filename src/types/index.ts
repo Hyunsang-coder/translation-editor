@@ -335,6 +335,8 @@ export interface ContextSnapshot {
     target: string;
     /** 동음이의 판단 근거. 주입 시 항목당 상한이 적용된다(resolveWorkflowContext). */
     notes?: string;
+    /** true면 원문 대소문자가 정확히 일치할 때만 적용. 없거나 false면 대소문자 무시. */
+    caseSensitive?: boolean;
   }>;
   createdAt: number;
 }

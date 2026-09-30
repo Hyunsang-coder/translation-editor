@@ -12,7 +12,7 @@ export interface BuildContextSnapshotInput {
   legacyProjectContext?: string;
   translationRules: string;
   forbiddenTerms: ForbiddenTerm[];
-  glossaryEntries: Array<Pick<GlossaryEntry, 'id' | 'source' | 'target' | 'notes'>>;
+  glossaryEntries: Array<Pick<GlossaryEntry, 'id' | 'source' | 'target' | 'notes'> & Partial<Pick<GlossaryEntry, 'caseSensitive'>>>;
   createdAt?: number;
 }
 
@@ -45,11 +45,12 @@ export function buildContextSnapshot(
         ...(note ? { note } : {}),
       })),
     glossaryEntries: input.glossaryEntries
-      .map(({ id, source, target, notes }) => ({
+      .map(({ id, source, target, notes, caseSensitive }) => ({
         id,
         source,
         target,
         ...(notes ? { notes } : {}),
+        ...(caseSensitive === true ? { caseSensitive: true as const } : {}),
       })),
     createdAt: input.createdAt ?? Date.now(),
   };

@@ -133,6 +133,30 @@ describe('workflow context snapshot', () => {
     expect(resolved.rendered.glossary).toContain(`${'가'.repeat(100)}...`);
   });
 
+  it('caseSensitive 플래그를 스냅샷에 보존해 구분 항목만 마커를 붙인다', () => {
+    const snapshot = buildContextSnapshot({
+      revision: 4,
+      projectMemoryItems: [],
+      translationRules: '',
+      forbiddenTerms: [],
+      glossaryEntries: [
+        { id: 'g1', source: 'Apple', target: '사과' },
+        { id: 'g2', source: 'Bolt', target: '볼트', caseSensitive: true },
+      ],
+      createdAt: 100,
+    });
+
+    expect(snapshot.glossaryEntries).toEqual([
+      { id: 'g1', source: 'Apple', target: '사과' },
+      { id: 'g2', source: 'Bolt', target: '볼트', caseSensitive: true },
+    ]);
+
+    const resolved = resolveWorkflowContextFromSnapshot({ mode: 'full-translate', snapshot });
+    expect(resolved.rendered.glossary).toContain('- Apple = 사과');
+    expect(resolved.rendered.glossary).not.toContain('- Apple = 사과 (');
+    expect(resolved.rendered.glossary).toContain('- Bolt = 볼트 (대소문자 구분, case-sensitive)');
+  });
+
   it('메모리가 상한을 넘으면 우선순위대로 잘라내고 manifest가 실제 주입분과 일치한다 (D6)', () => {
     const many = Array.from({ length: 45 }, (_, index) => ({
       id: `fact-${index}`,

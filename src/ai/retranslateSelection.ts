@@ -255,7 +255,7 @@ function buildOptionalContext(
   if (rendered.glossary) {
     sections.push(
       '[Glossary]',
-      'These are the project\'s settled translations. Do not substitute synonyms.',
+      'These are the project\'s settled translations. Do not substitute synonyms. Entries without a (대소문자 구분, case-sensitive) marker apply case-insensitively.',
       rendered.glossary,
     );
   }

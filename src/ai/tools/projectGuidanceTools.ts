@@ -102,7 +102,12 @@ export function createProjectGuidanceTools(
       });
       return JSON.stringify({
         glossary: formatGlossaryForPrompt(entries),
-        entries: entries.map(({ id, source, target }) => ({ id, source, target })),
+        entries: entries.map(({ id, source, target, caseSensitive }) => ({
+          id,
+          source,
+          target,
+          ...(caseSensitive === true ? { caseSensitive: true as const } : {}),
+        })),
       });
     },
     {

@@ -213,7 +213,7 @@ describe('polishTargetDocumentWithStreaming', () => {
     const systemPrompt = String(messages[0]?.content);
 
     expect(systemPrompt).toContain('[Glossary]');
-    expect(systemPrompt).toContain('Keep these preferred translations exactly. Do not substitute synonyms:');
+    expect(systemPrompt).toContain('(대소문자 구분, case-sensitive)');
     expect(systemPrompt).toContain('- Care Package = 보급 상자');
     expect(systemPrompt).toContain('- Blue Zone = 블루존');
   });

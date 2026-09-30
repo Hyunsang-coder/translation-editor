@@ -115,7 +115,7 @@ function buildPolishSystemPrompt(params: {
     ...(glossary
       ? [
           '[Glossary]',
-          'Keep these preferred translations exactly. Do not substitute synonyms:',
+          'Keep these preferred translations exactly. Do not substitute synonyms. Entries without a (대소문자 구분, case-sensitive) marker apply case-insensitively:',
           glossary,
           '',
         ]

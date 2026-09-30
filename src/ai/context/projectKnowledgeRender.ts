@@ -19,7 +19,7 @@ type RenderableForbiddenTerm = Pick<ForbiddenTerm, 'term' | 'replacement' | 'not
  * 억지로 공유하려고 언어 파라미터를 만들면 프롬프트가 한/영 혼용이 된다.
  */
 export const KNOWLEDGE_DIRECTIVES = {
-  glossary: '아래 용어집의 번역이 이 프로젝트의 확정 번역입니다. 동의어로 대체하지 마세요.',
+  glossary: '아래 용어집의 번역이 이 프로젝트의 확정 번역입니다. 동의어로 대체하지 마세요. (대소문자 구분, case-sensitive) 표시가 없는 항목은 대소문자를 무시하고 적용하세요.',
   forbiddenTerms: '아래 용어는 번역문에 쓸 수 없습니다. 대체어가 있으면 반드시 대체어를 사용하세요.',
   translationRules: '아래 번역 규칙이 이 프로젝트의 기준입니다. 일반적인 관례와 충돌하면 이 규칙을 우선합니다.',
   projectMemory:

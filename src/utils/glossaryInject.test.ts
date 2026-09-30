@@ -47,6 +47,18 @@ describe('formatGlossaryForPrompt', () => {
   it('returns empty string for no entries', () => {
     expect(formatGlossaryForPrompt([])).toBe('');
   });
+
+  it('marks case-sensitive entries and leaves insensitive entries unmarked', () => {
+    expect(formatGlossaryForPrompt([
+      entry({ id: '1', source: 'Apple', target: '사과' }),
+      entry({ id: '2', source: 'Bolt', target: '볼트', caseSensitive: true }),
+      entry({ id: '3', source: 'Nut', target: '너트', notes: '부품', caseSensitive: true }),
+    ])).toBe([
+      '- Apple = 사과',
+      '- Bolt = 볼트 (대소문자 구분, case-sensitive)',
+      '- Nut = 너트 (부품) (대소문자 구분, case-sensitive)',
+    ].join('\n'));
+  });
 });
 
 describe('buildGlossaryQueryWindows', () => {
