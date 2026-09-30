@@ -111,6 +111,9 @@ Critical implementation warnings learned from past issues.
 
 169. **대화 요약-이어가기 5종 (`conversationContext.ts` + `chatStore.ai.ts`)**: ① planner는 토큰 예산 우선 — 예산 안에 들면 개수와 무관하게 요약 없음(개수 캡 선적용이 조기 요약을 유발했다). ② 요약 상한에 잘린 꼬리는 최근 원문 앞에 붙여 이번 턴 무손실로 둘 것 — 빼면 중간 구간이 요약에도 원문에도 없다. ③ 요약 타임아웃 abort는 본 요청 취소로 오분류 금지. ④ 요약 실패 fallback은 경계 동결 — 전진시키면 좀비 구간이 된다. ⑤ 예약 토큰에 첨부/블록/선택/도구정의(10k)를 포함하고, 오버플로우 시 최소 보존 턴 긴급 요약 후 1회만 재시도한다.
 
+172. **도구의 앱 전용 데이터는 `artifact`로, 모델이 써야 하는 id만 content에**: `get_project_guidance`·`search_project_glossary`는 `responseFormat: 'content_and_artifact'`로 `[content, artifact]`를 반환하고, 감사 id(`ToolAuditArtifact`, `tools/toolAudit.ts`)는 artifact로만 `onToolCall`에 전달된다(`chatStore.ai.ts`가 `isToolAuditArtifact`로 검증해 `contextManifest`에 병합). ① 반환이 **정확히 2-튜플**이 아니면 LangChain이 던지고 에러 ToolMessage가 된다 — 모든 반환 경로를 튜플로. ② `tool.invoke(args)`는 content만 돌려준다; artifact는 `invoke({type:'tool_call', id, name, args})`로 호출해야 `ToolMessage.artifact`에 실린다(테스트 헬퍼 참고). ③ **메모리 id는 content에도 남긴다** — `propose_project_memory_change.targetItemId`가 이 id를 그대로 써야 하고 시스템 프롬프트 다이제스트에는 id가 없다. 금칙어·용어집 id는 모델이 쓸 곳이 없으므로 artifact 전용. ④ 결과가 `maxOutputChars`로 잘려도 artifact는 온전해서 감사 id가 기록된다(예전엔 JSON이 깨져 통째로 유실). 단 모델이 잘린 뒤쪽 항목을 못 봤어도 id는 남을 수 있다. ⑤ 미들웨어는 성공 경로에서 artifact를 `onToolCall` end 이벤트와 재구성한 ToolMessage에 옮긴다 — ToolMessage를 새로 만드는 코드는 `artifact`를 빠뜨리지 말 것. 프로바이더 요청에는 실리지 않음을 `toolArtifactSerialization.test.ts`가 고정한다.
+
+
 ## AbortController / Async
 
 21. **AbortSignal Propagation**: When using `AbortController` for request cancellation, always pass `abortSignal` to `streamAssistantReply`. Creating the controller alone doesn't cancel requests.

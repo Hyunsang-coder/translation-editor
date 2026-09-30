@@ -235,6 +235,22 @@ const toolResults = await Promise.allSettled(toolCallPromises);
 // 2개 이상 도구 호출 시 latency ~50% 감소
 ```
 
+### 도구 결과: 모델용 content vs 앱 전용 artifact
+```typescript
+// src/ai/tools/projectGuidanceTools.ts — responseFormat: 'content_and_artifact'
+// content(모델이 읽음)와 artifact(앱만 읽음, 프로바이더에 전송되지 않음)를 분리한다.
+const result: [string, ToolAuditArtifact] = [
+  JSON.stringify({ glossary: formatGlossaryForPrompt(entries) }),
+  { glossaryEntryIds: entries.map(({ id }) => id) },
+];
+return result;   // 정확히 2-튜플이어야 한다
+
+// src/ai/chatAgent/middleware.ts → onToolCall({ phase: 'end', result, artifact })
+// src/stores/chatStore.ai.ts    → isToolAuditArtifact(evt.artifact)로 contextManifest 갱신
+```
+`result` 문자열은 `maxOutputChars`로 잘릴 수 있으므로 앱 로직이 파싱하지 않는다.
+모델이 직접 써야 하는 id(프로젝트 메모리 `targetItemId`)만 content에 남긴다.
+
 ### 외부 도구 출력 안전화
 ```typescript
 // src/ai/chatAgent/middleware.ts → wrapExternalToolOutput()

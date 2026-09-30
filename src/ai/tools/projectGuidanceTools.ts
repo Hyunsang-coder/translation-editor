@@ -6,6 +6,7 @@ import {
   formatGlossaryForPrompt,
   resolveGlossaryEntries,
 } from '@/utils/glossaryInject';
+import type { ToolAuditArtifact } from './toolAudit';
 
 interface CreateProjectGuidanceToolsInput {
   projectId: string;
@@ -44,11 +45,12 @@ export function createProjectGuidanceTools(
       }).parse(rawArgs ?? {});
 
       const output: Record<string, unknown> = {};
+      const audit: ToolAuditArtifact = {};
       if (parsed.sections.includes('translation_rules')) {
         output.translationRules = input.translationRules;
       }
       if (parsed.sections.includes('forbidden_terms')) {
-        output.forbiddenTerms = input.forbiddenTerms
+        const terms = input.forbiddenTerms
           .filter((term) => term.enabled)
           .filter((term) =>
             matchesQuery(
@@ -56,25 +58,31 @@ export function createProjectGuidanceTools(
               parsed.query,
             ),
           )
-          .slice(0, 30)
-          .map(({ id, term, replacement, note }) => ({
-            id,
-            term,
-            ...(replacement ? { replacement } : {}),
-            ...(note ? { note } : {}),
-          }));
+          .slice(0, 30);
+        // 금칙어 id는 모델이 쓸 곳이 없다 — 감사용으로 artifact에만 싣는다.
+        output.forbiddenTerms = terms.map(({ term, replacement, note }) => ({
+          term,
+          ...(replacement ? { replacement } : {}),
+          ...(note ? { note } : {}),
+        }));
+        audit.forbiddenTermIds = terms.map(({ id }) => id);
       }
       if (parsed.sections.includes('project_memory')) {
-        output.projectMemory = input.projectMemoryItems
+        const items = input.projectMemoryItems
           .filter((item) => item.status === 'active')
           .filter((item) => matchesQuery(item.content, parsed.query))
-          .slice(0, 30)
-          .map(({ id, category, content }) => ({ id, category, content }));
+          .slice(0, 30);
+        // 메모리 id는 propose_project_memory_change의 targetItemId로 모델이 그대로 써야 하므로
+        // content에 남기고, 감사용으로는 artifact에도 싣는다.
+        output.projectMemory = items.map(({ id, category, content }) => ({ id, category, content }));
+        audit.projectMemoryItemIds = items.map(({ id }) => id);
       }
-      return JSON.stringify(output);
+      const result: [string, ToolAuditArtifact] = [JSON.stringify(output), audit];
+      return result;
     },
     {
       name: 'get_project_guidance',
+      responseFormat: 'content_and_artifact',
       description:
         '필요한 프로젝트 번역 규칙, 금칙어, 승인된 프로젝트 메모리만 선택해서 조회합니다.',
       schema: z.object({
@@ -100,18 +108,17 @@ export function createProjectGuidanceTools(
         ...(input.domain ? { domain: input.domain } : {}),
         limit: parsed.limit ?? 8,
       });
-      return JSON.stringify({
-        glossary: formatGlossaryForPrompt(entries),
-        entries: entries.map(({ id, source, target, caseSensitive }) => ({
-          id,
-          source,
-          target,
-          ...(caseSensitive === true ? { caseSensitive: true as const } : {}),
-        })),
-      });
+      // 모델은 포맷된 문자열(원문·번역·노트·대소문자 표시)만 있으면 된다.
+      // 항목 id는 앱의 감사 기록용이라 artifact로만 넘긴다.
+      const result: [string, ToolAuditArtifact] = [
+        JSON.stringify({ glossary: formatGlossaryForPrompt(entries) }),
+        { glossaryEntryIds: entries.map(({ id }) => id) },
+      ];
+      return result;
     },
     {
       name: 'search_project_glossary',
+      responseFormat: 'content_and_artifact',
       description:
         '현재 질문이나 선택 문구에 관련된 프로젝트 용어집 항목만 검색합니다.',
       schema: z.object({

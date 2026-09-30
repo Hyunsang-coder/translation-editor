@@ -45,6 +45,7 @@ import {
 } from '@/ai/tools/toolRegistry';
 import { useProjectMemoryStore } from '@/stores/projectMemoryStore';
 import { renderChatMemoryDigest } from '@/ai/context/projectKnowledgeRender';
+import { isToolAuditArtifact } from '@/ai/tools/toolAudit';
 import {
   appendProposal,
   tryExtractWebSearchQuery,
@@ -469,46 +470,35 @@ export function createAiActions(
             set({ statusMessage: `${friendlyName} 진행 중...` });
           } else {
             set({ statusMessage: '결과 처리 및 답변 생성 중...' });
-            if (evt.status === 'success' && evt.result) {
-              try {
-                const parsed = JSON.parse(evt.result) as {
-                  projectMemory?: Array<{ id?: unknown }>;
-                  forbiddenTerms?: Array<{ id?: unknown }>;
-                  entries?: Array<{ id?: unknown }>;
-                };
-                const manifest = nextMetadata.contextManifest ?? contextManifest;
-                const included = new Set(manifest.included);
-                const memoryIds = (parsed.projectMemory ?? [])
-                  .map((item) => item.id)
-                  .filter((id): id is string => typeof id === 'string');
-                const forbiddenIds = (parsed.forbiddenTerms ?? [])
-                  .map((item) => item.id)
-                  .filter((id): id is string => typeof id === 'string');
-                const glossaryIds = (parsed.entries ?? [])
-                  .map((item) => item.id)
-                  .filter((id): id is string => typeof id === 'string');
-                if (memoryIds.length > 0) included.add('project-memory');
-                if (forbiddenIds.length > 0) included.add('forbidden-terms');
-                if (glossaryIds.length > 0) included.add('glossary');
-                nextMetadata = {
-                  ...nextMetadata,
-                  contextManifest: {
-                    ...manifest,
-                    projectMemoryItemIds: [
-                      ...new Set([...manifest.projectMemoryItemIds, ...memoryIds]),
-                    ],
-                    forbiddenTermIds: [
-                      ...new Set([...manifest.forbiddenTermIds, ...forbiddenIds]),
-                    ],
-                    glossaryEntryIds: [
-                      ...new Set([...manifest.glossaryEntryIds, ...glossaryIds]),
-                    ],
-                    included: [...included],
-                  },
-                };
-              } catch {
-                // JSON 구조를 반환하지 않는 도구는 type-level 사용 기록만 남긴다.
-              }
+            // 감사 id는 모델이 읽는 result 문자열이 아니라 도구 artifact로 받는다.
+            // result는 maxOutputChars로 잘리면 JSON이 깨져 id가 통째로 사라지기 때문이다.
+            // artifact를 내지 않는 도구는 type-level 사용 기록(onToolsUsed)만 남긴다.
+            if (evt.status === 'success' && isToolAuditArtifact(evt.artifact)) {
+              const audit = evt.artifact;
+              const manifest = nextMetadata.contextManifest ?? contextManifest;
+              const included = new Set(manifest.included);
+              const memoryIds = audit.projectMemoryItemIds ?? [];
+              const forbiddenIds = audit.forbiddenTermIds ?? [];
+              const glossaryIds = audit.glossaryEntryIds ?? [];
+              if (memoryIds.length > 0) included.add('project-memory');
+              if (forbiddenIds.length > 0) included.add('forbidden-terms');
+              if (glossaryIds.length > 0) included.add('glossary');
+              nextMetadata = {
+                ...nextMetadata,
+                contextManifest: {
+                  ...manifest,
+                  projectMemoryItemIds: [
+                    ...new Set([...manifest.projectMemoryItemIds, ...memoryIds]),
+                  ],
+                  forbiddenTermIds: [
+                    ...new Set([...manifest.forbiddenTermIds, ...forbiddenIds]),
+                  ],
+                  glossaryEntryIds: [
+                    ...new Set([...manifest.glossaryEntryIds, ...glossaryIds]),
+                  ],
+                  included: [...included],
+                },
+              };
             }
           }
 

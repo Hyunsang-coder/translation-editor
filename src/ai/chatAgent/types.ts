@@ -32,6 +32,8 @@ export interface StreamCallbacks {
     args?: Record<string, unknown>;
     status?: 'success' | 'error';
     result?: string;
+    /** 도구가 content_and_artifact로 돌려준 앱 전용 데이터. 모델에는 전송되지 않는다. */
+    artifact?: unknown;
   }) => void;
   /** 모델 실행(생각) 시작 시 호출 */
   onModelRun?: (step: number) => void;

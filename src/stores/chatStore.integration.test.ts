@@ -430,6 +430,111 @@ describe('ChatStore - 채팅 기본 기능 (Phase 7)', () => {
       expect(manifest?.included).toContain('forbidden-terms');
     });
 
+    describe('도구 artifact → contextManifest 감사 기록', () => {
+      async function sendWithToolEvents(
+        events: Array<Parameters<NonNullable<Parameters<typeof mocks.streamAssistantReply>[2]['onToolCall']>>[0]>,
+      ) {
+        mocks.streamAssistantReply.mockImplementationOnce(async (_input, _runConfig, callbacks) => {
+          for (const event of events) callbacks?.onToolCall?.(event);
+          callbacks?.onToken?.('답변', '답변');
+          return '답변';
+        });
+        useChatStore.getState().createSession('Audit Session');
+        const sessionId = useChatStore.getState().currentSessionId!;
+        await useChatStore.getState().sendMessage('용어 알려줘', sessionId);
+        const session = useChatStore.getState().sessions.find((s) => s.id === sessionId);
+        return session?.messages.find((m) => m.role === 'assistant')?.metadata?.contextManifest;
+      }
+
+      it('search_project_glossary의 artifact id가 glossaryEntryIds와 included에 반영되고 중복은 제거된다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"glossary":"- Blue Zone = 블루존"}',
+            artifact: { glossaryEntryIds: ['g1', 'g2'] },
+          },
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"glossary":"- Bolt = 볼트"}',
+            artifact: { glossaryEntryIds: ['g2', 'g3'] },
+          },
+        ]);
+
+        expect(manifest?.glossaryEntryIds).toEqual(['g1', 'g2', 'g3']);
+        expect(manifest?.included).toContain('glossary');
+      });
+
+      it('get_project_guidance의 artifact id가 메모리·금칙어 manifest에 반영된다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'get_project_guidance', status: 'success',
+            result: '{"projectMemory":[{"id":"m1","category":"general","content":"x"}]}',
+            artifact: { projectMemoryItemIds: ['m1'], forbiddenTermIds: ['t1'] },
+          },
+        ]);
+
+        expect(manifest?.projectMemoryItemIds).toContain('m1');
+        expect(manifest?.forbiddenTermIds).toContain('t1');
+        expect(manifest?.included).toEqual(expect.arrayContaining(['project-memory', 'forbidden-terms']));
+      });
+
+      it('content가 제한 길이로 잘려 JSON이 깨져도 artifact로 감사 id가 기록된다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'get_project_guidance', status: 'success',
+            result: '{"projectMemory":[{"id":"m1","category":"gen\n[도구 결과가 제한 길이에서 잘렸습니다.]',
+            artifact: { projectMemoryItemIds: ['m1'] },
+          },
+        ]);
+
+        expect(manifest?.projectMemoryItemIds).toContain('m1');
+        expect(manifest?.included).toContain('project-memory');
+      });
+
+      it('artifact가 없으면 result의 JSON에 id가 있어도 감사 기록에 넣지 않는다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"entries":[{"id":"legacy-id"}]}',
+          },
+        ]);
+
+        expect(manifest?.glossaryEntryIds).not.toContain('legacy-id');
+        expect(manifest?.included).not.toContain('glossary');
+      });
+
+      it('형식이 잘못된 artifact는 무시하고 응답은 정상 완료된다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"glossary":""}',
+            artifact: { glossaryEntryIds: 'g1' },
+          },
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"glossary":""}',
+            artifact: 'not-an-object',
+          },
+        ]);
+
+        expect(manifest?.glossaryEntryIds).toEqual([]);
+        expect(manifest?.included).not.toContain('glossary');
+      });
+
+      it('빈 id 배열은 included를 늘리지 않는다', async () => {
+        const manifest = await sendWithToolEvents([
+          {
+            phase: 'end', toolName: 'search_project_glossary', status: 'success',
+            result: '{"glossary":""}',
+            artifact: { glossaryEntryIds: [] },
+          },
+        ]);
+
+        expect(manifest?.glossaryEntryIds).toEqual([]);
+        expect(manifest?.included).not.toContain('glossary');
+      });
+    });
+
     it('한 응답의 여러 프로젝트 지식 제안이 모두 누적된다 (D3)', async () => {
       mocks.streamAssistantReply.mockImplementationOnce(async (_input, _runConfig, callbacks) => {
         callbacks?.onToolCall?.({

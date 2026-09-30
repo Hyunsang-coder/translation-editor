@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -23,6 +23,16 @@ const fakeTool = tool(async () => 'tool output', {
   description: 'fake',
   schema: z.object({}),
 });
+
+/** 모델용 content와 앱 전용 artifact를 분리해 돌려주는 도구 (responseFormat: content_and_artifact) */
+function artifactTool(name: string, content: string, artifact: unknown) {
+  return tool(async () => [content, artifact] as [string, unknown], {
+    name,
+    description: 'returns content and artifact',
+    schema: z.object({}),
+    responseFormat: 'content_and_artifact',
+  });
+}
 
 /** registry 등록(trust: internal, maxOutputChars: 256) → 래핑 없음, 절단 있음 */
 const longOutputTool = tool(async () => 'X'.repeat(1000), {
@@ -413,6 +423,88 @@ describe('runChatAgentStream 도구 실행', () => {
     );
     // onModelRun은 0-based 스텝 인덱스 (chatStore가 step > 0으로 분기한다)
     expect(onModelRun.mock.calls.map((c) => c[0])).toEqual([0, 1]);
+  });
+
+  describe('도구 artifact', () => {
+    const AUDIT = { glossaryEntryIds: ['SECRET_AUDIT_ID'] };
+
+    it('artifact를 내는 도구는 onToolCall end 이벤트로 artifact를 전달한다', async () => {
+      const model = makeModel([[toolCallChunk('fake_tool', 'c1')], [textChunk('답변')]]);
+      const onToolCall = vi.fn();
+      await run({
+        model,
+        tools: [artifactTool('fake_tool', 'visible content', AUDIT)],
+        maxSteps: 3,
+        cb: { onToolCall },
+      });
+
+      expect(onToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'end', toolName: 'fake_tool', status: 'success', artifact: AUDIT }),
+      );
+    });
+
+    it('모델이 받는 도구 메시지에는 content만 들어가고 artifact 값은 들어가지 않는다', async () => {
+      const model = makeModel([[toolCallChunk('fake_tool', 'c1')], [textChunk('답변')]]);
+      await run({
+        model,
+        tools: [artifactTool('fake_tool', 'visible content', AUDIT)],
+        maxSteps: 3,
+      });
+
+      const toolMsg = model.seenMessages[1]!.find((m) => m.getType() === 'tool') as ToolMessage;
+      expect(JSON.stringify(toolMsg.content)).toContain('visible content');
+      expect(JSON.stringify(toolMsg.content)).not.toContain('SECRET_AUDIT_ID');
+      // 상태의 메시지에는 artifact가 보존된다 (요청 직렬화는 content만 사용).
+      expect(toolMsg.artifact).toEqual(AUDIT);
+    });
+
+    it('content가 maxOutputChars로 잘려도 artifact는 온전히 전달된다', async () => {
+      const model = makeModel([
+        [toolCallChunk('suggest_translation_rule', 'c1')],
+        [textChunk('답변')],
+      ]);
+      const onToolCall = vi.fn();
+      await run({
+        model,
+        tools: [artifactTool('suggest_translation_rule', 'X'.repeat(1000), AUDIT)],
+        maxSteps: 3,
+        cb: { onToolCall },
+      });
+
+      const content = String(model.seenMessages[1]!.find((m) => m.getType() === 'tool')?.content);
+      expect(content).toContain('[도구 결과가 제한 길이에서 잘렸습니다.]');
+      expect(onToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'end', status: 'success', artifact: AUDIT }),
+      );
+    });
+
+    it('artifact가 없는 도구의 end 이벤트에는 artifact 필드가 없다', async () => {
+      const model = makeModel([[toolCallChunk('fake_tool', 'c1')], [textChunk('답변')]]);
+      const onToolCall = vi.fn();
+      await run({ model, maxSteps: 3, cb: { onToolCall } });
+
+      const endEvent = onToolCall.mock.calls.map((c) => c[0]).find((e) => e.phase === 'end');
+      expect(endEvent).toBeDefined();
+      expect(endEvent).not.toHaveProperty('artifact');
+    });
+
+    it('content_and_artifact 도구가 2-튜플이 아닌 값을 돌려주면 에러 경로로 처리한다', async () => {
+      const notATuple = tool(async () => 'just a string' as unknown as [string, unknown], {
+        name: 'fake_tool',
+        description: 'breaks the contract',
+        schema: z.object({}),
+        responseFormat: 'content_and_artifact',
+      });
+      const model = makeModel([[toolCallChunk('fake_tool', 'c1')], [textChunk('답변')]]);
+      const onToolCall = vi.fn();
+      await run({ model, tools: [notATuple], maxSteps: 3, cb: { onToolCall } });
+
+      expect(onToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'end', toolName: 'fake_tool', status: 'error' }),
+      );
+      const endEvent = onToolCall.mock.calls.map((c) => c[0]).find((e) => e.phase === 'end');
+      expect(endEvent).not.toHaveProperty('artifact');
+    });
   });
 
   it('onToken은 스텝마다 리셋된 누적 텍스트와 델타를 전달한다', async () => {

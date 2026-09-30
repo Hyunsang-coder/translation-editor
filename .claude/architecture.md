@@ -68,6 +68,7 @@ Bound in `src/ai/chat.ts`; the **single source of truth is `src/ai/tools/toolReg
 - Profiles: `general`, `selection-source`, `selection-target`, `selection-retranslate` (binds zero tools). `resolveChatToolNames()` derives the allowlist from profile + runtime requirements.
 - Selection profiles swap whole-document reads for scoped ones: `get_selection_surroundings` (앞뒤 번역 단위, 방향별 최대 8) and `get_aligned_selection_context` (원문↔번역문 짝, 양방향).
 - Write-ish tools only ever *propose* (`propose_selection_edit`, `propose_project_memory_change`, `suggest_*`); nothing mutates the document or DB directly ([ADR-0003](../docs/adr/0003-no-auto-apply-preview-first.md)).
+- Tool results split **model-facing `content`** from **app-only `artifact`** (`responseFormat: 'content_and_artifact'`): audit ids for `contextManifest` travel in the artifact via `onToolCall`, never in text the store must re-parse. Only ids the model must echo back (project memory `targetItemId`) stay in content.
 - The tool list must not vary with message content — Anthropic renders the prefix as tools → system → messages, so a shifting list invalidates the system + history cache every turn.
 
 **Proactive Tool Usage**: AI calls document tools first rather than guessing. Tool loop is 6 steps, or 4 when a selection is attached.

@@ -389,11 +389,14 @@ export function createToolExecutionMiddleware(params: {
           ? `${rawContent.slice(0, maxOutputChars)}\n[도구 결과가 제한 길이에서 잘렸습니다.]`
           : rawContent;
 
+      // artifact는 모델에 전송되지 않는 앱 전용 데이터다. 절단·래핑 대상이 아니므로 그대로 넘긴다.
+      const artifact = result.artifact;
       params.cb?.onToolCall?.({
         phase: 'end',
         toolName,
         status: 'success',
         result: limitedContent,
+        ...(artifact !== undefined ? { artifact } : {}),
       });
 
       return new ToolMessage({
@@ -401,6 +404,7 @@ export function createToolExecutionMiddleware(params: {
         name: toolName,
         status: 'success',
         content: wrapExternalToolOutput(toolName, limitedContent),
+        ...(artifact !== undefined ? { artifact } : {}),
       });
     },
   });

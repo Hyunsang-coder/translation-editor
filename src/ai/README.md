@@ -53,6 +53,10 @@
 (`chatAgent/middleware.ts`). 외부 도구(`trust: 'external'`)와 registry 미등록 도구의 출력은 같은
 미들웨어가 `<external_content>`로 감쌉니다.
 
+도구는 모델용 `content`와 앱 전용 `artifact`(`responseFormat: 'content_and_artifact'`)를 나눠 반환할 수 있습니다.
+artifact는 프로바이더로 전송되지 않고 미들웨어가 `onToolCall`의 `artifact`로 전달합니다
+(예: 컨텍스트 감사 id, `tools/toolAudit.ts`).
+
 ### Tool guide (system message)
 모델이 도구 사용 원칙을 잊지 않도록, 시스템 메시지로 간단한 도구 가이드를 주입합니다.
 
