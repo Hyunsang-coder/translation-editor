@@ -59,9 +59,9 @@ describe('getAiConfig - provider × 용도 매핑', () => {
     useAiConfigStore.setState({ provider: 'anthropic' });
 
     expect(getAiConfig({ useFor: 'review' }).model).toBe('claude-opus-5-5');
-    expect(getAiConfig({ useFor: 'translation' }).model).toBe('claude-sonnet-5');
-    expect(getAiConfig({ useFor: 'polish' }).model).toBe('claude-sonnet-5');
-    expect(getAiConfig({ useFor: 'chat' }).model).toBe('claude-sonnet-5');
+    expect(getAiConfig({ useFor: 'translation' }).model).toBe('claude-sonnet-5-5');
+    expect(getAiConfig({ useFor: 'polish' }).model).toBe('claude-sonnet-5-5');
+    expect(getAiConfig({ useFor: 'chat' }).model).toBe('claude-sonnet-5-5');
   });
 
   it('effort는 요약만 medium이고 나머지는 전부 high', () => {
@@ -142,11 +142,11 @@ describe('normalizeProvider - 레거시 프리셋 ID 정규화', () => {
 
 describe('모델 직접 지정 (ADR-0017)', () => {
   it('지정한 칸만 갈아끼우고 나머지는 기본값을 유지한다', () => {
-    const overrides = { anthropic: { review: { model: 'claude-sonnet-5' } } };
+    const overrides = { anthropic: { review: { model: 'claude-sonnet-5-5' } } };
 
-    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-sonnet-5');
-    expect(resolveModelForUse('anthropic', 'translation', overrides).model).toBe('claude-sonnet-5');
-    expect(resolveModelForUse('anthropic', 'polish', overrides).model).toBe('claude-sonnet-5');
+    expect(resolveModelForUse('anthropic', 'review', overrides).model).toBe('claude-sonnet-5-5');
+    expect(resolveModelForUse('anthropic', 'translation', overrides).model).toBe('claude-sonnet-5-5');
+    expect(resolveModelForUse('anthropic', 'polish', overrides).model).toBe('claude-sonnet-5-5');
     // 다른 provider는 영향을 받지 않는다.
     expect(resolveModelForUse('openai', 'review', overrides).model).toBe('gpt-6-sol');
   });
@@ -162,17 +162,17 @@ describe('모델 직접 지정 (ADR-0017)', () => {
   it('effort만 지정하면 모델은 기본값을 유지한다', () => {
     const overrides = { anthropic: { polish: { effort: 'medium' as const } } };
     expect(resolveModelForUse('anthropic', 'polish', overrides)).toEqual({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       effort: 'medium',
     });
   });
 
   it('모델과 effort는 서로 독립적으로 지정된다', () => {
     const overrides = {
-      anthropic: { review: { model: 'claude-sonnet-5', effort: 'medium' as const } },
+      anthropic: { review: { model: 'claude-sonnet-5-5', effort: 'medium' as const } },
     };
     expect(resolveModelForUse('anthropic', 'review', overrides)).toEqual({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       effort: 'medium',
     });
   });
@@ -198,7 +198,7 @@ describe('모델 직접 지정 (ADR-0017)', () => {
 describe('세션 pin — 채팅 모델 스냅샷', () => {
   it('지정이 없으면 provider만 담는다(기존 형식 그대로)', () => {
     expect(buildSessionPin('anthropic', {})).toBe('anthropic');
-    expect(buildSessionPin('anthropic', { anthropic: { review: { model: 'claude-sonnet-5' } } })).toBe(
+    expect(buildSessionPin('anthropic', { anthropic: { review: { model: 'claude-sonnet-5-5' } } })).toBe(
       'anthropic',
     );
   });
@@ -239,7 +239,7 @@ describe('resolveModelRunConfig — 세션 pin이 채팅 모델의 권위다 (�
   it('스냅샷 없는 pin은 현재 지정이 아니라 기본값으로 간다', () => {
     // 지정을 켜기 전에 만들어진 세션이 다음 턴에 모델을 갈아타면, 스냅샷으로 막으려던
     // 캐시 프리픽스 파기가 그대로 일어난다.
-    expect(resolveModelRunConfig({ provider: 'anthropic' }).resolvedModel).toBe('claude-sonnet-5');
+    expect(resolveModelRunConfig({ provider: 'anthropic' }).resolvedModel).toBe('claude-sonnet-5-5');
   });
 
   it('스냅샷이 있으면 그 모델을 쓴다', () => {
@@ -257,13 +257,13 @@ describe('resolveModelRunConfig — 세션 pin이 채팅 모델의 권위다 (�
 
   it('pin이 없는 호출(비채팅 포함)은 현재 지정을 따른다', () => {
     useAiConfigStore.setState({
-      modelOverrides: { anthropic: { chat: { model: 'claude-haiku-4-5' }, review: { model: 'claude-sonnet-5' } } },
+      modelOverrides: { anthropic: { chat: { model: 'claude-haiku-4-5' }, review: { model: 'claude-sonnet-5-5' } } },
     });
     expect(resolveModelRunConfig().resolvedModel).toBe('claude-haiku-4-5');
-    expect(resolveModelRunConfig({ useFor: 'review' }).resolvedModel).toBe('claude-sonnet-5');
+    expect(resolveModelRunConfig({ useFor: 'review' }).resolvedModel).toBe('claude-sonnet-5-5');
     // 검수는 세션 개념이 없으므로 pin 문자열이 와도 지정이 살아 있어야 한다.
     expect(resolveModelRunConfig({ provider: 'anthropic', useFor: 'review' }).resolvedModel).toBe(
-      'claude-sonnet-5',
+      'claude-sonnet-5-5',
     );
   });
 });

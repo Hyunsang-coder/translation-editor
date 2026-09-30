@@ -41,11 +41,11 @@ export const MODEL_BY_USE: Readonly<
   Record<SelectableProvider, Readonly<Record<ModelUseFor, ModelSpec>>>
 > = {
   anthropic: {
-    translation: { model: 'claude-sonnet-5', effort: 'high' },
+    translation: { model: 'claude-sonnet-5-5', effort: 'high' },
     review: { model: 'claude-opus-5-5', effort: 'high' },
-    polish: { model: 'claude-sonnet-5', effort: 'high' },
-    chat: { model: 'claude-sonnet-5', effort: 'high' },
-    summary: { model: 'claude-sonnet-5', effort: 'medium' },
+    polish: { model: 'claude-sonnet-5-5', effort: 'high' },
+    chat: { model: 'claude-sonnet-5-5', effort: 'high' },
+    summary: { model: 'claude-sonnet-5-5', effort: 'medium' },
   },
   openai: {
     translation: { model: 'gpt-6-luna', effort: 'high' },
@@ -76,7 +76,7 @@ export const PROVIDER_LABELS: Readonly<Record<SelectableProvider, string>> = {
  * 첫 항목이 그 provider의 기본값이 아니라는 점에 주의 — 기본값은 항상 `MODEL_BY_USE`다.
  */
 export const MODEL_CHOICES: Readonly<Record<SelectableProvider, readonly string[]>> = {
-  anthropic: ['claude-opus-5-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+  anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5'],
   openai: ['gpt-6-sol', 'gpt-6-luna'],
 };
 

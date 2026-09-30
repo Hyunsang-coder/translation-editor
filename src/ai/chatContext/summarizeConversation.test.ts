@@ -28,10 +28,10 @@ beforeEach(() => {
 });
 
 describe('resolveSummaryModelRunConfig', () => {
-  it('anthropic 실행은 Sonnet 5 + effort medium으로 요약', () => {
+  it('anthropic 실행은 Sonnet 5.5 + effort medium으로 요약', () => {
     const rc = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-opus-4-8' }));
     expect(rc.provider).toBe('anthropic');
-    expect(rc.resolvedModel).toBe('claude-sonnet-5');
+    expect(rc.resolvedModel).toBe('claude-sonnet-5-5');
     expect(rc.reasoningEffort).toBe('medium');
     expect(rc.anthropicApiKey).toBe('sk-ant');
   });
@@ -47,7 +47,7 @@ describe('resolveSummaryModelRunConfig', () => {
 
   it('실행 모델이 달라도(같은 provider) 요약 모델은 고정', () => {
     const a = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-opus-4-8' }));
-    const b = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-sonnet-5' }));
+    const b = resolveSummaryModelRunConfig(baseRc({ provider: 'anthropic', resolvedModel: 'claude-sonnet-5-5' }));
     expect(a.resolvedModel).toBe(b.resolvedModel);
   });
 });
@@ -77,7 +77,7 @@ describe('summarizeConversation', () => {
     expect(createChatModel).toHaveBeenCalledTimes(1);
     // 저비용 요약 runConfig가 전달됐는지
     const opts = createChatModel.mock.calls[0]![1] as { runConfig: ModelRunConfig };
-    expect(opts.runConfig.resolvedModel).toBe('claude-sonnet-5');
+    expect(opts.runConfig.resolvedModel).toBe('claude-sonnet-5-5');
     expect(opts.runConfig.reasoningEffort).toBe('medium');
     // 입력 메시지에 기존 요약과 새 대화 원문이 포함
     const passedMessages = invoke.mock.calls[0]![0] as { content: string }[];

@@ -26,10 +26,10 @@ export interface ModelPrice {
 }
 
 /**
- * 단가표 (2026-09-22 기준: Claude Opus 5.5 / GPT-6 Sol·Luna 출시 반영).
+ * 단가표 (2026-09-29 기준: Claude Sonnet 5.5 출시 반영).
  *
- * - Anthropic: Opus 5.5 $4/$20, 캐시 read $0.20 (공식 발표·출시일 보도 확인값).
- *   캐시 write(5m TTL)는 1.25배. 이 앱은 5m TTL만 쓴다.
+ * - Anthropic: Opus 5.5 $4/$20, Sonnet 5.5 $2/$10 (Sonnet 5와 동일 단가 유지, 공식 발표 확인값).
+ *   캐시 read는 정가의 0.1배, write(5m TTL)는 1.25배. 이 앱은 5m TTL만 쓴다.
  * - OpenAI: Sol $2/$10, Luna $0.10/$0.50 (영구 단가, 5.6 대비 절반).
  *   캐시 read는 정가의 0.1배이며, 캐시 write에 대한 별도 과금이 없어(자동 캐싱)
  *   `cacheWritePerMTok`은 두지 않는다 —
@@ -47,13 +47,11 @@ export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
     cacheReadPerMTok: 0.2,
     cacheWritePerMTok: 5, // 4 × 1.25
   },
-  'claude-sonnet-5': {
-    // 2026-08-31까지 $2/$10 도입가가 적용되지만, 만료 후 과거 기록까지 바뀌면
-    // 혼란스러우므로 정가를 쓴다(도입가 구간은 실제 청구가 이보다 낮다).
-    inputPerMTok: 3,
-    outputPerMTok: 15,
-    cacheReadPerMTok: 0.3,
-    cacheWritePerMTok: 3.75,
+  'claude-sonnet-5-5': {
+    inputPerMTok: 2,
+    outputPerMTok: 10,
+    cacheReadPerMTok: 0.2,
+    cacheWritePerMTok: 2.5, // 2 × 1.25
   },
   'claude-haiku-4-5': {
     inputPerMTok: 1,

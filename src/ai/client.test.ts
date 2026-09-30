@@ -59,14 +59,14 @@ describe('createChatModel - Opus 5-5 sampling parameter guard', () => {
     expect(callArgs.temperature).toBe(0.7);
   });
 
-  it('채팅(claude-sonnet-5) 호출 시 temperature가 전달되지 않음', async () => {
+  it('채팅(claude-sonnet-5-5) 호출 시 temperature가 전달되지 않음', async () => {
     vi.stubEnv('VITE_AI_TEMPERATURE', '0.7');
     const { createChatModel } = await import('@/ai/client');
 
     createChatModel(undefined, { useFor: 'chat' });
 
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('claude-sonnet-5');
+    expect(callArgs.model).toBe('claude-sonnet-5-5');
     expect('temperature' in callArgs).toBe(false);
   });
 

@@ -34,7 +34,7 @@ describe('resolveModelRunConfig', () => {
 
   it('전역 provider를 스냅샷으로 캡처한다', () => {
     const rc = resolveModelRunConfig();
-    expect(rc.resolvedModel).toBe('claude-sonnet-5');
+    expect(rc.resolvedModel).toBe('claude-sonnet-5-5');
     expect(rc.provider).toBe('anthropic');
     expect(rc.reasoningEffort).toBe('high');
   });
@@ -54,7 +54,7 @@ describe('resolveModelRunConfig', () => {
 
   it('용도별로 모델·effort가 달라진다', () => {
     expect(resolveModelRunConfig({ useFor: 'review' }).resolvedModel).toBe('claude-opus-5-5');
-    expect(resolveModelRunConfig({ useFor: 'polish' }).resolvedModel).toBe('claude-sonnet-5');
+    expect(resolveModelRunConfig({ useFor: 'polish' }).resolvedModel).toBe('claude-sonnet-5-5');
     expect(resolveModelRunConfig({ useFor: 'summary' }).reasoningEffort).toBe('medium');
   });
 
@@ -62,7 +62,7 @@ describe('resolveModelRunConfig', () => {
     const rc = resolveModelRunConfig();
     // 요청 준비 중 사용자가 provider를 바꾸는 상황 시뮬레이션
     useAiConfigStore.setState({ provider: 'openai' });
-    expect(rc.resolvedModel).toBe('claude-sonnet-5');
+    expect(rc.resolvedModel).toBe('claude-sonnet-5-5');
     expect(rc.provider).toBe('anthropic');
   });
 
@@ -91,7 +91,7 @@ describe('createChatModel with runConfig — 모델 결정 경쟁 조건 제거'
 
   it('runConfig로 캡처한 모델을, 이후 전역 변경과 무관하게 사용한다', async () => {
     const { createChatModel } = await import('@/ai/client');
-    const rc = resolveModelRunConfig(); // claude-sonnet-5 캡처
+    const rc = resolveModelRunConfig(); // claude-sonnet-5-5 캡처
 
     // 준비 단계 이후 사용자가 전역 provider를 OpenAI로 변경
     useAiConfigStore.setState({ provider: 'openai' });
@@ -102,7 +102,7 @@ describe('createChatModel with runConfig — 모델 결정 경쟁 조건 제거'
     expect(anthropicCtorSpy).toHaveBeenCalledTimes(1);
     expect(openaiCtorSpy).not.toHaveBeenCalled();
     const callArgs = anthropicCtorSpy.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callArgs.model).toBe('claude-sonnet-5');
+    expect(callArgs.model).toBe('claude-sonnet-5-5');
   });
 
   it('runConfig의 provider/effort가 생성자에 반영된다', async () => {

@@ -27,16 +27,16 @@ describe('resolveModelCallOptions', () => {
 
   // 프리셋 시절에는 Sonnet 5가 review일 때만 effort를 받았다. 이제는 용도와 무관하게
   // 매핑이 준 값을 그대로 보낸다(기본값이 바뀌어도 흔들리지 않게 명시 전송).
-  it('Sonnet 5는 용도와 무관하게 매핑 effort를 그대로 전달', () => {
+  it('Sonnet 5.5는 용도와 무관하게 매핑 effort를 그대로 전달', () => {
     const high = resolveModelCallOptions(
-      cfg({ provider: 'anthropic', model: 'claude-sonnet-5', temperature: 0.5, reasoningEffort: 'high' }),
+      cfg({ provider: 'anthropic', model: 'claude-sonnet-5-5', temperature: 0.5, reasoningEffort: 'high' }),
     );
     expect(high.adaptiveThinking).toBe(true);
     expect(high.effort).toBe('high');
     expect(high.temperature).toBeUndefined();
 
     const medium = resolveModelCallOptions(
-      cfg({ provider: 'anthropic', model: 'claude-sonnet-5', reasoningEffort: 'medium' }),
+      cfg({ provider: 'anthropic', model: 'claude-sonnet-5-5', reasoningEffort: 'medium' }),
     );
     expect(medium.effort).toBe('medium');
   });
@@ -82,7 +82,7 @@ describe('resolveModelCallOptions', () => {
   });
 
   it('effort가 없는 cfg에는 아무것도 붙이지 않는다', () => {
-    const opts = resolveModelCallOptions(cfg({ provider: 'anthropic', model: 'claude-sonnet-5' }));
+    const opts = resolveModelCallOptions(cfg({ provider: 'anthropic', model: 'claude-sonnet-5-5' }));
     expect(opts.adaptiveThinking).toBe(true);
     expect(opts.effort).toBeUndefined();
   });

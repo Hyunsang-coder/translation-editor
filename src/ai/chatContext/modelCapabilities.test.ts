@@ -3,7 +3,7 @@ import { resolveModelCapabilities } from './modelCapabilities';
 
 describe('resolveModelCapabilities', () => {
   it('anthropic 모델은 ~200k 컨텍스트 기반 입력 예산과 tool/vision 지원', () => {
-    const c = resolveModelCapabilities({ resolvedModel: 'claude-sonnet-5', provider: 'anthropic' });
+    const c = resolveModelCapabilities({ resolvedModel: 'claude-sonnet-5-5', provider: 'anthropic' });
     expect(c.maxInputTokens).toBeGreaterThan(100_000);
     expect(c.maxInputTokens).toBeLessThanOrEqual(200_000);
     expect(c.toolCalling).toBe(true);
@@ -13,7 +13,7 @@ describe('resolveModelCapabilities', () => {
 
   it('openai 모델은 anthropic보다 큰 입력 예산', () => {
     const oa = resolveModelCapabilities({ resolvedModel: 'gpt-6-sol', provider: 'openai' });
-    const an = resolveModelCapabilities({ resolvedModel: 'claude-sonnet-5', provider: 'anthropic' });
+    const an = resolveModelCapabilities({ resolvedModel: 'claude-sonnet-5-5', provider: 'anthropic' });
     expect(oa.maxInputTokens).toBeGreaterThan(an.maxInputTokens);
     expect(oa.toolCalling).toBe(true);
     expect(oa.imageInputs).toBe(true);

@@ -26,11 +26,11 @@ vi.mock('@/ai/config', () => ({
   resolveModelRunConfig: mocks.resolveModelRunConfig,
   // resolveSummaryModelRunConfig(요약 모델 파생)이 사용하는 실 구현 스텁
   resolveModelForUse: (provider: string) => ({
-    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-6-luna',
+    model: provider === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-6-luna',
     effort: 'medium',
   }),
   getModelSpecForUse: (provider: string) => ({
-    model: provider === 'anthropic' ? 'claude-sonnet-5' : 'gpt-6-luna',
+    model: provider === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-6-luna',
     effort: 'medium',
   }),
   normalizeProvider: (v: string | undefined | null) => {
